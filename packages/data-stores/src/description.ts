@@ -185,7 +185,9 @@ export function dataStoreDescriptionOperation(runtime: DataStoreRuntime): Operat
             ? {}
             : {
                 nextStep:
-                  "data_store.use is coming: it will make a Data Store readable in a chat. It is not available yet."
+                  context.origin.kind === "agent"
+                    ? `Call data_store.use with the name '${name}' to read its rows in this chat, next to what the chat is about. The person's own store is added at once; any other store waits for the person's click on a card.`
+                    : "Outside clients read no rows. An agent in a chat reads them once data_store.use added the store there."
               })
         }
       });

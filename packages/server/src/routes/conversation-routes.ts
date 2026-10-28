@@ -78,6 +78,24 @@ export function registerConversationRoutes(route: Route, options: ChatServerOpti
       )
   });
 
+  // The person's click on the card of an agent's `data_store.use` (STORE-USE-1), recorded as
+  // an Operation Run. Only the person whose turn the card came from may take it.
+  route.operation(apiOperations["conversations.data_stores.add"], {
+    changeClass: "reversible",
+    authorize: (_input, { actor }) =>
+      isAuthenticatedServicePrincipal(actor)
+        ? { allowed: false, action: "conversations.data_stores.add", reason: "no_grant" }
+        : { allowed: true },
+    resource: ({ conversationId }) => ({ kind: "conversation", id: conversationId }),
+    execute: ({ conversationId, store, toolCallId }, context) =>
+      conversations.addDataStore(
+        conversationIdParam({ conversationId }),
+        personOf(context.actor),
+        { ...context, ...(context.runtime.locale ? { locale: context.runtime.locale } : {}) },
+        { store, toolCallId }
+      )
+  });
+
   route(apiOperations["conversations.move"], ({ user, context, params, body }) =>
     conversations.moveConversation(conversationIdParam(params), user, context, {
       collaborationWorkspaceId: asCollaborationWorkspaceId(body.collaborationWorkspaceId),

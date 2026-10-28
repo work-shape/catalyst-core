@@ -78,6 +78,7 @@ export const audit = defineTranslations({
     "audit.event.conversation.deleted": "Deleted a conversation",
     "audit.event.conversation.instance_create_refused":
       "Refused to create an asset of the instance from a conversation",
+    "audit.event.conversation.data_store_added": "Added a data store to a conversation for reading",
     "audit.event.conversation.moved": "Moved a conversation",
     "audit.event.conversation.renamed": "Renamed a conversation",
     "audit.event.conversation.retention_expiration_failed":
@@ -368,6 +369,8 @@ export const audit = defineTranslations({
     "audit.event.conversation.deleted": "Unterhaltung gelöscht",
     "audit.event.conversation.instance_create_refused":
       "Anlegen eines Assets der Instanz aus einer Unterhaltung abgelehnt",
+    "audit.event.conversation.data_store_added":
+      "Datenspeicher zum Lesen zu einer Unterhaltung hinzugefügt",
     "audit.event.conversation.moved": "Unterhaltung verschoben",
     "audit.event.conversation.renamed": "Unterhaltung umbenannt",
     "audit.event.conversation.retention_expiration_failed":

@@ -87,7 +87,7 @@ describe("Data Store discovery without rows", () => {
       filledBy: [{ kind: "workflow", name: "fill-findings", title: "Monthly check" }],
       readBy: [{ kind: "app", name: "read-findings", title: "Findings overview" }],
       rights: { read: true, add: true, change: true },
-      chat: { canReadRows: false, nextStep: expect.stringContaining("data_store.use is coming") },
+      chat: { canReadRows: false, nextStep: expect.stringContaining("data_store.use") },
       tables: [
         {
           name: "findings",

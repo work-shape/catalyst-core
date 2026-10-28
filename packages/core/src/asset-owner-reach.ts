@@ -24,7 +24,9 @@ export type OwnerReachUse =
       acrossOwners?: boolean;
     }
   | { kind: "availability"; availability: AgentAvailability }
-  | { kind: "app_audience"; audience: AppAudience };
+  | { kind: "app_audience"; audience: AppAudience }
+  /** A Data Store is read in a conversation of this workspace (STORE-USE-1). */
+  | { kind: "conversation"; workspaceId: string };
 
 /** Why a use goes beyond its owner's reach. */
 export type OwnerReachRefusal =
@@ -40,9 +42,10 @@ export type OwnerReachRefusal =
  * exposes something owned by a Personal Workspace. A source names assets of its own workspace
  * or the instance; an instance Workflow also names a Shared Workspace's assets, whose grants are
  * checked when it runs, never a Personal Workspace's. An asset of a Personal Workspace is
- * offered nowhere beyond its owner: availability selects nothing, and an App is at most for
- * its workspace. A Shared Workspace's asset offered in another workspace or to the whole
- * instance stays an instance admin's step and is not refused here.
+ * offered nowhere beyond its owner: availability selects nothing, an App is at most for its
+ * workspace, and a Data Store is read in no conversation outside it. A Shared Workspace's asset
+ * offered in another workspace or to the whole instance stays an instance admin's step and is
+ * not refused here.
  */
 export function ownerReachRefusal(
   source: AssetOwnerReach,
@@ -63,6 +66,13 @@ export function ownerReachRefusal(
     case "app_audience":
       return isPersonal(source) && use.audience === "instance"
         ? "app_instance_needs_shared_workspace"
+        : undefined;
+    case "conversation":
+      // A Personal Workspace's asset is read only in its owner's own conversations.
+      return isPersonal(source) &&
+        source.kind === "workspace" &&
+        source.workspaceId !== use.workspaceId
+        ? "owner_reach"
         : undefined;
   }
 }

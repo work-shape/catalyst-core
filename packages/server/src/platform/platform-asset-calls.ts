@@ -3,6 +3,7 @@ import { appEditCalls } from "./asset-calls/app-edit";
 import type { PlatformAssetCalls } from "@work-shape/catalyst-tool-execution";
 import type { AssetWorkflowOptions } from "../types";
 import { appSaveCalls } from "./asset-calls/app-save";
+import { dataStoreUseCalls } from "./asset-calls/data-store-use";
 import { discoveryCalls } from "./asset-calls/discovery";
 import { putCalls } from "./asset-calls/put";
 import { createAssetCallScope } from "./asset-calls/scope";
@@ -29,6 +30,7 @@ export function createPlatformAssetCalls(
   return {
     ...appSaveCalls(scope),
     ...appEditCalls(scope, workspaceObjects),
+    ...dataStoreUseCalls(scope),
     ...discoveryCalls(scope),
     ...putCalls(scope),
     ...skillCalls(scope),

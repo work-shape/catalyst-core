@@ -148,7 +148,9 @@ export function useDataStoreInstance(
      * stores the files of Conversations with.
      */
     knowledge?: boolean | KnowledgeOptions,
-    workflows?: true
+    workflows?: true,
+    /** A platform-tool agent, `platform-agent`, as `startWithAgent` starts one. */
+    agent?: AgentOptions
   ): Promise<DataStoreInstance>;
   /** A platform-tool agent on the same isolated store fixture. */
   startWithAgent(agent?: AgentOptions): Promise<DataStoreInstance>;

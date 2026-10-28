@@ -3,6 +3,7 @@ import { collectKnowledgeCitations } from "./knowledge-citations";
 import {
   AppError,
   ASK_QUESTION_TOOL_NAME,
+  DATA_STORE_USE_TOOL_NAME,
   WorkflowAgentOutputInvalidError,
   WORKFLOW_STEP_DATA_MAX_BYTES,
   forbiddenPreviewTool,
@@ -18,6 +19,7 @@ import {
   type KnowledgeCitationSource,
   type AgentRunId,
   type AgentRunResumeState,
+  type ConversationOfferSource,
   type LocaleCode,
   type PreviewViewerKey,
   type PausedToolCall,
@@ -42,7 +44,11 @@ import {
   createAssistantToolCallsMetadata,
   createSubmittedUserMessageContent
 } from "../model-context-projection";
-import { describeAgentDataTools, materializeModelTools } from "../model-tool-materialization";
+import {
+  describeAgentDataTools,
+  materializeModelTools,
+  type AgentDataTools
+} from "../model-tool-materialization";
 import {
   ModelInput,
   type ModelSelection,
@@ -59,6 +65,15 @@ import { withToolResultRead } from "./tool-result-read";
 import type { LocalAgentRuntimeOptions } from "./run-events";
 
 const DEFAULT_MAX_STEPS = 64;
+/** Tools that need the person of the turn: no subagent and no Workflow step is offered them. */
+const PERSON_TOOL_NAMES: readonly string[] = [ASK_QUESTION_TOOL_NAME, DATA_STORE_USE_TOOL_NAME];
+
+type ConversationOffer = Awaited<ReturnType<ConversationOfferSource["offerOf"]>>;
+
+/** A model tool by what names it: its name, or its type for a provider's own tool. */
+function modelToolKey(tool: ModelTool): string {
+  return "name" in tool && typeof tool.name === "string" ? tool.name : JSON.stringify(tool);
+}
 /** The route id of a run above a subagent whose model cannot be read. It has no region. */
 const UNREAD_ANCESTOR_ROUTE = "unread-ancestor";
 
@@ -123,73 +138,16 @@ export class TurnLoop {
     // An agent whose definition lists the platform's tools is offered those it lists, the
     // orientation on the platform and the skills the platform ships. The asset tools come from
     // the offer alone, which may hold back one the definition lists.
-    const offer =
-      input.workflowAgent || input.preview
-        ? undefined
-        : await this.options.conversationOffer?.offerOf({
-            clientInstanceId: context.clientInstanceId,
-            conversationId: input.conversationId,
-            agentToolNames: listed.toolNames,
-            user: context.user,
-            runId
-          });
-    const withheld = new Set(offer?.withheldToolNames ?? []);
-    // A subagent starts none of its own, and a Workflow step's agent never gets `run_agent`.
-    // Neither has a person to ask (ASK-1).
-    const agent = {
-      ...listed,
-      toolNames: [
-        ...new Set([
-          ...listed.toolNames.filter((toolName) => !toolName.startsWith(SUBJECT_TOOL_PREFIX)),
-          ...(offer?.toolNames ?? [])
-        ])
-      ]
-        .filter(
-          (toolName) =>
-            !withheld.has(toolName) &&
-            !(
-              (context.subagent || input.workflowAgent) &&
-              (isRunAgentCall(toolName) || toolName === ASK_QUESTION_TOOL_NAME)
-            )
-        )
-        .filter((toolName) => !input.preview || !forbiddenPreviewTool(toolName))
-    };
+    const offer = await this.offerOf(runId, listed, input, context);
+    const { agent, dataTools } = await this.agentToolsOf(runId, listed, offer, input, context);
     const modelSelection = this.modelInput.getModelSelectionForAgent(
       agent,
       input.modelBindingId,
       input.reasoningEffort
     );
     // Read once for the run, not for each model call of it: what the agent is offered stays
-    // the same while it works, except web tools removed after a personal call. Whether a
-    // tool may still be called is asked again by each call,
-    // and a data tool that was not offered here is refused for the whole run.
-    const dataTools = await describeAgentDataTools(
-      agent,
-      this.options.dataTools,
-      this.options.dataToolDescribeTimeoutMs
-    );
-    if (dataTools.sourceFailure) {
-      this.options.logger?.warn(
-        {
-          type: "agent_run.data_tools_unavailable",
-          runId,
-          agentName: agent.name,
-          reason: dataTools.sourceFailure,
-          toolNames: dataTools.missing
-        },
-        "The data tools of an agent could not be read; the run goes on without them"
-      );
-    } else if (dataTools.missing.length > 0) {
-      this.options.logger?.info(
-        {
-          type: "agent_run.data_tools_missing",
-          runId,
-          agentName: agent.name,
-          toolNames: dataTools.missing
-        },
-        "Agent lists data tools that do not exist now; the run goes on without them"
-      );
-    }
+    // the same while it works, except web tools removed after a personal call and the read
+    // tools of a Data Store a step added (`reoffer`).
     const offeredDataTools = new Set(dataTools.described.map((tool) => tool.name));
     // What a model of the run is sent: the tools it takes and where its context compacts.
     const modelSetupOf = (selection: ModelSelection): ModelSetup => {
@@ -199,15 +157,7 @@ export class TurnLoop {
       );
       return {
         modelSelection: selection,
-        tools: withToolResultRead(
-          materializeModelTools({
-            agent,
-            capabilities: selection.capabilities,
-            toolRegistry: this.options.toolRegistry,
-            dataTools: dataTools.described,
-            webAccess: this.options.webAccess
-          })
-        ),
+        tools: this.modelToolsOf(agent, selection, dataTools.described),
         compactThresholdTokens,
         compactionEnabled: compactThresholdTokens !== undefined
       };
@@ -252,6 +202,7 @@ export class TurnLoop {
       ancestorRoutes: (input.ancestors ?? []).map((ancestor) => this.routeOf(assets, ancestor)),
       tools,
       offeredDataTools,
+      listed,
       compactThresholdTokens,
       compactionEnabled,
       ...(fallback ? { fallback } : {}),
@@ -259,6 +210,136 @@ export class TurnLoop {
       userMessage,
       maxSteps: agent.maxSteps ?? this.options.maxSteps ?? DEFAULT_MAX_STEPS
     };
+  }
+
+  /** What the conversation offers the agent now. A Workflow step and a preview are offered nothing. */
+  private async offerOf(
+    runId: AgentRunId,
+    listed: AgentConfig,
+    input: StartAgentRunInput,
+    context: RuntimeCallContext
+  ): Promise<ConversationOffer | undefined> {
+    return input.workflowAgent || input.preview
+      ? undefined
+      : this.options.conversationOffer?.offerOf({
+          clientInstanceId: context.clientInstanceId,
+          conversationId: input.conversationId,
+          agentToolNames: listed.toolNames,
+          user: context.user,
+          runId
+        });
+  }
+
+  /**
+   * The agent with the tools its definition lists and the offer gives it, and its data tools as
+   * their source describes them now. Whether a tool may still be called is asked again by each
+   * call, and a data tool that was not offered is refused.
+   */
+  private async agentToolsOf(
+    runId: AgentRunId,
+    listed: AgentConfig,
+    offer: ConversationOffer | undefined,
+    input: StartAgentRunInput,
+    context: RuntimeCallContext
+  ): Promise<{ agent: AgentConfig; dataTools: AgentDataTools }> {
+    const withheld = new Set(offer?.withheldToolNames ?? []);
+    // A subagent starts none of its own, and a Workflow step's agent never gets `run_agent`.
+    // Neither has a person to ask (ASK-1) or to add a Data Store (STORE-USE-1).
+    const agent = {
+      ...listed,
+      toolNames: [
+        ...new Set([
+          ...listed.toolNames.filter((toolName) => !toolName.startsWith(SUBJECT_TOOL_PREFIX)),
+          ...(offer?.toolNames ?? [])
+        ])
+      ]
+        .filter(
+          (toolName) =>
+            !withheld.has(toolName) &&
+            !(
+              (context.subagent || input.workflowAgent) &&
+              (isRunAgentCall(toolName) || PERSON_TOOL_NAMES.includes(toolName))
+            )
+        )
+        .filter((toolName) => !input.preview || !forbiddenPreviewTool(toolName))
+    };
+    const dataTools = await describeAgentDataTools(
+      agent,
+      this.options.dataTools,
+      this.options.dataToolDescribeTimeoutMs
+    );
+    if (dataTools.sourceFailure) {
+      this.options.logger?.warn(
+        {
+          type: "agent_run.data_tools_unavailable",
+          runId,
+          agentName: agent.name,
+          reason: dataTools.sourceFailure,
+          toolNames: dataTools.missing
+        },
+        "The data tools of an agent could not be read; the run goes on without them"
+      );
+    } else if (dataTools.missing.length > 0) {
+      this.options.logger?.info(
+        {
+          type: "agent_run.data_tools_missing",
+          runId,
+          agentName: agent.name,
+          toolNames: dataTools.missing
+        },
+        "Agent lists data tools that do not exist now; the run goes on without them"
+      );
+    }
+    return { agent, dataTools };
+  }
+
+  /** The tools a model of the run is sent for the agent. */
+  private modelToolsOf(
+    agent: AgentConfig,
+    selection: ModelSelection,
+    dataTools: AgentDataTools["described"]
+  ): ModelTool[] {
+    return withToolResultRead(
+      materializeModelTools({
+        agent,
+        capabilities: selection.capabilities,
+        toolRegistry: this.options.toolRegistry,
+        dataTools,
+        webAccess: this.options.webAccess
+      })
+    );
+  }
+
+  /**
+   * Reads the conversation's offer again in the middle of the run, after a step added a Data
+   * Store to it (STORE-USE-1): the store's read tools reach the next model request of this
+   * turn. Nothing the run was offered is taken away; the system message stays as it was.
+   */
+  private async reoffer(
+    runId: AgentRunId,
+    input: StartAgentRunInput,
+    context: RuntimeCallContext,
+    setup: RunSetup,
+    model: RunModel
+  ): Promise<void> {
+    const offer = await this.offerOf(runId, setup.listed, input, context);
+    const { agent, dataTools } = await this.agentToolsOf(
+      runId,
+      setup.listed,
+      offer,
+      input,
+      context
+    );
+    for (const tool of dataTools.described) setup.offeredDataTools.add(tool.name);
+    const widen = (on: ModelSetup): ModelSetup => {
+      const have = new Set(on.tools.map(modelToolKey));
+      const added = this.modelToolsOf(agent, on.modelSelection, dataTools.described).filter(
+        (tool) => !have.has(modelToolKey(tool))
+      );
+      return added.length === 0 ? on : { ...on, tools: [...on.tools, ...added] };
+    };
+    model.current = widen(model.current);
+    if (model.fallback) model.fallback = widen(model.fallback);
   }
 
   /**
@@ -557,6 +638,10 @@ export class TurnLoop {
       state.complete();
       return undefined;
     }
+    // The offer was read before the paused step's calls were answered: one that added a Data
+    // Store brings its read tools now (STORE-USE-1).
+    if (finished.offerChanged || resume.toolCalls.some(isDataStoreUse))
+      await this.reoffer(runId, input, context, setup, model);
     return {
       messages,
       ownMessagesFrom: messages.length,
@@ -853,6 +938,9 @@ export class TurnLoop {
         state.complete();
         return;
       }
+      // A Data Store the step added brings its read tools to the next request (STORE-USE-1).
+      if (outcome.offerChanged && !stopping(context, state))
+        await this.reoffer(runId, input, context, setup, model);
       // The last step's open gets no note: no model request follows it.
       if (step + 1 < maxSteps)
         await this.noteOpenedPreview(runId, setup, context, state, outcome.opened, messages);
@@ -916,7 +1004,10 @@ interface ModelSetup {
 interface RunSetup extends ModelSetup {
   /** The routes of the runs above a subagent, nearest first; none for any other run. */
   ancestorRoutes: NonNullable<RuntimeCallContext["modelRoutes"]>;
-  offeredDataTools: ReadonlySet<string>;
+  /** The data tools the run was offered; a Data Store a step added widens it (`reoffer`). */
+  offeredDataTools: Set<string>;
+  /** The agent as its definition lists it, before the conversation's offer. */
+  listed: AgentConfig;
   /** The binding's fallback, where the run may switch to it. */
   fallback?: ModelSetup;
   systemMessage: ModelMessage;
@@ -993,6 +1084,10 @@ interface StepEntry {
   ): Promise<
     { messages: ModelMessage[]; providerContinuation?: ModelCompletion["continuation"] } | undefined
   >;
+}
+
+function isDataStoreUse(call: { toolName: string }): boolean {
+  return call.toolName === DATA_STORE_USE_TOOL_NAME;
 }
 
 /** The run was cancelled or is stopping: nothing more is read for its model. */

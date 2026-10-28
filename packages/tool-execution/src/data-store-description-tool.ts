@@ -14,7 +14,7 @@ export function createDataStoreDescriptionTool() {
     icon: "guide",
     effect: "reading",
     description:
-      "Describe a Data Store without reading rows: its fields in words, row estimates, what fills and reads it, the person's rights and whether this chat has row tools. Find its name with platform.assets.list first. Never infer row contents from metadata. If row tools are missing, report the returned next step: data_store.use is coming, not available yet. Never invent an interface path.",
+      "Describe a Data Store without reading rows: its fields in words, row estimates, what fills and reads it, the person's rights and whether this chat has row tools. Find its name with platform.assets.list first. Never infer row contents from metadata. If row tools are missing, follow the returned next step: data_store.use adds the store to this chat for reading. Never invent an interface path.",
     inputSchema: dataStoreDescriptionInputSchema,
     outputSchema: dataStoreDescriptionSchema,
     execute: () => toolFailed("handler_failed", "Describe Data Stores through the operation runner")

@@ -13,6 +13,7 @@ import * as auditTables from "./schema/audit";
 import * as configAssetsTables from "./schema/configAssets";
 import * as connectionsTables from "./schema/connections";
 import * as conversationCreatedAssetsTables from "./schema/conversationCreatedAssets";
+import * as conversationDataStoresTables from "./schema/conversationDataStores";
 import * as conversationsTables from "./schema/conversations";
 import * as dataScopesTables from "./schema/dataScopes";
 import * as dataStoresTables from "./schema/dataStores";
@@ -49,6 +50,7 @@ export * from "./schema/audit";
 export * from "./schema/configAssets";
 export * from "./schema/connections";
 export * from "./schema/conversationCreatedAssets";
+export * from "./schema/conversationDataStores";
 export * from "./schema/conversations";
 export * from "./schema/dataScopes";
 export * from "./schema/dataStores";
@@ -86,6 +88,7 @@ export const schema = {
   ...configAssetsTables,
   ...connectionsTables,
   ...conversationCreatedAssetsTables,
+  ...conversationDataStoresTables,
   ...conversationsTables,
   ...dataScopesTables,
   ...dataStoresTables,

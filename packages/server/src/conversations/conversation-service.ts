@@ -20,7 +20,9 @@ import {
   type RuntimeCallContext,
   type UserId,
   addDays,
+  asAgentRunId,
   asUserId,
+  DATA_STORE_USE_TOOL_NAME,
   getSubjectUserId,
   isAppError,
   readToolResultMetadata
@@ -41,7 +43,8 @@ import {
   normalizeGeneratedConversationTitle,
   temporaryAttachmentTitles
 } from "./conversation-title";
-import { requireOwnTranscript, requireReadableSubject } from "./platform-asset-subject";
+import { accessOf, requireOwnTranscript, requireReadableSubject } from "./platform-asset-subject";
+import { useDataStoreInConversation } from "./conversation-data-stores";
 import { checkoutApp, requireAppToCheckOut } from "../platform/asset-calls/app-edit";
 import { modelBindingRefOf, reasoningEffortTheModelTakes } from "../guardrails/system-model-call";
 import type { ChatServerOptions } from "../types";
@@ -53,6 +56,13 @@ const waitingAnswerSchema = z.object({
   awaitsPerson: z.literal(true)
 });
 const waitingOpenSchema = z.union([waitingAnswerSchema, z.object({ output: waitingAnswerSchema })]);
+
+/** The answer of an agent's `data_store.use` that waits for the person's click (STORE-USE-1). */
+const waitingUseAnswerSchema = z.object({ name: z.string(), awaitsPerson: z.literal(true) });
+const waitingUseSchema = z.union([
+  waitingUseAnswerSchema,
+  z.object({ output: waitingUseAnswerSchema })
+]);
 
 export interface CreateConversationCommand {
   visibility?: "private";
@@ -281,6 +291,88 @@ export class ConversationWorkflow {
       }
     });
     return updated;
+  }
+
+  /**
+   * The person's click on the card of an agent's `data_store.use` (STORE-USE-1): adds the
+   * store to their conversation for reading. Only the person whose turn the card came from,
+   * in their own session, and only for a call of this conversation that waited for them. The
+   * store's own checks (read right, publication, owner reach) are asked again here.
+   */
+  async addDataStore(
+    conversationId: ConversationId,
+    user: AuthenticatedUser,
+    context: { correlationId: string; audit: AuditRecorder; locale?: LocaleCode },
+    command: { store: string; toolCallId: string }
+  ) {
+    const conversation = await this.requireChatConversationAccess(conversationId, user);
+    // A key or a delegated actor is no click of the person's own (as for personal Connections).
+    if (user.keyScopes !== undefined || user.delegatedActor !== undefined) {
+      throw new AppError(
+        "FORBIDDEN",
+        "Only the person adds a Data Store to their conversation, in their own session",
+        { reason: "data_store_use_not_persons_turn" },
+        { exposeMessage: true }
+      );
+    }
+    await this.requirePendingUse(conversationId, command.toolCallId, command.store, user);
+    return useDataStoreInConversation(this.options, {
+      conversation,
+      actor: user,
+      access: await accessOf(this.options, user),
+      name: command.store,
+      confirmed: true,
+      context,
+      audit: context.audit,
+      toolCallId: command.toolCallId
+    });
+  }
+
+  /**
+   * Refuses a click that names no `data_store.use` of this store in this conversation that
+   * waited for the person, or one of another person's turn, a subagent's or a Workflow step's.
+   * Every refusal reads the same, so it tells nothing of another person's calls.
+   */
+  private async requirePendingUse(
+    conversationId: ConversationId,
+    toolCallId: string,
+    store: string,
+    user: AuthenticatedUser
+  ): Promise<void> {
+    const messages = await this.options.stores.conversations.listMessages({
+      clientInstanceId: this.options.clientInstanceId,
+      conversationId
+    });
+    const runIds = messages.flatMap((message) => {
+      const result = readToolResultMetadata(message.metadata);
+      if (result?.toolCallId !== toolCallId || result.toolName !== DATA_STORE_USE_TOOL_NAME)
+        return [];
+      const answer = waitingUseSchema.safeParse(result.result);
+      if (!answer.success) return [];
+      const used = "output" in answer.data ? answer.data.output : answer.data;
+      return used.name === store ? [result.runId] : [];
+    });
+    const runId = runIds[0];
+    const run =
+      runId === undefined
+        ? undefined
+        : await this.options.stores.agentRuns.getAgentRun({
+            clientInstanceId: this.options.clientInstanceId,
+            runId: asAgentRunId(runId)
+          });
+    if (
+      run?.conversationId !== conversationId ||
+      run.ownerUserId !== getSubjectUserId(user) ||
+      run.parentRunId !== undefined ||
+      run.workflowStepRunId !== undefined
+    ) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "The confirmation names no use of this Data Store that waits for you in this conversation",
+        { reason: "data_store_use_not_pending" },
+        { exposeMessage: true }
+      );
+    }
   }
 
   /**

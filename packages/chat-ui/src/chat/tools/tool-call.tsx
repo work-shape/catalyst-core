@@ -30,6 +30,11 @@ import {
 import { PageSaveCard } from "../../studio/pages/page-card";
 import { ASK_QUESTION_TOOL_NAME, readAskedQuestion } from "../questions/question";
 import { QuestionCard } from "../questions/question-card";
+import {
+  DATA_STORE_USE_TOOL_NAME,
+  DataStoreUseCard,
+  readDataStoreUse
+} from "../data-stores/data-store-use-card";
 import { AssetPreviewCard, previewedDraftOfCall } from "../../studio/pages/asset-preview";
 import { builtPageName, isOpenToolName, readPageSave } from "../../studio/pages/page-save";
 import {
@@ -249,6 +254,16 @@ export function ToolCallPart({
       : undefined;
   if (asked) {
     return <QuestionCard toolCallId={toolCallId} asked={asked} />;
+  }
+
+  // A Data Store the agent added to the conversation for reading, or one that waits for the
+  // person's click (STORE-USE-1).
+  const storeUse =
+    toolName === DATA_STORE_USE_TOOL_NAME && state === "completed"
+      ? readDataStoreUse(result)
+      : undefined;
+  if (storeUse) {
+    return <DataStoreUseCard toolCallId={toolCallId} use={storeUse} />;
   }
 
   // The agent's offer of a Connection's tools: a card whose button gives them to an agent.

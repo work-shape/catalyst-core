@@ -1,6 +1,10 @@
 import { SCHEDULED_START_TOOL_NAMES } from "@work-shape/catalyst-tool-execution";
 import { CATALYST_INTERNAL_AGENT_PROMPT } from "@work-shape/catalyst-agent-runtime";
-import { DATA_STORE_DESCRIPTION_TOOL_NAME, RUN_AGENT_TOOL_NAME } from "@work-shape/catalyst-core";
+import {
+  DATA_STORE_DESCRIPTION_TOOL_NAME,
+  DATA_STORE_USE_TOOL_NAME,
+  RUN_AGENT_TOOL_NAME
+} from "@work-shape/catalyst-core";
 import type { PlatformInstructions } from "@work-shape/catalyst-server";
 import {
   KNOWLEDGE_ADD_FILES_TOOL_NAME,
@@ -71,6 +75,7 @@ export const PLATFORM_TOOL_NAMES: readonly string[] = [
  */
 export const PLATFORM_MODULE_TOOL_NAMES: readonly string[] = [
   DATA_STORE_DESCRIPTION_TOOL_NAME,
+  DATA_STORE_USE_TOOL_NAME,
   CONNECTION_PROPOSE_TOOL_NAME,
   CONNECTION_DRAFT_TOOL_NAME,
   CONNECTION_OFFER_TOOL_NAME,
