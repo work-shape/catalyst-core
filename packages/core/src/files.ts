@@ -69,6 +69,7 @@ export const DEFAULT_ARTIFACT_PREVIEW_RENDERER = "artifact-preview-worker";
 // earlier results wrong, so they are rendered again: v2 raised the spreadsheet cell limit.
 export const DEFAULT_ARTIFACT_PREVIEW_RENDERER_VERSION = "preview-contract-v2";
 export const DEFAULT_ARTIFACT_PREVIEW_SETTINGS_HASH = "default-image-pages-v1";
+export const ATTACHMENT_IMAGE_VIEW_ARTIFACT_REF = "image.view";
 export const ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_REF = "preview.source_artifact";
 export const ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_KIND = "preview.source_attachment";
 
@@ -340,7 +341,10 @@ export interface AttachmentManifestEntry {
   byteSize: number;
   status: string;
   readable?: boolean;
-  modelVisibility?: ModelVisibleArtifactHint;
+  modelVisibility?: ModelVisibleArtifactHint & {
+    /** A derived image of the original file, retained with that file. */
+    artifactId?: ManagedArtifactId;
+  };
   modelContext?: AttachmentModelContextHint;
   metadata?: JsonObject;
 }

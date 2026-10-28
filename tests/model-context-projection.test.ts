@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   asAgentRunId,
   asClientInstanceId,
@@ -503,6 +503,53 @@ describe("model context projection", () => {
         ? [{ type: "text", text: "[Attached images]\n- screenshot.png (fileId: file_screenshot)" }]
         : []
     );
+  });
+
+  it("loads a derived attachment view without reading the original image", async () => {
+    const bytes = new Uint8Array([255, 216, 255]);
+    const artifactId = asManagedArtifactId("art_image_view");
+    const readFile = vi.fn();
+    const readArtifact = vi.fn(async () => ({ bytes, mimeType: "image/jpeg" }));
+    const manifest: AttachmentManifest = {
+      version: 1,
+      attachments: [
+        {
+          kind: "image",
+          fileId: asManagedFileId("file_original"),
+          attachmentId: asConversationAttachmentId("att_photo"),
+          filename: "photo.heic",
+          byteSize: 400,
+          status: "ready",
+          modelVisibility: { type: "image", mimeType: "image/jpeg", artifactId }
+        }
+      ]
+    };
+    const projected = await projectAgentVisibleHistory(
+      [
+        createMessage("user", "Describe the photo", {
+          agentRuntime: {
+            version: 1,
+            kind: "user_message",
+            attachmentManifest: manifest as unknown as JsonObject
+          }
+        })
+      ],
+      {
+        ...modelContextOptions(),
+        clientInstanceId: asClientInstanceId("projection-client"),
+        fileReader: { readFile },
+        artifactReader: { readArtifact }
+      }
+    );
+    expect(modelContentImages(projected[0]?.content ?? "")[0]).toMatchObject({
+      mimeType: "image/jpeg",
+      data: bytes
+    });
+    expect(readArtifact).toHaveBeenCalledWith({
+      clientInstanceId: asClientInstanceId("projection-client"),
+      artifactId
+    });
+    expect(readFile).not.toHaveBeenCalled();
   });
 
   it("loads model-visible image artifacts without storing base64 in history metadata", async () => {

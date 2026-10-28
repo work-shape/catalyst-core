@@ -1,4 +1,5 @@
 import {
+  asManagedArtifactId,
   approvalDecisionNote,
   readApprovalDecisionMetadata,
   createAssistantFinalMetadata,
@@ -612,7 +613,7 @@ async function projectUserAttachmentImages(
   attachmentManifest: AttachmentManifest | undefined,
   options: ModelContextProjectionOptions
 ): Promise<Extract<ModelContentPart, { type: "image" }>[]> {
-  if (!attachmentManifest || !options.clientInstanceId || !options.fileReader) {
+  if (!attachmentManifest || !options.clientInstanceId) {
     return [];
   }
   const images: Extract<ModelContentPart, { type: "image" }>[] = [];
@@ -621,10 +622,17 @@ async function projectUserAttachmentImages(
       continue;
     }
     try {
-      const object = await options.fileReader.readFile({
-        clientInstanceId: options.clientInstanceId,
-        fileId: attachment.fileId
-      });
+      const artifactId = attachment.modelVisibility.artifactId;
+      const object = artifactId
+        ? await options.artifactReader?.readArtifact({
+            clientInstanceId: options.clientInstanceId,
+            artifactId
+          })
+        : await options.fileReader?.readFile({
+            clientInstanceId: options.clientInstanceId,
+            fileId: attachment.fileId
+          });
+      if (!object) continue;
       const mimeType =
         object.mimeType ?? attachment.mimeType ?? attachment.modelVisibility.mimeType;
       if (!isSupportedImageMimeType(mimeType) || mimeType !== attachment.modelVisibility.mimeType) {
@@ -662,7 +670,10 @@ function readModelVisibility(
   }
   return {
     type: "image",
-    mimeType
+    mimeType,
+    ...(typeof value.artifactId === "string"
+      ? { artifactId: asManagedArtifactId(value.artifactId) }
+      : {})
   };
 }
 

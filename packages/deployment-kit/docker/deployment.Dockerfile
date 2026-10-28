@@ -281,6 +281,9 @@ RUN --mount=type=cache,id=vivd-apt-lists,target=/var/lib/apt/lists,sharing=locke
   && python3 -m pip install --break-system-packages --no-cache-dir \
     pdfplumber \
     pypdf \
+    Pillow==13.0.0 \
+    pillow-heif==1.8.1 \
+  && python3 -c "from PIL import Image; from pillow_heif import register_heif_opener; register_heif_opener(); assert 'AVIF' in Image.registered_extensions().values()" \
   && rm -rf /var/lib/apt/lists/*
 
 FROM document-runtime AS doc-worker
