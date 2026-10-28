@@ -251,6 +251,26 @@ export function createPostgresAgentProposalStore(db: PostgresConnection): AgentP
       );
     },
     get: (input) => getAgentProposal(db, input),
+    async getRevision(input) {
+      const [found] = await db
+        .select({
+          config: agentProposalRevisions.config,
+          fileSetId: agentProposalRevisions.fileSetId
+        })
+        .from(agentProposals)
+        .innerJoin(
+          agentProposalRevisions,
+          and(
+            eq(agentProposalRevisions.proposalId, agentProposals.id),
+            eq(agentProposalRevisions.revision, input.revision)
+          )
+        )
+        .where(ofAgent(input))
+        .limit(1);
+      return found
+        ? { config: found.config, ...(found.fileSetId ? { fileSetId: found.fileSetId } : {}) }
+        : undefined;
+    },
     save: (input) => saveAgentProposal(db, input),
     remove: (input) => removeAgentProposal(db, input)
   };

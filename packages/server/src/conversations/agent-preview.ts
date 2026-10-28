@@ -85,7 +85,15 @@ async function skillDraftsForTry(
         agentId: skill.id
       });
       const parsed = draft ? skillConfigSchema.safeParse(draft.config) : undefined;
-      return draft && parsed?.success ? [{ revision: draft.revision, config: parsed.data }] : [];
+      return draft && parsed?.success
+        ? [
+            {
+              revision: draft.revision,
+              config: parsed.data,
+              ...(draft.fileSetId ? { fileSetId: draft.fileSetId } : {})
+            }
+          ]
+        : [];
     })
   );
   return found.flat();

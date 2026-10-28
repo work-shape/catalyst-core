@@ -40,7 +40,15 @@ async function proposeOnResource(newText: string) {
   const f = await fixture(noIban);
   await applyAtCurrentRevisions(f.store.configAssets, {
     clientInstanceId,
-    mutations: [{ type: "upsert", kind: "skill", name: skill.name, config: json(withResource) }]
+    mutations: [
+      {
+        type: "upsert",
+        scope: f.owner,
+        kind: "skill",
+        name: skill.name,
+        config: json(withResource)
+      }
+    ]
   });
   const ops: SkillChangeOperation[] = [
     { type: "replace_text", target: "references/payment.md", oldText: "Pay by invoice.", newText }

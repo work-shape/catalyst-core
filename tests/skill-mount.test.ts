@@ -3,6 +3,7 @@ import { mkdtemp, readFile, readdir, rm, chmod, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import postgres from "postgres";
+import { skillConfigSchema } from "@work-shape/catalyst-config-schema";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
@@ -318,6 +319,54 @@ function toolContext(
 
 describe("the folders of an agent's skills in its workspace commands", () => {
   const { start } = useSkillWorlds();
+
+  it("mounts the admitted Try draft's whole folder even after the draft is discarded", async () => {
+    const { world, stores } = await startWorld(start);
+    const changedScript = "print('draft script')\n";
+    const saved = await world.api.call("assets.put", {
+      params: FORM,
+      payload: { files: formFolder(SKILL_MD, changedScript), expectedRevision: 1 }
+    });
+    expect(saved.statusCode, saved.body).toBe(200);
+    const live = await stores.configAssets.getConfigAsset({ clientInstanceId, ...FORM });
+    if (!live) throw new Error("Skill missing");
+    const draft = await stores.agentProposals.get({ clientInstanceId, agentId: live.id });
+    if (!draft) throw new Error("Draft missing");
+    const started: Started[] = [];
+    const h = await harness(world, stores, {
+      queueOnly: true,
+      executor: new DockerWorkspaceCommandProcessExecutor({
+        image: "runner:test",
+        commandClient: recordingDocker(started)
+      })
+    });
+    h.context.agentPreview = {
+      agentId: "assistant",
+      revision: 1,
+      source: "live",
+      config: agent("assistant", { skillNames: ["form"], toolNames: ["workspace.exec"] }),
+      skills: [
+        {
+          revision: draft.revision,
+          config: skillConfigSchema.parse(draft.config),
+          ...(draft.fileSetId ? { fileSetId: draft.fileSetId } : {})
+        }
+      ]
+    };
+    const queued = await h.exec("ls /skills/form");
+    expect(queued.status).toBe("queued");
+    await stores.agentProposals.remove({
+      clientInstanceId,
+      agentId: live.id,
+      revision: draft.revision
+    });
+    await h.runQueued();
+    expect((await h.command(queued.commandId))?.status).toBe("completed");
+    expect(started[0]?.skills.form?.["scripts/fill_form.py"]).toBe(
+      Buffer.from(changedScript).toString("base64")
+    );
+    expect(started[0]?.skills.form?.["assets/template.pdf"]).toBe(TEMPLATE.toString("base64"));
+  });
 
   it("records the run's skills on the command and mounts those alone, read-only, with no network", async () => {
     const { world, stores } = await startWorld(start);

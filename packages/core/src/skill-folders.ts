@@ -1,4 +1,6 @@
 import { SKILL_NAME_PATTERN } from "@work-shape/catalyst-asset-schemas";
+import type { SkillConfig } from "@work-shape/catalyst-asset-schemas";
+import type { FileSetId } from "./pages";
 import type { ClientInstanceId } from "./ids";
 
 /** Where a workspace command finds the folder of each skill of its run, read-only. */
@@ -7,12 +9,14 @@ export const SKILL_MOUNT_ROOT = "/skills";
 /**
  * One skill a workspace command mounts at `/skills/<name>/`: the revision that was live when
  * the command was queued, and the version of what the agent reads of it then. It holds names,
- * numbers and hashes, never content.
+ * numbers and hashes; a Try draft also carries its frozen definition and file set.
  */
 export interface WorkspaceCommandSkillMount {
   name: string;
   revision: number;
   sourceVersion: string;
+  /** The authorized Try snapshot, frozen at turn admission instead of a live revision. */
+  draft?: { config: SkillConfig; fileSetId?: FileSetId };
 }
 
 /** Whether a name can be a folder below `/skills`: one segment of the skill name rule. */
@@ -41,5 +45,6 @@ export interface SkillFolderReader {
     revision: number;
     /** When given, the revision must have this version. */
     sourceVersion?: string;
+    draft?: WorkspaceCommandSkillMount["draft"];
   }): Promise<SkillFolderFile[]>;
 }

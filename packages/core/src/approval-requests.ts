@@ -41,7 +41,14 @@ export interface ApprovalTransactionStores {
    * of a `<kind>_move` request, which commits with its decision (SHARE-1).
    */
   configAssets: Pick<ConfigAssetStore, "getConfigAsset"> &
-    Partial<Pick<ConfigAssetStore, "moveConfigAssets" | "listActiveConfigAssets">>;
+    Partial<
+      Pick<
+        ConfigAssetStore,
+        "moveConfigAssets" | "listActiveConfigAssets" | "applyConfigAssetMutations"
+      >
+    >;
+  /** A shared skill change is saved atomically with its approval decision. */
+  agentProposals?: import("./agent-proposals").AgentProposalStore;
   /** What a move writes beside the owner: its audit record and the grants that go with it. */
   audit?: Pick<AuditEventStore, "appendAuditEvent">;
   access?: Pick<AccessAdministrationStore, "listGrants" | "deleteGrant">;

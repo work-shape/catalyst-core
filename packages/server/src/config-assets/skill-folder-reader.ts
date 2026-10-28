@@ -15,7 +15,8 @@ import { readRevisionFolder } from "../assets/asset-files";
 /**
  * Reads the folder of one revision of a skill of this instance for the command worker, with
  * the read `assets.get files=true` answers: `SKILL.md`, its text resources and every file of
- * its file set. It reads the revision a command recorded, not the live one, and refuses a
+ * its file set. A Try command carries the draft definition and file set admitted with its turn.
+ * Otherwise it reads the stored revision a command recorded, and refuses a
  * revision of another instance, one that is not stored, one whose version is not the recorded
  * one, and a folder whose files are not the ones the revision records: a file missing from
  * storage, other bytes, or a file it does not name. It answers no rights: the command was given
@@ -33,12 +34,23 @@ export function createSkillFolderReader(options: {
       if (input.clientInstanceId !== options.clientInstanceId) {
         throw new AppError("FORBIDDEN", "A skill folder is read for its own instance only");
       }
-      const revision = await options.stores.configAssets.getConfigAssetRevision({
-        clientInstanceId: options.clientInstanceId,
-        kind: "skill",
-        name: input.name,
-        revision: input.revision
-      });
+      const asset = input.draft
+        ? await options.stores.configAssets.getConfigAsset({
+            clientInstanceId: options.clientInstanceId,
+            kind: "skill",
+            name: input.name
+          })
+        : undefined;
+      const revision = input.draft
+        ? asset
+          ? { assetId: asset.id, config: input.draft.config, fileSetId: input.draft.fileSetId }
+          : undefined
+        : await options.stores.configAssets.getConfigAssetRevision({
+            clientInstanceId: options.clientInstanceId,
+            kind: "skill",
+            name: input.name,
+            revision: input.revision
+          });
       if (!revision?.config) {
         throw new AppError("NOT_FOUND", `Revision ${input.revision} of the skill is not stored`, {
           reason: "skill_revision_missing"
