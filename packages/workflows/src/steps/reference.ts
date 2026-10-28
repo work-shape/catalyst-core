@@ -1,6 +1,8 @@
 import type { WORKFLOW_EXECUTED_STEP_TYPES } from "@work-shape/catalyst-core";
 import { agentReference } from "./agent.reference";
 import { codeReference } from "./code.reference";
+import { conditionReference } from "./condition.reference";
+import { parallelReference } from "./parallel.reference";
 import { loopReference } from "./loop.reference";
 import type { StepReference } from "./module";
 import { notifyReference } from "./notify.reference";
@@ -24,5 +26,7 @@ export const STEP_REFERENCE: { [Type in ExecutedStepType]: StepReference<Type> }
   agent: agentReference,
   code: codeReference,
   notify: notifyReference,
+  condition: conditionReference,
+  parallel: parallelReference,
   output: outputReference
 };

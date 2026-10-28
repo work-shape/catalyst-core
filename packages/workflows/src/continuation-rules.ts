@@ -15,7 +15,7 @@ export function workflowLoopMinimumSteps(index: WorkflowStepIndex, loopId: strin
   if (current?.step.type === "loop") total += current.step.steps.length;
   while (current) {
     total += current.position + 1;
-    current = current.sequence.loop ? index.get(current.sequence.loop) : undefined;
+    current = current.sequence.container ? index.get(current.sequence.container) : undefined;
   }
   return total;
 }
@@ -36,15 +36,38 @@ export async function workflowContinuationIssues(
     if (step.type === "workflow" || step.type === "notify") return true;
     if (step.type === "operation")
       return (await registry?.resolve(step.operation))?.effect !== "reading";
-    if (step.type === "loop") {
-      for (const child of step.steps) if (await changing(child)) return true;
-    }
+    const lists =
+      step.type === "loop"
+        ? [step.steps]
+        : step.type === "condition"
+          ? [step.then, step.else ?? []]
+          : step.type === "parallel"
+            ? step.branches.map((branch) => branch.steps)
+            : [];
+    for (const children of lists)
+      for (const child of children) if (await changing(child)) return true;
     return false;
   };
   for (const [id, entry] of index) {
     if (entry.step.type !== "loop" || !entry.step.continueAsNew) continue;
+    const containsBranch = (step: WorkflowStep): boolean =>
+      step.type === "condition" ||
+      step.type === "parallel" ||
+      (step.type === "loop" && step.steps.some(containsBranch));
+    if (entry.step.steps.some(containsBranch))
+      issues.push({
+        path: `steps.${id}.continueAsNew`,
+        message:
+          "continueAsNew cannot checkpoint a condition or parallel inside its body yet / continueAsNew kann einen Bedingungs- oder Parallelblock im Schleifenkörper noch nicht fortsetzen."
+      });
     let current: typeof entry | undefined = entry;
     while (current) {
+      if (current.step.type === "condition" || current.step.type === "parallel")
+        issues.push({
+          path: `steps.${id}.continueAsNew`,
+          message:
+            "continueAsNew cannot checkpoint inside a condition or parallel yet / continueAsNew kann innerhalb eines Bedingungs- oder Parallelblocks noch nicht fortsetzen."
+        });
       if (current !== entry && current.step.type === "loop" && (current.step.concurrency ?? 1) > 1)
         issues.push({
           path: `steps.${current.step.id}.concurrency`,
@@ -58,13 +81,13 @@ export async function workflowContinuationIssues(
           });
       }
       for (const step of current.sequence.steps.slice(current.position + 1)) {
-        if (step.type === "loop")
+        if (step.type === "loop" || step.type === "parallel" || step.type === "condition")
           issues.push({
             path: `steps.${step.id}`,
-            message: `Loop '${step.id}' cannot follow continueAsNew loop '${id}' at its level or an enclosing level: dynamic loop items cannot be reserved in the history budget. / Schleife '${step.id}' darf nicht nach der continueAsNew-Schleife '${id}' auf derselben oder einer umschließenden Ebene stehen: Dynamische Schleifenelemente können nicht im Schrittbudget des Fortsetzungslaufs reserviert werden.`
+            message: `${step.type === "loop" ? "Loop" : "Block"} '${step.id}' cannot follow continueAsNew loop '${id}' at its level or an enclosing level: dynamic loop items cannot be reserved in the history budget. / Schleife '${step.id}' darf nicht nach der continueAsNew-Schleife '${id}' auf derselben oder einer umschließenden Ebene stehen: Dynamische Schleifenelemente können nicht im Schrittbudget des Fortsetzungslaufs reserviert werden.`
           });
       }
-      current = current.sequence.loop ? index.get(current.sequence.loop) : undefined;
+      current = current.sequence.container ? index.get(current.sequence.container) : undefined;
     }
   }
   return issues;

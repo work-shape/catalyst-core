@@ -74,8 +74,7 @@ const manifestSchema = z.strictObject({
 
 /**
  * What the file form holds and this engine does not run, each by the name of its field. The
- * reserved blocks `condition` and `parallel` are not named here: `workflowBlockIssues` refuses
- * them, and what they hold is not read.
+ * blocks are visited just like top-level steps.
  */
 function unsupportedIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[] {
   const issues: WorkflowDefinitionIssue[] = [];
@@ -96,9 +95,15 @@ function unsupportedIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[
         issues.push(notSupported(`${at}.type`, `a step of the type '${step.type}'`));
       }
       issues.push(...stepUnsupportedIssues(step, at));
-      if (step.type === "loop") {
-        walk(step.steps, `${at}.steps`);
+      if (step.type === "loop") walk(step.steps, `${at}.steps`);
+      if (step.type === "condition") {
+        walk(step.then, `${at}.then`);
+        walk(step.else ?? [], `${at}.else`);
       }
+      if (step.type === "parallel")
+        step.branches.forEach((branch, branchIndex) =>
+          walk(branch.steps, `${at}.branches[${branchIndex}].steps`)
+        );
     });
   };
   walk(manifest.steps, "steps");
@@ -106,10 +111,13 @@ function unsupportedIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[
 }
 
 /**
- * One list of a definition in the order it runs: the steps at the top, or the steps of one
- * loop. `loop` is the id of that loop, and `parent` the list the loop is a step of.
+ * One sequential list: the top level, a loop body, or one branch. Its container owns the
+ * list, and parent is the list containing that block. Only a loop exposes a current item.
  */
 interface WorkflowSequence {
+  /** The containing block, of any type. */
+  container?: string;
+  /** Only a loop exposes its current item. */
   loop?: string;
   parent?: WorkflowSequence;
   steps: readonly WorkflowStep[];
@@ -122,23 +130,33 @@ export type WorkflowStepIndex = ReadonlyMap<
 >;
 
 /**
- * The steps of a definition by their ids, each with the list it runs in. What a reserved
- * block holds is not in it: the engine runs no step of one.
+ * The steps of a definition by their ids, each with its containing block and sequence.
  */
 export function indexWorkflowSteps(manifest: Pick<WorkflowManifest, "steps">): WorkflowStepIndex {
   const index = new Map<
     string,
     { step: WorkflowStep; sequence: WorkflowSequence; position: number }
   >();
-  const visit = (steps: readonly WorkflowStep[], loop?: string, parent?: WorkflowSequence) => {
+  const visit = (
+    steps: readonly WorkflowStep[],
+    container?: WorkflowStep,
+    parent?: WorkflowSequence
+  ) => {
     const sequence: WorkflowSequence = {
-      ...(loop === undefined ? {} : { loop }),
+      ...(container === undefined ? {} : { container: container.id }),
+      ...(container?.type === "loop" ? { loop: container.id } : {}),
       ...(parent === undefined ? {} : { parent }),
       steps
     };
     steps.forEach((step, position) => {
       index.set(step.id, { step, sequence, position });
-      if (step.type === "loop") visit(step.steps, step.id, sequence);
+      if (step.type === "loop") visit(step.steps, step, sequence);
+      if (step.type === "condition") {
+        visit(step.then, step, sequence);
+        visit(step.else ?? [], step, sequence);
+      }
+      if (step.type === "parallel")
+        for (const branch of step.branches) visit(branch.steps, step, sequence);
     });
   };
   visit(manifest.steps);
@@ -157,7 +175,7 @@ export function workflowLoopTailSteps(index: WorkflowStepIndex, loopId: string):
       if (step.type === "loop") break;
       total++;
     }
-    current = current.sequence.loop ? index.get(current.sequence.loop) : undefined;
+    current = current.sequence.container ? index.get(current.sequence.container) : undefined;
   }
   return total;
 }
@@ -214,10 +232,10 @@ function structuralIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[]
   }
   for (const [id, { step, sequence }] of index) {
     issues.push(...stepStructuralIssues(step, id));
-    if (sequence.loop !== undefined && (step.type === "trigger" || step.type === "output")) {
+    if (sequence.container !== undefined && (step.type === "trigger" || step.type === "output")) {
       issues.push({
         path: `steps.${id}`,
-        message: `A '${step.type}' step stands at the top, not in a loop`
+        message: `A '${step.type}' step stands at the top, not in a block`
       });
     }
     const mapped =
@@ -252,12 +270,14 @@ function structuralIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[]
     const references: { ref: WorkflowReference; field?: string; part?: number }[] =
       step.type === "loop"
         ? [{ ref: step.items }]
-        : [
-            ...mapped.flatMap(([field, source]) =>
-              sourceReferences(source).map((found) => ({ ...found, field }))
-            ),
-            ...keyParts.flatMap((source) => (source.ref ? [{ ref: source.ref }] : []))
-          ];
+        : step.type === "condition"
+          ? [{ ref: step.when.ref }]
+          : [
+              ...mapped.flatMap(([field, source]) =>
+                sourceReferences(source).map((found) => ({ ...found, field }))
+              ),
+              ...keyParts.flatMap((source) => (source.ref ? [{ ref: source.ref }] : []))
+            ];
     for (const { ref: reference, field, part } of references) {
       if (index.has(reference.step)) continue;
       // A part of a text is named by its field and its number, so the author finds it.

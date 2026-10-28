@@ -144,7 +144,7 @@ describe("the definitions a folder holds", () => {
     ).toEqual([]);
   });
 
-  it("reads the reserved blocks and refuses them with not_supported_yet, whatever they hold", async () => {
+  it("accepts condition and parallel blocks, including empty branches", () => {
     const condition = {
       id: "check",
       name: "Check",
@@ -163,25 +163,12 @@ describe("the definitions a folder holds", () => {
       ],
       concurrency: 2
     };
-    expect(refused({ steps: [trigger, condition, output()] })).toEqual([
-      ["not_supported_yet", "steps.check"]
-    ]);
-    expect(refused({ steps: [trigger, parallel, output()] })).toEqual([
-      ["not_supported_yet", "steps.both"]
-    ]);
+    expect(refused({ steps: [trigger, condition, output()] })).toEqual([]);
+    expect(refused({ steps: [trigger, parallel, output()] })).toEqual([]);
     // Inside a loop, without an `else`, and without a branch.
     const { else: _else, ...bare } = condition;
-    expect(refused({ steps: [trigger, loop("each", [bare]), output()] })).toEqual([
-      ["not_supported_yet", "steps.check"]
-    ]);
-    expect(refused({ steps: [trigger, { ...parallel, branches: [] }, output()] })).toEqual([
-      ["not_supported_yet", "steps.both"]
-    ]);
-    const refusal = await read({ steps: [trigger, condition, output()] });
-    expect(refusal.reason).toBe("not_supported_yet");
-    expect(refusal.issues).toEqual([
-      "Step 'check' has the type 'condition', which is not supported yet (not_supported_yet)"
-    ]);
+    expect(refused({ steps: [trigger, loop("each", [bare]), output()] })).toEqual([]);
+    expect(refused({ steps: [trigger, { ...parallel, branches: [] }, output()] })).toEqual([]);
     // A type no release knows is refused the same way.
     expect(
       refused({ steps: [trigger, { id: "x", name: "X", type: "teleport" }, output()] })

@@ -19,6 +19,8 @@ function unsupported(): never {
 export const unusedWorkflowRunsStore: WorkflowRunsStore = {
   lockDefinitionGraph: unsupported,
   recordStepRunInput: unsupported,
+  readBlockSteps: unsupported,
+  markBlockWaiting: unsupported,
   findRunByOperation: unsupported,
   findChildRun: unsupported,
   listChildRuns: unsupported,

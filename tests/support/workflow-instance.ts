@@ -99,6 +99,8 @@ export const stepRunsSchema = z.object({
       key: z.string(),
       status: z.string(),
       attempt: z.number(),
+      startedAt: z.string().optional(),
+      finishedAt: z.string().optional(),
       containerStepRunId: z.string().optional(),
       branch: z.string().optional(),
       iteration: z.object({ index: z.number(), label: z.string().optional() }).optional(),

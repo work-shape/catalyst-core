@@ -26,6 +26,21 @@ export function withEveryBodyStep(
   const index = indexWorkflowSteps(definition);
   return stepRuns.map((stepRun) => {
     const loop = index.get(stepRun.stepId)?.step;
+    if (loop?.type === "parallel" && stepRun.stepType === "parallel") {
+      const asked = loop.concurrency ?? loop.branches.length;
+      return {
+        ...stepRun,
+        ...(asked > 0 ? { concurrency: { asked, ranWith: Math.min(asked, stepSlots) } } : {}),
+        bodyCounts: Object.fromEntries(
+          loop.branches.flatMap((branch) =>
+            branch.steps.map((inner) => [
+              inner.id,
+              stepRun.bodyCounts?.[inner.id] ?? { total: 1, done: 0, failed: 0, running: 0 }
+            ])
+          )
+        )
+      };
+    }
     if (loop?.type !== "loop" || stepRun.stepType !== "loop") return stepRun;
     const asked = loopConcurrencyOf(loop);
     const shown: WorkflowStepRunView = {

@@ -37,6 +37,7 @@ export function createLoopProgress(options: {
   failLoop(
     tx: PlatformStores,
     run: WorkflowRun,
+    index: WorkflowStepIndex,
     loop: WorkflowStepRun,
     error: import("@work-shape/catalyst-core").WorkflowRunError
   ): Promise<void>;
@@ -146,7 +147,7 @@ export function createLoopProgress(options: {
         )
       )
         return;
-      await options.failLoop(tx, run, loopRun, {
+      await options.failLoop(tx, run, index, loopRun, {
         code: "continuation_no_progress",
         message: "The run budget cannot complete one loop item"
       });
@@ -197,7 +198,7 @@ export function createLoopProgress(options: {
         });
       } catch (error) {
         if (!(error instanceof WorkflowStepFailure)) throw error;
-        await options.failLoop(tx, run, loopRun, error.toRunError());
+        await options.failLoop(tx, run, index, loopRun, error.toRunError());
         return;
       }
     }

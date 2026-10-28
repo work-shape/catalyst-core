@@ -14,9 +14,8 @@ import {
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 
-// The file form of branches and parallel paths: nested blocks in the step list. The two block
-// types are reserved and no engine runs them, so the tests pin the names and the two refusals
-// that hold for every block, the loop included.
+// The file form of branches and parallel paths: nesting, ids and reference scope shared
+// by the validator and every execution path.
 
 const read = (id: string, from?: string): WorkflowStep => ({
   id,
@@ -47,7 +46,9 @@ const codes = (steps: WorkflowStep[]) => workflowBlockIssues(steps).map((issue) 
 
 describe("the blocks of a Workflow definition", () => {
   it("names the reserved types, the depth, the layout file and the refusals", () => {
-    expect(WORKFLOW_RESERVED_STEP_TYPES).toEqual(["condition", "parallel"]);
+    expect(WORKFLOW_RESERVED_STEP_TYPES).toEqual([]);
+    expect(WORKFLOW_STEP_TYPES).toContain("condition");
+    expect(WORKFLOW_STEP_TYPES).toContain("parallel");
     const types: readonly string[] = WORKFLOW_STEP_TYPES;
     for (const type of WORKFLOW_RESERVED_STEP_TYPES) expect(types).not.toContain(type);
     expect(WORKFLOW_MAX_BLOCK_DEPTH).toBe(16);
@@ -73,8 +74,8 @@ describe("the blocks of a Workflow definition", () => {
         steps = [loop(`l${String(outer)}`, steps)];
       return [start, ...steps];
     };
-    expect(codes(at(16))).toEqual(["not_supported_yet"]);
-    expect(codes(at(17))).toEqual(["not_supported_yet", "block_depth"]);
+    expect(codes(at(16))).toEqual([]);
+    expect(codes(at(17))).toEqual(["block_depth"]);
   });
 
   it("refuses a reference from one branch into a step of a sibling branch", () => {
@@ -88,7 +89,6 @@ describe("the blocks of a Workflow definition", () => {
       ]
     };
     expect(workflowBlockIssues([start, fork])).toEqual([
-      expect.objectContaining({ code: "not_supported_yet", step: "fork" }),
       expect.objectContaining({ code: "reference_out_of_scope", step: "right-read" })
     ]);
   });
@@ -171,8 +171,7 @@ describe("the blocks of a Workflow definition", () => {
     // What a file holds is not typed. The check is given it as it was read.
     const steps = z.custom<WorkflowStep[]>().parse(parsed);
     expect(workflowBlockIssues(steps)).toEqual([
-      expect.objectContaining({ code: "not_supported_yet", step: "wait" }),
-      expect.objectContaining({ code: "not_supported_yet", step: "odd" })
+      expect.objectContaining({ code: "not_supported_yet", step: "wait" })
     ]);
   });
 

@@ -511,7 +511,9 @@ async function findWorkflowStepOutput(
           ? isNull(workflowStepRuns.containerStepRunId)
           : and(
               eq(workflowStepRuns.containerStepRunId, input.containerStepRunId),
-              eq(workflowStepRuns.iteration, input.iteration ?? 0)
+              input.iteration === undefined
+                ? isNull(workflowStepRuns.iteration)
+                : eq(workflowStepRuns.iteration, input.iteration)
             )
       )
     )
@@ -624,6 +626,24 @@ export function createPostgresWorkflowRunsStore(db: PostgresConnection): Workflo
     noteStepRunOperation: (ref) => noteWorkflowStepRunOperation(db, ref),
     listOpenStepRuns: (ref) => listOpenWorkflowStepRuns(db, ref),
     listStepRuns: (input) => listWorkflowStepRuns(db, input),
+    readBlockSteps: async (ref) => {
+      const rows = await db
+        .select(stepRunColumns)
+        .from(workflowStepRuns)
+        .where(
+          and(
+            eq(workflowStepRuns.clientInstanceId, ref.clientInstanceId),
+            sql`${workflowStepRuns.containerStepRunId} = ${ref.id}`
+          )
+        );
+      return rows.map(mapStepRun);
+    },
+    markBlockWaiting: async (ref) => {
+      await db
+        .update(workflowStepRuns)
+        .set({ status: "waiting", ...(ref.failure ? { error: ref.failure } : {}) })
+        .where(and(stepRunIs(ref), inArray(workflowStepRuns.status, ["running", "waiting"])));
+    },
     findStepOutput: (input) => findWorkflowStepOutput(db, input),
     countLoopItems: (ref) => countWorkflowLoopItems(db, ref),
     readLoopItem: (ref) => readWorkflowLoopItem(db, ref),

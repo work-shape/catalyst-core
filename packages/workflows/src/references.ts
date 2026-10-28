@@ -95,7 +95,7 @@ export async function resolveReference(
         stepId: reference.step,
         ...(containerStepRunId === undefined
           ? {}
-          : { containerStepRunId, iteration: iteration ?? 0 })
+          : { containerStepRunId, ...(iteration === undefined ? {} : { iteration }) })
       });
       if (!output) throw unresolved(reference, "the step has no output");
       const field = fieldAt(output.value, reference.path);

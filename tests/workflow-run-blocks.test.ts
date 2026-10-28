@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { workflowStepRunFilterSchema, type WorkflowManifest } from "@work-shape/catalyst-core";
+import { workflowStepRunFilterSchema } from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
 import {
   publishedDefinitions,
@@ -168,110 +168,6 @@ describe("cancelling a Workflow Run inside a loop", () => {
       ["each_client", "cancelled"],
       ["each_client[0].send", "done"]
     ]);
-  });
-});
-
-describe("a reserved block", () => {
-  it("is refused with not_supported_yet when its definition is published or started", async () => {
-    const definitions = publishedDefinitions();
-    const condition = {
-      id: "check",
-      name: "Check",
-      type: "condition",
-      when: { ref: { step: "start", path: "input.note" }, op: "equals", value: "x" },
-      then: [],
-      else: []
-    };
-    const definition = notifyClients();
-    expect(() =>
-      definitions.publish({
-        ...definition,
-        steps: [definition.steps[0], condition, definition.steps[3]]
-      })
-    ).toThrowError(
-      expect.objectContaining({ details: expect.objectContaining({ reason: "not_supported_yet" }) })
-    );
-
-    const t = await ready();
-    const refused = await t.expectRefused(
-      t.root.id,
-      "workflows.start",
-      { params: { workflow: "with-condition" }, payload: {} },
-      { status: 422, code: "VALIDATION_FAILED" }
-    );
-    expect(refused.details).toMatchObject({
-      reason: "not_supported_yet",
-      issues: [{ code: "not_supported_yet", path: "steps.check" }]
-    });
-    expect(
-      await t.stores.audit.listAuditEvents({ clientInstanceId, type: "workflow_run.started" })
-    ).toEqual([]);
-  });
-
-  it("fails the run at the block, without a crash, where a run reaches one all the same", async () => {
-    // A definition another release stored: nothing checked it on its way to the engine.
-    const manifest: WorkflowManifest = {
-      id: "with-blocks",
-      name: "With blocks",
-      runAs: "workflow-runner",
-      inputs: { type: "object" },
-      outputs: { type: "object" },
-      steps: [
-        { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
-        {
-          id: "check",
-          name: "Check",
-          type: "condition",
-          when: { ref: { step: "start", path: "input.note" }, op: "equals", value: "x" },
-          then: [
-            {
-              id: "then_read",
-              name: "Read",
-              type: "operation",
-              operation: "connection.crm.echo",
-              input: {}
-            }
-          ]
-        },
-        { id: "result", name: "Result", type: "output", input: {} }
-      ]
-    };
-    const definitions = publishedDefinitions();
-    definitions.hold(manifest, "rev-with-condition");
-    const t = await ready({ definitions: definitions.source });
-    const run = await t.finish((await start(t, t.root.id, "with-blocks")).id);
-    expect(run.status).toBe("failed");
-    expect(run.error?.code).toBe("not_supported_yet");
-    expect(t.executed).toEqual([]);
-    const stepRuns = await stepRunsOf(t, run.id);
-    // One attempt: the refusal is no crash that the executor would run again.
-    expect(stepRuns.map((stepRun) => [stepRun.key, stepRun.status, stepRun.attempt])).toEqual([
-      ["start", "done", 1],
-      ["check", "failed", 1]
-    ]);
-    expect(run.error?.stepRunId).toBe(stepRuns[1]?.id);
-
-    const [start0, , result] = manifest.steps;
-    if (!start0 || !result) throw new Error("The definition lost a step");
-    definitions.hold(
-      {
-        ...manifest,
-        steps: [
-          start0,
-          {
-            id: "both",
-            name: "Both",
-            type: "parallel",
-            branches: [{ id: "left", name: "Left", steps: [] }],
-            concurrency: 2
-          },
-          result
-        ]
-      },
-      "rev-with-parallel"
-    );
-    const parallel = await t.finish((await start(t, t.root.id, "with-blocks")).id);
-    expect(parallel).toMatchObject({ status: "failed", error: { code: "not_supported_yet" } });
   });
 });
 

@@ -943,7 +943,9 @@ export const WORKFLOW_STEP_TYPES = [
   "agent",
   "notify",
   /** Starts another Workflow as a child run and waits for it. */
-  "workflow"
+  "workflow",
+  "condition",
+  "parallel"
 ] as const;
 export type WorkflowStepType = (typeof WORKFLOW_STEP_TYPES)[number];
 
@@ -954,11 +956,7 @@ export type WorkflowStepType = (typeof WORKFLOW_STEP_TYPES)[number];
  */
 export const WORKFLOW_EXECUTED_STEP_TYPES = [...WORKFLOW_STEP_TYPES] as const;
 
-export const WORKFLOW_RESERVED_STEP_TYPES = [
-  /** Reserved in the contract: drawn, and run by no engine yet. */
-  "condition",
-  "parallel"
-] as const;
+export const WORKFLOW_RESERVED_STEP_TYPES = [] as const;
 export type WorkflowReservedStepType = (typeof WORKFLOW_RESERVED_STEP_TYPES)[number];
 
 export const WORKFLOW_TRIGGER_KINDS = ["manual", "schedule", "parent", "outside"] as const;

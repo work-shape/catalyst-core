@@ -511,12 +511,12 @@ describe("starting a Workflow that cannot run", () => {
     const invalid = await t.expectRefused(
       t.root.id,
       "workflows.start",
-      { params: { workflow: "with-parallel-step" }, payload: {} },
+      { params: { workflow: "with-image-step" }, payload: {} },
       { status: 422, code: "VALIDATION_FAILED" }
     );
     expect(invalid.details).toMatchObject({
       reason: "not_supported_yet",
-      issues: [{ code: "not_supported_yet", path: "steps.check" }]
+      issues: [{ code: "not_supported_yet", path: "steps.1.type" }]
     });
     const wrongType = await t.expectRefused(
       t.root.id,
