@@ -49,6 +49,8 @@ describe("the released OpenAPI document", () => {
       "assets.get  GET /api/v1/assets/{kind}/{name}",
       "assets.list  GET /api/v1/assets/{kind}",
       "assets.list_live_once  GET /api/v1/assets/{kind}/{name}/run-live-once",
+      "assets.move  POST /api/v1/assets/{kind}/{name}/move",
+      "assets.move_check  POST /api/v1/assets/{kind}/{name}/move/check",
       "assets.preview  POST /api/v1/assets/{kind}/{name}/preview",
       "assets.publications.list  GET /api/v1/assets/{kind}/{name}/publications",
       "assets.publish  POST /api/v1/assets/{kind}/{name}/publish",
