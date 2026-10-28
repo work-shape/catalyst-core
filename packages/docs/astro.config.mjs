@@ -94,6 +94,7 @@ export default defineConfig({
                 "apps/actions",
                 "apps/connection-actions",
                 "apps/data-store-actions",
+                "apps/describe-data-store",
                 "apps/workflow-actions",
                 "apps/examples",
                 "apps/troubleshooting"
