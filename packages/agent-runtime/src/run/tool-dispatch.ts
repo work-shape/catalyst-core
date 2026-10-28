@@ -131,6 +131,7 @@ export class ToolDispatch {
                 this.modelInput.modelContextOptions(context)
               )
             : this.options.runTool,
+        offeredDataToolNames: [...offeredDataTools],
         unoffered:
           isUnofferedDataToolCall(toolCall.toolName, offeredDataTools) ||
           Boolean(input.preview && forbiddenPreviewTool(toolCall.toolName)),

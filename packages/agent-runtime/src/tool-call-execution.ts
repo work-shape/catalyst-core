@@ -31,6 +31,7 @@ export async function executeToolCall(input: {
    * a failure the agent reads, and nothing is run.
    */
   unoffered?: boolean;
+  offeredDataToolNames?: readonly string[];
   /** Set for a call refused before it runs, as a `run_agent` call beyond the step's limit. */
   refusal?: ToolExecutionError;
   modelContext: ModelContextProjectionOptions;
@@ -123,6 +124,7 @@ export async function executeToolCall(input: {
   // The surface is asked before the input is read, so a call the agent may not make is
   // refused as that and not for its input.
   const answer = await input.runTool(request, input.context, {
+    offeredDataToolNames: input.offeredDataToolNames,
     unreadableInput: input.toolCall.inputParseError && {
       code: input.toolCall.inputParseError.code,
       message: input.toolCall.inputParseError.message

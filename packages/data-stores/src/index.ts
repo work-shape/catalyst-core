@@ -104,7 +104,10 @@ export function dataStorePageOperationName(
 export const dataStoresModule = defineModule({
   name: "dataStores",
   kinds: [DATA_STORE_ASSET_KIND],
+  tools: ["platform.data_stores.describe"],
   operations: [
+    "platform.data_stores.describe",
+    "data_stores.description",
     "data_stores.query",
     "data_stores.insert",
     "data_stores.describe",

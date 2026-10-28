@@ -1,5 +1,6 @@
 import {
   createScheduledStartTools,
+  createDataStoreDescriptionTool,
   SCHEDULED_START_TOOL_NAMES
 } from "@work-shape/catalyst-tool-execution";
 import { describeAgentDataTools } from "@work-shape/catalyst-agent-runtime";
@@ -10,6 +11,7 @@ import {
   ASK_QUESTION_TOOL_NAME,
   RUN_AGENT_TOOL_NAME,
   DATA_STORE_ASSET_KIND,
+  DATA_STORE_DESCRIPTION_TOOL_NAME,
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
   dataStoreOperationName,
@@ -227,6 +229,7 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
         ...PLATFORM_TOOL_NAMES.filter((toolName) => agentToolNames.includes(toolName)),
         ...(holds
           ? [
+              DATA_STORE_DESCRIPTION_TOOL_NAME,
               ...WORKFLOW_TEST_TOOL_NAMES,
               KNOWLEDGE_ADD_FILES_TOOL_NAME,
               ...SCHEDULED_START_TOOL_NAMES
@@ -334,6 +337,7 @@ export function createPlatformTools(
     skillSaveApproval: (context: ToolExecutionContext, name: string) =>
       platformAssets.calls.skillSaveApproval(context, name),
     tools: [
+      createDataStoreDescriptionTool(),
       ...createPlatformDiscoveryTools(platformAssets.calls, {
         connectorTypes: input.connections?.connectorTypes,
         catalogue

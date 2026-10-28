@@ -3,6 +3,7 @@ import { previewDraft, previewToolDeps } from "./agent-preview";
 import { denialText, type ToolCallNames } from "./tool-refusal-text";
 import {
   AGENT_TOOL_ACTION_PREFIX,
+  DATA_STORE_DESCRIPTION_TOOL_NAME,
   AppError,
   ConfirmationUnattendedError,
   OPERATION_DENIAL_REASONS,
@@ -213,6 +214,7 @@ export function registerToolOperations(
     // replace their person-rights and subject checks, or collide when routes register.
     // `run_agent` is the call of `agents.run`, which the server registers.
     if (
+      tool.name === DATA_STORE_DESCRIPTION_TOOL_NAME ||
       SCHEDULED_START_TOOL_NAMES.includes(tool.name) ||
       WORKFLOW_TEST_TOOL_NAMES.includes(tool.name) ||
       APP_TRY_TOOL_NAMES.includes(tool.name) ||
@@ -495,6 +497,7 @@ export function createToolOperationRunner(
           ...(context.unattended ? { unattended: true } : {}),
           ...(context.firstPartyRun ? { firstPartyRun: true } : {}),
           ...(context.agentPreview ? { agentPreview: context.agentPreview } : {}),
+          offeredDataToolNames: options.offeredDataToolNames,
           unreadableInput: options.unreadableInput
         }
       );
