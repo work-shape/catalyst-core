@@ -158,6 +158,7 @@ describe("docker workspace command runner", () => {
           HOME: "/internal/home",
           PATH: "/unsafe/bin",
           TMPDIR: "/internal/tmp",
+          CATALYST_MAX_WORKSPACE_BYTES: "10485760",
           WORKSPACE_DIR: "/internal/workspace"
         }
       },
@@ -177,6 +178,7 @@ describe("docker workspace command runner", () => {
       HOME: "/workspace",
       PATH: "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
       TMPDIR: "/tmp",
+      CATALYST_MAX_WORKSPACE_BYTES: "10485760",
       WORKSPACE_DIR: "/workspace"
     });
     expect(invocation.args).toEqual(

@@ -29,3 +29,27 @@ describe("deployment kit system layers", () => {
     expect(dockerfile).toContain("FROM document-runtime AS doc-worker");
   });
 });
+
+describe("file helper runner packages", () => {
+  it("installs and smoke-checks the file programs in the runner", () => {
+    const system = dockerfile.split(" AS runner-system\n")[1]?.split("\nFROM ")[0] ?? "";
+    const runner = dockerfile.split("FROM runner-system AS runner")[1] ?? "";
+    for (const dependency of [
+      "7zip",
+      "libarchive-tools",
+      "pillow-heif==1.8.1",
+      "extract-msg==0.57.0",
+      "tnefparse==1.4.0",
+      "numbers-parser==4.22.0",
+      "Pillow==13.0.0"
+    ])
+      expect(system).toContain(dependency);
+    for (const smoke of [
+      "7z i",
+      "bsdtar --version",
+      "import extract_msg, tnefparse, numbers_parser, pillow_heif",
+      "Image.open(b).load()"
+    ])
+      expect(runner).toContain(smoke);
+  });
+});
