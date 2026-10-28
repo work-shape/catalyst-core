@@ -250,7 +250,9 @@ describe("the OAuth install's first step", () => {
     expect(markup).not.toContain('data-connection-field="credentialMode"');
     expect(markup).toContain("Each person connects their own account.");
     expect(markup).toContain('data-catalogue-redirect-uri=""');
-    expect(markup).toContain("cannot name its redirect URI");
+    expect(markup).toContain(
+      "No public address is set up yet, so there is no redirect URI. Ask the technical team."
+    );
   });
 
   it("asks for no field on the operator's managed client, and keeps the own app under More", () => {
