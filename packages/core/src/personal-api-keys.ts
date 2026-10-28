@@ -1,5 +1,6 @@
 import {
   ACTIONS,
+  PROJECT_ACTIONS,
   type OperationScope,
   type PlatformAction
 } from "@work-shape/catalyst-asset-schemas";
@@ -171,13 +172,15 @@ export const PERSONAL_API_KEY_USE_ACTIONS = [
 /**
  * The actions a personal key can name: reading, writing, deleting and publishing what the
  * owner builds, the use level, and the read-only infrastructure check under `system.view`.
- * Approving and administering stay with a signed-in person.
+ * Approving and administering stay with a signed-in person. A project's rights are carried by
+ * membership alone and held by nobody as a right a key could narrow (PRJ-1).
  */
 export const PERSONAL_API_KEY_ACTIONS: readonly PlatformAction[] = ACTIONS.filter(
   (action) =>
-    /\.(read|write|delete|publish)$/u.test(action) ||
-    action === "system.view" ||
-    PERSONAL_API_KEY_USE_ACTIONS.some((use) => use === action)
+    !PROJECT_ACTIONS.some((project) => project === action) &&
+    (/\.(read|write|delete|publish)$/u.test(action) ||
+      action === "system.view" ||
+      PERSONAL_API_KEY_USE_ACTIONS.some((use) => use === action))
 );
 
 /** What a key's workspace and asset are compared with: the resource of a check. */

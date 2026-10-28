@@ -10,6 +10,7 @@ import {
   asUserId,
   authScopeForPermission,
   createAuthorizer,
+  isMembershipOnlyAction,
   legacyPermissionFor,
   type AccessResource,
   type AuthenticatedIdentity,
@@ -31,6 +32,10 @@ const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
   while (cleanups.length > 0) await cleanups.pop()?.();
 });
+
+// A project's rights came after AP-4 and are carried by membership alone, never by a role or a
+// row (PRJ-1): no seed writes one, and the evaluator before AP-4 has no answer to compare.
+const ROW_ACTIONS = ACTIONS.filter((action) => !isMembershipOnlyAction(action));
 
 const INSTANCES = ["ap4-a", "ap4-b"];
 
@@ -194,7 +199,7 @@ async function seed(sql: Sql, seedNumber: number): Promise<Seeded> {
                 }
               })
             )
-          : pick(ACTIONS);
+          : pick(ROW_ACTIONS);
       // No release before AP-4 wrote a row at instance scope: the Access page refused it
       // (`invalid_scope`). A user's row there is still compared; a service principal's is not,
       // because once migration 0079 merged it with a key of the list nothing tells the two
@@ -270,7 +275,7 @@ function preDerive(principalPermissions: string[], credentialScopes: string[] | 
   };
 }
 
-const QUESTIONS = [...ACTIONS, ...PERMISSIONS, "ref:demo"];
+const QUESTIONS = [...ROW_ACTIONS, ...PERMISSIONS, "ref:demo"];
 
 /** The legacy key behind an action, or none. */
 function legacyKeyOf(action: (typeof ACTIONS)[number]) {

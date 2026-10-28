@@ -215,6 +215,8 @@
     "permissions.list": "holder_right",
     "permissions.rights": "holder_right",
     "platform.references.get": "asset_right",
+    "projects.get": "workspace_role",
+    "projects.list": "workspace_role",
     "ready.get": "public",
     "session_tokens.issue": "public",
     "view_runtime.files.get": "public",

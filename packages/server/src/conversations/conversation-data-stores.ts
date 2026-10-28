@@ -196,7 +196,8 @@ export async function useDataStoreInConversation(
     if (current) await requireOwnConversation(options, current);
     throw new AppError("NOT_FOUND", "Conversation is not available");
   }
-  await (input.audit ?? options.auditRecorder).record({
+  const audit = input.audit ?? options.auditRecorder;
+  await audit.record({
     type: "conversation.data_store_added",
     status: "success",
     actor: auditActorFromIdentity(actor),
