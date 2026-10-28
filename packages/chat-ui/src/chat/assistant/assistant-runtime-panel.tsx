@@ -20,6 +20,7 @@ import { dedupeToolSurfaceRefs, readToolSurfaceRefs } from "../tools/tool-surfac
 import { AssistantThread, type StartComposerPosition } from "./assistant-thread";
 import { AssistantToolRegistry } from "./assistant-tool-registry";
 import { transcriptMessageTimes } from "./thread-time";
+import { agentChangeLines } from "./agent-change-line";
 import { useRegisterToolDisplayActions } from "../../shared/domain-ui-widgets";
 import { useConversationSubject } from "../conversation/use-conversation-subject";
 import { useReportDockRun, useReportDockSubject } from "../dock/dock-subject";
@@ -148,6 +149,10 @@ function AssistantRuntimePane({
   const messageTimes = useMemo(
     () => transcriptMessageTimes(chat.messages ?? [], chat.activeRun),
     [chat.activeRun, chat.messages]
+  );
+  const agentChanges = useMemo(
+    () => agentChangeLines(chat.messages ?? [], chat.runAgents),
+    [chat.messages, chat.runAgents]
   );
   const activeRef = useRef(true);
   const rootSubmitPendingRef = useRef(false);
@@ -514,6 +519,7 @@ function AssistantRuntimePane({
               threadLoading={snapshotStatus === "loading"}
               loadedMessageCount={initialMessages.length}
               messageTimes={messageTimes}
+              agentChanges={agentChanges}
               conversationId={selectedConversationId}
               composerFocusRequestId={composerFocusRequestId}
               startComposerRef={startComposerRef}

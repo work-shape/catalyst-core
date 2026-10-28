@@ -352,6 +352,8 @@ export interface SelectedChatModel {
   localUploadingAttachments: LocalUploadingAttachment[];
   conversationRunning: boolean;
   activeRun: ConversationControllerState["activeRun"];
+  /** The agent of each run of the open conversation, oldest first: its agent change lines. */
+  runAgents: ReadonlyArray<{ inputMessageId: string; agentName: string }>;
   /** The open conversation's queue of follow-up messages. */
   followUpSource: FollowUpSource;
   sendBlock: SendBlock | undefined;

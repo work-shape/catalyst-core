@@ -652,6 +652,13 @@ export interface ReleaseRunStartCommandInput {
   claimedAt?: ISODateString;
 }
 
+/** The agent one run of a conversation used, and the message that started it. */
+export interface ConversationRunAgent {
+  runId: AgentRunId;
+  inputMessageId: MessageId;
+  agentName: string;
+}
+
 export interface AgentRunStore {
   claimRunStartCommand(input: ClaimRunStartCommandInput): Promise<ClaimRunStartCommandResult>;
   completeRunStartCommand(input: CompleteRunStartCommandInput): Promise<RunStartCommand>;
@@ -680,6 +687,15 @@ export interface AgentRunStore {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
   }): Promise<AgentRun | undefined>;
+  /**
+   * The agent of each run the conversation held, oldest first, with the message that started
+   * it: where its history shows that another agent answers from there on (T30). A child
+   * agent's run is not the conversation's.
+   */
+  listConversationRunAgents(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+  }): Promise<ConversationRunAgent[]>;
   updateAgentRunStatus(input: UpdateAgentRunStatusInput): Promise<AgentRun>;
   /**
    * The first step of an `agent_run.execute` job: moves a queued run to running under the

@@ -226,6 +226,8 @@ export interface ConversationThreadSnapshot {
     run: ActiveRunSummary;
     projection: AgentRunProjection;
   };
+  /** The agent of each run the conversation held, oldest first, by the message that started it. */
+  runAgents?: { inputMessageId: MessageId; agentName: string }[];
   userState: ConversationUserState;
   serverTime: ISODateString;
 }

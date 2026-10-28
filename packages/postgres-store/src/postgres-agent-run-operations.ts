@@ -32,6 +32,7 @@ import {
   type ClientInstanceId,
   type CompleteRunStartCommandInput,
   type ConversationId,
+  type ConversationRunAgent,
   type CreateAgentRunInput,
   type PrepareConversationRunStartInput,
   type PreparedConversationRunStart,
@@ -547,6 +548,35 @@ async function getLatestConversationAgentRun(
   return row ? mapAgentRun(row) : undefined;
 }
 
+async function listConversationRunAgents(
+  db: PostgresConnection,
+  input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+  }
+): Promise<ConversationRunAgent[]> {
+  const rows = await db
+    .select({
+      runId: agentRuns.id,
+      inputMessageId: agentRuns.inputMessageId,
+      agentName: agentRuns.agentName
+    })
+    .from(agentRuns)
+    .where(
+      and(
+        eq(agentRuns.clientInstanceId, input.clientInstanceId),
+        eq(agentRuns.conversationId, input.conversationId),
+        isNull(agentRuns.parentRunId)
+      )
+    )
+    .orderBy(asc(agentRuns.startedAt), asc(agentRuns.id));
+  return rows.map((row) => ({
+    runId: asAgentRunId(row.runId),
+    inputMessageId: asMessageId(row.inputMessageId),
+    agentName: row.agentName
+  }));
+}
+
 async function updateAgentRunStatus(
   db: PostgresConnection,
   input: UpdateAgentRunStatusInput
@@ -766,6 +796,11 @@ export function createPostgresAgentRunsStore(
       input: Parameters<AgentRunStore["getLatestConversationAgentRun"]>[0]
     ): Promise<AgentRun | undefined> {
       return getLatestConversationAgentRun(db, input);
+    },
+    async listConversationRunAgents(
+      input: Parameters<AgentRunStore["listConversationRunAgents"]>[0]
+    ): Promise<ConversationRunAgent[]> {
+      return listConversationRunAgents(db, input);
     },
     async updateAgentRunStatus(input: UpdateAgentRunStatusInput): Promise<AgentRun> {
       return updateAgentRunStatus(db, input);

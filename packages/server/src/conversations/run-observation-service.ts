@@ -88,6 +88,10 @@ export class RunObservationWorkflow {
         latestRun?.status === "failed" || latestRun?.status === "cancelled" ? latestRun : undefined;
       const runForSnapshot = activeRun ?? latestVisibleTerminalRun;
       const latestRunOfAnyStatus = activeRun ?? latestRun;
+      const runAgents = await stores.agentRuns.listConversationRunAgents({
+        clientInstanceId,
+        conversationId
+      });
       const serverTime = new Date().toISOString();
       const completedRunProjections = await this.createCompletedRunProjections(
         stores,
@@ -123,6 +127,14 @@ export class RunObservationWorkflow {
                   ? { reasoningEffort: latestRunOfAnyStatus.reasoningEffort }
                   : {})
               }
+            }
+          : {}),
+        ...(runAgents.length > 0
+          ? {
+              runAgents: runAgents.map(({ inputMessageId, agentName }) => ({
+                inputMessageId,
+                agentName
+              }))
             }
           : {}),
         // Synthetic until a backend read-marker mutation makes unread/read state product scope.

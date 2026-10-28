@@ -959,6 +959,11 @@ export const conversationThreadSnapshotSchema = z.object({
   /** The agent of the conversation's latest run: the agent it is held with. Absent before the first run. */
   agentName: z.string().optional(),
   /**
+   * The agent of each run the conversation held, oldest first, by the message that started the
+   * run: where another agent answers from that message on, the history says so (T30).
+   */
+  runAgents: z.array(z.object({ inputMessageId: z.string(), agentName: z.string() })).optional(),
+  /**
    * What the conversation's latest run was asked to use. Absent before the first run; a run that
    * followed the configured defaults leaves both fields out.
    */

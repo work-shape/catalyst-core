@@ -92,6 +92,7 @@ import {
   activeAgentNameFor,
   conversationAgentPickFor,
   terminalRunNotice,
+  withRunUnderway,
   WORKSPACE_AUTH_SCOPE,
   workspaceScopedConfigFor
 } from "./workspace-chat-state";
@@ -114,6 +115,7 @@ export {
   conversationAgentPickFor,
   isAbandonedDraftConversation,
   terminalRunNotice,
+  withRunUnderway,
   WORKSPACE_AUTH_SCOPE,
   workspaceScopedConfigFor
 } from "./workspace-chat-state";
@@ -812,6 +814,14 @@ export function useWorkspaceChatModel({
   });
   // MODEL-REGION-3: the conversation holds data from personal connections, as its thread says.
   const conversationPersonalData = selectedThread?.personalData === true;
+  // T30: the agent of each run, the one underway too before the thread is read again.
+  const threadRunAgents = selectedThread?.runAgents;
+  const activeRunInput = controller.activeRun?.run.inputMessageId;
+  const activeRunAgent = controller.activeRun?.run.agentName;
+  const runAgents = useMemo(
+    () => withRunUnderway(threadRunAgents ?? [], activeRunInput, activeRunAgent),
+    [activeRunAgent, activeRunInput, threadRunAgents]
+  );
   const { selectableModels, selectedModel, noModelAllowed } = agentModelSelection(
     activeAgent,
     modelPicks.modelBindingId,
@@ -1257,6 +1267,7 @@ export function useWorkspaceChatModel({
       localUploadingAttachments: draftAttachmentController.visibleUploadingAttachments,
       conversationRunning: selectedConversationRunning,
       activeRun: controller.activeRun,
+      runAgents,
       followUpSource,
       sendBlock: workspaceSendBlock({
         attachmentBlockedReason: draftAttachmentController.sendBlockedReason,

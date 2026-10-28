@@ -45,6 +45,7 @@ export {
   conversationAgentPickFor,
   isAbandonedDraftConversation,
   terminalRunNotice,
+  withRunUnderway,
   workspaceScopedConfigFor
 } from "../../../packages/chat-ui/src/chat/workspace/workspace-chat-model";
 export {

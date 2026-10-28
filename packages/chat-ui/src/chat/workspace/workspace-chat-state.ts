@@ -103,6 +103,22 @@ export function conversationAgentPickFor(input: {
   return input.pickedIn[conversationId] ?? heldWith ?? input.forNew;
 }
 
+/**
+ * The agent of each run of the open conversation as its thread names them, with the run underway
+ * added where the thread was read before it started (T30).
+ */
+export function withRunUnderway(
+  runAgents: ReadonlyArray<{ inputMessageId: string; agentName: string }>,
+  inputMessageId: string | undefined,
+  agentName: string | undefined
+): ReadonlyArray<{ inputMessageId: string; agentName: string }> {
+  if (inputMessageId === undefined || agentName === undefined) return runAgents;
+  const last = runAgents.at(-1);
+  return last?.inputMessageId === inputMessageId && last.agentName === agentName
+    ? runAgents
+    : [...runAgents, { inputMessageId, agentName }];
+}
+
 // The code a run is failed with when no worker took it within its queue limit.
 const RUN_NOT_STARTED_CODE = "AGENT_RUN_NOT_STARTED";
 
