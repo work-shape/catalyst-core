@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import {
   usageBreakdownSchema,
   usageSummarySchema,
@@ -325,6 +326,118 @@ describe("an agent of Only me in its owner's own chats", () => {
   });
 });
 
+/**
+ * A running instance with Kai, his own agent OWN in his Personal Workspace, and an agent
+ * offered to all that lists it as a subagent. `ownTools` are the tools OWN is given; the
+ * capability supplies tools the model may call.
+ */
+async function ownAgentInstance(
+  tools: NonNullable<Parameters<typeof createTestInstance>[0]["tools"]> = []
+) {
+  const ownTools = ["run_agent", ...tools.map((tool) => tool.name)];
+  const toolModel = createToolCallingModel();
+  const config = createTestConfig({
+    tools: ownTools.map((name) => ({ name, enabled: true })),
+    toolNames: ownTools,
+    sessionToken: { issuer: "own-agents-runtime", ttlSeconds: 900 },
+    developmentAuth: {
+      enabled: true,
+      users: [
+        {
+          id: "kai",
+          externalUserId: "kai",
+          displayLabel: "Kai",
+          roles: ["user"],
+          permissionRefs: []
+        }
+      ],
+      defaultUserId: "kai"
+    }
+  });
+  config.infrastructure.models = {
+    local: { provider: TOOL_CALLING_MODEL_PROVIDER, model: "local" }
+  };
+  const app = await createTestInstance({
+    config,
+    env: {
+      CHAT_SESSION_TOKEN_SECRET: "own-agents-test-session-signing-key-for-tests",
+      CHAT_SERVER_CREDENTIAL: "own-agents-test-server-credential"
+    },
+    capabilities: [toolModel.capability],
+    tools
+  });
+  running.push(app);
+  const instanceId = asClientInstanceId(getTestConfig(app).clientInstance.id);
+  const created = await app.call("conversations.create", { payload: { title: "Mine" } });
+  expect(created.statusCode, created.body).toBe(200);
+  const home = created.json<{ id: string; collaborationWorkspaceId: string }>();
+  const plain = {
+    instructions: "Use configured tools only.",
+    modelProviderId: "local",
+    initialPrompts: []
+  };
+  await applyAtCurrentRevisions(app.stores.configAssets, {
+    clientInstanceId: instanceId,
+    mutations: [
+      {
+        type: "upsert",
+        kind: "agent",
+        name: "test_agent",
+        config: {
+          name: "test_agent",
+          displayName: "Test Agent",
+          toolNames: ["run_agent"],
+          subagentNames: [OWN],
+          ...plain
+        }
+      }
+    ]
+  });
+  await applyAtCurrentRevisions(app.stores.configAssets, {
+    clientInstanceId: instanceId,
+    initialAgentAvailability: "hidden",
+    mutations: [
+      {
+        type: "upsert",
+        kind: "agent",
+        name: OWN,
+        config: { name: OWN, displayName: "Kais Steuer", toolNames: ownTools, ...plain },
+        scope: {
+          kind: "workspace",
+          workspaceId: asCollaborationWorkspaceId(home.collaborationWorkspaceId)
+        }
+      }
+    ]
+  });
+  return { app, instanceId, home, toolModel };
+}
+
+/** Starts a run of an agent in a chat and waits until it completes; its events. */
+async function runToEnd(
+  app: TestInstance,
+  instanceId: ReturnType<typeof asClientInstanceId>,
+  conversationId: string,
+  agentName: string,
+  text: string
+) {
+  const started = await app.call("conversations.runs.start", {
+    params: { conversationId },
+    payload: { agentName, idempotencyKey: `${agentName}-${text.length}`, message: { text } }
+  });
+  expect(started.statusCode, started.body).toBe(200);
+  const runId = asAgentRunId(started.json<{ run: { id: string } }>().run.id);
+  await waitUntil(async () => {
+    const stored = await app.stores.agentRuns.getAgentRun({
+      clientInstanceId: instanceId,
+      runId
+    });
+    return stored?.status === "completed";
+  }, "the run completes");
+  return (
+    await app.stores.agentRuns.listRunObservations({ clientInstanceId: instanceId, runId })
+  ).map((observation) => observation.payload);
+}
+
 describe("an agent of Only me beyond the chat its owner chose it in", () => {
   it("is refused for a scheduled prompt, even in its owner's own private chat", async () => {
     const { t, team } = await setup();
@@ -522,97 +635,9 @@ describe("an agent of Only me beyond the chat its owner chose it in", () => {
   });
 
   it("is never started as a subagent, even by an agent of its owner's own chat", async () => {
-    const toolModel = createToolCallingModel();
-    const config = createTestConfig({
-      toolNames: ["run_agent"],
-      sessionToken: { issuer: "own-agents-runtime", ttlSeconds: 900 },
-      developmentAuth: {
-        enabled: true,
-        users: [
-          {
-            id: "kai",
-            externalUserId: "kai",
-            displayLabel: "Kai",
-            roles: ["user"],
-            permissionRefs: []
-          }
-        ],
-        defaultUserId: "kai"
-      }
-    });
-    config.infrastructure.models = {
-      local: { provider: TOOL_CALLING_MODEL_PROVIDER, model: "local" }
-    };
-    const app = await createTestInstance({
-      config,
-      env: {
-        CHAT_SESSION_TOKEN_SECRET: "own-agents-test-session-signing-key-for-tests",
-        CHAT_SERVER_CREDENTIAL: "own-agents-test-server-credential"
-      },
-      capabilities: [toolModel.capability],
-      tools: []
-    });
-    running.push(app);
-    const instanceId = asClientInstanceId(getTestConfig(app).clientInstance.id);
-    const created = await app.call("conversations.create", { payload: { title: "Mine" } });
-    expect(created.statusCode, created.body).toBe(200);
-    const home = created.json<{ id: string; collaborationWorkspaceId: string }>();
-    const plain = {
-      instructions: "Use configured tools only.",
-      modelProviderId: "local",
-      initialPrompts: []
-    };
-    await applyAtCurrentRevisions(app.stores.configAssets, {
-      clientInstanceId: instanceId,
-      mutations: [
-        {
-          type: "upsert",
-          kind: "agent",
-          name: "test_agent",
-          config: {
-            name: "test_agent",
-            displayName: "Test Agent",
-            toolNames: ["run_agent"],
-            subagentNames: [OWN],
-            ...plain
-          }
-        }
-      ]
-    });
-    await applyAtCurrentRevisions(app.stores.configAssets, {
-      clientInstanceId: instanceId,
-      initialAgentAvailability: "hidden",
-      mutations: [
-        {
-          type: "upsert",
-          kind: "agent",
-          name: OWN,
-          config: { name: OWN, displayName: "Kais Steuer", toolNames: [], ...plain },
-          scope: {
-            kind: "workspace",
-            workspaceId: asCollaborationWorkspaceId(home.collaborationWorkspaceId)
-          }
-        }
-      ]
-    });
-    const run = async (conversationId: string, agentName: string, text: string) => {
-      const started = await app.call("conversations.runs.start", {
-        params: { conversationId },
-        payload: { agentName, idempotencyKey: `${agentName}-${text.length}`, message: { text } }
-      });
-      expect(started.statusCode, started.body).toBe(200);
-      const runId = asAgentRunId(started.json<{ run: { id: string } }>().run.id);
-      await waitUntil(async () => {
-        const stored = await app.stores.agentRuns.getAgentRun({
-          clientInstanceId: instanceId,
-          runId
-        });
-        return stored?.status === "completed";
-      }, "the run completes");
-      return (
-        await app.stores.agentRuns.listRunObservations({ clientInstanceId: instanceId, runId })
-      ).map((observation) => observation.payload);
-    };
+    const { app, instanceId, home } = await ownAgentInstance();
+    const run = (conversationId: string, agentName: string, text: string) =>
+      runToEnd(app, instanceId, conversationId, agentName, text);
 
     // Kai's own agent runs in his own chat, which it marks.
     await run(home.id, OWN, "Meine Steuer.");
@@ -634,6 +659,78 @@ describe("an agent of Only me beyond the chat its owner chose it in", () => {
       events.some(
         (event) =>
           event.type === "tool_call_failed" && JSON.stringify(event).includes("agent_not_available")
+      )
+    ).toBe(true);
+  });
+
+  it("runs itself as a subagent whose tool calls run, in its owner's own chat", async () => {
+    const read = defineTool({
+      name: "own.read",
+      effect: "reading",
+      description: "Reads something.",
+      inputSchema: z.object({ text: z.string() }),
+      execute: (input) => toolSuccess({ read: input.text })
+    });
+    const { app, instanceId, home } = await ownAgentInstance([read]);
+    const events = async (runId: string) =>
+      (
+        await app.stores.agentRuns.listRunObservations({
+          clientInstanceId: instanceId,
+          runId: asAgentRunId(runId)
+        })
+      ).map((observation) => observation.payload);
+    const completed = (runId: string) =>
+      waitUntil(
+        async () =>
+          (
+            await app.stores.agentRuns.getAgentRun({
+              clientInstanceId: instanceId,
+              runId: asAgentRunId(runId)
+            })
+          )?.status === "completed",
+        "the run completes"
+      );
+    // Kai's own agent starts itself in his own chat, which it marks; a changing call in a
+    // chat with personal data waits for Kai.
+    const task = `/tool ${read.name} ${JSON.stringify({ text: "Steuer" })}`;
+    const started = await app.call("conversations.runs.start", {
+      params: { conversationId: home.id },
+      payload: {
+        agentName: OWN,
+        idempotencyKey: "own-subagent-1",
+        message: {
+          text: `/tool run_agent ${JSON.stringify({ description: "Tax", task })}`
+        }
+      }
+    });
+    expect(started.statusCode, started.body).toBe(200);
+    const parentId = started.json<{ run: { id: string } }>().run.id;
+    let waiting: { id: string } | undefined;
+    await waitUntil(async () => {
+      waiting = (await app.stores.operationRuns.list({ clientInstanceId: instanceId })).find(
+        (run) =>
+          run.operation === "agents.run" &&
+          run.origin.kind === "agent" &&
+          run.origin.agentRunId === parentId &&
+          run.status === "pending_confirmation"
+      );
+      return waiting !== undefined;
+    }, "the start of the subagent waits for Kai");
+    const decided = await app.call("operations.decide", {
+      params: { runId: waiting?.id ?? "" },
+      payload: { decision: "confirm" }
+    });
+    expect(decided.statusCode, decided.body).toBeLessThan(300);
+    await completed(parentId);
+
+    const started_ = (await events(parentId)).find((event) => event.type === "subagent_started");
+    if (started_?.type !== "subagent_started") throw new Error("No subagent started");
+    const childId = started_.subagentRunId;
+    await completed(childId);
+    // The subagent, an own agent in the thread of its own, called its tool.
+    expect(
+      (await events(childId)).some(
+        (event) => event.type === "tool_call_completed" && JSON.stringify(event).includes("Steuer")
       )
     ).toBe(true);
   });
