@@ -3,6 +3,8 @@ import {
   CONNECTION_EXPOSURE_ACTION_PREFIX,
   WORKFLOW_ACTIONS,
   WORKFLOW_RUN_MODES,
+  WORKFLOW_STEP_TYPES,
+  WORKFLOW_RESERVED_STEP_TYPES,
   WORKFLOW_TRIGGER_KINDS,
   parseConnectionOperationName,
   type WorkflowBlockStepRunView,
@@ -349,16 +351,8 @@ export function toWorkflowRun(run: WorkflowRunResource): WorkflowRunView {
 }
 
 const STEP_KINDS: readonly WorkflowStepKind[] = [
-  "trigger",
-  "operation",
-  "loop",
-  "code",
-  "agent",
-  "notify",
-  "output",
-  "workflow",
-  "condition",
-  "parallel"
+  ...WORKFLOW_STEP_TYPES,
+  ...WORKFLOW_RESERVED_STEP_TYPES
 ];
 
 function stepKind(type: unknown): WorkflowStepKind | undefined {

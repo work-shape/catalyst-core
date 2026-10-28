@@ -6,7 +6,7 @@ its input comes from (the start form, an earlier step, a Connection), what the s
 what it hands on or where it stores it (only in the run, or kept in a Data Store, and who sees it
 there). Write for the person who runs the Workflow, not for a developer: no ids, paths or code.
 For example: "Takes the client number from the start form, loads that client's bookings from
-the accounting system once, and hands them to the checks below. Nothing is stored."
+the accounting system once, and hands them to the checks below. Keeps them only in this run."
 
 Load data once and reuse it. Read what a source answers in one step near the top and refer to
 that step's output in every later step; never call the same operation again for data a step
