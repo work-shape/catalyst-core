@@ -74,7 +74,8 @@ const OVERRIDES = {
     files: ["dist", "migrations", "src/migration-statements.js", "src/migration-statements.d.ts"]
   },
   // Shell scripts, host files and Node checks, shipped as they are: nothing is built.
-  "artifact-helpers": { files: ["dist", "skills"], sideEffects: undefined },
+  // `runtime` holds the Python file tools the file helpers run.
+  "artifact-helpers": { files: ["dist", "skills", "runtime"], sideEffects: undefined },
   // Its capability reads the skill it ships at runtime from ../skills relative to dist/.
   "outside-forms": { files: ["dist", "skills"] },
   "deployment-kit": {
