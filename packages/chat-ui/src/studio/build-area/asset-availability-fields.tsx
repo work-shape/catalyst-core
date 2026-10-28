@@ -28,9 +28,26 @@ export interface AvailabilityChoice {
   dependencies?: {
     key: QueryKey;
     read(form: AgentAvailabilityForm, signal: AbortSignal): Promise<DependencyAvailability | null>;
+    /**
+     * The same for a definition that is not live yet, such as the draft a publish makes live:
+     * what it would use that members could not use where the form makes it available.
+     */
+    readFor?(
+      config: Record<string, unknown>,
+      form: AgentAvailabilityForm,
+      signal: AbortSignal
+    ): Promise<DependencyAvailability | null>;
   };
   /** Answers with what went wrong, if anything did. */
   save(
+    availability: AgentAvailabilityForm,
+    options: { makeDependenciesAvailable: boolean }
+  ): Promise<string | undefined>;
+  /**
+   * The same save right after a publish of the agent: against the live revision the publish
+   * made, which the page has not read yet, and the availability the page showed.
+   */
+  saveAfterPublish?(
     availability: AgentAvailabilityForm,
     options: { makeDependenciesAvailable: boolean }
   ): Promise<string | undefined>;
@@ -56,6 +73,13 @@ export function useAvailabilityEdit(choice: AvailabilityChoice | undefined): Ava
   const saved = useMemo(() => agentAvailabilityToForm(choice?.saved), [choice?.saved]);
   const [form, setForm] = useState(saved);
   const [makeDependenciesAvailable, setMakeDependenciesAvailable] = useState(false);
+  // A save made elsewhere on the page, such as a publish that offers the agent, moves an
+  // untouched form along; a form the reader changed keeps what they chose.
+  const [base, setBase] = useState(saved);
+  if (base !== saved) {
+    setBase(saved);
+    if (agentAvailabilityFormsEqual(form, base)) setForm(saved);
+  }
   const changed = choice !== undefined && !agentAvailabilityFormsEqual(form, saved);
   return {
     form,

@@ -90,7 +90,8 @@ export interface AgentDraftSource {
    * Publish and Discard of the draft revision the page shows. Each reads the agent again once
    * it is made. A publish may also make what the draft uses available where the agent is: in
    * the workspaces the reader reviewed, `expectedAvailability`, which the instance compares with
-   * the agent's availability now and refuses where it changed.
+   * the agent's availability now and refuses where it changed. `afterPublish` runs once the
+   * publish is made and before the agent is read again, such as the save of where it is offered.
    */
   decide(
     kind: DraftDecision,
@@ -98,6 +99,7 @@ export interface AgentDraftSource {
     options?: {
       makeDependenciesAvailable: boolean;
       expectedAvailability: AgentAvailability | null;
+      afterPublish?: () => Promise<unknown>;
     }
   ): Promise<void>;
   /** The decision on its way. */
@@ -179,6 +181,7 @@ export function useAgentDraft(input: {
               body: { expectedRevision: revision, ...scope }
             }),
       done: async () => {
+        if (kind === "publish") await options?.afterPublish?.();
         queryClient.setQueryData(queryKey, null);
         // The published draft is the live agent, which the lists of offered agents also show.
         // The page does not wait for them, as a save in Build does not.

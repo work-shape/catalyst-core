@@ -3,6 +3,7 @@ import { Users } from "lucide-react";
 import { Chip, ScopeChip, type ChipSize } from "@work-shape/catalyst-ui";
 import type { BuildWorkspace } from "../../shared/build-rights";
 import type { BuildAsset } from "./build-kind/asset";
+import type { AgentAvailabilityForm } from "./asset-form-model";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import type { RefusalPlace } from "../../shared/i18n/refusals";
 
@@ -84,19 +85,28 @@ export function agentAudience(
   if (agent.agentUse === "granted") return { text: t("build.usedWithRight") };
   const offered = agent.availability;
   if (agent.scope.kind !== "instance" || !offered) return undefined;
-  if (offered.mode === "all") {
-    return { text: t("build.usedIn", { names: t("configAvailabilityAll") }) };
-  }
+  const names = offeredPlaces(offered, workspaces, t, locale);
+  if (names === undefined) return { text: t("build.usedNowhere"), nowhere: true };
+  return { text: t("build.usedIn", { names }) };
+}
+
+/**
+ * Where a chat can choose an asset, in the words of its "Available in" section: "All
+ * workspaces", or the workspaces by their names. Nothing where no chat can.
+ */
+export function offeredPlaces(
+  offered: Pick<AgentAvailabilityForm, "mode" | "personalWorkspaces" | "collaborationWorkspaceIds">,
+  workspaces: KnownWorkspaces,
+  t: Translate,
+  locale: string
+): string | undefined {
+  if (offered.mode === "all") return t("configAvailabilityAll");
   const names = offered.collaborationWorkspaceIds.map(
     (id) => assetPlace({ kind: "workspace", workspaceId: id }, workspaces, t).name
   );
   if (offered.personalWorkspaces) names.push(t("configAvailabilityPersonal"));
-  if (names.length === 0) return { text: t("build.usedNowhere"), nowhere: true };
-  return {
-    text: t("build.usedIn", {
-      names: new Intl.ListFormat(locale, { type: "conjunction" }).format(names)
-    })
-  };
+  if (names.length === 0) return undefined;
+  return new Intl.ListFormat(locale, { type: "conjunction" }).format(names);
 }
 
 /** The id of an agent page's "Available in" section, which the audience chip leads to. */

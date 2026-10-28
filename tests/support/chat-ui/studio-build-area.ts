@@ -3,6 +3,7 @@ export { BuildWithAgentDialog } from "../../../packages/chat-ui/src/studio/build
 export { instanceSentence } from "../../../packages/chat-ui/src/studio/build-area/build-refusals";
 export {
   agentAudience,
+  AssetPlacesProvider,
   assetPlace,
   refusalPlaceOf
 } from "../../../packages/chat-ui/src/studio/build-area/asset-place";
@@ -16,3 +17,8 @@ export {
   withChosenDataStores,
   withDataStoreAccess
 } from "../../../packages/chat-ui/src/studio/build-area/agent-data-stores-model";
+export {
+  offerChange,
+  publishOffer
+} from "../../../packages/chat-ui/src/studio/build-area/publish-offer";
+export { PublishOfferField } from "../../../packages/chat-ui/src/studio/build-area/publish-offer-field";
