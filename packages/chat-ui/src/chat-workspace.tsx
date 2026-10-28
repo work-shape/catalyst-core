@@ -715,8 +715,9 @@ function ChatWorkspaceContent({
               surfaceBesideWidth={onChatRoute ? chatSurface.besideWidth : 0}
               covered={headerCovered}
               selectedAgentName={model.config.activeAgentName}
-              // Only a conversation has an agent to choose: no other area has one.
-              showAgentSelector={onChatRoute && !onStartPage}
+              // Only a conversation has an agent to choose: no other area has one. Until its
+              // thread has loaded, the agent it was held with is not known (T30).
+              showAgentSelector={onChatRoute && !onStartPage && !model.config.activeAgentLoading}
               onSelectAgent={model.config.selectAgentName}
               onOpenSidebar={model.chrome.openSidebarDrawer}
             />

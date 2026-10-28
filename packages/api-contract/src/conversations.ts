@@ -921,6 +921,8 @@ export const conversationThreadSnapshotSchema = z.object({
       projection: agentRunProjectionSchema
     })
     .optional(),
+  /** The agent of the conversation's latest run: the agent it is held with. Absent before the first run. */
+  agentName: z.string().optional(),
   /**
    * What the conversation's latest run was asked to use. Absent before the first run; a run that
    * followed the configured defaults leaves both fields out.

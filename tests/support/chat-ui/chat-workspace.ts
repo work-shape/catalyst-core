@@ -42,6 +42,7 @@ export { UserMenu } from "../../../packages/chat-ui/src/chat/workspace/user-menu
 export { createPrivateConversationWith } from "../../../packages/chat-ui/src/chat/workspace/workspace-conversation-actions";
 export {
   activeAgentNameFor,
+  conversationAgentPickFor,
   isAbandonedDraftConversation,
   terminalRunNotice,
   workspaceScopedConfigFor
