@@ -1,3 +1,4 @@
+export { agentChangeLines } from "../../../packages/chat-ui/src/chat/assistant/agent-change-line";
 export { AssistantActivityStatus } from "../../../packages/chat-ui/src/chat/assistant/assistant-activity-status";
 export {
   AssistantComposer,

@@ -30,6 +30,7 @@ import { ThreadMessage } from "./assistant-message";
 import { focusComposerAtEnd } from "./composer-focus-request";
 import { MessageTryRunLine } from "../dock/try-run-lines";
 import { DayMarkersProvider, MessageDayMarker } from "./message-day-marker";
+import { AgentChangeLinesProvider, MessageAgentChangeLine } from "./agent-change-line";
 import { useTranslation } from "../../shared/i18n";
 import { useFooterKeepsThreadInView, useKeepReadingPlace } from "./reading-place";
 import type { SendBlock } from "./send-block";
@@ -95,6 +96,7 @@ export function AssistantThread({
   threadLoading,
   loadedMessageCount,
   messageTimes,
+  agentChanges,
   conversationId,
   composerFocusRequestId,
   startComposerRef,
@@ -168,6 +170,8 @@ export function AssistantThread({
   loadedMessageCount: number;
   /** When each message of the open conversation was written, by the thread's id: its day markers. */
   messageTimes: Readonly<Record<string, string>>;
+  /** Where another agent answers from a message on: that agent's name, by the message's id. */
+  agentChanges?: ReadonlyMap<string, string>;
   /** The open conversation; undefined on the screen for a new one. */
   conversationId?: string;
   composerFocusRequestId: number;
@@ -195,6 +199,17 @@ export function AssistantThread({
   const toolSubjectAgents = useMemo(
     () => [...(config?.agents ?? []), ...agents],
     [config?.agents, agents]
+  );
+  const agentChangeLabels = useMemo(
+    () =>
+      new Map(
+        [...(agentChanges ?? [])].map(([messageId, agentName]) => [
+          messageId,
+          toolSubjectAgents.find((candidate) => candidate.name === agentName)?.displayName ??
+            agentName
+        ])
+      ),
+    [agentChanges, toolSubjectAgents]
   );
   const startPage =
     useAuiState((state) => state.thread.isEmpty) &&
@@ -279,20 +294,23 @@ export function AssistantThread({
                   >
                     <FoldedCardsProvider>
                       <QuestionAnswersProvider>
-                        <ThreadPrimitive.Messages>
-                          {() => (
-                            <>
-                              <MessageDayMarker />
-                              <MessageTryRunLine />
-                              <ThreadMessage
-                                conversationRunning={conversationRunning}
-                                activeRunId={activeRunId}
-                                feedback={messageFeedbackSetup(config, conversationId)}
-                                platformReport={platformReport}
-                              />
-                            </>
-                          )}
-                        </ThreadPrimitive.Messages>
+                        <AgentChangeLinesProvider lines={agentChangeLabels}>
+                          <ThreadPrimitive.Messages>
+                            {() => (
+                              <>
+                                <MessageDayMarker />
+                                <MessageTryRunLine />
+                                <MessageAgentChangeLine />
+                                <ThreadMessage
+                                  conversationRunning={conversationRunning}
+                                  activeRunId={activeRunId}
+                                  feedback={messageFeedbackSetup(config, conversationId)}
+                                  platformReport={platformReport}
+                                />
+                              </>
+                            )}
+                          </ThreadPrimitive.Messages>
+                        </AgentChangeLinesProvider>
                       </QuestionAnswersProvider>
                     </FoldedCardsProvider>
                   </DayMarkersProvider>

@@ -99,3 +99,56 @@ test("each conversation opens and answers with its own agent, after a switch and
   await page.getByRole("button", { name: "Neuer Chat", exact: true }).first().click();
   await expect(startPageAgent(page)).toHaveAccessibleName(`Agent auswählen: ${FIRST.label}`);
 });
+
+// T30, wish 2: where another agent answers from within one conversation, the history says so
+// above that message, and keeps saying so after a reload: the line is read from the runs.
+test("the history says from where another agent answers, and keeps it after a reload", async ({
+  page
+}) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.addInitScript(() => localStorage.setItem("vivd-catalyst:locale", "de"));
+  const stamp = Date.now();
+  const lines = page.getByTestId("agent-change-line");
+  const pickInHeader = async (label: string) => {
+    await headerAgent(page).click();
+    await page.getByRole("option", { name: label }).click();
+    await expect(headerAgent(page)).toHaveAccessibleName(`Agent auswählen: ${label}`);
+  };
+  /** The user message right after each line, by its text. */
+  const linedMessages = () =>
+    page
+      .locator('[data-testid="agent-change-line"] + [data-role="user"]')
+      .allTextContents()
+      .then((texts) => texts.map((text) => text.trim()));
+
+  await page.goto("/");
+  expect((await send(page, `Erste Frage ${stamp}`)).agentName).toBe(FIRST.name);
+  // The first run has no line.
+  await expect(lines).toHaveCount(0);
+
+  await pickInHeader(SECOND.label);
+  expect((await send(page, `Zweite Frage ${stamp}`)).agentName).toBe(SECOND.name);
+  await expect(lines).toHaveCount(1);
+  await expect(lines).toHaveText(`Ab hier: ${SECOND.label}`);
+
+  await pickInHeader(FIRST.label);
+  expect((await send(page, `Dritte Frage ${stamp}`)).agentName).toBe(FIRST.name);
+  await expect(lines).toHaveText([`Ab hier: ${SECOND.label}`, `Ab hier: ${FIRST.label}`]);
+  expect(await linedMessages()).toEqual([
+    expect.stringContaining(`Zweite Frage ${stamp}`),
+    expect.stringContaining(`Dritte Frage ${stamp}`)
+  ]);
+
+  await page.reload();
+  await expect(lines).toHaveText([`Ab hier: ${SECOND.label}`, `Ab hier: ${FIRST.label}`]);
+  expect(await linedMessages()).toEqual([
+    expect.stringContaining(`Zweite Frage ${stamp}`),
+    expect.stringContaining(`Dritte Frage ${stamp}`)
+  ]);
+  await lines.first().scrollIntoViewIfNeeded();
+  await shootSurface(page, "t30-agent-change-1280-de", () => expect(lines).toHaveCount(2));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await lines.first().scrollIntoViewIfNeeded();
+  await shootSurface(page, "t30-agent-change-390-de", () => expect(lines).toHaveCount(2));
+});

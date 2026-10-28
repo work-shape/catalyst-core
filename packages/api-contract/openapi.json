@@ -44970,6 +44970,24 @@
           "agentName": {
             "type": "string"
           },
+          "runAgents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "inputMessageId": {
+                  "type": "string"
+                },
+                "agentName": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "inputMessageId",
+                "agentName"
+              ]
+            }
+          },
           "modelSelection": {
             "type": "object",
             "properties": {
