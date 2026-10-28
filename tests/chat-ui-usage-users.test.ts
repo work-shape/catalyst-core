@@ -224,7 +224,9 @@ describe("the Users page", () => {
       await act(async () => button("Reset two-factor sign-in").click());
       const dialog = required(document.querySelector('dialog[open], [role="dialog"]'));
       expect(dialog.textContent).toContain("Reset two-factor sign-in of Managed person?");
-      expect(dialog.textContent).toContain("outside this instance");
+      expect(dialog.textContent).toContain(
+        "First make sure it is really this person asking: by phone, in person or through another channel you trust."
+      );
       expect(mounted.requests).toEqual([]);
       await act(async () => button("Reset", dialog).click());
       await waitForText(mounted.container, "sets up two-factor sign-in again");
