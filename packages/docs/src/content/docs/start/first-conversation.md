@@ -13,6 +13,8 @@ In Catalyst you work with **agents**: assistants set up for a task, such as answ
 
 To add files, click **Add attachment** ("Anhang hinzufügen") or drop them onto the chat.
 
+HEIC, HEIF, TIFF, BMP and AVIF images receive a view the agent can see automatically. Multi-page TIFF scans can be read and viewed page by page, including OCR. Downloads and workspace imports keep the original file. Views are deleted under the same retention rules as the original. If an image exceeds 100 megapixels per frame, 200 frames or 60 seconds of conversion, the agent receives the original with an explanation that its automatic view is unavailable.
+
 If the agent offers more than one model, the chat shows a picker with **Model** ("Modell") and **Reasoning** ("Denkaufwand"). More reasoning takes longer and uses more of your quota.
 
 ## Find it again

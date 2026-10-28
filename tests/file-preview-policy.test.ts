@@ -28,15 +28,25 @@ describe("file preview policy", () => {
     expect(resolveFilePreviewCapability({ filename, mimeType })).toBe(expected);
   });
 
-  it.each(["IMG_0851.jpeg", "PHOTO.JPG", "chart.png", "photo.webp", "animation.gif", "icon.svg"])(
-    "previews %s when image MIME metadata is unavailable",
-    (filename) => {
-      for (const mimeType of [undefined, "application/octet-stream"]) {
-        expect(resolveFilePreviewCapability({ filename, mimeType })).toBe("native_image");
-        expect(getSourceFilePreviewKind(filename, mimeType)).toBe("image");
-      }
+  it.each([
+    "IMG_0851.jpeg",
+    "PHOTO.JPG",
+    "chart.png",
+    "photo.webp",
+    "animation.gif",
+    "icon.svg",
+    "photo.heic",
+    "photo.heif",
+    "scan.tif",
+    "scan.tiff",
+    "photo.bmp",
+    "photo.avif"
+  ])("previews %s when image MIME metadata is unavailable", (filename) => {
+    for (const mimeType of [undefined, "application/octet-stream"]) {
+      expect(resolveFilePreviewCapability({ filename, mimeType })).toBe("native_image");
+      expect(getSourceFilePreviewKind(filename, mimeType)).toBe("image");
     }
-  );
+  });
 
   it("does not infer an image from a filename containing an image extension before its suffix", () => {
     expect(resolveFilePreviewCapability({ filename: "photo.jpeg.zip" })).toBeUndefined();

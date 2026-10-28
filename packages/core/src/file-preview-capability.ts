@@ -39,7 +39,7 @@ export function resolveFilePreviewCapability(input: {
   }
   if (
     input.mimeType?.toLowerCase().startsWith("image/") ||
-    /\.(png|jpe?g|webp|gif|svg)$/iu.test(input.filename ?? "")
+    /\.(png|jpe?g|webp|gif|svg|heic|heif|tiff?|bmp|avif)$/iu.test(input.filename ?? "")
   ) {
     return "native_image";
   }

@@ -1,10 +1,14 @@
 import { createTestInstance, getTestJobs } from "./support/test-instance";
+import { claimAttachmentsForStoredMessage } from "./support/test-store";
 import { Readable } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import {
+  ATTACHMENT_IMAGE_VIEW_ARTIFACT_REF,
   StoreBackedAuditRecorder,
+  asConversationAttachmentId,
+  asMessageId,
   asConversationId,
   asClientInstanceId,
   asManagedFileId
@@ -208,6 +212,137 @@ describe("client instance app vertical slice", () => {
     expect(content.payload).toBe("GIF89a");
 
     await app.close();
+  });
+
+  it("serves a derived thumbnail and downloads the original, rejecting a view of another file", async () => {
+    const backing = createManagedObjectTestAttachmentCapability();
+    const app = await createTestInstance({
+      config: createTestConfig(),
+      env: {},
+      tools: [],
+      capabilities: [
+        {
+          ...backing.capability,
+          async create(context) {
+            const contribution = await backing.capability.create(context);
+            const access = context.managedObjectAccess.createAccess({
+              byteStore: backing.objects,
+              keyFactory: {
+                createFileObjectKey: () => "unused-file",
+                createArtifactObjectKey: () => "unused-artifact"
+              }
+            });
+            return {
+              ...contribution,
+              attachments: contribution.attachments?.map((handler) => ({
+                ...handler,
+                isInlineDisplayMimeType: (mimeType: string) => mimeType === "image/jpeg"
+              })),
+              managedObjects: [
+                {
+                  name: "derived-image-views",
+                  async readArtifact(input) {
+                    const view = await access.readArtifact(input);
+                    return { bytes: view.bytes, mimeType: view.mimeType };
+                  },
+                  async readFile(input) {
+                    const file = await access.readFile(input);
+                    return { bytes: file.bytes, mimeType: file.mimeType };
+                  }
+                }
+              ]
+            };
+          }
+        }
+      ]
+    });
+    try {
+      const created = await app.call("conversations.create", { payload: { title: "Image view" } });
+      const conversationId = asConversationId(created.json<{ id: string }>().id);
+      const upload = createMultipartFilePayload({
+        fieldName: "file",
+        filename: "photo.heic",
+        contentType: "image/heic",
+        content: "original-heic"
+      });
+      const uploaded = await app.call("conversations.draft_attachments.upload", {
+        params: { conversationId },
+        headers: upload.headers,
+        payload: upload.payload
+      });
+      expect(uploaded.statusCode).toBe(200);
+      const { attachment } = uploaded.json<{ attachment: { id: string; fileId: string } }>();
+      const stored = await app.stores.files.getConversationAttachment({
+        clientInstanceId: asClientInstanceId("demo-local"),
+        attachmentId: asConversationAttachmentId(attachment.id)
+      });
+      const view = await app.stores.files.createManagedArtifact({
+        clientInstanceId: stored!.clientInstanceId,
+        conversationId,
+        sourceFileId: asManagedFileId(attachment.fileId),
+        kind: ATTACHMENT_IMAGE_VIEW_ARTIFACT_REF,
+        filename: "photo.heic.view.jpg",
+        mimeType: "image/jpeg",
+        byteSize: 9,
+        checksum: "view-checksum",
+        objectKey: "test-view"
+      });
+      backing.objects.seed(view.objectKey, new TextEncoder().encode("jpeg-view"));
+      await app.stores.files.updateConversationAttachment({
+        clientInstanceId: stored!.clientInstanceId,
+        attachmentId: stored!.id,
+        artifactRefs: { [ATTACHMENT_IMAGE_VIEW_ARTIFACT_REF]: view.id }
+      });
+      const thumbnail = await app.call("conversations.files.get_content", {
+        params: { conversationId, fileId: attachment.fileId }
+      });
+      expect(thumbnail.statusCode).toBe(200);
+      expect(thumbnail.headers["content-type"]).toContain("image/jpeg");
+      expect(thumbnail.payload).toBe("jpeg-view");
+      await claimAttachmentsForStoredMessage(app.stores, {
+        clientInstanceId: stored!.clientInstanceId,
+        conversationId,
+        messageId: asMessageId("msg_derived_view"),
+        claimedAt: new Date().toISOString()
+      });
+      const original = await app.call("conversations.files.get_content", {
+        params: { conversationId, fileId: attachment.fileId },
+        query: { download: "true" }
+      });
+      expect(original.statusCode).toBe(200);
+      expect(original.headers["content-type"]).toContain("image/heic");
+      expect(original.payload).toBe("original-heic");
+      const unrelatedFile = await app.stores.files.createManagedFile({
+        clientInstanceId: stored!.clientInstanceId,
+        ownerUserId: "user-1",
+        filename: "other.heic",
+        mimeType: "image/heic",
+        byteSize: 1,
+        checksum: "other-file",
+        objectKey: "other-original"
+      });
+      const unrelated = await app.stores.files.createManagedArtifact({
+        clientInstanceId: stored!.clientInstanceId,
+        conversationId,
+        sourceFileId: unrelatedFile.id,
+        kind: ATTACHMENT_IMAGE_VIEW_ARTIFACT_REF,
+        mimeType: "image/jpeg",
+        byteSize: 1,
+        checksum: "unrelated",
+        objectKey: "unrelated-view"
+      });
+      await app.stores.files.updateConversationAttachment({
+        clientInstanceId: stored!.clientInstanceId,
+        attachmentId: stored!.id,
+        artifactRefs: { [ATTACHMENT_IMAGE_VIEW_ARTIFACT_REF]: unrelated.id }
+      });
+      const refused = await app.call("conversations.files.get_content", {
+        params: { conversationId, fileId: attachment.fileId }
+      });
+      expect(refused.statusCode).toBe(404);
+    } finally {
+      await app.close();
+    }
   });
 
   it("starts a turn from a picture sent without text, and refuses a message with neither", async () => {

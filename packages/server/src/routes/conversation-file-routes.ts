@@ -1,11 +1,13 @@
 import { apiOperations, type ArtifactPreviewResponse } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
+  ATTACHMENT_IMAGE_VIEW_ARTIFACT_REF,
   ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_KIND,
   ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_REF,
   asArtifactPreviewContractReady,
   asConversationAttachmentId,
   asManagedArtifactId,
+  asManagedFileId,
   detectArtifactPreviewSourceKind,
   isRetryableArtifactPreviewErrorCode,
   readArtifactPreviewLifecycle,
@@ -42,10 +44,40 @@ export function registerConversationFileRoutes(route: Route, options: ChatServer
       if (download && !sentAttachment) {
         throw new AppError("NOT_FOUND", "Attachment is not available in this conversation");
       }
-      const file = await service.readConversationFile({
-        conversationId,
-        fileId: fileIdParam(params)
-      });
+      const attachment = !download
+        ? await options.stores.files.findReadyConversationAttachmentByFile({
+            clientInstanceId: options.clientInstanceId,
+            conversationId,
+            fileId: asManagedFileId(fileIdParam(params))
+          })
+        : undefined;
+      const viewId = attachment?.artifactRefs[ATTACHMENT_IMAGE_VIEW_ARTIFACT_REF];
+      let file;
+      if (viewId && options.managedObjects) {
+        const view = await options.stores.files.getManagedArtifact({
+          clientInstanceId: options.clientInstanceId,
+          artifactId: viewId
+        });
+        if (
+          view?.conversationId !== conversationId ||
+          view.sourceFileId !== attachment.fileId ||
+          view.status !== "available"
+        ) {
+          throw new AppError("NOT_FOUND", "Attachment view is not available");
+        }
+        const content = await options.managedObjects.readArtifact({
+          clientInstanceId: options.clientInstanceId,
+          artifactId: viewId
+        });
+        file = {
+          fileId: attachment.fileId,
+          byteSize: view.byteSize,
+          ...content,
+          filename: view.filename ?? attachment.filename
+        };
+      } else {
+        file = await service.readConversationFile({ conversationId, fileId: fileIdParam(params) });
+      }
       const inlineCapability = resolveFilePreviewCapability({
         filename: file.filename,
         mimeType: file.mimeType
