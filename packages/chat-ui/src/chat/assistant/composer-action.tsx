@@ -21,7 +21,8 @@ export function ComposerAction({
   onCancelRun,
   onQueueFollowUp,
   onQueueSend,
-  onSubmitMessage
+  onSubmitMessage,
+  onSendWithoutText
 }: {
   sendBlock: SendBlock | undefined;
   sendQueued: boolean;
@@ -39,10 +40,13 @@ export function ComposerAction({
   onQueueFollowUp: () => void;
   onQueueSend: () => void;
   onSubmitMessage?: (text: string) => boolean;
+  /** Set where the draft's attachments may go without text. */
+  onSendWithoutText?: () => void;
 }) {
   const { t } = useTranslation();
   const threadRunning = useAuiState((state) => state.thread.isRunning);
   const emptyText = currentText.trim().length === 0;
+  const nothingToSend = emptyText && !onSendWithoutText;
   const actions = composerActions({
     conversationRunning,
     optimisticPending,
@@ -52,9 +56,7 @@ export function ComposerAction({
   });
   // During a loading block the control stays usable: a click is remembered like an Enter.
   const queuesSend = Boolean(sendBlock?.loading);
-  const sendDisabled = queuesSend
-    ? emptyText
-    : Boolean(sendBlock) || Boolean(onSubmitMessage && emptyText);
+  const sendDisabled = queuesSend ? emptyText : Boolean(sendBlock) || nothingToSend;
   const composer = useComposerRuntime();
   // The tooltip names the mode Enter sends in and what the modifier does instead (FU-2). In
   // someone else's run every message waits, so there is nothing else to offer.
@@ -63,8 +65,9 @@ export function ComposerAction({
     ? t(followUpMode === "steer" ? "followUpSteerNotOwn" : "followUpSend")
     : t(steers ? "followUpSteerTitle" : "followUpSendTitle", { keys: otherShortcutKeys() });
   const handleSendClick = useCallback(() => {
-    onSubmitMessage?.(composer.getState().text);
-  }, [composer, onSubmitMessage]);
+    if (onSubmitMessage) onSubmitMessage(composer.getState().text);
+    else onSendWithoutText?.();
+  }, [composer, onSendWithoutText, onSubmitMessage]);
   const stopButton = (placement: "alone" | "beside") => {
     const button = (
       <Button
@@ -125,7 +128,7 @@ export function ComposerAction({
         >
           <Send size={17} aria-hidden="true" />
         </Button>
-      ) : onSubmitMessage ? (
+      ) : onSubmitMessage || (emptyText && onSendWithoutText) ? (
         <Button
           type="button"
           size="icon"

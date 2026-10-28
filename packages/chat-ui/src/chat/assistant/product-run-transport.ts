@@ -59,8 +59,10 @@ export class ProductConversationRunTransport implements ChatTransport<UIMessage>
 
     const submittedUserMessage = findLastUserMessage(messages);
     const text = extractUserText(submittedUserMessage);
-    if (!text) {
-      throw new Error("A user text message is required.");
+    // A picture or file may go alone: the server sends the conversation's ready attachments
+    // with the message.
+    if (!text && !submittedUserMessage?.parts.some((part) => part.type === "file")) {
+      throw new Error("A message needs text or an attachment.");
     }
 
     const idempotencyKey = this.getIdempotencyKey(messageId ?? submittedUserMessage?.id);

@@ -228,7 +228,9 @@ function AssistantRuntimePane({
       }
 
       const trimmedText = text.trim();
-      if (!trimmedText || rootSubmitPendingRef.current || sendDisabledReason) {
+      // Files waiting in the composer may go without text.
+      const nothingToSend = !trimmedText && localUploadingAttachments.length === 0;
+      if (nothingToSend || rootSubmitPendingRef.current || sendDisabledReason) {
         return true;
       }
 
@@ -284,6 +286,7 @@ function AssistantRuntimePane({
       client,
       collaborationWorkspaceId,
       docked,
+      localUploadingAttachments.length,
       locale,
       onMessageSubmitted,
       onRunStarted,

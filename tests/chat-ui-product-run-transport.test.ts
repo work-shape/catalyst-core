@@ -240,6 +240,64 @@ describe("chat UI product run transport", () => {
     expect(idempotencyKeys).toEqual(["idem-1", "idem-1"]);
   });
 
+  it("sends a picture without text, and refuses a message with neither", async () => {
+    const bodies: unknown[] = [];
+    const client = {
+      conversations: {
+        runs: {
+          async create() {
+            throw new Error("createRun should not be called");
+          },
+          async start(input: { body: unknown }) {
+            bodies.push(input.body);
+            return createStartResponse({ conversationId: "conv_existing" });
+          }
+        }
+      }
+    };
+    const transport = new ProductConversationRunTransport({
+      client,
+      locale: "de",
+      selectedConversationId: "conv_existing",
+      createIdempotencyKey: () => `idem-${bodies.length + 1}`
+    });
+    const send = (message: ProductUiMessage) =>
+      transport.sendMessages({
+        trigger: "submit-message",
+        chatId: "chat",
+        messageId: message.id,
+        messages: [message],
+        abortSignal: undefined
+      });
+    const picture: ProductUiMessage = {
+      id: "user_msg_picture",
+      role: "user",
+      parts: [
+        { type: "text", text: "  " },
+        {
+          type: "file",
+          mediaType: "image/png",
+          filename: "screenshot.png",
+          url: "data:image/png;base64,iVBORw0KGgo="
+        }
+      ]
+    };
+
+    await drainStream(await send(picture));
+    await expect(send(createUserMessage("user_msg_empty", " \n "))).rejects.toThrow(
+      "A message needs text or an attachment."
+    );
+
+    expect(bodies).toEqual([
+      {
+        idempotencyKey: "idem-1",
+        locale: "de",
+        message: { text: "" },
+        followUp: "queue"
+      }
+    ]);
+  });
+
   it("hands started runs to the workspace observer without assistant-ui stream chunks", async () => {
     const submittedConversationIds: string[] = [];
     const startedRuns: StartConversationRunResponse[] = [];

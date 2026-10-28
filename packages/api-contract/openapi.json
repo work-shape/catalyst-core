@@ -43677,7 +43677,7 @@
             "properties": {
               "text": {
                 "type": "string",
-                "minLength": 1
+                "description": "The message. It may be empty when the conversation's ready draft attachments go with it; a message with neither text nor attachments is refused."
               }
             },
             "required": [
@@ -49478,7 +49478,7 @@
             "properties": {
               "text": {
                 "type": "string",
-                "minLength": 1
+                "description": "The message. It may be empty when the conversation's ready draft attachments go with it; a message with neither text nor attachments is refused."
               }
             },
             "required": [

@@ -1015,3 +1015,41 @@ test("a file carries the icon of its type in the composer, above the message and
     await expect(iconBeside(resources, file.name)).toHaveAttribute("data-file-type", file.icon);
   }
 });
+
+test("a file goes without text, picked on the start page and pasted in an open conversation", async ({
+  page
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
+  const input = page.getByPlaceholder("Message");
+  const send = page.getByRole("button", { name: "Send message" });
+  await expect(send).toBeDisabled();
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "picked.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("A file sent alone")
+  });
+  await expect(send).toBeEnabled();
+  await send.click();
+  // The local agent repeats what it received: the file's line, so the file reached its turn.
+  const received = (filename: string) =>
+    page.getByRole("listitem").filter({ hasText: new RegExp(`^${filename} \\(fileId: `, "u") });
+  await expect(received("picked.txt")).toBeVisible();
+  await expect(page.locator('[data-role="user"]').last()).toContainText("picked.txt");
+  await expect(send).toBeDisabled();
+
+  // A pasted file uploads like a picked one, and Enter sends it once it is ready.
+  await input.evaluate((field) => {
+    const data = new DataTransfer();
+    data.items.add(new File(["Pasted alone"], "pasted.txt", { type: "text/plain" }));
+    field.dispatchEvent(
+      new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true })
+    );
+  });
+  await expect(send).toBeEnabled();
+  await input.press("Enter");
+  await expect(received("pasted.txt")).toBeVisible();
+  await expect(page.locator('[data-role="user"]').last()).toContainText("pasted.txt");
+  await expect(page.getByText("A message needs text or an attachment.")).toHaveCount(0);
+});

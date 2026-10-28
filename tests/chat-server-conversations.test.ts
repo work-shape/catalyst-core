@@ -210,6 +210,65 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
+  it("starts a turn from a picture sent without text, and refuses a message with neither", async () => {
+    const app = await createTestInstance({
+      config: createTestConfig(),
+      env: {},
+      capabilities: [createTestAttachmentCapability()],
+      tools: []
+    });
+    const created = await app.call("conversations.create", { payload: { title: "Screenshot" } });
+    const conversation = created.json<{ id: string }>();
+    const startEmpty = (idempotencyKey: string) =>
+      app.call("conversations.runs.start", {
+        params: { conversationId: conversation.id },
+        payload: { idempotencyKey, message: { text: "  " } }
+      });
+
+    const refused = await startEmpty("empty-without-picture");
+    expect(refused.statusCode).toBe(422);
+    expect(refused.json()).toMatchObject({
+      error: { message: "A message needs text or an attachment." }
+    });
+    const listedBefore = await app.call(
+      "conversations.list",
+      await personalConversationListInput(app)
+    );
+    const refusedNew = await app.call("conversations.runs.create", {
+      payload: { idempotencyKey: "empty-new-conversation", message: { text: "" } }
+    });
+    expect(refusedNew.statusCode).toBe(422);
+    // The refused first message leaves no conversation behind.
+    const listedAfter = await app.call(
+      "conversations.list",
+      await personalConversationListInput(app)
+    );
+    expect(listedAfter.json().items).toHaveLength(listedBefore.json().items.length);
+
+    const upload = createMultipartFilePayload({
+      fieldName: "file",
+      filename: "screenshot.gif",
+      contentType: "image/gif",
+      content: "GIF89a"
+    });
+    const uploaded = await app.call("conversations.draft_attachments.upload", {
+      params: { conversationId: conversation.id },
+      headers: upload.headers,
+      payload: upload.payload
+    });
+    expect(uploaded.statusCode).toBe(200);
+    await waitForReadyDraftAttachment(app, conversation.id);
+
+    const started = await startEmpty("picture-alone");
+    expect(started.statusCode, started.body).toBe(200);
+    const sent = started.json<{ userMessage: { metadata?: unknown }; run: { id: string } }>();
+    // The picture goes with the message as its attachment.
+    expect(JSON.stringify(sent.userMessage.metadata)).toContain("screenshot.gif");
+    await drainRunEvents(app, conversation.id, sent.run.id);
+
+    await app.close();
+  });
+
   it("serves a file a browser would run as an attachment, never inline on the API origin", async () => {
     const app = await createTestInstance({
       config: createTestConfig(),
