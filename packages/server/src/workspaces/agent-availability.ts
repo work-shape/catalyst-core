@@ -26,7 +26,9 @@ const AGENT_WRITE = "agent.write";
 const AGENT_USE = "agent.use";
 
 type WorkspaceRef = { kind: CollaborationWorkspace["kind"]; id?: CollaborationWorkspace["id"] };
-type SnapshotOptions = Pick<ChatServerOptions, "configAssets" | "clientInstanceId">;
+type SnapshotOptions = Pick<ChatServerOptions, "clientInstanceId"> & {
+  configAssets: Pick<ChatServerOptions["configAssets"], "source" | "store">;
+};
 type UseCheckOptions = SnapshotOptions & Pick<ChatServerOptions, "stores">;
 
 /** Where a person reached for an agent, as `agent.use_refused` names it: a message in a

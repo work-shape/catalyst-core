@@ -240,7 +240,9 @@ function toProject(
       audience: project.audience,
       createdByUserId: project.createdByUserId,
       createdAt: asset.createdAt.toISOString(),
-      updatedAt: asset.updatedAt.toISOString()
+      updatedAt: asset.updatedAt.toISOString(),
+      ...(definition.data.defaultAgent ? { defaultAgent: definition.data.defaultAgent } : {}),
+      ...(definition.data.skills?.length ? { skills: definition.data.skills } : {})
     }
   ];
 }

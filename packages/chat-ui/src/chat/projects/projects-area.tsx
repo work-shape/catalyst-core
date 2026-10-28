@@ -51,6 +51,8 @@ import type { WorkspaceRoute } from "../../shared/workspace-route";
 import { RouteLink } from "../../studio/route-link";
 import { ProjectFilesSection } from "./project-files-section";
 import { ProjectInstructionsTile } from "./project-instructions";
+import { ProjectComposerAgent, ProjectSetupTile } from "./project-setup";
+import type { BuildWorkspace } from "../../shared/build-rights";
 
 /** The workspace the projects belong to, as the pages name it. */
 interface ProjectsWorkspace {
@@ -85,7 +87,19 @@ interface ProjectsAreaProps {
     text: string;
     collaborationWorkspaceId: string;
     projectId: string;
+    /** The agent the person chose; without one the project's default, else the workspace's. */
+    agentName?: string;
   }): Promise<void>;
+}
+
+/** The person's workspaces as the share of a greyed agent or skill names them (PRJ-7). */
+function shareWorkspacesOf(workspaces: ProjectsAreaProps["workspaces"]): BuildWorkspace[] {
+  return workspaces.map((entry) => ({
+    id: entry.id,
+    name: entry.name,
+    member: true,
+    ...(entry.kind === "personal" ? { personal: true as const } : {})
+  }));
 }
 
 /**
@@ -480,6 +494,7 @@ export function NewProjectDialog({
 /** One project: its head, its conversations as cards and a composer that starts one in it. */
 function ProjectPage({
   workspace,
+  workspaces,
   projectName,
   onOpenRoute,
   onOpenConversation,
@@ -551,12 +566,27 @@ function ProjectPage({
               state={<AudienceBadge project={project} workspace={workspace.name} />}
               description={project.description}
             />
-            <ProjectInstructionsTile project={project} />
+            {/* The project's settings as tiles: two beside each other where the page has room. */}
+            <div className="@container mb-8">
+              <div className="grid gap-4 @2xl:grid-cols-2">
+                <ProjectInstructionsTile project={project} />
+                <ProjectSetupTile
+                  project={project}
+                  workspace={workspace}
+                  workspaces={shareWorkspacesOf(workspaces)}
+                />
+              </div>
+            </div>
             {/* The files stand beside the chats where the page has room, and below them where not. */}
             <div className="grid gap-8 @4xl/page:grid-cols-[minmax(0,1fr)_minmax(18rem,26rem)]">
               <div className="@container min-w-0">
                 <ProjectConversations project={project} onOpenConversation={onOpenConversation} />
-                <ProjectComposer project={project} onStartChat={onStartChat} />
+                <ProjectComposer
+                  project={project}
+                  workspace={workspace}
+                  workspaces={workspaces}
+                  onStartChat={onStartChat}
+                />
               </div>
               <div className="min-w-0">
                 <ProjectFilesSection
@@ -665,13 +695,19 @@ function ConversationCard({
 /** Starts a new chat in the project with its first message; the chat opens once it runs. */
 function ProjectComposer({
   project,
+  workspace,
+  workspaces,
   onStartChat
 }: {
   project: ProjectView;
+  workspace: ProjectsWorkspace;
+  workspaces: ProjectsAreaProps["workspaces"];
   onStartChat: ProjectsAreaProps["onStartChat"];
 }) {
   const { t } = useTranslation();
   const [text, setText] = useState("");
+  // Chosen here; until then the server starts the chat with the project's default agent.
+  const [agentName, setAgentName] = useState<string>();
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
   const label = t("projects.composerLabel", { title: project.title });
@@ -686,7 +722,8 @@ function ProjectComposer({
       await onStartChat({
         text: message,
         collaborationWorkspaceId: project.collaborationWorkspaceId,
-        projectId: project.id
+        projectId: project.id,
+        ...(agentName ? { agentName } : {})
       });
     } catch {
       setFailed(true);
@@ -718,17 +755,26 @@ function ProjectComposer({
             }
           }}
         />
-        <Button
-          type="submit"
-          size="icon"
-          className="size-9 rounded-full"
-          aria-label={t("projects.send")}
-          title={t("projects.send")}
-          loading={pending}
-          disabled={text.trim() === ""}
-        >
-          <ArrowUp aria-hidden="true" />
-        </Button>
+        <div className="flex min-w-0 items-center gap-1">
+          <ProjectComposerAgent
+            project={project}
+            workspace={workspace}
+            workspaces={shareWorkspacesOf(workspaces)}
+            value={agentName}
+            onChange={setAgentName}
+          />
+          <Button
+            type="submit"
+            size="icon"
+            className="size-9 rounded-full"
+            aria-label={t("projects.send")}
+            title={t("projects.send")}
+            loading={pending}
+            disabled={text.trim() === ""}
+          >
+            <ArrowUp aria-hidden="true" />
+          </Button>
+        </div>
       </ComposerFrame>
       {failed ? <FormNotice tone="error">{t("projects.startFailed")}</FormNotice> : null}
     </form>

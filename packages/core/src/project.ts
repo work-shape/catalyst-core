@@ -2,12 +2,15 @@ import { z } from "zod";
 import {
   PROJECT_DESCRIPTION_MAX_LENGTH,
   PROJECT_NAME_MAX_LENGTH,
+  PROJECT_SKILLS_MAX,
   PROJECT_TITLE_MAX_LENGTH,
+  type ConfigAssetKind as ConfigAssetKindName,
   type ProjectAudience
 } from "@work-shape/catalyst-asset-schemas";
 import type { CollaborationWorkspace } from "./collaboration-workspace";
 import type { ConversationVisibility } from "./conversation";
 import type { ClientInstanceId, CollaborationWorkspaceId } from "./ids";
+import type { AuthenticatedUser } from "./identity";
 import type { ISODateString } from "./time";
 
 export {
@@ -15,6 +18,7 @@ export {
   PROJECT_ASSET_KIND,
   PROJECT_AUDIENCES,
   PROJECT_DESCRIPTION_MAX_LENGTH,
+  PROJECT_SKILLS_MAX,
   PROJECT_TITLE_MAX_LENGTH,
   type ProjectAudience
 } from "@work-shape/catalyst-asset-schemas";
@@ -38,14 +42,29 @@ export interface Project {
   createdByUserId: string;
   createdAt: ISODateString;
   updatedAt: ISODateString;
+  /**
+   * The agent a new chat in the project starts with (PRJ-7). Not a lock; where it is not
+   * offered to the person now, the workspace's default stands in.
+   */
+  defaultAgent?: string;
+  /** The skills every run in the project is offered beside its agent's own (PRJ-7). */
+  skills?: string[];
 }
+
+/** The longest name of an agent or a skill a project names. */
+const PROJECT_ASSET_NAME_MAX_LENGTH = 128;
 
 /** The stored definition of a project, the config of its asset. */
 export const projectDefinitionSchema = z
   .object({
     name: z.string().min(1).max(PROJECT_NAME_MAX_LENGTH),
     title: z.string().trim().min(1).max(PROJECT_TITLE_MAX_LENGTH),
-    description: z.string().trim().max(PROJECT_DESCRIPTION_MAX_LENGTH).optional()
+    description: z.string().trim().max(PROJECT_DESCRIPTION_MAX_LENGTH).optional(),
+    defaultAgent: z.string().min(1).max(PROJECT_ASSET_NAME_MAX_LENGTH).optional(),
+    skills: z
+      .array(z.string().min(1).max(PROJECT_ASSET_NAME_MAX_LENGTH))
+      .max(PROJECT_SKILLS_MAX)
+      .optional()
   })
   .strict();
 
@@ -96,6 +115,45 @@ export function inProjectAudience(
   userId: string
 ): boolean {
   return project.audience === "workspace" || project.createdByUserId === userId;
+}
+
+/**
+ * Whether no one but `person` reads the project and every chat in it (PRJ-7): their own
+ * Personal Workspace's, or a private one they made in a team. There, and only there, what is
+ * theirs alone, an agent or a skill of their Personal Workspace, may be its default or
+ * attached; a chat that uses it is marked personal, as in their own chats outside a project.
+ */
+export function projectReadOnlyBy(
+  project: Pick<Project, "audience" | "createdByUserId">,
+  workspace: { kind: "personal" | "shared"; personalUserId?: string | null } | undefined,
+  person: string
+): boolean {
+  if (workspace === undefined) return false;
+  return workspace.kind === "personal"
+    ? workspace.personalUserId === person
+    : project.audience === "private" && project.createdByUserId === person;
+}
+
+/**
+ * The skills a chat's project attaches, as a run of one person may read them (PRJ-7): those the
+ * project's audience may use, and the person's own, which only a chat they alone read is offered.
+ */
+export interface ProjectRunSkills {
+  shared: string[];
+  own: string[];
+}
+
+/** What a project names besides its files (PRJ-7): its default agent and its skills. */
+export type ProjectChoiceKind = ConfigAssetKindName;
+
+/** Where a run reads the skills of its chat's project. */
+export interface ProjectSkillsPort {
+  /** Nothing where the chat is in no project, the module is off or its person is not in its audience. */
+  skillsOf(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: string;
+    user?: AuthenticatedUser;
+  }): Promise<ProjectRunSkills | undefined>;
 }
 
 /** A project as a list shows it: with how many chats it holds and when it was last used. */

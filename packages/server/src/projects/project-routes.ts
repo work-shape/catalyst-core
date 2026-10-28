@@ -17,6 +17,8 @@ import type { ChatServerOptions } from "../types";
 import { addDraftAttachmentFromBytes } from "../routes/draft-attachment-routes";
 import { ProjectFileService } from "./project-files";
 import { ProjectWorkflow } from "./project-service";
+import { ProjectSetupService } from "./project-setup";
+import { resolveRequestLocale } from "../routes/request-context";
 
 /**
  * Projects (PRJ-1), of the module `projects`, which refuses all of them where it is off. A
@@ -27,6 +29,7 @@ export function registerProjectRoutes(route: Route, options: ChatServerOptions):
   const projects = new ProjectWorkflow(options);
   const conversations = new ConversationWorkflow(options);
   const files = new ProjectFileService(options);
+  const setup = new ProjectSetupService(options);
 
   route(apiOperations["projects.list"], ({ user, params }) =>
     projects.list(user, asCollaborationWorkspaceId(params.collaborationWorkspaceId))
@@ -53,6 +56,29 @@ export function registerProjectRoutes(route: Route, options: ChatServerOptions):
         ...(description ? { description } : {}),
         ...(audience ? { audience } : {})
       })
+  });
+
+  // A project's default agent and skills (PRJ-7).
+  route(apiOperations["projects.setup.get"], ({ user, params, request }) =>
+    setup.setup(user, params.projectId, resolveRequestLocale(options, request))
+  );
+
+  route.operation(apiOperations["projects.setup.set"], {
+    // The earlier choice is set again by the same call.
+    changeClass: "reversible",
+    authorize: authorizePerson("projects.setup.set"),
+    resource: ({ projectId }) => ({ kind: "project", id: projectId }),
+    execute: ({ projectId, defaultAgent, skills }, context) =>
+      setup.set(
+        personOf(context.actor),
+        {
+          correlationId: context.correlationId,
+          audit: context.audit,
+          ...(context.runtime.locale ? { locale: context.runtime.locale } : {})
+        },
+        projectId,
+        { defaultAgent, skills }
+      )
   });
 
   route.operation(apiOperations["conversations.set_project"], {

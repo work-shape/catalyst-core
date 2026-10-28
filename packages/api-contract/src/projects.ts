@@ -4,6 +4,7 @@ import {
   PROJECT_FILE_CHANGES,
   PROJECT_FILE_ORIGINS,
   PROJECT_DESCRIPTION_MAX_LENGTH,
+  PROJECT_SKILLS_MAX,
   PROJECT_TITLE_MAX_LENGTH
 } from "@work-shape/catalyst-asset-schemas";
 import { timestampSchema } from "./shared";
@@ -25,7 +26,11 @@ export const projectSchema = z.object({
   audience: projectAudienceSchema,
   createdByUserId: z.string(),
   createdAt: timestampSchema,
-  updatedAt: timestampSchema
+  updatedAt: timestampSchema,
+  /** The agent a new chat in the project starts with (PRJ-7); not a lock. */
+  defaultAgent: z.string().optional(),
+  /** The skills every run in the project is offered beside its agent's own (PRJ-7). */
+  skills: z.array(z.string()).optional()
 });
 
 /** A project in a list: with its sent chats counted and when it was last used (PRJ-5). */
@@ -52,7 +57,62 @@ export const setConversationProjectRequestSchema = z.object({
   projectId: z.string().min(1).nullable()
 });
 
+/**
+ * Why a choice is greyed for this project (PRJ-7): it is the person's own ("Nur ich") and the
+ * project is read by others, who could not use it. Sharing it with the workspace opens it.
+ */
+export const projectChoiceRefusalSchema = z.enum(["own_in_shared_project"]);
+
+/** Where an own agent or skill sits, for the share that opens it to the project's audience. */
+const projectChoiceAssetSchema = z.object({ id: z.string(), workspaceId: z.string() });
+
+export const projectAgentChoiceSchema = z.object({
+  name: z.string(),
+  displayName: z.string(),
+  description: z.string().optional(),
+  /** The person's own agent, of their Personal Workspace: a chat that uses it is theirs alone. */
+  own: z.boolean(),
+  refusal: projectChoiceRefusalSchema.optional(),
+  asset: projectChoiceAssetSchema.optional()
+});
+
+export const projectSkillChoiceSchema = z.object({
+  name: z.string(),
+  title: z.string(),
+  summary: z.string().optional(),
+  /** The icon of a skill the platform ships. */
+  icon: z.string().optional(),
+  /** The person's own skill, of their Personal Workspace: a chat that reads it is theirs alone. */
+  own: z.boolean(),
+  refusal: projectChoiceRefusalSchema.optional(),
+  asset: projectChoiceAssetSchema.optional()
+});
+
+/**
+ * A project's default agent and skills (PRJ-7), with what the person may choose: the agents
+ * offered to them in the workspace and the skills the workspace owns or its agents use; their
+ * own where only they read the project, and greyed with the reason where others do. A stored
+ * name that is none of these is not available to the person now.
+ */
+export const projectSetupSchema = z.object({
+  defaultAgent: z.string().optional(),
+  skills: z.array(z.string()),
+  /** The agent a new chat starts with where the project names none, or one not offered now. */
+  workspaceDefaultAgent: z.string().optional(),
+  agents: z.array(projectAgentChoiceSchema),
+  skillChoices: z.array(projectSkillChoiceSchema)
+});
+
+export const setProjectSetupRequestSchema = z.object({
+  /** `null`: new chats start with the workspace's default. */
+  defaultAgent: z.string().min(1).max(128).nullable(),
+  skills: z.array(z.string().min(1).max(128)).max(PROJECT_SKILLS_MAX)
+});
+
 export type ProjectView = z.infer<typeof projectSchema>;
+export type ProjectSetupView = z.infer<typeof projectSetupSchema>;
+export type ProjectAgentChoiceView = z.infer<typeof projectAgentChoiceSchema>;
+export type ProjectSkillChoiceView = z.infer<typeof projectSkillChoiceSchema>;
 export type ProjectListItemView = z.infer<typeof projectListItemSchema>;
 export type ProjectAudienceView = z.infer<typeof projectAudienceSchema>;
 

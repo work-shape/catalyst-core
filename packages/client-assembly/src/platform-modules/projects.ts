@@ -15,6 +15,8 @@ export const projectsModule = defineModule({
     "projects.get",
     "projects.create",
     "conversations.set_project",
+    "projects.setup.get",
+    "projects.setup.set",
     "projects.files.list",
     "projects.files.versions",
     "projects.files.get_content",

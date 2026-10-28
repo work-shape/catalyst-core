@@ -393,8 +393,11 @@ export function createWorkspaceConversationActions({
     text: string;
     collaborationWorkspaceId: string;
     projectId: string;
+    /** The agent chosen in the project's composer; without one the project's default (PRJ-7). */
+    agentName?: string;
   }) {
     const response = await startProductConversationRun({
+      ...(input.agentName ? { agentName: input.agentName } : {}),
       client,
       collaborationWorkspaceId: input.collaborationWorkspaceId,
       projectId: input.projectId,

@@ -41,6 +41,8 @@ export const PROJECT_FOLDER_WRITE_CHANGES = [
 export const PROJECT_TITLE_MAX_LENGTH = 120;
 /** The longest description of a project, in characters. */
 export const PROJECT_DESCRIPTION_MAX_LENGTH = 500;
+/** The most skills a project attaches (PRJ-7). */
+export const PROJECT_SKILLS_MAX = 20;
 
 /**
  * The name the server makes of a title: lowercase words joined by hyphens, then a hyphen and a

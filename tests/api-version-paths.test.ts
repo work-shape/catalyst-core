@@ -145,6 +145,7 @@ describe("the operation catalog", () => {
       "password-reset",
       "password-setup",
       "project-files",
+      "project-settings",
       "projects",
       "scheduled-starts",
       "skills",
