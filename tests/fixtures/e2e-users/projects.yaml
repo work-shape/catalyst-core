@@ -1,0 +1,19 @@
+# The two people of the projects spec (PRJ-1), used by no other spec: one makes a shared and a
+# private project in a workspace of theirs, the other is a member who sees the shared one only.
+# The labels sort after every other for the reason in e2e-app.yaml.
+- email: e2e-projects@example.test
+  displayLabel: E2E Zz Projects
+  passwordEnvName: E2E_PROJECTS_PASSWORD
+  developmentPassword: e2e-projects-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
+- email: e2e-projects-member@example.test
+  displayLabel: E2E Zz Projects Member
+  passwordEnvName: E2E_PROJECTS_MEMBER_PASSWORD
+  developmentPassword: e2e-projects-member-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
