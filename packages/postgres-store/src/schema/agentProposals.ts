@@ -10,10 +10,18 @@ import {
   timestamp,
   uniqueIndex
 } from "drizzle-orm/pg-core";
-import type { AgentProposalSource, ClientInstanceId, JsonObject } from "@work-shape/catalyst-core";
+import type {
+  AgentProposalSource,
+  ClientInstanceId,
+  FileSetId,
+  JsonObject
+} from "@work-shape/catalyst-core";
 import { configAssets } from "./configAssets";
 
-/** One counter row per agent; a stored head is pending. Source columns remain for rollback. */
+/**
+ * One counter row per agent, or per skill with a shared draft (SKILL-DRAFT-1); a stored head is
+ * pending. Source columns remain for rollback.
+ */
 export const agentProposals = pgTable(
   "agent_change_proposals",
   {
@@ -51,6 +59,8 @@ export const agentProposalRevisions = pgTable(
       .references(() => agentProposals.id, { onDelete: "cascade" }),
     revision: integer("revision").notNull(),
     config: jsonb("config").$type<JsonObject>().notNull(),
+    /** The file set of a skill draft's folder beside its config (SKILL-DRAFT-1). */
+    fileSetId: text("file_set_id").$type<FileSetId>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull()
   },
   (table) => [

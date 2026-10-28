@@ -62,7 +62,14 @@ export function createSkillAssetKind(options: {
         description: SKILL_NAME_RULE,
         schema: skillConfigSchema.shape.name
       },
-      actions: { read: "skill.read", write: "skill.write", delete: "skill.delete" },
+      // A team's or the instance's skill is saved to its one shared draft, which `publish`
+      // makes live; a personal skill is live on save (SKILL-DRAFT-1).
+      actions: {
+        read: "skill.read",
+        write: "skill.write",
+        publish: "skill.publish",
+        delete: "skill.delete"
+      },
       // The instance owns it, or the workspace it was made in (WS-OWN-1a).
       owners: [...ASSET_OWNER_KINDS],
       validate: () => [],

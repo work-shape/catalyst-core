@@ -164,6 +164,9 @@ export const workspaceQueryKeys = {
    */
   agentDraft: (apiBaseUrl: string, authScope: string, agent: string, workspaceId = "") =>
     ["assets", apiBaseUrl, authScope, "agent-draft", agent, workspaceId] as const,
+  /** The one shared draft of a skill the instance or a Shared Workspace owns (SKILL-DRAFT-1). */
+  skillDraft: (apiBaseUrl: string, authScope: string, skill: string, workspaceId = "") =>
+    ["assets", apiBaseUrl, authScope, "skill-draft", skill, workspaceId] as const,
   /**
    * Where a publish was asked to offer an agent and could not (OFFER-ON-PUBLISH). The page
    * starts again from the agent after the publish, so this outlives the page that asked.

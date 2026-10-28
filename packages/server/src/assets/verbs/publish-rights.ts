@@ -37,6 +37,7 @@ export async function authorizeAssetPublish(
       { ...caller, audit: scope.options.auditRecorder, correlationId: "" },
       address
     );
+  if (address.kind === "skill") return scope.skillDrafts.authorizePublish(caller, address);
   requireAssetManagementOn(scope.options, access, "put");
   const target = await scope.target(address);
   const { publish } = target.kind.actions;

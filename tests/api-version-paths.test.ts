@@ -147,6 +147,7 @@ describe("the operation catalog", () => {
       "project-files",
       "projects",
       "scheduled-starts",
+      "skills",
       "workflow-runs",
       "workflows",
       "workspaces"

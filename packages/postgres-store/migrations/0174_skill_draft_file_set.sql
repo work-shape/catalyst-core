@@ -1,0 +1,1 @@
+ALTER TABLE "agent_change_proposal_revisions" ADD COLUMN "file_set_id" text;

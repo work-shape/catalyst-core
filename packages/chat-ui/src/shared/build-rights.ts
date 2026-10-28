@@ -11,6 +11,11 @@ export const AGENT_ASSET_KIND = "agent";
 export const CONNECTION_ASSET_KIND = "connection";
 /** The kinds the legacy keys read and write on the whole instance. */
 const KEYED_KINDS = [AGENT_ASSET_KIND, "skill"] as const;
+/**
+ * The kinds with one shared draft a publish makes live: every agent, and a skill a team or the
+ * instance owns (SKILL-DRAFT-1). They are the kinds the legacy keys name.
+ */
+export type SharedDraftKind = (typeof KEYED_KINDS)[number];
 
 /** `publish` is named by a kind with a draft and a published revision only. */
 export type AssetVerb = "read" | "write" | "delete" | "publish";

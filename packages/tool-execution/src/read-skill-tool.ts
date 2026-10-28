@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   getSubjectUserId,
+  previewSkill,
   SKILL_MOUNT_ROOT,
   type ConfigAssetSource,
   type ConversationOfferSource,
@@ -133,9 +134,11 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
         );
       }
 
-      // The snapshot carries no skill's resources: the skill read is read whole.
+      // The snapshot carries no skill's resources: the skill read is read whole. A Try turn reads
+      // the skill's draft it froze in place of its live revision (SKILL-DRAFT-1).
       const skill = assets.skills.some((candidate) => candidate.name === input.name)
-        ? await options.assetSource.getSkill(input.name)
+        ? (previewSkill(context.agentPreview, input.name) ??
+          (await options.assetSource.getSkill(input.name)))
         : undefined;
       if (!skill) {
         return toolFailed("validation_failed", `Skill '${input.name}' is not defined`);

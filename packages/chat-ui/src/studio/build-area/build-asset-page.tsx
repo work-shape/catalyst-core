@@ -673,8 +673,21 @@ function LoadedAssetPage({
   const canPublish =
     draftAhead && conflict === undefined && mayOnAsset(source.rights, "publish", stored);
   // The agent's draft revision the page shows, which a restore names: an agent has one draft,
-  // and an earlier revision becomes its content.
+  // and an earlier revision becomes its content. So has a skill a team or the instance owns
+  // (SKILL-DRAFT-1); a skill of the reader's Personal Workspace is live on save.
   const agentDraftRead = useRef<number | null>(stored.agentDraft?.revision ?? null);
+  const sharedDraft =
+    entry.kind === AGENT_ASSET_KIND ||
+    (entry.kind === "skill" &&
+      !(
+        stored.scope.kind === "workspace" &&
+        source.rights.workspaces.some(
+          (workspace) =>
+            stored.scope.kind === "workspace" &&
+            workspace.id === stored.scope.workspaceId &&
+            workspace.personal === true
+        )
+      ));
   const { editWithAgent } = source;
   const agentPlace = agentWorkspaceOf(source.rights, stored);
   const agent = useBuildEditWithAgent(
@@ -744,7 +757,7 @@ function LoadedAssetPage({
         agentDraftRead.current = draftRevision;
         setFailure(undefined);
         onRestored(undefined);
-        return { ok: true, draftRevision };
+        return { ok: true, draftRevision, ...(files ? { stored: files } : {}) };
       }
       setStored({
         ...stored,
@@ -829,6 +842,7 @@ function LoadedAssetPage({
         saveBlocked={conflict !== undefined}
         instanceWrite={source.rights.instanceWrite}
         draft={{
+          shared: sharedDraft,
           canPublish: !shipped && mayOnAsset(source.rights, "publish", stored),
           onRead: (revision) => {
             agentDraftRead.current = revision;
@@ -963,7 +977,7 @@ function LoadedAssetPage({
         reload={reload}
         folder={{
           read: () => source.writes.readFiles(address),
-          save: (files) => write({ files })
+          save: (files, draft) => write({ files }, draft)
         }}
       />
       <BuildHistory
@@ -980,9 +994,7 @@ function LoadedAssetPage({
                     ...address,
                     revision,
                     expectedRevision: stored.revision,
-                    ...(entry.kind === AGENT_ASSET_KIND
-                      ? { expectedDraftRevision: agentDraftRead.current }
-                      : {})
+                    ...(sharedDraft ? { expectedDraftRevision: agentDraftRead.current } : {})
                   });
                 } catch (error) {
                   const outcome = refusalOf(error);

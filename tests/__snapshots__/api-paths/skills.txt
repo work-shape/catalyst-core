@@ -1,0 +1,2 @@
+skills.draft.discard  POST /api/v1/skills/:name/draft/discard
+skills.draft.get  GET /api/v1/skills/:name/draft

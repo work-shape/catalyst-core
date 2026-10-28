@@ -33,13 +33,15 @@ export async function writeAgentDraft(
     ...mutation.agentDraft,
     baseRevision: input.liveRevision,
     config: mutation.config,
+    // A skill's draft keeps the folder its write stored beside the config (SKILL-DRAFT-1).
+    ...(mutation.fileSetId === undefined ? {} : { fileSetId: mutation.fileSetId }),
     savedAt: input.savedAt
   });
   if (!saved) {
     const draft = await getAgentProposal(tx, address);
     throw new AppError(
       "REVISION_CONFLICT",
-      "The agent draft changed. Read it again before saving",
+      `The ${mutation.kind} draft changed. Read it again before saving`,
       {
         reason: "draft_changed",
         // A batch writes several agents: the refusal names the one whose draft moved.
@@ -61,23 +63,28 @@ export async function consumeAgentDraft(
     agentId: string;
     liveRevision: number;
     revision: number;
+    /** The kind whose draft it is, as its refusals name it: an agent or a skill. */
+    kind?: string;
   }
 ): Promise<void> {
-  const draft = await getAgentProposal(tx, input);
+  const { kind = "agent", ...address } = input;
+  const draft = await getAgentProposal(tx, address);
   if (draft?.revision !== input.revision) {
     throw new AppError(
       "REVISION_CONFLICT",
-      "The agent draft changed. Read it again before publishing",
+      `The ${kind} draft changed. Read it again before publishing`,
       { reason: "draft_changed" }
     );
   }
   if (draft.baseRevision !== input.liveRevision) {
-    throw new AppError("CONFLICT", "The live agent changed since the draft was written", {
+    throw new AppError("CONFLICT", `The live ${kind} changed since the draft was written`, {
       reason: "stale_base"
     });
   }
-  if (!(await removeAgentProposal(tx, { ...input, revision: draft.revision }))) {
-    throw new AppError("REVISION_CONFLICT", "The agent draft changed", { reason: "draft_changed" });
+  if (!(await removeAgentProposal(tx, { ...address, revision: draft.revision }))) {
+    throw new AppError("REVISION_CONFLICT", `The ${kind} draft changed`, {
+      reason: "draft_changed"
+    });
   }
 }
 

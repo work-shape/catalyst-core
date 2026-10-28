@@ -58,7 +58,13 @@ export async function putAsset(
     requireOwnScope(target, call.access);
     await requireExpectedRevision(scope.options, call, target, expectedRevision);
     assertStoredWritable(target, "always");
-    return scope.drafts.putFolder(call, target, input.files, expectedRevision);
+    return scope.drafts.putFolder(
+      call,
+      target,
+      input.files,
+      expectedRevision,
+      input.expectedDraftRevision
+    );
   }
   if (kind.revisionFiles && kind.content === "repository" && input.config !== undefined) {
     // Every write of such a kind is a commit of its folder: the config is written as one.
@@ -66,7 +72,13 @@ export async function putAsset(
     requireOwnScope(target, call.access);
     await requireExpectedRevision(scope.options, call, target, expectedRevision);
     assertStoredWritable(target, "always");
-    return scope.drafts.putConfig(call, target, input.config, expectedRevision);
+    return scope.drafts.putConfig(
+      call,
+      target,
+      input.config,
+      expectedRevision,
+      input.expectedDraftRevision
+    );
   }
   if (input.config === undefined || input.files !== undefined) {
     throw new AppError(

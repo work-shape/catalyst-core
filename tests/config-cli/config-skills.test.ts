@@ -15,6 +15,7 @@ import {
   writeMinimalManifest,
   pulledBaseline,
   instanceHolding,
+  publishPushedDraft,
   skillConfig
 } from "../support/config-cli";
 
@@ -106,7 +107,7 @@ describe("config CLI command flows", () => {
     await writeMinimalManifest(directory, "https://catalyst.test");
     const skill = { ...skillConfig("review", "Review"), frontmatter: { license: "MIT" } };
     const syncs: unknown[] = [];
-    const { fetchImpl } = await instanceHolding({ agents: [], skills: [skill] }, syncs);
+    const { fetchImpl, fixture } = await instanceHolding({ agents: [], skills: [skill] }, syncs);
     const options = {
       cwd: directory,
       env: { CATALYST_API_KEY: "cat_frontmatter" },
@@ -119,6 +120,8 @@ describe("config CLI command flows", () => {
     );
     expect(await runConfigCommand("push", options)).toBe(0);
     expect(syncs.at(-1)).toMatchObject({ items: [{ kind: "skill", config: { frontmatter: {} } }] });
+    // The skill is the instance's: the push wrote its draft, which a person publishes.
+    await publishPushedDraft(fixture, "skill", "review");
     // Force a server read so local reuse cannot hide retained server frontmatter.
     await rm(resolve(directory, "skills/review/SKILL.md"));
     expect(await runConfigCommand("pull", options)).toBe(0);

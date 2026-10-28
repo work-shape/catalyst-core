@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { agent, clientInstanceId, errorSchema, skill } from "./support/access-instance";
+import { publishSkillDraft } from "./support/agent-draft-publication";
 import {
   setupWorkspaceHolder as setup,
   type WorkspaceHolderInstance
@@ -65,6 +66,8 @@ describe("the revision each item of a batch is made against", () => {
   it("tells a stale item to who may read the asset, and only its name to who may not", async () => {
     await sync(t, t.kai.id, [putSkill("kai-guide", null)]);
     await sync(t, t.admin.id, [putSkill("kai-guide", 1, "Changed.")]);
+    // The team's skill changes by its draft and that draft's publish (SKILL-DRAFT-1).
+    await publishSkillDraft(t, "kai-guide", t.kaiTeam);
 
     const stale = await sync(t, t.kai.id, [
       putSkill("kai-guide", 1, "Stale."),
@@ -141,12 +144,23 @@ describe("the revision each item of a batch is made against", () => {
   it("is not refused for an asset it does not name", async () => {
     await sync(t, t.kai.id, [putSkill("kai-mine", null), putSkill("kai-theirs", null)]);
     await sync(t, t.admin.id, [putSkill("kai-theirs", 1, "Theirs, changed.")]);
+    await publishSkillDraft(t, "kai-theirs", t.kaiTeam);
 
     const applied = await sync(t, t.kai.id, [putSkill("kai-mine", 1, "Mine, changed.")]);
 
     expect(applied.statusCode, applied.body).toBe(200);
     expect(appliedSchema.parse(applied.json())).toMatchObject({
-      items: [{ type: "put", kind: "skill", name: "kai-mine", status: "applied", revision: 2 }],
+      // The team's skill is written as its draft; live stays at 1 (SKILL-DRAFT-1).
+      items: [
+        {
+          type: "put",
+          kind: "skill",
+          name: "kai-mine",
+          status: "applied",
+          revision: 1,
+          draftRevision: 1
+        }
+      ],
       warnings: []
     });
     expect(await t.stored("skill", "kai-theirs")).toMatchObject({ revision: 2 });

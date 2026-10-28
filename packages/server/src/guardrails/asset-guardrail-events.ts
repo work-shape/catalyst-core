@@ -291,6 +291,7 @@ export async function publishEvents(
     checkedAgentPublishes.set(held, { revision: input.revision, firstVersion });
     return [write, held];
   }
+  if (input.kind === "skill") return skillPublishEvents(options, input);
   const name = PUBLISH_EVENTS[input.kind];
   if (name === undefined) {
     return [];
@@ -586,4 +587,46 @@ function isImageOrFont(bytes: Uint8Array): boolean {
     startsWith([0x52, 0x49, 0x46, 0x46]) &&
     [0x57, 0x45, 0x42, 0x50].every((byte, index) => bytes[8 + index] === byte);
   return webp || IMAGE_AND_FONT_SIGNATURES.some(startsWith);
+}
+
+/**
+ * `asset.before_write` and `skill.before_publish` of the shared draft of a team's or the
+ * instance's skill that a publish makes live (SKILL-DRAFT-1), with the text of that draft. No
+ * guardrail is bound to the publish by default; an instance may bind one. A publish of a draft
+ * revision that is not the pending one is refused here, never let through unchecked.
+ */
+async function skillPublishEvents(
+  options: RevisionOptions,
+  input: RevisionAddress
+): Promise<OperationBeforeEvent[]> {
+  const asset = await options.configAssets.store.getConfigAsset({
+    clientInstanceId: options.clientInstanceId,
+    kind: "skill",
+    name: input.name
+  });
+  // Nothing of the caller's to make live: the publish itself refuses it, and says why.
+  if (
+    !asset ||
+    asset.status !== "active" ||
+    !assetScopesEqual(asset.scope, scopeOf(input.workspaceId))
+  )
+    return [];
+  const draft = await options.stores.agentProposals.get({
+    clientInstanceId: options.clientInstanceId,
+    agentId: asset.id
+  });
+  if (draft?.revision !== input.revision) return [];
+  const write = assetWriteEvent({ kind: "skill", name: input.name, config: draft.config });
+  return [
+    write,
+    {
+      ...write,
+      name: "skill.before_publish",
+      subject: {
+        ...write.subject,
+        id: asset.id,
+        ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
+      }
+    }
+  ];
 }

@@ -1,12 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   AgentAvailability,
   AgentDraft,
-  OperationOutcome
+  OperationOutcome,
+  SkillDraft
 } from "@work-shape/catalyst-api-client";
 import { invalidateOfferedAgents } from "../../shared/api/agent-placement-mutations";
 import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
+import type { SharedDraftKind } from "../../shared/build-rights";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorCode } from "../../shared/workspace-utils";
@@ -81,10 +83,19 @@ export async function decideDraft(input: {
   return undefined;
 }
 
+/**
+ * The one shared draft of an agent, or of a skill the instance or a Shared Workspace owns
+ * (SKILL-DRAFT-1), as a page reads it. A skill's names the skill in `agent` and comes with the
+ * files of its folder.
+ */
+export type SharedDraft = AgentDraft & { files?: readonly DraftFile[] };
+/** A file of a skill draft's folder, with its content. */
+type DraftFile = NonNullable<SkillDraft["files"]>[number];
+
 /** The agent's draft as the page reads it, and what the page does with it. */
 export interface AgentDraftSource {
   /** Undefined while the first read is on its way; `null` where the agent has no draft. */
-  latest: AgentDraft | null | undefined;
+  latest: SharedDraft | null | undefined;
   /** Reads the draft again, as after a refused save. */
   reread(): Promise<unknown>;
   /**
@@ -95,7 +106,7 @@ export interface AgentDraftSource {
     revision: number;
     config: Record<string, unknown>;
     liveRevision: number;
-  }): AgentDraft;
+  }): SharedDraft;
   /**
    * Publish and Discard of the draft revision the page shows. Each reads the agent again once
    * it is made. A publish may also make what the draft uses available where the agent is: in
@@ -124,12 +135,15 @@ export interface AgentDraftSource {
 }
 
 /**
- * The one draft of the agent on the page (AD-4). Only a holder of the agent's write right reads
- * it; the page of anybody else shows the live agent. The draft is read again with every read of
- * the assets, which the dock drops whenever its agent saves, so a draft the agent writes shows.
+ * The one draft of the agent on the page (AD-4), or of the skill a team or the instance owns
+ * (SKILL-DRAFT-1). Only a holder of the write right reads it; the page of anybody else shows
+ * the live asset. The draft is read again with every read of the assets, which the dock drops
+ * whenever its agent saves, so a draft the agent writes shows.
  */
 export function useAgentDraft(input: {
-  /** The agent on the page. Absent for a new one, which has no draft. */
+  /** The kind whose draft it is. An agent's where it is left out. */
+  kind?: SharedDraftKind;
+  /** The agent or the skill on the page. Absent for a new one, which has no draft. */
   agent: string | undefined;
   /** The workspace that owns the agent, by its id. Absent for the instance's own. */
   workspaceId?: string;
@@ -143,9 +157,11 @@ export function useAgentDraft(input: {
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState<DraftDecision>();
   const [answered, setAnswered] = useState<AnsweredRevision>();
-  const { agent, workspaceId, enabled, reload } = input;
+  const { kind: assetKind = "agent", agent, workspaceId, enabled, reload } = input;
   const scope = workspaceId === undefined ? {} : { workspaceId };
-  const queryKey = workspaceQueryKeys.agentDraft(apiBaseUrl, authScope, agent ?? "", workspaceId);
+  const queryKey = (
+    assetKind === "skill" ? workspaceQueryKeys.skillDraft : workspaceQueryKeys.agentDraft
+  )(apiBaseUrl, authScope, agent ?? "", workspaceId);
   const reads = enabled && agent !== undefined;
   const offerKey = workspaceQueryKeys.agentUnsetOffer(
     apiBaseUrl,
@@ -159,9 +175,20 @@ export function useAgentDraft(input: {
   const query = useQuery({
     queryKey,
     enabled: reads,
-    queryFn: async ({ signal }): Promise<AgentDraft | null> => {
+    queryFn: async ({ signal }): Promise<SharedDraft | null> => {
       if (agent === undefined) return null;
       try {
+        if (assetKind === "skill") {
+          // A skill's draft is read with its folder: the page edits the draft's files.
+          const { draft } = await client.skills.draft.get({
+            params: { name: agent },
+            query: { ...scope, files: "true" },
+            signal
+          });
+          if (draft === null) return null;
+          const { skill, ...rest } = draft;
+          return { ...rest, agent: skill };
+        }
         const { draft } = await client.agents.draft.get({
           params: { name: agent },
           query: scope,
@@ -188,7 +215,7 @@ export function useAgentDraft(input: {
       call: () =>
         kind === "publish"
           ? client.assets.publish({
-              params: { kind: "agent", name: agent },
+              params: { kind: assetKind, name: agent },
               body: {
                 revision,
                 ...scope,
@@ -200,7 +227,7 @@ export function useAgentDraft(input: {
                   : {})
               }
             })
-          : client.agents.draft.discard({
+          : (assetKind === "skill" ? client.skills.draft : client.agents.draft).discard({
               params: { name: agent },
               body: { expectedRevision: revision, ...scope }
             }),
@@ -212,7 +239,7 @@ export function useAgentDraft(input: {
         queryClient.setQueryData(queryKey, null);
         // The published draft is the live agent, which the lists of offered agents also show.
         // The page does not wait for them, as a save in Build does not.
-        if (kind === "publish") {
+        if (kind === "publish" && assetKind !== "skill") {
           invalidateOfferedAgents(queryClient, apiBaseUrl, authScope).catch(() => undefined);
         }
         await reload();
@@ -228,7 +255,7 @@ export function useAgentDraft(input: {
     latest,
     reread,
     saved: ({ revision, config, liveRevision }) => {
-      const draft: AgentDraft = {
+      const draft: SharedDraft = {
         agent: agent ?? "",
         revision,
         baseRevision: liveRevision,
@@ -239,6 +266,11 @@ export function useAgentDraft(input: {
         updatedAt: new Date().toISOString()
       };
       queryClient.setQueryData(queryKey, draft);
+      // A skill's draft is read again for its folder as stored, which a page opened later
+      // starts from.
+      if (assetKind === "skill") {
+        queryClient.invalidateQueries({ queryKey }).catch(() => undefined);
+      }
       return draft;
     },
     decide,
@@ -250,4 +282,66 @@ export function useAgentDraft(input: {
     busy,
     answerFor: (revision) => answerOfRevision(answered, revision)
   };
+}
+
+/**
+ * How a page follows the shared draft it holds (AD-4, SKILL-DRAFT-1): a newer draft somebody
+ * else wrote is taken over where nothing is typed, and said beside what is typed otherwise; a
+ * draft published or discarded elsewhere reads the live asset again. The agent's page and the
+ * skill's both follow theirs by it.
+ */
+export function useDraftFollow(
+  draft: AgentDraftSource | undefined,
+  input: {
+    /** The draft the page holds: the one it started from or last saved. */
+    held: SharedDraft | null;
+    setHeld(next: SharedDraft): void;
+    /** The page holds changes the reader has not saved. */
+    dirty: boolean;
+    saving: boolean;
+    /** Reads the live asset again: the page starts again from it. */
+    reload: (() => Promise<unknown>) | undefined;
+    /** Starts the form again from a newer draft. */
+    take(latest: SharedDraft): void;
+    /** Hears the draft revision the page shows, or that it shows none. */
+    onRead: ((revision: number | null) => void) | undefined;
+  }
+) {
+  const { held, setHeld, dirty, saving, reload, onRead } = input;
+  const take = useRef(input.take);
+  take.current = input.take;
+  const latest = draft?.latest;
+  const latestRevision = latest === undefined ? undefined : (latest?.revision ?? null);
+  const differs = latestRevision !== undefined && latestRevision !== (held?.revision ?? null);
+  const busy = draft?.busy;
+  // Somebody else wrote the draft, or published or discarded it, while the reader types: the
+  // page keeps what was typed and says who, and saves nothing over it.
+  const behind = draft !== undefined && differs && dirty ? { latest: latest ?? null } : undefined;
+  // The live asset is read again once: the page starts again from it.
+  const reloading = useRef(false);
+  useEffect(() => {
+    if (latest === undefined || saving || busy !== undefined) return;
+    if (!differs) {
+      // The same revision read again names its author as the instance does.
+      if (latest !== null && latest !== held) setHeld(latest);
+      return;
+    }
+    if (dirty) return;
+    if (latest === null) {
+      // Published or discarded elsewhere: the live asset is read again.
+      if (!reloading.current) {
+        reloading.current = true;
+        reload?.().catch(() => undefined);
+      }
+      return;
+    }
+    take.current(latest);
+    setHeld(latest);
+  }, [busy, differs, dirty, held, latest, reload, saving, setHeld]);
+  useEffect(() => {
+    onRead?.(held?.revision ?? null);
+  }, [held, onRead]);
+  const answer = draft?.answerFor(held?.revision);
+  const stale = held !== null && (held.stale || answer?.kind === "stale");
+  return { latest, latestRevision, behind, busy, answer, stale };
 }

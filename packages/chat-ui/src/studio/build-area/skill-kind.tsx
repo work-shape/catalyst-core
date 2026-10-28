@@ -1,7 +1,8 @@
-import { Badge, SkillIcon } from "@work-shape/catalyst-ui";
+import { Badge, Page, SkeletonPage, SkillIcon } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import { useSettingsPage } from "../../shared/settings-page-context";
-import { skillConfigToForm, startedSkillForm } from "./skill-form-model";
+import { useAgentDraft } from "./agent-draft-source";
+import { skillConfigToForm, startedSkillForm, withReadFiles } from "./skill-form-model";
 import type { BuildAsset, BuildAssetEditorProps, BuildAssetKind } from "./build-asset-kind";
 import { SkillEditor } from "./skill-editor";
 import { SkillImportDialog } from "./skill-import";
@@ -41,19 +42,44 @@ export const skillKind: BuildAssetKind = {
   Editor: SkillAssetEditor
 };
 
-/** The skill form on the asset page. A copy starts from the shipped skill it copies. */
+/**
+ * The skill form on the asset page. A copy starts from the shipped skill it copies. A skill a
+ * team or the instance owns has one shared draft (SKILL-DRAFT-1): the page of a holder of its
+ * write right starts from it, with its folder, and saves write it.
+ */
 function SkillAssetEditor(frame: BuildAssetEditorProps) {
   const { config } = useSettingsPage();
   const { t } = useTranslation();
-  const { asset, start } = frame;
-  const initialForm = asset
-    ? skillConfigToForm(asset.config)
-    : start?.copyOf
-      ? { ...skillConfigToForm(start.copyOf), name: start.name, title: start.title }
-      : startedSkillForm(start ?? { name: "", title: "" });
+  const { asset, start, owner } = frame;
+  const shared = asset !== undefined && frame.canWrite && frame.draft?.shared === true;
+  const draftSource = useAgentDraft({
+    kind: "skill",
+    agent: asset?.name,
+    ...(owner === undefined ? {} : { workspaceId: owner }),
+    enabled: shared,
+    reload: frame.reload ?? (async () => undefined)
+  });
+  const draft = shared ? draftSource : undefined;
+  if (draft !== undefined && draft.latest === undefined) {
+    return (
+      <Page ref={frame.page.ref}>
+        {frame.page.above}
+        <SkeletonPage />
+      </Page>
+    );
+  }
+  const latest = draft?.latest ?? undefined;
+  const initialForm = latest
+    ? withReadFiles(skillConfigToForm(latest.config), latest.files ?? [])
+    : asset
+      ? skillConfigToForm(asset.config)
+      : start?.copyOf
+        ? { ...skillConfigToForm(start.copyOf), name: start.name, title: start.title }
+        : startedSkillForm(start ?? { name: "", title: "" });
   return (
     <SkillEditor
       frame={frame}
+      {...(draft === undefined ? {} : { draft })}
       initialForm={initialForm}
       editable={config.features.configAssets.allowSkillEditing}
       badges={

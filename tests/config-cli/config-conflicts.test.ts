@@ -271,7 +271,12 @@ describe("config CLI command flows", () => {
     const after = (await readStateFile(resolve(directory, STATE_FILENAME))).instances.local;
     expect(after?.assets?.["skill:both"]).toMatchObject({ revision: 2 });
     expect(after?.assets?.["skill:remote"]).toEqual(before?.assets?.["skill:remote"]);
-    expect(after?.assets?.["skill:local"]).toMatchObject({ revision: 2 });
+    // The skill is the instance's: the push wrote its draft, and the live revision stays.
+    expect(after?.assets?.["skill:local"]).toMatchObject({
+      revision: 1,
+      draftRevision: 1,
+      draftPushed: true
+    });
     expect(after?.defaultAgentName).toBe(before?.defaultAgentName);
     output.length = 0;
     expect(await runConfigCommand("push", options)).toBe(0);

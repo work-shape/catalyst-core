@@ -1,6 +1,8 @@
 import { agentDependencyWarnings } from "./agent-dependency-availability";
 import { deleteTryConversations } from "../deletion/conversation-cleanup";
 import { agentDraftAuthor } from "./agent-drafts";
+import { draftFolderOf } from "./asset-upsert";
+import { writesSharedDraft } from "./shared-drafts";
 import {
   AppError,
   asCollaborationWorkspaceId,
@@ -43,7 +45,7 @@ import {
   toJsonObject
 } from "./asset-write-rules";
 import { currentRevisionOf } from "./asset-revision";
-import { readsOther, recordCommitted } from "./asset-target";
+import { readsOther, recordCommitted, scopeOf } from "./asset-target";
 import {
   isReady,
   readsItem,
@@ -350,26 +352,41 @@ async function checkBatch(
 
   // A delete of an asset that is not there writes nothing. It is handed to the store all the
   // same, which checks under its lock that the asset is still not there.
-  const mutations: ConfigAssetMutation[] = ready().map((entry) =>
-    entry.item.type === "delete"
-      ? { type: "delete", kind: entry.kind.kind, name: entry.name, scope: entry.scope }
-      : {
-          type: "upsert",
-          kind: entry.kind.kind,
-          name: entry.name,
-          config: toJsonObject(acceptedByName(entry.kind.kind).get(entry.name)),
-          scope: entry.scope,
-          ...(entry.kind.kind === "agent" && entry.asset?.status === "active"
-            ? {
-                agentDraft: {
-                  expectedDraftRevision: entry.item.expectedDraftRevision ?? null,
-                  author: agentDraftAuthor(call, releaseSync)
-                }
+  // Every item of the batch has its owner: whether a skill's write is its draft is asked once.
+  const skillDrafts = await writesSharedDraft(options, "skill", scopeOf(input.workspaceId));
+  const mutations: ConfigAssetMutation[] = await Promise.all(
+    ready().map(async (entry): Promise<ConfigAssetMutation> => {
+      if (entry.item.type === "delete")
+        return { type: "delete", kind: entry.kind.kind, name: entry.name, scope: entry.scope };
+      const config = toJsonObject(acceptedByName(entry.kind.kind).get(entry.name));
+      // An agent's write, and a team's or the instance's skill's, goes to its one shared draft
+      // (AD-1, SKILL-DRAFT-1).
+      const toDraft =
+        entry.asset?.status === "active" &&
+        (entry.kind.kind === "agent" || (entry.kind.kind === "skill" && skillDrafts));
+      const folder =
+        toDraft && entry.kind.kind === "skill" && entry.asset
+          ? await draftFolderOf(options, entry.kind, entry.asset.id, config)
+          : undefined;
+      return {
+        type: "upsert",
+        kind: entry.kind.kind,
+        name: entry.name,
+        config: folder?.config ?? config,
+        scope: entry.scope,
+        ...(toDraft
+          ? {
+              agentDraft: {
+                expectedDraftRevision: entry.item.expectedDraftRevision ?? null,
+                author: agentDraftAuthor(call, releaseSync)
               }
-            : {}),
-          // A kind with a published revision moves its draft with a write and nothing else.
-          ...(entry.kind.lifecycle === "draft_published" ? { draft: true as const } : {})
-        }
+            }
+          : {}),
+        ...(folder?.fileSetId === undefined ? {} : { fileSetId: folder.fileSetId }),
+        // A kind with a published revision moves its draft with a write and nothing else.
+        ...(entry.kind.lifecycle === "draft_published" ? { draft: true as const } : {})
+      };
+    })
   );
   if (defaultChange && (defaultChange.agentName ?? null) !== storedDefault) {
     mutations.push({ type: "setDefaultAgent", agentName: defaultChange.agentName });
