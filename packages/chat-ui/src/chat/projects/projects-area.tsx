@@ -1,4 +1,4 @@
-import { ArrowUp, Folder, Lock, MessageSquare, Plus } from "lucide-react";
+import { ArrowUp, Folder, Lock, MessageSquare, Plus, Users } from "lucide-react";
 import { useId, useState, type FormEvent } from "react";
 import type {
   CollaborationWorkspaceWithRole,
@@ -84,8 +84,15 @@ function AudienceBadge({ project, workspace }: { project: ProjectView; workspace
       {t("projects.audiencePrivate")}
     </Badge>
   ) : (
-    <Badge size="sm" tone="accent" data-testid="project-audience-shared">
-      {t("projects.audienceShared", { workspace })}
+    <Badge
+      size="sm"
+      appearance="outline"
+      className="max-w-full"
+      title={t("projects.audienceShared", { workspace })}
+      data-testid="project-audience-shared"
+    >
+      <Users aria-hidden="true" className="size-3 shrink-0" />
+      <span className="truncate">{t("projects.audienceShared", { workspace })}</span>
     </Badge>
   );
 }
