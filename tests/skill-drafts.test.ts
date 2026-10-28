@@ -456,6 +456,7 @@ describe("catalyst and a shared skill's draft", () => {
     const refused = await f.run(source, "push");
     expect(refused.code).toBe(1);
     expect(refused.err).toContain("The skill draft changed. Read it again before saving");
+    expect(refused.err).toContain("catalyst config pull --only skill:form");
     expect(
       f.calls.filter((call) => ["assets.sync", "assets.put"].includes(call.operation))
     ).toEqual([]);
