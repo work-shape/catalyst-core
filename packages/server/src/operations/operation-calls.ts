@@ -168,6 +168,7 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
           stores: options.stores,
           kinds: options.configAssets.kinds,
           modules: options.modules,
+          authorizer: options.authorizer,
           approvalKinds: (): string[] => [...approvalRequestHandlers.keys()]
         })
       : [])
