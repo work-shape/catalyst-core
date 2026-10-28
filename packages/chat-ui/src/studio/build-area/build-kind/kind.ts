@@ -135,6 +135,11 @@ export interface BuildAssetViewProps {
    * where it refused. Absent where the reader may not delete it.
    */
   remove?(): Promise<string | undefined>;
+  /**
+   * "Teilen…" (SHARE-1) for the head's menu, which opens the frame's dialog. Absent where the
+   * asset cannot go further up or the reader may not change it.
+   */
+  shareItem?: ReactNode;
 }
 
 /**

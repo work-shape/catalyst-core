@@ -41,6 +41,7 @@ import { NewAssetAvailability, type BuildCreateStart } from "./build-create-dial
 import { BuildHistory } from "./build-history";
 import { assetConfigTitle, type VisibleBuildKind } from "./build-model";
 import { SKILL_ROOT_FILE_NAME } from "./skill-form-model";
+import { useAssetShare } from "./asset-share";
 import { formatDateTime } from "../../shared/locale-format";
 import { useBuildEditWithAgent } from "./build-edit-with-agent";
 import {
@@ -437,6 +438,26 @@ export function ViewedAssetPage({
       ? (options) => editWithAgent({ kind, name }, agentPlace.workspaceId, options)
       : undefined
   );
+  // "Teilen…" (SHARE-1): after a move Studio follows the asset to its new place and reads it
+  // there, so the page shows that place.
+  const share = useAssetShare({
+    source: source.share,
+    subject:
+      asset === undefined
+        ? undefined
+        : {
+            kind,
+            name,
+            title: assetConfigTitle(asset, locale),
+            id: asset.id,
+            owner: asset.scope
+          },
+    canShare: asset !== undefined && mayOnAsset(source.rights, "write", asset),
+    onMoved: (owner) => {
+      if (source.chooseScope) source.chooseScope(owner);
+      else if (read.status === "ready") read.reload().catch(() => undefined);
+    }
+  });
   if (read.status === "ready") {
     const { asset } = read;
     const draftAhead =
@@ -484,8 +505,10 @@ export function ViewedAssetPage({
           kinds={kinds}
           {...(publish === undefined ? {} : { publish })}
           {...(remove === undefined ? {} : { remove })}
+          {...(share.item === undefined ? {} : { shareItem: share.item })}
         />
         {agent.dialog}
+        {share.dialog}
       </>
     );
   }
@@ -625,6 +648,23 @@ function LoadedAssetPage({
     />
   );
   const refusalPlace = refusalPlaceOf(workspaces);
+  // "Teilen…" (SHARE-1): up the ladder, for a reader who may change the asset. After a move the
+  // page shows the new place at once, and Studio follows the asset there.
+  const share = useAssetShare({
+    source: source.share,
+    subject: {
+      kind: entry.kind,
+      name: stored.name,
+      title: assetConfigTitle(stored, locale),
+      id: stored.id,
+      owner: stored.scope
+    },
+    canShare: canWrite && conflict === undefined,
+    onMoved: (owner) => {
+      setStored((before) => ({ ...before, scope: owner }));
+      source.chooseScope?.(owner);
+    }
+  });
   const canDelete = !shipped && state.canDelete && mayOnAsset(source.rights, "delete", stored);
   // A kind with drafts answers its two pointers. The saved draft is ahead of what is
   // published, or nothing is published yet.
@@ -841,6 +881,7 @@ function LoadedAssetPage({
           menu:
             conflict === "deleted" ? undefined : (
               <>
+                {share.item}
                 <CopyIdItem id={stored.name} />
                 {canDelete ? (
                   <>
@@ -961,6 +1002,7 @@ function LoadedAssetPage({
         }
       />
       {agent.dialog}
+      {share.dialog}
       <ConfirmDialog
         open={deleteOpen}
         title={t(entry.deleteTitle, { name: stored.name })}

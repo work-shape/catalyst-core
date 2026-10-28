@@ -1,5 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
 import type { WorkspaceRoute, WorkspaceRouteChangeOptions } from "../../shared/workspace-route";
+import type { BuildWorkspace } from "../../shared/build-rights";
 import type { AppRights } from "./app-model";
 
 /** The workspace whose Apps are shown, as the screens name it. */
@@ -18,6 +19,8 @@ export interface AppsHost {
   /** The Apps module is on for this instance. */
   enabled: boolean;
   rights: AppRights;
+  /** The workspaces the reader knows, as Studio names them: where "Teilen…" may lead. */
+  places?: readonly BuildWorkspace[];
   /** The open workspace. Absent while none is open. */
   workspace: AppsWorkspace | undefined;
   showRoute(route: WorkspaceRoute, options?: WorkspaceRouteChangeOptions): void;

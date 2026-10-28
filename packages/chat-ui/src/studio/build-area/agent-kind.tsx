@@ -1,6 +1,6 @@
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DATA_STORE_ASSET_KIND } from "@work-shape/catalyst-core";
-import { useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Badge, Page, SkeletonPage } from "@work-shape/catalyst-ui";
 import { useAgentPlacementMutations } from "../../shared/api/agent-placement-mutations";
 import { usePlatformContextQuery } from "../../shared/api/workspace-queries";
@@ -23,6 +23,12 @@ import { useKnowledgeBaseSource } from "./knowledge-base-source";
 import { useOwnedChoices } from "./owned-choices";
 import { assetPlace, useKnownWorkspaces } from "./asset-place";
 import { skillFacts } from "./skill-facts";
+import { useAssetShare } from "./asset-share";
+import {
+  createAssetShareSource,
+  type AssetShareSubject,
+  type AssetShareTarget
+} from "./asset-share-model";
 import type { DataStoreChoice } from "./agent-data-stores";
 import { unusableDataStoreReason } from "./agent-data-stores-model";
 
@@ -131,6 +137,15 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
     owner === undefined
       ? undefined
       : assetPlace({ kind: "workspace", workspaceId: owner }, workspaces, t).name;
+  // Each of them offers "Für alle teilen…" or "Mit {team} teilen…" (SHARE-1): the dialog opens
+  // on the agent's place, and once the skill moved there the chooser offers it.
+  const skillShare = useAgentChoiceShare();
+  const shareTo: AssetShareTarget | undefined =
+    owner === undefined
+      ? { kind: "instance" }
+      : ownerName === undefined
+        ? undefined
+        : { kind: "workspace", workspaceId: owner, name: ownerName };
   const unusable = otherPlace
     ? (ownSkills.data?.items ?? []).map((skill) => ({
         name: skill.name,
@@ -139,7 +154,28 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
         reason:
           ownerName === undefined
             ? t("build.skillOnlyMine")
-            : t("build.skillOnlyMineIn", { workspace: ownerName })
+            : t("build.skillOnlyMineIn", { workspace: ownerName }),
+        ...(shareTo === undefined || mine === undefined
+          ? {}
+          : {
+              share: {
+                label:
+                  shareTo.kind === "instance"
+                    ? t("share.withEveryone")
+                    : t("share.withTeam", { team: shareTo.name }),
+                onSelect: () =>
+                  skillShare.start(
+                    {
+                      kind: "skill",
+                      name: skill.name,
+                      title: skill.title || skill.name,
+                      id: skill.id,
+                      owner: { kind: "workspace", workspaceId: mine }
+                    },
+                    shareTo
+                  )
+              }
+            })
       }))
     : [];
   // The Knowledge Bases are offered where the instance has the kind: its module is on.
@@ -214,61 +250,99 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
   }
 
   return (
-    <AgentEditor
-      frame={frame}
-      initialForm={
-        draft?.latest
-          ? agentConfigToForm(draft.latest.config)
-          : asset
-            ? agentConfigToForm(asset.config)
-            : startedAgentForm(start ?? { name: "", title: "" }, locale === "de" ? "de" : "en")
-      }
-      isDefault={isDefault}
-      {...(draft === undefined ? {} : { draft })}
-      references={referencesQuery.data}
-      referencesLoading={referencesQuery.isPending}
-      editableAgentFields={management.editableAgentFields}
-      canManageAgentModels={canManageAgentModels(user)}
-      skillChoice={{
-        options: skills?.items ?? [],
-        ...(skills?.more === undefined ? {} : { more: skills.more }),
-        onSearch: (text) => setSkillSearch(text.trim()),
-        unusable
-      }}
-      knowledgeChoice={
-        knowledgeOn
-          ? {
-              options: knowledgeRead.status === "ready" ? knowledgeRead.data.items : [],
-              ...(knowledgeRead.status === "ready" && knowledgeRead.data.more !== undefined
-                ? { more: knowledgeRead.data.more }
-                : {}),
-              onSearch: (text) => setKnowledgeSearch(text.trim()),
-              workspaceOwned: owner !== undefined
-            }
-          : undefined
-      }
-      {...(dataStoreChoice === undefined ? {} : { dataStoreChoice })}
-      connectionTools={connectionTools}
-      appTools={appTools}
-      onMakeDefault={
-        asset && !isDefault && instanceWrite && management.allowDefaultAgentChange
-          ? () =>
-              placement.setDefaultAgent
-                .mutateAsync({ agentName: asset.name, assetId: asset.id })
-                .then(
-                  () => {
-                    setIsDefault(true);
-                    return undefined;
-                  },
-                  (error: unknown) => apiErrorMessage(error, t("configChangeSaveFailed"))
-                )
-          : undefined
-      }
-      {...(availability === undefined ? {} : { availability })}
-      {...(agentUse === undefined ? {} : { agentUse })}
-      {...(createCheck === undefined ? {} : { createCheck })}
-    />
+    <>
+      {skillShare.dialog}
+      <AgentEditor
+        frame={frame}
+        initialForm={
+          draft?.latest
+            ? agentConfigToForm(draft.latest.config)
+            : asset
+              ? agentConfigToForm(asset.config)
+              : startedAgentForm(start ?? { name: "", title: "" }, locale === "de" ? "de" : "en")
+        }
+        isDefault={isDefault}
+        {...(draft === undefined ? {} : { draft })}
+        references={referencesQuery.data}
+        referencesLoading={referencesQuery.isPending}
+        editableAgentFields={management.editableAgentFields}
+        canManageAgentModels={canManageAgentModels(user)}
+        skillChoice={{
+          options: skills?.items ?? [],
+          ...(skills?.more === undefined ? {} : { more: skills.more }),
+          onSearch: (text) => setSkillSearch(text.trim()),
+          unusable
+        }}
+        knowledgeChoice={
+          knowledgeOn
+            ? {
+                options: knowledgeRead.status === "ready" ? knowledgeRead.data.items : [],
+                ...(knowledgeRead.status === "ready" && knowledgeRead.data.more !== undefined
+                  ? { more: knowledgeRead.data.more }
+                  : {}),
+                onSearch: (text) => setKnowledgeSearch(text.trim()),
+                workspaceOwned: owner !== undefined
+              }
+            : undefined
+        }
+        {...(dataStoreChoice === undefined ? {} : { dataStoreChoice })}
+        connectionTools={connectionTools}
+        appTools={appTools}
+        onMakeDefault={
+          asset && !isDefault && instanceWrite && management.allowDefaultAgentChange
+            ? () =>
+                placement.setDefaultAgent
+                  .mutateAsync({ agentName: asset.name, assetId: asset.id })
+                  .then(
+                    () => {
+                      setIsDefault(true);
+                      return undefined;
+                    },
+                    (error: unknown) => apiErrorMessage(error, t("configChangeSaveFailed"))
+                  )
+            : undefined
+        }
+        {...(availability === undefined ? {} : { availability })}
+        {...(agentUse === undefined ? {} : { agentUse })}
+        {...(createCheck === undefined ? {} : { createCheck })}
+      />
+    </>
   );
+}
+
+/**
+ * "Teilen…" from an agent's chooser (SHARE-1): a greyed asset of the reader's own is shared up
+ * to the agent's place in the same dialog as on its page. A move reads the choosers again.
+ */
+function useAgentChoiceShare(): {
+  start(subject: AssetShareSubject, to: AssetShareTarget): void;
+  dialog: ReactNode;
+} {
+  const { apiBaseUrl, authScope, client } = useSettingsPage();
+  const queryClient = useQueryClient();
+  const source = useMemo(
+    () =>
+      createAssetShareSource(client, () => {
+        queryClient
+          .invalidateQueries({ queryKey: workspaceQueryKeys.assets(apiBaseUrl, authScope) })
+          .catch(() => undefined);
+      }),
+    [apiBaseUrl, authScope, client, queryClient]
+  );
+  const [subject, setSubject] = useState<AssetShareSubject>();
+  const share = useAssetShare({
+    source,
+    subject,
+    canShare: true,
+    onMoved: () => setSubject(undefined)
+  });
+  return {
+    start: (next, to) => {
+      setSubject(next);
+      share.open(to);
+    },
+    dialog: share.dialog
+  };
 }
 
 /**

@@ -7,6 +7,7 @@ import {
   FileText,
   LayoutGrid,
   Palette,
+  Share2,
   UserCheck,
   Workflow,
   Zap,
@@ -41,6 +42,13 @@ import {
   reviewStoreLabel
 } from "./data-store-review-item";
 import { personName } from "../../shared/person-name";
+import {
+  AssetMoveBody,
+  MOVABLE_KINDS,
+  assetMoveAcceptable,
+  assetMoveHeading,
+  assetMoveSubject
+} from "./asset-move-item";
 
 export type Translate = TranslationContextValue["t"];
 
@@ -369,6 +377,29 @@ const dataStoreReview: InboxItemKind = {
   Foot: NoticeFoot
 };
 
+/** A request to share an asset up the ladder ("Teilen mit…", SHARE-1) is accepted or declined. */
+const assetMoveDecisions: InboxDecisionEntries = [
+  { decision: "reject", label: "inbox.moveDecline" },
+  { decision: "approve", label: "inbox.moveAccept" }
+];
+
+/** A request that no longer moves what was asked can only be declined. */
+const assetMoveDeclineOnly: InboxDecisionEntries = [
+  { decision: "reject", label: "inbox.moveDecline" }
+];
+
+/** One kind per kind a workspace can own: `skill_move`, `agent_move` and so on. */
+const assetMoveKinds: readonly InboxItemKind[] = MOVABLE_KINDS.map((kind) => ({
+  kind: `${kind}_move`,
+  label: "inbox.kindAssetMove",
+  icon: Share2,
+  heading: assetMoveHeading,
+  title: assetMoveHeading,
+  subject: assetMoveSubject,
+  Body: AssetMoveBody,
+  decisions: (item) => (assetMoveAcceptable(item) ? assetMoveDecisions : assetMoveDeclineOnly)
+}));
+
 /**
  * The item kinds of the platform. This is deliberately not the client widget registry: an item
  * decides a change to the instance, so its body must not be replaceable by a client assembly.
@@ -382,7 +413,8 @@ export const inboxItemKinds: readonly InboxItemKind[] = [
   publishKind("agent_publish", "inbox.kindAgentPublish", Bot),
   notice,
   feedbackReview,
-  dataStoreReview
+  dataStoreReview,
+  ...assetMoveKinds
 ];
 
 const InboxItemKindsContext = createContext<readonly InboxItemKind[]>(inboxItemKinds);

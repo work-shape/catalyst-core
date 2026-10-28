@@ -22,3 +22,11 @@ export {
   publishOffer
 } from "../../../packages/chat-ui/src/studio/build-area/publish-offer";
 export { PublishOfferField } from "../../../packages/chat-ui/src/studio/build-area/publish-offer-field";
+export { AssetShareDialog } from "../../../packages/chat-ui/src/studio/build-area/asset-share-dialog";
+export {
+  shareSubmitHeld,
+  shareSubmitLabel,
+  shareTargets,
+  type AssetShareCheck,
+  type AssetShareSource
+} from "../../../packages/chat-ui/src/studio/build-area/asset-share-model";

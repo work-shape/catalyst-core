@@ -22,6 +22,7 @@ import { useTranslation } from "../../shared/i18n";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorCode } from "../../shared/workspace-utils";
 import type { BuildAsset, BuildAssetRow } from "./build-asset-kind";
+import { createAssetShareSource, type AssetShareSource } from "./asset-share-model";
 import type { PublishQuestionAnswer } from "./build-publish-question";
 import { approverNamesOf, instanceSentence, PendingApprovalError } from "./build-refusals";
 import {
@@ -185,6 +186,11 @@ export interface BuildSource {
   publishQuestion?(kind: string, name: string, revision: number): Promise<PublishQuestionAnswer>;
   writes: BuildWrites;
   /**
+   * "Teilen mit…" (SHARE-1): what a move up the ladder would do, and the move. Absent where the
+   * source cannot move an asset.
+   */
+  share?: AssetShareSource;
+  /**
    * The owner Studio works in for a kind a workspace can own: lists, reads and writes of such
    * a kind name it, so what is made here is owned by it. Undefined for a kind with one owner,
    * and absent where the source has one owner.
@@ -341,6 +347,9 @@ export function useBuildSource(): BuildSource {
       ? (instanceSentence(contextQuery.error, t) ?? t("build.loadFailed"))
       : undefined,
     reload: () => contextQuery.refetch(),
+    share: createAssetShareSource(client, (kind) => {
+      changed(kind)().catch(() => undefined);
+    }),
     scopeOf: (kind) => (scopedKinds.has(kind) ? scopeFor(kind) : undefined),
     chooseScope: (next) => {
       setPicked(true);

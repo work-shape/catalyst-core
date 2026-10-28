@@ -186,7 +186,9 @@ test("Studio says where an asset sits, greys what an agent cannot use, and says 
   await page.getByRole("combobox", { name: "Suchen", exact: true }).fill(tag);
   await expect(listbox.getByText(`Angebote prüfen ${tag}`)).toBeVisible();
   const greyed = listbox.getByRole("option").filter({ hasText: `Meine Steuerprüfung ${tag}` });
-  await expect(greyed).toHaveAttribute("aria-disabled", "true");
+  // Greyed, it offers to share the skill up to the agent's place instead (SHARE-1).
+  await expect(greyed).toHaveAttribute("data-picker-action", "");
+  await expect(greyed).toContainText("Für alle teilen…");
   await expect(greyed).toContainText(
     "Gehört nur dir. Ein Agent für alle kann ihn nicht verwenden."
   );

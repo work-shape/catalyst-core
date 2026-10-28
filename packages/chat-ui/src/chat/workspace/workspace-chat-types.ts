@@ -18,6 +18,7 @@ import type { ChatShellAdministration } from "../../shared/page-definition";
 import type { ResolvedThemeMode } from "../../shared/theme";
 import type { WorkspaceRoute } from "../../shared/workspace-route";
 import { type AgentListStatus } from "../../studio/agents/agents-model";
+import type { BuildWorkspace } from "../../shared/build-rights";
 import { type AppRights } from "../../studio/apps/app-model";
 import {
   type InstanceTimeZone,
@@ -88,6 +89,8 @@ interface DockChatModel {
 interface WorkflowsModel {
   access: WorkflowsAccess;
   rights: WorkflowRights;
+  /** The workspaces the reader knows, as Studio names them: where "Teilen…" of one leads. */
+  places?: readonly BuildWorkspace[];
   /**
    * The instance's time zone, for a schedule saved without one of its own; `defaulted`: the
    * instance sets none, so it is UTC. Absent until the instance has answered.
@@ -120,6 +123,8 @@ interface AppsModel {
   /** The Apps module is on and the session has workspaces to hold Apps. */
   enabled: boolean;
   rights: AppRights;
+  /** The workspaces the reader knows, as Studio names them: where "Teilen…" of an App leads. */
+  places?: readonly BuildWorkspace[];
   /** Opens a new conversation of the open workspace with this text in its composer. */
   startChat(prompt: string): void;
   /**

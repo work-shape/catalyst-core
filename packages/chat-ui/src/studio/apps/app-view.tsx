@@ -28,6 +28,7 @@ import {
 import { AppPreview } from "./app-preview";
 import { useAppEditWithAgent } from "./app-edit-with-agent";
 import { useAppsHost, type AppsWorkspace } from "./apps-host";
+import { useAppShare } from "./app-share";
 
 /**
  * One App open across the main area (layout 2): the published revision in the frame, and the
@@ -51,6 +52,7 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
   const dataSources = useAppDataSources(app);
   const showRoute = host?.showRoute;
   const workspaceId = workspace?.id;
+  const share = useAppShare(app, record.app, appTitle(record.app, app));
 
   const onNavigate = useCallback(
     (path: string) => {
@@ -94,6 +96,7 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
         dataSources={dataSources}
         app={app}
         draftShown={draftShown}
+        shareItem={share.item}
       >
         <AppPreview
           app={app}
@@ -113,6 +116,7 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
           onShown={setShown}
         />
       </AppViewFrame>
+      {share.dialog}
       {detailsOpen ? (
         <AppDetailsDialog
           name={name}
@@ -142,7 +146,8 @@ export function AppViewFrame({
   onEdit,
   onDetails,
   dataSources,
-  unassignedScopes
+  unassignedScopes,
+  shareItem
 }: {
   name: string;
   /** What the App does, in one line after its name. */
@@ -165,6 +170,8 @@ export function AppViewFrame({
   /** Where the App's data comes from, one sentence per filler, once it is known. */
   dataSources?: readonly string[] | undefined;
   unassignedScopes?: readonly string[] | undefined;
+  /** "Teilen…", for whoever may move the App to a team. */
+  shareItem?: ReactNode;
 }) {
   const { t } = useTranslation();
   // The head's "Chat" talks about the App where its draft is what the builder sees.
@@ -211,6 +218,7 @@ export function AppViewFrame({
                 <DropdownMenuItem onSelect={onDetails}>{t("apps.details")}</DropdownMenuItem>
                 <CopyAppLinkItem workspaceId={workspace.id} app={app} />
                 {/* The id is a builder's, as the number of a revision is. */}
+                {shareItem}
                 {appBuilder(rights) ? <CopyIdItem id={app} /> : null}
               </>
             ) : undefined

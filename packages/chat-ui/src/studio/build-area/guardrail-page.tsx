@@ -74,7 +74,8 @@ export function GuardrailPage({
   back,
   asset,
   kinds,
-  source
+  source,
+  shareItem
 }: BuildAssetViewProps & { source: GuardrailSource }) {
   const { t } = useTranslation();
   usePageShown(page, "asset");
@@ -198,7 +199,12 @@ export function GuardrailPage({
                 {t(outcome.label)}
               </Badge>
             }
-            menu={<CopyIdItem id={asset.name} />}
+            menu={
+              <>
+                {shareItem}
+                <CopyIdItem id={asset.name} />
+              </>
+            }
           />
         }
         outline={

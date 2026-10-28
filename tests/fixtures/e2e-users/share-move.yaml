@@ -1,0 +1,19 @@
+# The two members of the "Teilen mit…" spec: the builder shares a skill of their own with their
+# team, where they may build; the asker may build only in their own workspace, so sharing a
+# skill with everyone sends a request to the Inbox. The spec gives both their rights.
+- email: e2e-share-move-builder@example.test
+  displayLabel: E2E Zz Move Builder
+  passwordEnvName: E2E_SHARE_MOVE_BUILDER_PASSWORD
+  developmentPassword: e2e-share-move-builder-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
+- email: e2e-share-move-asker@example.test
+  displayLabel: E2E Zz Move Asker
+  passwordEnvName: E2E_SHARE_MOVE_ASKER_PASSWORD
+  developmentPassword: e2e-share-move-asker-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

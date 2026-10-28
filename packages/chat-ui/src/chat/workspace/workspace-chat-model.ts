@@ -44,6 +44,7 @@ import {
   useCollaborationWorkspaceModel,
   type BuildingWorkspace
 } from "../../shared/collaboration-workspace/collaboration-workspace-model";
+import { resolveBuildRights } from "../../shared/build-rights";
 import { canViewUsageGovernance } from "../../shared/governance";
 import { createTranslationContext } from "../../shared/i18n";
 import { workspaceRoutePath } from "../../shared/routes";
@@ -739,6 +740,12 @@ export function useWorkspaceChatModel({
         : NO_APP_RIGHTS,
     [appsEnabled, platformContextQuery.data, activeCollaborationWorkspaceId]
   );
+  // Where "Teilen…" of an App or a Workflow may lead: the workspaces the reader knows, as
+  // Studio names them.
+  const sharePlaces = useMemo(
+    () => resolveBuildRights(undefined, platformContextQuery.data).workspaces,
+    [platformContextQuery.data]
+  );
   const workflowsOpen = workflowsAccess({
     modules: instanceModules,
     workspaces: collaborationWorkspacesAvailable,
@@ -1139,6 +1146,7 @@ export function useWorkspaceChatModel({
     apps: {
       enabled: appsEnabled,
       rights: appRights,
+      places: sharePlaces,
       startChat: startNewConversationWith,
       editWithAgent: (app, options) =>
         startConversationAbout({ kind: APP_ASSET_KIND, name: app }, undefined, undefined, options),
@@ -1156,6 +1164,7 @@ export function useWorkspaceChatModel({
     workflows: {
       access: workflowsOpen,
       rights: workflowRights,
+      places: sharePlaces,
       ...(instanceTimeZone === undefined ? {} : { instanceTimeZone }),
       editWithAgent: (workflow, prompt, options) =>
         startConversationAbout(
