@@ -1,3 +1,8 @@
+import type {
+  ServerPreviewCaptureSettings,
+  ServerPreviewCaptureDiagnostics,
+  ServerPreviewCaptureRow
+} from "@work-shape/catalyst-core";
 import { sql } from "drizzle-orm";
 import {
   check,
@@ -265,13 +270,16 @@ export const previewCaptures = pgTable(
       .$type<FileSetId>()
       .notNull()
       .references(() => fileSets.id, { onDelete: "cascade" }),
-    status: text("status").$type<"pending" | "answering" | "captured" | "refused">().notNull(),
+    status: text("status").$type<ServerPreviewCaptureRow["status"]>().notNull(),
     code: text("code"),
     artifactId: text("artifact_id"),
     width: integer("width"),
     height: integer("height"),
     requestedAt: timestamp("requested_at", { withTimezone: true }).notNull(),
-    answeredAt: timestamp("answered_at", { withTimezone: true })
+    answeredAt: timestamp("answered_at", { withTimezone: true }),
+    // Null means the existing browser transport. Older APIs/workers remain compatible.
+    serverRequest: jsonb("server_request").$type<ServerPreviewCaptureSettings>(),
+    serverDiagnostics: jsonb("server_diagnostics").$type<ServerPreviewCaptureDiagnostics>()
   },
   (table) => [
     check(

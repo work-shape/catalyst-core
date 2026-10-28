@@ -27,6 +27,12 @@ const APPS_MODULE = "apps";
  * `assets.delete` with the kind `app`.
  */
 export function registerAppRoutes(route: Route, options: ResolvedChatServerOptions): void {
+  route(apiOperations["apps.captures.call"], async () => {
+    // A service credential alone authorizes nothing. SRV-1 mints no grants.
+    throw new AppError("FORBIDDEN", "Preview capture calls are not available", {
+      reason: "not_available"
+    });
+  });
   const workflow = new AppWorkflow(options);
   const actions = new AppActionCalls(options);
   const actionList = new AppActionList(options);

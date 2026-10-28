@@ -98,6 +98,7 @@
       "@work-shape/catalyst-model-provider": ["packages/model-provider/src/index.ts"],
       "@work-shape/catalyst-object-storage": ["packages/object-storage/src/index.ts"],
       "@work-shape/catalyst-postgres-connector": ["packages/postgres-connector/src/index.ts"],
+      "@work-shape/catalyst-preview-capture": ["packages/preview-capture/src/index.ts"],
       "@work-shape/catalyst-postgres-store": ["packages/postgres-store/src/index.ts"],
       "@work-shape/catalyst-postgres-store/migration-statements": [
         "packages/postgres-store/src/migration-statements.d.ts"

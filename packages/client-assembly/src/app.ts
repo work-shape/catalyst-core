@@ -385,6 +385,7 @@ export async function createClientInstanceExecutionAssembly(
     config,
     modules,
     infrastructure,
+    env,
     servesContent: processOptions.process === "api"
   });
   const modelProviders = getModelProviderConfigs(config);

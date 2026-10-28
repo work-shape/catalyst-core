@@ -1166,3 +1166,8 @@ export const SCHEDULED_START_STATES = ["active", "paused"] as const;
 
 /** Which revision answered an agent preview turn. */
 export const AGENT_PREVIEW_SOURCES = ["draft", "live"] as const;
+
+/** Server capture admission and the shared request lifecycle (browser transport retained). */
+export const PREVIEW_CAPTURE_SIZES = ["phone", "tablet", "desktop"] as const;
+export const PREVIEW_CAPTURE_STATUSES = ["pending", "answering", "captured", "refused"] as const;
+export const SERVER_PREVIEW_CAPTURE_REFUSALS = ["capture_busy", "capture_failed"] as const;

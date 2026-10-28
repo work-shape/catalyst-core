@@ -31,6 +31,9 @@ import {
 } from "./postgres-preview-reports";
 import {
   claimPreviewCapture,
+  claimServerPreviewCapture,
+  getServerPreviewCapture,
+  finishServerPreviewCapture,
   getPreviewCapture,
   pendingPreviewCaptures,
   requestPreviewCapture,
@@ -611,6 +614,9 @@ export function createPostgresPagesStore(db: PostgresConnection): PagesStore {
     previewViewedSince: (input) => previewViewedSince(db, input),
     takePreviewReport: (input) => takePreviewReport(db, input),
     prunePreviewReports: (input) => prunePreviewReports(db, input),
+    getServerPreviewCapture: (input) => getServerPreviewCapture(db, input),
+    claimServerPreviewCapture: (input) => claimServerPreviewCapture(db, input),
+    finishServerPreviewCapture: (input) => finishServerPreviewCapture(db, input),
     viewedPreview: (input) => viewedPreview(db, input),
     requestPreviewCapture: (input) => requestPreviewCapture(db, input),
     pendingPreviewCaptures: (input) => pendingPreviewCaptures(db, input),

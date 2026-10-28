@@ -30,3 +30,4 @@ export * from "./preview-capture";
 export * from "./preview-report";
 
 export * from "./data-store-description";
+export * from "./server-preview-capture";

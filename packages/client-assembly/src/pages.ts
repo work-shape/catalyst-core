@@ -1,3 +1,4 @@
+import { createInstancePreviewCaptureClient } from "./preview-capture-service";
 import { pageBuildCommandFile } from "@work-shape/catalyst-app-build";
 import { assetRepoCommandFile } from "@work-shape/catalyst-asset-repo";
 import {
@@ -62,6 +63,7 @@ export async function createInstancePages(input: {
   modules: ModuleSnapshot;
   infrastructure: InstanceInfrastructure;
   servesContent: boolean;
+  env?: ClientInstanceEnv;
 }): Promise<ChatServerOptions["pages"]> {
   const hasFilesStore = input.config.infrastructure.objectStorage.files !== undefined;
   if (!input.modules.isEnabled("apps")) {
@@ -94,7 +96,8 @@ export async function createInstancePages(input: {
   }
   return {
     objects: await createFilesStore(input.config, input.infrastructure.context),
-    contentKey: deriveAppContentKey(secret)
+    contentKey: deriveAppContentKey(secret),
+    previewCaptureService: createInstancePreviewCaptureClient(input.env ?? {})
   };
 }
 

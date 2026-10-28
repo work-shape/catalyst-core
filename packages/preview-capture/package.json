@@ -1,0 +1,58 @@
+{
+  "name": "@work-shape/catalyst-preview-capture",
+  "version": "0.8.0-rc.16",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/work-shape/catalyst-core",
+    "directory": "packages/preview-capture"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "catalyst-preview-capture": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "restricted",
+    "registry": "https://registry.npmjs.org/",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts src/cli.ts --format esm --dts && node build-host.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.1",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "esbuild": "0.28.1"
+  },
+  "dependencies": {
+    "playwright": "1.64.1",
+    "sharp": "0.35.5",
+    "zod": "4.4.3",
+    "@work-shape/catalyst-asset-schemas": "workspace:*",
+    "pino": "10.3.1",
+    "@work-shape/catalyst-core": "workspace:*"
+  }
+}

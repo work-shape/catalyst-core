@@ -1,3 +1,4 @@
+import { captureAddressActive } from "../apps/server-preview-captures";
 import { randomUUID } from "node:crypto";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
@@ -257,6 +258,9 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
     if (!checked.ok) {
       throw contentRefusal(checked.refusal);
     }
+    const capture = checked.claims.pageSessionId.startsWith("capture:");
+    if (!(await captureAddressActive(options, checked.claims)))
+      throw contentRefusal("token_expired");
     const fileSet = await options.stores.pages.getServedFileSet({
       clientInstanceId: options.clientInstanceId,
       fileSetId: address.fileSetId
@@ -273,7 +277,9 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
       throw contentRefusal("file_set_unknown");
     }
     const requested = address.path;
-    const cacheControl = appContentCacheControl(checked.claims.expiresAt - nowSeconds);
+    const cacheControl = capture
+      ? "no-store"
+      : appContentCacheControl(checked.claims.expiresAt - nowSeconds);
     const destination = request.headers["sec-fetch-dest"];
     // A revision of a kind that brings a preview is shown by the kind's document, never by
     // a file of the revision: of those only style sheets, images and fonts are served.
@@ -332,17 +338,18 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
     // An HTML file is answered as the shell that holds it, never as it is stored. The policy
     // of this answer names the one script of the shell's frame and the outside hosts it may
     // connect to: of an App's, never one that a draft added before it was published.
-    const storage = fileSet.asset
-      ? {
-          persistent: true,
-          session: checked.claims.pageSessionId,
-          values: await options.stores.pages.getAppUserStorage({
-            clientInstanceId: options.clientInstanceId,
-            appId: fileSet.asset.id,
-            userId: asUserId(checked.claims.viewerId)
-          })
-        }
-      : { persistent: false, session: checked.claims.pageSessionId, values: {} };
+    const storage =
+      fileSet.asset && !capture
+        ? {
+            persistent: true,
+            session: checked.claims.pageSessionId,
+            values: await options.stores.pages.getAppUserStorage({
+              clientInstanceId: options.clientInstanceId,
+              appId: fileSet.asset.id,
+              userId: asUserId(checked.claims.viewerId)
+            })
+          }
+        : { persistent: false, session: checked.claims.pageSessionId, values: {} };
     const shell = composePageShell(new TextDecoder().decode(bytes), storage);
     // The viewer is the one the token names: hosts that person allowed for their own view of
     // a draft are theirs alone (DRAFT-HOSTS-1).

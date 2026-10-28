@@ -38,6 +38,12 @@ const root = process.cwd();
  */
 const processLocalTimers = [
   {
+    file: "packages/preview-capture/src/adapters/memory.ts",
+    within: "watchRendererMemory",
+    count: 1,
+    why: "kills only this process's Chromium renderers that exceed their resident-memory share; database jobs cannot observe them"
+  },
+  {
     file: "packages/server/src/http/rate-limit.ts",
     within: "count",
     count: 1,

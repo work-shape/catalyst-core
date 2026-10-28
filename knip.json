@@ -24,7 +24,8 @@
         "src/studio/agents/index.ts",
         "src/studio/apps/index.ts",
         "src/studio/pages/index.ts",
-        "*.config.{ts,js,mjs}"
+        "*.config.{ts,js,mjs}",
+        "src/studio/pages/capture-host.ts"
       ],
       "project": ["src/**/*.{ts,tsx,mts,cts,js}", "*.{ts,mts,cts,js,mjs}"],
       "ignoreDependencies": [
@@ -111,7 +112,9 @@
         "e2e/**/*.ts",
         "scripts/**/*.mjs",
         "*.config.ts",
-        "eslint.config.mjs"
+        "eslint.config.mjs",
+        "tests/fixtures/preview-capture-api.ts",
+        "tests/support/build-capture-fixture.mjs"
       ],
       "project": [
         "tests/**/*.{ts,mts,cts}",
@@ -121,6 +124,11 @@
         "eslint.config.mjs"
       ],
       "ignoreBinaries": ["mkfifo", "openssl"],
+      "vite": false
+    },
+    "packages/preview-capture": {
+      "entry": ["src/index.ts", "src/cli.ts", "build-host.mjs"],
+      "project": ["src/**/*.ts", "build-host.mjs"],
       "vite": false
     }
   },

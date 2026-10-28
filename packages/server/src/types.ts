@@ -170,6 +170,8 @@ export interface ChatServerOptions {
    * removed with it either way.
    */
   pages?: {
+    /** Dark SRV-1; absent unless the API explicitly enables its service. */
+    previewCaptureService?: import("@work-shape/catalyst-core").PreviewCaptureService;
     /** The `files` object store. File sets live below `pages/`. */
     objects: ObjectStorage;
     /**

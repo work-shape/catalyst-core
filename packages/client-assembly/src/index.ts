@@ -141,3 +141,8 @@ export {
   type KnowledgeWorkerPlacement
 } from "./knowledge-worker";
 export { capabilityStoresOf, createCapabilityBrand } from "./capability-ports";
+
+export {
+  createInstancePreviewCaptureClient,
+  runClientInstancePreviewCaptureService
+} from "./preview-capture-service";

@@ -1,3 +1,4 @@
+import { runClientInstancePreviewCaptureService } from "./preview-capture-service";
 import type { ResultShaper } from "@work-shape/catalyst-core";
 import type { CatalogueEntry } from "@work-shape/catalyst-connections";
 import { existsSync } from "node:fs";
@@ -108,6 +109,8 @@ export interface DefinedClientInstance {
   runArtifactPreviewWorker(
     input?: OfThisBuild<CreateClientInstanceArtifactPreviewWorkerInput>
   ): Promise<void>;
+  /** The credential-free capture service; deliberately does not load instance env files. */
+  runPreviewCaptureService(input?: { env?: ClientInstanceEnv }): Promise<void>;
   seedStandaloneAuth(
     input?: Omit<SeedStandaloneAuthInput, "configPath"> & {
       configPath?: string;
@@ -234,6 +237,9 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
         ...located(workerInput),
         capabilities: build.capabilities
       });
+    },
+    runPreviewCaptureService(serviceInput = {}) {
+      return runClientInstancePreviewCaptureService(readClientInstanceEnv(serviceInput.env));
     },
     runArtifactPreviewWorker(workerInput = {}) {
       return runClientInstanceArtifactPreviewWorker({

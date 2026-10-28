@@ -309,3 +309,21 @@ the Terraform roots.
   the package copy the Dockerfile runs.
 - `tests/`: `pnpm test:deployment-kit` in the platform root (the shell suite and
   `node --test tests/*.test.mjs`). Not shipped.
+
+### Dark preview capture service (SRV-1)
+
+The `preview-capture` image target and `docker/preview-capture.compose.yml` are opt-in.
+No deployment or tool switches to server captures in this slice. The API defaults to
+`PREVIEW_CAPTURE_ENABLED=false`; enabling the Compose profile alone does not change it.
+The overlay puts only the API and capture service on its internal network. Do not attach
+Postgres, object storage or another worker, mount an env file, or give the service any
+credential except `PREVIEW_CAPTURE_SERVICE_TOKEN` (32+ characters).
+
+Set the seccomp profile path to the shipped `docker/preview-capture-seccomp.json`. With all
+capabilities dropped, Chromium also needs `chroot` inside its new user namespace; the
+profile explicitly permits it. Startup proves renderer seccomp and user isolation through
+`/proc` and refuses to run without them. Keep `no-new-privileges`, the read-only filesystem,
+profile tmpfs and 256 MiB shared memory. Two slots use a 768 MiB memory limit; use one slot
+and 512 MiB on a small host and record that budget before enabling. Rollback disables the
+API flag and Compose profile and leaves migration 0167's nullable columns in place while
+workers drain. See [the service's proof and run instructions](../preview-capture/README.md).

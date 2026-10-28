@@ -1,3 +1,8 @@
+import type {
+  PREVIEW_CAPTURE_STATUSES,
+  ServerPreviewCaptureInput,
+  ServerPreviewCaptureOutcome
+} from "@work-shape/catalyst-asset-schemas";
 import type { AppAvailability } from "./app-audience";
 import { AppError } from "./errors";
 import {
@@ -458,6 +463,8 @@ export interface PagesStore {
       requestedAt: string;
       perRun: number;
       perHour: number;
+      /** Internal server request; the store checks it against the live run and enqueues atomically. */
+      server?: ServerPreviewCaptureSettings;
     }
   ): Promise<{ id: string } | { refused: "capture_limit" }>;
   /** The person's requests of the conversation that wait for their browser, asked after `notBefore`. */
@@ -485,6 +492,33 @@ export interface PagesStore {
     clientInstanceId: ClientInstanceId;
     id: string;
   }): Promise<PreviewCaptureState | undefined>;
+
+  getServerPreviewCapture(input: {
+    clientInstanceId: ClientInstanceId;
+    id: string;
+  }): Promise<ServerPreviewCaptureRow | undefined>;
+  claimServerPreviewCapture(input: {
+    clientInstanceId: ClientInstanceId;
+    id: string;
+    now: string;
+  }): Promise<ServerPreviewCaptureRow | undefined>;
+  finishServerPreviewCapture(input: {
+    clientInstanceId: ClientInstanceId;
+    id: string;
+    answeredAt: string;
+    outcome:
+      | {
+          status: "captured";
+          artifactId: ManagedArtifactId;
+          width: number;
+          height: number;
+          diagnostics: ServerPreviewCaptureDiagnostics;
+        }
+      | {
+          status: "refused";
+          code: Extract<ServerPreviewCaptureOutcome, { status: "refused" }>["code"];
+        };
+  }): Promise<boolean>;
 
   getAppUserStorage(input: AppUserStorageKey): Promise<Record<string, string>>;
   mutateAppUserStorage(
@@ -842,3 +876,21 @@ export function fileSetContentType(path: string): string {
   const extension = /\.([A-Za-z0-9]+)$/u.exec(path)?.[1]?.toLowerCase();
   return (extension && FILE_SET_CONTENT_TYPES[extension]) || "application/octet-stream";
 }
+
+/** Internal server transport of the capture row; it carries no grant or App payload. */
+export interface ServerPreviewCaptureSettings extends Pick<
+  ServerPreviewCaptureInput,
+  "size" | "theme"
+> {
+  deadline: string;
+}
+export interface ServerPreviewCaptureRow {
+  id: string;
+  conversationId: ConversationId;
+  userId: UserId;
+  runId: string;
+  fileSetId: FileSetId;
+  status: (typeof PREVIEW_CAPTURE_STATUSES)[number];
+  settings: ServerPreviewCaptureSettings;
+}
+export type ServerPreviewCaptureDiagnostics = JsonObject;
