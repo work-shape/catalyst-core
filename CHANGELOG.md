@@ -7,6 +7,50 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.19 — 2026-10-28
+
+### Added
+
+- **Apps:** App pages and Edit in chat name other visible workspace members with an unsaved checkout of the current draft, with the checkout time. The hint clears after saving, a newer draft, or 24 hours without chat activity. It exposes no chat title or content.
+- **Chat:** An agent under "Only me", owned by a person's Personal Workspace, can now be chosen by that person in any chat they began that nobody else reads: a chat of their Personal Workspace or a private chat in a team. Choosing it marks the chat as holding personal data, so a later move to the workspace is refused. In a chat others read the agent picker shows it greyed with the reason. Nobody else sees it, and a key, an embedding host, a service principal, a subagent of another agent, a Workflow step or a scheduled start cannot use it. `workspaces.agents.list` returns such agents as `ownChatAgents`; the same chat-audience rule (`mayUseOwnInChat` in core) now also decides personal skills in chats. The publish dialog's "Can be chosen in" for such an agent reads "In your own chats". In the usage of a shared workspace such an agent counts to the workspace under one row, "Personal agents" (`PERSONAL_AGENTS_KEY`), never by its name.
+- **Project files:** A project has a folder of files with versions. Its page shows the file tree, takes files, folders and `.zip` archives (unpacked into a folder), and shows each file's versions with who made them and a restore. Uploads in a chat of a project land in its folder; a chat's contents have a "Project" section, an attachment can be saved to the project, and a file of another project the person reads can be added to a message. The agent of a chat in a project lists, reads, writes and edits the folder at `project/` with the file tools and is told its files in the system message; a write over a file that changed since the agent read it is kept beside it as a conflict copy, and the turn shows each change with an Undo. Only the project's audience reads or writes its files. `projects.files` sets the caps on files, bytes and kept versions. A deleted project, workspace or user takes the project files along; a deleted user's private projects go too.
+- **Projects:** A project's `AGENTS.md` at the root of its folder holds its instructions. Every run in the project takes them after its agent's own instructions (cut at 16,000 characters), records the version it took and keeps it when it resumes. Only a run whose person reads the project gets them; a subagent gets its root chat's, a Workflow step none. Each read is audited by project and version only.
+- **Projects:** The project page has an Instructions tile that shows, edits and lists the versions of `AGENTS.md`. When the agent writes or edits it, the run waits on a card that shows the change and that it applies to everyone in the project, also where changing calls are allowed. A chat whose instructions changed elsewhere since its last answer shows a line that opens the change.
+- **Projects:** The agent's description of a project folder now says to keep what the team needs in one file per topic, name the source file and record personal data only where needed.
+- **Projects:** The Projects page has a scope filter, "This workspace" and "All my workspaces". Across workspaces the projects stand in one group per workspace, each card with its workspace's chip, and opening a project of another workspace switches to it. `projects.list_mine` (`GET /api/v1/projects`) lists them from the person's memberships under the audience of each project: a private project only for its creator, and no grant, bundle or instance role adds one. A project in a list now carries how many chats it holds and when it was last used (PRJ-5).
+- **Projects:** The rail shows the five projects of the open workspace used last in a group above "Recent", with a plus that makes a project and a row to all of them.
+- **Shared skill drafts:** A skill the instance or a Shared Workspace owns now has one shared draft, as an agent has. `skill.write` edits the draft and `skill.publish` makes it live through the `skill.before_publish` guardrail event (no guardrail is bound by default). Holders of the skill's write right read and try the draft, and Try runs an agent with the drafts of the skills it uses only where the person holds write on them; everyone else gets the live revision. Skills of a Personal Workspace stay live on save, and existing skills keep their live revision. The skill page shows the draft badge, Publish and Discard draft. `skills.draft.get` and `skills.draft.discard` read and drop the draft. `catalyst config push` writes skill drafts; `--publish` or `catalyst skill publish` makes them live, and `catalyst skill discard` drops one.
+- **Workflows:** The Workflow canvas draws a `parallel` block as a frame with its branches side by side and a join after them, and a `condition` as a fork with its paths; a chain of else-conditions is one fork with one exit per path. Each branch shows its last run's status and duration, and a parallel frame shows its step counts.
+- **Workflows:** A run's page has a timeline that plays the run back moment by moment: a bar per step and per branch shows which branches ran at the same time and how long each took, and the canvas shows the run as it stood at that moment.
+- **UI:** `Timeline` shows bars on one time axis with an optional cursor; flow groups take `lanes` and a `joinLabel`.
+
+### Changed
+
+- **Release:** The artifact-helpers package may pack to 9,000,000 bytes: it ships the standalone helper bundles, skills and the Python file tools.
+
+### Fixed
+
+- **Release:** The artifact-helpers package publishes its `runtime` folder, the Python file tools the file helpers run.
+- **Workflows:** On the Workflow canvas, every test in a chain of else-conditions ("Otherwise if: …") is now a row of the fork you can select. It opens that test's own panel and shows its run status and duration. Before, only the first condition could be opened.
+- **Workflows:** Durations on the canvas (steps, branches, a parallel frame) are given to the second, as the run's timeline gives them: "1 min 54 s", not "1 min".
+- **UI:** A `condition` exit can name a `part` (`FlowExitPart`: id, status, meta). Its row is then selected by that id and shows the part's status and time. `FlowNodeRow` takes `status`, `meta`, `onOpen`, `selected` and `partId`.
+- **Agent Runs:** Workers restore a starter's personal API key scopes when rebuilding the caller, including after a pause and in subagents. Tools keep the key's operation access and the scope ceiling on its owner's current rights; Data Store row tools can no longer inherit the owner's wider access. A revoked or expired key stops the run before execution.
+- **Projects:** The plus of the rail's Projects group is named "Add project", so it is no longer read out with the same name as the Projects page's "New project" button.
+- Admin screens and the remaining chat interface messages use “Everyone” / “Alle” for a place and “all workspaces” / “alle Arbeitsbereiche” for organization-wide settings and rights, following SCOPE-WORDS. English and German no longer expose “instance” / “Instanz”; technical identifiers stay unchanged.
+- An agent's Knowledge Base chooser shows the Knowledge Bases of the reader's other places greyed, with the reason and, where the ladder goes up to the agent's place, "Share with everyone…" / "Share with {team}…", as the skill and Data Store choosers do.
+- An agent's skill chooser shows the skills of the reader's teams greyed with the reason and the share step, instead of hiding them; only names and titles the reader may list, never contents.
+- A Knowledge Base and a Connection of everyone say beside their place where agents may use them, or that none may yet, which leads to "Available in".
+- **Teilen…:** a person who belongs to a team but holds no right on its assets is offered that team in the dialog, beside Alle, and can send a request to share with it. Before, only Alle was offered, because Studio names a team only where the person holds such a right. The dialog now reads the person's own memberships; the instance already decided and filed the request.
+- **Asset page head:** a browser check at 390 and 320 px that the head of a skill and of an agent with a draft keeps every control inside the window, and that Replace and History stand in the "…" menu.
+- **Skill import:** Importing a skill again under the address of a deleted skill creates it anew, as a page opened empty does, instead of saying the address is taken.
+- **Workflows:** Continuations preserve open parallel and condition blocks, resume unfinished branches without repeating completed effects, and retain a single block with its branch records for run replay. Calls already in flight settle before the handoff.
+
+### Database
+
+- Migration `0173_project_files` adds the tables `project_files` (each file of a project as it is now) and `project_file_versions` (its kept versions), keyed to the project's asset with `on delete cascade`. Both are new and empty, so nothing is rewritten or validated.
+- `agent_runs` gains the nullable columns `project_id` and `project_instructions_version`: the project a run's chat was in and the version of its `AGENTS.md` the run took. No row changes.
+- Migration `0174_skill_draft_file_set` adds the nullable `file_set_id` column to `agent_change_proposal_revisions`: the folder a skill draft revision holds. Existing rows keep `NULL`; no row is rewritten.
+
 ## 0.8.0-rc.18 — 2026-10-28
 
 ### Added
