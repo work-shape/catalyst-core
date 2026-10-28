@@ -71,7 +71,7 @@ async function setup() {
       { type: "upsert", kind: "skill", name: HOUSE_SKILL, config: skill(HOUSE_SKILL) }
     ]
   });
-  return { t, kaiHome };
+  return { t, kaiHome, lenaHome };
 }
 
 async function listed(t: AccessInstance, userId: string) {
@@ -99,13 +99,22 @@ function personOf(user: UserRecord, overrides: Partial<AuthenticatedUser> = {}):
   };
 }
 
+/** A run's record of its start: by the person themself, in their own session. */
+function authorizationOf(user: UserRecord): NonNullable<AgentRun["authorization"]> {
+  return {
+    personalConnectionsAllowed: true,
+    principal: createUserPrincipal(personOf(user)),
+    subjectUserId: user.id,
+    scopes: ["*"]
+  };
+}
+
 /** A run as the store records it: its owner's own, started in their own session. */
 function runOf(
   conversation: Conversation,
   user: UserRecord,
   overrides: Partial<AgentRun> = {}
 ): AgentRun {
-  const person = personOf(user);
   return {
     id: createPlatformId<"AgentRunId">("run"),
     clientInstanceId,
@@ -113,12 +122,7 @@ function runOf(
     ownerUserId: user.id,
     inputMessageId: createPlatformId<"MessageId">("msg"),
     agentName: "assistant",
-    authorization: {
-      personalConnectionsAllowed: true,
-      principal: createUserPrincipal(person),
-      subjectUserId: user.id,
-      scopes: ["*"]
-    },
+    authorization: authorizationOf(user),
     status: "running",
     startedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -135,13 +139,15 @@ function runSkills(t: AccessInstance) {
     stores: {
       conversations: t.stores.conversations,
       configAssets: t.stores.configAssets,
+      workspaces: t.stores.workspaces,
       agentRuns: { getAgentRun: async ({ runId }) => runs.get(runId) }
     },
     modules: createModuleRegistry(platformModules).snapshot({})
   });
   const readSkill = createReadSkillTool({
     assetSource: createConfigAssetSource({ store: t.stores.configAssets, clientInstanceId }),
-    conversationOffer: platform.conversationOffer
+    conversationOffer: platform.conversationOffer,
+    conversations: t.stores.conversations
   });
   platform.registry([readSkill, ...platform.tools], new Set());
   return {
@@ -190,14 +196,15 @@ function runSkills(t: AccessInstance) {
 async function chatOf(
   t: AccessInstance,
   user: UserRecord,
-  collaborationWorkspaceId: Conversation["collaborationWorkspaceId"]
+  collaborationWorkspaceId: Conversation["collaborationWorkspaceId"],
+  visibility: Conversation["visibility"] = "workspace"
 ) {
   return t.stores.conversations.createConversation({
     clientInstanceId,
     collaborationWorkspaceId,
     createdByUserId: user.id,
     createdByExternalUserId: user.id,
-    visibility: "workspace",
+    visibility,
     title: "Chat",
     retainedUntil: new Date(Date.now() + 86_400_000).toISOString()
   });
@@ -245,11 +252,12 @@ describe("a person's skill in their own chats", () => {
   });
 
   it("is read in the owner's own run with any agent, and in no other run", async () => {
-    const { t, kaiHome } = await setup();
+    const { t, kaiHome, lenaHome } = await setup();
     const skills = runSkills(t);
     const kai = personOf(t.kai);
     const lena = personOf(t.lena);
-    const own = skills.record(runOf(await chatOf(t, t.kai, kaiHome), t.kai));
+    const ownChat = await chatOf(t, t.kai, kaiHome);
+    const own = skills.record(runOf(ownChat, t.kai));
 
     // Off: nothing is offered and nothing is read.
     expect(await skills.offered(own, kai)).toEqual({ skills: [], readSkill: false });
@@ -260,6 +268,9 @@ describe("a person's skill in their own chats", () => {
 
     expect((await switchOn(t, t.kai.id, KAI_SKILL)).statusCode).toBe(200);
     expect(await skills.offered(own, kai)).toEqual({ skills: [KAI_SKILL], readSkill: true });
+    const conversationOf = async (run: AgentRun) =>
+      t.stores.conversations.getConversation(clientInstanceId, run.conversationId);
+    expect((await conversationOf(own))?.personalDataAt).toBeUndefined();
     expect(await skills.read(own, kai, KAI_SKILL)).toMatchObject({
       status: "success",
       output: { name: KAI_SKILL, content: "Kai's checklist." }
@@ -267,7 +278,6 @@ describe("a person's skill in their own chats", () => {
     // The person's own skills only: Lena's skill is no part of Kai's run.
     expect(await skills.read(own, kai, LENA_SKILL)).toMatchObject({ status: "failed" });
 
-    // A conversation Kai and Lena share: Kai's turns read it, Lena's never do.
     const team = await t.sharedWorkspace("Team");
     for (const user of [t.kai, t.lena]) {
       await t.stores.workspaces.addMembership({
@@ -277,21 +287,108 @@ describe("a person's skill in their own chats", () => {
         role: "member"
       });
     }
+    // The read marked Kai's chat as a personal Connection's call marks it: it stays his alone,
+    // and a move to the team is refused.
+    expect((await conversationOf(own))?.personalDataAt).toBeDefined();
+    await expect(
+      t.stores.conversations.moveConversation({
+        clientInstanceId,
+        conversationId: own.conversationId,
+        fromCollaborationWorkspaceId: kaiHome,
+        toCollaborationWorkspaceId: team,
+        visibility: "workspace"
+      })
+    ).rejects.toMatchObject({ details: { reason: "personal_conversation_private" } });
+
+    // A chat the team reads gets no one's skill, whose turn it is: not Kai's in the chat he
+    // started, not Lena's.
+    expect((await switchOn(t, t.lena.id, LENA_SKILL)).statusCode).toBe(200);
     const shared = await chatOf(t, t.kai, team);
     const kaiTurn = skills.record(runOf(shared, t.kai));
     const lenaTurn = skills.record(runOf(shared, t.lena));
-    expect(await skills.offered(kaiTurn, kai)).toEqual({ skills: [KAI_SKILL], readSkill: true });
-    expect(await skills.offered(lenaTurn, lena)).toEqual({ skills: [], readSkill: false });
-    expect(await skills.read(lenaTurn, lena, KAI_SKILL)).toMatchObject({
+    expect(await skills.offered(kaiTurn, kai)).toEqual({ skills: [], readSkill: false });
+    expect(await skills.read(kaiTurn, kai, KAI_SKILL)).toMatchObject({
       status: "failed",
       error: { code: "not_allowed" }
     });
+    expect(await skills.offered(lenaTurn, lena)).toEqual({ skills: [], readSkill: false });
+    expect(await skills.read(lenaTurn, lena, KAI_SKILL)).toMatchObject({ status: "failed" });
+    expect(await skills.read(lenaTurn, lena, LENA_SKILL)).toMatchObject({ status: "failed" });
+    expect((await conversationOf(kaiTurn))?.personalDataAt).toBeUndefined();
 
-    // Refusals, each with the run as the store would hold it.
+    // A chat private to Kai in the team's workspace is his alone, and gets his skill.
+    const kaiPrivate = skills.record(runOf(await chatOf(t, t.kai, team, "private"), t.kai));
+    expect(await skills.offered(kaiPrivate, kai)).toEqual({
+      skills: [KAI_SKILL],
+      readSkill: true
+    });
+
+    // Refusals, each with the run as the store would hold it. Each fails one check alone where
+    // its name says so.
+    const keyActor = {
+      kind: "api_key" as const,
+      id: createPlatformId<"ApiCredentialId">("key"),
+      displayLabel: "Key",
+      authSource: "test"
+    };
     const refused: [string, AgentRun, AuthenticatedUser][] = [
+      // Lena's turn in chats Kai created: private to him in the team, and in his own home.
+      [
+        "Lena in Kai's private chat",
+        skills.record(runOf(await chatOf(t, t.kai, team, "private"), t.lena)),
+        lena
+      ],
+      ["Lena in Kai's home", skills.record(runOf(await chatOf(t, t.kai, kaiHome), t.lena)), lena],
+      // A chat in another person's Personal Workspace, though Kai created it.
+      ["a chat in Lena's home", skills.record(runOf(await chatOf(t, t.kai, lenaHome), t.kai)), kai],
       // Another person's run in Kai's chat, and Lena acting for Kai's run.
-      ["another person's run", skills.record(runOf(shared, t.lena)), lena],
+      ["another person's run", lenaTurn, lena],
       ["another person for the owner's run", own, lena],
+      // Only the run's owner is another person.
+      [
+        "a run another person owns",
+        skills.record(runOf(ownChat, t.kai, { ownerUserId: t.lena.id })),
+        kai
+      ],
+      // Only the run's start was no first-party session.
+      [
+        "a run started outside a session",
+        skills.record(
+          runOf(ownChat, t.kai, {
+            authorization: { ...authorizationOf(t.kai), personalConnectionsAllowed: false }
+          })
+        ),
+        kai
+      ],
+      // Only the run records a delegated actor.
+      [
+        "a run with a delegated actor",
+        skills.record(
+          runOf(ownChat, t.kai, {
+            authorization: { ...authorizationOf(t.kai), delegatedActor: keyActor }
+          })
+        ),
+        kai
+      ],
+      // Only the acting person has a delegated actor, or only key scopes.
+      ["the owner with a delegated actor", own, personOf(t.kai, { delegatedActor: keyActor })],
+      ["the owner with key scopes", own, personOf(t.kai, { keyScopes: ["skill.read"] })],
+      // Only the actor is a service principal, in the owner's name.
+      [
+        "a service principal in the owner's name",
+        own,
+        servicePrincipalAsRunUser({
+          kind: "service",
+          id: asServicePrincipalId(t.kai.id),
+          workflowRunId: createPlatformId<"WorkflowRunId">("wfrun"),
+          displayLabel: "Books",
+          permissionRefs: [],
+          permissions: [],
+          clientInstanceId,
+          authSource: "test",
+          scopes: []
+        })
+      ],
       // A run started with Kai's own key, and Kai's key acting for his own run.
       [
         "a run started with a key",

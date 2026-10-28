@@ -1,11 +1,13 @@
 import { z } from "zod";
 import {
+  getSubjectUserId,
   SKILL_MOUNT_ROOT,
   type ConfigAssetSource,
   type ConversationOfferSource,
+  type ConversationStore,
   type ToolExecutionContext
 } from "@work-shape/catalyst-core";
-import { runSkillNames } from "./run-skills";
+import { runSkillOffer } from "./run-skills";
 import { createSkillSourceVersion } from "./skill-source-version";
 import {
   defineTool,
@@ -81,6 +83,11 @@ export interface ReadSkillToolOptions {
   /** Which skills the platform ships to a conversation, beside those its agent lists. */
   conversationOffer?: ConversationOfferSource;
   /**
+   * Marks a chat that a read of its person's own skill (SCOPE-MYCHATS) carried their data
+   * into. Without it such a skill is not read.
+   */
+  conversations?: Pick<ConversationStore, "markPersonalData">;
+  /**
    * Whether a save of the skill by the person the agent acts for files a request, and who may
    * decide it, as a read of the asset answers it. Without it a read says nothing of a save.
    */
@@ -112,12 +119,12 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
       }
 
       const assets = await options.assetSource.getSnapshot();
-      const allowedSkillNames = await runSkillNames({
+      const allowed = await runSkillOffer({
         context,
         assets,
         conversationOffer: options.conversationOffer
       });
-      if (!allowedSkillNames.has(input.name)) {
+      if (!allowed.names.has(input.name)) {
         return toolFailed(
           "not_allowed",
           context.locale === "de"
@@ -132,6 +139,21 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
         : undefined;
       if (!skill) {
         return toolFailed("validation_failed", `Skill '${input.name}' is not defined`);
+      }
+      // A person's own skill carries their data into the chat: the chat is marked as a
+      // personal Connection's read marks it, before any of its text is answered, so it stays
+      // theirs alone. Where it cannot be marked, nothing is read.
+      if (allowed.personal.has(input.name)) {
+        const conversationId = context.toolRequest?.conversationId;
+        if (!options.conversations || !conversationId || !context.user) {
+          return toolFailed("not_allowed", "This skill cannot be read in this conversation.");
+        }
+        await options.conversations.markPersonalData({
+          clientInstanceId: context.clientInstanceId,
+          conversationId,
+          userId: getSubjectUserId(context.user),
+          at: new Date().toISOString()
+        });
       }
 
       const sourceVersion = createSkillSourceVersion(skill);

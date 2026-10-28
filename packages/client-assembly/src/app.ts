@@ -675,6 +675,7 @@ export async function createClientInstanceExecutionAssembly(
       createReadSkillTool({
         assetSource,
         conversationOffer,
+        conversations: store.conversations,
         saveApproval: platformTools.skillSaveApproval
       }),
       ...platformTools.tools,
