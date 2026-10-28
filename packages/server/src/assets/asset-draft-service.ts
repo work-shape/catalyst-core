@@ -586,7 +586,13 @@ export class AssetDraftWorkflow {
     const asset = requireActive(target);
     const { audience, personalWorkspace } =
       kind.kind === "app"
-        ? await prepareAppPublication(this.options, call, asset, input.audience)
+        ? await prepareAppPublication(
+            this.options,
+            call,
+            asset,
+            input.audience,
+            call.runtime?.locale ?? this.options.config.localization.defaultLocale
+          )
         : { audience: undefined, personalWorkspace: undefined };
     const revision = await liveRevision(this.options, call, target, input.revision);
     // A built revision needs its own nonempty file set before any dependent publish moves.

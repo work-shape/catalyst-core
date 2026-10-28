@@ -288,10 +288,13 @@ const REFUSALS: Readonly<Record<string, RefusalRow>> = {
   // The reason is given for more than one fault: only the two whose details say which are told.
   invalid_scope: {
     sentence: (details, t) =>
-      details.reference !== undefined
-        ? { key: "refusals.referenceOutOfScope" }
-        : namingRight("refusals.workflowRightOnNothing")(details, t)
+      details.reference === undefined
+        ? namingRight("refusals.workflowRightOnNothing")(details, t)
+        : isRecord(details.reference) && details.reference.reach === "personal"
+          ? { key: "refusals.referenceOnlyMine" }
+          : { key: "refusals.referenceOutOfScope" }
   },
+  owner_reach: { sentence: plain("refusals.offerOnlyMine") },
   revision_files_removed: { sentence: plain("refusals.revisionFilesRemoved") },
   revision_unknown: { sentence: plain("refusals.revisionUnknown") },
   revision_changed: { sentence: plain("refusals.revisionChanged") },

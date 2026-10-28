@@ -79,12 +79,16 @@ export const refusals = defineTranslations({
       "Who the app is live for changed in the meantime. Check it again, then publish.",
     "refusals.referenceOutOfScope":
       "This uses something from another workspace. It may only use what belongs to its own workspace or to the whole instance.",
+    "refusals.referenceOnlyMine":
+      "This uses something that is “Only me”. What a team or everyone uses may not rely on it. Create it in the team or for everyone, or ask an admin.",
+    "refusals.offerOnlyMine":
+      "This is “Only me”, so it cannot be offered to a team or to everyone. Create it in the team or for everyone, or ask an admin.",
     "refusals.publishSubjectUnreadable":
       "This request does not say what it publishes, so nobody can decide it.",
     "refusals.inputTooLargeToHold":
       "This change needs an approval, and it is too large to be held for one.",
     "refusals.appInstanceNeedsSharedWorkspace":
-      "Only an app in a shared workspace can be for the whole instance. Move it to a shared workspace first.",
+      "This app is “Only me”, so it cannot be for everyone. Build it in a team, or ask an admin.",
     "refusals.moduleOff": "A part of the platform this needs is switched off on this instance.",
     "refusals.rightMissing": "You need the right “{right}” for this.",
     "refusals.rightDenied": "The right “{right}” is denied to you here.",
@@ -171,12 +175,16 @@ export const refusals = defineTranslations({
       "Für wen die App live ist, hat sich inzwischen geändert. Prüfe es noch einmal und veröffentliche dann.",
     "refusals.referenceOutOfScope":
       "Das nutzt etwas aus einem anderen Arbeitsbereich. Es darf nur nutzen, was zum eigenen Arbeitsbereich oder zur ganzen Instanz gehört.",
+    "refusals.referenceOnlyMine":
+      "Das nutzt etwas, das „Nur ich“ ist. Was ein Team oder Alle nutzen, darf sich nicht darauf stützen. Lege es im Team oder für Alle an, oder bitte einen Admin darum.",
+    "refusals.offerOnlyMine":
+      "Das ist „Nur ich“ und kann darum keinem Team und nicht Allen angeboten werden. Lege es im Team oder für Alle an, oder bitte einen Admin darum.",
     "refusals.publishSubjectUnreadable":
       "Diese Anfrage sagt nicht, was sie veröffentlicht. Darum kann niemand sie entscheiden.",
     "refusals.inputTooLargeToHold":
       "Diese Änderung braucht eine Freigabe und ist zu groß, um dafür zurückgehalten zu werden.",
     "refusals.appInstanceNeedsSharedWorkspace":
-      "Nur eine App in einem geteilten Arbeitsbereich kann für die ganze Instanz sein. Verschiebe sie zuerst in einen geteilten Arbeitsbereich.",
+      "Diese App ist „Nur ich“ und kann darum nicht für Alle sein. Baue sie in einem Team, oder bitte einen Admin darum.",
     "refusals.moduleOff":
       "Ein Teil der Plattform, den das braucht, ist auf dieser Instanz ausgeschaltet.",
     "refusals.rightMissing": "Dafür brauchst du das Recht „{right}“.",

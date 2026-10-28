@@ -12,7 +12,8 @@ import {
   type CollaborationWorkspace,
   type InitialAgentAvailability,
   type JsonObject,
-  type OperationAuthorization
+  type OperationAuthorization,
+  resolveInitialAgentAvailability
 } from "@work-shape/catalyst-core";
 import {
   makeAgentDependenciesAvailable,
@@ -27,6 +28,7 @@ import {
   requireAssetKindModuleOn
 } from "./asset-write-rules";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
+import { assertOwnerReach } from "./asset-owner-references";
 import type { AssetWorkflowOptions } from "../types";
 
 /**
@@ -128,6 +130,16 @@ export async function setAssetAvailability(
     );
   }
   await authorizeInteractiveWrite(options, call.actor, call, call.audit);
+  const selected = input.mode === "selected";
+  const collaborationWorkspaceIds = selected
+    ? (input.collaborationWorkspaceIds ?? []).map(asCollaborationWorkspaceId)
+    : [];
+  const wanted: AgentAvailability = {
+    mode: input.mode,
+    personalWorkspaces: selected && input.personalWorkspaces === true,
+    collaborationWorkspaceIds
+  };
+  await requireOfferWithinReach(options, call, kind, input.name, wanted);
   if (input.kind === "agent" && input.makeDependenciesAvailable) {
     if (input.expectedRevision === undefined)
       throw new AppError(
@@ -145,14 +157,6 @@ export async function setAssetAvailability(
         kind: "agent",
         name: input.name
       });
-      const wanted: AgentAvailability = {
-        mode: input.mode,
-        personalWorkspaces: input.mode === "selected" && input.personalWorkspaces === true,
-        collaborationWorkspaceIds:
-          input.mode === "selected"
-            ? (input.collaborationWorkspaceIds ?? []).map(asCollaborationWorkspaceId)
-            : []
-      };
       await makeAgentDependenciesAvailable(within, call, asset?.config, wanted);
       return setAssetAvailability(
         within,
@@ -161,10 +165,6 @@ export async function setAssetAvailability(
       );
     });
   }
-  const selected = input.mode === "selected";
-  const collaborationWorkspaceIds = selected
-    ? (input.collaborationWorkspaceIds ?? []).map(asCollaborationWorkspaceId)
-    : [];
   for (const collaborationWorkspaceId of collaborationWorkspaceIds) {
     const workspace = await options.stores.workspaces.getWorkspace(
       options.clientInstanceId,
@@ -182,11 +182,7 @@ export async function setAssetAvailability(
     agentName: input.name,
     kind: input.kind,
     ...(input.expectedRevision === undefined ? {} : { expectedRevision: input.expectedRevision }),
-    availability: {
-      mode: input.mode,
-      personalWorkspaces: selected && input.personalWorkspaces === true,
-      collaborationWorkspaceIds
-    },
+    availability: wanted,
     ...(input.expectedAssetId === undefined ? {} : { expectedAssetId: input.expectedAssetId }),
     ...(input.expectedAvailability === undefined
       ? {}
@@ -278,15 +274,45 @@ export async function initialAgentPlacement(
   options: AssetWorkflowOptions,
   call: AssetCall,
   kind: WorkflowAssetKind,
-  input: {
-    name: string;
-    creates: boolean;
-    setsDefault: boolean;
-    config: unknown;
-    availableIn?: AvailableIn;
-    /** The workspace that owns the agent, which it is made in unless the write names one. */
-    madeIn?: string;
+  input: PlacementInput
+): Promise<{ initialAgentAvailability?: InitialAgentAvailability; warnings: AssetWarning[] }> {
+  const placement = await placementOf(options, call, kind, input);
+  const initial = placement.initialAgentAvailability;
+  if (initial !== undefined && input.madeIn !== undefined) {
+    // An agent of a Personal Workspace starts offered nowhere beyond its owner, whoever asks.
+    const { mode, collaborationWorkspaceIds } = resolveInitialAgentAvailability(initial, false);
+    await assertOwnerReach(
+      options,
+      {
+        kind: kind.kind,
+        name: input.name,
+        scope: { kind: "workspace", workspaceId: asCollaborationWorkspaceId(input.madeIn) }
+      },
+      {
+        kind: "availability",
+        availability: { mode, personalWorkspaces: false, collaborationWorkspaceIds }
+      },
+      call.runtime?.locale ?? options.config.localization.defaultLocale
+    );
   }
+  return placement;
+}
+
+interface PlacementInput {
+  name: string;
+  creates: boolean;
+  setsDefault: boolean;
+  config: unknown;
+  availableIn?: AvailableIn;
+  /** The workspace that owns the agent, which it is made in unless the write names one. */
+  madeIn?: string;
+}
+
+async function placementOf(
+  options: AssetWorkflowOptions,
+  call: AssetCall,
+  kind: WorkflowAssetKind,
+  input: PlacementInput
 ): Promise<{ initialAgentAvailability?: InitialAgentAvailability; warnings: AssetWarning[] }> {
   // Knowledge Bases and Connections start with no availability. Their use is widened only
   // by an explicit availability save, never by an ordinary content write or release.
@@ -381,6 +407,29 @@ export async function initialAgentPlacement(
       }
     ]
   };
+}
+
+/** Refuses an offer of an asset beyond its owner's reach (`assertOwnerReach`). */
+async function requireOfferWithinReach(
+  options: AssetWorkflowOptions,
+  call: AssetCall,
+  kind: WorkflowAssetKind,
+  name: string,
+  availability: AgentAvailability
+): Promise<void> {
+  const row = await options.configAssets.store.getConfigAsset({
+    clientInstanceId: options.clientInstanceId,
+    kind: kind.kind,
+    name
+  });
+  // An asset that is not there is refused by the store, as it always was.
+  if (!row) return;
+  await assertOwnerReach(
+    options,
+    row,
+    { kind: "availability", availability },
+    call.runtime?.locale ?? options.config.localization.defaultLocale
+  );
 }
 
 /** The workspace of that id, where the caller is a person who is one of its members. */

@@ -16,6 +16,7 @@ import {
 } from "@work-shape/catalyst-core";
 import type { AssetWorkflowOptions } from "../types";
 import { accessResource, type AssetCall } from "./asset-access";
+import { assertOwnerReach } from "./asset-owner-references";
 
 interface MissingDependency {
   kind: WorkspaceUseAssetKind;
@@ -227,6 +228,15 @@ export async function makeAgentDependenciesAvailable(
       reason: decision.reason
     });
   if (!wanted) return;
+  // A dependency of a Personal Workspace is never widened beyond its owner, whoever's agent
+  // names it. Asked of every one before any is widened.
+  for (const { asset, current } of missing)
+    await assertOwnerReach(
+      options,
+      asset,
+      { kind: "availability", availability: unionAvailability(current, wanted) },
+      call.runtime?.locale ?? options.config.localization.defaultLocale
+    );
   for (const { asset, current } of missing) {
     if (asset.kind !== "knowledge_base" && asset.kind !== "connection")
       throw new AppError("INTERNAL", "Invalid dependency kind");
