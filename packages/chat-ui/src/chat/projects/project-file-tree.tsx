@@ -11,13 +11,16 @@ export function ProjectFileTree({
   selectedPath,
   onOpen,
   fileActions,
-  folderActions
+  folderActions,
+  onMove
 }: {
   files: readonly ProjectFileView[];
   selectedPath?: string;
   onOpen(file: ProjectFileView): void;
   fileActions?(file: ProjectFileView): ReactNode;
   folderActions?(path: string): ReactNode;
+  /** A file or folder (its path ends in `/`) was dragged into a folder or to the top level (`""`). */
+  onMove?(path: string, toFolder: string): void;
 }) {
   const { t, locale } = useTranslation();
   const items = files.map((file) => {
@@ -43,6 +46,7 @@ export function ProjectFileTree({
       fileTestId="project-file-row"
       onOpen={(item) => onOpen(item.file)}
       folderActions={folderActions}
+      {...(onMove ? { onMove, rootDropLabel: t("projectFiles.dropTopLevel") } : {})}
     />
   );
 }

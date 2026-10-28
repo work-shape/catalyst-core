@@ -1,4 +1,5 @@
 import {
+  isAppError,
   normalizeProjectFilePath,
   PROJECT_INSTRUCTIONS_PATH,
   type ProjectCommandFileChange,
@@ -102,16 +103,24 @@ export class ProjectFolderMounts {
     for (const file of scanned) {
       const before = mount.baseline.get(file.path);
       if (before?.checksum === file.checksum && before.byteSize === file.byteSize) continue;
-      const result = await this.options.port.write(mount.folder, {
-        path: file.path,
-        bytes: await readFile(join(mount.directory, file.path)),
-        ...(file.mimeType ? { mimeType: file.mimeType } : {}),
-        replaces: before?.version ?? 0,
-        userId: mount.userId,
-        runId: command.agentRunId,
-        ...(mount.locale ? { locale: mount.locale } : {})
-      });
-      changed.push({ ...result, projectId: mount.folder.projectId });
+      try {
+        const result = await this.options.port.write(mount.folder, {
+          path: file.path,
+          bytes: await readFile(join(mount.directory, file.path)),
+          ...(file.mimeType ? { mimeType: file.mimeType } : {}),
+          replaces: before?.version ?? 0,
+          userId: mount.userId,
+          runId: command.agentRunId,
+          ...(mount.locale ? { locale: mount.locale } : {})
+        });
+        changed.push({ ...result, projectId: mount.folder.projectId });
+      } catch (error) {
+        // A file deleted for good while the command ran: said, not kept as a copy beside nothing.
+        if (!isGone(error)) throw error;
+        warnings.push(
+          `„${file.path}“ gibt es im Projekt nicht mehr (endgültig gelöscht oder verschoben); die Änderung wurde nicht übernommen`
+        );
+      }
     }
     // An edit by another command wins over this command's deletion (the PRJ-2 conflict rule).
     for (const file of mount.baseline.values()) {
@@ -176,6 +185,16 @@ export class ProjectFolderMounts {
     }
     return bytes;
   }
+}
+
+function isGone(error: unknown): boolean {
+  return (
+    isAppError(error) &&
+    typeof error.details === "object" &&
+    error.details !== null &&
+    "reason" in error.details &&
+    error.details.reason === "project_file_gone"
+  );
 }
 
 /** Commands may read instructions, but all changes to them require the confirmation card. */

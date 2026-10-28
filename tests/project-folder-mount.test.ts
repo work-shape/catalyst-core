@@ -419,6 +419,45 @@ describe("project snapshot writeback", () => {
     expect(result.output?.projectFileChanges).toHaveLength(1);
   });
 
+  it("says so, and keeps no copy, when a file was deleted for good while the command ran", async () => {
+    const id = await project();
+    const first = await chat(id);
+    await seed(first, "plan.md", "original");
+    await seed(first, "same.md", "original");
+    const local = new LocalWorkspaceCommandProcessExecutor();
+    const h = await harness({
+      executor: {
+        async execute(input) {
+          const result = await local.execute(input);
+          await files.purge(
+            authenticatedUserFromRecord({
+              user: t.kai,
+              identity: { authSource: "test", externalUserId: t.kai.id }
+            }),
+            id,
+            "plan.md"
+          );
+          // Another command made the same.md exactly what this one writes.
+          await seed(first, "same.md", "mine", 1);
+          return result;
+        }
+      }
+    });
+    const result = await h.exec(
+      first,
+      "printf mine > project/plan.md\nprintf mine > project/same.md"
+    );
+    expect(result.status, JSON.stringify(result.error)).toBe("completed");
+    expect(await text(first, "plan.md")).toBeUndefined();
+    expect((await files.list(await folder(first))).map((file) => file.path)).toEqual(["same.md"]);
+    expect(result.output?.projectFileChanges).toEqual([
+      expect.objectContaining({ path: "same.md", change: "unchanged", version: 2 })
+    ]);
+    expect(result.output?.projectFileWarnings).toEqual([
+      expect.stringContaining("„plan.md“ gibt es im Projekt nicht mehr")
+    ]);
+  });
+
   it("reads bytes from the host cache, verifies it and never shares writable copies", async () => {
     const c = await chat(await project());
     await seed(c, "cached.md", "original");

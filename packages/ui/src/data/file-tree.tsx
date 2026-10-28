@@ -1,5 +1,5 @@
 import { ChevronRight, File, Folder, FolderOpen } from "lucide-react";
-import { useState, type KeyboardEvent, type ReactNode } from "react";
+import { useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "../cn";
 
 /** One file of a tree. Its folders come from its `/`-separated path. */
@@ -69,11 +69,31 @@ function compareNodes(left: FileTreeNode, right: FileTreeNode): number {
   return collator.compare(left.name, right.name);
 }
 
+/** The folder a path lies in, ending in `/`; `""` at the top level. */
+function parentFolder(path: string): string {
+  const trimmed = path.endsWith("/") ? path.slice(0, -1) : path;
+  const cut = trimmed.lastIndexOf("/");
+  return cut < 0 ? "" : trimmed.slice(0, cut + 1);
+}
+
+/** Whether `source` (a file, or a folder ending in `/`) may be dropped into the folder `target`. */
+function dropsInto(source: string, target: string): boolean {
+  if (parentFolder(source) === target) return false;
+  return !(source.endsWith("/") && target.startsWith(source));
+}
+
 export interface FileTreeProps<Item extends FileTreeItem = FileTreeItem> {
   items: readonly Item[];
   onOpen?(item: Item): void;
   /** Buttons at a folder's end, such as renaming it. `path` ends in `/`. */
   folderActions?(path: string): ReactNode;
+  /**
+   * A file or folder was dragged into a folder, or to the top level (`toFolder` is `""`). A
+   * folder's path ends in `/`; so does `toFolder`. Without it nothing can be dragged.
+   */
+  onMove?(path: string, toFolder: string): void;
+  /** Names the top level as a drop target while something is dragged; needed with `onMove`. */
+  rootDropLabel?: string;
   /** Folders start open. A folder holding a selected file is always open at first. */
   defaultExpanded?: boolean;
   /** Names the tree for assistive technology. */
@@ -91,6 +111,8 @@ export function FileTree<Item extends FileTreeItem>({
   items,
   onOpen,
   folderActions,
+  onMove,
+  rootDropLabel,
   defaultExpanded = false,
   label,
   fileTestId,
@@ -112,6 +134,45 @@ export function FileTree<Item extends FileTreeItem>({
     toggled.get(path) ?? (defaultExpanded || selectedFolders.has(path));
   const setOpen = (path: string, open: boolean) =>
     setToggled((current) => new Map(current).set(path, open));
+  // The path being dragged and the folder it is over (`""` is the top level).
+  const [dragging, setDragging] = useState<string>();
+  const [over, setOver] = useState<string>();
+  const dragProps = (path: string) =>
+    onMove
+      ? {
+          draggable: true,
+          onDragStart: (event: DragEvent<HTMLElement>) => {
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData("text/plain", path);
+            setDragging(path);
+          },
+          onDragEnd: () => {
+            setDragging(undefined);
+            setOver(undefined);
+          }
+        }
+      : {};
+  const dropProps = (target: string) =>
+    onMove && dragging !== undefined
+      ? {
+          onDragOver: (event: DragEvent<HTMLElement>) => {
+            if (!dropsInto(dragging, target)) return;
+            event.preventDefault();
+            event.stopPropagation();
+            event.dataTransfer.dropEffect = "move";
+            setOver(target);
+          },
+          onDragLeave: () => setOver((current) => (current === target ? undefined : current)),
+          onDrop: (event: DragEvent<HTMLElement>) => {
+            if (!dropsInto(dragging, target)) return;
+            event.preventDefault();
+            event.stopPropagation();
+            setDragging(undefined);
+            setOver(undefined);
+            onMove(dragging, target);
+          }
+        }
+      : {};
 
   const renderNodes = (level: number, children: FileTreeNode<Item>[]): ReactNode =>
     children.map((node) => {
@@ -130,7 +191,15 @@ export function FileTree<Item extends FileTreeItem>({
         const FolderIcon = open ? FolderOpen : Folder;
         return (
           <li key={node.path} className="min-w-0" data-folder={node.path}>
-            <div className="group/file-tree-row flex min-w-0 items-center rounded-md transition-colors hover:bg-state-hover">
+            <div
+              className={cn(
+                "group/file-tree-row flex min-w-0 items-center rounded-md transition-colors hover:bg-state-hover",
+                over === node.path && "bg-state-selected ring-1 ring-primary-border"
+              )}
+              data-drop-over={over === node.path ? "" : undefined}
+              {...dragProps(node.path)}
+              {...dropProps(node.path)}
+            >
               <button
                 type="button"
                 className="flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-md py-1 pr-2 text-left text-body focus-visible:focus-ring"
@@ -201,6 +270,7 @@ export function FileTree<Item extends FileTreeItem>({
               onOpen && "hover:bg-state-hover",
               item.selected && "bg-state-selected hover:bg-state-selected"
             )}
+            {...dragProps(node.path)}
           >
             {onOpen ? (
               <button
@@ -228,8 +298,23 @@ export function FileTree<Item extends FileTreeItem>({
     });
 
   return (
-    <ul aria-label={label} className={cn("grid min-w-0 gap-0.5", className)}>
-      {renderNodes(0, nodes)}
-    </ul>
+    <div className="grid min-w-0 gap-1">
+      <ul aria-label={label} className={cn("grid min-w-0 gap-0.5", className)}>
+        {renderNodes(0, nodes)}
+      </ul>
+      {onMove && dragging !== undefined && dropsInto(dragging, "") ? (
+        <div
+          data-testid="file-tree-root-drop"
+          data-drop-over={over === "" ? "" : undefined}
+          className={cn(
+            "rounded-md border border-dashed border-border px-3 py-2 text-center text-caption text-muted-foreground transition-colors",
+            over === "" && "border-primary-border bg-primary-soft text-primary-soft-foreground"
+          )}
+          {...dropProps("")}
+        >
+          {rootDropLabel}
+        </div>
+      ) : null}
+    </div>
   );
 }

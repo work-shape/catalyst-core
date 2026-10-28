@@ -684,10 +684,7 @@ export class ProjectFileService implements ProjectFolderPort, ProjectCommandFold
       const checksum = sha256(input.bytes);
       const mimeType = projectFileMimeType(input.path, input.mimeType);
       const current = await this.current(folder.projectId, input.path);
-      if (
-        current?.checksum === checksum &&
-        (input.replaces === undefined || input.replaces === current.version)
-      ) {
+      if (current?.checksum === checksum) {
         return { status: "unchanged", file: current };
       }
       put = `${projectFileObjectPrefix(folder.projectId)}${randomUUID()}`;
@@ -921,6 +918,13 @@ function answered(result: WriteProjectFileVersionResult): ProjectFileChange {
         "CONFLICT",
         `${result.path} changed since: it is at version ${String(result.currentVersion)}`,
         { reason: "project_file_changed", currentVersion: result.currentVersion },
+        { exposeMessage: true }
+      );
+    case "gone":
+      throw new AppError(
+        "CONFLICT",
+        `${result.path} is no longer in the project: it was deleted for good or moved. Nothing was written.`,
+        { reason: "project_file_gone" },
         { exposeMessage: true }
       );
     case "missing":

@@ -29,6 +29,7 @@ import {
   expandProjectUploads,
   formatProjectBytes,
   pickedUploads,
+  projectPathInFolder,
   projectUploadCaps,
   runLimited,
   takenUploadPaths,
@@ -158,6 +159,30 @@ export function ProjectFilesSection({
     }
   }
 
+  // A drag of a file or folder into a folder, or onto the top level.
+  async function drop(path: string, toFolder: string) {
+    setRefusal(undefined);
+    try {
+      const to = projectPathInFolder(path, toFolder);
+      await writes.move({ from: path, to });
+      // The file open in the panel follows its move.
+      if (
+        openPath !== undefined &&
+        (path.endsWith("/") ? openPath.startsWith(path) : openPath === path)
+      ) {
+        setOpenPath(`${to}${openPath.slice(path.length)}`);
+      }
+    } catch (error) {
+      setRefusal(
+        apiErrorCode(error) === "CONFLICT"
+          ? t("projectFiles.renameTaken")
+          : error instanceof Error && error.message === t("projectFiles.held")
+            ? t("projectFiles.held")
+            : t("projectFiles.actionFailed")
+      );
+    }
+  }
+
   const takenNames = replace ? [...replace.taken.keys()] : [];
   const usage = files.data
     ? t(files.data.usage.files === 1 ? "projectFiles.usageOne" : "projectFiles.usage", {
@@ -230,6 +255,9 @@ export function ProjectFilesSection({
             files={files.data.items}
             selectedPath={openPath}
             onOpen={(file) => setOpenPath(file.path)}
+            onMove={(path, toFolder) => {
+              drop(path, toFolder).catch(() => undefined);
+            }}
             fileActions={(file: ProjectFileView) => (
               <IconButton
                 size="sm"

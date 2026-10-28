@@ -108,9 +108,23 @@ async function startChat(
     /** Picks the files and waits until the composer has nothing left to upload. */
     choose: async (files: File[]) => {
       await act(async () => controller?.onFilesSelected(files));
-      await vi.waitFor(() => expect(controller?.visibleUploadingAttachments).toEqual([]));
+      await vi.waitFor(() =>
+        expect(
+          controller?.visibleUploadingAttachments.filter(
+            (attachment) => attachment.status !== "unpacked"
+          )
+        ).toEqual([])
+      );
     },
-    uploading: () => controller?.visibleUploadingAttachments ?? [],
+    uploading: () =>
+      (controller?.visibleUploadingAttachments ?? []).filter(
+        (attachment) => attachment.status !== "unpacked"
+      ),
+    /** The line an unpacked .zip leaves where its upload chip was. */
+    notes: () =>
+      (controller?.visibleUploadingAttachments ?? []).flatMap((attachment) =>
+        attachment.status === "unpacked" ? [attachment.note] : []
+      ),
     unmount: () => act(() => root.unmount())
   };
 }
@@ -155,8 +169,27 @@ describe("a .zip in the composer of a project's chat", () => {
       ]);
       expect(chat.errors).toEqual([]);
       expect(chat.uploading()).toEqual([]);
+      // The upload chip gives way to a line that says where the files went, and holds no file.
+      expect(chat.notes()).toEqual(["2 Dateien in „Angebote“ abgelegt"]);
     } finally {
       await chat.unmount();
+    }
+  });
+
+  it("says so in the singular for one file, and says nothing when it is refused", async () => {
+    const one = await startChat({ projectId: "prj_1" });
+    try {
+      await one.choose([await archive("Unterlagen.zip", { "a.md": "hello" })]);
+      expect(one.notes()).toEqual(["1 Datei in „Unterlagen“ abgelegt"]);
+    } finally {
+      await one.unmount();
+    }
+    const refused = await startChat({ projectId: "prj_1" });
+    try {
+      await refused.choose([await archive("Boese.zip", { "../evil.txt": "bad" })]);
+      expect(refused.notes()).toEqual([]);
+    } finally {
+      await refused.unmount();
     }
   });
 
