@@ -1,15 +1,17 @@
 import {
   AppError,
   serverPreviewCaptureOutcomeSchema,
+  type SecretResolver,
   type PreviewCaptureService
 } from "@work-shape/catalyst-core";
 import type { ClientInstanceEnv } from "../env";
 /** Only the API gets this client. Off unless explicitly enabled; the tool stays on PREVIEW-SEE-1. */
-export function createInstancePreviewCaptureClient(
-  env: ClientInstanceEnv
-): PreviewCaptureService | undefined {
+export async function createInstancePreviewCaptureClient(
+  env: ClientInstanceEnv,
+  secrets: SecretResolver
+): Promise<PreviewCaptureService | undefined> {
   if (env.PREVIEW_CAPTURE_ENABLED !== "true") return undefined;
-  const token = env.PREVIEW_CAPTURE_SERVICE_TOKEN;
+  const token = await secrets.resolve("PREVIEW_CAPTURE_SERVICE_TOKEN");
   const url = new URL(env.PREVIEW_CAPTURE_SERVICE_ORIGIN ?? "http://preview-capture:4120");
   if (
     !token ||

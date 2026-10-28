@@ -119,6 +119,16 @@ describe("the module registry", () => {
     expect(neither.offModuleOf("jobKind", "asset_repo.commit")).toBe("apps");
   });
 
+  it("turns off capture calls and capture jobs with Apps", () => {
+    const registry = createModuleRegistry(platformModules);
+    const off = registry.snapshot({ apps: { enabled: false } });
+    expect(off.offModuleOf("operation", "apps.captures.call")).toBe("apps");
+    expect(off.offModuleOf("jobKind", "preview.capture")).toBe("apps");
+    const on = registry.snapshot({ apps: { enabled: true } });
+    expect(on.offModuleOf("operation", "apps.captures.call")).toBeUndefined();
+    expect(on.offModuleOf("jobKind", "preview.capture")).toBeUndefined();
+  });
+
   it("is frozen, and so is the snapshot it resolves", () => {
     const registry = createModuleRegistry(platformModules);
     const snapshot = registry.snapshot({ resources: { enabled: true } });
