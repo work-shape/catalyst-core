@@ -234,6 +234,29 @@ describe("Connection page", () => {
     expect(markup).not.toContain("data-connection-disabled");
   });
 
+  it("says beside its place where agents may use a Connection of everyone (SCOPE-WORDS)", () => {
+    const offered = renderPage({
+      asset: {
+        ...connectionAsset(),
+        availability: { mode: "all", collaborationWorkspaceIds: [], personalWorkspaces: false }
+      },
+      locale: "de"
+    });
+    const line = (markup: string) => /<div data-asset-place="".*?<\/div>/su.exec(markup)?.[0] ?? "";
+    expect(line(offered)).toContain(">Alle<");
+    expect(line(offered)).toContain(">Agenten nutzen sie in: Alle Arbeitsbereiche<");
+    // Offered nowhere: the line says so in plain words.
+    expect(line(renderPage({ asset: connectionAsset() }))).toContain(">No agent can use it yet<");
+    // One of a workspace is used there: its place says so.
+    expect(
+      line(
+        renderPage({
+          asset: { ...connectionAsset(), scope: { kind: "workspace", workspaceId: "ws_1" } }
+        })
+      )
+    ).not.toContain("Agents use it");
+  });
+
   it("shows the settings and of the credential only whether it is there", () => {
     const markup = renderPage();
 

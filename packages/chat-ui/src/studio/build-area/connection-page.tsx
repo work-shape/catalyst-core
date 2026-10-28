@@ -24,7 +24,13 @@ import {
 } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { usePageShown } from "./asset-editor-shell";
-import { AssetPlaceLine, AssetPlaceRow } from "./asset-place";
+import {
+  AssetPlaceLine,
+  AssetPlaceRow,
+  assetAudience,
+  AVAILABILITY_SECTION_ID,
+  useKnownWorkspaces
+} from "./asset-place";
 import type {
   BuildAssetEditorProps,
   BuildAssetViewProps,
@@ -105,8 +111,11 @@ export function ConnectionPage({
   /** Where agents can use the Connection, for a reader who may change it. */
   availability?: ReactNode;
 }) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   usePageShown(page, "asset");
+  // Where agents may use a Connection of everyone, beside where it sits (SCOPE-WORDS). Where
+  // none may, the chip leads a reader who may change that to "Available in".
+  const audience = assetAudience("connection", asset, useKnownWorkspaces(), t, locale);
   // A Connection made here and not yet read waits for its first discovery. A REST API has none:
   // its page reads the Connection again for a while after a write.
   // A type with a form of its own, such as a document source, discovers nothing, and its
@@ -367,7 +376,7 @@ export function ConnectionPage({
     ...(availability
       ? [
           {
-            id: "availability",
+            id: AVAILABILITY_SECTION_ID,
             label: t("configAvailability"),
             description: t("configAvailabilityConnectionDescription"),
             body: availability
@@ -429,7 +438,11 @@ export function ConnectionPage({
       {/* The first line of the content starts where the outline does. */}
       <div className="grid min-w-0 content-start pt-5">
         <AssetPlaceRow>
-          <AssetPlaceLine owner={asset.scope} />
+          <AssetPlaceLine
+            owner={asset.scope}
+            audience={audience?.text}
+            {...(audience?.nowhere && availability ? { audienceTo: AVAILABILITY_SECTION_ID } : {})}
+          />
         </AssetPlaceRow>
         {notice ? <div className="mb-4 grid gap-2">{notice}</div> : null}
         {config.origin === "release" ? (

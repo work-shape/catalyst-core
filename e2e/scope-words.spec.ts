@@ -192,7 +192,12 @@ test("Studio says where an asset sits, greys what an agent cannot use, and says 
   await expect(greyed).toContainText(
     "Gehört nur dir. Ein Agent für alle kann ihn nicht verwenden."
   );
-  await expect(listbox.getByText(`Monatsbericht ${tag}`)).toHaveCount(0);
+  // A skill of the reader's team is greyed too, never hidden, and can be shared up to everyone.
+  const teamSkill = listbox.getByRole("option").filter({ hasText: `Monatsbericht ${tag}` });
+  await expect(teamSkill).toContainText(
+    `Liegt in Controlling ${tag}. Ein Agent für alle kann ihn nicht verwenden.`
+  );
+  await expect(teamSkill).toContainText("Für alle teilen…");
   await shoot(page, "agent-skill-picker");
 
   // The save is sent with the reader's own skill added: the instance refuses it, and the page

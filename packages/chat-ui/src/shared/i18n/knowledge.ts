@@ -158,10 +158,13 @@ export const knowledge = defineTranslations({
     "knowledge.agentNone": "No knowledge base chosen.",
     "knowledge.agentChoose": "Choose knowledge bases",
     "knowledge.agentNoteWorkspace":
-      "Lists the knowledge bases of this agent's workspace and those for everyone. One of another workspace is not offered here.",
+      "Lists the knowledge bases of this agent's workspace and those for everyone. One of another place is greyed, with the reason.",
     "knowledge.agentNoteInstance":
-      "Lists the knowledge bases for everyone. One that belongs to a workspace is not offered here.",
+      "Lists the knowledge bases for everyone. One that belongs to a workspace is greyed, with the reason.",
     "knowledge.agentUnpublished": "Not published yet: it answers once it is published",
+    "knowledge.agentCannotAll": "An agent for everyone cannot use it.",
+    "knowledge.agentCannotMine": "An agent of yours alone cannot use it.",
+    "knowledge.agentCannotIn": "An agent of {workspace} cannot use it.",
     "knowledge.fromLabel": "Where does its knowledge come from?",
     "knowledge.fromUpload": "Upload files",
     "knowledge.fromConnected": "Connected",
@@ -448,11 +451,14 @@ export const knowledge = defineTranslations({
     "knowledge.agentNone": "Keine Wissensbasis gewählt.",
     "knowledge.agentChoose": "Wissensbasen wählen",
     "knowledge.agentNoteWorkspace":
-      "Hier stehen die Wissensbasen aus dem Arbeitsbereich dieses Agenten und die für alle. Eine aus einem anderen Arbeitsbereich steht hier nicht zur Wahl.",
+      "Hier stehen die Wissensbasen aus dem Arbeitsbereich dieses Agenten und die für alle. Eine von woanders steht ausgegraut da, mit dem Grund.",
     "knowledge.agentNoteInstance":
-      "Hier stehen die Wissensbasen für alle. Eine, die einem Arbeitsbereich gehört, steht hier nicht zur Wahl.",
+      "Hier stehen die Wissensbasen für alle. Eine, die einem Arbeitsbereich gehört, steht ausgegraut da, mit dem Grund.",
     "knowledge.agentUnpublished":
       "Noch nicht veröffentlicht: Sie antwortet, sobald sie veröffentlicht ist",
+    "knowledge.agentCannotAll": "Ein Agent für alle kann sie nicht verwenden.",
+    "knowledge.agentCannotMine": "Ein Agent nur für dich kann sie nicht verwenden.",
+    "knowledge.agentCannotIn": "Ein Agent von {workspace} kann sie nicht verwenden.",
     "knowledge.fromLabel": "Woher kommt ihr Wissen?",
     "knowledge.fromUpload": "Dateien hochladen",
     "knowledge.fromConnected": "Verbunden",
