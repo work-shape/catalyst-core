@@ -1,6 +1,7 @@
 import {
   MODEL_USAGE_EVENT_STATUSES,
   MODEL_USAGE_SOURCES,
+  PERSONAL_AGENTS_KEY,
   PERSONAL_WORKSPACES_KEY,
   USAGE_BREAKDOWN_DIMENSIONS,
   USAGE_COST_STATUSES,
@@ -418,7 +419,7 @@ export interface RecentModelUsage {
   byAttribution: ModelUsageAttributionGroup[];
 }
 
-export { PERSONAL_WORKSPACES_KEY, USAGE_BREAKDOWN_DIMENSIONS, USAGE_ORIGINS };
+export { PERSONAL_AGENTS_KEY, PERSONAL_WORKSPACES_KEY, USAGE_BREAKDOWN_DIMENSIONS, USAGE_ORIGINS };
 export type UsageBreakdownDimension = (typeof USAGE_BREAKDOWN_DIMENSIONS)[number];
 export type UsageOrigin = (typeof USAGE_ORIGINS)[number];
 
