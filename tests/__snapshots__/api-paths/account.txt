@@ -1,3 +1,5 @@
+me.chat_skills.list  GET /api/v1/me/chat-skills
+me.chat_skills.set  PUT /api/v1/me/chat-skills/:name
 me.delete  DELETE /api/v1/me
 me.get  GET /api/v1/me
 me.model_preference.get  GET /api/v1/me/model-preference

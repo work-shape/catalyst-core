@@ -5,29 +5,57 @@ import {
   useSetOwnChatSkillMutation
 } from "../../shared/api/personal-chat-skills";
 import { useTranslation } from "../../shared/i18n";
-import { useSettingsPage } from "../../shared/settings-page-context";
+import {
+  useOptionalSettingsPage,
+  type SettingsPageContextValue
+} from "../../shared/settings-page-context";
 import type { AssetSection } from "./asset-editor-shell";
 import type { BuildAssetEditorProps } from "./build-asset-kind";
 
-/**
- * "In meinen Chats verwenden" on a skill of the reader's own Personal Workspace
- * (SCOPE-MYCHATS): the section with the switch, and the badge the page head shows while it is
- * on. The instance decides whose skill it is; on every other skill both are absent.
- */
-export function useSkillMyChats(frame: Pick<BuildAssetEditorProps, "asset" | "owner">): {
+/** The section with the switch, and the badge the page head shows while it is on. */
+export interface SkillMyChatsParts {
   section?: AssetSection;
   badge?: ReactNode;
-} {
-  const { apiBaseUrl, authScope, client } = useSettingsPage();
-  const { t } = useTranslation();
+}
+
+type SkillFrame = Pick<BuildAssetEditorProps, "asset" | "owner">;
+
+/**
+ * "In meinen Chats verwenden" on a skill of the reader's own Personal Workspace
+ * (SCOPE-MYCHATS). The instance decides whose skill it is; on every other skill, and on a page
+ * rendered outside the settings page, both parts are absent.
+ */
+export function SkillMyChats({
+  frame,
+  children
+}: {
+  frame: SkillFrame;
+  children(parts: SkillMyChatsParts): ReactNode;
+}) {
+  const settings = useOptionalSettingsPage();
   const name = frame.asset?.name;
   // Only a workspace's skill can be the reader's own: no other asks the instance.
-  const query = useOwnChatSkillsQuery({
-    apiBaseUrl,
-    authScope,
-    client,
-    enabled: name !== undefined && frame.owner !== undefined
-  });
+  return settings && name !== undefined && frame.owner !== undefined ? (
+    <OwnSkillMyChats settings={settings} name={name}>
+      {children}
+    </OwnSkillMyChats>
+  ) : (
+    children({})
+  );
+}
+
+function OwnSkillMyChats({
+  settings,
+  name,
+  children
+}: {
+  settings: SettingsPageContextValue;
+  name: string;
+  children(parts: SkillMyChatsParts): ReactNode;
+}) {
+  const { apiBaseUrl, authScope, client } = settings;
+  const { t } = useTranslation();
+  const query = useOwnChatSkillsQuery({ apiBaseUrl, authScope, client, enabled: true });
   const setOwn = useSetOwnChatSkillMutation({
     apiBaseUrl,
     authScope,
@@ -36,12 +64,12 @@ export function useSkillMyChats(frame: Pick<BuildAssetEditorProps, "asset" | "ow
   });
   const [failed, setFailed] = useState(false);
   const own = query.data?.items.find((item) => item.name === name);
-  if (name === undefined || own === undefined) return {};
+  if (own === undefined) return children({});
   const switchTo = (inMyChats: boolean) => {
     setFailed(false);
     setOwn.mutateAsync({ name, inMyChats }).catch(() => setFailed(true));
   };
-  return {
+  return children({
     badge: own.inMyChats ? (
       <Badge data-skill-my-chats="on">{t("skillMyChats.on")}</Badge>
     ) : undefined,
@@ -66,5 +94,5 @@ export function useSkillMyChats(frame: Pick<BuildAssetEditorProps, "asset" | "ow
         </div>
       )
     }
-  };
+  });
 }

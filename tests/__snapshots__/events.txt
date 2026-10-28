@@ -142,6 +142,7 @@
 {"name":"scope_assignment.changed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"storage.orphaned_file_cleanup_failed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"storage.orphaned_files_deleted","legacy":true,"audited":true,"phases":["after"]}
+{"name":"user.chat_skill_changed","legacy":false,"audited":true,"phases":["after"]}
 {"name":"user.created","legacy":true,"audited":true,"phases":["after"]}
 {"name":"user.deleted","legacy":true,"audited":true,"phases":["after"]}
 {"name":"user.deletion_requested","legacy":true,"audited":true,"phases":["after"]}

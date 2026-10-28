@@ -190,6 +190,7 @@
     "health.get": "public",
     "instance.workspaces.list": "asset_right",
     "me.api_keys.list": "own",
+    "me.chat_skills.list": "own",
     "me.connect_codes.get": "own",
     "me.delete": "own",
     "me.get": "own",
