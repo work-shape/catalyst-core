@@ -58,7 +58,7 @@ const assetSchema = z.object({
 });
 
 /** `notify-clients` with a block no engine of this release runs. */
-function withCondition() {
+function withDelay() {
   const definition = notifyClients();
   return {
     ...definition,
@@ -66,11 +66,8 @@ function withCondition() {
       ...definition.steps.slice(0, 1),
       {
         id: "check",
-        name: "Is there a note",
-        type: "condition",
-        when: { ref: { step: "start", path: "input.note" }, op: "equals", value: "yes" },
-        then: [],
-        else: []
+        name: "Wait",
+        type: "delay"
       },
       ...definition.steps.slice(1)
     ]
@@ -347,11 +344,56 @@ describe("a Workflow stored as an asset", () => {
     expect((await listed(t))[0]?.lastRun).toMatchObject({ id: run.id, status: "done" });
   });
 
+  it.each(["condition", "parallel"])("saves, publishes and runs a %s block", async (type) => {
+    const t = await ready();
+    const base = notifyClients();
+    const read = {
+      id: "analysis",
+      name: "Analyse",
+      type: "operation",
+      operation: "connection.crm.echo",
+      input: { text: { ref: { step: "start", path: "input.note" } } }
+    };
+    const block =
+      type === "condition"
+        ? {
+            id: "block",
+            name: "Choose",
+            type,
+            when: { ref: { step: "start", path: "input.note" }, op: "equals", value: NOTE },
+            then: [read]
+          }
+        : {
+            id: "block",
+            name: "Together",
+            type,
+            branches: [{ id: "one", name: "One", steps: [read] }]
+          };
+    const revision = await put(
+      t,
+      { ...base, steps: [base.steps[0], block, ...base.steps.slice(1)] },
+      null
+    );
+    const published = await publish(t, revision);
+    expect(published.statusCode, published.body).toBe(200);
+    expect((await listed(t))[0]).toMatchObject({ runnable: true, reasons: [] });
+    const run = await t.finish((await start(t)).id);
+    expect(run.status, JSON.stringify(run.error)).toBe("done");
+    const steps = await stepRunsOf(t, run.id);
+    const container = steps.find((step) => step.stepId === "block");
+    expect(container?.status).toBe("done");
+    expect(steps.find((step) => step.stepId === "analysis")).toMatchObject({
+      containerStepRunId: container?.id,
+      branch: type === "condition" ? "then" : "one",
+      status: "done"
+    });
+  });
+
   it("refuses at the save and at the publish what the engine refuses, by the engine's code", async () => {
     const t = await ready();
     const refusedSave = await t.call(t.admin.id, "assets.put", {
       params: address,
-      payload: { config: { name: WORKFLOW, manifest: withCondition() }, expectedRevision: null }
+      payload: { config: { name: WORKFLOW, manifest: withDelay() }, expectedRevision: null }
     });
     expect(refusedSave.statusCode, refusedSave.body).toBe(422);
     const saveError = errorSchema.parse(refusedSave.json()).error;
@@ -403,7 +445,7 @@ describe("a Workflow stored as an asset", () => {
           name: WORKFLOW,
           config: z
             .record(z.string(), z.json())
-            .parse({ name: WORKFLOW, manifest: withCondition() }) satisfies JsonObject,
+            .parse({ name: WORKFLOW, manifest: withDelay() }) satisfies JsonObject,
           draft: true
         }
       ]
@@ -470,7 +512,7 @@ describe("a Workflow stored as an asset", () => {
           name: WORKFLOW,
           config: z
             .record(z.string(), z.json())
-            .parse({ name: WORKFLOW, manifest: withCondition() }) satisfies JsonObject,
+            .parse({ name: WORKFLOW, manifest: withDelay() }) satisfies JsonObject,
           draft: true
         }
       ]

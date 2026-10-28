@@ -65,9 +65,8 @@ export const configOf = (steps: unknown[] = []) => ({ name: WORKFLOW, manifest: 
 /** A step the engine of this release does not run, and the one the agent writes after it. */
 export const notRun = {
   id: "ask",
-  name: "Parallel branches",
-  type: "parallel",
-  branches: [{ id: "branch", name: "Branch", steps: [] }]
+  name: "Wait",
+  type: "delay"
 };
 export const added = {
   id: "books",
