@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, exists, inArray, isNotNull, or, sql, type SQL } from "drizzle-orm";
 import {
   asClientInstanceId,
   asCollaborationWorkspaceId,
@@ -13,6 +13,7 @@ import {
   configAssets,
   configAssetState,
   conversations,
+  messages,
   permissionGrants,
   projects
 } from "./schema";
@@ -51,15 +52,80 @@ export function createPostgresProjectStore(db: PostgresConnection): ProjectStore
       );
       return project;
     },
-    listProjectsForWorkspace(input) {
-      return selectProjects(
-        db,
-        and(
-          eq(configAssets.clientInstanceId, input.clientInstanceId),
-          eq(configAssets.scopeKind, "workspace"),
-          eq(configAssets.scopeId, input.collaborationWorkspaceId),
-          or(eq(projects.audience, "workspace"), eq(projects.createdByUserId, input.viewerUserId))
+    async listProjectsForViewer(input) {
+      if (input.collaborationWorkspaceIds.length === 0) return [];
+      const workspaceIds = [...input.collaborationWorkspaceIds];
+      // The sent chats of each project, of its own workspace only: a row that names a project
+      // of another workspace is read by nobody (PRJ-1) and is not counted.
+      const activity = db
+        .select({
+          projectId: sql<string>`${conversations.projectId}`.as("activity_project_id"),
+          workspaceId: sql<string>`${conversations.collaborationWorkspaceId}`.as(
+            "activity_workspace_id"
+          ),
+          count: sql<number>`count(*)::int`.as("activity_count"),
+          lastAt: sql<string>`max(${conversations.updatedAt})`.as("activity_last_at")
+        })
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.clientInstanceId, input.clientInstanceId),
+            inArray(conversations.collaborationWorkspaceId, workspaceIds),
+            isNotNull(conversations.projectId),
+            eq(conversations.status, "active"),
+            eq(conversations.kind, "chat"),
+            // A chat without messages is an unsent draft, which no list counts.
+            exists(
+              db
+                .select({ id: messages.id })
+                .from(messages)
+                .where(
+                  and(
+                    eq(messages.clientInstanceId, conversations.clientInstanceId),
+                    eq(messages.conversationId, conversations.id)
+                  )
+                )
+            )
+          )
         )
+        .groupBy(conversations.projectId, conversations.collaborationWorkspaceId)
+        .as("activity");
+      const lastActivity = sql<Date>`greatest(${configAssets.updatedAt}, ${activity.lastAt})`;
+      const rows = await db
+        .select({
+          asset: configAssets,
+          project: projects,
+          config: configAssetRevisions.config,
+          count: activity.count,
+          lastActivityAt: lastActivity
+        })
+        .from(configAssets)
+        .innerJoin(projects, eq(projects.assetId, configAssets.id))
+        .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
+        .leftJoin(
+          activity,
+          and(
+            eq(activity.projectId, configAssets.id),
+            eq(activity.workspaceId, configAssets.scopeId)
+          )
+        )
+        .where(
+          and(
+            eq(configAssets.clientInstanceId, input.clientInstanceId),
+            eq(configAssets.kind, PROJECT_ASSET_KIND),
+            eq(configAssets.status, "active"),
+            eq(configAssets.scopeKind, "workspace"),
+            inArray(configAssets.scopeId, workspaceIds),
+            or(eq(projects.audience, "workspace"), eq(projects.createdByUserId, input.viewerUserId))
+          )
+        )
+        .orderBy(desc(lastActivity), desc(configAssets.id));
+      return rows.flatMap(({ asset, project, config, count, lastActivityAt }) =>
+        toProject(asset, project, config).map((entry) => ({
+          ...entry,
+          conversationCount: count ?? 0,
+          lastActivityAt: new Date(lastActivityAt).toISOString()
+        }))
       );
     },
     async listProjectIdsOfWorkspace(input) {
@@ -152,24 +218,31 @@ async function selectProjects(db: PostgresConnection, where: SQL | undefined): P
       )
     )
     .orderBy(desc(configAssets.updatedAt), desc(configAssets.id));
-  return rows.flatMap(({ asset, project, config }) => {
-    const definition = projectDefinitionSchema.safeParse(config);
-    if (!definition.success || asset.scopeId === null) return [];
-    return [
-      {
-        id: asset.id,
-        clientInstanceId: asClientInstanceId(asset.clientInstanceId),
-        name: asset.name,
-        collaborationWorkspaceId: asCollaborationWorkspaceId(asset.scopeId),
-        title: definition.data.title,
-        ...(definition.data.description ? { description: definition.data.description } : {}),
-        audience: project.audience,
-        createdByUserId: project.createdByUserId,
-        createdAt: asset.createdAt.toISOString(),
-        updatedAt: asset.updatedAt.toISOString()
-      }
-    ];
-  });
+  return rows.flatMap(({ asset, project, config }) => toProject(asset, project, config));
+}
+
+/** The project of an asset row and its audience row; nothing where its definition is unreadable. */
+function toProject(
+  asset: typeof configAssets.$inferSelect,
+  project: typeof projects.$inferSelect,
+  config: unknown
+): Project[] {
+  const definition = projectDefinitionSchema.safeParse(config);
+  if (!definition.success || asset.scopeId === null) return [];
+  return [
+    {
+      id: asset.id,
+      clientInstanceId: asClientInstanceId(asset.clientInstanceId),
+      name: asset.name,
+      collaborationWorkspaceId: asCollaborationWorkspaceId(asset.scopeId),
+      title: definition.data.title,
+      ...(definition.data.description ? { description: definition.data.description } : {}),
+      audience: project.audience,
+      createdByUserId: project.createdByUserId,
+      createdAt: asset.createdAt.toISOString(),
+      updatedAt: asset.updatedAt.toISOString()
+    }
+  ];
 }
 
 /**

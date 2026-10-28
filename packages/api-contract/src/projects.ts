@@ -28,7 +28,16 @@ export const projectSchema = z.object({
   updatedAt: timestampSchema
 });
 
-export const projectsSchema = z.object({ items: z.array(projectSchema) });
+/** A project in a list: with its sent chats counted and when it was last used (PRJ-5). */
+export const projectListItemSchema = projectSchema.extend({
+  /** The sent chats in the project; everyone who sees the project reads all of them. */
+  conversationCount: z.number().int().nonnegative(),
+  /** The latest change to the project or to a chat in it. */
+  lastActivityAt: timestampSchema
+});
+
+/** Latest activity first. */
+export const projectsSchema = z.object({ items: z.array(projectListItemSchema) });
 
 export const createProjectRequestSchema = z.object({
   collaborationWorkspaceId: z.string().min(1),
@@ -44,6 +53,7 @@ export const setConversationProjectRequestSchema = z.object({
 });
 
 export type ProjectView = z.infer<typeof projectSchema>;
+export type ProjectListItemView = z.infer<typeof projectListItemSchema>;
 export type ProjectAudienceView = z.infer<typeof projectAudienceSchema>;
 
 // Project files (PRJ-2): one folder per project that people and agents write in place. Every

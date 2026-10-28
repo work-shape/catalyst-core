@@ -11,6 +11,7 @@ export const projectsModule = defineModule({
   kinds: ["project"],
   operations: [
     "projects.list",
+    "projects.list_mine",
     "projects.get",
     "projects.create",
     "conversations.set_project",

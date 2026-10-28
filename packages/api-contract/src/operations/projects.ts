@@ -25,7 +25,8 @@ import { blob, defineOperation, defineRegisteredOperation, json } from "./define
  * Projects, of the module `projects` (PRJ-1): a named folder of chat work in one workspace,
  * shared with its members or private to its creator. Only membership reaches a project; no
  * grant and no bundle opens one, and a project outside the caller's audience answers as one
- * that does not exist. Spec: projects.md, sections 3 and 8.
+ * that does not exist. `projects.list_mine` answers across the caller's memberships (PRJ-5).
+ * Spec: projects.md, sections 3, 8 and 9.
  */
 export const projectOperations = {
   "projects.list": defineOperation({
@@ -40,6 +41,21 @@ export const projectOperations = {
     effect: "reading",
     response: json(projectsSchema),
     errors: ["NOT_FOUND"],
+    rateClass: "read"
+  }),
+  "projects.list_mine": defineOperation({
+    id: "projects.list_mine",
+    method: "GET",
+    path: "/api/v1/projects",
+    summary:
+      "List the projects of every workspace the caller is a member of that the caller is in the audience of",
+    tag: "Projects",
+    auth: "user",
+    scope: "conversation:read",
+    requires: [],
+    effect: "reading",
+    response: json(projectsSchema),
+    errors: [],
     rateClass: "read"
   }),
   "projects.get": defineOperation({

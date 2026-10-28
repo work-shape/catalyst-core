@@ -10,8 +10,9 @@ import { WORKSPACE_AUTH_SCOPE } from "../../chat/workspace/workspace-chat-state"
 import { useWorkspaceApiClient } from "./workspace-api-client";
 import { workspaceQueryKeys } from "./workspace-query-keys";
 
-// Projects (PRJ-1): the projects of a workspace, one project by its name with its
-// conversations, and the writes that make a project and move a conversation in or out.
+// Projects (PRJ-1): the projects of a workspace, and of all the person's workspaces (PRJ-5), one
+// project by its name with its conversations, and the writes that make a project and move a
+// conversation in or out.
 
 /** How many of a project's conversations its page shows. */
 const PROJECT_CONVERSATIONS_LIMIT = 50;
@@ -25,6 +26,7 @@ const projectQueryKeys = {
   all: (apiBaseUrl: string) => ["projects", apiBaseUrl] as const,
   list: (apiBaseUrl: string, workspaceId: string) =>
     ["projects", apiBaseUrl, "list", workspaceId] as const,
+  mine: (apiBaseUrl: string) => ["projects", apiBaseUrl, "mine"] as const,
   one: (apiBaseUrl: string, name: string) => ["projects", apiBaseUrl, "one", name] as const,
   conversations: (apiBaseUrl: string, projectId: string) =>
     ["projects", apiBaseUrl, "conversations", projectId] as const
@@ -43,6 +45,20 @@ export function useProjectsQuery(workspaceId: string) {
         })
       ).items,
     enabled: client !== undefined && workspaceId !== ""
+  });
+}
+
+/**
+ * The projects of every workspace the person is a member of, in their audience, latest
+ * activity first (PRJ-5).
+ */
+export function useMyProjectsQuery(enabled = true) {
+  const { apiBaseUrl, client } = useWorkspaceApiClient();
+  return useQuery({
+    queryKey: projectQueryKeys.mine(apiBaseUrl),
+    queryFn: async ({ signal }) =>
+      (await requireClient(client).projects.list_mine({ signal })).items,
+    enabled: client !== undefined && enabled
   });
 }
 
@@ -86,7 +102,7 @@ interface NewProject {
   audience?: ProjectAudienceView;
 }
 
-/** Makes a project; the workspace's list is read again after. */
+/** Makes a project; the workspace's list and the list across workspaces are read again after. */
 export function useCreateProjectMutation(heldMessage: string) {
   const { apiBaseUrl, client } = useWorkspaceApiClient();
   const queryClient = useQueryClient();
@@ -98,6 +114,9 @@ export function useCreateProjectMutation(heldMessage: string) {
         .invalidateQueries({
           queryKey: projectQueryKeys.list(apiBaseUrl, project.collaborationWorkspaceId)
         })
+        .catch(() => undefined);
+      queryClient
+        .invalidateQueries({ queryKey: projectQueryKeys.mine(apiBaseUrl) })
         .catch(() => undefined);
     }
   });
