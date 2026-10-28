@@ -87,7 +87,8 @@ test("all projects: the rail group, the scope filter with workspace chips, and a
   pageErrors
 }) => {
   test.setTimeout(60_000);
-  const suffix = String(Date.now()).slice(-5);
+  // Its own per run: runs side by side share the two people.
+  const suffix = randomUUID().slice(0, 6);
   const sales = `Vertrieb ${suffix}`;
   const finance = `Finanzierung ${suffix}`;
   const sharedTitle = `Hoheluft Neubau ${suffix}`;
@@ -136,7 +137,7 @@ test("all projects: the rail group, the scope filter with workspace chips, and a
   await expect(page.getByTestId("project-card")).toHaveCount(2);
 
   // The plus of the group makes a project in the open workspace.
-  await railGroup.getByRole("button", { name: "Neues Projekt" }).click();
+  await railGroup.getByRole("button", { name: "Projekt hinzufügen" }).click();
   const dialog = page.getByRole("dialog", { name: "Neues Projekt" });
   await expect(dialog).toContainText(sales);
   await dialog.getByRole("button", { name: "Abbrechen" }).click();
@@ -145,13 +146,15 @@ test("all projects: the rail group, the scope filter with workspace chips, and a
 
   // Across workspaces: one group per workspace, each card with its workspace's chip.
   await page.getByRole("radio", { name: "Alle meine Arbeitsbereiche" }).click();
+  // The people may hold workspaces of an earlier run on the same database: only this run's
+  // workspaces are counted, the open one first.
   const groups = page.getByTestId("projects-workspace-group");
-  await expect(groups).toHaveCount(2);
   await expect(groups.first()).toContainText(sales);
+  await expect(groups.filter({ hasText: sales }).getByTestId("project-card")).toHaveCount(2);
+  await expect(groups.filter({ hasText: finance }).getByTestId("project-card")).toHaveCount(1);
   const otherCard = page.getByTestId("project-card").filter({ hasText: otherTitle });
   await expect(otherCard).toContainText(finance);
   await expect(otherCard).toContainText("1 Chat");
-  await expect(page.getByTestId("project-card")).toHaveCount(3);
   await shot(page, "projects-all-workspaces");
 
   // Opening the other workspace's project switches to that workspace.
@@ -170,8 +173,9 @@ test("all projects: the rail group, the scope filter with workspace chips, and a
   await expect(page.getByRole("radio", { name: "Alle meine Arbeitsbereiche" })).toBeChecked();
   await memberPage.goto(`/w/${salesId}/projects`);
   await memberPage.getByRole("radio", { name: "Alle meine Arbeitsbereiche" }).click();
-  await expect(memberPage.getByTestId("project-card")).toHaveCount(1);
-  await expect(memberPage.getByTestId("project-card")).toContainText(sharedTitle);
+  const memberCards = memberPage.getByTestId("project-card").filter({ hasText: suffix });
+  await expect(memberCards).toHaveCount(1);
+  await expect(memberCards).toContainText(sharedTitle);
   await expect(memberPage.getByText(privateTitle)).toHaveCount(0);
   await expect(memberPage.getByText(otherTitle)).toHaveCount(0);
   await expect(memberPage.getByTestId("rail-project")).toHaveCount(1);
