@@ -30,6 +30,7 @@ import {
   authorReasoningEffort,
   defaultReasoningEffortForAgentBinding,
   isModelBindingUserSelectableForAgent,
+  mayUseOwnInChat,
   modelRouteAllowedForPersonalData,
   PersonalDataModelRegionError,
   reasoningEffortChoiceForBinding,
@@ -45,6 +46,7 @@ import {
   agentWriter,
   callerAccess,
   getWorkspaceAssetSnapshot,
+  ownAgents,
   requireAgentUse
 } from "../workspaces/agent-availability";
 import { createEmptyAttachmentManifest } from "./attachments";
@@ -53,6 +55,37 @@ import { createConversationTitle } from "./conversation-title";
 import { generateConversationTitleJob } from "../jobs/job-kinds";
 import type { ChatServerOptions } from "../types";
 import { ConversationWorkflow, type CreateConversationCommand } from "./conversation-service";
+
+/** The chat a run is for, as far as whether only its person reads it. */
+interface OwnChatCandidate {
+  conversation: Pick<Conversation, "kind" | "status" | "createdByUserId" | "visibility">;
+  /** The stored chat, which a choice of the caller's own agent marks. Unset before it exists. */
+  conversationId?: ConversationId;
+}
+
+/**
+ * The chat a first message will create, as `createConversation` sets who reads it: private where
+ * asked or about an asset, else the workspace's default. One in a project is left out: its
+ * project decides, so the caller's own agent is chosen there once the chat exists.
+ */
+function newChatOf(
+  user: AuthenticatedUser,
+  workspace: CollaborationWorkspace,
+  command: CreateConversationCommand
+): OwnChatCandidate | undefined {
+  if (command.projectId !== undefined) return undefined;
+  return {
+    conversation: {
+      kind: "chat",
+      status: "active",
+      createdByUserId: getSubjectUserId(user),
+      visibility:
+        workspace.kind !== "personal" && (command.subject || command.visibility === "private")
+          ? "private"
+          : workspace.defaultConversationVisibility
+    }
+  };
+}
 
 export interface SendConversationMessageCommand {
   agentName?: string;
@@ -115,7 +148,12 @@ export class RunStartWorkflow {
     acceptedFollowUp = false,
     preview?: AgentPreview,
     /** The conversation carries the personal-data mark (MODEL-REGION-3). */
-    personalData = false
+    personalData = false,
+    /**
+     * The chat the run is for, where the caller's own agent may be chosen in it: the stored
+     * one, which the choice marks, or before it exists the one it will be.
+     */
+    chat?: OwnChatCandidate
   ): Promise<{
     agentName: string;
     modelBindingId?: string;
@@ -130,8 +168,20 @@ export class RunStartWorkflow {
         "No default agent is configured for this client instance yet"
       );
     }
+    // An agent of the caller's own Personal Workspace is offered in no workspace: its owner
+    // chooses it only in a chat that only they read, which the choice marks as personal.
+    const ownAgent =
+      !preview &&
+      requestedAgentName !== undefined &&
+      !assets.agents.some((candidate) => candidate.name === requestedAgentName) &&
+      chat !== undefined &&
+      mayUseOwnInChat(caller.user, chat.conversation, workspace)
+        ? (await ownAgents(this.options, { user: caller.user, access }, requestedAgentName))[0]
+        : undefined;
     const agent =
-      preview?.config ?? assets.agents.find((candidate) => candidate.name === agentName);
+      preview?.config ??
+      ownAgent ??
+      assets.agents.find((candidate) => candidate.name === agentName);
     if (requestedAgentName !== undefined && !agent) {
       await requireAgentUse(this.options, {
         actor: caller.user,
@@ -194,7 +244,17 @@ export class RunStartWorkflow {
       }
     }
     const modelBindingId = requestedModelBindingId ?? agent?.modelBindingId;
-    if (personalData) this.requirePersonalDataModel(agent, modelBindingId);
+    if (personalData || ownAgent) this.requirePersonalDataModel(agent, modelBindingId);
+    if (ownAgent && chat?.conversationId !== undefined) {
+      // Locks the chat and asks again that only the caller reads it: a move that won the lock
+      // first refuses the run, and none after it can widen who reads the chat.
+      await this.options.stores.conversations.markPersonalData({
+        clientInstanceId: this.options.clientInstanceId,
+        conversationId: chat.conversationId,
+        userId: getSubjectUserId(caller.user),
+        at: new Date().toISOString()
+      });
+    }
     const binding = this.options.config.modelBindings.find(
       (candidate) => candidate.id === modelBindingId
     );
@@ -279,7 +339,8 @@ export class RunStartWorkflow {
         { user, access: command.access, correlationId: context.correlationId },
         Boolean(command.dispatchFollowUpId),
         preview,
-        conversation.personalDataAt !== undefined
+        conversation.personalDataAt !== undefined,
+        { conversation, conversationId }
       );
       const attachments = this.options.attachments;
       const pendingDraftAttachments =
@@ -528,12 +589,20 @@ export class RunStartWorkflow {
 
     try {
       // Checked before the Conversation exists so a rejected agent or model leaves nothing behind.
+      const workspace = await this.conversations.resolveTargetWorkspace(
+        user,
+        command.collaborationWorkspaceId
+      );
       await this.resolveRunSelection(
-        await this.conversations.resolveTargetWorkspace(user, command.collaborationWorkspaceId),
+        workspace,
         command.agentName,
         command.modelBindingId,
         command.reasoningEffort,
-        { user, access: command.access, correlationId: context.correlationId }
+        { user, access: command.access, correlationId: context.correlationId },
+        false,
+        undefined,
+        false,
+        newChatOf(user, workspace, command)
       );
       const conversation = await this.conversations.createConversation(user, context, {
         title: command.title ?? createConversationTitle(command.text),

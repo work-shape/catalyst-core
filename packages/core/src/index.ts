@@ -61,6 +61,7 @@ export * from "./operation-registry";
 export * from "./operation-runs";
 export * from "./operations";
 export * from "./origins";
+export * from "./own-chat";
 export * from "./pages";
 export * from "./paging";
 export * from "./person-labels";

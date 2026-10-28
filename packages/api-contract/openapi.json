@@ -45161,6 +45161,186 @@
               ]
             }
           },
+          "ownChatAgents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "defaultModelBindingId": {
+                  "type": "string"
+                },
+                "selectableModels": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "bindingId": {
+                        "type": "string"
+                      },
+                      "model": {
+                        "type": "string"
+                      },
+                      "compactThresholdTokens": {
+                        "type": "number"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "vendor": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      },
+                      "region": {
+                        "$ref": "#/components/schemas/ModelRegion"
+                      },
+                      "personalDataBlocked": {
+                        "type": "boolean",
+                        "const": true
+                      },
+                      "usageTier": {
+                        "$ref": "#/components/schemas/ModelUsageTier"
+                      },
+                      "reasoningEffort": {
+                        "$ref": "#/components/schemas/ReasoningEffort"
+                      },
+                      "selectableReasoningEfforts": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/ReasoningEffort"
+                        }
+                      }
+                    },
+                    "required": [
+                      "model",
+                      "selectableReasoningEfforts"
+                    ]
+                  }
+                },
+                "compactThresholdTokens": {
+                  "type": "number"
+                },
+                "buildsAssets": {
+                  "type": "boolean"
+                },
+                "welcomeMessage": {
+                  "type": "string"
+                },
+                "welcomeSubtitle": {
+                  "type": "string"
+                },
+                "initialPrompts": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "title": {
+                        "type": "string"
+                      },
+                      "prompt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "title",
+                      "prompt"
+                    ]
+                  }
+                },
+                "starters": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "skillName": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "hint": {
+                        "type": "string"
+                      },
+                      "prompt": {
+                        "type": "string"
+                      },
+                      "icon": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "skillName",
+                      "title",
+                      "prompt"
+                    ]
+                  }
+                },
+                "connections": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "service": {
+                        "type": "string"
+                      },
+                      "connectorType": {
+                        "type": "string"
+                      },
+                      "tools": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "toolName": {
+                              "type": "string"
+                            },
+                            "effect": {
+                              "type": "string",
+                              "enum": [
+                                "reading",
+                                "changing"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "toolName",
+                            "effect"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "title",
+                      "tools"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "name",
+                "displayName",
+                "selectableModels",
+                "initialPrompts"
+              ]
+            }
+          },
           "nextCursor": {
             "type": "string"
           }

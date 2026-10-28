@@ -191,13 +191,15 @@ export interface RunOperationDeps {
    * workspace: an agent that was withdrawn from it meanwhile no longer acts there. Without it
    * this process does not ask. With an actor it also asks whether that person may use the
    * agent there (`agent.use`, AGENT-USE-1); with a correlation id as well, a refusal of the
-   * right is recorded under it, as a subagent start's.
+   * right is recorded under it, as a subagent start's. With the chat of the call, the actor's own
+   * agent ("Nur ich") counts as available in a chat only the actor reads, as its run started.
    */
   agentAvailable?(input: {
     agentName: string;
     workspaceId: CollaborationWorkspaceId;
     actor?: AuthenticatedIdentity;
     correlationId?: string;
+    conversationId?: ConversationId;
   }): Promise<boolean>;
   logger: Logger;
   now?: () => Date;

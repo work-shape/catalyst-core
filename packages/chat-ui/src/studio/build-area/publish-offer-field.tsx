@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useId, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { RadioGroup, type RadioOption } from "@work-shape/catalyst-ui";
 import { actionLabel } from "../../admin/access/right-words";
 import { useTranslation } from "../../shared/i18n";
@@ -10,7 +10,7 @@ import type { PublishOffer, PublishOfferOption, PublishOfferValue } from "./publ
 /**
  * "Can be chosen in" of the publish dialog (OFFER-ON-PUBLISH): the places the reader may set,
  * the one that holds now or the agent's own preselected. A reader without the right reads it
- * as it is, with who can change it; an agent of "Only me" is offered to nobody else.
+ * as it is, with who can change it; an agent of "Only me" is chosen in its owner's own chats.
  */
 export function PublishOfferField({
   offer,
@@ -25,19 +25,27 @@ export function PublishOfferField({
 }) {
   const { locale, t } = useTranslation();
   const workspaces = useKnownWorkspaces();
-  const labelId = useId();
   const label = t("build.offerLabel");
   const placesOf = (option: PublishOfferOption["availability"]) =>
     offeredPlaces(option, workspaces, t, locale) ?? t("build.offerNowhere");
 
   if (offer.kind === "mine") {
+    // "Only me": its owner chooses it in their own chats, nobody else anywhere.
     return (
-      <div role="group" aria-labelledby={labelId} className="grid gap-1" data-publish-offer="mine">
-        <span id={labelId} className="text-label">
-          {label}
-        </span>
-        <p className="text-caption text-muted-foreground">{t("build.availabilityOnlyMine")}</p>
-      </div>
+      <RadioGroup
+        variant="plain"
+        label={label}
+        disabled
+        value="own-chats"
+        data-publish-offer="mine"
+        options={[
+          {
+            value: "own-chats",
+            label: t("build.offerOwnChats"),
+            description: t("build.offerOwnChatsHint")
+          }
+        ]}
+      />
     );
   }
   if (offer.kind === "fixed") {

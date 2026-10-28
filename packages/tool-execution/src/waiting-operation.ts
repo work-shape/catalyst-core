@@ -486,7 +486,8 @@ async function admitAgain(
     !(await deps.agentAvailable({
       agentName: call.origin.agentName,
       workspaceId: call.workspaceId,
-      actor: call.actor
+      actor: call.actor,
+      conversationId: call.origin.conversationId
     }))
   ) {
     return refuse(

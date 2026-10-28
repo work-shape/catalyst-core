@@ -181,6 +181,8 @@ export interface WorkspaceConfigModel {
   /** The instance's theme inputs for the resolved mode; undefined until the config has loaded. */
   theme: ThemeInputs | undefined;
   activeAgentName: string | undefined;
+  /** The person's own agents ("Nur ich") the chat on screen cannot choose, as others read it. */
+  ownAgentsElsewhere: SafeConfig["agents"];
   /** The open conversation's thread has not loaded, so the agent it was held with is not known yet. */
   activeAgentLoading: boolean;
   selectAgentName(agentName: string | undefined): void;

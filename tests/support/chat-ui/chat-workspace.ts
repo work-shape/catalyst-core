@@ -44,6 +44,7 @@ export {
   activeAgentNameFor,
   conversationAgentPickFor,
   isAbandonedDraftConversation,
+  isOwnChat,
   terminalRunNotice,
   withRunUnderway,
   workspaceScopedConfigFor

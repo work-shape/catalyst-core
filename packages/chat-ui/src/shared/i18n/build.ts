@@ -99,6 +99,9 @@ export const build = defineTranslations({
     "build.offerNowhere": "No chat yet",
     "build.offerNowhereHint": "You can offer it later under “Available in”.",
     "build.offerKeepHint": "As it is now",
+    "build.offerOwnChats": "In your own chats",
+    "build.offerOwnChatsHint":
+      "Only you can choose it, in chats you started that nobody else reads. Such a chat stays private.",
     "build.offerTeamHint": "In the chats of its members.",
     "build.offerNeedsRight":
       "Only people with the right “{right}” under “Everyone” can change this.",
@@ -287,6 +290,9 @@ export const build = defineTranslations({
     "build.offerNowhere": "Noch in keinem Chat",
     "build.offerNowhereHint": "Du kannst ihn später unter „Verfügbar in“ anbieten.",
     "build.offerKeepHint": "Wie bisher",
+    "build.offerOwnChats": "In deinen eigenen Chats",
+    "build.offerOwnChatsHint":
+      "Nur du kannst ihn wählen, in Chats, die du begonnen hast und die sonst niemand liest. Ein solcher Chat bleibt privat.",
     "build.offerTeamHint": "In den Chats seiner Mitglieder.",
     "build.offerNeedsRight": "Ändern darf das nur, wer unter „Alle“ das Recht „{right}“ hat.",
     "build.usedWithRight": "Nur wer das Recht dazu hat",

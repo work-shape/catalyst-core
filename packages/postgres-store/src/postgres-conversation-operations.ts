@@ -5,6 +5,7 @@ export {
 } from "./postgres-conversation-lifecycle";
 import {
   AppError,
+  chatReadOnlyBy,
   personalConnectionContextError,
   personalConversationPrivateError,
   dataStoreConversationPrivateError,
@@ -889,15 +890,7 @@ export function createPostgresConversationsStore(
                 )
               )
           : [];
-        if (
-          !conversation ||
-          conversation.kind !== "chat" ||
-          conversation.createdByUserId !== input.userId ||
-          !workspace ||
-          (workspace.kind === "personal"
-            ? workspace.personalUserId !== input.userId
-            : conversation.visibility !== "private")
-        ) {
+        if (!conversation || !chatReadOnlyBy(conversation, workspace, input.userId)) {
           throw personalConnectionContextError(
             "only the acting person may read the root conversation"
           );

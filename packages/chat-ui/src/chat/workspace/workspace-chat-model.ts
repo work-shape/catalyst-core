@@ -91,6 +91,7 @@ import { useUnreadableDockConversation } from "./use-workspace-dock";
 import {
   activeAgentNameFor,
   conversationAgentPickFor,
+  isOwnChat,
   terminalRunNotice,
   withRunUnderway,
   WORKSPACE_AUTH_SCOPE,
@@ -114,6 +115,7 @@ export {
   activeAgentNameFor,
   conversationAgentPickFor,
   isAbandonedDraftConversation,
+  isOwnChat,
   terminalRunNotice,
   withRunUnderway,
   WORKSPACE_AUTH_SCOPE,
@@ -394,10 +396,21 @@ export function useWorkspaceChatModel({
     localePreference,
     enabled: isAuthenticated && collaborationWorkspacesAvailable
   });
+  // The person's own agents ("Nur ich") are chosen only in a chat nobody else reads.
+  const ownChat = isOwnChat({
+    userId: meQuery.data?.id,
+    workspace: collaborationWorkspace.activeCollaborationWorkspace,
+    conversation:
+      threadQuery.data?.conversation.id === selectedConversationId
+        ? threadQuery.data?.conversation
+        : undefined,
+    conversationOpen: selectedConversationId !== undefined
+  });
   const {
     config,
     agentsLoading,
-    workspaceScoped: agentsWorkspaceScoped
+    workspaceScoped: agentsWorkspaceScoped,
+    ownAgentsElsewhere
   } = useMemo(
     () =>
       workspaceScopedConfigFor({
@@ -408,13 +421,15 @@ export function useWorkspaceChatModel({
           view !== "chat" ||
           workspaceAgentsQuery.isError ||
           collaborationWorkspace.loadFailed ||
-          collaborationWorkspace.activeCollaborationWorkspace?.kind === "personal"
+          collaborationWorkspace.activeCollaborationWorkspace?.kind === "personal",
+        ownChat
       }),
     [
       collaborationWorkspace.activeCollaborationWorkspace?.kind,
       collaborationWorkspace.loadFailed,
       collaborationWorkspacesAvailable,
       configQuery.data,
+      ownChat,
       view,
       workspaceAgentsQuery.data,
       workspaceAgentsQuery.isError
@@ -1040,6 +1055,7 @@ export function useWorkspaceChatModel({
       resolvedThemeMode,
       theme,
       activeAgentName,
+      ownAgentsElsewhere,
       activeAgentLoading:
         selectedConversationId !== undefined &&
         conversationAgentPicks[selectedConversationId] === undefined &&

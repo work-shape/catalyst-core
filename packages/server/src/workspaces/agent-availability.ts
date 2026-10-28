@@ -4,10 +4,14 @@ import {
   INSTANCE_ASSET_SCOPE,
   agentUseRefusalOf,
   auditActorFromIdentity,
+  getSubjectUserId,
+  isAuthenticatedServicePrincipal,
   createAuthorizer,
   isAgentAvailableInWorkspace,
   operationDenialError,
   type ActorAccess,
+  type AgentConfig,
+  type AssetScope,
   type AuthenticatedIdentity,
   type AuthenticatedUser,
   type CollaborationWorkspace,
@@ -111,6 +115,62 @@ export async function getWorkspaceAssetSnapshot(
           ? agents.find((agent) => agent.shipped !== undefined)?.name
           : undefined) ?? agents[0]?.name)
   };
+}
+
+/**
+ * The agents of the caller's own Personal Workspace ("Nur ich") that the caller may use, or the
+ * one of that name. Offered in no workspace, such an agent is chosen only by its owner, in a
+ * chat only they read (`mayUseOwnInChat`): never by another person, a key, an embedding host or
+ * a service principal, and never as a subagent or a Workflow step, which ask availability.
+ */
+export async function ownAgents(
+  options: UseCheckOptions,
+  caller: { user: AuthenticatedIdentity; access: ActorAccess },
+  agentName?: string
+): Promise<AgentConfig[]> {
+  const { user } = caller;
+  if (
+    isAuthenticatedServicePrincipal(user) ||
+    user.delegatedActor !== undefined ||
+    user.keyScopes !== undefined
+  ) {
+    return [];
+  }
+  const person = getSubjectUserId(user);
+  const [assets, limited] = await Promise.all([
+    options.configAssets.source.getSnapshot(),
+    options.configAssets.store.listAgentUseLimits({ clientInstanceId: options.clientInstanceId })
+  ]);
+  const owners = new Map<string, Promise<boolean>>();
+  const own: AgentConfig[] = [];
+  for (const agent of assets.agents) {
+    if (agentName !== undefined && agent.name !== agentName) continue;
+    const scope = assets.agentKeys?.get(agent.name)?.scope;
+    if (scope?.kind !== "workspace") continue;
+    let owned = owners.get(scope.workspaceId);
+    if (owned === undefined) {
+      owned = ownedByPersonalWorkspaceOf(options, scope, person);
+      owners.set(scope.workspaceId, owned);
+    }
+    if (!(await owned)) continue;
+    if (agentUseRefusal(caller.access, assets, limited, agent.name) !== undefined) continue;
+    own.push(agent);
+  }
+  return own;
+}
+
+/** Whether an asset of this scope is owned by the person's own Personal Workspace. */
+export async function ownedByPersonalWorkspaceOf(
+  options: Pick<ChatServerOptions, "clientInstanceId" | "stores">,
+  scope: AssetScope,
+  person: string
+): Promise<boolean> {
+  if (scope.kind !== "workspace") return false;
+  const workspace = await options.stores.workspaces.getWorkspace(
+    options.clientInstanceId,
+    scope.workspaceId
+  );
+  return workspace?.kind === "personal" && workspace.personalUserId === person;
 }
 
 /**
