@@ -5136,6 +5136,8 @@
         "",
         "Do not put sensitive documents, tool outputs, long-lived credentials, or workflow payloads in the token.",
         "",
+        "A session token is always the host acting for the person, whether or not it names a `delegatedActor` (without one, the server names the token's issuer). So an embedded chat never reaches what is the person's alone: their \"Only me\" agents, personal skills and Connections, their confirmation settings (\"Always allow\"), adding a Data Store from a card, or deleting their account. The person does these in their own sign-in.",
+        "",
         "## Identity Mapping",
         "",
         "Conversation ownership should use a product-owned user identity.",
