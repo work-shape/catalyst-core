@@ -222,6 +222,7 @@
     "projects.get": "workspace_role",
     "projects.list": "workspace_role",
     "projects.list_mine": "workspace_role",
+    "projects.setup.get": "workspace_role",
     "ready.get": "public",
     "session_tokens.issue": "public",
     "view_runtime.files.get": "public",
