@@ -35,7 +35,7 @@ export const WORKFLOW_STEP_FILES_FOLDER = "steps";
 
 /**
  * The step types a definition may name. Spec: Workflow definition, step types in v1. The spec
- * also names `condition`, `approval` and `delay`; each joins this list with the slice that
+ * also names `approval` and `delay`; each joins this list with the slice that
  * executes it, so that no definition is accepted that no engine runs.
  */
 export { WORKFLOW_STEP_TYPES } from "@work-shape/catalyst-asset-schemas";
@@ -372,20 +372,28 @@ export type WorkflowStep =
   | WorkflowConditionStep
   | WorkflowParallelStep;
 
+export const WORKFLOW_CONDITION_OPERATORS = [
+  "equals",
+  "not_equals",
+  "greater_than",
+  "greater_than_or_equal",
+  "less_than",
+  "less_than_or_equal"
+] as const;
+
 /**
  * What a `condition` tests: one field of an earlier output against a literal. `op` is a name
  * of the engine's comparisons, which the slice that executes the block fixes.
  */
 export interface WorkflowConditionTest {
   ref: WorkflowReference;
-  op: string;
+  op: (typeof WORKFLOW_CONDITION_OPERATORS)[number];
   value: JsonValue;
 }
 
 /**
- * Reserved: runs its `then` steps where the test holds and its `else` steps where it does not.
- * The type is not in `WORKFLOW_STEP_TYPES` until an engine runs it, so a definition that
- * carries one is refused with `WORKFLOW_ERROR_CODES.notSupported`. Its output is
+ * Runs its `then` steps where the test holds and its `else` steps where it does not.
+ * Its output is
  * `WorkflowConditionOutput`. Spec: Branches, parallel paths and the canvas.
  */
 export type WorkflowConditionStep = WorkflowStepBase & {
@@ -403,7 +411,7 @@ export interface WorkflowParallelBranch {
 }
 
 /**
- * Reserved like `condition`: runs its branches at the same time and ends when every branch
+ * Runs its branches at the same time and ends when every branch
  * has ended; one failed branch fails the step after the others have ended. Its output is
  * `WorkflowParallelOutput`.
  */

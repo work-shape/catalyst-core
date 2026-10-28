@@ -557,6 +557,15 @@ export interface WorkflowRunsStore {
   /** Writes a step run as `queued` and counts it on its run. */
   createStepRun(stepRun: NewWorkflowStepRun): Promise<WorkflowStepRun>;
   getStepRun(ref: WorkflowStepRunRef): Promise<WorkflowStepRun | undefined>;
+  /** Direct children of a branch block, bounded by the definition's step count. Behind the run lock. */
+  readBlockSteps(ref: WorkflowStepRunRef): Promise<WorkflowStepRun[]>;
+  /** A branch block gives up its job; its children carry it to the join. */
+  markBlockWaiting(
+    ref: WorkflowStepRunRef & {
+      /** A run-wide refusal is propagated after every sibling branch drains. */
+      failure?: WorkflowRunError;
+    }
+  ): Promise<void>;
   /** Moves a step run that has not ended to `running` under the number of the attempt. */
   markStepRunRunning(
     ref: WorkflowStepRunRef & { attempt: number; startedAt: ISODateString }
@@ -637,7 +646,7 @@ export interface WorkflowRunsStore {
   }): Promise<WorkflowStepRunView[]>;
   /**
    * The output of the step run of `stepId` that ended as `done` in one place of the run: at
-   * the top where `containerStepRunId` is missing, otherwise in that item of that loop.
+   * the top where `containerStepRunId` is missing, otherwise in the named block, and in the named iteration for a loop.
    */
   findStepOutput(input: {
     clientInstanceId: ClientInstanceId;

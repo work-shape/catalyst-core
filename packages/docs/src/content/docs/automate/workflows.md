@@ -90,6 +90,41 @@ inline list. It shares the parent's objects, permissions and expiry; it does not
 A view adds `offset` to the dataset reference and reports its own `rowCount`. Its `bytes` is
 the parent's upper bound; consumers enforce byte limits against the rows actually read.
 
+## Run independent work together
+
+Load shared data once near the start, then reference that step's output in each analysis.
+Use a `parallel` step with `branches: [{ id, name, steps }]` for independent analyses.
+Steps within each branch still run in order. Omit `concurrency` to start all branches,
+or set a positive integer to limit active branches; the Workflow and instance step slots
+still apply. The following step waits for every branch.
+
+The parallel output has one field per branch id containing the output of that branch's
+last step. An empty branch returns `null`; an empty parallel returns `{}`. If one branch
+fails, its remaining steps are skipped. Other branches, including those waiting for a
+concurrency slot, finish before the parallel step fails. Cancelling the run prevents further
+steps and branches from starting; calls already in flight finish and record their outcomes.
+
+A `condition` step uses `when: { ref: { step, path }, op, value }`, a `then` step list and an
+optional `else` step list. Only the chosen list runs. `equals` and `not_equals` compare JSON
+values structurally. `greater_than`, `greater_than_or_equal`, `less_than` and
+`less_than_or_equal` compare numbers without converting strings. A missing reference or
+an ordered comparison on another type fails the step. Its output is `{ taken, result }`:
+`taken` is `then` or `else`, and `result` is the chosen list's last output, or `null` when empty.
+
+Loops, conditions and parallel blocks can nest up to 16 levels. Every step id is unique in
+the definition, and branch ids are unique within their parallel block. A step can reference
+earlier steps in its own list and in the lists containing it; it cannot reference a sibling
+branch or a step inside a finished block. Read the block's output after it joins instead.
+
+Every step should have a plain `description`: where the input comes from, what happens,
+and what it hands on or where the result is kept. Step outputs are reused within that run;
+a Data Store keeps results needed after it, under that store's access rules.
+
+The existing run reads expose start and finish times for each reached step, including each
+branch's steps and the enclosing block. Children name their `containerStepRunId` and
+`branch`; parallel step runs include `bodyCounts` for every step directly in a branch,
+including steps not yet reached. Branch layout on the canvas is a separate feature.
+
 ## Continue a long run
 
 A long loop can continue in a fresh run when it reaches its step or duration budget.
@@ -110,13 +145,15 @@ the carried input, that part fails and names the field that needs attention.
 Until resume positions and finished-step outputs are carried between histories, publishing
 and draft test runs refuse these shapes, naming the step and rule in English and German:
 
-- A write, send, notify, child Workflow start, or loop containing one before a
+- A write, send, notify, child Workflow start, or block containing one before a
   `continueAsNew` loop at the same or any enclosing level. Reads, triggers and code
   steps may precede it; those steps run again in every history.
-- A loop after a `continueAsNew` loop at the same or any enclosing level.
+- A loop, condition or parallel block after a `continueAsNew` loop at the same or any enclosing level.
 - A loop with `concurrency` above 1 enclosing a `continueAsNew` loop, at any depth.
   The refusal names both loops: a checkpoint cannot record unfinished sibling items.
   Concurrency on the continuing loop itself remains allowed.
+- A condition or parallel block enclosing a `continueAsNew` loop, or inside its body.
+  The current checkpoint carries loop positions and cannot represent branch frontiers.
 - A `limits.stepRuns` budget smaller than the steps before the loop, the loop containers,
   one item and the tail together. The refusal states the minimum count and the limit.
 

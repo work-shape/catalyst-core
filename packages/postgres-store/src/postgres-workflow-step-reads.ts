@@ -72,7 +72,10 @@ export async function listWorkflowStepRuns(
     .limit(input.page?.limit ?? 2147483647);
   const loops = rows.filter((row) => row.stepType === "loop").map((row) => row.id);
   const counts = await countWorkflowLoops(db, loops);
-  const bodies = await countWorkflowLoopBodies(db, loops, counts);
+  const blocks = rows
+    .filter((row) => row.stepType === "loop" || row.stepType === "parallel")
+    .map((row) => row.id);
+  const bodies = await countWorkflowBlockBodies(db, blocks, counts);
   return rows.map((row) => {
     const loop = counts.get(row.id);
     const bodyCounts = bodies.get(row.id);
@@ -94,11 +97,11 @@ export async function listWorkflowStepRuns(
 }
 
 /**
- * How the step runs of each step directly inside each of the named loop step runs stand, by
- * step id. `total` is the number of the loop's items: each step runs once for an item. A step
+ * How direct child steps of each loop or parallel step run stand, by step id. A loop
+ * repeats each step for its item count; each direct step of a parallel runs once. A step
  * no item has reached yet has no entry here; whoever knows the definition adds it.
  */
-async function countWorkflowLoopBodies(
+async function countWorkflowBlockBodies(
   db: PostgresConnection,
   loopStepRunIds: WorkflowStepRunId[],
   loops: Map<string, WorkflowLoopCounts>
@@ -121,7 +124,7 @@ async function countWorkflowLoopBodies(
     const body = row.loop === null ? undefined : bodies.get(row.loop);
     if (!body || row.loop === null) continue;
     body[row.stepId] = {
-      total: loops.get(row.loop)?.total ?? 0,
+      total: loops.get(row.loop)?.total ?? 1,
       done: row.done,
       failed: row.failed,
       running: row.running

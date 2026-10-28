@@ -323,3 +323,45 @@ it("names the carrying loop and its path when an inner loop exceeds the budget f
   expect(response.json().error.message).toContain("The loop 'each_client' needs at least 6");
   expect(response.json().error.message).not.toContain("The loop 'inner'");
 });
+
+it("refuses branch frontiers the loop-only checkpoint cannot preserve, and replayed branch writes", async () => {
+  const wrap = (steps: readonly WorkflowStep[]): WorkflowStep => ({
+    id: "fork",
+    name: "Fork",
+    type: "parallel",
+    branches: [{ id: "one", name: "One", steps }]
+  });
+  const base = manifest();
+  const continuing = base.steps[2];
+  if (!continuing || continuing.type !== "loop") throw new Error("Expected continuing loop");
+  const inBranch = {
+    ...base,
+    steps: [...base.steps.slice(0, 2), wrap([continuing]), ...base.steps.slice(3)]
+  };
+  expect(await workflowContinuationIssues(inBranch)).toContainEqual(
+    expect.objectContaining({
+      path: "steps.each_client.continueAsNew",
+      message: expect.stringContaining("inside a condition or parallel")
+    })
+  );
+  const inLoop = {
+    ...base,
+    steps: [
+      ...base.steps.slice(0, 2),
+      { ...continuing, steps: [wrap([write])] },
+      ...base.steps.slice(3)
+    ]
+  };
+  expect(await workflowContinuationIssues(inLoop)).toContainEqual(
+    expect.objectContaining({
+      path: "steps.each_client.continueAsNew",
+      message: expect.stringContaining("inside its body")
+    })
+  );
+  expect(await workflowContinuationIssues(before(wrap([write])))).toContainEqual(
+    expect.objectContaining({
+      path: "steps.fork",
+      message: expect.stringContaining("would run again")
+    })
+  );
+});

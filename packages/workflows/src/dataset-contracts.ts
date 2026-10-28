@@ -210,109 +210,143 @@ export async function workflowStepSchemas(
       }
     };
   }
-  for (const { step } of index.values()) {
-    if (step.type === "trigger")
-      outputs.set(step.id, {
-        type: "object",
-        properties: { input: expanded(manifest.inputs, manifest.types) }
-      });
-    if (step.type === "operation" && registry) {
-      const descriptor = await registry.resolve(step.operation);
-      if (!descriptor) {
-        if (step.paginate)
-          throw new AppError("VALIDATION_FAILED", "The paged operation does not exist", {
-            reason: "paging_invalid"
-          });
-        continue;
-      }
-      if (step.paginate) {
-        let validPaging = false;
-        try {
-          resolvedPaging(descriptor.paging, step.paginate);
-          validPaging = true;
-        } catch {
-          /* Refuse below without storing schema errors or input values. */
-        }
-        if (
-          !descriptor.paging ||
-          descriptor.effect !== "reading" ||
-          !step.dataset ||
-          descriptor.streams ||
-          !validPaging
-        )
-          throw new AppError(
-            "VALIDATION_FAILED",
-            "paginate needs a reading operation with paging and dataset.at",
-            { reason: "paging_invalid" }
-          );
-      }
-      inputs.set(step.id, expanded(inputJsonSchemaOf(descriptor), manifest.types));
-      let output = expanded(
-        jsonObjectSchema.parse(descriptor.outputJsonSchema ?? {}),
-        manifest.types
-      );
-      if (descriptor.batch && schemaAt(output, "failures")?.type !== "dataset")
-        output = replace(
-          output,
-          "failures",
-          jsonObjectSchema.parse(z.toJSONSchema(operationBatchFailureSchema))
-        );
-      if (step.dataset) {
-        const list = schemaAt(output, step.dataset.at);
-        if (list && list.type !== "array")
-          throw new AppError(
-            "VALIDATION_FAILED",
-            "dataset.at must name a list in the operation output",
-            { reason: "dataset_schema_invalid" }
-          );
-        output = replace(
-          output,
-          step.dataset.at,
-          jsonObjectSchema.parse(list?.items ?? { type: "object" })
-        );
-      }
-      outputs.set(step.id, output);
-    }
-    if (step.type === "workflow") {
-      const child = await definitions.read(step.workflow);
-      if (child) {
-        inputs.set(step.id, expanded(child.manifest.inputs, child.manifest.types));
-        outputs.set(step.id, expanded(child.manifest.outputs, child.manifest.types));
-      }
-    }
-    if (step.type === "code" || step.type === "agent") {
-      inputs.set(step.id, expanded(step.inputSchema, manifest.types));
-      outputs.set(step.id, expanded(step.outputSchema, manifest.types));
-    }
-    if (step.type === "output") inputs.set(step.id, expanded(manifest.outputs, manifest.types));
-    if (step.type === "loop") {
-      const source = sourceOf(step.items.step, step.id);
-      const shape = source ? schemaAt(source, step.items.path) : undefined;
-      if (step.batch !== undefined && shape && shape.type !== "dataset")
-        throw new AppError("VALIDATION_FAILED", "batch on a loop needs a dataset", {
-          reason: "batch_requires_dataset"
+  async function visit(steps: readonly WorkflowStep[]): Promise<void> {
+    for (const step of steps) {
+      if (step.type === "trigger")
+        outputs.set(step.id, {
+          type: "object",
+          properties: { input: expanded(manifest.inputs, manifest.types) }
         });
-      if (shape?.type === "dataset")
-        loopItems.set(
-          step.id,
-          step.batch === undefined ? jsonObjectSchema.parse(shape.row) : shape
+      if (step.type === "operation" && registry) {
+        const descriptor = await registry.resolve(step.operation);
+        if (!descriptor) {
+          if (step.paginate)
+            throw new AppError("VALIDATION_FAILED", "The paged operation does not exist", {
+              reason: "paging_invalid"
+            });
+          continue;
+        }
+        if (step.paginate) {
+          let validPaging = false;
+          try {
+            resolvedPaging(descriptor.paging, step.paginate);
+            validPaging = true;
+          } catch {
+            /* Refuse below without storing schema errors or input values. */
+          }
+          if (
+            !descriptor.paging ||
+            descriptor.effect !== "reading" ||
+            !step.dataset ||
+            descriptor.streams ||
+            !validPaging
+          )
+            throw new AppError(
+              "VALIDATION_FAILED",
+              "paginate needs a reading operation with paging and dataset.at",
+              { reason: "paging_invalid" }
+            );
+        }
+        inputs.set(step.id, expanded(inputJsonSchemaOf(descriptor), manifest.types));
+        let output = expanded(
+          jsonObjectSchema.parse(descriptor.outputJsonSchema ?? {}),
+          manifest.types
         );
-      else if (shape?.type === "array")
-        loopItems.set(step.id, jsonObjectSchema.parse(shape.items ?? {}));
-      outputs.set(step.id, {
-        type: "object",
-        properties: {
-          total: { type: "integer" },
-          done: { type: "integer" },
-          failed: { type: "integer" },
-          ...(step.onItemFailure === "continue"
-            ? { failures: { type: "dataset", row: loopFailureRowSchema } }
-            : {})
-        },
-        required: ["total", "done", "failed"]
-      });
+        if (descriptor.batch && schemaAt(output, "failures")?.type !== "dataset")
+          output = replace(
+            output,
+            "failures",
+            jsonObjectSchema.parse(z.toJSONSchema(operationBatchFailureSchema))
+          );
+        if (step.dataset) {
+          const list = schemaAt(output, step.dataset.at);
+          if (list && list.type !== "array")
+            throw new AppError(
+              "VALIDATION_FAILED",
+              "dataset.at must name a list in the operation output",
+              { reason: "dataset_schema_invalid" }
+            );
+          output = replace(
+            output,
+            step.dataset.at,
+            jsonObjectSchema.parse(list?.items ?? { type: "object" })
+          );
+        }
+        outputs.set(step.id, output);
+      }
+      if (step.type === "workflow") {
+        const child = await definitions.read(step.workflow);
+        if (child) {
+          inputs.set(step.id, expanded(child.manifest.inputs, child.manifest.types));
+          outputs.set(step.id, expanded(child.manifest.outputs, child.manifest.types));
+        }
+      }
+      if (step.type === "code" || step.type === "agent") {
+        inputs.set(step.id, expanded(step.inputSchema, manifest.types));
+        outputs.set(step.id, expanded(step.outputSchema, manifest.types));
+      }
+      if (step.type === "output") inputs.set(step.id, expanded(manifest.outputs, manifest.types));
+      if (step.type === "loop") {
+        const source = sourceOf(step.items.step, step.id);
+        const shape = source ? schemaAt(source, step.items.path) : undefined;
+        if (step.batch !== undefined && shape && shape.type !== "dataset")
+          throw new AppError("VALIDATION_FAILED", "batch on a loop needs a dataset", {
+            reason: "batch_requires_dataset"
+          });
+        if (shape?.type === "dataset")
+          loopItems.set(
+            step.id,
+            step.batch === undefined ? jsonObjectSchema.parse(shape.row) : shape
+          );
+        else if (shape?.type === "array")
+          loopItems.set(step.id, jsonObjectSchema.parse(shape.items ?? {}));
+        outputs.set(step.id, {
+          type: "object",
+          properties: {
+            total: { type: "integer" },
+            done: { type: "integer" },
+            failed: { type: "integer" },
+            ...(step.onItemFailure === "continue"
+              ? { failures: { type: "dataset", row: loopFailureRowSchema } }
+              : {})
+          },
+          required: ["total", "done", "failed"]
+        });
+      }
+      if (step.type === "loop") await visit(step.steps);
+      if (step.type === "condition") {
+        await visit(step.then);
+        await visit(step.else ?? []);
+        const branches = [step.then, step.else ?? []].map((steps) => {
+          const last = steps.at(-1);
+          return last ? (outputs.get(last.id) ?? {}) : { type: "null" };
+        });
+        outputs.set(step.id, {
+          type: "object",
+          properties: {
+            taken: { type: "string", enum: ["then", "else"] },
+            result: { anyOf: branches }
+          },
+          required: ["taken", "result"]
+        });
+      }
+      if (step.type === "parallel") {
+        for (const branch of step.branches) await visit(branch.steps);
+        outputs.set(step.id, {
+          type: "object",
+          properties: Object.fromEntries(
+            step.branches.map((branch) => {
+              const last = branch.steps.at(-1);
+              return [branch.id, last ? (outputs.get(last.id) ?? {}) : { type: "null" }];
+            })
+          ),
+          required: step.branches.map((branch) => branch.id),
+          additionalProperties: false
+        });
+      }
     }
   }
+  await visit(manifest.steps);
   return {
     input: (step) => inputs.get(step),
     reference: (reader, reference) => {

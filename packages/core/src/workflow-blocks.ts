@@ -153,7 +153,7 @@ function referencesOf(step: ReadStep): string[] {
  * `reference_out_of_scope`, since it names no one step. A block deeper than
  * `WORKFLOW_MAX_BLOCK_DEPTH` is `block_depth` and is not read further, so its steps count for
  * nothing. A step whose type is not in `WORKFLOW_STEP_TYPES` is `not_supported_yet`: the
- * reserved `condition` and `parallel`, and a type no release knows.
+ * a type no release knows.
  */
 export function workflowBlockIssues(steps: readonly WorkflowStep[]): WorkflowBlockIssue[] {
   const known: readonly string[] = WORKFLOW_STEP_TYPES;

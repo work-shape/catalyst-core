@@ -1,3 +1,4 @@
+import { createBranchProgress } from "./branch-progress";
 import { startAgentStep } from "./agent-step";
 import { createStepBeginning } from "./step-begin";
 import { createRunReads } from "./run-reads";
@@ -358,6 +359,22 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       });
       if (!loopRun) break;
       const loop = index.get(loopRun.stepId)?.step;
+      if (loop?.type === "parallel") {
+        // Even a run-wide refusal drains sibling branches. Keep that refusal on the
+        // waiting block so an outer loop never treats it as a recoverable item failure.
+        const failure = systemic
+          ? { ...error, stepRunId: error.stepRunId ?? stepRun.id }
+          : undefined;
+        if (failure)
+          await tx.workflowRuns.markBlockWaiting({ clientInstanceId, id: loopRun.id, failure });
+        await branches.fillBranches(
+          tx,
+          run,
+          index,
+          failure ? { ...loopRun, error: failure } : loopRun
+        );
+        return;
+      }
       if (!systemic && loop?.type === "loop" && loop.onItemFailure === "continue") {
         await fillLoop(tx, run, index, loopRun);
         return;
@@ -367,7 +384,11 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         id: loopRun.id,
         status: "failed",
         finishedAt: now().toISOString(),
-        error: { code: "loop_step_failed", message: "A step of the loop failed" }
+        error: {
+          code: loop?.type === "condition" ? "condition_step_failed" : "loop_step_failed",
+          message: "A step of the block failed",
+          stepRunId: error.stepRunId ?? stepRun.id
+        }
       });
       // The loop stopped: its items that wait never start. Those with a call in flight end
       // and are recorded, and `settle` starts nothing after them.
@@ -376,7 +397,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     }
     await finishRun(tx, run, {
       status: "failed",
-      error: { ...error, stepRunId: stepRun.id }
+      error: { ...error, stepRunId: error.stepRunId ?? stepRun.id }
     });
   }
 
@@ -399,6 +420,24 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     retireData: (tx, run) => datasetLifetime.end(tx, { ...run, status: "continued" }, undefined)
   });
 
+  const branches = createBranchProgress({
+    clientInstanceId,
+    now,
+    beginStep,
+    advance,
+    stepDataMaxBytes: limits.stepDataMaxBytes,
+    async failBlock(tx, run, index, block, error, systemic) {
+      await tx.workflowRuns.endStepRun({
+        clientInstanceId,
+        id: block.id,
+        status: "failed",
+        finishedAt: now().toISOString(),
+        error
+      });
+      await failStep(tx, run, index, block, error, systemic);
+    }
+  });
+
   const fillLoop = createLoopProgress({
     continueRun,
     clientInstanceId,
@@ -407,7 +446,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     beginStep,
     advance,
     completeDatasets,
-    async failLoop(tx, run, loop, error) {
+    async failLoop(tx, run, index, loop, error) {
       await tx.workflowRuns.endStepRun({
         clientInstanceId,
         id: loop.id,
@@ -415,7 +454,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         finishedAt: now().toISOString(),
         error
       });
-      await finishRun(tx, run, { status: "failed", error: { ...error, stepRunId: loop.id } });
+      await failStep(tx, run, index, loop, error);
     }
   });
 
@@ -477,7 +516,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       id: stepRun.containerStepRunId
     });
     if (!loopRun) return;
-    await fillLoop(tx, run, index, loopRun);
+    if (loopRun.stepType === "loop") await fillLoop(tx, run, index, loopRun);
+    else await branches.fillBranches(tx, run, index, loopRun);
   }
 
   const claim = createStepClaim({ clientInstanceId, stores, now, waiting, executor, finishRun });
@@ -632,6 +672,19 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           correlationId: run.correlationId
         }
       );
+      return;
+    }
+    if (end.kind === "parallel" || end.kind === "condition") {
+      if (!live) {
+        await tx.workflowRuns.endStepRun({ ...ref, status: "cancelled", finishedAt });
+        return;
+      }
+      if (end.kind === "condition")
+        await branches.startCondition(tx, run, index, stepRun, end.taken);
+      else {
+        await tx.workflowRuns.markBlockWaiting(ref);
+        await branches.fillBranches(tx, run, index, stepRun);
+      }
       return;
     }
     if (end.kind === "loop") {

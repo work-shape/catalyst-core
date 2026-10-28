@@ -150,7 +150,7 @@ export function workflowLimitIssues(
     while (current && !continuingId) {
       if (current.step.type === "loop" && current.step.continueAsNew)
         continuingId = current.step.id;
-      current = current.sequence.loop ? index.get(current.sequence.loop) : undefined;
+      current = current.sequence.container ? index.get(current.sequence.container) : undefined;
     }
     const needed = workflowLoopMinimumSteps(index, id);
     if (continuingId && needed > budget)

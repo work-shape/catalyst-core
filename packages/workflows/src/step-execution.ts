@@ -1,3 +1,4 @@
+import { conditionHolds } from "./condition-test";
 import { fitsSchema, recordStepInput, stepTextSchemas } from "./step-input";
 import { agentStepOutcome } from "./agent-step";
 import { valuePosition } from "./json";
@@ -96,6 +97,8 @@ export type StepEnd =
       files?: string[];
     }
   | { kind: "notice"; notice: NoticeSendInput }
+  | { kind: "condition"; taken: "then" | "else" }
+  | { kind: "parallel" }
   | { kind: "done"; output: JsonValue; operationRunId?: OperationRunId; call?: WorkflowStepRunCall }
   | {
       kind: "failed";
@@ -600,6 +603,13 @@ export function createStepExecutor(options: StepExecutorOptions) {
                   : { kind: "workflow_run", workflowId: run.workflow, runId: run.id }
             }
           };
+        }
+        case "parallel":
+          return { kind: "parallel" };
+        case "condition": {
+          const actual = await resolveReference(scope, step.when.ref);
+          await recordStepInput(stores.workflowRuns, scope, { actual });
+          return { kind: "condition", taken: conditionHolds(actual, step.when) ? "then" : "else" };
         }
         case "loop": {
           if (step.collect !== undefined) throw notSupportedFailure("'collect' on a loop");

@@ -15,7 +15,7 @@ export function loopContinuation(index: WorkflowStepIndex, loopId: string) {
   while (current) {
     if (current.step.type === "loop" && current.step.continueAsNew)
       return current.step.continueAsNew;
-    current = current.sequence.loop ? index.get(current.sequence.loop) : undefined;
+    current = current.sequence.container ? index.get(current.sequence.container) : undefined;
   }
   return undefined;
 }

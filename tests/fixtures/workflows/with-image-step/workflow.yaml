@@ -1,0 +1,17 @@
+id: with-image-step
+name: With an unsupported image step
+runAs: workflow-runner
+inputs: { type: object }
+outputs: { type: object }
+steps:
+  - id: start
+    name: Start
+    type: trigger
+    triggers: [{ kind: manual }]
+  - id: check
+    name: Check
+    type: image
+  - id: result
+    name: Result
+    type: output
+    input: {}

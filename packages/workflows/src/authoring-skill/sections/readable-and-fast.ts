@@ -10,6 +10,10 @@ the accounting system once, and hands them to the checks below. Nothing is store
 
 Load data once and reuse it. Read what a source answers in one step near the top and refer to
 that step's output in every later step; never call the same operation again for data a step
-already has. Where items do not depend on each other, such as one check per client or per
-document, put them in a \`loop\` and set its \`concurrency\` so they run at once. Steps outside a
-loop run one after the other.`;
+already has. Put independent analyses of the same loaded data into a \`parallel\` block;
+map each branch's input to the load step's output. Reuse these values within this run, rather
+than promising a cache across runs. Use a Data Store only when results need to persist,
+and explain who can read them there. The step after the block waits for every analysis.
+Where items do not depend on each other, such as one check per client or per
+document, put them in a \`loop\` and set its \`concurrency\` so they run at once. Steps within
+a branch still run one after the other.`;

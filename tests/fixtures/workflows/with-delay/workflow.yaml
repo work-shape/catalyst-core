@@ -1,0 +1,17 @@
+id: with-delay
+name: With an unsupported delay step
+runAs: workflow-runner
+inputs: { type: object }
+outputs: { type: object }
+steps:
+  - id: start
+    name: Start
+    type: trigger
+    triggers: [{ kind: manual }]
+  - id: check
+    name: Check
+    type: delay
+  - id: result
+    name: Result
+    type: output
+    input: {}
