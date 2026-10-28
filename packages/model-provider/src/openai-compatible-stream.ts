@@ -199,7 +199,10 @@ export async function* streamOpenAiCompatibleCompletion(
   }
 
   if (!completed) {
-    throw new AppError("TIMEOUT", "Model provider stream ended before the completion marker");
+    throw new ModelProviderError({
+      kind: "timeout",
+      message: "Model provider stream ended before the completion marker"
+    });
   }
 
   yield {
@@ -370,7 +373,11 @@ export async function* streamOpenAiResponsesCompletion(
   }
 
   if (!finalResponse) {
-    throw new AppError("TIMEOUT", "Model provider stream ended before response.completed");
+    throw new ModelProviderError({
+      kind: "timeout",
+      message: "Model provider stream ended before response.completed",
+      details: { providerId }
+    });
   }
 
   const heldBack = citationMarkers.flush();

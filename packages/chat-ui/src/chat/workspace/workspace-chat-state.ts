@@ -172,6 +172,7 @@ export function terminalRunNotice(
   }
   // The provider's own words are English and do not say whether the run goes on.
   if (error.code === MODEL_RATE_LIMITED_CODE) return t("runRateLimited");
+  if (error.code === "TIMEOUT") return t("runTimedOut");
   // Only a refusal of the application speaks to the person. An internal, aborted or unknown
   // failure carries the worker's words, such as "Agent run failed": it reads as interrupted.
   // Only a cancellation says stopped.
