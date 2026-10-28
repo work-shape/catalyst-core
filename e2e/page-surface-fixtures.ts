@@ -305,7 +305,9 @@ export async function sendToolCall(page: Page, tool: string, input: unknown): Pr
   await composer.fill(`/tool ${tool} ${JSON.stringify(input)}`);
   // The button is there once the run before has ended.
   await page.getByRole("button", { name: /^(?:Send message|Nachricht senden)$/u }).click();
-  await expect(answers).toHaveCount(before + 1);
+  // workspace.open may build the App before the run answers: this waits for tool work,
+  // rather than a local UI update, including when the test host is busy.
+  await expect(answers).toHaveCount(before + 1, { timeout: 30_000 });
 }
 
 /** Lets the agent write files of the Page. */
