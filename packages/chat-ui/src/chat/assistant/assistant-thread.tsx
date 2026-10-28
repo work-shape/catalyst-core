@@ -37,6 +37,7 @@ import { useMoveWithPanels } from "../surface/panel-move";
 import { findRunActivity, shouldShowRunActivity } from "./thread-activity";
 import { ToolSubjectsProvider } from "./tool-subjects";
 import { FoldedCardsProvider } from "../conversation/card-fold-context";
+import { QuestionAnswersProvider } from "../questions/question-card";
 import { messageFeedbackSetup } from "../feedback/message-feedback";
 import {
   PlatformReportAction,
@@ -277,20 +278,22 @@ export function AssistantThread({
                     optimisticPending={optimisticPending}
                   >
                     <FoldedCardsProvider>
-                      <ThreadPrimitive.Messages>
-                        {() => (
-                          <>
-                            <MessageDayMarker />
-                            <MessageTryRunLine />
-                            <ThreadMessage
-                              conversationRunning={conversationRunning}
-                              activeRunId={activeRunId}
-                              feedback={messageFeedbackSetup(config, conversationId)}
-                              platformReport={platformReport}
-                            />
-                          </>
-                        )}
-                      </ThreadPrimitive.Messages>
+                      <QuestionAnswersProvider>
+                        <ThreadPrimitive.Messages>
+                          {() => (
+                            <>
+                              <MessageDayMarker />
+                              <MessageTryRunLine />
+                              <ThreadMessage
+                                conversationRunning={conversationRunning}
+                                activeRunId={activeRunId}
+                                feedback={messageFeedbackSetup(config, conversationId)}
+                                platformReport={platformReport}
+                              />
+                            </>
+                          )}
+                        </ThreadPrimitive.Messages>
+                      </QuestionAnswersProvider>
                     </FoldedCardsProvider>
                   </DayMarkersProvider>
                 </ToolSubjectsProvider>

@@ -2,6 +2,7 @@ import { compileJsonSchema } from "@work-shape/catalyst-connections";
 import { collectKnowledgeCitations } from "./knowledge-citations";
 import {
   AppError,
+  ASK_QUESTION_TOOL_NAME,
   WorkflowAgentOutputInvalidError,
   WORKFLOW_STEP_DATA_MAX_BYTES,
   forbiddenPreviewTool,
@@ -132,6 +133,7 @@ export class TurnLoop {
           });
     const withheld = new Set(offer?.withheldToolNames ?? []);
     // A subagent starts none of its own, and a Workflow step's agent never gets `run_agent`.
+    // Neither has a person to ask (ASK-1).
     const agent = {
       ...listed,
       toolNames: [
@@ -143,7 +145,10 @@ export class TurnLoop {
         .filter(
           (toolName) =>
             !withheld.has(toolName) &&
-            !((context.subagent || input.workflowAgent) && isRunAgentCall(toolName))
+            !(
+              (context.subagent || input.workflowAgent) &&
+              (isRunAgentCall(toolName) || toolName === ASK_QUESTION_TOOL_NAME)
+            )
         )
         .filter((toolName) => !input.preview || !forbiddenPreviewTool(toolName))
     };
@@ -542,6 +547,11 @@ export class TurnLoop {
       });
       if (settled !== "answered") return undefined;
     }
+    // A step that asked the person a question ends the turn, also when it paused (ASK-1).
+    if (resume.toolCalls.some((call) => call.toolName === ASK_QUESTION_TOOL_NAME)) {
+      state.complete();
+      return undefined;
+    }
     return {
       messages,
       ownMessagesFrom: messages.length,
@@ -830,6 +840,12 @@ export class TurnLoop {
           doneToolCallIds: outcome.answeredToolCallIds,
           ...(outcome.subagents.length > 0 ? { subagents: outcome.subagents } : {})
         });
+        return;
+      }
+      // A question to the person ends the turn after its step: their answer is their next
+      // message (ASK-1). A subagent the step started is still answered first.
+      if (outcome.asked && outcome.subagents.length === 0) {
+        state.complete();
         return;
       }
       // The last step's open gets no note: no model request follows it.

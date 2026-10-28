@@ -1,5 +1,6 @@
 import { WEB_FETCH_TOOL_NAME } from "@work-shape/catalyst-web-access";
 import {
+  ASK_QUESTION_TOOL_NAME,
   WORKSPACE_OPEN_TOOL_NAME,
   forbiddenPreviewTool,
   isFileSetId,
@@ -42,7 +43,13 @@ const DEFAULT_REPEATED_TOOL_CALL_LIMIT = 3;
  * answered once the step's calls are through and its subagent ended.
  */
 export type ToolDispatchOutcome =
-  | { kind: "answered"; subagents: StartedSubagent[]; opened: OpenedPreview[] }
+  | {
+      kind: "answered";
+      subagents: StartedSubagent[];
+      opened: OpenedPreview[];
+      /** A call of the step asked the person a question: the turn ends with the step (ASK-1). */
+      asked: boolean;
+    }
   | { kind: "stopped" }
   | {
       kind: "paused";
@@ -101,6 +108,7 @@ export class ToolDispatch {
     const answeredToolCallIds: string[] = [];
     const subagents: StartedSubagent[] = [];
     const opened: OpenedPreview[] = [];
+    let asked = false;
     for (const toolCall of toolCalls) {
       if (context.signal?.aborted) return { kind: "stopped" };
       const webRefusal = await this.webFetchRefusal(runId, toolCall.toolName, state, input);
@@ -158,8 +166,11 @@ export class ToolDispatch {
       answeredToolCallIds.push(toolCall.toolCallId);
       const preview = openedPreview(toolCall, result.result);
       if (preview) opened.push(preview);
+      if (toolCall.toolName === ASK_QUESTION_TOOL_NAME && result.result.status === "success") {
+        asked = true;
+      }
     }
-    return { kind: "answered", subagents, opened };
+    return { kind: "answered", subagents, opened, asked };
   }
 
   async webFetchRefusal(

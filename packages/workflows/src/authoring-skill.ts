@@ -8,6 +8,7 @@ import { introSection } from "./authoring-skill/sections/intro";
 import { manifestSection } from "./authoring-skill/sections/manifest";
 import { mappingsSection } from "./authoring-skill/sections/mappings";
 import { notRunYetSection } from "./authoring-skill/sections/not-run-yet";
+import { readableAndFastSection } from "./authoring-skill/sections/readable-and-fast";
 import { runnerPackagesSection } from "./authoring-skill/sections/runner-packages";
 import { stepFilesSection } from "./authoring-skill/sections/step-files";
 import { stepTypesSection } from "./authoring-skill/sections/step-types";
@@ -31,6 +32,7 @@ function content(packages: readonly WorkflowRunnerPackage[]): string {
     dataScopeSection,
     manifestSection,
     stepTypesSection,
+    readableAndFastSection,
     stepFilesSection,
     runnerPackagesSection(packages),
     mappingsSection,

@@ -13,6 +13,7 @@ import {
   readConnectionOffer
 } from "../../studio/build-area/connection-give-card";
 import { readToolDisplayPayloadFromToolResult } from "../../shared/domain-ui-widgets";
+import { isQuestionCall } from "../questions/question";
 import { appSavedByCall, standingAssetOpen } from "../conversation/subject-run";
 import { NO_FOLDED_CARDS, type FoldedCard } from "../conversation/card-fold";
 import { isOpenToolName, readPageSave } from "../../studio/pages/page-save";
@@ -51,13 +52,15 @@ export function createAssistantMessageGroupBy(
   // run goes on and does not fold into the count of tool calls. An open of an asset stands
   // there too: a change of what the conversation is about is always seen. So does a subagent's
   // card, which is how the person follows and stops it, and the Connect card of a call refused
-  // for a missing sign-in, which is how the person connects. So does an App's card. A preview
-  // or a save that a newer card stands for folds into the work.
+  // for a missing sign-in, which is how the person connects. So does an App's card, and the
+  // agent's question to the person. A preview or a save that a newer card stands for folds into
+  // the work.
   return (part, context) =>
     ((isPageSaveCall(part) || isAppSavedLine(part)) && !isFolded(part, folded)) ||
     isStandingOpen(part) ||
     isSubagentCall(part) ||
-    isConnectCall(part)
+    isConnectCall(part) ||
+    isQuestionCall(part)
       ? []
       : byType(part, context);
 }
@@ -217,6 +220,8 @@ function staysVisibleAfterRun(
     isConnectionDraftCard(part) ||
     isConnectCall(part) ||
     isSubagentCall(part) ||
+    // The agent's question is how the person answers it: it stays (ASK-1).
+    isQuestionCall(part) ||
     (index > finalTextIndex && isVisibleFinalAssistantPart(part))
   );
 }
@@ -400,7 +405,8 @@ function isStandaloneToolCall(
     isAppSavedLine(part) ||
     isConnectionDraftCard(part) ||
     isConnectCall(part) ||
-    isSubagentCall(part)
+    isSubagentCall(part) ||
+    isQuestionCall(part)
   ) {
     return true;
   }

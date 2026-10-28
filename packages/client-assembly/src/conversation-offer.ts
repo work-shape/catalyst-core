@@ -7,6 +7,7 @@ import { createPlatformAssetCalls, type AssetWorkflowOptions } from "@work-shape
 import { connectionProposalCatalogue } from "./connection-proposal-catalogue";
 import { HTTP_API_CONNECTOR_TYPE, type Catalogue } from "@work-shape/catalyst-connections";
 import {
+  ASK_QUESTION_TOOL_NAME,
   RUN_AGENT_TOOL_NAME,
   DATA_STORE_ASSET_KIND,
   getSubjectUserId,
@@ -36,6 +37,7 @@ import {
   PREVIEW_CAPTURE_TOOL_NAME,
   WORKSPACE_OPEN_TOOL_NAME,
   createAppSaveTool,
+  createAskQuestionTool,
   createConnectionDraftTool,
   createConnectionOfferTool,
   createConnectionProposeTool,
@@ -64,7 +66,8 @@ import { offeredSkillNames } from "./shipped-skills";
 // the platform in its system prompt and the skills the platform ships, the documentation in
 // every conversation, in one about an asset those for its kind and in one about none yet those
 // of every kind, since the agent may open any. Every other agent gets none of them. Every
-// agent, where Apps exist, is offered what opens a folder in the preview and saves it as an App.
+// agent, where Apps exist, is offered what opens a folder in the preview and saves it as an App,
+// and every agent is offered the question to the person (ASK-1).
 
 /** Whether an agent whose definition lists these tools holds the platform's. */
 function holdsPlatformTools(agentToolNames: readonly string[]): boolean {
@@ -230,6 +233,7 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
           ? [CONNECTION_DRAFT_TOOL_NAME, CONNECTION_OFFER_TOOL_NAME]
           : []),
         ...appToolNames(input.hasTool),
+        ASK_QUESTION_TOOL_NAME,
         ...(skillNames.length > 0 ? [READ_SKILL_TOOL] : [])
       ]
         .filter((toolName) => input.hasTool(toolName))
@@ -334,6 +338,7 @@ export function createPlatformTools(
       ...createScheduledStartTools(),
       createKnowledgeAddFilesTool(),
       createRunAgentTool(),
+      createAskQuestionTool(),
       createAppSaveTool(platformAssets.calls),
       createAppPublishTool(),
       ...createAppTryTools(),
@@ -371,7 +376,7 @@ export function createPlatformTools(
      * readable wherever they are offered whatever the release enables: an agent's own
      * definition still lists the tool only where the release names it. So are the open and the
      * save of an App, which the `apps` module turns off; the file tools its folder is written
-     * with stay the release's to enable.
+     * with stay the release's to enable. So is the question to the person (ASK-1).
      */
     registry(tools: AnyToolDefinition[], enabledByRelease: ReadonlySet<string>): ToolRegistry {
       attached.tools = new ToolRegistry({
@@ -382,6 +387,7 @@ export function createPlatformTools(
           ...PLATFORM_MODULE_TOOL_NAMES,
           READ_SKILL_TOOL,
           RUN_AGENT_TOOL_NAME,
+          ASK_QUESTION_TOOL_NAME,
           WORKSPACE_OPEN_TOOL_NAME,
           APP_SAVE_TOOL_NAME
         ]),
