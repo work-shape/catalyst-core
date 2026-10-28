@@ -9,6 +9,7 @@ export * from "./app-audience";
 export * from "./app-workflow-refusals";
 export * from "./artifact-preview-lifecycle";
 export * from "./asset-address";
+export * from "./asset-move";
 export * from "./asset-owner-reach";
 export * from "./attached-file-titles";
 export * from "./before-action-check";

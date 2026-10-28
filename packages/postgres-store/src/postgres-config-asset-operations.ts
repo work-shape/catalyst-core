@@ -71,6 +71,7 @@ import {
   removeConfigAsset as removePostgresConfigAsset
 } from "./postgres-config-asset-pointers";
 import { sweepAssetRepoSaves } from "./jobs/asset-repo-sweep";
+import { moveConfigAssets } from "./postgres-config-asset-move";
 
 async function listPublishedConfigAssets(
   db: PostgresConnection,
@@ -840,6 +841,7 @@ export function createPostgresConfigAssetsStore(
     listAgentUseLimits: (input) => deps.listAgentUseLimits(input),
     setAgentUse: (input) => deps.setAgentUse(input),
     listPersonalChatSkills: (input) => deps.listPersonalChatSkills(input),
-    setPersonalChatSkill: (input) => deps.setPersonalChatSkill(input)
+    setPersonalChatSkill: (input) => deps.setPersonalChatSkill(input),
+    moveConfigAssets: (input) => moveConfigAssets(db, input)
   };
 }

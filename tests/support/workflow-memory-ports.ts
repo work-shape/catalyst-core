@@ -277,7 +277,8 @@ export const unusedConfigAssetStore: ConfigAssetStore = {
   listAgentUseLimits: unsupported,
   setAgentUse: unsupported,
   listPersonalChatSkills: unsupported,
-  setPersonalChatSkill: unsupported
+  setPersonalChatSkill: unsupported,
+  moveConfigAssets: unsupported
 };
 export const unusedAuditEventStore: AuditEventStore = {
   appendAuditEvent: unsupported,

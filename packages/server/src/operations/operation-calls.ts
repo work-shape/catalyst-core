@@ -4,6 +4,7 @@ import {
   createOperationRegistry,
   isAgentAvailableInWorkspace,
   isAuthenticatedServicePrincipal,
+  type ApprovalRequestHandler,
   type AuthenticatedIdentity,
   type CollaborationWorkspaceId
 } from "@work-shape/catalyst-core";
@@ -14,6 +15,7 @@ import {
 } from "../approvals/approval-request-service";
 import { createAppActionOperationSource } from "../apps/action-source";
 import { guardAppOrigin } from "../apps/app-origin-guard";
+import { createAssetMoveApprovalHandlers } from "../approvals/asset-move-approval";
 import { createHeldAssetPreviewer } from "../approvals/held-asset-preview";
 import {
   createOperationCallApprovalHandler,
@@ -158,9 +160,19 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
             auditRecorder: options.auditRecorder
           })
         ]
+      : []),
+    // "Teilen mit…" into a place where the person lacks the right (SHARE-1).
+    ...(options.configAssets
+      ? createAssetMoveApprovalHandlers({
+          clientInstanceId,
+          stores: options.stores,
+          kinds: options.configAssets.kinds,
+          modules: options.modules,
+          approvalKinds: (): string[] => [...approvalRequestHandlers.keys()]
+        })
       : [])
   ];
-  const approvalRequestHandlers = new Map([
+  const approvalRequestHandlers: Map<string, ApprovalRequestHandler> = new Map([
     ...(options.approvalRequests?.handlers ?? []),
     ...handlers.map((handler) => [handler.kind, handler] as const)
   ]);

@@ -1,0 +1,653 @@
+import {
+  AppError,
+  asCollaborationWorkspaceId,
+  asUserId,
+  assetMoveLadderRefusal,
+  assetOwnerRung,
+  assetScopesEqual,
+  auditActorFromIdentity,
+  isAuthenticatedServicePrincipal,
+  ownerReachRefusal,
+  type AccessResource,
+  type ActorAccess,
+  type AssetKindRegistry,
+  type AssetMoveEditors,
+  type AssetMovePath,
+  type AssetMoveUsers,
+  type AssetOwnerReach,
+  type AssetOwnerRung,
+  type AssetScope,
+  type AuditActor,
+  type AuthenticatedIdentity,
+  type ClientInstanceId,
+  type CollaborationWorkspace,
+  type ConfigAssetRecord,
+  type JsonObject,
+  type LocaleCode,
+  type ModuleSnapshot,
+  type PlatformStores
+} from "@work-shape/catalyst-core";
+import { readDefinitionField, type WorkflowAssetKind } from "../asset-kinds/shared";
+import { assertOwnerReach } from "./asset-owner-references";
+import { assetKindLabel, assetTitle } from "./asset-reference-labels";
+import { requireAssetKindModuleOn } from "./asset-write-rules";
+
+// SHARE-1 "Teilen mit…": an asset moves up the ladder Nur ich → Team → Alle with what it uses,
+// never down or sideways (Felix and the manager, 2026-10-28; it generalises MOVE-1). The move
+// changes the owner and nothing else: ids, names, revisions, drafts, availability, grants,
+// rows and runs stay, so whatever is keyed by the asset follows by itself. Editing follows the
+// new place. With the right at the target the move is made at once; without it, it becomes a
+// request an admin with that right decides in the Inbox (`asset-move-approval.ts`).
+
+/** What a move or its check is given. The address is where the asset is now. */
+export interface AssetMoveInput {
+  kind: string;
+  name: string;
+  /** The workspace that owns the asset now; left out for the instance's own. */
+  workspaceId?: string;
+  to: { kind: "instance" } | { kind: "workspace"; workspaceId: string };
+  /** The id of the asset as the caller read it. Another asset of the name is a conflict. */
+  expectedAssetId?: string;
+  /** The caller read what breaks and moves it all the same. */
+  acceptBreaks?: boolean;
+}
+
+/** What the planning reads: the stores of the instance and its kinds. */
+export interface AssetMoveOptions {
+  clientInstanceId: ClientInstanceId;
+  stores: PlatformStores;
+  kinds: AssetKindRegistry<WorkflowAssetKind>;
+  modules: ModuleSnapshot;
+  /** The approval kinds of the instance: a member with one of them open is not moved. */
+  approvalKinds(): readonly string[];
+}
+
+/** One asset of the move. */
+interface MoveMember {
+  kind: WorkflowAssetKind;
+  record: ConfigAssetRecord;
+  title: string;
+}
+
+/** An asset that stays where it is and can no longer use a moved one afterwards. */
+interface MoveBreak {
+  kind: string;
+  name: string;
+  title: string;
+  uses: { kind: string; name: string };
+}
+
+export interface AssetMovePlan {
+  root: MoveMember;
+  from: AssetScope;
+  to: AssetScope;
+  fromReach: AssetOwnerReach;
+  toReach: AssetOwnerReach;
+  toWorkspace?: CollaborationWorkspace;
+  /** The asset first, then what it uses that would otherwise stay below it. */
+  members: MoveMember[];
+  breaks: MoveBreak[];
+}
+
+/** The approval kind a request to move an asset of this kind is filed as. */
+export function assetMoveApprovalKind(kind: string): string {
+  return `${kind}_move`;
+}
+
+/** The kinds that a workspace may own, which are the ones that can be moved up. */
+export function movableKinds(kinds: AssetKindRegistry<WorkflowAssetKind>): WorkflowAssetKind[] {
+  return kinds.kinds.filter((kind) => kind.owners.includes("workspace"));
+}
+
+/** What a right at the target is asked on: the kind at the owner the move goes to. */
+export function moveTargetResource(
+  kind: string,
+  to: { kind: "instance" } | { kind: "workspace"; workspaceId: string }
+): AccessResource {
+  return { kind, ...(to.kind === "workspace" ? { workspaceId: to.workspaceId } : {}) };
+}
+
+/**
+ * Plans the move of one asset and refuses, with a plain sentence, what cannot move: not a step
+ * up, a kind the target cannot own, a team the person is not a member of, an open approval, a
+ * reference owner reach refuses at the target, or a build limit of the team. The plan is read
+ * again when the move is made, and the store refuses it if a member changed in between.
+ */
+export async function planAssetMove(
+  options: AssetMoveOptions,
+  input: AssetMoveInput,
+  locale: LocaleCode,
+  actor?: AuthenticatedIdentity
+): Promise<AssetMovePlan> {
+  const { stores, clientInstanceId } = options;
+  const de = locale === "de";
+  requireAssetKindModuleOn(options.modules, input.kind);
+  const rootKind = options.kinds.require(input.kind);
+  const from = scopeOf(input.workspaceId);
+  const row = await stores.configAssets.getConfigAsset({
+    clientInstanceId,
+    kind: rootKind.kind,
+    name: input.name
+  });
+  if (!row || row.status !== "active" || row.config === null || !assetScopesEqual(row.scope, from))
+    throw new AppError("NOT_FOUND", `Config ${rootKind.kind} '${input.name}' was not found`);
+  if (input.expectedAssetId !== undefined && input.expectedAssetId !== row.id)
+    throw new AppError(
+      "CONFLICT",
+      `Config ${rootKind.kind} '${input.name}' is another asset than the one this move was made for`,
+      { kind: rootKind.kind, name: input.name, reason: "asset_replaced" }
+    );
+  const to = scopeOf(input.to.kind === "workspace" ? input.to.workspaceId : undefined);
+  const workspaces = new Map<string, Promise<CollaborationWorkspace | undefined>>();
+  const workspaceOf = (id: string) => {
+    let read = workspaces.get(id);
+    if (!read) {
+      read = stores.workspaces.getWorkspace(clientInstanceId, asCollaborationWorkspaceId(id));
+      workspaces.set(id, read);
+    }
+    return read;
+  };
+  const reachOf = async (scope: AssetScope): Promise<AssetOwnerReach> =>
+    scope.kind === "instance"
+      ? { kind: "instance" }
+      : {
+          kind: "workspace",
+          workspaceId: scope.workspaceId,
+          workspaceKind: (await workspaceOf(scope.workspaceId))?.kind
+        };
+  const toWorkspace = to.kind === "workspace" ? await workspaceOf(to.workspaceId) : undefined;
+  if (to.kind === "workspace" && !toWorkspace)
+    throw new AppError(
+      "VALIDATION_FAILED",
+      de
+        ? "Diesen Arbeitsbereich gibt es auf dieser Instanz nicht."
+        : "This workspace does not exist on this instance.",
+      { reason: "workspace_not_found" }
+    );
+  const [fromReach, toReach] = await Promise.all([reachOf(from), reachOf(to)]);
+  const placeOf = (reach: AssetOwnerReach, workspace?: CollaborationWorkspace) =>
+    ownerPlace(reach, workspace?.name, de);
+  const fromPlace = placeOf(
+    fromReach,
+    from.kind === "workspace" ? await workspaceOf(from.workspaceId) : undefined
+  );
+  const toPlace = placeOf(toReach, toWorkspace);
+  const titleOf = (kind: WorkflowAssetKind, record: ConfigAssetRecord) =>
+    assetTitle(options.kinds.kinds, kind.kind, record.name, record.config ?? {}, locale);
+  const label = (kind: string, name: string) => `${assetKindLabel(kind, locale)} „${name}“`;
+  const rootLabel = label(rootKind.kind, row.name);
+
+  const ladder = assetMoveLadderRefusal(fromReach, toReach);
+  if (ladder !== undefined)
+    throw refusal(
+      ladder,
+      ladder === "move_same_place"
+        ? de
+          ? `${rootLabel} gehört schon ${toPlace}.`
+          : `${rootLabel} already belongs to ${toPlace}.`
+        : ladder === "move_down"
+          ? de
+            ? `${rootLabel} gehört ${fromPlace}. Teilen geht nur nach oben, von „Nur ich“ zu einem Team und von einem Team zu Alle, nie zurück. Wer eine eigene Fassung braucht, dupliziert es.`
+            : `${rootLabel} belongs to ${fromPlace}. Sharing only goes up, from "Only me" to a team and from a team to everyone, never back. If you need a version of your own, duplicate it.`
+          : de
+            ? `${rootLabel} gehört ${fromPlace}. Von dort geht Teilen nur nach oben, nicht ${assetOwnerRung(fromReach) === "team" ? "in ein anderes Team" : "in einen anderen persönlichen Arbeitsbereich"}.`
+            : `${rootLabel} belongs to ${fromPlace}. From there sharing only goes up, not to ${assetOwnerRung(fromReach) === "team" ? "another team" : "another Personal Workspace"}.`,
+      { from, to }
+    );
+  // Only a team the person belongs to: the place decides who edits, and they stay among them.
+  if (
+    to.kind === "workspace" &&
+    actor !== undefined &&
+    !isAuthenticatedServicePrincipal(actor) &&
+    !(await stores.workspaces.getMembership({
+      clientInstanceId,
+      collaborationWorkspaceId: to.workspaceId,
+      userId: asUserId(actor.id)
+    }))
+  )
+    throw refusal(
+      "move_not_member",
+      de
+        ? `Du bist nicht Mitglied von ${toPlace}. Teilen geht nur mit einem Team, in dem du Mitglied bist.`
+        : `You are not a member of ${toPlace}. You can share only with a team you belong to.`,
+      { to }
+    );
+
+  // The closure: what a member uses and its owner holds, followed until nothing new is found.
+  const records = new Map<string, Promise<ConfigAssetRecord | undefined>>();
+  const recordOf = (kind: string, name: string) => {
+    const key = `${kind}:${name}`;
+    let read = records.get(key);
+    if (!read) {
+      read =
+        key === `${row.kind}:${row.name}`
+          ? Promise.resolve(row)
+          : stores.configAssets.getConfigAsset({ clientInstanceId, kind, name });
+      records.set(key, read);
+    }
+    return read;
+  };
+  const referencesOf = async (kind: WorkflowAssetKind, record: ConfigAssetRecord) =>
+    usedBy(options, kind, record);
+  const root: MoveMember = { kind: rootKind, record: row, title: titleOf(rootKind, row) };
+  const members: MoveMember[] = [root];
+  const memberIds = new Set([row.id]);
+  for (let index = 0; index < members.length; index++) {
+    const member = members[index];
+    if (!member) break;
+    for (const reference of await referencesOf(member.kind, member.record)) {
+      const kind = options.kinds.get(reference.kind);
+      const used = kind ? await recordOf(reference.kind, reference.name) : undefined;
+      if (!kind || !used || used.status !== "active" || memberIds.has(used.id)) continue;
+      if (!assetScopesEqual(used.scope, from)) continue;
+      memberIds.add(used.id);
+      members.push({ kind, record: used, title: titleOf(kind, used) });
+    }
+  }
+  for (const member of members) {
+    if (!member.kind.owners.includes(to.kind))
+      throw refusal(
+        "move_kind_owner",
+        de
+          ? `${label(member.kind.kind, member.record.name)} kann nicht Allen gehören: ${assetKindLabel(member.kind.kind, locale)}s gehören immer einem Team. Teile ${member === members[0] ? "es" : rootLabel} mit einem Team.`
+          : `${label(member.kind.kind, member.record.name)} cannot belong to everyone: ${assetKindLabel(member.kind.kind, locale)}s always belong to a team. Share ${member === members[0] ? "it" : rootLabel} with a team instead.`,
+        { asset: { kind: member.kind.kind, name: member.record.name }, to }
+      );
+  }
+  await refuseOpenApprovals(options, members, label, de);
+  await refuseBeyondBuildLimits(members, toWorkspace, toPlace, label, de);
+
+  // Every move passes owner reach at the target (#142): each member as it will be owned, and
+  // each asset it uses as it will be owned after the move.
+  const reach = { clientInstanceId, stores };
+  for (const member of members) {
+    const source = { kind: member.kind.kind, name: member.record.name, scope: to };
+    for (const reference of await referencesOf(member.kind, member.record)) {
+      const used = options.kinds.get(reference.kind)
+        ? await recordOf(reference.kind, reference.name)
+        : undefined;
+      if (!used || used.status !== "active") continue;
+      await assertOwnerReach(
+        reach,
+        source,
+        {
+          kind: "reference",
+          target: {
+            kind: reference.kind,
+            name: reference.name,
+            scope: memberIds.has(used.id) ? to : used.scope
+          },
+          acrossOwners: member.kind.crossOwnerReferences?.includes(reference.kind) === true,
+          sourceUnread: false
+        },
+        locale
+      );
+    }
+    if (member.kind.hasWorkspaceAvailability) {
+      const availability = (
+        await stores.configAssets.listAgentAvailability({
+          clientInstanceId,
+          agentName: member.record.name,
+          kind: member.kind.kind
+        })
+      ).get(member.record.name);
+      if (availability)
+        await assertOwnerReach(reach, source, { kind: "availability", availability }, locale);
+    }
+    const audience = member.record.appAvailability?.audience;
+    if (audience !== undefined)
+      await assertOwnerReach(reach, source, { kind: "app_audience", audience }, locale);
+  }
+
+  return {
+    root,
+    from,
+    to,
+    fromReach,
+    toReach,
+    ...(toWorkspace ? { toWorkspace } : {}),
+    members,
+    breaks: await findBreaks(options, { from, fromReach, toReach, memberIds, members, titleOf })
+  };
+}
+
+/** Whether the caller holds the right at the target for every member: then it moves at once. */
+export function holdsMoveTarget(access: ActorAccess, plan: AssetMovePlan): boolean {
+  return plan.members.every(
+    (member) =>
+      access.authorize(member.kind.actions.write, moveTargetResource(member.kind.kind, plan.to))
+        .allowed
+  );
+}
+
+/** Refuses a move that breaks something the caller did not say they accept. */
+export function requireBreaksAccepted(
+  plan: AssetMovePlan,
+  accepted: boolean | undefined,
+  locale: LocaleCode
+): void {
+  if (plan.breaks.length === 0 || accepted === true) return;
+  const de = locale === "de";
+  const named = plan.breaks
+    .map((broken) => `${assetKindLabel(broken.kind, locale)} „${broken.name}“`)
+    .join(", ");
+  throw refusal(
+    "move_breaks",
+    de
+      ? `Danach kann ${named} nicht mehr verwenden, was mitgeht, weil es bei ${ownerPlace(plan.fromReach, undefined, true)} bleibt. Bestätige das, um trotzdem zu teilen.`
+      : `Afterwards ${named} can no longer use what moves, because it stays under ${ownerPlace(plan.fromReach, undefined, false)}. Confirm that to share all the same.`,
+    {
+      breaks: plan.breaks.map(({ kind, name, uses }) => ({ kind, name, uses }))
+    }
+  );
+}
+
+/**
+ * Makes the move: one transaction that gives every member the new owner and records
+ * `asset.moved` with ids alone. A member that changed since the plan refuses it, and then
+ * nothing moved; whatever fails inside rolls all of it back.
+ */
+export async function executeAssetMove(
+  options: Pick<AssetMoveOptions, "clientInstanceId" | "stores">,
+  plan: AssetMovePlan,
+  call: {
+    actor: AuditActor;
+    correlationId: string;
+    runId?: string;
+    requestId?: string;
+  }
+): Promise<{ version: number }> {
+  const { clientInstanceId } = options;
+  return options.stores.transaction(async (stores) => {
+    const result = await stores.configAssets.moveConfigAssets({
+      clientInstanceId,
+      to: plan.to,
+      assets: plan.members.map(({ record }) => ({
+        id: record.id,
+        from: plan.from,
+        activeRevisionId: record.activeRevisionId,
+        ...(record.publishedRevisionId ? { publishedRevisionId: record.publishedRevisionId } : {})
+      }))
+    });
+    await stores.audit.appendAuditEvent({
+      clientInstanceId,
+      type: "asset.moved",
+      status: "success",
+      actor: call.actor,
+      subject: plan.root.record.id,
+      correlationId: call.correlationId,
+      metadata: {
+        assetId: plan.root.record.id,
+        kind: plan.root.kind.kind,
+        from: ownerIds(plan.from),
+        to: ownerIds(plan.to),
+        moved: plan.members.map(({ kind, record }) => ({ assetId: record.id, kind: kind.kind })),
+        ...(call.requestId ? { requestId: call.requestId } : {}),
+        ...(call.runId ? { operationRunId: call.runId } : {})
+      }
+    });
+    return result;
+  });
+}
+
+/** The actor a move made by a person or a principal is recorded under. */
+export function moveActor(actor: AuthenticatedIdentity): AuditActor {
+  return auditActorFromIdentity(actor);
+}
+
+type MoveOwner = { kind: "instance" } | { kind: "workspace"; workspaceId: string };
+
+/** What a check answers: names, titles and owners only, never content. */
+export interface AssetMoveView {
+  asset: { kind: string; name: string; id: string };
+  from: MoveOwner;
+  to: MoveOwner;
+  path: AssetMovePath;
+  moves: { kind: string; name: string; id: string; title: string }[];
+  breaks: { kind: string; name: string; title: string; uses: { kind: string; name: string } }[];
+  afterwards: {
+    owner: MoveOwner & { rung: AssetOwnerRung; workspaceName?: string };
+    editors: AssetMoveEditors;
+    users: AssetMoveUsers;
+    callerEdits: boolean;
+  };
+}
+
+/**
+ * What a check answers and the dialog shows: what moves, what breaks, and who reads and edits
+ * it afterwards. Names and titles only, never content.
+ */
+export function assetMoveView(plan: AssetMovePlan, access: ActorAccess): AssetMoveView {
+  const direct = holdsMoveTarget(access, plan);
+  return {
+    asset: { kind: plan.root.kind.kind, name: plan.root.record.name, id: plan.root.record.id },
+    from: ownerIds(plan.from),
+    to: ownerIds(plan.to),
+    path: direct ? "direct" : "request",
+    moves: plan.members.map(({ kind, record, title }) => ({
+      kind: kind.kind,
+      name: record.name,
+      id: record.id,
+      title
+    })),
+    breaks: plan.breaks.map(({ kind, name, title, uses }) => ({ kind, name, title, uses })),
+    afterwards: {
+      owner: {
+        ...ownerIds(plan.to),
+        rung: assetOwnerRung(plan.toReach),
+        ...(plan.toWorkspace ? { workspaceName: plan.toWorkspace.name } : {})
+      },
+      // Who changes it: the Builders of the team, or instance admins and instance Builders.
+      editors: plan.to.kind === "instance" ? "instance_builders" : "workspace_builders",
+      // Who uses it: the team's members, or everyone where it is offered.
+      users: plan.to.kind === "instance" ? "everyone_where_offered" : "workspace_members",
+      callerEdits: direct
+    }
+  };
+}
+
+function ownerIds(scope: AssetScope): MoveOwner {
+  return scope.kind === "instance"
+    ? { kind: "instance" }
+    : { kind: "workspace", workspaceId: scope.workspaceId };
+}
+
+function scopeOf(workspaceId: string | undefined): AssetScope {
+  return workspaceId === undefined
+    ? { kind: "instance" }
+    : { kind: "workspace", workspaceId: asCollaborationWorkspaceId(workspaceId) };
+}
+
+/** The place on the ladder as people read it: „Nur ich“, the team's name, or Alle. */
+function ownerPlace(reach: AssetOwnerReach, workspaceName: string | undefined, de: boolean) {
+  const rung = assetOwnerRung(reach);
+  if (rung === "everyone") return de ? "Allen" : "everyone";
+  if (rung === "personal") return de ? "„Nur ich“" : `"Only me"`;
+  return `„${workspaceName ?? (de ? "Team" : "team")}“`;
+}
+
+function refusal(reason: string, message: string, details: JsonObject = {}): AppError {
+  return new AppError("VALIDATION_FAILED", message, { reason, ...details });
+}
+
+/**
+ * What one asset uses, in every revision a user or a writer is served: the draft, the
+ * published revision, and an agent's shared draft.
+ */
+async function usedBy(
+  options: Pick<AssetMoveOptions, "clientInstanceId" | "stores">,
+  kind: WorkflowAssetKind,
+  record: ConfigAssetRecord
+): Promise<{ kind: string; name: string }[]> {
+  if (!kind.references) return [];
+  const configs: unknown[] = [record.config, record.publishedConfig];
+  if (kind.kind === "agent") {
+    const draft = await options.stores.agentProposals.get({
+      clientInstanceId: options.clientInstanceId,
+      agentId: record.id
+    });
+    if (draft) configs.push(draft.config);
+  }
+  const seen = new Set<string>();
+  const used: { kind: string; name: string }[] = [];
+  for (const config of configs) {
+    if (config === undefined || config === null) continue;
+    for (const reference of kind.references(config)) {
+      const key = `${reference.kind}:${reference.name}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      used.push(reference);
+    }
+  }
+  return used;
+}
+
+/** A member that waits for a decision, such as its publish, is not moved under it. */
+async function refuseOpenApprovals(
+  options: AssetMoveOptions,
+  members: readonly MoveMember[],
+  label: (kind: string, name: string) => string,
+  de: boolean
+): Promise<void> {
+  const moveKinds = new Set(
+    movableKinds(options.kinds).map((kind) => assetMoveApprovalKind(kind.kind))
+  );
+  const kinds = options.approvalKinds().filter((kind) => !moveKinds.has(kind));
+  if (kinds.length === 0) return;
+  for (const member of members) {
+    const subjects: JsonObject[] = [
+      { assetId: member.record.id },
+      { publishedWith: [{ assetId: member.record.id }] }
+    ];
+    for (const subjectContains of subjects) {
+      const [open] = await options.stores.approvals.listApprovalRequests({
+        clientInstanceId: options.clientInstanceId,
+        kinds,
+        status: "pending",
+        subjectContains,
+        page: { limit: 1 }
+      });
+      if (open)
+        throw refusal(
+          "move_open_approval",
+          de
+            ? `Für ${label(member.kind.kind, member.record.name)} wartet noch eine Freigabe. Sie wird zuerst entschieden, dann kann es geteilt werden.`
+            : `A request about ${label(member.kind.kind, member.record.name)} is still waiting. It is decided first; then it can be shared.`,
+          { asset: { kind: member.kind.kind, name: member.record.name }, requestId: open.id }
+        );
+    }
+  }
+}
+
+/** An agent goes into a team only within the tools and models the team allows (WS-BUILD-1). */
+async function refuseBeyondBuildLimits(
+  members: readonly MoveMember[],
+  workspace: CollaborationWorkspace | undefined,
+  place: string,
+  label: (kind: string, name: string) => string,
+  de: boolean
+): Promise<void> {
+  if (!workspace) return;
+  const { allowedToolNames, allowedModelBindingIds } = workspace;
+  if (allowedToolNames === undefined && allowedModelBindingIds === undefined) return;
+  const strings = (config: unknown, field: string) => {
+    const value = readDefinitionField(config, field);
+    if (typeof value === "string") return [value];
+    return Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === "string")
+      : [];
+  };
+  for (const member of members) {
+    if (member.kind.kind !== "agent") continue;
+    for (const config of [member.record.config, member.record.publishedConfig]) {
+      if (!config) continue;
+      const tool =
+        allowedToolNames &&
+        strings(config, "toolNames").find((name) => !allowedToolNames.includes(name));
+      const bindings = [
+        ...strings(config, "modelBindingId"),
+        ...strings(config, "userSelectableModelBindingIds")
+      ];
+      const model =
+        allowedModelBindingIds &&
+        (bindings.length === 0 ? "" : bindings.find((id) => !allowedModelBindingIds.includes(id)));
+      if (tool === undefined && model === undefined) continue;
+      throw refusal(
+        "move_build_limits",
+        de
+          ? `${label("agent", member.record.name)} nutzt ${tool === undefined ? "ein Modell" : `das Werkzeug „${tool}“`}, das in ${place} nicht erlaubt ist. Passe den Agenten an oder bitte einen Admin, es dort zu erlauben.`
+          : `${label("agent", member.record.name)} uses ${tool === undefined ? "a model" : `the tool "${tool}"`} that ${place} does not allow. Change the agent, or ask an admin to allow it there.`,
+        {
+          asset: { kind: "agent", name: member.record.name },
+          ...(tool === undefined ? {} : { toolName: tool }),
+          workspaceId: workspace.id
+        }
+      );
+    }
+  }
+}
+
+/**
+ * What stays where it is and can no longer use a moved asset: an asset of the old owner that
+ * uses one, where owner reach refuses the pair once the moved one belongs to the target. Only
+ * a move to a team can break anything: whatever is owned anywhere may use what Alle own.
+ */
+async function findBreaks(
+  options: Pick<AssetMoveOptions, "clientInstanceId" | "stores" | "kinds">,
+  input: {
+    from: AssetScope;
+    fromReach: AssetOwnerReach;
+    toReach: AssetOwnerReach;
+    memberIds: ReadonlySet<string>;
+    members: readonly MoveMember[];
+    titleOf(kind: WorkflowAssetKind, record: ConfigAssetRecord): string;
+  }
+): Promise<MoveBreak[]> {
+  if (input.toReach.kind === "instance") return [];
+  const moved = new Map(
+    input.members.map(({ kind, record }) => [`${kind.kind}:${record.name}`, record])
+  );
+  const breaks: MoveBreak[] = [];
+  for (const kind of options.kinds.kinds) {
+    if (!kind.references || !kind.owners.includes(input.from.kind)) continue;
+    let afterName: string | undefined;
+    for (;;) {
+      const page = await options.stores.configAssets.listConfigAssetPage({
+        clientInstanceId: options.clientInstanceId,
+        kind: kind.kind,
+        scope: input.from,
+        limit: 200,
+        ...(afterName === undefined ? {} : { afterName }),
+        readable: () => true
+      });
+      for (const listed of page) {
+        if (input.memberIds.has(listed.id)) continue;
+        // The page holds the draft; the published revision and an agent's draft are read too.
+        const record =
+          (await options.stores.configAssets.getConfigAsset({
+            clientInstanceId: options.clientInstanceId,
+            kind: kind.kind,
+            name: listed.name
+          })) ?? listed;
+        for (const reference of await usedBy(options, kind, record)) {
+          if (!moved.has(`${reference.kind}:${reference.name}`)) continue;
+          const refused = ownerReachRefusal(input.fromReach, {
+            kind: "reference",
+            target: input.toReach,
+            acrossOwners: kind.crossOwnerReferences?.includes(reference.kind) === true
+          });
+          if (refused === undefined) continue;
+          breaks.push({
+            kind: kind.kind,
+            name: record.name,
+            title: input.titleOf(kind, record),
+            uses: { kind: reference.kind, name: reference.name }
+          });
+        }
+      }
+      if (page.length < 200) break;
+      afterName = page.at(-1)?.name;
+    }
+  }
+  return breaks;
+}

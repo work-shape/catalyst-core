@@ -4502,6 +4502,246 @@
         "x-catalyst-rate-class": "write"
       }
     },
+    "/api/v1/assets/{kind}/{name}/move": {
+      "post": {
+        "operationId": "assets.move",
+        "summary": "Share one asset up to a team or to everyone, with what it uses",
+        "tags": [
+          "Assets"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "Catalyst-Unattended",
+            "in": "header",
+            "description": "`1` on a call of an API credential when nobody watches its terminal, such as `catalyst <kind> publish --yes`. The call is then not its caller's own confirmation: a call that needs one waits in the caller's Inbox and answers `202` with its run, status `pending_confirmation`. It only ever makes a call stricter; a browser session's call ignores it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveAssetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveAssetResponse"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/assets/{kind}/{name}/move/check": {
+      "post": {
+        "operationId": "assets.move_check",
+        "summary": "Check a move as it would be made, without making it",
+        "tags": [
+          "Assets"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveAssetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckAssetMoveResponse"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/assets/{kind}/{name}/preview": {
       "post": {
         "operationId": "assets.preview",
@@ -41299,6 +41539,39 @@
           }
         ]
       },
+      "AssetMoveTarget": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "instance"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "workspace"
+              },
+              "workspaceId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "kind",
+              "workspaceId"
+            ]
+          }
+        ]
+      },
       "AssetPointersResponse": {
         "type": "object",
         "properties": {
@@ -42353,6 +42626,200 @@
         },
         "required": [
           "ok"
+        ]
+      },
+      "CheckAssetMoveResponse": {
+        "type": "object",
+        "properties": {
+          "asset": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name",
+              "id"
+            ]
+          },
+          "from": {
+            "$ref": "#/components/schemas/AssetScope"
+          },
+          "to": {
+            "$ref": "#/components/schemas/AssetScope"
+          },
+          "path": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "request"
+            ]
+          },
+          "moves": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "name",
+                "id",
+                "title"
+              ]
+            }
+          },
+          "breaks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "uses": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "name"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "name",
+                "title",
+                "uses"
+              ]
+            }
+          },
+          "afterwards": {
+            "type": "object",
+            "properties": {
+              "owner": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "instance"
+                      },
+                      "workspaceName": {
+                        "type": "string"
+                      },
+                      "rung": {
+                        "type": "string",
+                        "enum": [
+                          "personal",
+                          "team",
+                          "everyone"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "rung"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "workspace"
+                      },
+                      "workspaceId": {
+                        "type": "string"
+                      },
+                      "workspaceName": {
+                        "type": "string"
+                      },
+                      "rung": {
+                        "type": "string",
+                        "enum": [
+                          "personal",
+                          "team",
+                          "everyone"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "workspaceId",
+                      "rung"
+                    ]
+                  }
+                ]
+              },
+              "editors": {
+                "type": "string",
+                "enum": [
+                  "workspace_builders",
+                  "instance_builders"
+                ]
+              },
+              "users": {
+                "type": "string",
+                "enum": [
+                  "workspace_members",
+                  "everyone_where_offered"
+                ]
+              },
+              "callerEdits": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "owner",
+              "editors",
+              "users",
+              "callerEdits"
+            ]
+          }
+        },
+        "required": [
+          "asset",
+          "from",
+          "to",
+          "path",
+          "moves",
+          "breaks",
+          "afterwards"
         ]
       },
       "CheckAssetNameRequest": {
@@ -46444,6 +46911,233 @@
           "totalTokens",
           "webSearchCallCount",
           "cost"
+        ]
+      },
+      "MoveAssetRequest": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "to": {
+            "$ref": "#/components/schemas/AssetMoveTarget"
+          },
+          "expectedAssetId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "acceptBreaks": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "to"
+        ]
+      },
+      "MoveAssetResponse": {
+        "type": "object",
+        "properties": {
+          "asset": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name",
+              "id"
+            ]
+          },
+          "from": {
+            "$ref": "#/components/schemas/AssetScope"
+          },
+          "to": {
+            "$ref": "#/components/schemas/AssetScope"
+          },
+          "path": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "request"
+            ]
+          },
+          "moves": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "name",
+                "id",
+                "title"
+              ]
+            }
+          },
+          "breaks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "uses": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "name"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "name",
+                "title",
+                "uses"
+              ]
+            }
+          },
+          "afterwards": {
+            "type": "object",
+            "properties": {
+              "owner": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "instance"
+                      },
+                      "workspaceName": {
+                        "type": "string"
+                      },
+                      "rung": {
+                        "type": "string",
+                        "enum": [
+                          "personal",
+                          "team",
+                          "everyone"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "rung"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "workspace"
+                      },
+                      "workspaceId": {
+                        "type": "string"
+                      },
+                      "workspaceName": {
+                        "type": "string"
+                      },
+                      "rung": {
+                        "type": "string",
+                        "enum": [
+                          "personal",
+                          "team",
+                          "everyone"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "workspaceId",
+                      "rung"
+                    ]
+                  }
+                ]
+              },
+              "editors": {
+                "type": "string",
+                "enum": [
+                  "workspace_builders",
+                  "instance_builders"
+                ]
+              },
+              "users": {
+                "type": "string",
+                "enum": [
+                  "workspace_members",
+                  "everyone_where_offered"
+                ]
+              },
+              "callerEdits": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "owner",
+              "editors",
+              "users",
+              "callerEdits"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "moved",
+              "requested"
+            ]
+          },
+          "requestId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "asset",
+          "from",
+          "to",
+          "path",
+          "moves",
+          "breaks",
+          "afterwards",
+          "status"
         ]
       },
       "MoveConversationRequest": {
