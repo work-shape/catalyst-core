@@ -6,12 +6,32 @@ import type { Page } from "@playwright/test";
 import { z } from "zod";
 import { shoot, shotsDir, signIn } from "./inbox-fixtures";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
+import { requestAnswered } from "./allowed-page-errors";
 import { expect, test } from "./test";
+
+// The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
+test.use({
+  allowedPageErrors: {
+    errors: [
+      {
+        name: "skill-import-over-a-deleted-address",
+        reason:
+          "Chromium's own log line: the test imports a skill again after deleting it, the first " +
+          "create is answered with 412 because a deleted asset holds the address, and the import " +
+          "creates it again after that delete.",
+        matches: requestAnswered(412),
+        path: /^\/api\/v1\/assets\/skill\/e2e_skill_import$/u,
+        tests: ["a skill is imported from a .zip, and its files are replaced from a folder"]
+      }
+    ]
+  }
+});
 
 // A skill brought into Studio whole: a .zip is imported from the Skills list, its files show on
 // the new skill's page with their sizes, and a folder replaces them with the files it adds,
-// changes and removes listed before the save. A member who may not write skills is offered
-// neither.
+// changes and removes listed before the save. The skill is the instance's, so the replace writes
+// its one shared draft (SKILL-DRAFT-1), which Publish makes live. A member who may not write
+// skills is offered neither.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
@@ -153,6 +173,19 @@ test("a skill is imported from a .zip, and its files are replaced from a folder"
     expect((await replaced).ok()).toBe(true);
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.locator('[data-skill-file="references/r.md"]')).toHaveCount(0);
+    await expect(page.locator("[data-agent-draft-badge]")).toHaveText("Draft version 1");
+    // The live skill keeps the imported files until the draft is published.
+    expect(
+      folderSchema.parse(await (await page.request.get(`${skillPath}?files=true`)).json()).revision
+    ).toBe(1);
+    await page.locator("[data-skill-publish]").click();
+    const published = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" && response.url() === `${skillPath}/publish`
+    );
+    await page.getByRole("dialog").getByRole("button", { name: "Publish", exact: true }).click();
+    expect((await published).ok()).toBe(true);
+    await expect(page.locator("[data-agent-draft-badge]")).toHaveCount(0);
 
     const second = folderSchema.parse(
       await (await page.request.get(`${skillPath}?files=true`)).json()
@@ -171,6 +204,22 @@ test("a skill is imported from a .zip, and its files are replaced from a folder"
     await expect(page.locator("[data-skill-import-replace]")).toHaveText(
       "Replace the files of Form import"
     );
+
+    // Once the skill is deleted, its address is free again: the import creates it anew after
+    // that delete and keeps its history.
+    await page.keyboard.press("Escape");
+    await removeSkill(page);
+    await page.goto("/build/skills");
+    await importZip(page, "e2e-skill-import.zip", archive);
+    await expect(page.locator("[data-skill-import-taken]")).toHaveCount(0);
+    const again = page.waitForResponse(
+      (response) =>
+        response.request().method() === "PUT" && response.url() === skillPath && response.ok()
+    );
+    await page.getByRole("button", { name: "Import", exact: true }).click();
+    await again;
+    await expect(page).toHaveURL(new RegExp(`/build/skills/${NAME}$`, "u"));
+    await page.goto("/build/skills");
 
     // The preview with a long German name, in both themes and at both widths.
     const long = new Map<string, Buffer | string>([

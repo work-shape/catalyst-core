@@ -450,13 +450,22 @@ function BuildFrameBody({
         <entry.importDialog.Dialog
           checkName={(name) => source.checkName(entry.kind, name)}
           create={async ({ name, files }) => {
+            const create = (expectedRevision: number | null) =>
+              source.writes.put({ kind: entry.kind, name, files, expectedRevision });
             try {
-              const stored = await source.writes.put({
-                kind: entry.kind,
-                name,
-                files,
-                expectedRevision: null
-              });
+              let stored: { revision: number };
+              try {
+                stored = await create(null);
+              } catch (error) {
+                // The address is held by a deleted asset, as on a page opened empty: the import
+                // creates it again after that delete, which the instance has just told, and it
+                // keeps its history.
+                const met = readBuildRefusal(error, t, locale);
+                if (met.ok || !met.conflict || !met.deleted || met.currentRevision === undefined) {
+                  throw error;
+                }
+                stored = await create(met.currentRevision);
+              }
               return { ok: true, revision: stored.revision };
             } catch (error) {
               const outcome = readBuildRefusal(error, t, locale);
