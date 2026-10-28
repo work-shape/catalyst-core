@@ -13,6 +13,7 @@ import { expect, test } from "./test";
 
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
 const EDIT_IN_CHAT = /^(?:Edit in chat|Im Chat bearbeiten)$/u;
+test.describe.configure({ retries: 0 });
 
 const html = (title: string, text: string) =>
   `<!doctype html><html><head><title>${title}</title></head><body><h1>${text}</h1></body></html>`;
@@ -172,12 +173,17 @@ test("another builder sees who checked out the draft until a save or 24 hours id
             await expect(
               viewer.getByRole("menuitem", { name: /(?:Edit in chat|Im Chat bearbeiten) · /u })
             ).toBeVisible();
-            const bounds = await viewer.getByRole("menu").boundingBox();
-            expect(bounds).not.toBeNull();
-            if (bounds) {
-              expect(bounds.x).toBeGreaterThanOrEqual(0);
-              expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
-            }
+            await expect(viewer.getByRole("menu")).toHaveCSS("opacity", "1");
+            const menu = viewer.getByRole("menu");
+            await expect
+              .poll(async () => (await menu.boundingBox())?.x ?? -1)
+              .toBeGreaterThanOrEqual(0);
+            await expect
+              .poll(async () => {
+                const bounds = await menu.boundingBox();
+                return bounds ? bounds.x + bounds.width : Infinity;
+              })
+              .toBeLessThanOrEqual(width);
             await viewer.keyboard.press("Escape");
             await expect(viewer.getByRole("menu")).toBeHidden();
           } else {

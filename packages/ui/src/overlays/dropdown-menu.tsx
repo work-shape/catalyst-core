@@ -80,7 +80,7 @@ export function DropdownMenuContent({
         collisionPadding={ANCHORED_COLLISION_PADDING}
         className={cn(
           anchoredPanelClassName,
-          "max-h-(--radix-dropdown-menu-content-available-height) min-w-48 overflow-y-auto p-1",
+          "max-h-(--radix-dropdown-menu-content-available-height) max-w-(--radix-dropdown-menu-content-available-width) min-w-48 overflow-y-auto p-1",
           className
         )}
         {...props}
