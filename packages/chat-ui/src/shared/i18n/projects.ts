@@ -13,6 +13,8 @@ export const projects = defineTranslations({
     "projects.chatCount": "{count} chats",
     "projects.chatCountOne": "1 chat",
     "projects.railAll": "All projects",
+    "projects.railAllChats": "All chats",
+    "projects.railChatsOf": "Chats in {project}",
     // Its own name: the page's "New project" button stands beside it on the Projects page.
     "projects.railNew": "Add project",
     "projects.new": "New project",
@@ -70,6 +72,8 @@ export const projects = defineTranslations({
     "projects.chatCount": "{count} Chats",
     "projects.chatCountOne": "1 Chat",
     "projects.railAll": "Alle Projekte",
+    "projects.railAllChats": "Alle Chats",
+    "projects.railChatsOf": "Chats in {project}",
     "projects.railNew": "Projekt hinzufügen",
     "projects.new": "Neues Projekt",
     "projects.listFailed": "Die Projekte konnten nicht geladen werden.",

@@ -32,6 +32,8 @@ const projectQueryKeys = {
   one: (apiBaseUrl: string, name: string) => ["projects", apiBaseUrl, "one", name] as const,
   conversations: (apiBaseUrl: string, projectId: string) =>
     ["projects", apiBaseUrl, "conversations", projectId] as const,
+  railChats: (apiBaseUrl: string, projectId: string) =>
+    ["projects", apiBaseUrl, "rail-chats", projectId] as const,
   setup: (apiBaseUrl: string, projectId: string) =>
     ["projects", apiBaseUrl, "setup", projectId] as const
 };
@@ -90,6 +92,32 @@ export function useProjectConversationsQuery(project: ProjectView | undefined) {
             collaborationWorkspaceId: project?.collaborationWorkspaceId ?? "",
             projectId: project?.id ?? "",
             limit: PROJECT_CONVERSATIONS_LIMIT
+          },
+          signal
+        })
+      ).items,
+    enabled: client !== undefined && project !== undefined
+  });
+}
+
+/**
+ * The newest chats of a project the person reads, as many as the rail shows under its row. The
+ * same list as the project page's, so the same audience decides.
+ */
+export function useProjectRailChatsQuery(
+  project: Pick<ProjectView, "id" | "collaborationWorkspaceId"> | undefined,
+  limit: number
+) {
+  const { apiBaseUrl, client } = useWorkspaceApiClient();
+  return useQuery({
+    queryKey: projectQueryKeys.railChats(apiBaseUrl, project?.id ?? ""),
+    queryFn: async ({ signal }): Promise<ConversationListItem[]> =>
+      (
+        await requireClient(client).conversations.list({
+          query: {
+            collaborationWorkspaceId: project?.collaborationWorkspaceId ?? "",
+            projectId: project?.id ?? "",
+            limit
           },
           signal
         })

@@ -6,6 +6,9 @@ import {
   CollaborationWorkspaceSelector,
   DockedChat,
   WorkspaceRail,
+  activeRailProject,
+  railProjectChats,
+  type RailProject,
   retentionHintAfter,
   retentionHintClosed,
   retentionHintOpen,
@@ -1024,5 +1027,211 @@ describe("workspace rail conversation rows", () => {
 
     expect(markup).toContain("Angebot Q3");
     expect(markup).not.toContain("Aug 1");
+  });
+});
+
+// PRJ-5: the project whose page or chat is open unfolds in the rail to its five newest chats
+// the person reads, with "All chats" to its page; "Recent" leaves those chats out.
+
+function projectChat(id: string, minute: number, projectId?: string): ConversationListItem {
+  const at = `2026-10-29T10:${String(minute).padStart(2, "0")}:00.000Z`;
+  return {
+    id,
+    clientInstanceId: "client",
+    collaborationWorkspaceId: "cw_team",
+    createdByUserId: "user_1",
+    createdByExternalUserId: "external_1",
+    visibility: "workspace",
+    title: `Chat ${id}`,
+    status: "active",
+    createdAt: at,
+    updatedAt: at,
+    retainedUntil: "2027-10-29T10:00:00.000Z",
+    ...(projectId ? { projectId } : {})
+  };
+}
+
+function railProject(id: string, title: string, audience: "workspace" | "private" = "workspace") {
+  return {
+    id,
+    name: id,
+    title,
+    audience,
+    collaborationWorkspaceId: "cw_team"
+  } satisfies RailProject;
+}
+
+const nord = railProject("prj_nord", "Projekt Nord");
+const sued = railProject("prj_sued", "Projekt Süd");
+
+describe("the active project of the rail", () => {
+  const projects = [nord, sued];
+
+  it("is the project whose page is open", () => {
+    expect(activeRailProject(projects, { projectName: "prj_sued" })).toBe(sued);
+  });
+
+  it("is the project of the open chat", () => {
+    expect(activeRailProject(projects, { conversation: projectChat("c1", 1, "prj_nord") })).toBe(
+      nord
+    );
+  });
+
+  it("is none for a chat outside a project, or a project the rail does not list", () => {
+    expect(activeRailProject(projects, { conversation: projectChat("c1", 1) })).toBeUndefined();
+    expect(
+      activeRailProject(projects, { conversation: projectChat("c1", 1, "prj_hidden") })
+    ).toBeUndefined();
+    expect(activeRailProject(projects, { projectName: "prj_hidden" })).toBeUndefined();
+    expect(activeRailProject(undefined, { projectName: "prj_nord" })).toBeUndefined();
+  });
+});
+
+describe("the chats under the active project's row", () => {
+  it("are its five newest, newest first", () => {
+    const fetched = [1, 2, 3, 4, 5, 6].map((minute) =>
+      projectChat(`n${minute}`, minute, "prj_nord")
+    );
+    expect(railProjectChats("prj_nord", fetched, [], undefined).map(({ id }) => id)).toEqual([
+      "n6",
+      "n5",
+      "n4",
+      "n3",
+      "n2"
+    ]);
+  });
+
+  it("take a chat just started, and leave out one moved out or of another project", () => {
+    const fetched = [projectChat("n1", 1, "prj_nord"), projectChat("n2", 2, "prj_nord")];
+    const loaded = [
+      projectChat("new", 9, "prj_nord"),
+      // Moved out since the project's list was read.
+      { ...projectChat("n2", 8), title: "Moved" },
+      projectChat("s1", 7, "prj_sued"),
+      projectChat("free", 6)
+    ];
+    expect(railProjectChats("prj_nord", fetched, loaded, undefined).map(({ id }) => id)).toEqual([
+      "new",
+      "n1"
+    ]);
+  });
+
+  it("show a chat as the rail has it now", () => {
+    const renamed = { ...projectChat("n1", 1, "prj_nord"), title: "Neu benannt", unread: true };
+    expect(
+      railProjectChats("prj_nord", [projectChat("n1", 1, "prj_nord")], [renamed], undefined)
+    ).toEqual([renamed]);
+  });
+
+  it("keep the open chat after them when it is older", () => {
+    const fetched = [1, 2, 3, 4, 5, 6].map((minute) =>
+      projectChat(`n${minute}`, minute + 10, "prj_nord")
+    );
+    const open = projectChat("old", 0, "prj_nord");
+    expect(railProjectChats("prj_nord", fetched, [], open).map(({ id }) => id)).toEqual([
+      "n6",
+      "n5",
+      "n4",
+      "n3",
+      "n2",
+      "old"
+    ]);
+  });
+});
+
+/** The rail of a workspace with projects, in German unless said otherwise. */
+function renderProjectRail(overrides: Partial<RailProps>, locale: LocaleCode = "de"): string {
+  return renderRail(
+    undefined,
+    undefined,
+    [...(overrides.conversations ?? [])],
+    { projects: true, ...overrides },
+    locale
+  );
+}
+
+/** The titles of the conversation rows in the markup, in order. */
+function rows(html: string): string[] {
+  return [...html.matchAll(/data-testid="conversation-row"[^]*?title="([^"]+)"/gu)].map(
+    (match) => match[1] ?? ""
+  );
+}
+
+/** The part of the markup from one test id to the next one given. */
+function between(html: string, from: string, to: string): string {
+  const start = html.indexOf(`data-testid="${from}"`);
+  const end = html.indexOf(`data-testid="${to}"`, start);
+  expect(start).toBeGreaterThan(-1);
+  expect(end).toBeGreaterThan(start);
+  return html.slice(start, end);
+}
+
+describe("the rail with an active project", () => {
+  const inNord = [projectChat("n2", 5, "prj_nord"), projectChat("n1", 4, "prj_nord")];
+  const conversations = [projectChat("free", 6), ...inNord, projectChat("s1", 3, "prj_sued")];
+
+  it("unfolds the active project's row to its chats and All chats, and no other", () => {
+    const html = renderProjectRail({
+      recentProjects: [nord, sued],
+      activeProject: { id: "prj_nord", chats: inNord },
+      conversations,
+      selectedConversationId: "n1"
+    });
+    expect(html.match(/data-testid="rail-project-chats"/gu)).toHaveLength(1);
+    expect(html).toContain('aria-label="Chats in Projekt Nord"');
+    const group = between(html, "rail-project-chats", "rail-project-chats-all");
+    expect(rows(group)).toEqual(["Chat n2", "Chat n1"]);
+    expect(between(html, "rail-project-chats-all", "rail-projects-all")).toContain("Alle Chats");
+    // The rows under the project carry no project mark: the row above says it.
+    expect(group).not.toContain('data-testid="conversation-project-marker"');
+    expect(group).toMatch(/data-selected="true"[^]*Chat n1/u);
+    // The chats stand right under their project's row, before the next project.
+    expect(html.indexOf("Projekt Nord")).toBeLessThan(
+      html.indexOf('data-testid="rail-project-chats"')
+    );
+    expect(html.indexOf('data-testid="rail-project-chats"')).toBeLessThan(
+      html.indexOf("Projekt Süd")
+    );
+  });
+
+  it("leaves those chats out of Recent, and keeps the rest there", () => {
+    const html = renderProjectRail({
+      recentProjects: [nord, sued],
+      activeProject: { id: "prj_nord", chats: inNord },
+      conversations
+    });
+    const recent = html.slice(html.indexOf('data-testid="rail-projects-all"'));
+    expect(recent).toContain("Zuletzt");
+    expect(rows(recent)).toEqual(["Chat free", "Chat s1"]);
+    expect(rows(html)).toEqual(["Chat n2", "Chat n1", "Chat free", "Chat s1"]);
+  });
+
+  it("says nothing is there when Recent holds only the project's chats", () => {
+    const html = renderProjectRail({
+      recentProjects: [nord],
+      activeProject: { id: "prj_nord", chats: inNord },
+      conversations: inNord
+    });
+    expect(html).toContain("Zuletzt");
+    expect(html).not.toContain("Noch keine Unterhaltungen");
+    expect(rows(html)).toEqual(["Chat n2", "Chat n1"]);
+  });
+
+  it("lists the active project among the recent ones when it was used earlier", () => {
+    const projects = [1, 2, 3, 4, 5].map((n) => railProject(`prj_${n}`, `Projekt ${n}`));
+    const older = railProject("prj_alt", "Projekt Alt");
+    const html = renderProjectRail({
+      recentProjects: [...projects, older],
+      activeProject: { id: "prj_alt", chats: [projectChat("a1", 1, "prj_alt")] }
+    });
+    expect(html.match(/data-testid="rail-project"/gu)).toHaveLength(6);
+    expect(html).toContain("Projekt Alt");
+    expect(between(html, "rail-project-chats", "rail-projects-all")).toContain("Chat a1");
+  });
+
+  it("unfolds nothing without an active project", () => {
+    const html = renderProjectRail({ recentProjects: [nord, sued], conversations }, "en");
+    expect(html).not.toContain('data-testid="rail-project-chats"');
+    expect(rows(html)).toEqual(["Chat free", "Chat n2", "Chat n1", "Chat s1"]);
   });
 });
