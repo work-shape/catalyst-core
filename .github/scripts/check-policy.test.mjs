@@ -166,8 +166,15 @@ test("every job runs on every release run, after the dispatch policy", () => {
 const prWorkflow = readFileSync(new URL("../workflows/pr.yml", import.meta.url), "utf8");
 const prJobs = parse(prWorkflow).jobs;
 
-test("PR checks run three independent static jobs and eight shards on GitHub-hosted runners", () => {
-  assert.deepEqual(Object.keys(prJobs).sort(), ["check", "lint", "tests", "tooling", "types"]);
+test("PR checks run static jobs, capture isolation and eight shards on GitHub-hosted runners", () => {
+  assert.deepEqual(Object.keys(prJobs).sort(), [
+    "check",
+    "lint",
+    "preview-capture",
+    "tests",
+    "tooling",
+    "types"
+  ]);
   for (const [name, job] of Object.entries(prJobs)) {
     assert.equal(job["runs-on"], "ubuntu-latest", name);
     if (name !== "check") {
@@ -187,7 +194,7 @@ test("PR checks run three independent static jobs and eight shards on GitHub-hos
     "pnpm exec vitest run --shard=${{ matrix.shard }}/8"
   );
   assert.equal(prJobs.check.if, "always()");
-  assert.deepEqual(prJobs.check.needs, ["lint", "types", "tooling", "tests"]);
+  assert.deepEqual(prJobs.check.needs, ["lint", "types", "tooling", "tests", "preview-capture"]);
 });
 
 test("PR checks retain every static command in its parallel job", () => {
@@ -231,7 +238,22 @@ test("PR checks retain every static command in its parallel job", () => {
 });
 
 test("PR jobs build locally when needed and never transfer compiled output", () => {
-  assert.doesNotMatch(prWorkflow, /actions\/(?:upload-artifact|download-artifact|cache)(?:\/|@)/u);
+  assert.doesNotMatch(prWorkflow, /actions\/(?:download-artifact|cache)(?:\/|@)/u);
+  // Capture evidence is the only upload: no compiled output is shared between jobs.
+  for (const [name, job] of Object.entries(prJobs)) {
+    const uploads = job.steps.filter((step) => step.uses?.startsWith("actions/upload-artifact@"));
+    assert.equal(uploads.length, name === "preview-capture" ? 1 : 0, name);
+    if (uploads.length) {
+      assert.equal(uploads[0].name, "Capture proof");
+      assert.equal(uploads[0].if, "always()");
+      assert.deepEqual(uploads[0].with, {
+        name: "preview-capture-proof",
+        path: ".tmp/capture-proof/",
+        "include-hidden-files": true,
+        "if-no-files-found": "error"
+      });
+    }
+  }
   for (const name of ["tooling", "tests"]) {
     assert.equal(prJobs[name].steps.find((step) => step.name === "Build").run, "pnpm build");
   }
@@ -239,4 +261,25 @@ test("PR jobs build locally when needed and never transfer compiled output", () 
   for (const name of ["lint", "types"]) {
     assert.ok(!prJobs[name].steps.some((step) => step.name === "Build"), name);
   }
+});
+
+test("capture isolation is a required real container proof on each PR", () => {
+  const capture = prJobs["preview-capture"];
+  assert.ok(prJobs.check.needs.includes("preview-capture"));
+  assert.equal(capture["runs-on"], "ubuntu-latest");
+  assert.ok(
+    capture.steps.some(
+      (step) => step.run === "pnpm --filter @work-shape/catalyst-preview-capture build"
+    )
+  );
+  assert.ok(
+    capture.steps.some(
+      (step) =>
+        step.run === "docker build -t catalyst-srv1-preview-capture packages/preview-capture"
+    )
+  );
+  const proof = capture.steps.find(
+    (step) => step.run === "pnpm exec vitest run tests/preview-capture-service.browser.test.ts"
+  );
+  assert.deepEqual(proof.env, { CAPTURE_BROWSER_TESTS: "1" });
 });
