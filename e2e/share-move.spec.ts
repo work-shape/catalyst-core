@@ -205,8 +205,15 @@ test("a member shares a skill with their team, another asks to share with everyo
   await askerOwn.put();
 
   const ask = await openShare(askerPage, askerOwn.personal, askName, askTitle);
-  // The team gives the asker no right, so the one rung above their own is Alle.
-  await expect(ask.locator("[data-share-target]")).toHaveText("Alle");
+  // The team gives the asker no right on its skills, yet they belong to it: it is offered first,
+  // as a request, and Alle beside it.
+  const toTeam = ask.getByRole("radio", { name: new RegExp(team, "u") });
+  await expect(toTeam).toBeChecked();
+  await expect(ask.locator("[data-share-users]")).toHaveText(`Die Mitglieder von ${team}`);
+  await expect(ask.locator("[data-share-request]")).toBeVisible();
+  await expect(ask.getByRole("button", { name: "Anfrage senden" })).toBeEnabled();
+  await shoot(askerPage, "dialog-request-team");
+  await ask.getByRole("radio", { name: /^Alle/u }).check();
   await expect(ask.locator("[data-share-users]")).toHaveText("Alle, denen es angeboten wird");
   await expect(ask.locator("[data-share-request]")).toBeVisible();
   const send = ask.getByRole("button", { name: "Anfrage senden" });
