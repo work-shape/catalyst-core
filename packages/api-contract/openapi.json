@@ -8640,6 +8640,9 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
           },
@@ -43637,6 +43640,10 @@
           },
           "subject": {
             "$ref": "#/components/schemas/ConversationSubject"
+          },
+          "checkout": {
+            "type": "boolean",
+            "const": true
           },
           "creationTarget": {
             "$ref": "#/components/schemas/ConversationCreationTarget"

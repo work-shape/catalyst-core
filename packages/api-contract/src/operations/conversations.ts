@@ -64,7 +64,7 @@ export const conversationOperations = {
     effect: "changing",
     body: createConversationRequestSchema,
     response: json(conversationSchema),
-    errors: ["NOT_FOUND"],
+    errors: ["NOT_FOUND", "FORBIDDEN", "CONFLICT", "VALIDATION_FAILED"],
     rateClass: "write"
   }),
   "conversations.rename": defineOperation({

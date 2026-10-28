@@ -115,6 +115,11 @@ interface AppsModel {
    */
   editWithAgent(app: string, options?: { fresh: boolean }): Promise<void>;
   /**
+   * "Edit in chat": a new conversation with the agent that builds, holding the App's current
+   * draft and its files, in the dock beside the App's draft. Absent where no agent here builds.
+   */
+  editInChat?(app: string): Promise<void>;
+  /**
    * Opens the dock on the list with a new conversation with an agent that builds assets and
    * `prompt` in its composer: its first save creates the App. Absent where no agent here builds
    * them, or the person may write no App.

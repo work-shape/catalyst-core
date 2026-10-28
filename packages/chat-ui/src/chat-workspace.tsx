@@ -536,6 +536,7 @@ function ChatWorkspaceContent({
     showRoute: model.route.showRoute,
     startChat: model.apps.startChat,
     editWithAgent: model.apps.editWithAgent,
+    ...(model.apps.editInChat ? { editInChat: model.apps.editInChat } : {}),
     ...(model.apps.startNew ? { startNew: model.apps.startNew } : {}),
     // An App's card stands in the conversation on screen: a publish from it tells its agent.
     ...(cardConversation === undefined

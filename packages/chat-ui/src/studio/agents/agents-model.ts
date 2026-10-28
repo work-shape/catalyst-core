@@ -85,13 +85,13 @@ export function editWithBuildingAgent(
   startAbout: (
     subject: { kind: string; name: string },
     workspaceId: string | undefined,
-    options?: { fresh: boolean }
+    options?: { fresh: boolean; checkout?: true }
   ) => Promise<void>
 ):
   | ((
       subject: { kind: string; name: string },
       workspaceId: string | undefined,
-      options?: { fresh: boolean }
+      options?: { fresh: boolean; checkout?: true }
     ) => Promise<void>)
   | undefined {
   if (buildingAgentName === undefined) {

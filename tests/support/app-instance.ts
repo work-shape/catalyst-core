@@ -208,6 +208,7 @@ export async function setupAppInstance(options: AppInstanceOptions = {}): Promis
         })
       },
       allowedOrigins: ["https://ui.example.test"],
+      ...(options.workspaceObjects ? { workspaceObjects: options.workspaceObjects } : {}),
       ...(options.explicitCredentials
         ? { authAdapter: { ...recordAuthAdapter(), credentialMode: "explicit" as const } }
         : {}),

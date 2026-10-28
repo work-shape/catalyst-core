@@ -152,6 +152,11 @@ export interface ChatServerOptions {
       mimeType: string;
     }>;
   };
+  /**
+   * The object store of the conversations' Execution Workspaces, where "Edit in chat" on an
+   * App's page writes the App's files into a new conversation. Without it that start is refused.
+   */
+  workspaceObjects?: ObjectStorage;
   executionWorkspaceCleanup?: {
     store: ExecutionWorkspaceCleanupStore;
     objects?: {

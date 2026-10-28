@@ -37,6 +37,13 @@ export interface AppsHost {
    */
   editWithAgent?(app: string, options?: { fresh: boolean }): Promise<void>;
   /**
+   * "Edit in chat": a new conversation of the reader's own with the agent that builds, which
+   * the instance makes holding the App's current draft with all its files, opened in the dock
+   * beside the App's draft. Rejects where the instance refuses it, such as for a reader who may
+   * not change the App. Absent where no agent here builds Apps.
+   */
+  editInChat?(app: string): Promise<void>;
+  /**
    * Sends the person's message to the conversation on screen, queued behind a run that goes
    * (CHAT-CONN-1): an App published from its card there tells the agent, which carries on
    * (APPCARD-1). Absent without a conversation.
