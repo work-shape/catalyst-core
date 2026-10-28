@@ -1,3 +1,4 @@
+import { checkpointFrame } from "./continuation-checkpoint";
 import type {
   ClientInstanceId,
   JsonValue,
@@ -37,6 +38,7 @@ export function createBranchProgress(options: {
     error: WorkflowRunError,
     systemic?: boolean
   ): Promise<void>;
+  resumePending(tx: PlatformStores, run: WorkflowRun, stepRun?: WorkflowStepRun): Promise<boolean>;
   stepDataMaxBytes: number;
 }) {
   const { clientInstanceId, now, beginStep, advance, failBlock } = options;
@@ -79,7 +81,7 @@ export function createBranchProgress(options: {
       await complete(tx, run, index, block, { taken, result: null });
       return;
     }
-    await tx.workflowRuns.markBlockWaiting({ clientInstanceId, id: block.id });
+    await tx.workflowRuns.markBlockWaiting({ clientInstanceId, id: block.id, taken });
     await beginStep(
       tx,
       run,
@@ -95,8 +97,12 @@ export function createBranchProgress(options: {
     index: WorkflowStepIndex,
     block: WorkflowStepRun
   ) {
+    if (await options.resumePending(tx, run, block)) return;
+    const current = await tx.workflowRuns.getStepRun({ clientInstanceId, id: block.id });
+    if (current?.status !== "waiting") return;
     const step = index.get(block.stepId)?.step;
     if (step?.type !== "parallel" && step?.type !== "condition") return;
+    const frame = await checkpointFrame(tx, run, block);
     const children = await tx.workflowRuns.readBlockSteps({ clientInstanceId, id: block.id });
     const outputOf = async (last: WorkflowStep | undefined): Promise<JsonValue> => {
       if (!last) return null;
@@ -140,6 +146,12 @@ export function createBranchProgress(options: {
         ))
       )
         return;
+      // Restoring a completed prefix may itself join this block or admit its siblings.
+      if (
+        Object.hasOwn(frame?.completed ?? {}, first.id) ||
+        Object.hasOwn(frame?.failed ?? {}, first.id)
+      )
+        return fillBranches(tx, run, index, block);
       going++;
     }
     if (going > 0) return;
@@ -156,15 +168,15 @@ export function createBranchProgress(options: {
         index,
         block,
         {
-          ...(block.error ??
+          ...(current.error ??
             cause?.error ??
             failed.error ?? {
               code: "parallel_branch_failed",
               message: "A branch of the parallel step failed"
             }),
-          stepRunId: block.error?.stepRunId ?? failed.error?.stepRunId ?? failed.id
+          stepRunId: current.error?.stepRunId ?? failed.error?.stepRunId ?? failed.id
         },
-        block.error !== undefined
+        current.error !== undefined
       );
       return;
     }

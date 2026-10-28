@@ -27,6 +27,7 @@ export function createStepClaim(options: {
   now(): Date;
   waiting: ReturnType<typeof createRunWaiting>;
   executor: ReturnType<typeof createStepExecutor>;
+  resumePending(tx: PlatformStores, run: WorkflowRun, stepRun: WorkflowStepRun): Promise<boolean>;
   finishRun(
     tx: PlatformStores,
     run: WorkflowRun,
@@ -59,6 +60,8 @@ export function createStepClaim(options: {
       const stepRun = await tx.workflowRuns.getStepRun(ref);
       if (!chain || !stepRun) return undefined;
       let run = chain.run;
+      if (stepRun.status === "queued" && (await options.resumePending(tx, run, stepRun)))
+        return undefined;
       // A code step waits while the command worker runs its script, and is taken up again
       // when the script has ended. Nothing else that waits is executed by a step job.
       const afterChild =
@@ -110,7 +113,9 @@ export function createStepClaim(options: {
           : undefined;
       const index = definition ? indexWorkflowSteps(definition) : undefined;
       let container = stepRun.containerStepRunId;
-      let drains = false;
+      let drains =
+        (await tx.workflowRuns.readCheckpoint({ clientInstanceId, id: run.id }))?.pending !==
+        undefined;
       while (container && !drains) {
         const parent = await tx.workflowRuns.getStepRun({ clientInstanceId, id: container });
         const loop = parent ? index?.get(parent.stepId)?.step : undefined;

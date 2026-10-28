@@ -244,6 +244,21 @@ export async function memoryWorkflowEngine(
     async readCheckpoint(ref) {
       return clone(checkpoints.get(ref.id));
     },
+    async readBlockSteps(ref) {
+      return [...steps.values()]
+        .filter(
+          (step) =>
+            step.containerStepRunId === ref.id &&
+            (ref.iteration === undefined || step.iteration?.index === ref.iteration)
+        )
+        .map(clone);
+    },
+    async requestContinuation(ref) {
+      checkpoints.set(ref.id, {
+        ...(checkpoints.get(ref.id) ?? { stepId: "", offset: 0 }),
+        pending: clone(ref.pending)
+      });
+    },
     async listRuns() {
       return [...runs.values()].map(clone);
     },

@@ -50,31 +50,15 @@ export async function workflowContinuationIssues(
   };
   for (const [id, entry] of index) {
     if (entry.step.type !== "loop" || !entry.step.continueAsNew) continue;
-    const containsBranch = (step: WorkflowStep): boolean =>
-      step.type === "condition" ||
-      step.type === "parallel" ||
-      (step.type === "loop" && step.steps.some(containsBranch));
-    if (entry.step.steps.some(containsBranch))
-      issues.push({
-        path: `steps.${id}.continueAsNew`,
-        message:
-          "continueAsNew cannot checkpoint a condition or parallel inside its body yet / continueAsNew kann einen Bedingungs- oder Parallelblock im Schleifenkörper noch nicht fortsetzen."
-      });
     let current: typeof entry | undefined = entry;
     while (current) {
-      if (current.step.type === "condition" || current.step.type === "parallel")
-        issues.push({
-          path: `steps.${id}.continueAsNew`,
-          message:
-            "continueAsNew cannot checkpoint inside a condition or parallel yet / continueAsNew kann innerhalb eines Bedingungs- oder Parallelblocks noch nicht fortsetzen."
-        });
       if (current !== entry && current.step.type === "loop" && (current.step.concurrency ?? 1) > 1)
         issues.push({
           path: `steps.${current.step.id}.concurrency`,
           message: `Loop '${current.step.id}' cannot use concurrency above 1 while enclosing continueAsNew loop '${id}': a continuation checkpoint cannot record unfinished sibling items. / Schleife '${current.step.id}' darf keine concurrency über 1 verwenden, wenn sie die continueAsNew-Schleife '${id}' umschließt: Ein Fortsetzungspunkt kann den Fortschritt noch laufender Geschwisterelemente nicht speichern.`
         });
       for (const step of current.sequence.steps.slice(0, current.position)) {
-        if (await changing(step))
+        if (!current.sequence.container && (await changing(step)))
           issues.push({
             path: `steps.${step.id}`,
             message: `Step '${step.id}' cannot precede continueAsNew loop '${id}' at its level or an enclosing level: writes, sends, notifications, child Workflow starts and loops containing them would run again in every history. / Schritt '${step.id}' darf nicht vor der continueAsNew-Schleife '${id}' auf derselben oder einer umschließenden Ebene stehen: Schreibzugriffe, Versand, Benachrichtigungen, Starts von Kind-Workflows und Schleifen mit diesen Schritten würden in jedem Fortsetzungslauf erneut ausgeführt.`

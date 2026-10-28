@@ -10,7 +10,7 @@ import type { JsonObject, JsonValue } from "./json";
 import type { OperationRunActor } from "./operation-runs";
 import type { StorePage } from "./paging";
 import type { ISODateString } from "./time";
-import type { WorkflowBlockStepRunView } from "./workflow-blocks";
+import type { WorkflowBlockStepRunView, WorkflowConditionOutput } from "./workflow-blocks";
 import type {
   WorkflowLastRun,
   WorkflowLoopCounts,
@@ -180,6 +180,27 @@ export interface WorkflowRunBounds {
   concurrency?: { key: string; slots: number };
 }
 
+/** A block frontier; only unfinished items and their completed prefix leave a history. */
+export type WorkflowCheckpointFrame = {
+  stepId: string;
+  stepType?: Extract<WorkflowStep["type"], "loop" | "parallel" | "condition">;
+  offset: number;
+  /** Remaining items; omitted when a cursor continuation reads its next page. */
+  items?: JsonValue[] | WorkflowDatasetReference;
+  /** Finished items in earlier histories, excluding the saved frontier. */
+  counts?: { total: number; done: number; failed: number };
+  completed?: Record<string, JsonValue>;
+  failed?: Record<string, { [K in keyof WorkflowRunError]: WorkflowRunError[K] }>;
+  taken?: WorkflowConditionOutput["taken"];
+  failure?: { [K in keyof WorkflowRunError]: WorkflowRunError[K] };
+};
+
+export type WorkflowPendingContinuation = {
+  loopRunId: WorkflowStepRunId;
+  completed: number;
+  before?: string;
+};
+
 export type NewWorkflowRun = Pick<
   WorkflowRun,
   | "id"
@@ -211,21 +232,12 @@ export type NewWorkflowRun = Pick<
     /** The run's input, checked against the definition's `inputs`. */
     input: JsonObject;
     /** Engine-owned checkpoint; values are read separately and never in run/list responses. */
-    checkpoint?: {
-      stepId: string;
-      offset: number;
-      /** Remaining items; omitted for cursor continuations that read the next page. */
-      items?: JsonValue[] | WorkflowDatasetReference;
-      /** Totals of finished items in earlier histories, excluding the saved frontier. */
-      counts?: { total: number; done: number; failed: number };
-      completed?: Record<string, JsonValue>;
-      ancestors?: {
-        stepId: string;
-        offset: number;
-        items?: JsonValue[] | WorkflowDatasetReference;
-        counts?: { total: number; done: number; failed: number };
-        completed?: Record<string, JsonValue>;
-      }[];
+    checkpoint?: WorkflowCheckpointFrame & {
+      ancestors?: WorkflowCheckpointFrame[];
+      /** Open blocks, addressed by their path in the successor's first resumed item. */
+      blocks?: Record<string, WorkflowCheckpointFrame>;
+      /** A durable request: admitted calls settle before any history is retired. */
+      pending?: WorkflowPendingContinuation;
     };
   };
 
@@ -532,6 +544,9 @@ export interface WorkflowRunsStore {
   readRunInput(ref: WorkflowRunRef): Promise<JsonObject | undefined>;
   /** The bounded loop position carried from the previous history. */
   readCheckpoint(ref: WorkflowRunRef): Promise<NewWorkflowRun["checkpoint"]>;
+  requestContinuation(
+    ref: WorkflowRunRef & { pending: WorkflowPendingContinuation }
+  ): Promise<void>;
   /** The definition a run was started on. `id` is whatever a caller named. */
   readRunDefinition(input: {
     clientInstanceId: ClientInstanceId;
@@ -557,13 +572,15 @@ export interface WorkflowRunsStore {
   /** Writes a step run as `queued` and counts it on its run. */
   createStepRun(stepRun: NewWorkflowStepRun): Promise<WorkflowStepRun>;
   getStepRun(ref: WorkflowStepRunRef): Promise<WorkflowStepRun | undefined>;
-  /** Direct children of a branch block, bounded by the definition's step count. Behind the run lock. */
-  readBlockSteps(ref: WorkflowStepRunRef): Promise<WorkflowStepRun[]>;
+  /** Direct children behind the run lock. Select one iteration for a loop frontier. */
+  readBlockSteps(ref: WorkflowStepRunRef & { iteration?: number }): Promise<WorkflowStepRun[]>;
+  readBlockTaken(ref: WorkflowStepRunRef): Promise<WorkflowConditionOutput["taken"] | undefined>;
   /** A branch block gives up its job; its children carry it to the join. */
   markBlockWaiting(
     ref: WorkflowStepRunRef & {
       /** A run-wide refusal is propagated after every sibling branch drains. */
       failure?: WorkflowRunError;
+      taken?: WorkflowConditionOutput["taken"];
     }
   ): Promise<void>;
   /** Moves a step run that has not ended to `running` under the number of the attempt. */

@@ -324,7 +324,7 @@ it("names the carrying loop and its path when an inner loop exceeds the budget f
   expect(response.json().error.message).not.toContain("The loop 'inner'");
 });
 
-it("refuses branch frontiers the loop-only checkpoint cannot preserve, and replayed branch writes", async () => {
+it("accepts branch frontiers and refuses replayed top-level branch writes", async () => {
   const wrap = (steps: readonly WorkflowStep[]): WorkflowStep => ({
     id: "fork",
     name: "Fork",
@@ -338,12 +338,11 @@ it("refuses branch frontiers the loop-only checkpoint cannot preserve, and repla
     ...base,
     steps: [...base.steps.slice(0, 2), wrap([continuing]), ...base.steps.slice(3)]
   };
-  expect(await workflowContinuationIssues(inBranch)).toContainEqual(
-    expect.objectContaining({
-      path: "steps.each_client.continueAsNew",
-      message: expect.stringContaining("inside a condition or parallel")
-    })
-  );
+  expect(
+    (await workflowContinuationIssues(inBranch)).filter((issue) =>
+      issue.path.endsWith("continueAsNew")
+    )
+  ).toEqual([]);
   const inLoop = {
     ...base,
     steps: [
@@ -352,12 +351,11 @@ it("refuses branch frontiers the loop-only checkpoint cannot preserve, and repla
       ...base.steps.slice(3)
     ]
   };
-  expect(await workflowContinuationIssues(inLoop)).toContainEqual(
-    expect.objectContaining({
-      path: "steps.each_client.continueAsNew",
-      message: expect.stringContaining("inside its body")
-    })
-  );
+  expect(
+    (await workflowContinuationIssues(inLoop)).filter((issue) =>
+      issue.path.endsWith("continueAsNew")
+    )
+  ).toEqual([]);
   expect(await workflowContinuationIssues(before(wrap([write])))).toContainEqual(
     expect.objectContaining({
       path: "steps.fork",

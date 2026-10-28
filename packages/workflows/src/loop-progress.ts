@@ -41,6 +41,7 @@ export function createLoopProgress(options: {
     loop: WorkflowStepRun,
     error: import("@work-shape/catalyst-core").WorkflowRunError
   ): Promise<void>;
+  resumePending(tx: PlatformStores, run: WorkflowRun, stepRun?: WorkflowStepRun): Promise<boolean>;
   continueRun(
     tx: PlatformStores,
     run: WorkflowRun,
@@ -102,6 +103,7 @@ export function createLoopProgress(options: {
     index: WorkflowStepIndex,
     loopRun: WorkflowStepRun
   ): Promise<void> {
+    if (await options.resumePending(tx, run, loopRun)) return;
     const loopRef: WorkflowStepRunRef = { clientInstanceId, id: loopRun.id };
     const loop = index.get(loopRun.stepId)?.step;
     const first = loop?.type === "loop" ? loop.steps[0] : undefined;

@@ -55,7 +55,11 @@ export function continuationWorkflowRuns(
   db: PostgresConnection
 ): Pick<
   WorkflowRunsStore,
-  "readCheckpoint" | "markContinuation" | "handoffContinuation" | "readLoopProgress"
+  | "readCheckpoint"
+  | "requestContinuation"
+  | "markContinuation"
+  | "handoffContinuation"
+  | "readLoopProgress"
 > {
   return {
     async readCheckpoint(ref) {
@@ -64,6 +68,14 @@ export function continuationWorkflowRuns(
         .from(workflowRuns)
         .where(runIs(ref));
       return row?.checkpoint ?? undefined;
+    },
+    async requestContinuation(ref) {
+      await db
+        .update(workflowRuns)
+        .set({
+          checkpoint: sql`coalesce(${workflowRuns.checkpoint}, '{"stepId":"","offset":0}'::jsonb) || ${JSON.stringify({ pending: ref.pending })}::jsonb`
+        })
+        .where(runIs(ref));
     },
     async handoffContinuation(ref) {
       await db

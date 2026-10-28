@@ -607,6 +607,8 @@ export function createStepExecutor(options: StepExecutorOptions) {
         case "parallel":
           return { kind: "parallel" };
         case "condition": {
+          const saved = await checkpointFrame(stores, run, stepRun);
+          if (saved?.taken) return { kind: "condition", taken: saved.taken };
           const actual = await resolveReference(scope, step.when.ref);
           await recordStepInput(stores.workflowRuns, scope, { actual });
           return { kind: "condition", taken: conditionHolds(actual, step.when) ? "then" : "else" };
