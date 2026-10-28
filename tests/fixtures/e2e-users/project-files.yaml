@@ -1,0 +1,19 @@
+# The two people of the project files spec (PRJ-2), used by no other spec: one fills a shared
+# project's folder and lets the agent write a file in it, the other is a member whose chat in the
+# project changes that file. The labels sort after every other for the reason in e2e-app.yaml.
+- email: e2e-project-files@example.test
+  displayLabel: E2E Zz Project Files
+  passwordEnvName: E2E_PROJECT_FILES_PASSWORD
+  developmentPassword: e2e-project-files-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
+- email: e2e-project-files-member@example.test
+  displayLabel: E2E Zz Project Files Member
+  passwordEnvName: E2E_PROJECT_FILES_MEMBER_PASSWORD
+  developmentPassword: e2e-project-files-member-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
