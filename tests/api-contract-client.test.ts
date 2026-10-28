@@ -363,7 +363,7 @@ describe("api client derived from the operation catalog", () => {
 
     // An upload takes a file; only a stream reports that it is caught up.
     expectTypeOf<keyof OperationInput<"conversations.draft_attachments.upload">>().toEqualTypeOf<
-      "params" | "file" | "signal"
+      "params" | "query" | "file" | "signal"
     >();
     expectTypeOf<keyof OperationInput<"conversations.runs.observe">>().toEqualTypeOf<
       "params" | "query" | "signal" | "onCaughtUp" | "onSkipped"
@@ -574,10 +574,12 @@ describe("api client derived from the operation catalog", () => {
 
     const uploaded = await client.conversations.draft_attachments.upload({
       params: { conversationId: "conv_1" },
+      query: { agentName: "file_agent" },
       file: new File(["notes"], "notes.txt", { type: "text/plain" })
     });
 
     expect(uploaded.outcome).toBe("created");
+    expect(new URL(required(requests[0]).url).searchParams.get("agentName")).toBe("file_agent");
     expect(requests[0]?.headers.get("content-type")).toMatch(/^multipart\/form-data; boundary=/u);
     const form = await requests[0]?.formData();
     const file = form?.get("file");

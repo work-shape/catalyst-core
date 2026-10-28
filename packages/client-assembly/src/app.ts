@@ -125,7 +125,8 @@ import { createToolDefinitions } from "./tools";
 import {
   createExecutionWorkspaceManagedObjectReader,
   createExecutionWorkspaceSourceAttachmentHandler,
-  unsupportedAttachmentMessage
+  unsupportedAttachmentMessage,
+  workspaceSourceRoutingInput
 } from "./workspace-source-attachments";
 
 export interface CreateClientInstanceAppInput {
@@ -472,8 +473,21 @@ export async function createClientInstanceExecutionAssembly(
     await store.close?.();
     throw error;
   }
-  const capabilityAttachmentHandlers = capabilityContributions.flatMap(
-    (contribution) => contribution.attachments ?? []
+  const capabilityAttachmentHandlers = capabilityContributions.flatMap((contribution) =>
+    (contribution.attachments ?? []).map((handler) => ({
+      ...handler,
+      acceptsFile(file: Parameters<ClientInstanceAttachmentHandler["acceptsFile"]>[0]) {
+        return handler.acceptsFile(file) && handler.acceptsFile(workspaceSourceRoutingInput(file));
+      },
+      uploadDraftAttachment(
+        file: Parameters<ClientInstanceAttachmentHandler["uploadDraftAttachment"]>[0]
+      ) {
+        return handler.uploadDraftAttachment({
+          ...file,
+          mimeType: workspaceSourceRoutingInput(file).mimeType
+        });
+      }
+    }))
   );
   const workspaceSourceAttachment = workspaceObjectStore
     ? createExecutionWorkspaceSourceAttachmentHandler({

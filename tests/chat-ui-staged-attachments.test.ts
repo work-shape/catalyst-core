@@ -87,6 +87,7 @@ async function startPage(
         );
       }
       if (method === "POST") {
+        expect(url.searchParams.get("agentName")).toBe("file_agent");
         const taken = { ...attachment, id: `attachment_${sent instanceof File ? sent.name : ""}` };
         return Response.json({ attachment: taken, attachments: [taken], outcome: "created" });
       }
@@ -103,6 +104,7 @@ async function startPage(
       authScope: "staged-test",
       client,
       selectedConversationId: selected,
+      agentName: "file_agent",
       collaborationWorkspaceId: workspace,
       isAuthenticated: true,
       createConversationForFiles: () =>

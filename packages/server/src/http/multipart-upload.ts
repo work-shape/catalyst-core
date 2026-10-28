@@ -50,8 +50,8 @@ export async function stageMultipartFile(stream: NodeJS.ReadableStream): Promise
       const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
       byteSize += bytes.byteLength;
       checksum.update(bytes);
-      if (header.byteLength < 16) {
-        header = Buffer.concat([header, bytes.subarray(0, 16 - header.byteLength)]);
+      if (header.byteLength < 8192) {
+        header = Buffer.concat([header, bytes.subarray(0, 8192 - header.byteLength)]);
       }
       callback(null, bytes);
     }
