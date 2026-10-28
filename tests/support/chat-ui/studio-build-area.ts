@@ -7,3 +7,4 @@ export {
   refusalPlaceOf
 } from "../../../packages/chat-ui/src/studio/build-area/asset-place";
 export { AgentSkills } from "../../../packages/chat-ui/src/studio/build-area/agent-skills";
+export { NewAssetAvailability } from "../../../packages/chat-ui/src/studio/build-area/build-create-dialog";

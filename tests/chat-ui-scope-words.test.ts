@@ -2,6 +2,7 @@
 
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 import { CONDITION_WAIT_MS, required } from "./support/assertions";
@@ -10,6 +11,7 @@ import {
   agentAudience,
   assetPlace,
   createTranslationContext,
+  NewAssetAvailability,
   refusalPlaceOf,
   tellRefusal,
   TranslationProvider
@@ -134,6 +136,37 @@ describe("a refusal for something of another place", () => {
       "This uses something from another workspace. It can only use what belongs to its own workspace or is for everyone. Make that item there, or ask an admin to."
     );
     for (const message of [team, mine, unnamed]) expect(message).not.toMatch(/CLI|scope/iu);
+  });
+});
+
+describe("a new agent made under Only me", () => {
+  it("offers an admin no availability everywhere, greyed with the reason", () => {
+    const markup = (onlyMine: boolean) =>
+      renderToStaticMarkup(
+        createElement(
+          TranslationProvider,
+          { locale: "de", children: null },
+          createElement(
+            UiRoot,
+            { mode: "light", labels: uiLabelsEn },
+            createElement(NewAssetAvailability, {
+              startsIn: {
+                workspace: { id: MINE, name: "Nur ich" },
+                mayChooseAll: true,
+                ...(onlyMine ? { onlyMine } : {})
+              },
+              everywhere: false,
+              onChange: () => undefined
+            })
+          )
+        )
+      );
+    const mine = markup(true);
+    expect(mine).toMatch(/<option value="all" disabled="">Alle Arbeitsbereiche<\/option>/u);
+    expect(mine).toContain(
+      "Das ist „Nur ich“ und kann darum keinem Team und nicht allen angeboten werden."
+    );
+    expect(markup(false)).toMatch(/<option value="all">/u);
   });
 });
 

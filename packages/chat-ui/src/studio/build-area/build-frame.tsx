@@ -316,7 +316,8 @@ function BuildFrameBody({
                   }
                 : undefined
               : workspace,
-          mayChooseAll: source.rights.instanceWrite
+          mayChooseAll: source.rights.instanceWrite,
+          ...(scopeWorkspace?.personal ? { onlyMine: true } : {})
         }
       : undefined;
   // "New" of a kind with a page and no dialog of its own opens the page empty: its first save

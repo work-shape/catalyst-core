@@ -23,6 +23,11 @@ export interface BuildCreateStart {
   workspace: { id: string; name: string } | undefined;
   /** The reader may make the asset available in every workspace. */
   mayChooseAll: boolean;
+  /**
+   * The asset starts in the reader's own Personal Workspace: it is "Only me", and the instance
+   * refuses to offer it everywhere, so that choice stands greyed with its reason.
+   */
+  onlyMine?: boolean;
 }
 
 /**
@@ -168,8 +173,11 @@ export function NewAssetAvailability({
 }) {
   const { t } = useTranslation();
   const where = startsIn.workspace?.name ?? t("build.createAvailableHidden");
-  const hint =
-    startsIn.workspace && !everywhere ? t("build.createAvailableWorkspaceHint") : undefined;
+  const hint = startsIn.onlyMine
+    ? t("build.availabilityOnlyMine")
+    : startsIn.workspace && !everywhere
+      ? t("build.createAvailableWorkspaceHint")
+      : undefined;
   if (!startsIn.mayChooseAll) {
     return (
       <KeyValueList layout="stacked">
@@ -180,11 +188,13 @@ export function NewAssetAvailability({
   return (
     <Field label={t("configAvailability")} hint={hint}>
       <Select
-        value={everywhere ? "all" : "start"}
+        value={everywhere && !startsIn.onlyMine ? "all" : "start"}
         onChange={(event) => onChange(event.target.value === "all")}
       >
         <option value="start">{where}</option>
-        <option value="all">{t("configAvailabilityAll")}</option>
+        <option value="all" disabled={startsIn.onlyMine}>
+          {t("configAvailabilityAll")}
+        </option>
       </Select>
     </Field>
   );

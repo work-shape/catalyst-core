@@ -8,3 +8,4 @@ section: Changed
 - **Studio:** When an asset is refused because it uses something from another place (`invalid_scope` with a reference), the message says where the asset sits, what it used, and what to do: make the item in the right place, or ask an admin.
 - **Studio:** Data Stores are listed as "Data" / "Daten" and Knowledge Bases as "Knowledge" / "Wissen". A Knowledge Base over a data store's tables is offered as "Knowledge from your data" / "Wissen aus deinen Daten".
 - **UI library:** `ScopeChip` takes `scope: "personal"` for the reader's own place.
+- **Studio:** For an agent, Knowledge Base or Connection that is "Only me", the availability fields and the New dialog's "All workspaces" stand greyed with the reason, as the instance refuses them.

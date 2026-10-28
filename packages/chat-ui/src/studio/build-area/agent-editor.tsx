@@ -674,6 +674,7 @@ export function AgentEditor({
               <AvailabilityFields
                 edit={availabilityEdit}
                 locked={isDefault && availability.saved?.mode === "all"}
+                fixedReason={availability.fixedReason}
                 disabled={saving}
                 workspaces={availability.workspaces}
                 workspacesError={availability.workspacesError}

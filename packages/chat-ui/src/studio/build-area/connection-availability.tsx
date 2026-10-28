@@ -49,6 +49,7 @@ export function ConnectionAvailability({
         disabled={saving}
         workspaces={choice.workspaces}
         workspacesError={choice.workspacesError}
+        fixedReason={choice.fixedReason}
         hiddenHint={t("configAvailabilityAssetHiddenHint")}
         refusals={refused === undefined ? [] : [refused]}
       />
