@@ -356,6 +356,20 @@ describe("projects and who reaches them", () => {
     // A private project keeps it private: it may go there.
     expect((await setProject(t.kai.id, personal.id, kaisPrivate.id)).statusCode).toBe(200);
 
+    // A chat that reads a Data Store its person added stays theirs alone (STORE-USE-1).
+    const reading = await startOutside(t.kai.id, team, "private");
+    const storeAssetId = await t.assetId("agent", "assistant");
+    await withTestSql(
+      (sql) => sql`
+        insert into conversation_data_stores
+          (conversation_id, store_asset_id, client_instance_id, added_by_user_id, added_at)
+        values (${reading.id}, ${storeAssetId}, ${clientInstanceId}, ${t.kai.id}, now())`
+    );
+    expect(reason(await setProject(t.kai.id, reading.id, shared.id))).toBe(
+      "data_store_conversation_private"
+    );
+    expect((await setProject(t.kai.id, reading.id, kaisPrivate.id)).statusCode).toBe(200);
+
     const about = await startOutside(t.kai.id, team, "private");
     await t.stores.conversations.setConversationSubject({
       clientInstanceId,
