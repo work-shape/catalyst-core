@@ -98,10 +98,14 @@ export async function hydrateWorkspace(
     }
     await mkdir(workspaceDirectory, { recursive: true });
     await context.ensureStandardWorkspaceDirectories(workspaceDirectory);
-    const files = await context.store.executionWorkspaces.listWorkspaceFiles({
-      clientInstanceId: command.clientInstanceId,
-      workspaceId: workspace.id
-    });
+    const files = (
+      await context.store.executionWorkspaces.listWorkspaceFiles({
+        clientInstanceId: command.clientInstanceId,
+        workspaceId: workspace.id
+      })
+    ).filter((file) => file.path !== "project" && !file.path.startsWith("project/"));
+    // This reserved path is filled separately, after the run's project access is checked.
+    await rm(join(workspaceDirectory, "project"), { recursive: true, force: true });
     const durablePaths = new Set(files.map((file) => file.path));
     const cachedPaths = new Set(cachedFiles.map((file) => file.path));
     if (context.reuseWorkspaceDirectories && !setsEqual(cachedPaths, durablePaths)) {
@@ -165,18 +169,46 @@ export async function ensureStandardWorkspaceDirectories(
   }
 }
 
+interface WorkspaceScanOptions {
+  skipProjectDirectory?: boolean;
+  maxBytes?: number;
+  maxFileBytes?: number;
+  maxFiles?: number;
+}
+
 export async function scanWorkspaceFiles(
   maxPathLength: number,
   workspaceDirectory: string,
-  command: WorkspaceCommand
+  command: WorkspaceCommand,
+  options: WorkspaceScanOptions = {}
 ): Promise<ScannedWorkspaceFile[]> {
   const scanned: ScannedWorkspaceFile[] = [];
+  for await (const file of iterateWorkspaceFiles(
+    maxPathLength,
+    workspaceDirectory,
+    command,
+    options
+  )) {
+    scanned.push(file);
+  }
+  return scanned.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+/** Projects can hold GiBs: their scan keeps one file's bytes in memory at a time. */
+export async function* iterateWorkspaceFiles(
+  maxPathLength: number,
+  workspaceDirectory: string,
+  command: WorkspaceCommand,
+  options: WorkspaceScanOptions = {}
+): AsyncGenerator<ScannedWorkspaceFile> {
+  let scannedCount = 0;
   let totalBytes = 0;
-  const scanDirectory = async (directory: string): Promise<void> => {
+  const scanDirectory = async function* (directory: string): AsyncGenerator<ScannedWorkspaceFile> {
     const entries = await readdir(directory, { withFileTypes: true });
     for (const entry of entries) {
       const absolutePath = join(directory, entry.name);
       const workspacePath = relative(workspaceDirectory, absolutePath).split("\\").join("/");
+      if ((options.skipProjectDirectory ?? true) && workspacePath === "project") continue;
       if (entry.isSymbolicLink()) {
         throw new WorkspaceRunnerFailure(
           "WORKSPACE_SYMLINK_REJECTED",
@@ -186,7 +218,7 @@ export async function scanWorkspaceFiles(
         );
       }
       if (entry.isDirectory()) {
-        await scanDirectory(absolutePath);
+        yield* scanDirectory(absolutePath);
         continue;
       }
       if (!entry.isFile()) {
@@ -218,7 +250,13 @@ export async function scanWorkspaceFiles(
         );
       }
       totalBytes += stats.size;
-      if (totalBytes > (command.limits.maxWorkspaceBytes ?? DEFAULT_WORKSPACE_BYTES)) {
+      const maxBytes =
+        options.maxBytes ?? command.limits.maxWorkspaceBytes ?? DEFAULT_WORKSPACE_BYTES;
+      if (
+        totalBytes > maxBytes ||
+        stats.size > (options.maxFileBytes ?? maxBytes) ||
+        scannedCount >= (options.maxFiles ?? Infinity)
+      ) {
         throw new WorkspaceRunnerFailure(
           "WORKSPACE_SIZE_LIMIT_EXCEEDED",
           "Workspace size limit exceeded",
@@ -226,22 +264,22 @@ export async function scanWorkspaceFiles(
           {
             path: normalized.value,
             totalBytes,
-            maxWorkspaceBytes: command.limits.maxWorkspaceBytes ?? DEFAULT_WORKSPACE_BYTES
+            maxWorkspaceBytes: maxBytes
           }
         );
       }
       const bytes = await readFile(absolutePath);
-      scanned.push({
+      scannedCount += 1;
+      yield {
         path: normalized.value,
         bytes,
         byteSize: bytes.byteLength,
         checksum: createWorkspaceChecksum(bytes),
         mimeType: inferWorkspaceMimeType(normalized.value)
-      });
+      };
     }
   };
-  await scanDirectory(workspaceDirectory);
-  return scanned.sort((left, right) => left.path.localeCompare(right.path));
+  yield* scanDirectory(workspaceDirectory);
 }
 
 interface WorkspaceCommandFileContext {

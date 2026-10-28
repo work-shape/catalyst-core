@@ -4,6 +4,7 @@ import {
   asConversationId,
   asManagedArtifactId,
   asUserId,
+  authenticatedUserFromRecord,
   DEFAULT_PROJECT_FILE_LIMITS,
   getSubjectUserId,
   isAppError,
@@ -26,6 +27,9 @@ import {
   type ProjectFileOrigin,
   type ProjectFileVersion,
   type ProjectFolderPort,
+  type ProjectCommandFolder,
+  type ProjectCommandFolderPort,
+  type ProjectCommandFolderRequest,
   type WriteProjectFileVersionResult
 } from "@work-shape/catalyst-core";
 import { requireChatConversationAccess } from "../conversations/conversation-access";
@@ -67,7 +71,7 @@ interface WriteInput {
  * project that does not exist, also by its id. The bytes lie in the instance's `files` store
  * below the project's asset (`assets/<id>/files/`), so they go with the project.
  */
-export class ProjectFileService implements ProjectFolderPort {
+export class ProjectFileService implements ProjectFolderPort, ProjectCommandFolderPort {
   constructor(private readonly options: ProjectFileOptions) {}
 
   get limits(): ProjectFileLimits {
@@ -467,6 +471,7 @@ export class ProjectFileService implements ProjectFolderPort {
     conversationId: string;
     user?: AuthenticatedUser;
   }): Promise<ConversationProjectFolder | undefined> {
+    if (input.clientInstanceId !== this.options.clientInstanceId) return undefined;
     if (!this.options.modules.isEnabled("projects")) return undefined;
     let conversation = await this.options.stores.conversations.getConversation(
       this.options.clientInstanceId,
@@ -479,7 +484,12 @@ export class ProjectFileService implements ProjectFolderPort {
         conversation.parentConversationId
       );
     }
-    if (!conversation || conversation.status !== "active" || !conversation.projectId) {
+    if (
+      !conversation ||
+      conversation.kind === "run_thread" ||
+      conversation.status !== "active" ||
+      !conversation.projectId
+    ) {
       return undefined;
     }
     const project = await this.options.stores.projects.getProject({
@@ -505,6 +515,67 @@ export class ProjectFileService implements ProjectFolderPort {
       collaborationWorkspaceId: project.collaborationWorkspaceId,
       conversationId: conversation.id
     };
+  }
+
+  async folderOfCommand(
+    command: ProjectCommandFolderRequest
+  ): Promise<ProjectCommandFolder | undefined> {
+    if (command.clientInstanceId !== this.options.clientInstanceId || !command.agentRunId)
+      return undefined;
+    const run = await this.options.stores.agentRuns.getAgentRun({
+      clientInstanceId: this.options.clientInstanceId,
+      runId: command.agentRunId
+    });
+    if (
+      !run?.ownerUserId ||
+      run.conversationId !== command.conversationId ||
+      run.ownerUserId !== command.ownerUserId ||
+      run.workflowStepRunId ||
+      run.principalId ||
+      (run.authorization && run.authorization.principal.kind !== "user")
+    )
+      return undefined;
+    const person = await this.options.stores.users.getUser({
+      clientInstanceId: this.options.clientInstanceId,
+      userId: asUserId(run.ownerUserId)
+    });
+    if (person?.status !== "active") return undefined;
+    const user = authenticatedUserFromRecord({
+      user: person,
+      identity: { authSource: "project-command", externalUserId: person.id }
+    });
+    const folder = await this.folderOf({
+      clientInstanceId: command.clientInstanceId,
+      conversationId: command.conversationId,
+      user
+    });
+    return folder
+      ? { folder, userId: person.id, ...(run.locale ? { locale: run.locale } : {}) }
+      : undefined;
+  }
+
+  async readVersion(folder: ConversationProjectFolder, file: ProjectFile): Promise<Uint8Array> {
+    const version = await this.storedVersion(
+      folder.projectId,
+      requirePath(file.path),
+      file.version
+    );
+    return readObjectBytes(this.objects(), version.objectKey);
+  }
+
+  async removeVersion(
+    folder: ConversationProjectFolder,
+    input: { path: string; replaces: number; userId: string; runId: string }
+  ): Promise<ProjectFileChange | undefined> {
+    const result = await this.change(folder, {
+      ...input,
+      path: requirePath(input.path),
+      bytes: null,
+      origin: "agent",
+      conversationId: folder.conversationId
+    });
+    if (result.status === "conflict" || result.status === "missing") return undefined;
+    return answered(result);
   }
 
   list(folder: ConversationProjectFolder): Promise<ProjectFile[]> {

@@ -13,11 +13,13 @@ import {
   type SkillFolderReader,
   type WorkspaceFile
 } from "@work-shape/catalyst-core";
+import type { ProjectCommandFileChange, ProjectCommandFolderPort } from "@work-shape/catalyst-core";
 import { randomUUID } from "node:crypto";
 import { lstat, mkdir, readdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { readToolExecutionEnv } from "./env";
+import { ProjectFolderMounts, type PreparedProjectFolder } from "./project-folder-mount";
 import {
   removeTree,
   SKILL_FOLDER_CACHE_DIRECTORY,
@@ -75,6 +77,7 @@ export interface LocalWorkspaceCommandRunnerOptions {
    * skill fails and runs nothing; one without skills runs as before.
    */
   skillFolders?: SkillFolderReader;
+  projectFolders?: ProjectCommandFolderPort;
   now?: () => string;
 }
 
@@ -119,6 +122,7 @@ export class LocalWorkspaceCommandRunner {
   private readonly now: () => string;
   private readonly activeExecutionDirectories = new Set<string>();
   private readonly skillFolderCache?: SkillFolderCache;
+  private readonly projectFolders?: ProjectFolderMounts;
 
   constructor(options: LocalWorkspaceCommandRunnerOptions) {
     this.store = options.store;
@@ -133,6 +137,12 @@ export class LocalWorkspaceCommandRunner {
     this.auditRecorder = options.auditRecorder;
     this.telemetry = options.telemetry;
     this.now = options.now ?? (() => new Date().toISOString());
+    this.projectFolders = options.projectFolders
+      ? new ProjectFolderMounts({
+          rootDirectory: this.tempRootDirectory,
+          port: options.projectFolders
+        })
+      : undefined;
     this.skillFolderCache = options.skillFolders
       ? new SkillFolderCache({
           rootDirectory: join(this.tempRootDirectory, SKILL_FOLDER_CACHE_DIRECTORY),
@@ -215,8 +225,9 @@ export class LocalWorkspaceCommandRunner {
       removedCount: 0,
       failedCount: 0
     };
-    let removedCount = skills.removedCount;
-    let failedCount = skills.failedCount;
+    const projects = await this.projectFolders?.evictIdle(input);
+    let removedCount = skills.removedCount + (projects?.removedCount ?? 0);
+    let failedCount = skills.failedCount + (projects?.failedCount ?? 0);
     for (const entry of entries) {
       if (!entry.isDirectory() || !entry.name.startsWith("catalyst-workspace-")) {
         continue;
@@ -266,10 +277,22 @@ export class LocalWorkspaceCommandRunner {
     let promotedArtifacts: WorkspaceCommandPromotedArtifact[] = [];
     let cacheReusable = false;
     let skillLease: SkillFolderLease | undefined;
+    let projectMount: PreparedProjectFolder | undefined;
+    let projectDirectory: string | undefined;
+    const projectFileChanges: ProjectCommandFileChange[] = [];
     try {
       const workspace = await this.requireWorkspace(command);
       hydrated = await this.hydrateWorkspace(workspace, command);
       this.activeExecutionDirectories.add(hydrated.executionDirectory);
+      // A fresh bind source path per command also avoids a Docker host retaining the inode
+      // of a removed and recreated directory when the conversation directory is reused.
+      projectDirectory = this.processExecutor.mountsProjectFolder
+        ? join(hydrated.executionDirectory, `project-${randomUUID()}`)
+        : join(hydrated.workspaceDirectory, "project");
+      projectMount = await this.projectFolders?.prepare(command, projectDirectory);
+      if (projectMount && this.processExecutor.mountsProjectFolder) {
+        await mkdir(join(hydrated.workspaceDirectory, "project"), { recursive: true });
+      }
       skillLease = await this.acquireSkillFolders(command);
       const skillFolders = await this.placeSkillFolders(
         skillLease?.folders ?? [],
@@ -280,8 +303,14 @@ export class LocalWorkspaceCommandRunner {
         hydrated.workspaceDirectory,
         join(hydrated.executionDirectory, "tmp"),
         options.signal,
-        skillFolders
+        skillFolders,
+        projectMount && this.processExecutor.mountsProjectFolder
+          ? projectMount.directory
+          : undefined
       );
+      if (projectMount) {
+        await this.projectFolders?.sync(command, projectMount, projectFileChanges);
+      }
       const scannedFiles = await this.scanWorkspaceFiles(hydrated.workspaceDirectory, command);
       const syncedFiles = await this.syncChangedFiles(
         workspace,
@@ -296,7 +325,12 @@ export class LocalWorkspaceCommandRunner {
         syncedFiles,
         hydrated.workspaceDirectory
       );
-      const output = commandOutputFromProcess(processResult, changedFiles, promotedArtifacts);
+      const output = commandOutputFromProcess(
+        processResult,
+        changedFiles,
+        promotedArtifacts,
+        projectFileChanges
+      );
       const processError = this.processError(command, processResult);
       return {
         output,
@@ -306,13 +340,26 @@ export class LocalWorkspaceCommandRunner {
     } catch (error) {
       return {
         output: processResult
-          ? commandOutputFromProcess(processResult, changedFiles, promotedArtifacts)
+          ? commandOutputFromProcess(
+              processResult,
+              changedFiles,
+              promotedArtifacts,
+              projectFileChanges
+            )
           : undefined,
         error: toWorkspaceCommandError(error)
       };
     } finally {
       skillLease?.release();
       if (hydrated) {
+        for (const directory of [
+          join(hydrated.workspaceDirectory, "project"),
+          ...(projectDirectory ? [projectDirectory] : [])
+        ]) {
+          await rm(directory, { recursive: true, force: true }).catch(() => {
+            cacheReusable = false;
+          });
+        }
         // The copies of a sandbox without mounts are the command's alone.
         await removeTree(join(hydrated.executionDirectory, LOCAL_SKILL_FOLDERS_DIRECTORY)).catch(
           () => undefined
@@ -408,7 +455,8 @@ export class LocalWorkspaceCommandRunner {
     workspaceDirectory: string,
     tempDirectory: string,
     signal?: AbortSignal,
-    skillFolders: readonly SandboxSkillFolder[] = []
+    skillFolders: readonly SandboxSkillFolder[] = [],
+    projectDirectory?: string
   ): Promise<ProcessResult> {
     const normalizedCwd = command.cwd
       ? normalizeWorkspaceDirectory(command.cwd, { maxPathLength: this.maxPathLength })
@@ -439,6 +487,7 @@ export class LocalWorkspaceCommandRunner {
       cwd: cwd.value,
       tempDirectory,
       ...(skillFolders.length > 0 ? { skillFolders } : {}),
+      ...(projectDirectory ? { projectDirectory } : {}),
       env: {
         HOME: workspaceDirectory,
         PATH: readToolExecutionEnv().path,
@@ -635,7 +684,8 @@ async function copyFolder(source: string, target: string): Promise<void> {
 function commandOutputFromProcess(
   processResult: ProcessResult,
   changedFiles: WorkspaceCommandChangedFile[],
-  promotedArtifacts: WorkspaceCommandPromotedArtifact[]
+  promotedArtifacts: WorkspaceCommandPromotedArtifact[],
+  projectFileChanges: ProjectCommandFileChange[]
 ): WorkspaceCommandOutput {
   return {
     exitCode: processResult.exitCode,
@@ -644,6 +694,7 @@ function commandOutputFromProcess(
     durationMs: processResult.durationMs,
     changedFiles,
     promotedArtifacts,
+    ...(projectFileChanges.length > 0 ? { projectFileChanges } : {}),
     truncated: processResult.truncated
   };
 }
@@ -654,6 +705,15 @@ function terminalCommandAuditMetadata(command: WorkspaceCommand): JsonObject {
     durationMs: command.output?.durationMs ?? null,
     changedFileCount: command.output?.changedFiles.length ?? 0,
     promotedArtifactCount: command.output?.promotedArtifacts.length ?? 0,
+    ...(command.output?.projectFileChanges
+      ? {
+          projectFileChanges: command.output.projectFileChanges.map((change) => ({
+            projectId: change.projectId,
+            version: change.version,
+            change: change.change
+          }))
+        }
+      : {}),
     stdoutTruncated: command.output?.truncated.stdout ?? false,
     stderrTruncated: command.output?.truncated.stderr ?? false,
     ...(command.error
