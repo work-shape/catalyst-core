@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  unknownToJsonValue,
   asAgentRunId,
   asClientInstanceId,
   asConversationId,
@@ -530,7 +531,7 @@ describe("model context projection", () => {
           agentRuntime: {
             version: 1,
             kind: "user_message",
-            attachmentManifest: manifest as unknown as JsonObject
+            attachmentManifest: unknownToJsonValue(manifest)
           }
         })
       ],

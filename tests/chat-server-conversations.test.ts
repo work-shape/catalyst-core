@@ -1,5 +1,6 @@
 import { createTestInstance, getTestJobs } from "./support/test-instance";
 import { claimAttachmentsForStoredMessage } from "./support/test-store";
+import assert from "node:assert/strict";
 import { Readable } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -276,8 +277,9 @@ describe("client instance app vertical slice", () => {
         clientInstanceId: asClientInstanceId("demo-local"),
         attachmentId: asConversationAttachmentId(attachment.id)
       });
+      assert(stored);
       const view = await app.stores.files.createManagedArtifact({
-        clientInstanceId: stored!.clientInstanceId,
+        clientInstanceId: stored.clientInstanceId,
         conversationId,
         sourceFileId: asManagedFileId(attachment.fileId),
         kind: ATTACHMENT_IMAGE_VIEW_ARTIFACT_REF,
@@ -289,8 +291,8 @@ describe("client instance app vertical slice", () => {
       });
       backing.objects.seed(view.objectKey, new TextEncoder().encode("jpeg-view"));
       await app.stores.files.updateConversationAttachment({
-        clientInstanceId: stored!.clientInstanceId,
-        attachmentId: stored!.id,
+        clientInstanceId: stored.clientInstanceId,
+        attachmentId: stored.id,
         artifactRefs: { [ATTACHMENT_IMAGE_VIEW_ARTIFACT_REF]: view.id }
       });
       const thumbnail = await app.call("conversations.files.get_content", {
@@ -300,7 +302,7 @@ describe("client instance app vertical slice", () => {
       expect(thumbnail.headers["content-type"]).toContain("image/jpeg");
       expect(thumbnail.payload).toBe("jpeg-view");
       await claimAttachmentsForStoredMessage(app.stores, {
-        clientInstanceId: stored!.clientInstanceId,
+        clientInstanceId: stored.clientInstanceId,
         conversationId,
         messageId: asMessageId("msg_derived_view"),
         claimedAt: new Date().toISOString()
@@ -313,7 +315,7 @@ describe("client instance app vertical slice", () => {
       expect(original.headers["content-type"]).toContain("image/heic");
       expect(original.payload).toBe("original-heic");
       const unrelatedFile = await app.stores.files.createManagedFile({
-        clientInstanceId: stored!.clientInstanceId,
+        clientInstanceId: stored.clientInstanceId,
         ownerUserId: "user-1",
         filename: "other.heic",
         mimeType: "image/heic",
@@ -322,7 +324,7 @@ describe("client instance app vertical slice", () => {
         objectKey: "other-original"
       });
       const unrelated = await app.stores.files.createManagedArtifact({
-        clientInstanceId: stored!.clientInstanceId,
+        clientInstanceId: stored.clientInstanceId,
         conversationId,
         sourceFileId: unrelatedFile.id,
         kind: ATTACHMENT_IMAGE_VIEW_ARTIFACT_REF,
@@ -332,8 +334,8 @@ describe("client instance app vertical slice", () => {
         objectKey: "unrelated-view"
       });
       await app.stores.files.updateConversationAttachment({
-        clientInstanceId: stored!.clientInstanceId,
-        attachmentId: stored!.id,
+        clientInstanceId: stored.clientInstanceId,
+        attachmentId: stored.id,
         artifactRefs: { [ATTACHMENT_IMAGE_VIEW_ARTIFACT_REF]: unrelated.id }
       });
       const refused = await app.call("conversations.files.get_content", {
