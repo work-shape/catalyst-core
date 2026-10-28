@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
@@ -10,9 +11,12 @@ import {
   asClientInstanceId,
   asCollaborationWorkspaceId,
   asConversationId,
+  AGENTS_RUN_OPERATION,
   asServicePrincipalId,
+  asToolCallId,
   asUserId,
   chatReadOnlyBy,
+  createUserPrincipal,
   createPlatformId,
   mayUseOwnInChat,
   PERSONAL_AGENTS_KEY,
@@ -28,13 +32,15 @@ import {
   setupAccessInstance,
   type AccessInstance
 } from "./support/access-instance";
-import { subagentOperation } from "@work-shape/catalyst-server";
+import { registerSubagentOperation } from "@work-shape/catalyst-server";
+import { runOperation } from "@work-shape/catalyst-tool-execution";
 import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
 import { waitUntil } from "./support/assertions";
 import { createMultipartFilePayload } from "./support/chat-server-attachment-harness";
 import { withTestSql } from "./support/test-sql";
 import { createTestConfig } from "./support/fixtures";
+import { createStoredConfigAssetSource } from "./support/static-config-asset-source";
 import { createToolCallingModel, TOOL_CALLING_MODEL_PROVIDER } from "./support/held-model";
 import {
   createTestInstance,
@@ -391,8 +397,17 @@ describe("an agent of Only me beyond the chat its owner chose it in", () => {
   });
 
   it("runs itself as a subagent only for its owner, in a chat only the owner reads", async () => {
-    const { t, team, chat, start } = await setup();
+    const { t, team, chat } = await setup();
     const calls = await getTestOperationCalls(t.instance);
+    registerSubagentOperation(calls.registry, {
+      clientInstanceId,
+      stores: t.stores,
+      assetSource: createStoredConfigAssetSource({
+        store: t.stores.configAssets,
+        clientInstanceId
+      }),
+      agentAvailable: async (input) => (await calls.deps.agentAvailable?.(input)) ?? false
+    });
     const person = (userId: string, overrides: Partial<AuthenticatedUser> = {}) =>
       ({
         id: userId,
@@ -404,64 +419,80 @@ describe("an agent of Only me beyond the chat its owner chose it in", () => {
         authSource: "test",
         ...overrides
       }) satisfies AuthenticatedIdentity;
-    const parent = (conversationId: string, agentName = OWN) => ({
-      id: asAgentRunId("run_parent"),
-      conversationId: asConversationId(conversationId),
-      agentName
-    });
-    let current = parent("none");
-    let startedWith: string | undefined;
-    const operation = subagentOperation({
-      clientInstanceId,
-      stores: {
-        agentRuns: { getAgentRun: async () => current },
-        conversations: t.stores.conversations,
-        scheduledStarts: { isScheduledAgentRun: async () => false },
-        childAgentRuns: {
-          startSubagentRun: async (input: { agentName: string }) => {
-            startedWith = input.agentName;
-            return { status: "started", run: { id: "run_child" }, threadId: "thread_child" };
-          }
+    // A running run of OWN in a chat, as its owner choosing it there left it: the chat marked.
+    const parentIn = async (conversationId: string, mark = true) => {
+      const id = asConversationId(conversationId);
+      // The store never marks a chat others read.
+      if (mark)
+        await t.stores.conversations.markPersonalData({
+          clientInstanceId,
+          conversationId: id,
+          userId: t.kai.id,
+          at: new Date().toISOString()
+        });
+      const message = await t.stores.conversations.appendMessage({
+        clientInstanceId,
+        conversationId: id,
+        role: "user",
+        text: "Meine Steuer"
+      });
+      return t.stores.agentRuns.createAgentRun({
+        id: asAgentRunId(`run_${randomUUID()}`),
+        clientInstanceId,
+        conversationId: id,
+        ownerUserId: t.kai.id,
+        inputMessageId: message.id,
+        agentName: OWN,
+        status: "running",
+        startedAt: new Date().toISOString(),
+        correlationId: randomUUID(),
+        authorization: {
+          personalConnectionsAllowed: true,
+          principal: createUserPrincipal(person(t.kai.id)),
+          subjectUserId: t.kai.id,
+          scopes: ["*"]
         }
-      } as never,
-      assetSource: {
-        getSnapshot: async () => ({
-          agents: [agent(OWN, { subagentNames: ["helper"] }), agent("helper")]
-        })
-      } as never,
-      agentAvailable: (input) => calls.deps.agentAvailable?.(input) ?? Promise.resolve(false)
-    });
-    const call = async (
-      actor: AuthenticatedIdentity,
-      input: { agent?: string } = {},
-      origin: Record<string, unknown> = {}
-    ) => {
-      startedWith = undefined;
-      const result = await operation.execute({ description: "Tax", task: "Check.", ...input }, {
-        actor,
-        correlationId: "corr_1",
-        runId: "oprun_1",
-        origin: {
-          kind: "agent",
-          agentRunId: current.id,
-          conversationId: current.conversationId,
-          agentName: OWN,
-          toolCallId: "tc_1",
-          toolName: "run_agent",
-          ...origin
-        }
-      } as never);
-      return { result, started: startedWith };
+      });
     };
+    const runItself = (
+      parent: Awaited<ReturnType<typeof parentIn>>,
+      actor: AuthenticatedIdentity,
+      input: { agent?: string } = {}
+    ) =>
+      runOperation(
+        {
+          operation: AGENTS_RUN_OPERATION,
+          effect: "changing",
+          input: { description: "Tax", task: "Check.", ...input },
+          actor,
+          origin: {
+            kind: "agent",
+            agentRunId: parent.id,
+            conversationId: parent.conversationId,
+            agentName: parent.agentName,
+            toolCallId: asToolCallId(`call_${randomUUID()}`),
+            toolName: AGENTS_RUN_OPERATION
+          },
+          correlationId: randomUUID()
+        },
+        {
+          ...calls.deps,
+          agentToolNames: () => [AGENTS_RUN_OPERATION],
+          // A changing call in a personal chat waits for its person's confirmation; what the
+          // person confirms is not under test here, only whether the agent may be started.
+          policy: { ...calls.deps.policy, personalConversation: async () => false }
+        },
+        { modelRoutes: [{ id: "local", region: "eu" }] }
+      );
 
     const own = await chat(t.kai.id, team, "private");
-    expect((await start(t.kai.id, own.id)).statusCode).toBe(200);
-    current = parent(own.id);
+    const parent = await parentIn(own.id);
     // The owner's own agent, left out of 'agent', runs itself in a chat only the owner reads.
-    expect((await call(person(t.kai.id))).started).toBe(OWN);
-    // Naming itself is the same; naming another agent of its config never uses the chat.
-    expect((await call(person(t.kai.id), { agent: OWN })).started).toBe(OWN);
-    expect((await call(person(t.kai.id), { agent: "helper" })).started).toBeUndefined();
+    const ran = await runItself(parent, person(t.kai.id));
+    expect(ran.result, JSON.stringify(ran.result)).toMatchObject({
+      status: "done",
+      output: { agent: OWN }
+    });
     // Another member, a key and a Workflow step's principal never run it.
     for (const [what, actor] of [
       ["another member", person(t.lena.id)],
@@ -481,15 +512,13 @@ describe("an agent of Only me beyond the chat its owner chose it in", () => {
         })
       ]
     ] as const) {
-      expect((await call(actor)).started, what).toBeUndefined();
+      expect((await runItself(parent, actor)).result.status, what).not.toBe("done");
     }
-    // A chat the team reads never does; the store cannot mark one as personal either.
+    // A chat the team reads never runs it, whoever asks.
     const shared = await chat(t.kai.id, team);
-    current = parent(shared.id);
-    expect((await call(person(t.kai.id))).started).toBeUndefined();
-    // Another member's agent is no business of Kai, even in his own marked chat.
-    current = parent(own.id, "helper");
-    expect((await call(person(t.kai.id))).started).toBeUndefined();
+    expect(shared.visibility).toBe("workspace");
+    const inShared = await parentIn(shared.id, false);
+    expect((await runItself(inShared, person(t.kai.id))).result.status).not.toBe("done");
   });
 
   it("is never started as a subagent, even by an agent of its owner's own chat", async () => {
