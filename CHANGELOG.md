@@ -7,6 +7,12 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.17 — 2026-10-28
+
+### Changed
+
+- **Release:** The outside-forms package may pack to 450,000 bytes: it ships two built web pages, the public form page and its preview beside the chat.
+
 ## 0.8.0-rc.16 — 2026-10-27
 
 ### Added
