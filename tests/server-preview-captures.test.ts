@@ -334,6 +334,44 @@ describe("dark server preview requests", () => {
     for (const headers of credentials)
       expect((await t.instance.call("apps.captures.call", { headers })).statusCode).toBe(403);
   });
+  it.each(["another-page", "app-without-write"])(
+    "refuses before minting for an unrelated target: %s",
+    async (kind) => {
+      const { id, conversationId } = await run(t.kai.id);
+      const target =
+        kind === "another-page"
+          ? await t.openPage(t.admin.id)
+          : await t.openApp(t.admin.id, "draft");
+      if (!isFileSetId(target.proof.fileSetId)) throw Error("No file set");
+      const asked = await t.stores.pages.requestPreviewCapture({
+        clientInstanceId,
+        userId: asUserId(t.kai.id),
+        conversationId,
+        runId: id,
+        toolCallId: randomUUID(),
+        fileSetId: target.proof.fileSetId,
+        requestedAt: new Date().toISOString(),
+        perRun: 3,
+        perHour: 20,
+        server: {
+          deadline: new Date(Date.now() + 20_000).toISOString(),
+          size: "desktop",
+          theme: "light"
+        }
+      });
+      if (!("id" in asked)) throw Error("Limit");
+      let called = false;
+      duringCapture = async () => {
+        called = true;
+        return { status: "refused", code: "capture_failed" };
+      };
+      await work(asked.id);
+      expect(called).toBe(false);
+      expect(
+        (await t.stores.pages.getServerPreviewCapture({ clientInstanceId, id: asked.id }))?.status
+      ).toBe("refused");
+    }
+  );
   it("enforces three requests per run even when the writer asks for a higher limit", async () => {
     const { id, frame } = await run();
     if (!isFileSetId(frame.proof.fileSetId)) throw Error("No file set");

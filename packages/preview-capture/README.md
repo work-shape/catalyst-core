@@ -47,3 +47,8 @@ Run `node tests/support/build-capture-fixture.mjs` and
 `CAPTURE_BROWSER_TESTS=1 pnpm exec vitest run tests/preview-capture-service.browser.test.ts`.
 This starts only test-owned containers on an internal network, removes them afterwards, and
 leaves the WebP pictures and sandbox evidence in `.tmp/capture-proof/`.
+
+Blocked requests report only method, host and path, without queries or bearer segments.
+When Chromium refuses through CSP before creating an HTTP request, the method is `CSP`:
+DevTools supplies the blocked URL, but no HTTP method exists at that point. These diagnostics
+come from Node's network and DevTools observers, independently of the Page's guard.

