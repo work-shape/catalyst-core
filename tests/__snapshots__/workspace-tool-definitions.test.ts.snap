@@ -327,6 +327,11 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
               "lastCommandId": {
                 "type": "string"
               },
+              "version": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
               "promotedArtifacts": {
                 "type": "array",
                 "items": {
@@ -558,6 +563,11 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
         "mimeType": {
           "type": "string"
         },
+        "version": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
         "encoding": {
           "type": "string",
           "const": "utf-8"
@@ -632,6 +642,11 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
         "content": {
           "type": "string",
           "description": "The whole text of the file."
+        },
+        "replacesVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "For a file of the project folder (project/...): the version workspace.read_file answered, which this write replaces. 0 for a new file. Where the file changed since, the write is kept beside it as a conflict copy."
         }
       }
     },
@@ -649,6 +664,12 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
           "type": "string",
           "maxLength": 1048576,
           "description": "The whole text of the file."
+        },
+        "replacesVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "For a file of the project folder (project/...): the version workspace.read_file answered, which this write replaces. 0 for a new file. Where the file changed since, the write is kept beside it as a conflict copy."
         }
       },
       "required": [
@@ -671,6 +692,61 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
         },
         "created": {
           "type": "boolean"
+        },
+        "project": {
+          "type": "object",
+          "properties": {
+            "projectId": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "version": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "change": {
+              "type": "string",
+              "enum": [
+                "created",
+                "updated",
+                "unchanged",
+                "conflict_copy"
+              ]
+            },
+            "previousVersion": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "changed": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "path",
+                "version"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "projectId",
+            "path",
+            "version",
+            "change"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -724,6 +800,11 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
               }
             }
           }
+        },
+        "replacesVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "For a file of the project folder (project/...): the version workspace.read_file answered, which this write replaces. 0 for a new file. Where the file changed since, the write is kept beside it as a conflict copy."
         }
       }
     },
@@ -761,6 +842,12 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
             ],
             "additionalProperties": false
           }
+        },
+        "replacesVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "For a file of the project folder (project/...): the version workspace.read_file answered, which this write replaces. 0 for a new file. Where the file changed since, the write is kept beside it as a conflict copy."
         }
       },
       "required": [
@@ -785,6 +872,61 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
+        },
+        "project": {
+          "type": "object",
+          "properties": {
+            "projectId": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "version": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "change": {
+              "type": "string",
+              "enum": [
+                "created",
+                "updated",
+                "unchanged",
+                "conflict_copy"
+              ]
+            },
+            "previousVersion": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "changed": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "path",
+                "version"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "projectId",
+            "path",
+            "version",
+            "change"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
