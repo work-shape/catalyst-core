@@ -16,10 +16,12 @@ const token = "local-capture-fixture-token-00000000";
 const docker = (...args: string[]) =>
   execFileSync("docker", args, { encoding: "utf8", timeout: 35_000, maxBuffer: 2_000_000 });
 const peer = (script: string) => docker("exec", api, "node", "--input-type=module", "-e", script);
-const fixture = (html: string) =>
-  peer(`await fetch('http://127.0.0.1:4100/fixture',{method:'POST',body:${JSON.stringify(html)}})`);
-function capture(extra: Record<string, unknown> = {}): CaptureOutcome {
-  const input = {
+const fixture = (html: string, name = "proof.mac", hold = false) =>
+  peer(
+    `await fetch('http://127.0.0.1:4100/fixture/${name}',{method:'POST',body:${JSON.stringify(JSON.stringify({ html, hold }))}})`
+  );
+function captureInput(extra: Record<string, unknown> = {}) {
+  return {
     themeColors: DEFAULT_THEME_INPUTS.light,
     contentPath: "/app-content/fset_00000000-0000-0000-0000-000000000000/proof.mac/",
     session: "capture:pcap_fixture",
@@ -30,6 +32,9 @@ function capture(extra: Record<string, unknown> = {}): CaptureOutcome {
     number: 1,
     ...extra
   };
+}
+function capture(extra: Record<string, unknown> = {}): CaptureOutcome {
+  const input = captureInput(extra);
   return JSON.parse(
     peer(
       `const r=await fetch('http://${service}:4120/capture',{method:'POST',headers:{authorization:'Bearer ${token}','content-type':'application/json'},body:${JSON.stringify(JSON.stringify(input))}});console.log(await r.text());`
@@ -76,9 +81,9 @@ suite("isolated Linux capture service", () => {
       "catalyst.worktree=srv1-preview-capture",
       "--read-only",
       "--tmpfs",
-      "/tmp:size=192m,mode=1777",
+      "/tmp:size=384m,mode=1777",
       "--shm-size",
-      "256m",
+      "512m",
       "--cap-drop",
       "ALL",
       "--security-opt",
@@ -86,11 +91,11 @@ suite("isolated Linux capture service", () => {
       "--security-opt",
       `seccomp=${resolve("packages/deployment-kit/docker/preview-capture-seccomp.json")}`,
       "--pids-limit",
-      "192",
+      "384",
       "--cpus",
       "1.5",
       "--memory",
-      "512m",
+      "1024m",
       "-e",
       `PREVIEW_CAPTURE_SERVICE_TOKEN=${token}`,
       "-e",
@@ -98,7 +103,7 @@ suite("isolated Linux capture service", () => {
       "-e",
       "PREVIEW_CAPTURE_INTERFACE_ORIGIN=http://interface.invalid",
       "-e",
-      "PREVIEW_CAPTURE_CONCURRENCY=1",
+      "PREVIEW_CAPTURE_CONCURRENCY=2",
       image
     );
     // Poll readiness without retrying a test: a startup refusal ends the fixture immediately.
@@ -258,6 +263,69 @@ suite("isolated Linux capture service", () => {
       expect(capture().status).toBe("done");
     }
   );
+  it.each([
+    { name: "deadline", script: "while(true){}" },
+    {
+      name: "memory",
+      script: "const held=[];setInterval(()=>held.push(new Uint8Array(8*1024*1024).fill(1)),50)"
+    }
+  ])("fails only its own capture on $name with two captures in flight", ({ name, script }) => {
+    fixture(`<script>${script}</script>`, "bad.mac");
+    fixture("<h1>Still healthy</h1>", "healthy.mac", true);
+    const inputs = [
+      captureInput({
+        contentPath: "/app-content/fset_00000000-0000-0000-0000-000000000000/bad.mac/",
+        deadline: Date.now() + (name === "deadline" ? 3000 : 20_000)
+      }),
+      captureInput({
+        contentPath: "/app-content/fset_00000000-0000-0000-0000-000000000000/healthy.mac/"
+      })
+    ];
+    const [failed, healthy] = JSON.parse(
+      peer(
+        `const inputs=${JSON.stringify(inputs)};
+        const capture=async input=>{const r=await fetch('http://${service}:4120/capture',{method:'POST',headers:{authorization:'Bearer ${token}','content-type':'application/json'},body:JSON.stringify(input)});return r.json()};
+        const healthy=capture(inputs[1]);
+        const waitingDeadline=Date.now()+8000;
+        while(!await (await fetch('http://127.0.0.1:4100/waiting/healthy.mac')).json()){
+          if(Date.now()>waitingDeadline)throw Error('Healthy capture did not start');
+          await new Promise(done=>setTimeout(done,50));
+        }
+        const failed=await capture(inputs[0]);
+        await fetch('http://127.0.0.1:4100/release/healthy.mac');
+        console.log(JSON.stringify([failed,await healthy]));`
+      )
+    );
+    expect(failed).toEqual({
+      status: "refused",
+      code: "capture_failed",
+      message:
+        name === "memory"
+          ? "The page used too much memory"
+          : "The page exceeded the capture deadline"
+    });
+    expect(healthy.status).toBe("done");
+    expect(healthy).not.toHaveProperty("message");
+  });
+  it("disables DNS prefetch and WebRTC outside routed HTTP requests", () => {
+    fixture(
+      `<h1>No WebRTC</h1><script>console.error("WebRTC constructors: " + typeof RTCPeerConnection + ", " + typeof webkitRTCPeerConnection)</script>`
+    );
+    const result = capture();
+    expect(result.status).toBe("done");
+    if (result.status !== "done") throw Error("Capture failed");
+    expect(JSON.stringify(result.report)).toContain("WebRTC constructors: undefined, undefined");
+    const flags = docker(
+      "exec",
+      service,
+      "node",
+      "--input-type=module",
+      "-e",
+      `import{readdirSync,readFileSync}from'node:fs';for(const pid of readdirSync('/proc').filter(p=>/^\\d+$/.test(p))){try{const cmd=readFileSync('/proc/'+pid+'/cmdline','utf8');if(cmd.includes('--remote-debugging-pipe'))console.log(cmd)}catch{}}`
+    );
+    expect(flags).toContain("--dns-prefetch-disable");
+    expect(flags).toContain("--force-webrtc-ip-handling-policy=disable_non_proxied_udp");
+  });
   it("refuses startup when Docker blocks the process namespace sandbox", () => {
     const result = spawnSync(
       "docker",

@@ -17,15 +17,16 @@ services:
     user: "10001:10001"
     read_only: true
     tmpfs:
-      - /tmp:size=192m,mode=1777
-    shm_size: 256m
+      - /tmp:size=384m,mode=1777
+    shm_size: 512m
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
       - seccomp=${PREVIEW_CAPTURE_SECCOMP:?path to preview-capture-seccomp.json required}
-    pids_limit: 192
+    pids_limit: 384
     cpus: 1.5
-    mem_limit: ${PREVIEW_CAPTURE_MEMORY:-768m}
+    # Two independent browsers, each with its own bounded renderers and host frame.
+    mem_limit: ${PREVIEW_CAPTURE_MEMORY:-1024m}
     networks: [preview-capture]
     environment:
       PREVIEW_CAPTURE_SERVICE_TOKEN: ${PREVIEW_CAPTURE_SERVICE_TOKEN}

@@ -6,29 +6,58 @@ import { loadAppKitFiles } from "@work-shape/catalyst-server";
 const files = loadAppKitFiles("/vendor/app-kit");
 const version = [...files.keys()].at(-1);
 if (!version) throw new Error("No released kit");
-let html = "<h1>Plain Page</h1>";
-let scripts = new Map<string, { text: string; kind: string }>();
+const fixtures = new Map<
+  string,
+  {
+    html: string;
+    scripts: Map<string, { text: string; kind: string }>;
+    waiting: boolean;
+    released: Promise<void>;
+    release: () => void;
+  }
+>();
 const served: string[] = [];
 const handle = async (
   request: import("node:http").IncomingMessage,
   response: import("node:http").ServerResponse
 ) => {
   const path = request.url ?? "/";
-  if (path === "/fixture" && request.method === "POST") {
+  if (path.startsWith("/fixture/") && request.method === "POST") {
     let body = "";
     for await (const part of request) body += part;
+    const input: { html: string; hold: boolean } = JSON.parse(body);
     const built = rewriteHtml({
       path: "index.html",
       kitVersion: version,
-      html: body.replaceAll("KIT_VERSION", version),
+      html: input.html.replaceAll("KIT_VERSION", version),
       exists: () => false
     });
-    html = built.html;
-    scripts = new Map(
-      built.extracted.map((file) => [file.path, { text: file.text, kind: file.kind }])
-    );
+    let release = () => {};
+    const released = input.hold
+      ? new Promise<void>((done) => {
+          release = done;
+        })
+      : Promise.resolve();
+    fixtures.set(path.slice("/fixture/".length), {
+      html: built.html,
+      scripts: new Map(
+        built.extracted.map((file) => [file.path, { text: file.text, kind: file.kind }])
+      ),
+      waiting: false,
+      released,
+      release
+    });
     served.length = 0;
     response.end("ok");
+    return;
+  }
+  if (path.startsWith("/release/")) {
+    fixtures.get(path.slice("/release/".length))?.release();
+    response.end("ok");
+    return;
+  }
+  if (path.startsWith("/waiting/")) {
+    response.end(JSON.stringify(fixtures.get(path.slice("/waiting/".length))?.waiting ?? false));
     return;
   }
   if (path === "/served") {
@@ -50,6 +79,9 @@ const handle = async (
     return;
   }
   if (path.startsWith("/app-content/")) {
+    const fixture = fixtures.get(path.split("/")[3] ?? "");
+    if (!fixture) throw new Error("No fixture");
+    const { html, scripts } = fixture;
     const name = path.split("/").slice(4).join("/");
     if (scripts.has(name)) {
       response.setHeader(
@@ -61,6 +93,8 @@ const handle = async (
       response.end(scripts.get(name)?.text);
       return;
     }
+    fixture.waiting = true;
+    await fixture.released;
     const session = "capture:pcap_fixture";
     const shell = composePageShell(html, { session, values: {}, persistent: false });
     for (const [key, value] of Object.entries(

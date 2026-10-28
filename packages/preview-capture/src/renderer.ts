@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { createContentForwarder } from "./registration";
-import { watchRendererMemory } from "./registration";
+import { createContentForwarder, watchRendererMemory } from "./registration";
 import { chromium, type Browser, type BrowserContext } from "playwright";
 import sharp from "sharp";
 import { rendererSandboxEvidence, type SandboxEvidence } from "./sandbox";
@@ -20,7 +19,8 @@ interface ProcessInfo {
   type: string;
 }
 
-export class CaptureRenderer {
+// A slot owns its Chromium process: deadlines and RSS checks never touch another slot.
+class CaptureSlot {
   private browser: Browser | undefined;
   private starting: Promise<Browser> | undefined;
   private idle: ReturnType<typeof setTimeout> | undefined;
@@ -46,13 +46,18 @@ export class CaptureRenderer {
     if (this.browser?.isConnected()) return this.browser;
     if (this.starting) return this.starting;
     this.starting = (async () => {
+      this.browserPid = undefined;
       // Playwright disables this sandbox by default. Never accept caller-supplied launch flags.
       const browser = await chromium.launch({
         chromiumSandbox: true,
         headless: true,
         timeout: 10_000,
         env: { HOME: "/tmp", PATH: "/usr/local/bin:/usr/bin:/bin", LANG: "C.UTF-8" },
-        args: ["--js-flags=--max-old-space-size=128"]
+        args: [
+          "--js-flags=--max-old-space-size=128",
+          "--dns-prefetch-disable",
+          "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"
+        ]
       });
       this.browser = browser;
       this.browserPid = (await this.processes(browser)).find((p) => p.type === "browser")?.id;
@@ -87,10 +92,11 @@ export class CaptureRenderer {
 
   async close(): Promise<void> {
     if (this.idle) clearTimeout(this.idle);
-    const browser = this.browser;
+    const browser = this.browser ?? (await this.starting?.catch(() => undefined));
     this.browser = undefined;
     // A stuck renderer must not keep shutdown or the next capture waiting indefinitely.
-    const pid = this.browserPid;
+    const pid = browser ? this.browserPid : undefined;
+    this.browserPid = undefined;
     const kill = setTimeout(() => {
       if (pid) {
         try {
@@ -115,6 +121,8 @@ export class CaptureRenderer {
     let timeout: ReturnType<typeof setTimeout> | undefined;
     let stopMonitor: (() => void) | undefined;
     let memoryExceeded = false;
+    let deadlineExceeded = false;
+    let shutdown: Promise<void> | undefined;
     const blocked: BlockedRequest[] = [];
     const record = (method: string, raw: string) => {
       if (blocked.length >= 50) return;
@@ -140,7 +148,8 @@ export class CaptureRenderer {
     try {
       const timedOut = new Promise<never>((_, reject) => {
         timeout = setTimeout(() => {
-          this.close().catch(() => undefined);
+          deadlineExceeded = true;
+          shutdown = this.close().catch(() => undefined);
           reject(new Error("deadline"));
         }, remaining);
       });
@@ -157,6 +166,15 @@ export class CaptureRenderer {
             locale: input.locale
           });
           const ctx = context;
+          // This script runs in every document's main world before App scripts, including
+          // nested frames. Workers have neither constructor. WebRTC bypasses HTTP routing.
+          await ctx.addInitScript({
+            content: `for (const name of ["RTCPeerConnection", "webkitRTCPeerConnection"]) {
+              Object.defineProperty(globalThis, name, {
+                value: undefined, writable: false, configurable: false
+              });
+            }`
+          });
           // CSP can reject before routing. These failures still belong in the service's report.
           ctx.on("requestfailed", (request) => {
             record(request.method(), request.url());
@@ -311,12 +329,18 @@ export class CaptureRenderer {
       return {
         status: "refused",
         code: "capture_failed",
-        ...(memoryExceeded ? { message: "The page used too much memory" } : {})
+        ...(memoryExceeded
+          ? { message: "The page used too much memory" }
+          : deadlineExceeded
+            ? { message: "The page exceeded the capture deadline" }
+            : {})
       };
     } finally {
       if (timeout) clearTimeout(timeout);
       stopMonitor?.();
-      // close() above kills a browser on deadline. Normal cleanup closes only this context.
+      // Do not release this slot while its timed-out browser is still starting or closing.
+      await shutdown;
+      // Normal cleanup closes only this slot's context.
       await context?.close().catch(() => undefined);
       this.active--;
       this.captures++;
@@ -332,5 +356,35 @@ export class CaptureRenderer {
         }
       }
     }
+  }
+}
+
+/** The service's admission queue bounds the number of concurrent, independent slots. */
+export class CaptureRenderer {
+  private readonly slots: { renderer: CaptureSlot; busy: boolean }[] = [];
+  constructor(
+    private readonly options: { apiOrigin: string; interfaceOrigin: string; hostScript: string }
+  ) {}
+
+  async verifySandbox(): Promise<SandboxEvidence> {
+    return new CaptureSlot(this.options).verifySandbox();
+  }
+
+  async capture(input: CaptureInput): Promise<CaptureOutcome> {
+    let slot = this.slots.find((slot) => !slot.busy);
+    if (!slot) {
+      slot = { renderer: new CaptureSlot(this.options), busy: false };
+      this.slots.push(slot);
+    }
+    slot.busy = true;
+    try {
+      return await slot.renderer.capture(input);
+    } finally {
+      slot.busy = false;
+    }
+  }
+
+  async close(): Promise<void> {
+    await Promise.all(this.slots.map((slot) => slot.renderer.close()));
   }
 }
