@@ -1,5 +1,7 @@
 import {
   AppError,
+  DATA_STORE_ASSET_KIND,
+  WORKFLOW_ASSET_KIND,
   asCollaborationWorkspaceId,
   asUserId,
   assetMoveLadderRefusal,
@@ -8,6 +10,7 @@ import {
   auditActorFromIdentity,
   isAuthenticatedServicePrincipal,
   ownerReachRefusal,
+  type AccessAdministrationStore,
   type AccessResource,
   type ActorAccess,
   type AssetKindRegistry,
@@ -16,15 +19,20 @@ import {
   type AssetMoveUsers,
   type AssetOwnerReach,
   type AssetOwnerRung,
+  type ApiAccessStore,
   type AssetScope,
   type AuditActor,
+  type AuditEventStore,
   type AuthenticatedIdentity,
   type ClientInstanceId,
   type CollaborationWorkspace,
+  type CollaborationWorkspaceStore,
   type ConfigAssetRecord,
+  type ConfigAssetStore,
   type JsonObject,
   type LocaleCode,
   type ModuleSnapshot,
+  type PermissionGrant,
   type PlatformStores
 } from "@work-shape/catalyst-core";
 import { readDefinitionField, type WorkflowAssetKind } from "../asset-kinds/shared";
@@ -33,11 +41,13 @@ import { assetKindLabel, assetTitle } from "./asset-reference-labels";
 import { requireAssetKindModuleOn } from "./asset-write-rules";
 
 // SHARE-1 "Teilen mit…": an asset moves up the ladder Nur ich → Team → Alle with what it uses,
-// never down or sideways (Felix and the manager, 2026-10-28; it generalises MOVE-1). The move
-// changes the owner and nothing else: ids, names, revisions, drafts, availability, grants,
-// rows and runs stay, so whatever is keyed by the asset follows by itself. Editing follows the
-// new place. With the right at the target the move is made at once; without it, it becomes a
-// request an admin with that right decides in the Inbox (`asset-move-approval.ts`).
+// never down or sideways (Felix and the manager, 2026-10-28; it generalises MOVE-1). Only who
+// holds the asset where it lies moves it: the owner of a Personal Workspace, or whoever may
+// change everything that goes from a team. The move changes the owner: ids, names, revisions,
+// drafts, availability, rows and runs stay, so whatever is keyed by the asset follows by
+// itself. Editing follows the new place, so the grants that edited the asset at the old one go
+// (`grantsLeavingWith`). With the right at the target the move is made at once; without it, it
+// becomes a request an admin with that right decides in the Inbox (`asset-move-approval.ts`).
 
 /** What a move or its check is given. The address is where the asset is now. */
 export interface AssetMoveInput {
@@ -83,7 +93,11 @@ export interface AssetMovePlan {
   to: AssetScope;
   fromReach: AssetOwnerReach;
   toReach: AssetOwnerReach;
+  fromWorkspace?: CollaborationWorkspace;
   toWorkspace?: CollaborationWorkspace;
+  locale: LocaleCode;
+  /** How many grants the move takes away, as they stand when it is planned. */
+  grantsLeaving: { onAssets: number; runAccounts: number };
   /** The asset first, then what it uses that would otherwise stay below it. */
   members: MoveMember[];
   breaks: MoveBreak[];
@@ -117,8 +131,9 @@ export async function planAssetMove(
   options: AssetMoveOptions,
   input: AssetMoveInput,
   locale: LocaleCode,
-  actor?: AuthenticatedIdentity
+  caller?: { actor: AuthenticatedIdentity; access: ActorAccess }
 ): Promise<AssetMovePlan> {
+  const actor = caller?.actor;
   const { stores, clientInstanceId } = options;
   const de = locale === "de";
   requireAssetKindModuleOn(options.modules, input.kind);
@@ -244,6 +259,14 @@ export async function planAssetMove(
       members.push({ kind, record: used, title: titleOf(kind, used) });
     }
   }
+  const fromWorkspace = from.kind === "workspace" ? await workspaceOf(from.workspaceId) : undefined;
+  // Before anything else is said about what goes: only who holds it where it lies moves it.
+  if (caller)
+    requireMoveSource(
+      { fromReach, from, members, locale, ...(fromWorkspace ? { fromWorkspace } : {}) },
+      caller.actor,
+      caller.access
+    );
   for (const member of members) {
     if (!member.kind.owners.includes(to.kind))
       throw refusal(
@@ -299,16 +322,212 @@ export async function planAssetMove(
       await assertOwnerReach(reach, source, { kind: "app_audience", audience }, locale);
   }
 
+  const planned = { root, from, to, members };
+  const leaving = await grantsLeavingWith(stores, clientInstanceId, planned);
   return {
-    root,
-    from,
-    to,
+    ...planned,
     fromReach,
     toReach,
+    ...(fromWorkspace ? { fromWorkspace } : {}),
     ...(toWorkspace ? { toWorkspace } : {}),
-    members,
+    locale,
+    grantsLeaving: { onAssets: leaving.onAssets.length, runAccounts: leaving.runAccounts.length },
     breaks: await findBreaks(options, { from, fromReach, toReach, memberIds, members, titleOf })
   };
+}
+
+/**
+ * Who may move an asset out of where it lies: the owner of a Personal Workspace, nobody else,
+ * whatever rights they hold; from a team or the instance, whoever may change every asset that
+ * goes. A request is filed only for who passes here.
+ */
+function requireMoveSource(
+  plan: Pick<AssetMovePlan, "fromReach" | "fromWorkspace" | "from" | "members" | "locale">,
+  actor: AuthenticatedIdentity,
+  access: ActorAccess
+): void {
+  const de = plan.locale === "de";
+  if (assetOwnerRung(plan.fromReach) === "personal") {
+    if (
+      isAuthenticatedServicePrincipal(actor) ||
+      plan.fromWorkspace?.personalUserId == null ||
+      plan.fromWorkspace.personalUserId !== actor.id
+    )
+      throw new AppError(
+        "FORBIDDEN",
+        de
+          ? "Nur wer diesen persönlichen Arbeitsbereich besitzt, kann teilen, was darin liegt."
+          : "Only the owner of this Personal Workspace can share what is in it.",
+        { reason: "move_not_owner" }
+      );
+    return;
+  }
+  for (const { kind, record } of plan.members) {
+    const resource: AccessResource = {
+      kind: kind.kind,
+      name: record.name,
+      assetId: record.id,
+      ...(plan.from.kind === "workspace" ? { workspaceId: plan.from.workspaceId } : {})
+    };
+    if (!access.authorize(kind.actions.write, resource).allowed)
+      throw new AppError(
+        "FORBIDDEN",
+        de
+          ? `Du darfst ${assetKindLabel(kind.kind, plan.locale)} „${record.name}“ nicht ändern, und es geht mit. Teilen kann nur, wer alles ändern darf, was mitgeht.`
+          : `You may not change ${assetKindLabel(kind.kind, plan.locale)} "${record.name}", and it goes along. Only who may change everything that goes along can share it.`,
+        {
+          reason: "move_source_right",
+          action: kind.actions.write,
+          asset: { kind: kind.kind, name: record.name }
+        }
+      );
+  }
+}
+
+/**
+ * Why a request filed by this person no longer moves anything when it is decided: their
+ * account is no longer active, they left the team it goes to, or the Personal Workspace it
+ * comes from is no longer theirs. Undefined while they still could have moved it.
+ */
+export async function requesterRefusal(
+  options: Pick<AssetMoveOptions, "clientInstanceId" | "stores">,
+  plan: AssetMovePlan,
+  requesterId: string
+): Promise<{ reason: string; message: string } | undefined> {
+  const de = plan.locale === "de";
+  const userId = asUserId(requesterId);
+  const user = await options.stores.users.getUser({
+    clientInstanceId: options.clientInstanceId,
+    userId
+  });
+  if (user?.status !== "active")
+    return {
+      reason: "move_requester_inactive",
+      message: de
+        ? "Das Konto der Person, die das Teilen angefragt hat, ist nicht mehr aktiv. Es wurde nichts geteilt."
+        : "The account of the person who asked to share it is no longer active. Nothing was shared."
+    };
+  if (
+    assetOwnerRung(plan.fromReach) === "personal" &&
+    plan.fromWorkspace?.personalUserId !== userId
+  )
+    return {
+      reason: "move_requester_not_owner",
+      message: de
+        ? "Der persönliche Arbeitsbereich, aus dem geteilt werden sollte, gehört nicht mehr der Person, die angefragt hat. Es wurde nichts geteilt."
+        : "The Personal Workspace it was to be shared from no longer belongs to the person who asked. Nothing was shared."
+    };
+  if (
+    plan.to.kind === "workspace" &&
+    !(await options.stores.workspaces.getMembership({
+      clientInstanceId: options.clientInstanceId,
+      collaborationWorkspaceId: plan.to.workspaceId,
+      userId
+    }))
+  )
+    return {
+      reason: "move_requester_not_member",
+      message: de
+        ? `Die Person, die angefragt hat, ist nicht mehr Mitglied von „${plan.toWorkspace?.name ?? "Team"}“. Es wurde nichts geteilt.`
+        : `The person who asked is no longer a member of "${plan.toWorkspace?.name ?? "the team"}". Nothing was shared.`
+    };
+  return undefined;
+}
+
+/** The stores a move writes through, in one transaction: the request's decision or its own. */
+export interface AssetMoveWriteStores {
+  configAssets: Pick<ConfigAssetStore, "moveConfigAssets" | "listActiveConfigAssets">;
+  audit: Pick<AuditEventStore, "appendAuditEvent">;
+  access: Pick<AccessAdministrationStore, "listGrants" | "deleteGrant">;
+  apiAccess: Pick<ApiAccessStore, "findServicePrincipalByOwner">;
+  workspaces: Pick<CollaborationWorkspaceStore, "getMembership">;
+}
+
+/**
+ * The grants that edited the moved assets at their old place, which go with the move: every
+ * grant on a moved asset that is more than reading or using it, and a reading or using one
+ * that reaches beyond who reads at the new place (anyone but a member, for a team). And the
+ * grants a moved Workflow's own run account holds at the old place: on that workspace, or on
+ * an asset of it that stays.
+ */
+async function grantsLeavingWith(
+  stores: Pick<AssetMoveWriteStores, "configAssets" | "access" | "apiAccess" | "workspaces">,
+  clientInstanceId: ClientInstanceId,
+  plan: Pick<AssetMovePlan, "members" | "from" | "to">
+): Promise<{ onAssets: PermissionGrant[]; runAccounts: PermissionGrant[] }> {
+  const moved = new Set(plan.members.map(({ record }) => record.id));
+  const members = new Map<string, Promise<boolean>>();
+  const memberOfTarget = (userId: string) => {
+    const { to } = plan;
+    if (to.kind !== "workspace") return Promise.resolve(true);
+    let read = members.get(userId);
+    if (!read) {
+      read = stores.workspaces
+        .getMembership({
+          clientInstanceId,
+          collaborationWorkspaceId: to.workspaceId,
+          userId: asUserId(userId)
+        })
+        .then((membership) => membership !== undefined);
+      members.set(userId, read);
+    }
+    return read;
+  };
+  const onAssets: PermissionGrant[] = [];
+  for (const { record } of plan.members) {
+    const grants = await stores.access.listGrants({
+      clientInstanceId,
+      scopeKind: "asset",
+      scopeId: record.id
+    });
+    for (const grant of grants) {
+      const readsOrUses = grant.action.endsWith(".read") || grant.action.endsWith(".use");
+      const keeps =
+        readsOrUses &&
+        (plan.to.kind === "instance" ||
+          (grant.holderKind === "user" && (await memberOfTarget(grant.holderId))));
+      if (!keeps) onAssets.push(grant);
+    }
+  }
+  const runAccounts: PermissionGrant[] = [];
+  const { from } = plan;
+  let staying: Promise<Set<string>> | undefined;
+  const staysAtOldPlace = async (assetId: string) => {
+    staying ??= stores.configAssets
+      .listActiveConfigAssets({ clientInstanceId })
+      .then(
+        (assets) =>
+          new Set(
+            assets
+              .filter((asset) => assetScopesEqual(asset.scope, from) && !moved.has(asset.id))
+              .map((asset) => asset.id)
+          )
+      );
+    return (await staying).has(assetId);
+  };
+  if (from.kind === "workspace")
+    for (const { kind, record } of plan.members) {
+      if (kind.kind !== WORKFLOW_ASSET_KIND) continue;
+      const account = await stores.apiAccess.findServicePrincipalByOwner({
+        clientInstanceId,
+        owner: { kind: WORKFLOW_ASSET_KIND, assetId: record.id }
+      });
+      if (!account) continue;
+      const grants = await stores.access.listGrants({
+        clientInstanceId,
+        holderKind: "service_principal",
+        holderId: account.id
+      });
+      for (const grant of grants) {
+        const atOldPlace =
+          (grant.scopeKind === "workspace" && grant.scopeId === from.workspaceId) ||
+          (grant.scopeKind === "asset" &&
+            grant.scopeId !== undefined &&
+            (await staysAtOldPlace(grant.scopeId)));
+        if (atOldPlace) runAccounts.push(grant);
+      }
+    }
+  return { onAssets, runAccounts };
 }
 
 /** Whether the caller holds the right at the target for every member: then it moves at once. */
@@ -343,51 +562,71 @@ export function requireBreaksAccepted(
 }
 
 /**
- * Makes the move: one transaction that gives every member the new owner and records
- * `asset.moved` with ids alone. A member that changed since the plan refuses it, and then
- * nothing moved; whatever fails inside rolls all of it back.
+ * Makes the move in its own transaction: every member gets the new owner, the grants that
+ * edited it at the old place go, and `asset.moved` is recorded with ids alone. A member that
+ * changed since the plan refuses it, and then nothing moved; whatever fails rolls all of it back.
  */
 export async function executeAssetMove(
   options: Pick<AssetMoveOptions, "clientInstanceId" | "stores">,
   plan: AssetMovePlan,
-  call: {
-    actor: AuditActor;
-    correlationId: string;
-    runId?: string;
-    requestId?: string;
-  }
+  call: AssetMoveWriteCall
 ): Promise<{ version: number }> {
-  const { clientInstanceId } = options;
-  return options.stores.transaction(async (stores) => {
-    const result = await stores.configAssets.moveConfigAssets({
-      clientInstanceId,
-      to: plan.to,
-      assets: plan.members.map(({ record }) => ({
-        id: record.id,
-        from: plan.from,
-        activeRevisionId: record.activeRevisionId,
-        ...(record.publishedRevisionId ? { publishedRevisionId: record.publishedRevisionId } : {})
-      }))
-    });
-    await stores.audit.appendAuditEvent({
-      clientInstanceId,
-      type: "asset.moved",
-      status: "success",
-      actor: call.actor,
-      subject: plan.root.record.id,
-      correlationId: call.correlationId,
-      metadata: {
-        assetId: plan.root.record.id,
-        kind: plan.root.kind.kind,
-        from: ownerIds(plan.from),
-        to: ownerIds(plan.to),
-        moved: plan.members.map(({ kind, record }) => ({ assetId: record.id, kind: kind.kind })),
-        ...(call.requestId ? { requestId: call.requestId } : {}),
-        ...(call.runId ? { operationRunId: call.runId } : {})
-      }
-    });
-    return result;
+  return options.stores.transaction((stores) =>
+    writeAssetMove(stores, options.clientInstanceId, plan, call)
+  );
+}
+
+export interface AssetMoveWriteCall {
+  actor: AuditActor;
+  correlationId: string;
+  runId?: string;
+  requestId?: string;
+}
+
+/**
+ * The writes of a move, through stores bound to the transaction it is part of: a request's
+ * decision commits or rolls back with them.
+ */
+export async function writeAssetMove(
+  stores: AssetMoveWriteStores,
+  clientInstanceId: ClientInstanceId,
+  plan: AssetMovePlan,
+  call: AssetMoveWriteCall
+): Promise<{ version: number }> {
+  const result = await stores.configAssets.moveConfigAssets({
+    clientInstanceId,
+    to: plan.to,
+    assets: plan.members.map(({ record }) => ({
+      id: record.id,
+      from: plan.from,
+      activeRevisionId: record.activeRevisionId,
+      ...(record.publishedRevisionId ? { publishedRevisionId: record.publishedRevisionId } : {})
+    }))
   });
+  // Read again inside the transaction: a grant given since the plan goes as well.
+  const leaving = await grantsLeavingWith(stores, clientInstanceId, plan);
+  const dropped = [...leaving.onAssets, ...leaving.runAccounts];
+  for (const grant of dropped)
+    await stores.access.deleteGrant({ clientInstanceId, grantId: grant.id });
+  await stores.audit.appendAuditEvent({
+    clientInstanceId,
+    type: "asset.moved",
+    status: "success",
+    actor: call.actor,
+    subject: plan.root.record.id,
+    correlationId: call.correlationId,
+    metadata: {
+      assetId: plan.root.record.id,
+      kind: plan.root.kind.kind,
+      from: ownerIds(plan.from),
+      to: ownerIds(plan.to),
+      moved: plan.members.map(({ kind, record }) => ({ assetId: record.id, kind: kind.kind })),
+      ...(dropped.length > 0 ? { droppedGrantIds: dropped.map((grant) => grant.id) } : {}),
+      ...(call.requestId ? { requestId: call.requestId } : {}),
+      ...(call.runId ? { operationRunId: call.runId } : {})
+    }
+  });
+  return result;
 }
 
 /** The actor a move made by a person or a principal is recorded under. */
@@ -410,7 +649,14 @@ export interface AssetMoveView {
     editors: AssetMoveEditors;
     users: AssetMoveUsers;
     callerEdits: boolean;
+    /**
+     * The grants that go: on the moved assets, those to change them and those to read or use
+     * them that reach beyond the new place; and a moved Workflow's run account's at the old.
+     */
+    grantsDropped: { onAssets: number; runAccounts: number };
   };
+  /** The rows that go with a moved Data Store, and who reads them afterwards. */
+  data: { kind: string; name: string; title: string; sentence: string }[];
 }
 
 /**
@@ -441,9 +687,29 @@ export function assetMoveView(plan: AssetMovePlan, access: ActorAccess): AssetMo
       editors: plan.to.kind === "instance" ? "instance_builders" : "workspace_builders",
       // Who uses it: the team's members, or everyone where it is offered.
       users: plan.to.kind === "instance" ? "everyone_where_offered" : "workspace_members",
-      callerEdits: direct
-    }
+      callerEdits: direct,
+      grantsDropped: plan.grantsLeaving
+    },
+    data: plan.members
+      .filter(({ kind }) => kind.kind === DATA_STORE_ASSET_KIND)
+      .map(({ kind, record, title }) => ({
+        kind: kind.kind,
+        name: record.name,
+        title,
+        sentence: dataSentence(plan, title)
+      }))
   };
+}
+
+function dataSentence(plan: AssetMovePlan, title: string): string {
+  const team = plan.toWorkspace?.name;
+  if (plan.locale === "de")
+    return plan.to.kind === "workspace"
+      ? `Die Daten in „${title}“ gehen mit und sind dann für das Team „${team ?? "Team"}“ lesbar.`
+      : `Die Daten in „${title}“ gehen mit und sind dann für alle lesbar, denen es angeboten wird.`;
+  return plan.to.kind === "workspace"
+    ? `The data in "${title}" goes along and can then be read by the team "${team ?? "team"}".`
+    : `The data in "${title}" goes along and can then be read by everyone it is offered to.`;
 }
 
 function ownerIds(scope: AssetScope): MoveOwner {

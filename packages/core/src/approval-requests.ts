@@ -15,6 +15,10 @@ import type { OperationRunStore } from "./operation-runs";
 import type { ConfigAssetStore } from "./config-assets";
 import type { LocaleCode } from "./localization";
 import type { FeedbackStore } from "./feedback";
+import type { AccessAdministrationStore } from "./access-administration-store";
+import type { ApiAccessStore } from "./api-access";
+import type { AuditEventStore } from "./audit";
+import type { CollaborationWorkspaceStore } from "./collaboration-workspace";
 
 export * from "./approval-request";
 
@@ -32,8 +36,17 @@ export interface ApprovalFurtherRight {
 export interface ApprovalTransactionStores {
   jobs: JobsStore;
   operationRuns: OperationRunStore;
-  /** What a kind reads of the asset a request is about, such as whether it moved. */
-  configAssets: Pick<ConfigAssetStore, "getConfigAsset">;
+  /**
+   * What a kind reads of the asset a request is about, such as whether it moved, and the move
+   * of a `<kind>_move` request, which commits with its decision (SHARE-1).
+   */
+  configAssets: Pick<ConfigAssetStore, "getConfigAsset"> &
+    Partial<Pick<ConfigAssetStore, "moveConfigAssets" | "listActiveConfigAssets">>;
+  /** What a move writes beside the owner: its audit record and the grants that go with it. */
+  audit?: Pick<AuditEventStore, "appendAuditEvent">;
+  access?: Pick<AccessAdministrationStore, "listGrants" | "deleteGrant">;
+  apiAccess?: Pick<ApiAccessStore, "findServicePrincipalByOwner">;
+  workspaces?: Pick<CollaborationWorkspaceStore, "getMembership">;
   /** The comment a `feedback_review` item marks handled, in the same transaction. */
   feedback?: Pick<FeedbackStore, "getFeedback" | "markFeedbackHandled">;
 }

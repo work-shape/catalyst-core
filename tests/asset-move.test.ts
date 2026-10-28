@@ -266,6 +266,8 @@ describe("assets.move", () => {
         { assetId: await t.assetId("agent", "kai-agent"), kind: "agent" },
         { assetId: await t.assetId("skill", "kai-skill"), kind: "skill" }
       ],
+      // Kai's own write grants on the two assets: editing follows the team now.
+      droppedGrantIds: [expect.any(String), expect.any(String)],
       operationRunId: expect.any(String)
     });
     // Ids only: no name, title or content of a Personal Workspace's asset in the record.
@@ -476,5 +478,217 @@ describe("a move without the right at the target", () => {
       kind: "workspace",
       workspaceId: mine
     });
+  });
+});
+
+// Review of #153: a move out of a place comes from who holds it there, and a request is
+// decided for the person who filed it as they are when it is decided.
+describe("who may move an asset out of its place", () => {
+  it("refuses an admin moving another person's personal agent and skill into a team", async () => {
+    const { t, mine, team } = await places();
+    // The admin created the team and is a member of it.
+    await own(t, mine, "skill", "kai-skill");
+    await own(t, mine, "agent", "kai-agent", { skillNames: ["kai-skill"] });
+    for (const check of [true, false]) {
+      const response = await move(
+        t,
+        t.admin.id,
+        "agent",
+        "kai-agent",
+        mine,
+        toTeam(team),
+        {},
+        check
+      );
+      expect(refusalOf(response)).toMatchObject({ status: 403, reason: "move_not_owner" });
+    }
+    expect(await scopeOf(t, "agent", "kai-agent")).toEqual({
+      kind: "workspace",
+      workspaceId: mine
+    });
+    expect(await scopeOf(t, "skill", "kai-skill")).toEqual({
+      kind: "workspace",
+      workspaceId: mine
+    });
+    expect(await movedEvents(t)).toEqual([]);
+  });
+
+  it("refuses a person with a grant on another person's personal agent", async () => {
+    const { t, mine, team } = await places();
+    await join(t, t.lena, team);
+    for (const action of ["agent.read", "agent.write", "skill.read", "skill.write"])
+      await t.grant(t.lena.id, action, { workspaceId: team });
+    await own(t, mine, "skill", "kai-skill");
+    await own(t, mine, "agent", "kai-agent", { skillNames: ["kai-skill"] });
+    const agentId = await t.assetId("agent", "kai-agent");
+    for (const action of ["agent.read", "agent.write"])
+      await t.grant(t.lena.id, action, { assetId: agentId });
+    const response = await move(t, t.lena.id, "agent", "kai-agent", mine, toTeam(team));
+    expect(refusalOf(response)).toMatchObject({ status: 403, reason: "move_not_owner" });
+    expect(await scopeOf(t, "skill", "kai-skill")).toEqual({
+      kind: "workspace",
+      workspaceId: mine
+    });
+    const requests = await t.stores.approvals.listApprovalRequests({
+      clientInstanceId,
+      kinds: ["agent_move"]
+    });
+    expect(requests).toEqual([]);
+  });
+
+  it("refuses a team's asset to a person who may not change everything that goes with it", async () => {
+    const { t, team } = await places();
+    await applyAtCurrentRevisions(t.stores.configAssets, {
+      clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "skill",
+          name: "team-skill",
+          config: skill("team-skill"),
+          scope: { kind: "workspace", workspaceId: team }
+        },
+        {
+          type: "upsert",
+          kind: "agent",
+          name: "team-agent",
+          config: agent("team-agent", { skillNames: ["team-skill"] }),
+          scope: { kind: "workspace", workspaceId: team }
+        }
+      ]
+    });
+    for (const action of ["agent.read", "agent.write"])
+      await t.grant(t.kai.id, action, { assetId: await t.assetId("agent", "team-agent") });
+    const response = await move(t, t.kai.id, "agent", "team-agent", team, { kind: "instance" });
+    expect(refusalOf(response)).toMatchObject({
+      status: 403,
+      reason: "move_source_right",
+      asset: { kind: "skill", name: "team-skill" }
+    });
+    expect(
+      await t.stores.approvals.listApprovalRequests({ clientInstanceId, kinds: ["agent_move"] })
+    ).toEqual([]);
+  });
+});
+
+describe("a request decided after its requester changed", () => {
+  async function file(p: Places) {
+    const { t, mine, team } = p;
+    await own(t, mine, "skill", "kai-skill");
+    await own(t, mine, "agent", "kai-agent", { skillNames: ["kai-skill"] });
+    const response = await move(t, t.kai.id, "agent", "kai-agent", mine, toTeam(team));
+    return z.string().parse(moveSchema.parse(response.json()).requestId);
+  }
+
+  it("ends it without moving when the requester left the team", async () => {
+    const p = await places();
+    const { t, mine, team } = p;
+    const requestId = await file(p);
+    await t.stores.workspaces.removeMembership({
+      clientInstanceId,
+      collaborationWorkspaceId: team,
+      userId: asUserId(t.kai.id)
+    });
+    const decided = await t.expectOk(t.admin.id, "approval_requests.decide", {
+      params: { requestId },
+      payload: { decision: "approve" }
+    });
+    expect(decided.json()).toMatchObject({
+      status: "superseded",
+      applyResult: { reason: "move_requester_not_member" }
+    });
+    expect(await scopeOf(t, "agent", "kai-agent")).toEqual({
+      kind: "workspace",
+      workspaceId: mine
+    });
+    expect(await movedEvents(t)).toEqual([]);
+  });
+
+  it("ends it without moving when the requester's account is disabled", async () => {
+    const p = await places();
+    const { t, mine } = p;
+    const requestId = await file(p);
+    await t.stores.users.updateUser({
+      clientInstanceId,
+      userId: asUserId(t.kai.id),
+      status: "disabled"
+    });
+    const decided = await t.expectOk(t.admin.id, "approval_requests.decide", {
+      params: { requestId },
+      payload: { decision: "approve" }
+    });
+    expect(decided.json()).toMatchObject({
+      status: "superseded",
+      applyResult: { reason: "move_requester_inactive" }
+    });
+    expect(await scopeOf(t, "agent", "kai-agent")).toEqual({
+      kind: "workspace",
+      workspaceId: mine
+    });
+  });
+});
+
+describe("edit rights follow the new place", () => {
+  it("drops the grants to change a moved asset and those to read it beyond the team, and says so first", async () => {
+    const { t, mine, team } = await places();
+    for (const action of ["agent.read", "agent.write"])
+      await t.grant(t.kai.id, action, { workspaceId: team });
+    await own(t, mine, "agent", "kai-agent");
+    const agentId = await t.assetId("agent", "kai-agent");
+    // Lena is no member of the team; the admin is.
+    const lenaReads = await t.grant(t.lena.id, "agent.read", { assetId: agentId });
+    const lenaWrites = await t.grant(t.lena.id, "agent.write", { assetId: agentId });
+    const adminReads = await t.grant(t.admin.id, "agent.read", { assetId: agentId });
+    const check = await move(t, t.kai.id, "agent", "kai-agent", mine, toTeam(team), {}, true);
+    // Kai's own write, Lena's write and Lena's read go; Kai's and the admin's reads stay.
+    expect(check.json()).toMatchObject({
+      afterwards: { grantsDropped: { onAssets: 3, runAccounts: 0 } }
+    });
+    const moved = await move(t, t.kai.id, "agent", "kai-agent", mine, toTeam(team));
+    expect(moved.statusCode, moved.body).toBe(200);
+    const left = (
+      await t.stores.access.listGrants({ clientInstanceId, scopeKind: "asset", scopeId: agentId })
+    ).map((grant) => grant.id);
+    expect(left).toContain(adminReads);
+    expect(left).not.toContain(lenaReads);
+    expect(left).not.toContain(lenaWrites);
+    expect(left).toHaveLength(2);
+    const [event] = await movedEvents(t);
+    expect(event?.metadata).toMatchObject({
+      droppedGrantIds: expect.arrayContaining([lenaReads, lenaWrites])
+    });
+  });
+});
+
+describe("a second request for the same asset", () => {
+  it("is refused while somebody else's waits, naming who asked", async () => {
+    const { t, team } = await places();
+    await join(t, t.lena, team);
+    await applyAtCurrentRevisions(t.stores.configAssets, {
+      clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "skill",
+          name: "team-skill",
+          config: skill("team-skill"),
+          scope: { kind: "workspace", workspaceId: team }
+        }
+      ]
+    });
+    for (const user of [t.kai, t.lena])
+      for (const action of ["skill.read", "skill.write"])
+        await t.grant(user.id, action, { workspaceId: team });
+    const filed = await move(t, t.kai.id, "skill", "team-skill", team, { kind: "instance" });
+    expect(moveSchema.parse(filed.json()).status).toBe("requested");
+    const second = await move(t, t.lena.id, "skill", "team-skill", team, { kind: "instance" });
+    expect(refusalOf(second)).toMatchObject({
+      status: 422,
+      reason: "move_request_open",
+      requestedBy: "Kai"
+    });
+    expect(JSON.stringify(second.json())).not.toContain(
+      z.string().parse(moveSchema.parse(filed.json()).requestId)
+    );
   });
 });
