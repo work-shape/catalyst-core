@@ -38,6 +38,7 @@ import type { OperationRunStore } from "./operation-runs";
 import type { InfrastructureCheckStore } from "./infrastructure-checks";
 import type { PagesStore } from "./pages";
 import type { ProjectStore } from "./project";
+import type { ProjectFileStore } from "./project-files";
 import type { ModelUsageEventStore } from "./usage";
 import type { UserStore } from "./user";
 import type { ApiAccessStore } from "./api-access";
@@ -121,6 +122,8 @@ export interface PlatformStores {
   platformReports: PlatformReportStore;
   /** The audience of each project (PRJ-1); its definition is a config asset. */
   projects: ProjectStore;
+  /** The files of each project with their versions (PRJ-2). */
+  projectFiles: ProjectFileStore;
   /** Resolves after commit; a rejected callback rolls back all domain writes. Nested calls use savepoints. */
   transaction<T>(fn: (stores: PlatformStores) => Promise<T>): Promise<T>;
   /**

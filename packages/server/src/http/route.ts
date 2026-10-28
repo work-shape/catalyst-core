@@ -446,26 +446,36 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
       if (!caller.identity) {
         throw new AppError("INTERNAL", `Operation '${operation.id}' was reached by nobody`);
       }
-      // The fields the descriptor declares are handed on as they arrived: the registry's one
-      // schema parses them, and what it parsed is what the run hashes and the operation
-      // receives. A field of the query or the body that the descriptor does not declare there
-      // is left out, so a query string never stands in for a field of the body.
-      return face.answer(
-        operation,
-        {
-          identity: caller.identity,
-          origin: originOf(caller.identity, request),
-          correlationId,
-          input: {
-            ...declaredFields(operation.body, request.body),
-            ...declaredFields(operation.query, request.query),
-            ...params
+      // A multipart descriptor hands its file to the call as a live upload, as a per-resource
+      // route does: staged on disk while the call runs, removed after it however it ends.
+      const staged = operation.multipart
+        ? await stageOperationUpload(request, binding.uploadLimitBytes)
+        : undefined;
+      try {
+        // The fields the descriptor declares are handed on as they arrived: the registry's one
+        // schema parses them, and what it parsed is what the run hashes and the operation
+        // receives. A field of the query or the body that the descriptor does not declare
+        // there is left out, so a query string never stands in for a field of the body.
+        return await face.answer(
+          operation,
+          {
+            identity: caller.identity,
+            origin: originOf(caller.identity, request),
+            correlationId,
+            input: {
+              ...declaredFields(operation.body, request.body),
+              ...declaredFields(operation.query, request.query),
+              ...params
+            },
+            idempotencyKey: readIdempotencyKey(request),
+            locale: resolveRequestLocale(options, request),
+            ...(staged ? { upload: staged.upload } : {})
           },
-          idempotencyKey: readIdempotencyKey(request),
-          locale: resolveRequestLocale(options, request)
-        },
-        reply
-      );
+          reply
+        );
+      } finally {
+        await staged?.cleanup();
+      }
     }
   }
   function registerResourceOperation<const Op extends Operation>(

@@ -20,6 +20,7 @@ import {
 import type { ChatServerOptions } from "../types";
 import { deleteConversationAggregate } from "./user-deletion";
 import { retireWorkspaceAssets } from "./workspace-assets";
+import { deleteWorkspaceProjectObjects } from "../projects/project-cleanup";
 
 export interface WorkspaceDeletionResult {
   collaborationWorkspaceId: CollaborationWorkspaceId;
@@ -147,6 +148,8 @@ export async function completeWorkspaceDeletion(
     actor: input.actor,
     correlationId: input.correlationId
   });
+  // The rows of the workspace's projects go with its assets; their bytes go first (PRJ-2).
+  await deleteWorkspaceProjectObjects(options, collaborationWorkspaceId);
   return transaction(async (stores) => {
     // The store refuses while data of a deleted Conversation is still being removed.
     await stores.workspaces.deleteWorkspace(scope);

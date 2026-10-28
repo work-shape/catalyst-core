@@ -1,10 +1,11 @@
-import { Ellipsis, FileText, Search, SearchX } from "lucide-react";
+import { Download, Ellipsis, FileText, Search, SearchX } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../actions/button";
 import { IconButton } from "../actions/icon-button";
 import { CodeBlock, type CodeToken } from "../data/code-block";
 import { CommandLine } from "../data/command-line";
 import { CodeFile } from "../data/code-file";
+import { FileTree } from "../data/file-tree";
 import { FilterBar } from "../data/filter-bar";
 import { FoldedText } from "../data/folded-text";
 import { KeyValue, KeyValueList, type KeyValueLayout } from "../data/key-value";
@@ -431,6 +432,33 @@ function LoadMoreSample({ text }: { text: GalleryText }) {
   );
 }
 
+function FileTreeSample({ text }: { text: GalleryText }) {
+  const [selected, setSelected] = useState(`${text.fileTreeNotes}/${text.fileTreeChecklist}`);
+  const download = (
+    <IconButton label={text.fileTreeDownload} size="sm" variant="ghost">
+      <Download aria-hidden="true" />
+    </IconButton>
+  );
+  const items = [
+    { path: `${text.fileTreeNotes}/${text.fileTreeChecklist}`, meta: "2 KB" },
+    { path: `${text.fileTreeNotes}/${text.fileTreeBrief}`, meta: "6 KB" },
+    {
+      path: text.fileTreeOffer,
+      meta: "1.2 MB",
+      icon: <FileText aria-hidden="true" className="size-4" />
+    }
+  ].map((item) => ({ ...item, actions: download, selected: item.path === selected }));
+  return (
+    <div className="max-w-md">
+      <FileTree
+        label={text.fileTreeLabel}
+        items={items}
+        onOpen={(item) => setSelected(item.path)}
+      />
+    </div>
+  );
+}
+
 export const dataGallery: GalleryGroup = {
   id: "data",
   entries: [
@@ -517,6 +545,11 @@ export const dataGallery: GalleryGroup = {
       name: "ListRow",
       components: ["List", "ListRow"],
       render: (text) => <ListRowSamples text={text} />
+    },
+    {
+      name: "FileTree",
+      components: ["FileTree"],
+      render: (text) => <FileTreeSample text={text} />
     },
     {
       name: "FilterBar",

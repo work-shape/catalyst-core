@@ -12,6 +12,15 @@ export type { ChartType } from "./chart-engine";
 export { CodeBlock, type CodeBlockProps, type CodeToken } from "./code-block";
 export { CodeFile, type CodeFileProps } from "./code-file";
 export { CommandLine, type CommandLineProps } from "./command-line";
+export {
+  buildFileTree,
+  FileTree,
+  type FileTreeFileNode,
+  type FileTreeFolderNode,
+  type FileTreeItem,
+  type FileTreeNode,
+  type FileTreeProps
+} from "./file-tree";
 export { FilterBar, type FilterBarProps } from "./filter-bar";
 export { FoldedText } from "./folded-text";
 export {

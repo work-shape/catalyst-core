@@ -22,6 +22,7 @@ import { FollowUpQueue, useFollowUpQueue } from "./follow-up-queue";
 import { shouldQueueSend, type SendBlock } from "./send-block";
 import { ComposerAction } from "./composer-action";
 import { followUpModeOfSend } from "./follow-up-shortcut";
+import { AddFromProjectButton } from "../projects/add-from-project";
 
 export interface LocalUploadingAttachment {
   id: string;
@@ -94,7 +95,7 @@ export function AssistantComposer({
   const currentText = useComposer((state) => state.text);
   const composerShellRef = useRef<HTMLDivElement | null>(null);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
-  const attachmentActionRef = useRef<HTMLButtonElement | null>(null);
+  const attachmentActionRef = useRef<HTMLSpanElement | null>(null);
   const composerControlsRef = useRef<HTMLDivElement | null>(null);
   const previousComposerLayoutRef = useRef<ComposerLayoutSnapshot | null>(null);
   const composerLayoutAnimationsRef = useRef<Animation[]>([]);
@@ -351,21 +352,26 @@ export function AssistantComposer({
                   }
                 }}
               />
-              <Button
+              <span
                 ref={attachmentActionRef}
-                type="button"
-                variant="ghost"
-                size="icon"
                 className={cn(
-                  "col-start-1 size-9 shrink-0 rounded-full text-muted-foreground",
+                  "col-start-1 flex shrink-0 items-center",
                   composerExpanded ? "row-start-2" : "row-start-1"
                 )}
-                title={t("addAttachment")}
-                aria-label={t("addAttachment")}
-                onClick={() => fileInputRef.current?.click()}
               >
-                <Paperclip size={16} aria-hidden="true" />
-              </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-9 shrink-0 rounded-full text-muted-foreground"
+                  title={t("addAttachment")}
+                  aria-label={t("addAttachment")}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Paperclip size={16} aria-hidden="true" />
+                </Button>
+                <AddFromProjectButton className="rounded-full" />
+              </span>
             </>
           ) : null}
           <ComposerPrimitive.Input
@@ -720,7 +726,7 @@ export function shouldExpandComposer(text: string, wrapsAtCompactWidth = false):
 
 function getCompactComposerInputWidth(
   shell: HTMLDivElement,
-  attachment: HTMLButtonElement | null,
+  attachment: HTMLElement | null,
   controls: HTMLDivElement,
   attachmentsEnabled: boolean
 ): number {

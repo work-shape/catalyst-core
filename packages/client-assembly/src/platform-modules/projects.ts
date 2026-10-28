@@ -9,6 +9,21 @@ import { defineModule } from "@work-shape/catalyst-core";
 export const projectsModule = defineModule({
   name: "projects",
   kinds: ["project"],
-  operations: ["projects.list", "projects.get", "projects.create", "conversations.set_project"],
+  operations: [
+    "projects.list",
+    "projects.get",
+    "projects.create",
+    "conversations.set_project",
+    "projects.files.list",
+    "projects.files.versions",
+    "projects.files.get_content",
+    "projects.files.upload",
+    "projects.files.move",
+    "projects.files.delete",
+    "projects.files.purge",
+    "projects.files.restore",
+    "conversations.project_files.save",
+    "conversations.draft_attachments.add_from_project"
+  ],
   ui: ["rail.projects", "workspace.projects", "workspace.project"]
 });

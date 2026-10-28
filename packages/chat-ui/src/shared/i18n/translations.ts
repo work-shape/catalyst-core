@@ -54,6 +54,7 @@ import { operations } from "./operations";
 import { pages } from "./pages";
 import { personalApiKeys } from "./personal-api-keys";
 import { personalConnections } from "./personal-connections";
+import { projectFiles } from "./project-files";
 import { projects } from "./projects";
 import { publishNarrative } from "./publish-narrative";
 import { refusals } from "./refusal-texts";
@@ -136,6 +137,7 @@ export const translations = combineTranslations(common)
   .and(personalApiKeys)
   .and(personalConnections)
   .and(projects)
+  .and(projectFiles)
   .and(publishNarrative)
   .and(refusals)
   .and(rights)

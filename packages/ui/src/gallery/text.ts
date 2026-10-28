@@ -243,6 +243,12 @@ export interface GalleryText
   tableState: string;
   tableUpdated: string;
   tableUpdatedTime: string;
+  fileTreeLabel: string;
+  fileTreeNotes: string;
+  fileTreeChecklist: string;
+  fileTreeOffer: string;
+  fileTreeBrief: string;
+  fileTreeDownload: string;
   rowAgent: string;
   rowWorkflow: string;
   rowServicePrincipal: string;
@@ -522,6 +528,12 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     tableState: "State",
     tableUpdated: "Updated",
     tableUpdatedTime: "9:41 AM",
+    fileTreeLabel: "Project files",
+    fileTreeNotes: "notes",
+    fileTreeChecklist: "checklist.md",
+    fileTreeOffer: "offer.pdf",
+    fileTreeBrief: "brief.md",
+    fileTreeDownload: "Download",
     rowAgent: "Support assistant",
     rowWorkflow: "Invoice check",
     rowServicePrincipal: "Monthly check",
@@ -807,6 +819,12 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     tableState: "Status",
     tableUpdated: "Geändert",
     tableUpdatedTime: "09:41",
+    fileTreeLabel: "Projektdateien",
+    fileTreeNotes: "notizen",
+    fileTreeChecklist: "checkliste.md",
+    fileTreeOffer: "angebot.pdf",
+    fileTreeBrief: "briefing.md",
+    fileTreeDownload: "Herunterladen",
     rowAgent: "Support-Assistent",
     rowWorkflow: "Rechnungsprüfung",
     rowServicePrincipal: "Monatsprüfung",

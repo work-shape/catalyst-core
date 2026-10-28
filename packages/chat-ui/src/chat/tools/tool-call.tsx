@@ -45,6 +45,7 @@ import { ApprovalRequestCard } from "../approvals/approval-request-card";
 import { readApprovalRequestDisplay } from "../approvals/approval-request-model";
 import { useConnectionToolSubject } from "../assistant/tool-subjects";
 import { AssetOpenedLine } from "../conversation/conversation-subject";
+import { ProjectFileChangeLine, readProjectFileChange } from "../projects/project-file-change-line";
 import { appSavedByCall, standingAssetOpen } from "../conversation/subject-run";
 import { AppCard } from "../../studio/apps/app-card";
 import { useFoldedCard } from "../conversation/card-fold-context";
@@ -216,6 +217,12 @@ export function ToolCallPart({
   const previewed = folded ? undefined : previewedDraftOfCall({ toolName, result, isError });
   if (previewed) {
     return <AssetPreviewCard draft={previewed} />;
+  }
+
+  // A write of the agent to a file of the chat's project: a line with its version and Undo.
+  const projectChange = readProjectFileChange({ toolName, result, isError });
+  if (projectChange) {
+    return <ProjectFileChangeLine change={projectChange} />;
   }
 
   const opened = standingAssetOpen({ toolName, toolCallId, result, isError });

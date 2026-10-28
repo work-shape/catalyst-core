@@ -19,6 +19,7 @@ import {
   createSkillChangeApprovalHandler,
   createChatServer,
   createChatServerJobs,
+  ProjectFileService,
   workflowAssetKindOf
 } from "@work-shape/catalyst-server";
 import type { ChatAttachmentService, ChatServerOptions } from "@work-shape/catalyst-server";
@@ -525,6 +526,17 @@ export async function createClientInstanceExecutionAssembly(
       : []),
     ...capabilityContributions.flatMap((contribution) => contribution.managedObjects ?? [])
   ]);
+  // The project folders (PRJ-2), which a chat's agent reaches with its file tools.
+  const projectFiles = new ProjectFileService({
+    stores: store,
+    clientInstanceId,
+    config,
+    modules,
+    logger,
+    ...(pages ? { pages } : {}),
+    attachments,
+    managedObjects
+  });
   const jobRetries = capabilityContributions.flatMap(
     (contribution) => contribution.jobRetries ?? []
   );
@@ -620,6 +632,7 @@ export async function createClientInstanceExecutionAssembly(
     dataTools: () => configAssets.dataTools,
     dataToolDescribeTimeoutMs: config.runtime.dataToolDescribeTimeoutMs,
     toolRights: mailSendToolRights(config),
+    projectFolder: () => projectFiles,
     policy: {
       instanceDefaults: config.policy.defaults,
       centralSettings: () => operationCalls.deps.policy.centralSettings()
@@ -657,6 +670,7 @@ export async function createClientInstanceExecutionAssembly(
         auditRecorder,
         telemetry: createConsoleWorkspaceCommandTelemetry(logger),
         limits: config.executionWorkspaces.command,
+        projectFolder: projectFiles,
         // The skills an agent run may read, which its commands mount read-only at /skills.
         skills: { assetSource, conversationOffer, conversations: store.conversations },
         sourceFileReader: attachments

@@ -127,4 +127,22 @@ export interface ProjectStore {
     collaborationWorkspaceId: CollaborationWorkspaceId;
     viewerUserId: string;
   }): Promise<Project[]>;
+  /** Every project of a workspace whatever its audience or status: what its deletion removes. */
+  listProjectIdsOfWorkspace(input: {
+    clientInstanceId: ClientInstanceId;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
+  }): Promise<string[]>;
+  /** The private projects a person made, in any workspace: what their deletion removes. */
+  listPrivateProjectIdsCreatedBy(input: {
+    clientInstanceId: ClientInstanceId;
+    userId: string;
+  }): Promise<string[]>;
+  /**
+   * Deletes projects with their definition, audience and file rows. Every conversation that
+   * names one, a deleted one too, leaves it first. The stored objects are the caller's.
+   */
+  deleteProjects(input: {
+    clientInstanceId: ClientInstanceId;
+    projectIds: readonly string[];
+  }): Promise<{ deleted: number; conversationsLeft: number }>;
 }

@@ -363,7 +363,7 @@ async function rememberAttachmentPreviewSource(
   });
 }
 
-function contentDisposition(disposition: "attachment" | "inline", filename: string): string {
+export function contentDisposition(disposition: "attachment" | "inline", filename: string): string {
   const safeFilename = sanitizeHeaderFilename(filename);
   return [
     `${disposition}; filename="${asciiFilenameFallback(safeFilename)}"`,

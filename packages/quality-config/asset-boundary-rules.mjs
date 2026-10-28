@@ -72,7 +72,8 @@ export const assetBoundaryRules = ({ rule, keyName, staticReads }) => {
         const file = fileOf(context.filename).replace("packages/tool-execution/src/", "");
         const allowed =
           file === "workspace-tools/workspace-handle-resolver.ts"
-            ? ["conversationId"]
+            ? // The run is named on each version of a project file the agent writes (PRJ-2).
+              ["conversationId", "agentRunId"]
             : file === "workspace-tools/exec.ts"
               ? ["agentRunId", "toolCallId"]
               : [];

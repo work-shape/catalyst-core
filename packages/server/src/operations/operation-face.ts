@@ -60,6 +60,11 @@ export interface AssembledOperationBinding {
    * the operation takes. The HTTP route reads it; the registry knows nothing of bodies.
    */
   bodyLimitBytes?: number;
+  /**
+   * For a multipart descriptor: the most bytes its one file may have. A larger file reaches
+   * the operation cut after one byte more, and the operation refuses it as too large.
+   */
+  uploadLimitBytes?: number;
   /** Records every call of a reading operation. See `recordsEveryCall` of the definition. */
   recordsEveryCall?: true;
   /**

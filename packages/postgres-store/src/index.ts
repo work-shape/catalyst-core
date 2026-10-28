@@ -1,6 +1,7 @@
 import { createPostgresFeedbackStore } from "./postgres-feedback-operations";
 import { createPostgresPlatformReportStore } from "./postgres-platform-report-operations";
 import { createPostgresProjectStore } from "./postgres-project-operations";
+import { createPostgresProjectFileStore } from "./postgres-project-file-operations";
 import { createPostgresWorkflowNoticesStore } from "./postgres-workflow-notices";
 import { createPostgresNoticeMailStore } from "./postgres-notice-mail";
 import {
@@ -217,6 +218,7 @@ function bindStores(
     feedback: createPostgresFeedbackStore(db),
     platformReports: createPostgresPlatformReportStore(db),
     projects: createPostgresProjectStore(db),
+    projectFiles: createPostgresProjectFileStore(db),
     transaction: (fn) => transact((_tx, stores) => fn(stores)),
     // Under read committed every statement reads its own moment; repeatable read gives the
     // whole transaction the moment of its first read. Only the outermost transaction sets it.

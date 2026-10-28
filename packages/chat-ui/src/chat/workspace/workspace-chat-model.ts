@@ -1136,6 +1136,9 @@ export function useWorkspaceChatModel({
     },
     projects: {
       enabled: projectsEnabled,
+      selectedProjectId: projectsEnabled
+        ? (selectedThread?.conversation.projectId ?? undefined)
+        : undefined,
       startChat: startConversationInProject
     },
     agents: {

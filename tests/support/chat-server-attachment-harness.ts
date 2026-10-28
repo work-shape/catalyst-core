@@ -1,9 +1,13 @@
 import { createHash } from "node:crypto";
 import { expect } from "vitest";
-import type { ClientInstanceCapability } from "@work-shape/catalyst-client-assembly";
+import type {
+  ClientInstanceAttachmentHandler,
+  ClientInstanceCapability
+} from "@work-shape/catalyst-client-assembly";
 import {
   createPlatformId,
   type AttachmentManifestEntry,
+  type ClientInstanceId,
   type ConversationAttachment,
   type DraftAttachment,
   type FileAttachmentFormat,
@@ -168,142 +172,151 @@ export function createManagedObjectTestAttachmentCapability(
   };
 }
 
-export function createTestAttachmentCapability(
-  options: {
-    onConversationAttachmentsDeleted?(deletion: {
-      attachmentCount: number;
-      fileObjectKeys: string[];
-      artifactObjectKeys: string[];
-    }): void;
-  } = {}
-): ClientInstanceCapability {
-  const attachmentsByConversation = new Map<string, DraftAttachment[]>();
-  const files = new Map<
-    string,
-    {
-      filename: string;
-      mimeType?: string;
-      bytes: Uint8Array;
-    }
-  >();
+interface TestAttachmentOptions {
+  onConversationAttachmentsDeleted?(deletion: {
+    attachmentCount: number;
+    fileObjectKeys: string[];
+    artifactObjectKeys: string[];
+  }): void;
+}
 
+interface TestAttachmentState {
+  attachmentsByConversation: Map<string, DraftAttachment[]>;
+  files: Map<string, { filename: string; mimeType?: string; bytes: Uint8Array }>;
+}
+
+function createTestAttachmentState(): TestAttachmentState {
+  return { attachmentsByConversation: new Map(), files: new Map() };
+}
+
+export function createTestAttachmentCapability(
+  options: TestAttachmentOptions = {}
+): ClientInstanceCapability {
+  const state = createTestAttachmentState();
   return {
     name: "test-attachments",
     create(context) {
       return {
-        attachments: [
-          {
-            name: "test-attachments",
-            maxFileBytes: 1024 * 1024,
-            acceptedFileTypes: ["text/plain", "image/gif"],
-            acceptsFile() {
-              return true;
-            },
-            async listDraftAttachments(conversationId) {
-              return attachmentsByConversation.get(conversationId) ?? [];
-            },
-            async uploadDraftAttachment(input) {
-              const bytes = await readUploadBytes(input);
-              const fileId = createPlatformId<"ManagedFileId">("file");
-              const attachment: DraftAttachment = {
-                id: createPlatformId<"ConversationAttachmentId">("att"),
-                clientInstanceId: context.clientInstanceId,
-                conversationId: input.conversationId,
-                fileId,
-                filename: input.filename,
-                mimeType: input.mimeType,
-                byteSize: bytes.byteLength,
-                checksum: "test-checksum",
-                status: "ready",
-                format: formatForMimeType(input.mimeType),
-                artifactRefs: {},
-                processingMetadata: {},
-                warnings: [],
-                error: null,
-                processingAttempts: 0,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-              };
-              files.set(fileId, {
-                filename: input.filename,
-                mimeType: input.mimeType,
-                bytes
-              });
-              const conversationAttachments =
-                attachmentsByConversation.get(input.conversationId) ?? [];
-              conversationAttachments.push(attachment);
-              attachmentsByConversation.set(input.conversationId, conversationAttachments);
-              return {
-                attachment,
-                outcome: "created"
-              };
-            },
-            async retryDraftAttachment() {
-              throw new Error("Retry is not implemented by the test attachment capability");
-            },
-            async deleteDraftAttachment(input) {
-              const conversationAttachments =
-                attachmentsByConversation.get(input.conversationId) ?? [];
-              const remaining = conversationAttachments.filter(
-                (attachment) => attachment.id !== input.attachmentId
-              );
-              attachmentsByConversation.set(input.conversationId, remaining);
-              const deleted = conversationAttachments.find(
-                (attachment) => attachment.id === input.attachmentId
-              );
-              if (!deleted) {
-                throw new Error("Attachment is not available");
-              }
-              return {
-                ...deleted,
-                deletedAt: new Date().toISOString()
-              };
-            },
-            async deleteConversationAttachments(input) {
-              const conversationAttachments =
-                attachmentsByConversation.get(input.conversationId) ?? [];
-              attachmentsByConversation.set(input.conversationId, []);
-              for (const attachment of conversationAttachments) {
-                files.delete(attachment.fileId);
-              }
-              const deletion = {
-                attachmentCount: conversationAttachments.length,
-                fileObjectKeys: conversationAttachments.map((attachment) => attachment.fileId),
-                artifactObjectKeys: []
-              };
-              options.onConversationAttachmentsDeleted?.(deletion);
-              return deletion;
-            },
-            async readConversationFile(input) {
-              const file = files.get(input.fileId);
-              if (!file) {
-                throw new Error("File is not available");
-              }
-              return {
-                fileId: input.fileId as ManagedFileId,
-                filename: file.filename,
-                mimeType: file.mimeType,
-                byteSize: file.bytes.byteLength,
-                bytes: file.bytes
-              };
-            },
-            blockingDraftAttachmentMessage() {
-              return undefined;
-            },
-            createAttachmentManifest(attachments) {
-              return {
-                version: 1,
-                attachments: attachments.flatMap((attachment) =>
-                  manifestEntryForAttachment(attachment)
-                )
-              };
-            },
-            isInlineDisplayMimeType(mimeType) {
-              return mimeType === "image/gif";
-            }
-          }
-        ]
+        attachments: [createTestAttachmentService(context.clientInstanceId, options, state)]
       };
+    }
+  };
+}
+
+/**
+ * The draft attachments of the test capability as a server takes them, for an instance built
+ * from server options: files kept in memory, ready at once.
+ */
+export function createTestAttachmentService(
+  clientInstanceId: ClientInstanceId,
+  options: TestAttachmentOptions = {},
+  state: TestAttachmentState = createTestAttachmentState()
+): ClientInstanceAttachmentHandler {
+  const { attachmentsByConversation, files } = state;
+  const context = { clientInstanceId };
+  return {
+    name: "test-attachments",
+    maxFileBytes: 1024 * 1024,
+    acceptedFileTypes: ["text/plain", "image/gif"],
+    acceptsFile() {
+      return true;
+    },
+    async listDraftAttachments(conversationId) {
+      return attachmentsByConversation.get(conversationId) ?? [];
+    },
+    async uploadDraftAttachment(input) {
+      const bytes = await readUploadBytes(input);
+      const fileId = createPlatformId<"ManagedFileId">("file");
+      const attachment: DraftAttachment = {
+        id: createPlatformId<"ConversationAttachmentId">("att"),
+        clientInstanceId: context.clientInstanceId,
+        conversationId: input.conversationId,
+        fileId,
+        filename: input.filename,
+        mimeType: input.mimeType,
+        byteSize: bytes.byteLength,
+        checksum: "test-checksum",
+        status: "ready",
+        format: formatForMimeType(input.mimeType),
+        artifactRefs: {},
+        processingMetadata: {},
+        warnings: [],
+        error: null,
+        processingAttempts: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      files.set(fileId, {
+        filename: input.filename,
+        mimeType: input.mimeType,
+        bytes
+      });
+      const conversationAttachments = attachmentsByConversation.get(input.conversationId) ?? [];
+      conversationAttachments.push(attachment);
+      attachmentsByConversation.set(input.conversationId, conversationAttachments);
+      return {
+        attachment,
+        outcome: "created"
+      };
+    },
+    async retryDraftAttachment() {
+      throw new Error("Retry is not implemented by the test attachment capability");
+    },
+    async deleteDraftAttachment(input) {
+      const conversationAttachments = attachmentsByConversation.get(input.conversationId) ?? [];
+      const remaining = conversationAttachments.filter(
+        (attachment) => attachment.id !== input.attachmentId
+      );
+      attachmentsByConversation.set(input.conversationId, remaining);
+      const deleted = conversationAttachments.find(
+        (attachment) => attachment.id === input.attachmentId
+      );
+      if (!deleted) {
+        throw new Error("Attachment is not available");
+      }
+      return {
+        ...deleted,
+        deletedAt: new Date().toISOString()
+      };
+    },
+    async deleteConversationAttachments(input) {
+      const conversationAttachments = attachmentsByConversation.get(input.conversationId) ?? [];
+      attachmentsByConversation.set(input.conversationId, []);
+      for (const attachment of conversationAttachments) {
+        files.delete(attachment.fileId);
+      }
+      const deletion = {
+        attachmentCount: conversationAttachments.length,
+        fileObjectKeys: conversationAttachments.map((attachment) => attachment.fileId),
+        artifactObjectKeys: []
+      };
+      options.onConversationAttachmentsDeleted?.(deletion);
+      return deletion;
+    },
+    async readConversationFile(input) {
+      const file = files.get(input.fileId);
+      if (!file) {
+        throw new Error("File is not available");
+      }
+      return {
+        fileId: input.fileId as ManagedFileId,
+        filename: file.filename,
+        mimeType: file.mimeType,
+        byteSize: file.bytes.byteLength,
+        bytes: file.bytes
+      };
+    },
+    blockingDraftAttachmentMessage() {
+      return undefined;
+    },
+    createAttachmentManifest(attachments) {
+      return {
+        version: 1,
+        attachments: attachments.flatMap((attachment) => manifestEntryForAttachment(attachment))
+      };
+    },
+    isInlineDisplayMimeType(mimeType) {
+      return mimeType === "image/gif";
     }
   };
 }

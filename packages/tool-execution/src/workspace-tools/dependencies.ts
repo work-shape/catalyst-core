@@ -5,6 +5,7 @@ import type {
   ManagedFileId,
   ObjectStorage,
   PlatformStores,
+  ProjectFolderPort,
   ToolExecutionContext,
   WorkspaceCommand
 } from "@work-shape/catalyst-core";
@@ -59,6 +60,11 @@ export interface WorkspaceCommandServiceOptions {
   skills?: WorkspaceSkillSource;
   auditRecorder?: AuditRecorder;
   telemetry?: WorkspaceCommandTelemetry;
+  /**
+   * The folder of the project a conversation is in (PRJ-2): the file tools read and write it
+   * under `project/`. Without it, `project/` is a path of the run's workspace like any other.
+   */
+  projectFolder?: ProjectFolderPort;
   limits?: Partial<WorkspaceCommandServiceLimits>;
   execResultWaitMs?: number;
   execResultPollIntervalMs?: number;
@@ -77,6 +83,7 @@ export interface WorkspaceToolDependencies {
   readonly skills?: WorkspaceSkillSource;
   readonly auditRecorder?: AuditRecorder;
   readonly telemetry?: WorkspaceCommandTelemetry;
+  readonly projectFolder?: ProjectFolderPort;
   readonly limits: WorkspaceCommandServiceLimits;
   readonly now: () => string;
 }
@@ -104,6 +111,7 @@ export function resolveWorkspaceToolDependencies(
     skills: options.skills,
     auditRecorder: options.auditRecorder,
     telemetry: options.telemetry,
+    projectFolder: options.projectFolder,
     limits: {
       ...DEFAULT_LIMITS,
       ...options.limits

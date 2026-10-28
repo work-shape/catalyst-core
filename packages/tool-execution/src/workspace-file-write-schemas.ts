@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { JsonObject } from "@work-shape/catalyst-core";
+import { PROJECT_FOLDER_WRITE_CHANGES, type JsonObject } from "@work-shape/catalyst-core";
 import { DEFAULT_LIMITS } from "./workspace-tool-schemas";
 
 /**
@@ -33,14 +33,29 @@ const contentDescription = "The whole text of the file.";
 const oldTextDescription =
   "Exact text to replace, with the spaces, tabs and line breaks the file has.";
 const newTextDescription = "The text that takes its place.";
+const replacesVersionDescription =
+  "For a file of the project folder (project/...): the version workspace.read_file answered, which this write replaces. 0 for a new file. Where the file changed since, the write is kept beside it as a conflict copy.";
 
 const pathSchema = z.string().min(1).max(DEFAULT_LIMITS.maxPathLength);
 const textSchema = z.string().max(WORKSPACE_FILE_TOOL_INPUT_MAX_CHARS);
+const replacesVersionSchema = z.number().int().min(0).describe(replacesVersionDescription);
+
+/** What a write in the project folder did (PRJ-2): the turn shows it with an Undo. */
+export const projectFileToolChangeSchema = z.object({
+  projectId: z.string(),
+  path: z.string(),
+  version: z.number().int().positive(),
+  change: z.enum(PROJECT_FOLDER_WRITE_CHANGES),
+  previousVersion: z.number().int().positive().optional(),
+  /** For a conflict copy: the file that changed in the meantime. */
+  changed: z.object({ path: z.string(), version: z.number().int().positive() }).optional()
+});
 
 export const workspaceWriteFileInputSchema = z
   .object({
     path: pathSchema.describe(pathDescription),
-    content: textSchema.describe(contentDescription)
+    content: textSchema.describe(contentDescription),
+    replacesVersion: replacesVersionSchema.optional()
   })
   .strict();
 
@@ -48,7 +63,8 @@ export const workspaceWriteFileOutputSchema = z.object({
   path: z.string(),
   byteSize: z.number().int().nonnegative(),
   /** False when the call replaced a file. */
-  created: z.boolean()
+  created: z.boolean(),
+  project: projectFileToolChangeSchema.optional()
 });
 
 export const workspaceEditFileInputSchema = z
@@ -64,7 +80,8 @@ export const workspaceEditFileInputSchema = z
           .strict()
       )
       .min(1)
-      .max(EDITS_INPUT_BOUND)
+      .max(EDITS_INPUT_BOUND),
+    replacesVersion: replacesVersionSchema.optional()
   })
   .strict()
   .superRefine((input, context) => {
@@ -84,7 +101,8 @@ export const workspaceEditFileInputSchema = z
 export const workspaceEditFileOutputSchema = z.object({
   path: z.string(),
   byteSize: z.number().int().nonnegative(),
-  editsApplied: z.number().int().positive()
+  editsApplied: z.number().int().positive(),
+  project: projectFileToolChangeSchema.optional()
 });
 
 const pathJsonSchema: JsonObject = {
@@ -94,6 +112,12 @@ const pathJsonSchema: JsonObject = {
   description: pathDescription
 };
 
+const replacesVersionJsonSchema: JsonObject = {
+  type: "integer",
+  minimum: 0,
+  description: replacesVersionDescription
+};
+
 // Override required: validation is wider than the limits, and the model is shown the limits.
 export const workspaceWriteFileInputJsonSchema: JsonObject = {
   type: "object",
@@ -101,7 +125,8 @@ export const workspaceWriteFileInputJsonSchema: JsonObject = {
   required: ["path", "content"],
   properties: {
     path: pathJsonSchema,
-    content: { type: "string", description: contentDescription }
+    content: { type: "string", description: contentDescription },
+    replacesVersion: replacesVersionJsonSchema
   }
 };
 
@@ -124,6 +149,7 @@ export const workspaceEditFileInputJsonSchema: JsonObject = {
           newText: { type: "string", description: newTextDescription }
         }
       }
-    }
+    },
+    replacesVersion: replacesVersionJsonSchema
   }
 };

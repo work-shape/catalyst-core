@@ -20,6 +20,13 @@ export interface ExecutionWorkspaceHandleResolver extends WorkspaceHandleResolve
    * tool addresses it. Undefined when the call carries no tool request.
    */
   findWorkspaceHandle(context: ToolExecutionContext): Promise<ExistingWorkspaceLookup | undefined>;
+  /**
+   * The conversation and the agent run of the call, without a lookup: what the project folder
+   * of the conversation is found by (PRJ-2). Undefined when the call carries no tool request.
+   */
+  callOf(
+    context: ToolExecutionContext
+  ): { conversationId: ConversationId; agentRunId: string } | undefined;
 }
 
 export function createExecutionWorkspaceHandleResolver(options: {
@@ -42,6 +49,11 @@ export function createExecutionWorkspaceHandleResolver(options: {
         handle: { kind: "execution_workspace", id: workspace.id },
         conversationId: workspace.conversationId
       };
+    },
+    callOf(context) {
+      const conversationId = context.toolRequest?.conversationId;
+      const agentRunId = context.toolRequest?.agentRunId;
+      return conversationId && agentRunId ? { conversationId, agentRunId } : undefined;
     },
     async findWorkspaceHandle(context) {
       const conversationId = context.toolRequest?.conversationId;

@@ -32,6 +32,8 @@ import {
   type ConversationOfferSource,
   type ModuleSnapshot,
   type PlatformStores,
+  type ProjectFolderPort,
+  projectFolderManifest,
   type ToolExecutionContext
 } from "@work-shape/catalyst-core";
 import {
@@ -109,6 +111,17 @@ const APP_TOOLS = [
   "workspace.read_file"
 ];
 
+/**
+ * What an agent works on its project's folder with (PRJ-2): the file tools, which reach it at
+ * `project/`. Offered in a chat of a project whose folder the run's person reads.
+ */
+const PROJECT_FOLDER_TOOLS = [
+  "workspace.list_files",
+  "workspace.read_file",
+  "workspace.write_file",
+  "workspace.edit_file"
+];
+
 /** The tools that build an App, where this process can build one. */
 function appToolNames(hasTool: (toolName: string) => boolean): string[] {
   return hasTool(WORKSPACE_OPEN_TOOL_NAME) && hasTool(WRITE_FILE_TOOL) ? APP_TOOLS : [];
@@ -140,6 +153,8 @@ interface ConversationOfferInput {
   };
   /** Whether this process has a tool: registered, enabled and of no module that is off. */
   hasTool(toolName: string): boolean;
+  /** The folder of the project a chat is in (PRJ-2): its manifest goes into the run's prompt. */
+  projectFolder?: () => ProjectFolderPort | undefined;
   /**
    * The right a person needs to be offered a tool, by tool: a listed tool whose right the
    * person of the run lacks is withheld from the model. Asked of the instance's authorizer.
@@ -355,6 +370,7 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
               canPause: true
             }).value !== "deny")
       );
+      const folder = await projectFolderOf(input, request);
       const toolNames = [
         ...PLATFORM_TOOL_NAMES.filter((toolName) => agentToolNames.includes(toolName)),
         ...(holds
@@ -371,6 +387,7 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
           ? [CONNECTION_DRAFT_TOOL_NAME, CONNECTION_OFFER_TOOL_NAME]
           : []),
         ...appToolNames(input.hasTool),
+        ...(folder ? PROJECT_FOLDER_TOOLS : []),
         ASK_QUESTION_TOOL_NAME,
         ...(skillNames.length > 0 || ownSkillNames.length > 0 ? [READ_SKILL_TOOL] : [])
       ]
@@ -396,10 +413,30 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
         toolNames,
         skillNames,
         ...(ownSkillNames.length > 0 ? { personalSkillNames: ownSkillNames } : {}),
-        ...(holds ? { orientation: PLATFORM_ORIENTATION } : {})
+        ...(holds ? { orientation: PLATFORM_ORIENTATION } : {}),
+        ...(folder ? { projectFolder: folder } : {})
       };
     }
   };
+}
+
+/**
+ * The manifest of the chat's project folder, where the chat is in a project whose folder the
+ * person of the run reads and this process has the file tools that reach it.
+ */
+async function projectFolderOf(
+  input: ConversationOfferInput,
+  request: OfferRequest
+): Promise<string | undefined> {
+  const port = input.projectFolder?.();
+  if (!port || !input.hasTool("workspace.read_file")) return undefined;
+  const folder = await port.folderOf({
+    clientInstanceId: request.clientInstanceId,
+    conversationId: request.conversationId,
+    ...(request.user ? { user: request.user } : {})
+  });
+  if (!folder) return undefined;
+  return projectFolderManifest({ title: folder.title, files: await port.list(folder) });
 }
 
 /**
@@ -429,7 +466,13 @@ export async function conversationToolNames(
 export function createPlatformTools(
   input: Pick<
     ConversationOfferInput,
-    "stores" | "modules" | "dataTools" | "dataToolDescribeTimeoutMs" | "policy" | "toolRights"
+    | "stores"
+    | "modules"
+    | "dataTools"
+    | "dataToolDescribeTimeoutMs"
+    | "policy"
+    | "toolRights"
+    | "projectFolder"
   > & {
     /**
      * The Connections of the instance, where the module `connections` is on: the agent's draft
@@ -508,6 +551,7 @@ export function createPlatformTools(
         : { dataToolDescribeTimeoutMs: input.dataToolDescribeTimeoutMs }),
       ...(input.policy ? { policy: input.policy } : {}),
       ...(input.toolRights ? { toolRights: input.toolRights } : {}),
+      ...(input.projectFolder ? { projectFolder: input.projectFolder } : {}),
       authorizer: () => attached.authorizer,
       hasTool: (toolName) => attached.tools?.has(toolName) ?? false
     }),

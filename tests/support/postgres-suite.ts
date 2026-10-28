@@ -79,6 +79,8 @@ export function usePostgresSuite(prefix: string): PostgresSuite {
       await sql`delete from audit_events where client_instance_id = ${clientInstanceId}`;
       await sql`delete from run_start_commands where client_instance_id = ${clientInstanceId}`;
       await sql`delete from conversations where client_instance_id = ${clientInstanceId}`;
+      // A project is an asset of its workspace; its files go with it.
+      await sql`delete from config_assets where client_instance_id = ${clientInstanceId} and kind = 'project'`;
       await sql`delete from managed_files where client_instance_id = ${clientInstanceId}`;
       await sql`delete from collaboration_workspace_memberships where client_instance_id = ${clientInstanceId}`;
       await sql`delete from collaboration_workspaces where client_instance_id = ${clientInstanceId}`;

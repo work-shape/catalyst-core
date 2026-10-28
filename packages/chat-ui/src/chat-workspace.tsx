@@ -48,6 +48,7 @@ import { useRailApps } from "./studio/apps/rail-apps";
 import { InboxArea } from "./chat/inbox";
 import { ScheduledPage } from "./chat/scheduled/scheduled-page";
 import { ProjectsArea } from "./chat/projects/projects-area";
+import { AddFromProjectProvider } from "./chat/projects/add-from-project";
 import { ProjectChangeDialogs, type ProjectChange } from "./chat/projects/project-move-dialog";
 import { LoginPanel } from "./chat/login-panel";
 import { TwoFactorSetupScreen } from "./chat/two-factor-setup-screen";
@@ -230,7 +231,8 @@ function ChatWorkspaceContent({
   const resourcesPanel = useResourcesPanelState({
     conversationId: resourcesConversationId,
     enabled: resourcesAvailable,
-    roomBeside
+    roomBeside,
+    projectId: model.projects.selectedProjectId
   });
   const displayPanel = useToolDisplayPanel();
   // The slot reports its placement a render late; a surface that has closed covers nothing at once.
@@ -841,77 +843,93 @@ function ChatWorkspaceContent({
                                   onAgentWork={setDockAgentWork}
                                 >
                                   <section className="relative h-full min-h-0 min-w-0">
-                                    <AttachmentContentProvider
-                                      client={chat.client}
-                                      selectedConversationId={chat.selectedConversationId}
+                                    <AddFromProjectProvider
+                                      target={
+                                        model.projects.enabled &&
+                                        chat.selectedConversationId &&
+                                        chat.selectedConversationWorkspaceId
+                                          ? {
+                                              conversationId: chat.selectedConversationId,
+                                              collaborationWorkspaceId:
+                                                chat.selectedConversationWorkspaceId,
+                                              projectId: model.projects.selectedProjectId,
+                                              agentName: model.config.activeAgentName
+                                            }
+                                          : undefined
+                                      }
                                     >
-                                      <PageHostProvider
-                                        conversationId={chat.selectedConversationId}
-                                        {...pageHost}
+                                      <AttachmentContentProvider
+                                        client={chat.client}
+                                        selectedConversationId={chat.selectedConversationId}
                                       >
-                                        <div
-                                          ref={setSplitAreaElement}
-                                          className="flex h-full min-h-0 min-w-0"
+                                        <PageHostProvider
+                                          conversationId={chat.selectedConversationId}
+                                          {...pageHost}
                                         >
                                           <div
-                                            className={cn(
-                                              "relative h-full min-h-0 min-w-0 flex-1",
-                                              // The card's width of 22rem and its gap of 1.5rem to the edge,
-                                              // so the thread centres with equal gaps to the sidebar and to
-                                              // the card. It is less than the split minimum: a card that has
-                                              // room beside the conversation leaves it its minimum too.
-                                              resourcesInset && "[--resources-inset:23.5rem]"
-                                            )}
-                                            // Under a surface that covers it the chat leaves the tab order.
-                                            inert={chatCovered}
-                                            onDragEnter={chat.fileDropzone.onChatDragEnter}
-                                            onDragOver={chat.fileDropzone.onChatDragOver}
-                                            onDragLeave={chat.fileDropzone.onChatDragLeave}
-                                            onDrop={chat.fileDropzone.onChatDrop}
+                                            ref={setSplitAreaElement}
+                                            className="flex h-full min-h-0 min-w-0"
                                           >
-                                            <DockConversationPane
-                                              chat={chat}
-                                              agentTry={agentTry.pane}
-                                            />
-                                            {chat.fileDropzone.draggingFiles ? (
-                                              <ChatDropOverlay />
-                                            ) : null}
-                                            {resourcesAvailable &&
-                                            resourcesConversationId &&
-                                            resourcesPanel.hasResources &&
-                                            !resourcesShown ? (
-                                              <ResourcesPanelToggle
-                                                onOpen={() => {
-                                                  displayPanel.close();
-                                                  resourcesPanel.openExplicitly();
-                                                }}
+                                            <div
+                                              className={cn(
+                                                "relative h-full min-h-0 min-w-0 flex-1",
+                                                // The card's width of 22rem and its gap of 1.5rem to the edge,
+                                                // so the thread centres with equal gaps to the sidebar and to
+                                                // the card. It is less than the split minimum: a card that has
+                                                // room beside the conversation leaves it its minimum too.
+                                                resourcesInset && "[--resources-inset:23.5rem]"
+                                              )}
+                                              // Under a surface that covers it the chat leaves the tab order.
+                                              inert={chatCovered}
+                                              onDragEnter={chat.fileDropzone.onChatDragEnter}
+                                              onDragOver={chat.fileDropzone.onChatDragOver}
+                                              onDragLeave={chat.fileDropzone.onChatDragLeave}
+                                              onDrop={chat.fileDropzone.onChatDrop}
+                                            >
+                                              <DockConversationPane
+                                                chat={chat}
+                                                agentTry={agentTry.pane}
+                                              />
+                                              {chat.fileDropzone.draggingFiles ? (
+                                                <ChatDropOverlay />
+                                              ) : null}
+                                              {resourcesAvailable &&
+                                              resourcesConversationId &&
+                                              resourcesPanel.hasResources &&
+                                              !resourcesShown ? (
+                                                <ResourcesPanelToggle
+                                                  onOpen={() => {
+                                                    displayPanel.close();
+                                                    resourcesPanel.openExplicitly();
+                                                  }}
+                                                />
+                                              ) : null}
+                                            </div>
+                                            {/* Beside a page the dock's surfaces cover the page instead. */}
+                                            {onChatRoute ? (
+                                              <SurfaceSlot
+                                                onBesideWidthChange={chatSurface.reportBesideWidth}
+                                                onCoveringChange={chatSurface.reportCovering}
                                               />
                                             ) : null}
                                           </div>
-                                          {/* Beside a page the dock's surfaces cover the page instead. */}
-                                          {onChatRoute ? (
-                                            <SurfaceSlot
-                                              onBesideWidthChange={chatSurface.reportBesideWidth}
-                                              onCoveringChange={chatSurface.reportCovering}
+                                          {/* Placed in the main area, not in the conversation: it keeps its
+                                place when a surface takes room from the conversation. */}
+                                          {resourcesExit.held ? (
+                                            <ResourcesPanel
+                                              client={resourcesPanel.client}
+                                              conversationId={resourcesExit.held}
+                                              {...resourcesPanel.contents}
+                                              onClose={resourcesPanel.close}
+                                              open
+                                              leaving={resourcesExit.leaving}
+                                              covered={displayPanel.open}
+                                              onAnimationEnd={resourcesExit.onAnimationEnd}
                                             />
                                           ) : null}
-                                        </div>
-                                        {/* Placed in the main area, not in the conversation: it keeps its
-                                place when a surface takes room from the conversation. */}
-                                        {resourcesExit.held ? (
-                                          <ResourcesPanel
-                                            client={resourcesPanel.client}
-                                            conversationId={resourcesExit.held}
-                                            {...resourcesPanel.contents}
-                                            onClose={resourcesPanel.close}
-                                            open
-                                            leaving={resourcesExit.leaving}
-                                            covered={displayPanel.open}
-                                            onAnimationEnd={resourcesExit.onAnimationEnd}
-                                          />
-                                        ) : null}
-                                      </PageHostProvider>
-                                    </AttachmentContentProvider>
+                                        </PageHostProvider>
+                                      </AttachmentContentProvider>
+                                    </AddFromProjectProvider>
                                   </section>
                                 </DockedChat>
                               )}
