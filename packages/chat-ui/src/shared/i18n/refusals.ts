@@ -32,6 +32,11 @@ export interface ToldRefusal {
 export interface RefusalPlace {
   workspaceId?: string;
   canOpen?(route: WorkspaceRoute): boolean;
+  /**
+   * A workspace a refusal names, as the reader knows it: their own, or by its name. Nothing for
+   * a workspace the reader is not shown, which the sentence then names by no name.
+   */
+  placeOf?(workspaceId: string): { mine: true } | { name: string } | undefined;
 }
 
 /** A sentence before it is told: its key and what it names. */
@@ -51,7 +56,7 @@ interface RefusalRow {
    * The sentence, or nothing where the details lack what it names: the instance's sentence,
    * which names it, then stays.
    */
-  sentence(details: RefusalDetails, t: Translate): RowSentence | undefined;
+  sentence(details: RefusalDetails, t: Translate, place?: RefusalPlace): RowSentence | undefined;
   action?(details: RefusalDetails, place: RefusalPlace): RowAction | undefined;
 }
 
@@ -238,6 +243,55 @@ const APP_WORKFLOW_ROWS = {
   }
 } satisfies Record<AppWorkflowRefusal, RefusalRow>;
 
+/** An owner a refusal names: the instance, or one workspace by its id. */
+function ownerIn(value: unknown): { workspaceId?: string } | undefined {
+  if (!isRecord(value)) return undefined;
+  if (value.kind === "instance") return {};
+  return value.kind === "workspace" && typeof value.workspaceId === "string"
+    ? { workspaceId: value.workspaceId }
+    : undefined;
+}
+
+/**
+ * Why an asset may not use what it names, in the words of the place ladder (SCOPE-WORDS): where
+ * the asset sits, where what it uses sits, and what the reader can do next. Until something can
+ * be shared to a wider place, the way is to make it where it is used or to ask an admin.
+ */
+function referenceSentence(
+  details: RefusalDetails,
+  t: Translate,
+  { placeOf }: RefusalPlace = {}
+): RowSentence {
+  const source = ownerIn(details.owner);
+  const reference = isRecord(details.reference) ? details.reference : {};
+  const used = ownerIn(reference.owner);
+  // What sits in a Personal Workspace is "Only me" whoever's it is: a reader can name only theirs.
+  const usedPlace =
+    reference.reach === "personal"
+      ? { mine: true as const }
+      : used?.workspaceId === undefined
+        ? undefined
+        : placeOf?.(used.workspaceId);
+  const target =
+    usedPlace === undefined
+      ? t("refusals.referenceTargetOther")
+      : "mine" in usedPlace
+        ? t("refusals.referenceTargetMine")
+        : t("refusals.referenceTargetWorkspace", { workspace: usedPlace.name });
+  if (source !== undefined && source.workspaceId === undefined) {
+    return { key: "refusals.referenceForAll", values: { target } };
+  }
+  const sourcePlace = source?.workspaceId === undefined ? undefined : placeOf?.(source.workspaceId);
+  if (sourcePlace === undefined) {
+    return reference.reach === "personal"
+      ? { key: "refusals.referenceOnlyMine" }
+      : { key: "refusals.referenceOutOfScope" };
+  }
+  return "mine" in sourcePlace
+    ? { key: "refusals.referenceForMine", values: { target } }
+    : { key: "refusals.referenceForWorkspace", values: { source: sourcePlace.name, target } };
+}
+
 /**
  * The one table: each reason of the App, Data Store and Workflow publish paths, and of an App's
  * calls, with its sentence and, where it names one, the way to it.
@@ -287,12 +341,10 @@ const REFUSALS: Readonly<Record<string, RefusalRow>> = {
   person_context_unmapped: { sentence: plain("refusals.personContextUnmapped") },
   // The reason is given for more than one fault: only the two whose details say which are told.
   invalid_scope: {
-    sentence: (details, t) =>
-      details.reference === undefined
-        ? namingRight("refusals.workflowRightOnNothing")(details, t)
-        : isRecord(details.reference) && details.reference.reach === "personal"
-          ? { key: "refusals.referenceOnlyMine" }
-          : { key: "refusals.referenceOutOfScope" }
+    sentence: (details, t, place) =>
+      details.reference !== undefined
+        ? referenceSentence(details, t, place)
+        : namingRight("refusals.workflowRightOnNothing")(details, t, place)
   },
   owner_reach: { sentence: plain("refusals.offerOnlyMine") },
   revision_files_removed: { sentence: plain("refusals.revisionFilesRemoved") },
@@ -336,7 +388,7 @@ export function tellRefusal(
   const reason = details?.reason;
   const row =
     typeof reason === "string" && Object.hasOwn(REFUSALS, reason) ? REFUSALS[reason] : undefined;
-  const sentence = details && row?.sentence(details, t);
+  const sentence = details && row?.sentence(details, t, place);
   if (details === undefined || row === undefined || sentence === undefined) return undefined;
   const way = row.action?.(details, place);
   const action = way && place.canOpen?.(way.route) === true ? way : undefined;

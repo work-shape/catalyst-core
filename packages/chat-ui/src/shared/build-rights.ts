@@ -63,12 +63,12 @@ export function assetRightsOn(
  * A workspace whose own assets the reader holds a right on, as the scope names it: a Shared
  * Workspace, or the reader's own Personal Workspace.
  */
-interface BuildWorkspace {
+export interface BuildWorkspace {
   id: string;
   name: string;
   /** The reader is a member: a new agent made there starts offered there. */
   member: boolean;
-  /** The reader's Personal Workspace, which Studio names "Personal". */
+  /** The reader's Personal Workspace, which Studio names "Only me". */
   personal?: true;
 }
 

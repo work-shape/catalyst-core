@@ -417,8 +417,8 @@ describe("Studio frame", () => {
     for (const chip of [">MCP server<", ">postgres<", "Enabled", "Disabled"]) {
       expect(list, chip).toContain(chip);
     }
-    // One chip says whose a row is: the frame's, never a second one of the kind.
-    expect(list).not.toContain(">Instance<");
+    // One chip says where a row sits: the frame's, never a second one of the kind.
+    expect(list.split(">Everyone<")).toHaveLength(2);
     expect(list).not.toContain(">Workspace<");
     // Where a Connection comes from is no chip of the row.
     expect(list).not.toContain("Release config");
@@ -619,9 +619,7 @@ describe("Studio asset page", () => {
     const markup = page(source({ permissions: [], workspaces: [taxWorkspace], assets: read }));
 
     // The notice names whose asset it is and what editing needs.
-    expect(markup).toMatch(
-      /data-build-read-only=""[^>]*>.*Belongs to the workspace Tax\. Only a person/u
-    );
+    expect(markup).toMatch(/data-build-read-only=""[^>]*>.*Belongs to Tax\. Only a person/u);
     expect(markup).toContain('value="Tax review"');
     // A field that is only read stays readable: read-only, not disabled, and not required.
     expect(markup).toMatch(/<input[^>]*readOnly=""[^>]*value="Tax review"/u);
@@ -679,7 +677,7 @@ describe("Studio asset page", () => {
     );
 
     expect(markup).toContain(
-      "Belongs to the workspace Legal. Only a person who may edit in this workspace can change it."
+      "Belongs to Legal. Only a person who may build in Legal can change it."
     );
   });
 
@@ -693,7 +691,7 @@ describe("Studio asset page", () => {
     );
 
     expect(markup).toContain(
-      "Belongs to the instance. Only a person who may edit on the whole instance can change it."
+      "This is for everyone. Only a person who may build for everyone can change it."
     );
   });
 
@@ -722,7 +720,7 @@ describe("Studio asset page", () => {
       /aria-label="Mehr erfahren darüber, wer das ändern darf, öffnet in neuem Tab"[^>]*>Mehr erfahren</u
     );
     // Without an address the notice is the same sentence and no link.
-    expect(page(from)).toContain("Belongs to the workspace Tax. Only a person");
+    expect(page(from)).toContain("Belongs to Tax. Only a person");
     expect(page(from)).not.toContain("data-docs-link");
     expect(page(from)).not.toContain("Learn more");
   });

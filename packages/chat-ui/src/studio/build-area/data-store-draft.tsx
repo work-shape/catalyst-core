@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import {
   Badge,
-  Chip,
   List,
   ListRow,
   Page,
@@ -17,6 +16,7 @@ import {
 } from "@work-shape/catalyst-ui";
 import { useDockAgentWorksOn } from "../../chat/dock/dock-subject";
 import { useTranslation } from "../../shared/i18n";
+import { AssetPlaceLine, AssetPlaceRow } from "./asset-place";
 import type { BuildAssetViewProps } from "./build-asset-kind";
 import { draftTablesOf, type DraftTable } from "./data-store-draft-fields";
 import {
@@ -74,15 +74,6 @@ export function DataStoreDraftPage({
           back={back}
           title={title}
           description={description}
-          scope={
-            <Chip>
-              {t(
-                asset.scope.kind === "workspace"
-                  ? "dataStores.scopeWorkspace"
-                  : "dataStores.scopeInstance"
-              )}
-            </Chip>
-          }
           state={
             <Badge tone="warning" data-data-store-draft="">
               {t("dataStores.draftUnpublished")}
@@ -94,6 +85,9 @@ export function DataStoreDraftPage({
     >
       {page.above}
       <div className="grid min-w-0 content-start gap-6 pt-5">
+        <AssetPlaceRow>
+          <AssetPlaceLine owner={asset.scope} />
+        </AssetPlaceRow>
         {head.failure}
         {description === undefined ? null : <p className="text-body">{description}</p>}
         <DataStorePublishSection

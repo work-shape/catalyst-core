@@ -185,10 +185,10 @@ describe("where the empty dock says a new asset is created", () => {
     expect(target).toEqual({ owner: "workspace", workspaceName: "Team Vertrieb" });
     if (target === undefined) return;
     expect(creationTargetLine("agent", target, de)).toBe(
-      "Neue Agenten entstehen in „Team Vertrieb“."
+      "Neue Agenten entstehen unter „Team Vertrieb“."
     );
     expect(creationTargetLine("skill", target, en)).toBe(
-      "New skills are created in “Team Vertrieb”."
+      "New skills are created under “Team Vertrieb”."
     );
   });
 
@@ -197,7 +197,7 @@ describe("where the empty dock says a new asset is created", () => {
     expect(target).toEqual({ owner: "instance" });
     if (target === undefined) return;
     expect(creationTargetLine("data_store", target, de)).toBe(
-      "Neue Datenspeicher entstehen in der Instanz."
+      "Neue Datenspeicher entstehen unter „Alle“."
     );
     expect(creationTargetLine("connection", target, en)).toBeUndefined();
     expect(dockCreationTarget({ owners: undefined, workspaceName: "Team" })).toBeUndefined();
@@ -221,12 +221,12 @@ describe("where the empty dock says a new asset is created", () => {
     });
     expect(refused).toEqual({ owner: "instance", refused: true });
     if (allowed === undefined || refused === undefined) return;
-    expect(creationTargetLine("agent", allowed, de)).toBe("Neue Agenten entstehen in der Instanz.");
+    expect(creationTargetLine("agent", allowed, de)).toBe("Neue Agenten entstehen unter „Alle“.");
     expect(creationTargetLine("agent", refused, de)).toBe(
-      "Du darfst hier keine Agenten der Instanz anlegen."
+      "Du darfst hier keine Agenten für alle anlegen."
     );
     expect(creationTargetLine("skill", refused, en)).toBe(
-      "You may not create skills of the instance here."
+      "You may not create skills for everyone here."
     );
     // Data Stores and Workflows keep their rule under the scope Instance.
     expect(

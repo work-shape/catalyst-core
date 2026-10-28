@@ -476,8 +476,8 @@ describe("creating an agent in a workspace's Studio scope", () => {
       await vi.waitFor(
         () =>
           expect(
-            document.querySelector('button[aria-label^="Scope: "]')?.getAttribute("aria-label")
-          ).toBe("Scope: Sales"),
+            document.querySelector('button[aria-label^="Where: "]')?.getAttribute("aria-label")
+          ).toBe("Where: Sales"),
         { timeout: CONDITION_WAIT_MS }
       );
       await startAndCreate();

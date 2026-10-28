@@ -14,6 +14,7 @@ import {
   Page,
   PageHeader,
   PageOutline,
+  ScopeChip,
   Section,
   SkeletonList
 } from "@work-shape/catalyst-ui";
@@ -31,6 +32,7 @@ import { usePageShown } from "./asset-editor-shell";
 import type { BuildAssetViewProps } from "./build-asset-kind";
 import { opensHere } from "../apps/app-header";
 import { opensAssets, type BuildKind } from "./build-asset-kind";
+import { AssetPlaceRow } from "./asset-place";
 import { useBuildNavigation } from "../../shared/build-route";
 import {
   GUARDRAIL_HIT_LABELS,
@@ -191,7 +193,6 @@ export function GuardrailPage({
             back={back}
             title={guardrail.title ?? asset.name}
             description={guardrail.description}
-            scope={<Chip>{scopeLabel(scope, nameOf, t)}</Chip>}
             state={
               <Badge tone={outcome.tone} dot>
                 {t(outcome.label)}
@@ -210,6 +211,13 @@ export function GuardrailPage({
         {page.above}
         {/* The first line of the content starts where the outline does. */}
         <div className="grid min-w-0 content-start pt-5">
+          <AssetPlaceRow>
+            <ScopeChip
+              size="sm"
+              scope={scope.kind === "instance" ? "instance" : "workspace"}
+              name={scopeLabel(scope, nameOf, t)}
+            />
+          </AssetPlaceRow>
           <Banner layout="line" className="mb-4" data-build-read-only="">
             {t("guardrails.description")}
           </Banner>
@@ -231,17 +239,17 @@ export function GuardrailPage({
   }
 }
 
-/** Who the guardrail belongs to: the instance, or its workspace by name where it is known. */
+/**
+ * Where the guardrail sits, in the words of the place ladder: "Alle" for the instance, or its
+ * workspace by name where it is known. A guardrail never sits in a Personal Workspace.
+ */
 function scopeLabel(
   scope: GuardrailScope,
   nameOf: WorkspaceNameOf,
   t: (key: TranslationKey, values?: Record<string, string>) => string
 ): string {
-  if (scope.kind === "instance") return t("guardrails.scopeInstance");
-  const name = nameOf(scope.workspaceId);
-  return name === undefined
-    ? t("guardrails.scopeSomeWorkspace")
-    : t("guardrails.scopeWorkspace", { name });
+  if (scope.kind === "instance") return t("build.placeAll");
+  return nameOf(scope.workspaceId) ?? t("build.placeOtherWorkspace");
 }
 
 type Translate = TranslationContextValue["t"];

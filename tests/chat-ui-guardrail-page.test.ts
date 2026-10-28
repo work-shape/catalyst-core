@@ -149,7 +149,7 @@ describe("Guardrail page", () => {
     expect(markup).toContain(
       "Runs before anyone asks for an approval of the kind Skill change, instance-wide, part of the instance&#x27;s setup. Checks the content for breaches of its rule, with a model. Blocks if the check fails."
     );
-    expect(markup).toContain(">Instance<");
+    expect(markup).toContain(">Everyone<");
     expect(markup).toContain("Check whether the text names a person.");
     expect(markup).toContain("The action does not happen. Whoever acted is told the reason.");
     expect(markup).toContain(

@@ -24,6 +24,7 @@ import {
 } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { usePageShown } from "./asset-editor-shell";
+import { AssetPlaceLine, AssetPlaceRow } from "./asset-place";
 import type {
   BuildAssetEditorProps,
   BuildAssetViewProps,
@@ -397,15 +398,6 @@ export function ConnectionPage({
           back={back}
           title={title}
           description={textOf(config, "description")}
-          scope={
-            <Chip>
-              {t(
-                asset.scope.kind === "workspace"
-                  ? "connections.scopeWorkspace"
-                  : "connections.scopeInstance"
-              )}
-            </Chip>
-          }
           state={
             // An enabled Connection is as good as its last test or call, as its status says;
             // until its detail is read, the head claims nothing about it.
@@ -436,6 +428,9 @@ export function ConnectionPage({
       {page.above}
       {/* The first line of the content starts where the outline does. */}
       <div className="grid min-w-0 content-start pt-5">
+        <AssetPlaceRow>
+          <AssetPlaceLine owner={asset.scope} />
+        </AssetPlaceRow>
         {notice ? <div className="mb-4 grid gap-2">{notice}</div> : null}
         {config.origin === "release" ? (
           <Banner layout="line" className="mb-4" data-build-read-only="">

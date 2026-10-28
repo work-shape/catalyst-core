@@ -26,10 +26,7 @@ export const guardrails = defineTranslations({
     "guardrails.empty":
       "No further guardrails yet. A guardrail checks an action before it happens and warns, holds it for approval or blocks it. Some come with the instance's setup, and further ones are written with the CLI.",
     "guardrails.missing": "There is no guardrail with the id {name}.",
-    "guardrails.scopeInstance": "Instance",
     "guardrails.whenItRuns": "When it runs",
-    "guardrails.scopeWorkspace": "Workspace {name}",
-    "guardrails.scopeSomeWorkspace": "One workspace",
     "guardrails.runs.sentence": "Runs {when}, {where}.",
     "guardrails.runs.assetWrite": "before {actor} saves {asset}",
     "guardrails.runs.operationCall": "before {actor} calls {operation}",
@@ -151,10 +148,7 @@ export const guardrails = defineTranslations({
     "guardrails.empty":
       "Noch keine weiteren Leitplanken. Eine Leitplanke prüft eine Aktion, bevor sie geschieht, und warnt, hält sie zur Freigabe an oder blockiert sie. Manche kommen mit der Einrichtung der Instanz, weitere werden mit der CLI geschrieben.",
     "guardrails.missing": "Es gibt keine Leitplanke mit der Kennung {name}.",
-    "guardrails.scopeInstance": "Instanz",
     "guardrails.whenItRuns": "Wann sie greift",
-    "guardrails.scopeWorkspace": "Workspace {name}",
-    "guardrails.scopeSomeWorkspace": "Ein Workspace",
     "guardrails.runs.sentence": "Läuft, {when}, {where}.",
     "guardrails.runs.assetWrite": "bevor {actor} {asset} speichert",
     "guardrails.runs.operationCall": "bevor {actor} {operation} aufruft",

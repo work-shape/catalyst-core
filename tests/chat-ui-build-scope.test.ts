@@ -108,7 +108,7 @@ describe("the Studio scope", () => {
         scope: { kind: "workspace", workspaceId: TEAM }
       })
     );
-    expect(inTeam).toContain('aria-label="Scope: Team"');
+    expect(inTeam).toContain('aria-label="Where: Team"');
     expect(inTeam).toContain("team-helper");
     // The row carries its workspace's name as a chip.
     expect(inTeam).toMatch(/team-helper[\s\S]*>Team</u);
@@ -121,7 +121,7 @@ describe("the Studio scope", () => {
       }),
       "de"
     );
-    expect(onInstance).toContain('aria-label="Geltungsbereich: Instanz"');
+    expect(onInstance).toContain('aria-label="Wo: Alle"');
     expect(onInstance).toContain("house-agent");
     expect(onInstance).not.toContain(">Team<");
   });
@@ -134,11 +134,11 @@ describe("the Studio scope", () => {
         scope: { kind: "workspace", workspaceId: TEAM }
       })
     );
-    expect(member).not.toContain('aria-label="Scope:');
+    expect(member).not.toContain('aria-label="Where:');
     expect(member).toContain("team-helper");
   });
 
-  it("offers the reader's Personal Workspace as Personal, and opens Studio to nobody for it alone", () => {
+  it("offers the reader's Personal Workspace as Only me, and opens Studio to nobody for it alone", () => {
     const OWN = "cws_own";
     const own = {
       id: OWN,
@@ -159,8 +159,8 @@ describe("the Studio scope", () => {
       { kind: "workspace", workspaceId: TEAM },
       { kind: "workspace", workspaceId: OWN }
     ]);
-    expect(buildWorkspaceName(builder, OWN, "Personal")).toBe("Personal");
-    expect(buildWorkspaceName(builder, TEAM, "Personal")).toBe("Team");
+    expect(buildWorkspaceName(builder, OWN, "Only me")).toBe("Only me");
+    expect(buildWorkspaceName(builder, TEAM, "Only me")).toBe("Team");
     // What the agent made in a personal conversation is the reader's to change there.
     expect(builder.may("write", { kind: "agent", workspaceId: OWN })).toBe(true);
 

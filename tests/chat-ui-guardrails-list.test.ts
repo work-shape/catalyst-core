@@ -164,7 +164,7 @@ describe("the Guardrails list", () => {
   it("shows the shipped guardrail as a row of the list, under the search and the scope", () => {
     const markup = renderList();
     const search = markup.indexOf('aria-label="Search guardrails"');
-    const scope = markup.indexOf('aria-label="Scope: Instance"');
+    const scope = markup.indexOf('aria-label="Where: Everyone"');
     const list = markup.indexOf('aria-label="Guardrails"');
     expect(search).toBeGreaterThan(-1);
     expect(scope).toBeGreaterThan(search);
@@ -178,7 +178,7 @@ describe("the Guardrails list", () => {
     expect(row).toMatch(/role="switch"[^>]*aria-checked="true"/u);
     expect(row).not.toMatch(/<button[^>]*role="switch"[^>]* disabled=""/u);
     // One guardrail is in the list: it is not empty.
-    expect(markup).not.toContain("Nothing in Instance yet.");
+    expect(markup).not.toContain("Nothing under “Everyone” yet.");
   });
 
   it("puts the shipped guardrail before the instance's own, in the same list", () => {
@@ -201,12 +201,12 @@ describe("the Guardrails list", () => {
     const alone = renderList({ listError: "The guardrails could not be loaded.", read: ready([]) });
     expect(alone).toContain("The guardrails could not be loaded.");
     expect(alone).not.toContain('aria-label="Guardrails"');
-    expect(alone).not.toContain("Nothing in Instance yet.");
+    expect(alone).not.toContain("Nothing under “Everyone” yet.");
   });
 
   it("is empty in a workspace, where the shipped guardrail does not apply", () => {
     const markup = renderList({ scope: { kind: "workspace", workspaceId: TEAM } });
-    expect(markup).toContain("Nothing in Team yet.");
+    expect(markup).toContain("Nothing under “Team” yet.");
     expect(markup).not.toContain("Shipped with the platform");
   });
 

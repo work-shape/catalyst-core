@@ -3,7 +3,6 @@ import { useState, type ReactNode } from "react";
 import {
   Badge,
   Banner,
-  Chip,
   EmptyState,
   InlineError,
   KeyValue,
@@ -27,6 +26,7 @@ import { useDockAgentWorksOn } from "../../chat/dock/dock-subject";
 import { formatDateTime } from "../../shared/locale-format";
 import { useTranslation } from "../../shared/i18n";
 import { usePageShown } from "./asset-editor-shell";
+import { AssetPlaceLine, AssetPlaceRow } from "./asset-place";
 import type { BuildAssetViewProps } from "./build-asset-kind";
 import {
   columnTypeView,
@@ -299,15 +299,6 @@ function PublishedDataStorePage({
           back={back}
           title={title}
           description={textOf(asset.config, "description")}
-          scope={
-            <Chip>
-              {t(
-                asset.scope.kind === "workspace"
-                  ? "dataStores.scopeWorkspace"
-                  : "dataStores.scopeInstance"
-              )}
-            </Chip>
-          }
           state={
             view ? (
               <Badge tone={view.tone} dot>
@@ -328,6 +319,9 @@ function PublishedDataStorePage({
       {page.above}
       {/* The first line of the content starts where the outline does. */}
       <div className="grid min-w-0 content-start pt-5">
+        <AssetPlaceRow>
+          <AssetPlaceLine owner={asset.scope} />
+        </AssetPlaceRow>
         <Banner layout="line" className="mb-4" data-build-read-only="">
           {t("dataStores.description")}
         </Banner>

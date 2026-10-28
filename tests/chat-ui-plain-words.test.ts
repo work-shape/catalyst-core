@@ -70,7 +70,9 @@ const REFUSED: { word: string; pattern: RegExp; in: readonly Locale[] }[] = [
     in: locales
   },
   // German says Skill: "Fähigkeit" beside it on one screen reads as a second thing.
-  { word: "Fähigkeit", pattern: /Fähigkeit/u, in: ["de"] }
+  { word: "Fähigkeit", pattern: /Fähigkeit/u, in: ["de"] },
+  // SCOPE-WORDS: where an asset sits is asked "Wo", never "Geltungsbereich" (or Scope).
+  { word: "Geltungsbereich", pattern: /Geltungsbereich/u, in: ["de"] }
 ];
 
 /** Where a refused word stays, by key or key prefix, and why. */

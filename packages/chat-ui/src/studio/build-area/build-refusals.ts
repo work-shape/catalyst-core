@@ -1,7 +1,7 @@
 import type { LocaleCode } from "@work-shape/catalyst-api-client";
 import { EGRESS_DENIED } from "@work-shape/catalyst-core";
 import type { TranslationContextValue, TranslationKey } from "../../shared/i18n";
-import { refusalDetailsOf, tellRefusal } from "../../shared/i18n/refusals";
+import { refusalDetailsOf, tellRefusal, type RefusalPlace } from "../../shared/i18n/refusals";
 import { formatFileBytes } from "./skill-form-model";
 import { apiErrorCode, apiErrorMessage } from "../../shared/workspace-utils";
 
@@ -274,12 +274,14 @@ const FIELD_OF_CONFIG_KEY = new Map<string, BuildRefusalField>([
  * Reads a refused change. A refusal from a workspace's build limits names its field and is told in
  * the reader's language; an issue of the definition goes to the field its path names; a reason
  * the refusal table knows is told in its words; every other sentence is shown as the instance
- * said it, which includes the one sentence about an asset the reader may not read.
+ * said it, which includes the one sentence about an asset the reader may not read. `place`
+ * names the workspaces a refusal speaks of, as the page knows them.
  */
 export function readBuildRefusal(
   error: unknown,
   t: Translate,
-  locale: LocaleCode
+  locale: LocaleCode,
+  place: RefusalPlace = {}
 ): BuildWriteOutcome {
   if (apiErrorCode(error) === "REVISION_CONFLICT") {
     return readRefusalDetails(error).reason === "draft_changed"
@@ -369,7 +371,7 @@ export function readBuildRefusal(
       })
     };
   }
-  const told = tellRefusal(refusalDetailsOf(error), t);
+  const told = tellRefusal(refusalDetailsOf(error), t, place);
   if (told !== undefined) {
     return refused({ message: told.message });
   }

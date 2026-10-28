@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNo
 import {
   Avatar,
   Button,
-  Chip,
   ConfirmDialog,
   Dialog,
   DropdownMenuItem,
@@ -65,6 +64,7 @@ import {
   type BuildScope
 } from "../../shared/build-rights";
 import { readBuildRefusal } from "./build-refusals";
+import { AssetPlaceLine, AssetPlacesProvider, assetPlace } from "./asset-place";
 import { scrollPageToTop } from "./build-scroll";
 import { BUILT_WITH_AGENT, BuildListEmpty } from "./build-list-empty";
 import { BuildWithAgentDialog } from "../build-with-agent-dialog";
@@ -83,12 +83,24 @@ const firstListView: ListView = { text: "" };
  * back, History, the delete, the answer to a conflict and every state; what a kind is comes
  * from its registry entry, and what the instance holds from `source`.
  */
-export function BuildFrame({
+export function BuildFrame(props: {
+  source: BuildSource;
+  /** The shared workspace the reader works in: a new agent starts available there. */
+  workspace?: { id: string; name: string };
+}) {
+  // Every page of Studio names a place by the workspaces the reader is shown.
+  return (
+    <AssetPlacesProvider value={props.source.rights.workspaces}>
+      <BuildFrameBody {...props} />
+    </AssetPlacesProvider>
+  );
+}
+
+function BuildFrameBody({
   source,
   workspace
 }: {
   source: BuildSource;
-  /** The shared workspace the reader works in: a new agent starts available there. */
   workspace?: { id: string; name: string };
 }) {
   const { locale, t } = useTranslation();
@@ -110,7 +122,7 @@ export function BuildFrame({
             workspaceName: buildWorkspaceName(
               source.rights,
               offeredScope.workspaceId,
-              t("collaborationWorkspacePersonalName")
+              t("build.placeMine")
             )
           }
         : { owner: "instance", mayCreate: place.kind.state.canCreate }
@@ -300,11 +312,7 @@ export function BuildFrame({
               ? scopeWorkspace?.member
                 ? {
                     id: scopeWorkspace.id,
-                    name: buildWorkspaceName(
-                      source.rights,
-                      scopeWorkspace.id,
-                      t("collaborationWorkspacePersonalName")
-                    )
+                    name: buildWorkspaceName(source.rights, scopeWorkspace.id, t("build.placeMine"))
                   }
                 : undefined
               : workspace,
@@ -568,11 +576,14 @@ function BuildList({
   const settledText = useSettledText(view.text);
   const list = source.useList(entry.kind, { text: settledText });
   const scope = source.scopeOf?.(entry.kind);
-  const scopes = scope && source.chooseScope ? buildScopes(source.rights) : [];
-  const workspaceName = (id: string) =>
-    buildWorkspaceName(source.rights, id, t("build.scopePersonal"));
-  const scopeName = (of: BuildScope) =>
-    of.kind === "instance" ? t("build.scopeInstance") : workspaceName(of.workspaceId);
+  const scopeName = (of: BuildScope) => assetPlace(of, source.rights.workspaces, t).name;
+  // "Wo" offers the places in the order of the ladder: Nur ich, the teams, Alle.
+  const rung = (of: BuildScope) =>
+    ({ mine: 0, workspace: 1, all: 2 })[assetPlace(of, source.rights.workspaces, t).rung];
+  const scopes =
+    scope && source.chooseScope
+      ? buildScopes(source.rights).toSorted((one, other) => rung(one) - rung(other))
+      : [];
   const filtered = settledText.trim() !== "";
   // A kind that only lists has no asset to start and no CLI entry, and a page only to show one.
   const editable = isEditableKind(entry) ? entry : undefined;
@@ -635,7 +646,7 @@ function BuildList({
                 <>
                   {scope && scopes.length > 1 ? (
                     <Picker
-                      label={t("build.scopeFilter")}
+                      label={t("build.placeFilter")}
                       options={scopes.map((option) => ({
                         value: buildScopeValue(option),
                         label: scopeName(option)
@@ -647,9 +658,9 @@ function BuildList({
                       }}
                     >
                       <PickerButton
-                        label={t("build.scopeFilter")}
+                        label={t("build.placeFilter")}
                         value={scopeName(scope)}
-                        placeholder={t("build.scopeInstance")}
+                        placeholder={t("build.placeAll")}
                       />
                     </Picker>
                   ) : null}
@@ -666,7 +677,7 @@ function BuildList({
             ) : rows.length === 0 && leadRows.length === 0 ? (
               <EmptyState layout="inline" icon={<SearchX aria-hidden="true" />}>
                 {scope && !filtered
-                  ? t("build.noneInScope", { scope: scopeName(scope) })
+                  ? t("build.noneInPlace", { place: scopeName(scope) })
                   : t("build.noMatch", { query: settledText.trim() })}
               </EmptyState>
             ) : (
@@ -704,12 +715,11 @@ function BuildList({
                           rowText || undefined
                         )
                       }
-                      // One chip says whose the asset is: "Personal" alone for the reader's own.
+                      // Every row says where the asset sits, in the words of the ladder: Nur
+                      // ich, the team's name or Alle, the same chip as on its page.
                       chips={
                         <>
-                          {asset.scope.kind === "workspace" ? (
-                            <Chip size="sm">{workspaceName(asset.scope.workspaceId)}</Chip>
-                          ) : null}
+                          <AssetPlaceLine owner={asset.scope} />
                           {entry.badges?.(asset, t)}
                         </>
                       }
