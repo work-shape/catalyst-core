@@ -287,7 +287,7 @@ async function setConversationProject(
       });
       if (!project) throw new AppError("NOT_FOUND", "Project is not available");
     }
-    if (conversation.personalDataAt && input.visibility !== "private") {
+    if (input.visibility !== "private") {
       const [workspace] = await tx
         .select({ kind: collaborationWorkspaces.kind })
         .from(collaborationWorkspaces)
@@ -297,7 +297,22 @@ async function setConversationProject(
             eq(collaborationWorkspaces.id, conversation.collaborationWorkspaceId)
           )
         );
-      if (workspace?.kind !== "personal") throw personalConversationPrivateError();
+      if (workspace?.kind !== "personal") {
+        // Others would read it in a shared project: personal data stays private, and so does a
+        // conversation that reads a Data Store a person added (STORE-USE-1).
+        if (conversation.personalDataAt) throw personalConversationPrivateError();
+        const [used] = await tx
+          .select({ id: conversationDataStores.storeAssetId })
+          .from(conversationDataStores)
+          .where(
+            and(
+              eq(conversationDataStores.clientInstanceId, input.clientInstanceId),
+              eq(conversationDataStores.conversationId, input.conversationId)
+            )
+          )
+          .limit(1);
+        if (used) throw dataStoreConversationPrivateError();
+      }
     }
     await tx
       .update(conversations)
