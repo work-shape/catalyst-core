@@ -178,6 +178,7 @@ export interface GalleryText
   workspaceFinance: string;
   workspaceLegal: string;
   instanceName: string;
+  onlyMe: string;
   personName: string;
   groupEditors: string;
   readOnly: string;
@@ -453,6 +454,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     workspaceFinance: "Finance",
     workspaceLegal: "Legal",
     instanceName: "Acme",
+    onlyMe: "Only me",
     personName: "Maria Schmidt",
     groupEditors: "Editors",
     readOnly: "Read-only",
@@ -735,6 +737,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     workspaceFinance: "Finanzen",
     workspaceLegal: "Recht",
     instanceName: "Acme",
+    onlyMe: "Nur ich",
     personName: "Maria Schmidt",
     groupEditors: "Redaktion",
     readOnly: "Schreibgeschützt",
