@@ -44,6 +44,20 @@ export const agentDraft = defineTranslations({
     "agentDraft.shippedBadge": "Ships with the platform",
     "agentDraft.shippedDiffers": "Differs from what the platform ships",
     "agentDraft.shippedReset": "Reset to shipped",
+    "agentDraft.shippedNewer": "The platform has a new version of this field.",
+    "agentDraft.shippedNewerMine": "Your version",
+    "agentDraft.shippedNewerNext": "New version of the platform",
+    "agentDraft.shippedTakeNewer": "Take new version",
+    "agentDraft.shippedKeepMine": "Keep mine",
+    "agentDraft.platformInstructions": "Platform instructions",
+    "agentDraft.platformInstructionsHint":
+      "Ship with the platform and take each release's new version.",
+    "agentDraft.platformInstructionsEdit": "Change platform text",
+    "agentDraft.platformInstructionsEditHint":
+      "Once you change it, this text is the instance's and no release updates it.",
+    "agentDraft.additionalInstructions": "Additions of this instance",
+    "agentDraft.additionalInstructionsHint":
+      "Apply after the platform's instructions. A release never changes them.",
     "agentDraft.stale":
       "The published version of “{name}” changed after this draft was written, so the draft cannot be published. Save a change to base it on the published version, or discard it."
   },
@@ -86,6 +100,20 @@ export const agentDraft = defineTranslations({
     "agentDraft.shippedBadge": "Kommt mit der Plattform",
     "agentDraft.shippedDiffers": "Weicht von dem ab, was die Plattform mitbringt",
     "agentDraft.shippedReset": "Auf Auslieferung zurücksetzen",
+    "agentDraft.shippedNewer": "Die Plattform hat eine neue Fassung dieses Felds.",
+    "agentDraft.shippedNewerMine": "Deine Fassung",
+    "agentDraft.shippedNewerNext": "Neue Fassung der Plattform",
+    "agentDraft.shippedTakeNewer": "Neue Fassung übernehmen",
+    "agentDraft.shippedKeepMine": "Meine behalten",
+    "agentDraft.platformInstructions": "Anweisungen der Plattform",
+    "agentDraft.platformInstructionsHint":
+      "Kommen mit der Plattform und übernehmen mit jedem Release die neue Fassung.",
+    "agentDraft.platformInstructionsEdit": "Plattform-Text ändern",
+    "agentDraft.platformInstructionsEditHint":
+      "Sobald du ihn änderst, gehört dieser Text der Instanz, und kein Release aktualisiert ihn mehr.",
+    "agentDraft.additionalInstructions": "Ergänzungen dieser Instanz",
+    "agentDraft.additionalInstructionsHint":
+      "Gelten nach den Anweisungen der Plattform. Ein Release ändert sie nie.",
     "agentDraft.stale":
       "Die veröffentlichte Version von „{name}“ hat sich geändert, nachdem dieser Entwurf geschrieben wurde. Darum lässt er sich nicht veröffentlichen. Speichere eine Änderung, um ihn auf die veröffentlichte Version zu stützen, oder verwirf ihn."
   }

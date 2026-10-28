@@ -18,6 +18,8 @@ export interface AgentFormState {
   welcomeMessage: LocalizedPair;
   welcomeSubtitle: LocalizedPair;
   instructions: string;
+  /** What the instance adds after the instructions of an agent that ships with the platform. */
+  additionalInstructions: string;
   modelProviderId: string;
   modelBindingId: string;
   reasoningEffort: string;
@@ -37,6 +39,12 @@ export interface AgentFormState {
   /** The Knowledge Bases the agent answers from, by id. */
   knowledgeBases: string[];
   initialPrompts: AgentInitialPromptForm[];
+  /**
+   * The shipped fields a release shipped anew after the instance changed them. The page takes
+   * one out when the person takes the new version or keeps their own. Absent where the agent
+   * holds no such list; an empty list is sent once the person has decided every field.
+   */
+  shippedNewer: string[] | undefined;
 }
 
 /** Mirrors the availability contract; an agent without a stored row is hidden everywhere. */
@@ -139,6 +147,8 @@ export function agentConfigToForm(config: Record<string, unknown>): AgentFormSta
     welcomeMessage: localizedToPair(config.welcomeMessage),
     welcomeSubtitle: localizedToPair(config.welcomeSubtitle),
     instructions: typeof config.instructions === "string" ? config.instructions : "",
+    additionalInstructions:
+      typeof config.additionalInstructions === "string" ? config.additionalInstructions : "",
     modelProviderId,
     modelBindingId,
     reasoningEffort: typeof config.reasoningEffort === "string" ? config.reasoningEffort : "",
@@ -156,7 +166,8 @@ export function agentConfigToForm(config: Record<string, unknown>): AgentFormSta
         title: localizedToPair(record.title),
         prompt: localizedToPair(record.prompt)
       };
-    })
+    }),
+    shippedNewer: Array.isArray(config.shippedNewer) ? stringArray(config.shippedNewer) : undefined
   };
 }
 
@@ -220,6 +231,9 @@ export function agentFormToConfig(
     ...(welcomeMessage === undefined ? {} : { welcomeMessage }),
     ...(welcomeSubtitle === undefined ? {} : { welcomeSubtitle }),
     instructions: form.instructions,
+    ...(form.additionalInstructions.trim()
+      ? { additionalInstructions: form.additionalInstructions }
+      : {}),
     ...(form.modelBindingId
       ? { modelBindingId: form.modelBindingId }
       : form.modelProviderId
@@ -240,7 +254,8 @@ export function agentFormToConfig(
       .map((prompt) => ({
         title: pairToLocalized(prompt.title) ?? "",
         prompt: pairToLocalized(prompt.prompt) ?? ""
-      }))
+      })),
+    ...(form.shippedNewer ? { shippedNewer: form.shippedNewer } : {})
   };
 }
 
@@ -361,6 +376,7 @@ export function emptyAgentForm(): AgentFormState {
     welcomeMessage: { ...EMPTY_LOCALIZED_PAIR },
     welcomeSubtitle: { ...EMPTY_LOCALIZED_PAIR },
     instructions: "",
+    additionalInstructions: "",
     modelProviderId: "",
     modelBindingId: "",
     reasoningEffort: "",
@@ -372,7 +388,8 @@ export function emptyAgentForm(): AgentFormState {
     toolNames: [],
     skillNames: [],
     knowledgeBases: [],
-    initialPrompts: []
+    initialPrompts: [],
+    shippedNewer: undefined
   };
 }
 

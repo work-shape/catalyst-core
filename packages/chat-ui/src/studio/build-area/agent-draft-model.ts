@@ -15,6 +15,7 @@ export type DraftAgentField =
   | "welcomeMessage"
   | "welcomeSubtitle"
   | "instructions"
+  | "additionalInstructions"
   | "maxSteps"
   | "model"
   | "skillNames"
@@ -40,6 +41,7 @@ const FIELD_PARTS: readonly (readonly [DraftAgentField, readonly (keyof AgentFor
   ["welcomeMessage", ["welcomeMessage"]],
   ["welcomeSubtitle", ["welcomeSubtitle"]],
   ["instructions", ["instructions"]],
+  ["additionalInstructions", ["additionalInstructions"]],
   ["maxSteps", ["maxSteps"]],
   ["model", MODEL_PARTS],
   ["skillNames", ["skillNames"]],
@@ -64,6 +66,7 @@ const SECTION_OF_FIELD: Record<DraftAgentField, string> = {
   welcomeMessage: "overview",
   welcomeSubtitle: "overview",
   instructions: "instructions",
+  additionalInstructions: "instructions",
   maxSteps: "instructions",
   model: "model",
   skillNames: "skills",

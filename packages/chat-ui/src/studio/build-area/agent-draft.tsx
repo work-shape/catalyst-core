@@ -225,6 +225,8 @@ function PublishedContent({
       return <LanguageLines live={live[field]} draft={draft[field]} />;
     case "instructions":
       return <FoldedText>{live.instructions || t("agentDraft.empty")}</FoldedText>;
+    case "additionalInstructions":
+      return <FoldedText>{live.additionalInstructions || t("agentDraft.empty")}</FoldedText>;
     case "maxSteps":
       return live.maxSteps || t("configInstanceDefault");
     case "model":

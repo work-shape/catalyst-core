@@ -7757,6 +7757,10 @@
         "",
         "Each release brings Workshaper up to date. A field the instance left as the last release shipped it takes what the new release ships. A field the instance changed stays as the instance wrote it. Tools and skills merge one by one: what the release ships, without what the instance removed since, with what the instance added. The agent page marks a field that differs from what the release shipped and offers to reset it.",
         "",
+        "To add to Workshaper's instructions without taking them over, write in **Additions of this instance** (\"Ergänzungen dieser Instanz\") on the agent page, or `additionalInstructions` in the file. Workshaper follows them after its instructions, and no release changes them, so the instructions keep taking each release's text. **Change platform text** (\"Plattform-Text ändern\") opens the instructions themselves; once changed, they are the instance's.",
+        "",
+        "Where the instance changed a field and a later release changes it too, the agent page shows \"The platform has a new version\" (\"Die Plattform hat eine neue Fassung\") at that field, with both versions side by side. **Take new version** puts the release's text in the field, **Keep mine** keeps the instance's; either is saved and published like any change. A pending draft of Workshaper is moved onto each release in the same way, so publishing it later does not bring back the old release's text.",
+        "",
         "Workshaper cannot be deleted. To hide it, offer it in no workspace. Turning the module off stops the updates and leaves the stored agent as it is. Its id, `workshaper`, stays the platform's: no other agent can take it, also with the module off. `catalyst config pull` brings it into a working copy like any agent, and a push changes it as the agent page does. What the release shipped stays on the instance and is not part of the file; a push that would delete it is refused."
       ]
     },

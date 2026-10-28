@@ -36,7 +36,7 @@ export interface ShippedAgentSeedResult {
 
 export interface SeedShippedAgentsInput {
   clientInstanceId: ClientInstanceId;
-  stores: Pick<PlatformStores, "configAssets">;
+  stores: Pick<PlatformStores, "configAssets" | "agentProposals">;
   /** What this build ships, where the module that ships it is on. */
   agents: readonly ShippedAgent[];
 }
@@ -76,6 +76,8 @@ async function reconcile(input: SeedShippedAgentsInput): Promise<ShippedAgentSee
   const result: ShippedAgentSeedResult = { retained: [], created: [], updated: [] };
   const mutations: ConfigAssetMutation[] = [];
   const baseRevisions: Record<string, number | null> = {};
+  /** The agents whose live revision this start replaces, with that revision. */
+  const replaced: { agent: ShippedAgent; id: string; revision: number }[] = [];
   for (const agent of input.agents) {
     const row = await store.getConfigAsset({
       clientInstanceId,
@@ -100,6 +102,7 @@ async function reconcile(input: SeedShippedAgentsInput): Promise<ShippedAgentSee
     // A deleted row continues its revisions.
     baseRevisions[`${AGENT_KIND}:${agent.name}`] = row?.revision ?? null;
     (active ? result.updated : result.created).push(agent.name);
+    if (active) replaced.push({ agent, id: active.id, revision: active.revision });
   }
   if (mutations.length > 0) {
     await store.applyConfigAssetMutations({
@@ -111,6 +114,43 @@ async function reconcile(input: SeedShippedAgentsInput): Promise<ShippedAgentSee
       initialAgentAvailability: "hidden",
       mutations
     });
+    for (const each of replaced) await rebaseDraft(input, each);
   }
   return result;
+}
+
+/**
+ * Moves a pending draft of a shipped agent onto the live revision the seed just wrote, merged
+ * with what the release ships as the live agent is. Without it the draft stayed on the old
+ * revision, and its publish wrote the old release's text back as if the instance had changed
+ * it. A draft written against an older live revision than the one replaced stays on its base:
+ * that is somebody's change, not the release's. Its author stays who wrote it.
+ */
+async function rebaseDraft(
+  input: SeedShippedAgentsInput,
+  replaced: { agent: ShippedAgent; id: string; revision: number }
+): Promise<void> {
+  const { clientInstanceId } = input;
+  const draft = await input.stores.agentProposals.get({ clientInstanceId, agentId: replaced.id });
+  if (!draft) return;
+  const live = await input.stores.configAssets.getConfigAsset({
+    clientInstanceId,
+    kind: AGENT_KIND,
+    name: replaced.agent.name
+  });
+  if (live?.id !== replaced.id) return;
+  const config = toJsonObject(mergeShippedAgent(draft.config, replaced.agent, configValuesEqual));
+  const baseRevision =
+    draft.baseRevision === replaced.revision ? live.revision : draft.baseRevision;
+  if (baseRevision === draft.baseRevision && configValuesEqual(config, draft.config)) return;
+  // A person who saved the draft in between keeps theirs as they wrote it.
+  await input.stores.agentProposals.save({
+    clientInstanceId,
+    agentId: replaced.id,
+    author: draft.author,
+    baseRevision,
+    expectedDraftRevision: draft.revision,
+    config,
+    savedAt: new Date().toISOString()
+  });
 }

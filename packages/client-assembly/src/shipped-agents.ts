@@ -66,7 +66,7 @@ export function shippedAgentsOf(input: {
 /** Brings the stored shipped agents up to what this build ships, and logs what it changed. */
 export async function seedInstanceShippedAgents(execution: {
   clientInstanceId: ClientInstanceId;
-  store: Pick<PlatformStores, "configAssets">;
+  store: Pick<PlatformStores, "configAssets" | "agentProposals">;
   /** What this build ships to the instance, from `shippedAgentsOf`. */
   shippedAgents: readonly ShippedAgent[];
   logger: Logger;
