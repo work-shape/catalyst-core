@@ -713,7 +713,9 @@ describe("the modules workflows and dataStores", () => {
       ...nothing,
       name: "dataStores",
       kinds: [DATA_STORE_ASSET_KIND],
+      tools: ["platform.data_stores.describe"],
       operations: [
+        "data_stores.description",
         "data_stores.query",
         "data_stores.insert",
         "data_stores.describe",
