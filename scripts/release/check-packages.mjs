@@ -27,8 +27,8 @@ const MAX_TARBALL_BYTES_BY_DIR = {
   // The schemas and declarations of every API operation, and the OpenAPI document the docs build
   // reads; each grows with the operations (assets.move, projects, data_store.use and more in 0.8.0-rc.18).
   "api-contract": 400_000,
-  // Standalone helper bundles and shipped skills.
-  "artifact-helpers": 6_500_000,
+  // Standalone helper bundles, shipped skills and the Python file tools; the file helpers took it to 8.2 MB.
+  "artifact-helpers": 9_000_000,
   // Compiled components, stylesheet and Vite helpers.
   "chat-ui": 960_000,
   // Bundled server assembly: routes, workers and built-in capabilities.
