@@ -139,7 +139,8 @@ describe("publishing an agent that uses what its workspaces lack", () => {
   /** The agent page with a draft whose read again names what is missing. */
   function mountDraft(
     dependencyAvailability: AgentDraft["dependencyAvailability"],
-    availability?: AvailabilityChoice
+    availability?: AvailabilityChoice,
+    held: Partial<AgentDraftSource> = {}
   ) {
     const draft: AgentDraft = {
       agent: "assistant",
@@ -151,7 +152,7 @@ describe("publishing an agent that uses what its workspaces lack", () => {
       author: { userId: "user_me", name: "Me", release: false },
       updatedAt: "2026-10-19T09:00:00.000Z"
     };
-    const decided: unknown[][] = [];
+    const decided: Parameters<AgentDraftSource["decide"]>[] = [];
     const reads = { count: 0 };
     function Page() {
       // The page's own save left a draft the instance told nothing about; Publish reads it again.
@@ -170,7 +171,8 @@ describe("publishing an agent that uses what its workspaces lack", () => {
           decided.push(args);
         },
         busy: undefined,
-        answerFor: () => undefined
+        answerFor: () => undefined,
+        ...held
       };
       return createElement(AgentEditor, {
         frame: frame(),
@@ -323,6 +325,91 @@ describe("publishing an agent that uses what its workspaces lack", () => {
     await vi.waitFor(() => expect(page.reads.count).toBe(1), { timeout: CONDITION_WAIT_MS });
 
     expect(missingBanner()).toBeNull();
+  });
+
+  // OFFER-ON-PUBLISH: the dialog sets where the agent is offered after the publish is made. Where
+  // that is refused the publish stands: the page that starts again holds the dialog's choice as an
+  // unsaved change, with the instance's sentence, and saving it tries again.
+  describe("an offer the publish could not set", () => {
+    const nowhere = {
+      mode: "selected" as const,
+      personalWorkspaces: false,
+      collaborationWorkspaceIds: []
+    };
+    const everywhere = {
+      mode: "all" as const,
+      personalWorkspaces: false,
+      collaborationWorkspaceIds: []
+    };
+    const sentence = "The instance refused to offer this agent here.";
+    const choice = (overrides: Partial<AvailabilityChoice> = {}): AvailabilityChoice => ({
+      saved: nowhere,
+      workspaces,
+      save: async () => undefined,
+      ...overrides
+    });
+
+    it("answers the choice and the instance's sentence from the step after the publish", async () => {
+      const saved: unknown[] = [];
+      const page = mountDraft(
+        { missing: [], administrators: [] },
+        choice({
+          saveAfterPublish: async (next) => {
+            saved.push(next);
+            return sentence;
+          }
+        })
+      );
+      const dialog = await openPublish();
+      await click(button("Publish", dialog));
+
+      const [, , options] = required(page.decided[0]);
+      const afterPublish = required(options?.afterPublish);
+      expect(await afterPublish()).toEqual({ form: everywhere, message: sentence });
+      expect(saved).toEqual([everywhere]);
+    });
+
+    it("answers nothing where the place was set", async () => {
+      const page = mountDraft(
+        { missing: [], administrators: [] },
+        choice({ saveAfterPublish: async () => undefined })
+      );
+      const dialog = await openPublish();
+      await click(button("Publish", dialog));
+
+      const [, , options] = required(page.decided[0]);
+      const afterPublish = required(options?.afterPublish);
+      expect(await afterPublish()).toBeUndefined();
+    });
+
+    it("shows the sentence and the dialog's choice on the page that starts again, until it is saved", async () => {
+      const settled = vi.fn();
+      const saves: unknown[] = [];
+      mountDraft(undefined, choice({ save: async (next) => void saves.push(next) }), {
+        unsetOffer: { form: everywhere, message: sentence },
+        settleOffer: settled
+      });
+
+      const notice = required(document.querySelector("[data-offer-not-set]"));
+      expect(notice.textContent).toContain("Published, but where chats can choose the agent");
+      expect(notice.textContent).toContain(sentence);
+      // The choice stands in the page's own field as a change: nothing is saved yet.
+      const section = required(document.querySelector("section#availability"));
+      expect(
+        section.querySelector('[role="radio"][aria-checked="true"]')?.getAttribute("value")
+      ).toBe("all");
+      expect(saves).toEqual([]);
+      expect(settled).not.toHaveBeenCalled();
+
+      await click(button("Save changes"));
+      expect(saves).toEqual([everywhere]);
+      expect(settled).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows nothing of an offer that was set", async () => {
+      mountDraft(undefined, choice());
+      expect(document.querySelector("[data-offer-not-set]")).toBeNull();
+    });
   });
 });
 

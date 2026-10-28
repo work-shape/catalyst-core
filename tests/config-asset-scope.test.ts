@@ -123,9 +123,7 @@ describe("scope on a config asset", () => {
     // The instance's agent and another workspace's agent may not name the workspace's skill.
     const invalidScope = {
       code: "VALIDATION_FAILED",
-      message: expect.stringContaining(
-        "references Skill 'team-notes' owned by workspace 'Scope test'"
-      ),
+      message: expect.stringContaining('Skill "team-notes" belongs to the team "Scope test"'),
       details: { reason: "invalid_scope" }
     };
     await expect(

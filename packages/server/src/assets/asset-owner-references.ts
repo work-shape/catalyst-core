@@ -7,6 +7,7 @@ import {
   type AgentAvailability,
   type AppAudience,
   type AssetOwnerReach,
+  type AssetOwnerRung,
   type AssetScope,
   type ClientInstanceId,
   type CollaborationWorkspace,
@@ -86,6 +87,66 @@ async function ownerReach(
   return { kind: "workspace", workspaceId: scope.workspaceId, workspaceKind: workspace?.kind };
 }
 
+/** Where an asset sits, as the ladder's words: only its person, a team by name, or everyone. */
+interface Place {
+  rung: AssetOwnerRung;
+  team?: string;
+}
+
+async function placeOf(scope: AssetScope, workspaces: WorkspaceReader): Promise<Place> {
+  if (scope.kind === "instance") return { rung: "everyone" };
+  const workspace = await workspaces(scope.workspaceId);
+  return workspace?.kind === "shared"
+    ? { rung: "team", team: workspace.name }
+    : { rung: "personal" };
+}
+
+function quoted(name: string, de: boolean): string {
+  return de ? `„${name}“` : `"${name}"`;
+}
+
+/**
+ * What an agent or person is told when a source names an asset of an owner it may not rely on
+ * (2026-10-28): where each sits, and the next step: share the item with the source's place in
+ * "Teilen…" where a person can, else ask an admin. The UI's words, never a command.
+ */
+function referenceSentence(
+  names: { source: string; target: string },
+  places: { source: Place; target: Place },
+  de: boolean
+): string {
+  const { source, target } = places;
+  const team = (place: Place) => quoted(place.team ?? (de ? "Team" : "team"), de);
+  const is = (place: Place) => {
+    if (place.rung === "personal") {
+      return de ? "ist nur für dich („Nur ich“)" : 'is only for you ("Only me")';
+    }
+    if (place.rung === "everyone") return de ? "ist für Alle" : "is for everyone";
+    return de ? `gehört zum Team ${team(place)}` : `belongs to the team ${team(place)}`;
+  };
+  const facts = de
+    ? `${names.target} ${is(target)}. ${names.source} ${is(source)} und darf sich darum nicht darauf stützen.`
+    : `${names.target} ${is(target)}. ${names.source} ${is(source)} and so may not rely on it.`;
+  // A person shares up the ladder; moving something between two teams stays an admin's step.
+  const shareable =
+    source.rung !== "personal" &&
+    (target.rung === "personal" || (target.rung === "team" && source.rung === "everyone"));
+  if (!shareable) return `${facts} ${de ? "Bitte einen Admin darum." : "Ask an admin."}`;
+  const to =
+    source.rung === "everyone"
+      ? de
+        ? "Allen"
+        : "everyone"
+      : de
+        ? `dem Team ${team(source)}`
+        : `the team ${team(source)}`;
+  return `${facts} ${
+    de
+      ? `Teile ${names.target} über „Teilen…“ mit ${to}, oder bitte einen Admin darum.`
+      : `Share ${names.target} with ${to} using "Share…", or ask an admin.`
+  }`;
+}
+
 /**
  * The one owner check (2026-10-28): something shared never relies on or exposes something a
  * Personal Workspace owns. The decision is `ownerReachRefusal` in core; this reads the owners'
@@ -119,39 +180,25 @@ export async function assertOwnerReach(
       throw new AppError(
         "VALIDATION_FAILED",
         de
-          ? "Dieses Asset kann nicht erstellt werden, weil ein Asset eines anderen Eigentümers darauf verweist. Ein Asset darf nur auf Assets im selben Arbeitsbereich oder in der Instanz verweisen."
-          : "This asset cannot be created because an asset of another owner references it. An asset may reference only assets of its own workspace or the instance.",
+          ? "Dieses Asset kann nicht erstellt werden, weil ein Asset eines anderen Eigentümers darauf verweist. Ein Asset darf nur auf Assets im selben Arbeitsbereich oder in der Instanz verweisen. Bitte einen Admin darum."
+          : "This asset cannot be created because an asset of another owner references it. An asset may reference only assets of its own workspace or the instance. Ask an admin.",
         { reason: "invalid_scope" }
       );
     }
     const personal =
       decided.target.kind === "workspace" && decided.target.workspaceKind !== "shared";
-    const ownerName = async (scope: AssetScope) => {
-      if (scope.kind === "instance") return de ? "Instanz" : "the instance";
-      const workspace = await workspaces(scope.workspaceId);
-      return de
-        ? `Arbeitsbereich '${workspace?.name ?? "unbekannt"}'`
-        : `workspace '${workspace?.name ?? "unknown"}'`;
-    };
-    const sourceName = await ownerName(source.scope);
-    const sourceOwner = de
-      ? `${source.scope.kind === "instance" ? "zur" : "zum"} ${sourceName}`
-      : sourceName;
-    const targetName = await ownerName(use.target.scope);
-    const target = `${assetKindLabel(use.target.kind, locale)} '${use.target.name}'`;
+    const targetLabel = `${assetKindLabel(use.target.kind, locale)} ${quoted(use.target.name, de)}`;
+    const sourceLabel = `${assetKindLabel(source.kind, locale)} ${quoted(source.name, de)}`;
     throw new AppError(
       "VALIDATION_FAILED",
-      de
-        ? `${label} gehört ${sourceOwner} und verweist auf ${target} im ${targetName}. ${
-            personal
-              ? `${target} liegt unter „Nur ich“, in einem persönlichen Arbeitsbereich: Was einem Team oder Allen gehört, darf sich nicht darauf stützen. Ein Asset darf nur auf Assets im selben Arbeitsbereich oder in der Instanz verweisen. Lege das in einem Team-Arbeitsbereich oder für Alle an, oder bitte einen Admin darum.`
-              : "Ein Asset darf nur auf Assets im selben Arbeitsbereich oder in der Instanz verweisen; ein Asset der Instanz darf nicht auf Assets eines Arbeitsbereichs verweisen."
-          }`
-        : `${label} owned by ${sourceOwner} references ${target} owned by ${targetName}. ${
-            personal
-              ? `${target} is in a Personal Workspace ("Only me"): what belongs to a team or to everyone may not rely on it. An asset may reference only assets of its own workspace or the instance. Create it in a Shared Workspace or for everyone, or ask an admin.`
-              : "An asset may reference only assets of its own workspace or the instance; an instance-owned asset cannot reference workspace assets."
-          }`,
+      referenceSentence(
+        { source: sourceLabel, target: targetLabel },
+        {
+          source: await placeOf(source.scope, workspaces),
+          target: await placeOf(use.target.scope, workspaces)
+        },
+        de
+      ),
       {
         reason: refusal,
         reference: {

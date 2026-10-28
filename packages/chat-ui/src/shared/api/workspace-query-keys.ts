@@ -164,6 +164,12 @@ export const workspaceQueryKeys = {
    */
   agentDraft: (apiBaseUrl: string, authScope: string, agent: string, workspaceId = "") =>
     ["assets", apiBaseUrl, authScope, "agent-draft", agent, workspaceId] as const,
+  /**
+   * Where a publish was asked to offer an agent and could not (OFFER-ON-PUBLISH). The page
+   * starts again from the agent after the publish, so this outlives the page that asked.
+   */
+  agentUnsetOffer: (apiBaseUrl: string, authScope: string, agent: string, workspaceId = "") =>
+    ["agent-unset-offer", apiBaseUrl, authScope, agent, workspaceId] as const,
   /** Every read of the Data Store pages: their state, tables, rows and what uses them. */
   dataStores: (apiBaseUrl: string) => ["data-store", apiBaseUrl] as const,
   administeredCollaborationWorkspaces: (apiBaseUrl: string, authScope: string) =>

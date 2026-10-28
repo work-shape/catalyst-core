@@ -463,9 +463,12 @@ export class AssetReadWorkflow {
         : {}),
       ...(target.kind.hasWorkspaceAvailability
         ? {
+            // A Personal Workspace's asset is offered nowhere beyond its owner (`ownerReachRefusal`),
+            // so there is nothing to set: its agents, subagents, Knowledge Bases and Connections.
             canSetAvailability:
               call.access.authorize(target.kind.actions.write).allowed &&
-              call.access.authorize(target.kind.actions.write, target.resource).allowed
+              call.access.authorize(target.kind.actions.write, target.resource).allowed &&
+              !(await this.inPersonalWorkspace(asset.scope))
           }
         : {}),
       ...(target.kind.kind === "agent" &&
@@ -491,6 +494,16 @@ export class AssetReadWorkflow {
       allowed,
       updatedAt: asset.updatedAt
     };
+  }
+
+  /** Whether an owner is a Personal Workspace, or a workspace of unknown kind. */
+  private async inPersonalWorkspace(scope: AssetScope): Promise<boolean> {
+    if (scope.kind !== "workspace") return false;
+    const workspace = await this.options.stores.workspaces.getWorkspace(
+      this.options.clientInstanceId,
+      scope.workspaceId
+    );
+    return workspace?.kind !== "shared";
   }
 
   private async agentStatus(config: unknown) {

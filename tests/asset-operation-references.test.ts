@@ -78,7 +78,7 @@ describe("a reference to an asset the caller may not read", () => {
     expect(await check(t.admin.id, "team-notes")).toEqual({
       valid: false,
       issues: [
-        `Agent 'kai-intake' owned by workspace 'Kai's team' references Skill 'team-notes' owned by workspace 'Team'. An asset may reference only assets of its own workspace or the instance; an instance-owned asset cannot reference workspace assets.`
+        `Skill "team-notes" belongs to the team "Team". Agent "kai-intake" belongs to the team "Kai's team" and so may not rely on it. Ask an admin.`
       ]
     });
     expect(await check(t.admin.id, "nowhere")).toEqual({

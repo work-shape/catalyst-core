@@ -90,6 +90,8 @@ async function missingDependencies(
   const missing: {
     asset: ConfigAssetRecord;
     current: AgentAvailability | undefined;
+    /** Owned by a Personal Workspace: never widened beyond its owner (`ownerReachRefusal`). */
+    personal: boolean;
     summary: MissingDependency;
   }[] = [];
   for (const reference of references) {
@@ -119,9 +121,17 @@ async function missingDependencies(
         : locale === "de"
           ? "Wissensbasis"
           : "Knowledge Base";
+    const owner =
+      asset.scope.kind === "workspace"
+        ? await options.stores.workspaces.getWorkspace(
+            options.clientInstanceId,
+            asset.scope.workspaceId
+          )
+        : undefined;
     missing.push({
       asset,
       current,
+      personal: asset.scope.kind === "workspace" && owner?.kind !== "shared",
       summary: {
         ...reference,
         displayName: label ?? asset.name,
@@ -141,7 +151,11 @@ export async function agentDependencyAvailability(
   config: unknown,
   wanted: AgentAvailability | undefined
 ): Promise<NonNullable<Asset["dependencyAvailability"]>> {
-  const missing = await missingDependencies(options, call, config, wanted);
+  // What a Personal Workspace owns is offered to no one else, so there is no step to take on it
+  // here: the page shows no choice to make it available, and no admin to ask.
+  const missing = (await missingDependencies(options, call, config, wanted)).filter(
+    ({ personal }) => !personal
+  );
   const administrator = missing.length
     ? await options.stores.users.getInstanceAdminName({
         clientInstanceId: options.clientInstanceId

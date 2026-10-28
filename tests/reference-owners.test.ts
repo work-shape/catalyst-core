@@ -20,6 +20,7 @@ import { withTestSql } from "./support/test-sql";
 
 import { auth, kb, put, seed, store, writerHeaders } from "./support/reference-owners";
 
+const quote = (name: string, de: boolean) => (de ? `„${name}“` : `"${name}"`);
 const names = z.object({ items: z.array(z.object({ name: z.string() })) });
 
 describe("asset reference owners through the assembled API", () => {
@@ -69,21 +70,32 @@ describe("asset reference owners through the assembled API", () => {
               owner: { kind: "workspace", workspaceId: workspace.id }
             }
           });
-          expect(error.message).toContain(workspace.name);
           expect(error.message).not.toContain(workspace.id);
-          expect(error.message).toContain(
-            owner ? other.name : locale === "de" ? "zur Instanz" : "the instance"
-          );
-          if (locale === "de") {
-            expect(error.message).toContain(
-              owner ? `gehört zum Arbeitsbereich '${other.name}'` : "gehört zur Instanz"
-            );
-            expect(error.message).toContain(`im Arbeitsbereich '${workspace.name}'`);
-            if (kind === "agent") expect(error.message).toContain("Wissensbasis");
-          }
-          expect(error.message).toContain(
-            locale === "de" ? "im selben Arbeitsbereich" : "own workspace or the instance"
-          );
+          // Where each sits and the next step, in the caller's words.
+          const de = locale === "de";
+          const used = kind === "agent" ? "ws-a-kb" : "ws-a-store";
+          const target =
+            kind === "agent"
+              ? `${de ? "Wissensbasis" : "Knowledge Base"} ${quote("ws-a-kb", de)}`
+              : `${de ? "Datenspeicher" : "Data Store"} ${quote("ws-a-store", de)}`;
+          const source = `${
+            kind === "agent" ? "Agent" : de ? "Wissensbasis" : "Knowledge Base"
+          } ${quote("outside", de)}`;
+          const facts = de
+            ? `${target} gehört zum Team ${quote(workspace.name, de)}. ${source} ${
+                owner ? `gehört zum Team ${quote(other.name, de)}` : "ist für Alle"
+              } und darf sich darum nicht darauf stützen.`
+            : `${target} belongs to the team ${quote(workspace.name, de)}. ${source} ${
+                owner ? `belongs to the team ${quote(other.name, de)}` : "is for everyone"
+              } and so may not rely on it.`;
+          const next = owner
+            ? de
+              ? "Bitte einen Admin darum."
+              : "Ask an admin."
+            : de
+              ? `Teile ${target} über „Teilen…“ mit Allen, oder bitte einen Admin darum.`
+              : `Share ${target} with everyone using "Share…", or ask an admin.`;
+          expect(error.message, used).toBe(`${facts} ${next}`);
         }
     });
 

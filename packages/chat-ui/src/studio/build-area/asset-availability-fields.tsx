@@ -69,9 +69,13 @@ interface AvailabilityEdit {
   discard(): void;
 }
 
-export function useAvailabilityEdit(choice: AvailabilityChoice | undefined): AvailabilityEdit {
+export function useAvailabilityEdit(
+  choice: AvailabilityChoice | undefined,
+  /** A choice the reader made that was not saved: the form starts from it. */
+  unsaved?: AgentAvailabilityForm
+): AvailabilityEdit {
   const saved = useMemo(() => agentAvailabilityToForm(choice?.saved), [choice?.saved]);
-  const [form, setForm] = useState(saved);
+  const [form, setForm] = useState(unsaved ?? saved);
   const [makeDependenciesAvailable, setMakeDependenciesAvailable] = useState(false);
   // A save made elsewhere on the page, such as a publish that offers the agent, moves an
   // untouched form along; a form the reader changed keeps what they chose.
