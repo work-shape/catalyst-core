@@ -7,6 +7,6 @@ section: Added
   - **What moves:** what the asset uses from its owner moves with it.
   - **Edit rights:** they follow the new place. The move drops grants to change the moved assets, and drops read or use grants that reach beyond the new place's readers. It also drops what a moved Workflow's run account held at the old place.
   - **Refusals:** each one names its reason in a plain sentence.
-  - **Direct or by request:** with the write right at the target, the move happens at once. Without it, the move files a `<kind>_move` approval request. Someone who holds that right accepts or declines it in the Inbox. When the request is decided, the requester is checked again: they must still be active, a member of the target team and the owner of the Personal Workspace.
+  - **Direct or by request:** with the write right at the target, the move happens at once. Without it, the move files a `<kind>_move` approval request. Someone who holds that right accepts or declines it in the Inbox. When the request is decided, the requester is checked again: they must still be active, a member of the target team, the owner of the Personal Workspace, or, from a team, allowed to change everything that goes along.
   - **Dry run:** `assets.move_check` answers what moves, what breaks, which grants go, whose data goes along, and who reads and edits it afterwards.
   - **Audit:** the move records `asset.moved` with ids only, in one transaction with the owner change, or with the decision of the request.

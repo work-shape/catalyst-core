@@ -604,6 +604,53 @@ describe("a request decided after its requester changed", () => {
     expect(await movedEvents(t)).toEqual([]);
   });
 
+  it("ends it without moving when the requester may no longer change an asset that goes along", async () => {
+    const { t, team } = await places();
+    await applyAtCurrentRevisions(t.stores.configAssets, {
+      clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "skill",
+          name: "team-skill",
+          config: skill("team-skill"),
+          scope: { kind: "workspace", workspaceId: team }
+        },
+        {
+          type: "upsert",
+          kind: "agent",
+          name: "team-agent",
+          config: agent("team-agent", { skillNames: ["team-skill"] }),
+          scope: { kind: "workspace", workspaceId: team }
+        }
+      ]
+    });
+    const grants = new Map<string, string>();
+    for (const action of ["agent.read", "agent.write", "skill.read", "skill.write"])
+      grants.set(action, await t.grant(t.kai.id, action, { workspaceId: team }));
+    const filed = await move(t, t.kai.id, "agent", "team-agent", team, { kind: "instance" });
+    const requestId = z.string().parse(moveSchema.parse(filed.json()).requestId);
+    // After filing, Kai may no longer change the skill that goes along with the agent.
+    await t.stores.access.deleteGrant({
+      clientInstanceId,
+      grantId: z.string().parse(grants.get("skill.write"))
+    });
+    const decided = await t.expectOk(t.admin.id, "approval_requests.decide", {
+      params: { requestId },
+      payload: { decision: "approve" }
+    });
+    expect(decided.json()).toMatchObject({
+      status: "superseded",
+      applyResult: { reason: "move_requester_source_right" }
+    });
+    for (const [kind, name] of [
+      ["agent", "team-agent"],
+      ["skill", "team-skill"]
+    ] as const)
+      expect(await scopeOf(t, kind, name)).toEqual({ kind: "workspace", workspaceId: team });
+    expect(await movedEvents(t)).toEqual([]);
+  });
+
   it("ends it without moving when the requester's account is disabled", async () => {
     const p = await places();
     const { t, mine } = p;

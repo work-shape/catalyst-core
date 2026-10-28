@@ -8,6 +8,8 @@ import {
   assetOwnerRung,
   assetScopesEqual,
   auditActorFromIdentity,
+  authenticatedUserFromRecord,
+  createAuthorizer,
   isAuthenticatedServicePrincipal,
   ownerReachRefusal,
   type AccessAdministrationStore,
@@ -24,6 +26,7 @@ import {
   type AuditActor,
   type AuditEventStore,
   type AuthenticatedIdentity,
+  type Authorizer,
   type ClientInstanceId,
   type CollaborationWorkspace,
   type CollaborationWorkspaceStore,
@@ -68,6 +71,8 @@ export interface AssetMoveOptions {
   stores: PlatformStores;
   kinds: AssetKindRegistry<WorkflowAssetKind>;
   modules: ModuleSnapshot;
+  /** Who may do what; a request's requester is asked again when it is decided. */
+  authorizer?: Authorizer;
   /** The approval kinds of the instance: a member with one of them open is not moved. */
   approvalKinds(): readonly string[];
 }
@@ -362,35 +367,45 @@ function requireMoveSource(
       );
     return;
   }
-  for (const { kind, record } of plan.members) {
+  const missing = unchangeableMember(plan, access);
+  if (missing)
+    throw new AppError(
+      "FORBIDDEN",
+      de
+        ? `Du darfst ${assetKindLabel(missing.kind.kind, plan.locale)} „${missing.record.name}“ nicht ändern, und es geht mit. Teilen kann nur, wer alles ändern darf, was mitgeht.`
+        : `You may not change ${assetKindLabel(missing.kind.kind, plan.locale)} "${missing.record.name}", and it goes along. Only who may change everything that goes along can share it.`,
+      {
+        reason: "move_source_right",
+        action: missing.kind.actions.write,
+        asset: { kind: missing.kind.kind, name: missing.record.name }
+      }
+    );
+}
+
+/** The first asset that goes along which this access may not change where it lies. */
+function unchangeableMember(
+  plan: Pick<AssetMovePlan, "from" | "members">,
+  access: ActorAccess
+): MoveMember | undefined {
+  return plan.members.find(({ kind, record }) => {
     const resource: AccessResource = {
       kind: kind.kind,
       name: record.name,
       assetId: record.id,
       ...(plan.from.kind === "workspace" ? { workspaceId: plan.from.workspaceId } : {})
     };
-    if (!access.authorize(kind.actions.write, resource).allowed)
-      throw new AppError(
-        "FORBIDDEN",
-        de
-          ? `Du darfst ${assetKindLabel(kind.kind, plan.locale)} „${record.name}“ nicht ändern, und es geht mit. Teilen kann nur, wer alles ändern darf, was mitgeht.`
-          : `You may not change ${assetKindLabel(kind.kind, plan.locale)} "${record.name}", and it goes along. Only who may change everything that goes along can share it.`,
-        {
-          reason: "move_source_right",
-          action: kind.actions.write,
-          asset: { kind: kind.kind, name: record.name }
-        }
-      );
-  }
+    return !access.authorize(kind.actions.write, resource).allowed;
+  });
 }
 
 /**
  * Why a request filed by this person no longer moves anything when it is decided: their
- * account is no longer active, they left the team it goes to, or the Personal Workspace it
- * comes from is no longer theirs. Undefined while they still could have moved it.
+ * account is no longer active, the Personal Workspace it comes from is no longer theirs, they
+ * may no longer change everything that goes from a team, or they left the team it goes to.
+ * Undefined while they still could have moved it, as `requireMoveSource` asks it at filing.
  */
 export async function requesterRefusal(
-  options: Pick<AssetMoveOptions, "clientInstanceId" | "stores">,
+  options: Pick<AssetMoveOptions, "clientInstanceId" | "stores" | "authorizer">,
   plan: AssetMovePlan,
   requesterId: string
 ): Promise<{ reason: string; message: string } | undefined> {
@@ -417,6 +432,23 @@ export async function requesterRefusal(
         ? "Der persönliche Arbeitsbereich, aus dem geteilt werden sollte, gehört nicht mehr der Person, die angefragt hat. Es wurde nichts geteilt."
         : "The Personal Workspace it was to be shared from no longer belongs to the person who asked. Nothing was shared."
     };
+  if (assetOwnerRung(plan.fromReach) !== "personal") {
+    const requester = authenticatedUserFromRecord({
+      user,
+      identity: { authSource: "approval-decision", externalUserId: user.id }
+    });
+    const access = await (options.authorizer ?? createAuthorizer(options.stores.access)).forActor(
+      requester
+    );
+    const missing = unchangeableMember(plan, access);
+    if (missing)
+      return {
+        reason: "move_requester_source_right",
+        message: de
+          ? `Die Person, die angefragt hat, darf ${assetKindLabel(missing.kind.kind, plan.locale)} „${missing.record.name}“ nicht mehr ändern, und es geht mit. Es wurde nichts geteilt.`
+          : `The person who asked may no longer change ${assetKindLabel(missing.kind.kind, plan.locale)} "${missing.record.name}", and it goes along. Nothing was shared.`
+      };
+  }
   if (
     plan.to.kind === "workspace" &&
     !(await options.stores.workspaces.getMembership({
