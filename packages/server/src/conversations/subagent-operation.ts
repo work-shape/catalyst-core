@@ -6,6 +6,7 @@ import {
   type ClientInstanceId,
   type CollaborationWorkspaceId,
   type ConfigAssetSource,
+  type ConversationId,
   type OperationDefinition,
   type OperationRegistry,
   type PlatformStores,
@@ -29,13 +30,15 @@ export interface SubagentOperationOptions {
   assetSource: ConfigAssetSource;
   /**
    * Whether a person may use an agent in a workspace now: the rule a new run starts under,
-   * availability and `agent.use` (AGENT-USE-1). A refusal of `agent.use` is recorded.
+   * availability and `agent.use` (AGENT-USE-1). A refusal of `agent.use` is recorded. With the
+   * root chat, the actor's own agent ("Nur ich") counts as available in a chat only they read.
    */
   agentAvailable(input: {
     agentName: string;
     workspaceId: CollaborationWorkspaceId;
     actor: AuthenticatedIdentity;
     correlationId: string;
+    conversationId?: ConversationId;
   }): Promise<boolean>;
 }
 
@@ -110,7 +113,10 @@ export function subagentOperation(
           agentName,
           workspaceId: root.collaborationWorkspaceId,
           actor: context.actor,
-          correlationId: context.correlationId
+          correlationId: context.correlationId,
+          // The subagent's thread belongs to this chat, so a person's own agent that runs
+          // itself there is judged by the chat's audience. Another agent it names never is.
+          ...(agentName === parent.agentName ? { conversationId: root.id } : {})
         }))
       ) {
         return refused(
