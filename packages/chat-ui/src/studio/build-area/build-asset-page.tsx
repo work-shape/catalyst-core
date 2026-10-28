@@ -52,6 +52,7 @@ import { readBuildRefusal, readRefusalDetails, type BuildWriteOutcome } from "./
 import { AGENT_ASSET_KIND, type BuildRights } from "../../shared/build-rights";
 import {
   AssetPlaceLine,
+  AVAILABILITY_SECTION_ID,
   agentAudience,
   assetPlace,
   refusalPlaceOf,
@@ -609,13 +610,18 @@ function LoadedAssetPage({
       : place.rung === "all"
         ? t("build.readOnlyInstance")
         : t("build.readOnly");
-  // Where the asset sits and, for an agent offered more narrowly, who uses it: in the head.
+  // Where the asset sits and, for an agent, where a chat can choose it: in the head. Where no
+  // chat can, the chip leads a reader who may change that to the "Available in" section.
+  const audience =
+    entry.kind === AGENT_ASSET_KIND ? agentAudience(stored, workspaces, t, locale) : undefined;
+  const maySetAvailability = stored.canSetAvailability ?? source.rights.instanceWrite;
   const placeLine = (
     <AssetPlaceLine
       owner={stored.scope}
-      audience={
-        entry.kind === AGENT_ASSET_KIND ? agentAudience(stored, workspaces, t, locale) : undefined
-      }
+      audience={audience?.text}
+      {...(audience?.nowhere && maySetAvailability && !shipped
+        ? { audienceTo: AVAILABILITY_SECTION_ID }
+        : {})}
     />
   );
   const refusalPlace = refusalPlaceOf(workspaces);
