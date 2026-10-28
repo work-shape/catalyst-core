@@ -540,6 +540,12 @@ export function useWorkspaceChatModel({
     authScope: WORKSPACE_AUTH_SCOPE,
     client,
     selectedConversationId,
+    projectId: projectsEnabled
+      ? threadQuery.data?.conversation.id === selectedConversationId
+        ? (threadQuery.data?.conversation.projectId ?? undefined)
+        : undefined
+      : undefined,
+    translation: createTranslationContext(activeLocale),
     collaborationWorkspaceId: activeCollaborationWorkspaceId,
     isAuthenticated,
     createConversationForFiles,

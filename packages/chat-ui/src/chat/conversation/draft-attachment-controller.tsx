@@ -6,8 +6,10 @@ import {
   type ApiClient,
   type DraftAttachment
 } from "@work-shape/catalyst-api-client";
+import { invalidateProjectFiles } from "../../shared/api/project-files";
 import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
+import { projectUploadRefusalText, unpackZipIntoProject } from "../projects/project-zip-upload";
 import type { LocalUploadingAttachment } from "../assistant/assistant-composer";
 
 export interface DraftAttachmentControllerInput {
@@ -16,6 +18,13 @@ export interface DraftAttachmentControllerInput {
   authScope: string;
   client: ApiClient;
   selectedConversationId: string | undefined;
+  /** The project the open conversation belongs to: a .zip handed to it is unpacked there. */
+  projectId?: string;
+  /**
+   * The words of the interface's language, where the hook runs above the provider that holds it,
+   * as the workspace's chat model does.
+   */
+  translation?: TranslationContextValue;
   agentName?: string;
   /** The open workspace; files waiting for a first message belong to it. */
   collaborationWorkspaceId: string | undefined;
@@ -68,7 +77,8 @@ export function useDraftAttachmentController(
   input: DraftAttachmentControllerInput
 ): DraftAttachmentController {
   const queryClient = useQueryClient();
-  const { t } = useTranslation();
+  const provided = useTranslation();
+  const { t, locale } = input.translation ?? provided;
   const uploadLimiter = useRef(createConcurrencyLimiter(MAX_CONCURRENT_UPLOADS));
   const [localUploadingAttachments, setLocalUploadingAttachments] = useState<
     LocalUploadingConversationAttachment[]
@@ -142,15 +152,68 @@ export function useDraftAttachmentController(
       stageFiles(selectedFiles);
       return;
     }
+    // In a chat of a project a .zip is a folder of the project, not a file of the message.
+    const projectId = input.projectId;
+    const archives = projectId ? selectedFiles.filter(isZipFile) : [];
+    if (projectId) {
+      for (const archive of archives) {
+        unpackZip(conversationId, projectId, archive).catch(() => undefined);
+      }
+    }
     try {
-      const acceptedFiles = selectedFiles.filter((file) =>
-        shouldUploadFile(file, draftAttachments, localUploadingAttachments)
+      const acceptedFiles = selectedFiles.filter(
+        (file) =>
+          !archives.includes(file) &&
+          shouldUploadFile(file, draftAttachments, localUploadingAttachments)
       );
       for (const file of acceptedFiles) {
         void startUpload(conversationId, file);
       }
     } catch (error) {
       input.onError(error instanceof ApiError ? error.message : "File upload failed");
+    }
+  }
+
+  /**
+   * Unpacks a .zip into a folder of the conversation's project. It shows as an upload while it
+   * is read, so the message waits for it; nothing of it is attached to the message.
+   */
+  async function unpackZip(conversationId: string, projectId: string, zip: File): Promise<void> {
+    const localId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}:${zip.name}`;
+    setLocalUploadingAttachments((current) => [
+      ...current,
+      {
+        id: localId,
+        conversationId,
+        filename: zip.name,
+        byteSize: zip.size,
+        mimeType: zip.type || undefined,
+        status: "uploading"
+      }
+    ]);
+    try {
+      const outcome = await unpackZipIntoProject({
+        client: input.client,
+        projectId,
+        zip,
+        heldMessage: t("projectFiles.held"),
+        confirmReplace: (paths) =>
+          window.confirm(t("projectFiles.zipReplace", { count: paths.length }))
+      });
+      if (outcome.status === "refused") {
+        input.onError(projectUploadRefusalText(outcome.refusal, t, locale));
+      }
+    } catch (error) {
+      input.onError(
+        error instanceof ApiError && error.message
+          ? `${zip.name}: ${error.message}`
+          : t("projectFiles.zipFailed", { name: zip.name })
+      );
+    } finally {
+      invalidateProjectFiles(queryClient, input.apiBaseUrl, projectId);
+      setLocalUploadingAttachments((current) =>
+        current.filter((attachment) => attachment.id !== localId)
+      );
     }
   }
 
@@ -564,6 +627,10 @@ function getSendBlockedReason(
     return "Wait for file processing to finish before sending.";
   }
   return undefined;
+}
+
+function isZipFile(file: File): boolean {
+  return /\.zip$/iu.test(file.name);
 }
 
 function shouldUploadFile(

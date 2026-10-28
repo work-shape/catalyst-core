@@ -29,12 +29,13 @@ import {
   expandProjectUploads,
   formatProjectBytes,
   pickedUploads,
-  projectFileName,
+  projectUploadCaps,
   runLimited,
   takenUploadPaths,
   type ProjectUpload,
   type ProjectUploadRefusal
 } from "./project-files-model";
+import { projectUploadRefusalText } from "./project-zip-upload";
 
 /** Uploads into a project run this many at a time. */
 const PROJECT_UPLOADS_AT_ONCE = 2;
@@ -85,25 +86,8 @@ export function ProjectFilesSection({
     taken: Map<string, number>;
   }>();
 
-  const refusalText = (refused: ProjectUploadRefusal): string => {
-    const max = (bytes: number) => formatProjectBytes(bytes, locale);
-    switch (refused.limit) {
-      case "files":
-        return t("projectFiles.refusedFiles", { count: refused.count, max: refused.max });
-      case "file_bytes":
-        return t("projectFiles.refusedFileBytes", {
-          name: projectFileName(refused.path),
-          max: max(refused.max)
-        });
-      case "project_bytes":
-        return t("projectFiles.refusedProjectBytes", {
-          bytes: max(refused.bytes),
-          max: max(refused.max)
-        });
-      case "unreadable":
-        return t("projectFiles.refusedUnreadable", { name: projectFileName(refused.path) });
-    }
-  };
+  const refusalText = (refused: ProjectUploadRefusal): string =>
+    projectUploadRefusalText(refused, t, locale);
 
   const setRow = (id: string, row: Partial<UploadRow>) =>
     setUploads((rows) =>
@@ -144,13 +128,14 @@ export function ProjectFilesSection({
     setRefusal(undefined);
     setReading(true);
     try {
-      const expanded = await expandProjectUploads(await read);
+      const current = files.data;
+      if (!current) return;
+      const expanded = await expandProjectUploads(await read, projectUploadCaps(current));
       if (!expanded.ok) {
         setRefusal(refusalText(expanded.refusal));
         return;
       }
-      const current = files.data;
-      if (expanded.uploads.length === 0 || !current) return;
+      if (expanded.uploads.length === 0) return;
       const refused = checkProjectUploads(expanded.uploads, {
         usage: current.usage,
         limits: current.limits,

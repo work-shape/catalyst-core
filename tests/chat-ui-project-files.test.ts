@@ -18,6 +18,25 @@ import {
 // against the project's caps before anything is read; a .zip is unpacked into a folder of its
 // name; a write of the agent leaves a line with its change.
 
+const roomy = { maxFileBytes: 1_000_000, maxProjectBytes: 10_000_000, usedBytes: 0 };
+
+/** A .zip whose entry declares `declared` bytes while it inflates to what `content` is. */
+async function zipDeclaring(name: string, content: string, declared: number): Promise<ArrayBuffer> {
+  const zip = new JSZip();
+  zip.file(name, content, { compression: "DEFLATE" });
+  const bytes = await zip.generateAsync({ type: "uint8array" });
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  for (let at = 0; at < bytes.length - 4; at += 1) {
+    // The local header declares the size at 22, the central directory's at 24.
+    const signature = view.getUint32(at, true);
+    if (signature === 0x04034b50) view.setUint32(at + 22, declared, true);
+    if (signature === 0x02014b50) view.setUint32(at + 24, declared, true);
+  }
+  const copy = new ArrayBuffer(bytes.length);
+  new Uint8Array(copy).set(bytes);
+  return copy;
+}
+
 const limits = {
   maxFiles: 3,
   maxFileBytes: 100,
@@ -116,7 +135,7 @@ describe("uploads into a project", () => {
       size: bytes.byteLength,
       read: () => Promise.resolve(new File([bytes], "Unterlagen.zip"))
     };
-    const expanded = await expandProjectUploads([archive, upload("plain.txt", 3)]);
+    const expanded = await expandProjectUploads([archive, upload("plain.txt", 3)], roomy);
     expect(expanded.ok).toBe(true);
     if (!expanded.ok) return;
     expect(expanded.uploads.map((entry) => [entry.path, entry.size]).sort()).toEqual([
@@ -134,10 +153,90 @@ describe("uploads into a project", () => {
       size: 3,
       read: () => Promise.resolve(new File(["abc"], "broken.zip"))
     };
-    expect(await expandProjectUploads([broken])).toEqual({
+    expect(await expandProjectUploads([broken], roomy)).toEqual({
       ok: false,
       refusal: { limit: "unreadable", path: "broken.zip" }
     });
+  });
+
+  it("does not take an entry that ends at another size than it declares", async () => {
+    const bytes = await zipDeclaring("a.txt", "x".repeat(900), 3);
+    const expanded = await expandProjectUploads(
+      [
+        {
+          path: "lie.zip",
+          size: bytes.byteLength,
+          read: () => Promise.resolve(new File([bytes], "lie.zip"))
+        }
+      ],
+      roomy
+    );
+    expect(expanded).toEqual({ ok: false, refusal: { limit: "unreadable", path: "lie.zip" } });
+  });
+
+  it("stops an entry that declares less than it inflates at the file cap", async () => {
+    const bytes = await zipDeclaring("a.txt", "x".repeat(50_000), 3);
+    const expanded = await expandProjectUploads(
+      [
+        {
+          path: "bomb.zip",
+          size: bytes.byteLength,
+          read: () => Promise.resolve(new File([bytes], "bomb.zip"))
+        }
+      ],
+      { ...roomy, maxFileBytes: 100 }
+    );
+    expect(expanded).toMatchObject({
+      ok: false,
+      refusal: { limit: "file_bytes", path: "bomb/a.txt", max: 100 }
+    });
+    if (!expanded.ok && expanded.refusal.limit === "file_bytes") {
+      expect(expanded.refusal.size).toBeGreaterThan(100);
+    }
+  });
+
+  it("stops an archive whose entries together pass what the project may still hold", async () => {
+    const zip = new JSZip();
+    zip.file("a.txt", "x".repeat(60));
+    zip.file("b.txt", "x".repeat(60));
+    const bytes = await zip.generateAsync({ type: "arraybuffer" });
+    const expanded = await expandProjectUploads(
+      [
+        {
+          path: "two.zip",
+          size: bytes.byteLength,
+          read: () => Promise.resolve(new File([bytes], "two.zip"))
+        }
+      ],
+      { maxFileBytes: 100, maxProjectBytes: 250, usedBytes: 150 }
+    );
+    expect(expanded).toMatchObject({
+      ok: false,
+      refusal: { limit: "project_bytes", max: 250 }
+    });
+  });
+
+  it("refuses a .zip with an entry that climbs out of its folder", async () => {
+    for (const name of ["../evil.txt", "docs/../../evil.txt", "docs/..\\evil.txt"]) {
+      const zip = new JSZip();
+      zip.file("fine.txt", "ok");
+      zip.file(name, "bad");
+      const bytes = await zip.generateAsync({ type: "arraybuffer" });
+      const expanded = await expandProjectUploads(
+        [
+          {
+            path: "Ordner.zip",
+            size: bytes.byteLength,
+            read: () => Promise.resolve(new File([bytes], "Ordner.zip"))
+          }
+        ],
+        roomy
+      );
+      expect(expanded, name).toEqual({
+        ok: false,
+        refusal: { limit: "unsafe_path", path: "Ordner.zip" }
+      });
+    }
   });
 
   it("names the folder of a .zip without its extension", () => {
