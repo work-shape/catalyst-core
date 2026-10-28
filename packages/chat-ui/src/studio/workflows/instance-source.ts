@@ -316,6 +316,15 @@ function ownersOf(client: WorkflowsClient): Map<string, string | undefined> {
   return known;
 }
 
+/** An explicit move supersedes the owner learned by earlier reads of this Workflow. */
+export function rememberWorkflowOwner(
+  client: WorkflowsClient,
+  workflow: string,
+  workspaceId: string | undefined
+): void {
+  ownersOf(client).set(workflow, workspaceId);
+}
+
 /**
  * The source of an instance. The list joins engine start/run summaries with asset rights,
  * including Workflows held by write or publish alone. A definition is read as an asset.
