@@ -497,6 +497,35 @@ describe("Data Stores in Build", () => {
     );
   });
 
+  it("marks a row whose draft waits to be published with the draft badge of the other lists, and drops it once published (T21)", () => {
+    const rows = {
+      // Saved after the last publish: the draft waits.
+      waiting: storeRow("waiting", { revision: 3, draftRevision: 3, publishedRevision: 2 }),
+      // Published: the draft is the published revision.
+      published: storeRow("published", { revision: 3, draftRevision: 3, publishedRevision: 3 }),
+      // Never published: its own badge says so, not the draft-ahead one.
+      fresh: storeRow("fresh", { revision: 1, draftRevision: 1 })
+    };
+    const marked = (locale: "en" | "de", name: keyof typeof rows): boolean => {
+      const list = render({ kindPath: "data-stores" }, { list: Object.values(rows), locale });
+      const row = list.slice(list.indexOf(`href="/build/data-stores/${name}"`));
+      const next = row.indexOf('href="/build/data-stores/', 10);
+      return (next < 0 ? row : row.slice(0, next)).includes("data-build-draft-state");
+    };
+    expect(marked("en", "waiting")).toBe(true);
+    expect(marked("en", "published")).toBe(false);
+    expect(marked("en", "fresh")).toBe(false);
+    expect(marked("de", "waiting")).toBe(true);
+    const german = render({ kindPath: "data-stores" }, { list: [rows.waiting], locale: "de" });
+    expect(german).toContain(">Entwurf<");
+    expect(render({ kindPath: "data-stores" }, { list: [rows.waiting], locale: "en" })).toContain(
+      ">Draft<"
+    );
+    expect(render({ kindPath: "data-stores" }, { list: [rows.fresh], locale: "de" })).toContain(
+      "Entwurf · nicht veröffentlicht"
+    );
+  });
+
   it("offers whoever New opens the agent for the agent with two examples on the empty list, and tells everybody else what a store is", () => {
     const builder = render({ kindPath: "data-stores" }, { buildWithAgent: noop });
     expect(builder).toContain("Describe one to the agent, and its first save creates it.");

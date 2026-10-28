@@ -37,6 +37,13 @@ export function dataStoreNeverPublished(
   return asset.draftRevision !== undefined && asset.publishedRevision === undefined;
 }
 
+/** Whether a draft was saved after the last publish and waits to be published. */
+export function dataStoreDraftAhead(
+  asset: Pick<BuildAssetViewProps["asset"], "draftRevision" | "publishedRevision" | "revision">
+): boolean {
+  return asset.draftRevision !== undefined && asset.revision !== asset.publishedRevision;
+}
+
 /**
  * The page of a Data Store never published: there is no database yet, so nothing of its state,
  * its tables or its rows can be read. It says so, says in words what the store will hold as

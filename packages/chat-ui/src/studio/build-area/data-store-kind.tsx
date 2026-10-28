@@ -7,7 +7,7 @@ import {
   dataStoreStateView,
   formatDataStoreSize
 } from "./data-store-model";
-import { dataStoreNeverPublished } from "./data-store-draft";
+import { dataStoreDraftAhead, dataStoreNeverPublished } from "./data-store-draft";
 import { DataStorePage } from "./data-store-page";
 import {
   serverConditionsShown,
@@ -176,6 +176,13 @@ export function dataStoreKindOn(useSource: () => DataStoreSource): BuildListedKi
             <DataStoreRowState name={asset.name} useSource={useSource} />
             <DataStoreRowMeasured name={asset.name} useSource={useSource} />
             <DataStoreRowApps name={asset.name} useSource={useSource} />
+            {/* The draft badge of the other lists: a draft saved after the last publish waits,
+                whatever the store's state says. */}
+            {dataStoreDraftAhead(asset) ? (
+              <Badge tone="warning" data-build-draft-state="">
+                {t("build.draftAhead")}
+              </Badge>
+            ) : null}
           </>
         )}
       </>
