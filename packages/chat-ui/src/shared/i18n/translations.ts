@@ -62,6 +62,7 @@ import { settings } from "./settings";
 import { signIn } from "./sign-in";
 import { skillFiles } from "./skill-files";
 import { skillImport } from "./skill-import";
+import { skillMyChats } from "./skill-my-chats";
 import { questions } from "./questions";
 import { subagents } from "./subagents";
 import { tools } from "./tools";
@@ -140,6 +141,7 @@ export const translations = combineTranslations(common)
   .and(signIn)
   .and(skillFiles)
   .and(skillImport)
+  .and(skillMyChats)
   .and(questions)
   .and(subagents)
   .and(tools)

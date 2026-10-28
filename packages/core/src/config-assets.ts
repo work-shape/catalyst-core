@@ -921,4 +921,29 @@ export interface ConfigAssetStore {
     use: AgentUse;
     expectedAssetId?: string;
   }): Promise<AgentUse>;
+  /**
+   * The active skills of one person's Personal Workspace, each with whether the person uses it
+   * in their own chats with every agent (SCOPE-MYCHATS). Nobody else's skill is in it: the
+   * owner is read from the workspace, never from the caller's word.
+   */
+  listPersonalChatSkills(input: {
+    clientInstanceId: ClientInstanceId;
+    userId: string;
+  }): Promise<PersonalChatSkill[]>;
+  /**
+   * Switches one skill of the person's Personal Workspace on or off for their own chats.
+   * Throws `NOT_FOUND` for any other skill, one of another person's included.
+   */
+  setPersonalChatSkill(input: {
+    clientInstanceId: ClientInstanceId;
+    userId: string;
+    skillName: string;
+    inMyChats: boolean;
+  }): Promise<PersonalChatSkill>;
+}
+
+/** A skill of a person's Personal Workspace, and whether their own chats use it. */
+export interface PersonalChatSkill {
+  name: string;
+  inMyChats: boolean;
 }

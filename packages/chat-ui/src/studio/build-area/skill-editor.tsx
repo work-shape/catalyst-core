@@ -10,6 +10,7 @@ import type { BuildAssetEditorProps } from "./build-asset-kind";
 import { refusalsOf } from "./build-refusals";
 import { SkillFileList, SkillFilePane, type SkillFileSelection } from "./skill-files";
 import { SkillReplaceDialog } from "./skill-import";
+import { useSkillMyChats } from "./skill-my-chats";
 import {
   clearSkillReplaceRequest,
   requestedSkillReplace,
@@ -59,6 +60,7 @@ export function SkillEditor({
   const [readAttempt, setReadAttempt] = useState(0);
   const editable = frame.canWrite && instanceEditable;
   const { folder } = frame;
+  const myChats = useSkillMyChats(frame);
   // "Replace from folder" is open, with the folder an import handed over where it found the
   // skill's address taken.
   const [replacing, setReplacing] = useState<{ initial?: SkillImport } | undefined>(() => {
@@ -231,6 +233,7 @@ export function SkillEditor({
         </>
       )
     },
+    ...(myChats.section ? [myChats.section] : []),
     {
       id: "files",
       label: t("skillFiles.title"),
@@ -298,7 +301,16 @@ export function SkillEditor({
       frame={{ ...frame, canWrite: editable }}
       title={form.title.trim() || form.name || t("configNewSkill")}
       description={form.summary.trim()}
-      badges={badges}
+      badges={
+        myChats.badge ? (
+          <>
+            {badges}
+            {myChats.badge}
+          </>
+        ) : (
+          badges
+        )
+      }
       headActions={
         editable && folder !== undefined && frame.asset !== undefined
           ? [

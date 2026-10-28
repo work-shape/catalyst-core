@@ -108,6 +108,10 @@ function appToolNames(hasTool: (toolName: string) => boolean): string[] {
 interface ConversationOfferInput {
   stores: {
     conversations: Pick<PlatformStores["conversations"], "getConversation">;
+    /** The run an offer is for: whether it is its person's own (SCOPE-MYCHATS). */
+    agentRuns?: Pick<PlatformStores["agentRuns"], "getAgentRun">;
+    /** The skills a person switched on for their own chats (SCOPE-MYCHATS). */
+    configAssets?: Pick<PlatformStores["configAssets"], "listPersonalChatSkills">;
     /** A person's own settings: a tool they set to Never is not offered to their runs (OP-6). */
     userOperationSettings?: Pick<PlatformStores["userOperationSettings"], "list">;
   };
@@ -169,9 +173,62 @@ async function withheldToolNames(
   });
 }
 
+type OfferRequest = Parameters<ConversationOfferSource["offerOf"]>[0];
+type OfferedConversation = NonNullable<
+  Awaited<ReturnType<ConversationOfferInput["stores"]["conversations"]["getConversation"]>>
+>;
+
+/**
+ * The skills the run's person switched on for their own chats (SCOPE-MYCHATS): only for a run
+ * of a chat that its owner started themself in a first-party session, as the stored run records
+ * it, and that acts for that person now. A run of another member of the conversation gets that
+ * member's own and never the owner's; a subagent, a Workflow step, a service principal, and a
+ * run started or acting with a key or for an embedding host get none.
+ */
+async function personalSkillNames(
+  input: ConversationOfferInput,
+  request: OfferRequest,
+  conversation: OfferedConversation
+): Promise<string[]> {
+  const { user, runId, clientInstanceId } = request;
+  const { agentRuns, configAssets } = input.stores;
+  if (!user || !runId || !agentRuns || !configAssets) return [];
+  if (
+    isAuthenticatedServicePrincipal(user) ||
+    user.delegatedActor !== undefined ||
+    user.keyScopes !== undefined
+  ) {
+    return [];
+  }
+  if (conversation.kind !== "chat" || conversation.status !== "active") return [];
+  const person = getSubjectUserId(user);
+  const run = await agentRuns.getAgentRun({ clientInstanceId, runId });
+  const authorization = run?.authorization;
+  if (
+    !run ||
+    !authorization ||
+    run.conversationId !== conversation.id ||
+    run.ownerUserId !== person ||
+    run.parentRunId ||
+    run.workflowStepRunId ||
+    run.principalId ||
+    authorization.personalConnectionsAllowed !== true ||
+    authorization.delegatedActor !== undefined ||
+    authorization.subjectUserId !== person ||
+    authorization.principal.kind !== "user" ||
+    authorization.principal.id !== person
+  ) {
+    return [];
+  }
+  return (await configAssets.listPersonalChatSkills({ clientInstanceId, userId: person }))
+    .filter((skill) => skill.inMyChats)
+    .map((skill) => skill.name);
+}
+
 function createConversationOffer(input: ConversationOfferInput): ConversationOfferSource {
   return {
-    async offerOf({ clientInstanceId, conversationId, agentToolNames, user }) {
+    async offerOf(request) {
+      const { clientInstanceId, conversationId, agentToolNames, user } = request;
       const conversation = await input.stores.conversations.getConversation(
         clientInstanceId,
         conversationId
@@ -180,8 +237,11 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
       const { subject } = conversation;
       const holds = holdsPlatformTools(agentToolNames);
       // A skill nobody can read is not listed: it would promise what no tool answers.
-      const skillNames =
-        holds && input.hasTool(READ_SKILL_TOOL) ? offeredSkillNames(subject, input.modules) : [];
+      const readsSkills = input.hasTool(READ_SKILL_TOOL);
+      const skillNames = holds && readsSkills ? offeredSkillNames(subject, input.modules) : [];
+      const ownSkillNames = readsSkills
+        ? await personalSkillNames(input, request, conversation)
+        : [];
       const rowNames =
         holds && subject?.kind === DATA_STORE_ASSET_KIND
           ? (["describe", "query", "preview_rows", "insert", "update", "delete_rows"] as const).map(
@@ -238,7 +298,7 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
           : []),
         ...appToolNames(input.hasTool),
         ASK_QUESTION_TOOL_NAME,
-        ...(skillNames.length > 0 ? [READ_SKILL_TOOL] : [])
+        ...(skillNames.length > 0 || ownSkillNames.length > 0 ? [READ_SKILL_TOOL] : [])
       ]
         .filter((toolName) => input.hasTool(toolName))
         .concat(offeredRowTools.map((tool) => tool.name));
@@ -261,6 +321,7 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
         ...(withheld.length > 0 ? { withheldToolNames: withheld } : {}),
         toolNames,
         skillNames,
+        ...(ownSkillNames.length > 0 ? { personalSkillNames: ownSkillNames } : {}),
         ...(holds ? { orientation: PLATFORM_ORIENTATION } : {})
       };
     }

@@ -102,7 +102,7 @@ export function createInstanceOperationCalls(
       const run = await store.agentRuns.getAgentRun({ clientInstanceId, runId });
       return run ? workflowAgentActor(store, operationCalls.registry, run) : undefined;
     },
-    async agentToolNames(agentName, conversationId) {
+    async agentToolNames(agentName, conversationId, call) {
       // A Workflow agent step's thread holds its one run, whatever its status: its tools are
       // its Workflow's, never those of an agent asset of the same name (CR-2).
       const run =
@@ -118,7 +118,8 @@ export function createInstanceOperationCalls(
         ? await input.conversationOffer?.offerOf({
             clientInstanceId,
             conversationId,
-            agentToolNames: listed
+            agentToolNames: listed,
+            ...(call ? { user: call.user, runId: call.runId } : {})
           })
         : undefined;
       // The query of each Knowledge Base the agent lists, which its one knowledge tool calls,

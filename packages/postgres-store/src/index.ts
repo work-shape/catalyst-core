@@ -11,6 +11,10 @@ import {
   listAgentUseLimits as listPostgresAgentUseLimits,
   setAgentUse as setPostgresAgentUse
 } from "./postgres-agent-use";
+import {
+  listPersonalChatSkills as listPostgresPersonalChatSkills,
+  setPersonalChatSkill as setPostgresPersonalChatSkill
+} from "./postgres-personal-chat-skills";
 import { listConfigAssetPage as listPostgresConfigAssetPage } from "./postgres-config-asset-page";
 import {
   getConfigAssetPageOrigin as getPostgresConfigAssetPageOrigin,
@@ -184,7 +188,9 @@ function bindStores(
         agentAwaitsFirstPublish: (input) => postgresAgentAwaitsFirstPublish(db, input),
         setAgentAvailability: (input) => setPostgresAgentAvailability(db, input),
         listAgentUseLimits: (input) => listPostgresAgentUseLimits(db, input),
-        setAgentUse: (input) => setPostgresAgentUse(db, input)
+        setAgentUse: (input) => setPostgresAgentUse(db, input),
+        listPersonalChatSkills: (input) => listPostgresPersonalChatSkills(db, input),
+        setPersonalChatSkill: (input) => setPostgresPersonalChatSkill(db, input)
       },
       inTransaction
     ),

@@ -73,6 +73,13 @@ export interface ConversationOffer {
    */
   skillNames: readonly string[];
   /**
+   * The skills of the run's person that they switched on for their own chats (SCOPE-MYCHATS),
+   * by name: read-only, like the agent's own. Only a run its owner started themself in a chat,
+   * as the stored run records it, gets them; another member's run, a subagent, a Workflow step
+   * and a run started with a key get none, and the agent's definition stays as it is.
+   */
+  personalSkillNames?: readonly string[];
+  /**
    * How the platform works, as a section of the system prompt. Only an agent that holds the
    * platform's tools is told it.
    */
@@ -120,6 +127,11 @@ export interface ConversationOfferSource {
     agentToolNames: readonly string[];
     /** The person the run acts for; the tools they may not call are withheld. */
     user?: AuthenticatedUser;
+    /**
+     * The run the offer is for. Only with it, and only for a run of `user`'s own, are the
+     * person's own skills offered.
+     */
+    runId?: AgentRunId;
   }): Promise<ConversationOffer | undefined>;
 }
 

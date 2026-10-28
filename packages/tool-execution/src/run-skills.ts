@@ -8,7 +8,10 @@ import {
 } from "@work-shape/catalyst-core";
 import { createSkillSourceVersion } from "./skill-source-version";
 
-/** The skills this run may read or use, including its frozen Try draft and conversation offer. */
+/**
+ * The skills this run may read or use, including its frozen Try draft and conversation offer,
+ * which holds the person's own skills where the run is theirs (SCOPE-MYCHATS).
+ */
 export async function runSkillNames(options: {
   context: ToolExecutionContext;
   assets: RuntimeAssetSnapshot;
@@ -27,10 +30,16 @@ export async function runSkillNames(options: {
       ? await options.conversationOffer?.offerOf({
           clientInstanceId: context.clientInstanceId,
           conversationId,
-          agentToolNames: agent?.toolNames ?? []
+          agentToolNames: agent?.toolNames ?? [],
+          user: context.user,
+          ...(context.toolRequest?.agentRunId ? { runId: context.toolRequest.agentRunId } : {})
         })
       : undefined;
-  return new Set([...(agent?.skillNames ?? []), ...(offer?.skillNames ?? [])]);
+  return new Set([
+    ...(agent?.skillNames ?? []),
+    ...(offer?.skillNames ?? []),
+    ...(offer?.personalSkillNames ?? [])
+  ]);
 }
 
 /** Where a workspace command finds the skills of its run. */
