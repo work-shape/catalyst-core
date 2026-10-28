@@ -17,6 +17,8 @@ import { MissingDependencies, type DependencyAvailability } from "./dependency-a
  */
 export interface AvailabilityChoice {
   saved: AgentAvailabilityForm | undefined;
+  /** Why the availability cannot be changed, such as for what is "Only me": the fields grey. */
+  fixedReason?: string;
   workspaces: readonly AdministeredCollaborationWorkspace[];
   workspacesError?: string;
   /**
@@ -84,6 +86,7 @@ export function useAvailabilityEdit(choice: AvailabilityChoice | undefined): Ava
 export function AvailabilityFields({
   edit,
   locked = false,
+  fixedReason,
   disabled,
   workspaces,
   workspacesError,
@@ -94,6 +97,8 @@ export function AvailabilityFields({
   edit: AvailabilityEdit;
   /** The default agent is offered everywhere, and stays so until another agent is the default. */
   locked?: boolean;
+  /** Why the availability cannot be changed at all: the fields grey, with this as their hint. */
+  fixedReason?: string;
   disabled: boolean;
   workspaces: readonly AdministeredCollaborationWorkspace[];
   workspacesError?: string;
@@ -105,7 +110,7 @@ export function AvailabilityFields({
 }) {
   const { t } = useTranslation();
   const { form } = edit;
-  const fixed = locked || disabled;
+  const fixed = locked || disabled || fixedReason !== undefined;
   const workspaceNames = new Map(workspaces.map((workspace) => [workspace.id, workspace.name]));
   // Ids the list no longer returns stay visible, so saving never drops them unseen.
   const workspaceIds = [
@@ -124,7 +129,7 @@ export function AvailabilityFields({
         variant="plain"
         label={t("configAvailability")}
         labelHidden
-        hint={locked ? t("configAvailabilityDefaultLocked") : undefined}
+        hint={fixedReason ?? (locked ? t("configAvailabilityDefaultLocked") : undefined)}
         disabled={fixed}
         value={form.mode}
         onValueChange={(mode) => update({ mode })}

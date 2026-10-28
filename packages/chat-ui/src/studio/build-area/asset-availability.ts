@@ -9,6 +9,7 @@ import { useTranslation } from "../../shared/i18n";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorMessage } from "../../shared/workspace-utils";
 import type { AvailabilityChoice } from "./asset-availability-fields";
+import { useKnownWorkspaces } from "./asset-place";
 import type { AgentUseChoice } from "./agent-use-fields";
 import type { AgentAvailabilityForm } from "./asset-form-model";
 import type { BuildAssetEditorProps } from "./build-asset-kind";
@@ -47,6 +48,7 @@ export function useAvailabilityChoice(
   const { apiBaseUrl, authScope, client } = useSettingsPage();
   const { t } = useTranslation();
   const { asset, owner } = frame;
+  const workspaces = useKnownWorkspaces();
   const maySet = asset?.canSetAvailability ?? frame.instanceWrite;
   const placement = useAgentPlacementMutations({
     apiBaseUrl,
@@ -61,10 +63,14 @@ export function useAvailabilityChoice(
     enabled: maySet && asset !== undefined
   });
   const [saved, setSaved] = useState(asset?.availability);
+  // What sits in the reader's Personal Workspace is "Only me": the instance refuses to offer it
+  // anywhere else, so the fields stand greyed with the reason.
+  const onlyMine = workspaces.some((workspace) => workspace.personal && workspace.id === owner);
   if (asset === undefined || !maySet) return undefined;
   const scope = owner === undefined ? {} : { workspaceId: owner };
   return {
     saved,
+    ...(onlyMine ? { fixedReason: t("build.availabilityOnlyMine") } : {}),
     workspaces: workspacesQuery.data ?? [],
     workspacesError: workspacesQuery.error
       ? apiErrorMessage(workspacesQuery.error, undefined)

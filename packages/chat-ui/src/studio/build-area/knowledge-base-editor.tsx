@@ -366,6 +366,7 @@ export function KnowledgeBaseEditor({
                 disabled={saving}
                 workspaces={availability.workspaces}
                 workspacesError={availability.workspacesError}
+                fixedReason={availability.fixedReason}
                 hiddenHint={t("configAvailabilityAssetHiddenHint")}
                 refusals={refusalsOf(outcome, "availability")}
               />
