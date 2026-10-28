@@ -188,7 +188,7 @@ jobs:
   # The one name branch protection requires: green only when every job above is.
   check:
     if: always()
-    needs: [lint, types, tooling, tests]
+    needs: [lint, types, tooling, tests, preview-capture]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -212,7 +212,8 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - name: Install
+        run: pnpm install --frozen-lockfile
       - run: pnpm --filter @work-shape/catalyst-asset-schemas build
       - run: pnpm --filter @work-shape/catalyst-asset-schemas pack --out packages/preview-capture/schemas.tgz
       - run: pnpm --filter @work-shape/catalyst-core build
