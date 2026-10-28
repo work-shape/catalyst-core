@@ -242,7 +242,10 @@ function toProject(
       createdAt: asset.createdAt.toISOString(),
       updatedAt: asset.updatedAt.toISOString(),
       ...(definition.data.defaultAgent ? { defaultAgent: definition.data.defaultAgent } : {}),
-      ...(definition.data.skills?.length ? { skills: definition.data.skills } : {})
+      ...(definition.data.skills?.length ? { skills: definition.data.skills } : {}),
+      ...(definition.data.knowledgeBases?.length
+        ? { knowledgeBases: definition.data.knowledgeBases }
+        : {})
     }
   ];
 }

@@ -43,6 +43,14 @@ export const PROJECT_TITLE_MAX_LENGTH = 120;
 export const PROJECT_DESCRIPTION_MAX_LENGTH = 500;
 /** The most skills a project attaches (PRJ-7). */
 export const PROJECT_SKILLS_MAX = 20;
+/** The most Knowledge Bases a project attaches (PRJ-8). */
+export const PROJECT_KNOWLEDGE_BASES_MAX = 20;
+
+/**
+ * Why a project's choice is greyed: the person's own, in a project others read; or a Knowledge
+ * Base not everyone in the project's audience may search (PRJ-8).
+ */
+export const PROJECT_CHOICE_REFUSALS = ["own_in_shared_project", "not_everyone_may_use"] as const;
 
 /**
  * The name the server makes of a title: lowercase words joined by hyphens, then a hyphen and a

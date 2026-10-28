@@ -97,6 +97,12 @@ export interface ConversationOffer {
    * of the run reads the project.
    */
   projectFolder?: string;
+  /**
+   * The Knowledge Bases the chat's project attaches that this run may search beside its agent's
+   * own (PRJ-8): only those every reader of the chat may use, and the person's own only in a
+   * chat they alone read. Each search still asks the person's `knowledge_base.use`.
+   */
+  knowledgeBases?: readonly string[];
 }
 
 /** The release skill containing this instance's product documentation. */

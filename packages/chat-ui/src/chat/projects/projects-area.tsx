@@ -52,6 +52,7 @@ import { RouteLink } from "../../studio/route-link";
 import { ProjectFilesSection } from "./project-files-section";
 import { ProjectInstructionsTile } from "./project-instructions";
 import { ProjectComposerAgent, ProjectSetupTile } from "./project-setup";
+import { ProjectKnowledgeTile } from "./project-knowledge";
 import type { BuildWorkspace } from "../../shared/build-rights";
 
 /** The workspace the projects belong to, as the pages name it. */
@@ -566,35 +567,41 @@ function ProjectPage({
               state={<AudienceBadge project={project} workspace={workspace.name} />}
               description={project.description}
             />
-            {/* The project's settings as tiles: two beside each other where the page has room. */}
-            <div className="@container mb-8">
-              <div className="grid gap-4 @2xl:grid-cols-2">
+            {/* The page's body measures its own width: the page frame is no container. */}
+            <div className="@container/project">
+              {/* The project's settings as tiles, side by side as far as the page has room. */}
+              <div className="mb-8 grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-4">
                 <ProjectInstructionsTile project={project} />
                 <ProjectSetupTile
                   project={project}
                   workspace={workspace}
                   workspaces={shareWorkspacesOf(workspaces)}
                 />
-              </div>
-            </div>
-            {/* The files stand beside the chats where the page has room, and below them where not. */}
-            <div className="grid gap-8 @4xl/page:grid-cols-[minmax(0,1fr)_minmax(18rem,26rem)]">
-              <div className="@container min-w-0">
-                <ProjectConversations project={project} onOpenConversation={onOpenConversation} />
-                <ProjectComposer
+                <ProjectKnowledgeTile
                   project={project}
                   workspace={workspace}
-                  workspaces={workspaces}
-                  onStartChat={onStartChat}
+                  workspaces={shareWorkspacesOf(workspaces)}
                 />
               </div>
-              <div className="min-w-0">
-                <ProjectFilesSection
-                  project={project}
-                  onOpenConversation={(conversationId) =>
-                    onOpenConversation(project.collaborationWorkspaceId, conversationId)
-                  }
-                />
+              {/* The files stand beside the chats where the page has room, and below them where not. */}
+              <div className="grid gap-8 @4xl/project:grid-cols-[minmax(0,1fr)_minmax(18rem,26rem)]">
+                <div className="@container min-w-0">
+                  <ProjectConversations project={project} onOpenConversation={onOpenConversation} />
+                  <ProjectComposer
+                    project={project}
+                    workspace={workspace}
+                    workspaces={workspaces}
+                    onStartChat={onStartChat}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <ProjectFilesSection
+                    project={project}
+                    onOpenConversation={(conversationId) =>
+                      onOpenConversation(project.collaborationWorkspaceId, conversationId)
+                    }
+                  />
+                </div>
               </div>
             </div>
           </>

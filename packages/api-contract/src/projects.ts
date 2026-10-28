@@ -4,6 +4,8 @@ import {
   PROJECT_FILE_CHANGES,
   PROJECT_FILE_ORIGINS,
   PROJECT_DESCRIPTION_MAX_LENGTH,
+  PROJECT_CHOICE_REFUSALS,
+  PROJECT_KNOWLEDGE_BASES_MAX,
   PROJECT_SKILLS_MAX,
   PROJECT_TITLE_MAX_LENGTH
 } from "@work-shape/catalyst-asset-schemas";
@@ -30,7 +32,9 @@ export const projectSchema = z.object({
   /** The agent a new chat in the project starts with (PRJ-7); not a lock. */
   defaultAgent: z.string().optional(),
   /** The skills every run in the project is offered beside its agent's own (PRJ-7). */
-  skills: z.array(z.string()).optional()
+  skills: z.array(z.string()).optional(),
+  /** The Knowledge Bases every run in the project may search beside its agent's own (PRJ-8). */
+  knowledgeBases: z.array(z.string()).optional()
 });
 
 /** A project in a list: with its sent chats counted and when it was last used (PRJ-5). */
@@ -58,10 +62,12 @@ export const setConversationProjectRequestSchema = z.object({
 });
 
 /**
- * Why a choice is greyed for this project (PRJ-7): it is the person's own ("Nur ich") and the
- * project is read by others, who could not use it. Sharing it with the workspace opens it.
+ * Why a choice is greyed for this project. `own_in_shared_project` (PRJ-7): it is the person's
+ * own ("Nur ich") and the project is read by others, who could not use it; sharing it with the
+ * workspace opens it. `not_everyone_may_use` (PRJ-8): a Knowledge Base the person may search
+ * and not everyone in the project's audience may, as it is not available in the workspace.
  */
-export const projectChoiceRefusalSchema = z.enum(["own_in_shared_project"]);
+export const projectChoiceRefusalSchema = z.enum(PROJECT_CHOICE_REFUSALS);
 
 /** Where an own agent or skill sits, for the share that opens it to the project's audience. */
 const projectChoiceAssetSchema = z.object({ id: z.string(), workspaceId: z.string() });
@@ -88,6 +94,19 @@ export const projectSkillChoiceSchema = z.object({
   asset: projectChoiceAssetSchema.optional()
 });
 
+/** A Knowledge Base a project may attach (PRJ-8): one the person may search. */
+export const projectKnowledgeBaseChoiceSchema = z.object({
+  name: z.string(),
+  title: z.string(),
+  description: z.string().optional(),
+  /** Not published yet: attached, it answers once it is. */
+  unpublished: z.boolean().optional(),
+  /** The person's own, of their Personal Workspace: only a chat they alone read searches it. */
+  own: z.boolean(),
+  refusal: projectChoiceRefusalSchema.optional(),
+  asset: projectChoiceAssetSchema.optional()
+});
+
 /**
  * A project's default agent and skills (PRJ-7), with what the person may choose: the agents
  * offered to them in the workspace and the skills the workspace owns or its agents use; their
@@ -100,19 +119,29 @@ export const projectSetupSchema = z.object({
   /** The agent a new chat starts with where the project names none, or one not offered now. */
   workspaceDefaultAgent: z.string().optional(),
   agents: z.array(projectAgentChoiceSchema),
-  skillChoices: z.array(projectSkillChoiceSchema)
+  skillChoices: z.array(projectSkillChoiceSchema),
+  /** The Knowledge Bases the project attaches (PRJ-8), kept where they no longer apply. */
+  knowledgeBases: z.array(z.string()),
+  /**
+   * The Knowledge Bases the person may attach, those not everyone in the project's audience may
+   * use greyed with the reason. Missing where the module `knowledge` is off.
+   */
+  knowledgeBaseChoices: z.array(projectKnowledgeBaseChoiceSchema).optional()
 });
 
+/** What is left out stays as it is. */
 export const setProjectSetupRequestSchema = z.object({
   /** `null`: new chats start with the workspace's default. */
-  defaultAgent: z.string().min(1).max(128).nullable(),
-  skills: z.array(z.string().min(1).max(128)).max(PROJECT_SKILLS_MAX)
+  defaultAgent: z.string().min(1).max(128).nullable().optional(),
+  skills: z.array(z.string().min(1).max(128)).max(PROJECT_SKILLS_MAX).optional(),
+  knowledgeBases: z.array(z.string().min(1).max(128)).max(PROJECT_KNOWLEDGE_BASES_MAX).optional()
 });
 
 export type ProjectView = z.infer<typeof projectSchema>;
 export type ProjectSetupView = z.infer<typeof projectSetupSchema>;
 export type ProjectAgentChoiceView = z.infer<typeof projectAgentChoiceSchema>;
 export type ProjectSkillChoiceView = z.infer<typeof projectSkillChoiceSchema>;
+export type ProjectKnowledgeBaseChoiceView = z.infer<typeof projectKnowledgeBaseChoiceSchema>;
 export type ProjectListItemView = z.infer<typeof projectListItemSchema>;
 export type ProjectAudienceView = z.infer<typeof projectAudienceSchema>;
 

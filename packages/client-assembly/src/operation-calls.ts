@@ -122,11 +122,15 @@ export function createInstanceOperationCalls(
             ...(call ? { user: call.user, runId: call.runId } : {})
           })
         : undefined;
-      // The query of each Knowledge Base the agent lists, which its one knowledge tool calls,
-      // and the start of a subagent, which `run_agent` calls.
+      // The query of each Knowledge Base the agent lists and its chat's project attaches
+      // (PRJ-8), which its one knowledge tool calls, and the start of a subagent, which
+      // `run_agent` calls.
       return [
         ...(await conversationToolNames(listed, offer)),
         ...(agent ? knowledgeOperationNamesOf(agent) : []),
+        ...(offer?.knowledgeBases
+          ? knowledgeOperationNamesOf({ knowledgeBases: [...offer.knowledgeBases] })
+          : []),
         ...(listed.includes(RUN_AGENT_TOOL_NAME) ? [AGENTS_RUN_OPERATION] : [])
       ];
     }

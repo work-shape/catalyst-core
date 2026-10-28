@@ -166,7 +166,10 @@ interface ConversationOfferInput {
   hasTool(toolName: string): boolean;
   /** The folder of the project a chat is in (PRJ-2): its manifest goes into the run's prompt. */
   projectFolder?: () => ProjectFolderPort | undefined;
-  /** The skills of the project a chat is in (PRJ-7): offered beside its agent's own. */
+  /**
+   * The skills (PRJ-7) and Knowledge Bases (PRJ-8) of the project a chat is in: offered beside
+   * its agent's own.
+   */
   projectSkills?: () => ProjectSkillsPort | undefined;
   /** Where a run's read of the project's instructions is audited, by project and version. */
   audit?: AuditRecorder;
@@ -288,6 +291,31 @@ async function ownRunPerson(
     return undefined;
   }
   return person;
+}
+
+/**
+ * The Knowledge Bases of the chat's project (PRJ-8): those every reader of the chat may search,
+ * and the person's own only where the run may be offered what is theirs alone. Nothing where
+ * the module `knowledge` is off.
+ */
+async function projectKnowledgeBaseNames(
+  input: ConversationOfferInput,
+  request: OfferRequest,
+  conversation: OfferedConversation
+): Promise<string[]> {
+  const port = input.projectSkills?.();
+  if (!port?.knowledgeBasesOf) return [];
+  const found = await port.knowledgeBasesOf({
+    clientInstanceId: request.clientInstanceId,
+    conversationId: request.conversationId,
+    ...(request.user ? { user: request.user } : {})
+  });
+  if (!found) return [];
+  const own =
+    found.own.length > 0 && (await ownRunPerson(input, request, conversation)) !== undefined
+      ? found.own
+      : [];
+  return [...new Set([...found.shared, ...own])];
 }
 
 /**
@@ -427,6 +455,7 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
             }).value !== "deny")
       );
       const folder = await projectFolderOf(input, request);
+      const knowledgeBases = await projectKnowledgeBaseNames(input, request, conversation);
       const toolNames = [
         ...PLATFORM_TOOL_NAMES.filter((toolName) => agentToolNames.includes(toolName)),
         ...(holds
@@ -470,7 +499,8 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
         skillNames,
         ...(ownSkillNames.length > 0 ? { personalSkillNames: ownSkillNames } : {}),
         ...(holds ? { orientation: PLATFORM_ORIENTATION } : {}),
-        ...(folder ? { projectFolder: folder } : {})
+        ...(folder ? { projectFolder: folder } : {}),
+        ...(knowledgeBases.length > 0 ? { knowledgeBases } : {})
       };
     },
     projectInstructionsOf: (request) => projectInstructionsOf(input, request)

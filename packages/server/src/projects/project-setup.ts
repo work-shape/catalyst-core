@@ -3,25 +3,39 @@ import {
   AppError,
   asCollaborationWorkspaceId,
   asConversationId,
+  asUserId,
   auditActorFromUser,
   getSubjectUserId,
   isAppError,
+  isAgentAvailableInWorkspace,
   isAuthenticatedServicePrincipal,
+  KNOWLEDGE_BASE_ACTIONS,
+  KNOWLEDGE_BASE_ASSET_KIND,
+  ownerReachRefusal,
   PROJECT_ASSET_KIND,
+  PROJECT_CHOICE_REFUSALS,
+  PROJECT_KNOWLEDGE_BASES_MAX,
   PROJECT_SKILLS_MAX,
   projectDefinitionSchema,
   projectReadOnlyBy,
+  createAuthorizer,
+  type ActorAccess,
+  type AgentAvailability,
   type AgentConfig,
+  type AssetScope,
+  type ConfigAssetRecord,
   type AuditRecorder,
   type AuthenticatedUser,
   type CollaborationWorkspace,
   type LocaleCode,
   type Project,
   type ProjectChoiceKind,
+  type ProjectRunKnowledgeBases,
   type ProjectRunSkills,
   type ProjectSkillsPort
 } from "@work-shape/catalyst-core";
 import type { ChatServerOptions } from "../types";
+import { accessResource } from "../assets/asset-access";
 import {
   callerAccess,
   getWorkspaceAssetSnapshot,
@@ -42,6 +56,16 @@ import {
 /** How many skills of the workspace a project's chooser reads. */
 const WORKSPACE_SKILLS_READ = 200;
 
+// A project's Knowledge Bases (PRJ-8). Attaching grants nothing: each search asks the person's
+// `knowledge_base.use`. What may be attached is what every reader of the project's chats may
+// search, as a chat's answers from it stand in the transcript for all of them: in a project
+// others read, a Knowledge Base available in its workspace, which gives every member the use;
+// in one only its creator reads, any they may search, their own among them. The candidates are
+// those an agent of the workspace could name (`ownerReachRefusal`), and the person's own.
+
+/** How many Knowledge Bases of each owner a project's chooser reads. */
+const KNOWLEDGE_BASES_READ = 200;
+
 export type ProjectSetupOptions = Pick<
   ChatServerOptions,
   "stores" | "clientInstanceId" | "config" | "modules"
@@ -50,8 +74,11 @@ export type ProjectSetupOptions = Pick<
     configAssets: Pick<ChatServerOptions["configAssets"], "source" | "store">;
   };
 
-/** Why a choice is greyed: the person's own, in a project others read. */
-type ProjectChoiceRefusal = "own_in_shared_project";
+/**
+ * Why a choice is greyed: the person's own, in a project others read; or a Knowledge Base not
+ * everyone in the project's audience may search.
+ */
+type ProjectChoiceRefusal = (typeof PROJECT_CHOICE_REFUSALS)[number];
 
 interface ProjectChoiceAsset {
   id: string;
@@ -77,12 +104,37 @@ interface ProjectSkillChoice {
   asset?: ProjectChoiceAsset;
 }
 
+interface ProjectKnowledgeBaseChoice {
+  name: string;
+  title: string;
+  description?: string;
+  unpublished?: boolean;
+  own: boolean;
+  refusal?: ProjectChoiceRefusal;
+  asset?: ProjectChoiceAsset;
+}
+
 export interface ProjectSetup {
   defaultAgent?: string;
   skills: string[];
   workspaceDefaultAgent?: string;
   agents: ProjectAgentChoice[];
   skillChoices: ProjectSkillChoice[];
+  knowledgeBases: string[];
+  knowledgeBaseChoices?: ProjectKnowledgeBaseChoice[];
+}
+
+/** What decides the Knowledge Bases of one project for one person. */
+interface KnowledgeScope {
+  project: Project;
+  workspace: CollaborationWorkspace;
+  person: string;
+  /** The person's rights as a call in a chat of the project asks them: in its workspace. */
+  access: ActorAccess;
+  /** Only the person reads the project and its chats. */
+  alone: boolean;
+  availability: Map<string, AgentAvailability>;
+  ownerOf(workspaceId: string): Promise<CollaborationWorkspace | undefined>;
 }
 
 /** What the person may choose for a project now, and what a chat of theirs in it reads. */
@@ -218,10 +270,18 @@ export class ProjectSetupService implements ProjectSkillsPort {
   /** A project's default agent and skills, with what the caller may choose for it. */
   async setup(user: AuthenticatedUser, projectId: string, locale?: LocaleCode) {
     const project = await requireProjectAccess(this.options, user, projectId);
-    return this.viewOf(project, await this.choicesFor(user, project, locale));
+    const [choices, knowledgeBases] = await Promise.all([
+      this.choicesFor(user, project, locale),
+      this.knowledgeChoicesFor(user, project, locale)
+    ]);
+    return this.viewOf(project, choices, knowledgeBases);
   }
 
-  private viewOf(project: Project, choices: ProjectChoices): ProjectSetup {
+  private viewOf(
+    project: Project,
+    choices: ProjectChoices,
+    knowledgeBases: ProjectKnowledgeBaseChoice[] | undefined
+  ): ProjectSetup {
     return {
       ...(project.defaultAgent ? { defaultAgent: project.defaultAgent } : {}),
       skills: project.skills ?? [],
@@ -229,32 +289,210 @@ export class ProjectSetupService implements ProjectSkillsPort {
         ? { workspaceDefaultAgent: choices.workspaceDefaultAgent }
         : {}),
       agents: choices.agents,
-      skillChoices: choices.skills
+      skillChoices: choices.skills,
+      knowledgeBases: project.knowledgeBases ?? [],
+      ...(knowledgeBases ? { knowledgeBaseChoices: knowledgeBases } : {})
+    };
+  }
+
+  /** What decides the person's Knowledge Bases in the project; nothing where the module is off. */
+  private async knowledgeScope(
+    user: AuthenticatedUser,
+    project: Project
+  ): Promise<KnowledgeScope | undefined> {
+    const { options } = this;
+    if (!options.modules.isEnabled("knowledge")) return undefined;
+    const person = getSubjectUserId(user);
+    const workspace = await this.workspaceOf(project);
+    const [access, availability] = await Promise.all([
+      (options.authorizer ?? createAuthorizer(options.stores.access)).forActor(user, {
+        workspaceId: project.collaborationWorkspaceId
+      }),
+      options.configAssets.store.listAgentAvailability({
+        clientInstanceId: options.clientInstanceId,
+        kind: KNOWLEDGE_BASE_ASSET_KIND
+      })
+    ]);
+    const owners = new Map<string, Promise<CollaborationWorkspace | undefined>>([
+      [workspace.id, Promise.resolve(workspace)]
+    ]);
+    return {
+      project,
+      workspace,
+      person,
+      access,
+      alone: projectReadOnlyBy(project, workspace, person),
+      availability,
+      ownerOf: (workspaceId) => {
+        let owner = owners.get(workspaceId);
+        if (owner === undefined) {
+          owner = options.stores.workspaces.getWorkspace(
+            options.clientInstanceId,
+            asCollaborationWorkspaceId(workspaceId)
+          );
+          owners.set(workspaceId, owner);
+        }
+        return owner;
+      }
     };
   }
 
   /**
-   * Sets the default agent and the skills. A new name must be one the caller may choose now; a
-   * name already stored may stay, as a project moved or shared since keeps what no longer
-   * applies and shows it so (section 10). Refused with `CONFLICT` where the project changed
-   * meanwhile.
+   * One Knowledge Base as the person may attach it to the project, greyed with the reason where
+   * not everyone in its audience may search it; nothing where the person may not search it, it
+   * is another person's own, or one an agent of the workspace could not name.
+   */
+  private async knowledgeChoiceOf(
+    scope: KnowledgeScope,
+    record: ConfigAssetRecord
+  ): Promise<ProjectKnowledgeBaseChoice | undefined> {
+    if (record.status !== "active" || record.kind !== KNOWLEDGE_BASE_ASSET_KIND) return undefined;
+    const owner =
+      record.scope.kind === "workspace" ? await scope.ownerOf(record.scope.workspaceId) : undefined;
+    if (record.scope.kind === "workspace" && owner === undefined) return undefined;
+    const own = owner?.kind === "personal";
+    if (own && owner.personalUserId !== scope.person) return undefined;
+    // Beside the person's own, what an agent of the project's workspace could name.
+    if (
+      !own &&
+      ownerReachRefusal(
+        {
+          kind: "workspace",
+          workspaceId: scope.workspace.id,
+          workspaceKind: scope.workspace.kind
+        },
+        {
+          kind: "reference",
+          target:
+            record.scope.kind === "workspace"
+              ? {
+                  kind: "workspace",
+                  workspaceId: record.scope.workspaceId,
+                  workspaceKind: owner?.kind
+                }
+              : { kind: "instance" }
+        }
+      ) !== undefined
+    ) {
+      return undefined;
+    }
+    const resource = accessResource(record.kind, record.name, record.scope, record.id);
+    if (!scope.access.authorize(KNOWLEDGE_BASE_ACTIONS.use, resource).allowed) return undefined;
+    // Where others read the project: the person's own reaches no chat of theirs, and another
+    // only where every member of the workspace may search it, as its availability there gives.
+    const refusal: ProjectChoiceRefusal | undefined = scope.alone
+      ? undefined
+      : own
+        ? ownerReachRefusal(
+            { kind: "workspace", workspaceId: owner.id, workspaceKind: owner.kind },
+            { kind: "conversation", workspaceId: scope.workspace.id }
+          ) === undefined
+          ? undefined
+          : "own_in_shared_project"
+        : isAgentAvailableInWorkspace(scope.availability.get(record.name), scope.workspace)
+          ? undefined
+          : "not_everyone_may_use";
+    const config = record.publishedConfig ?? record.config ?? {};
+    const text = (value: unknown) =>
+      typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
+    const title = text(config.title) ?? record.name;
+    const description = text(config.description);
+    return {
+      name: record.name,
+      title,
+      ...(description ? { description } : {}),
+      ...(record.publishedRevision === undefined ? { unpublished: true } : {}),
+      own,
+      ...(refusal ? { refusal } : {}),
+      ...(own && record.scope.kind === "workspace"
+        ? { asset: { id: record.id, workspaceId: record.scope.workspaceId } }
+        : {})
+    };
+  }
+
+  /**
+   * The Knowledge Bases the person may attach to the project: the instance's, its workspace's
+   * and their own, each that they may search, greyed where not everyone reading it may.
+   */
+  private async knowledgeChoicesFor(
+    user: AuthenticatedUser,
+    project: Project,
+    locale?: LocaleCode
+  ): Promise<ProjectKnowledgeBaseChoice[] | undefined> {
+    const { options } = this;
+    const scope = await this.knowledgeScope(user, project);
+    if (!scope) return undefined;
+    const home =
+      scope.workspace.kind === "personal"
+        ? undefined
+        : (
+            await options.stores.workspaces.listWorkspacesForUser({
+              clientInstanceId: options.clientInstanceId,
+              userId: asUserId(scope.person)
+            })
+          ).find(
+            (workspace) =>
+              workspace.kind === "personal" && workspace.personalUserId === scope.person
+          );
+    const owners: AssetScope[] = [
+      { kind: "instance" },
+      { kind: "workspace", workspaceId: scope.workspace.id },
+      ...(home ? [{ kind: "workspace" as const, workspaceId: home.id }] : [])
+    ];
+    const records = (
+      await Promise.all(
+        owners.map((owner) =>
+          options.stores.configAssets.listConfigAssetPage({
+            clientInstanceId: options.clientInstanceId,
+            kind: KNOWLEDGE_BASE_ASSET_KIND,
+            scope: owner,
+            limit: KNOWLEDGE_BASES_READ,
+            readable: () => true
+          })
+        )
+      )
+    ).flat();
+    const choices: ProjectKnowledgeBaseChoice[] = [];
+    for (const record of records) {
+      const choice = await this.knowledgeChoiceOf(scope, record);
+      if (choice) choices.push(choice);
+    }
+    choices.sort((left, right) =>
+      left.title.localeCompare(right.title, locale ?? options.config.localization.defaultLocale)
+    );
+    return choices;
+  }
+
+  /**
+   * Sets the default agent, the skills and the Knowledge Bases; what the call leaves out stays.
+   * A new name must be one the caller may choose now; a name already stored may stay, as a
+   * project moved or shared since keeps what no longer applies and shows it so (section 10).
+   * Refused with `CONFLICT` where the project changed meanwhile.
    */
   async set(
     user: AuthenticatedUser,
     context: { correlationId: string; audit: AuditRecorder; locale?: LocaleCode },
     projectId: string,
-    input: { defaultAgent: string | null; skills: readonly string[] }
+    input: {
+      defaultAgent?: string | null;
+      skills?: readonly string[];
+      knowledgeBases?: readonly string[];
+    }
   ): Promise<ProjectSetup> {
     const { options } = this;
     const project = await requireProjectAccess(options, user, projectId);
-    const choices = await this.choicesFor(user, project, context.locale);
-    const skills = [...new Set(input.skills)];
-    if (skills.length > PROJECT_SKILLS_MAX) {
+    const [choices, knowledgeChoices] = await Promise.all([
+      this.choicesFor(user, project, context.locale),
+      this.knowledgeChoicesFor(user, project, context.locale)
+    ]);
+    const skills = input.skills === undefined ? undefined : [...new Set(input.skills)];
+    if (skills && skills.length > PROJECT_SKILLS_MAX) {
       throw refused(`A project attaches at most ${String(PROJECT_SKILLS_MAX)} skills`, {
         reason: "project_skills_limit"
       });
     }
-    const defaultAgent = input.defaultAgent ?? undefined;
+    const defaultAgent =
+      input.defaultAgent === undefined ? project.defaultAgent : (input.defaultAgent ?? undefined);
     if (defaultAgent !== undefined && defaultAgent !== project.defaultAgent) {
       const choice = choices.agents.find((agent) => agent.name === defaultAgent);
       if (!choice) {
@@ -265,7 +503,7 @@ export class ProjectSetupService implements ProjectSkillsPort {
       if (choice.refusal) throw ownInSharedProject("agent");
     }
     const stored = new Set(project.skills ?? []);
-    for (const name of skills) {
+    for (const name of skills ?? []) {
       if (stored.has(name)) continue;
       const choice = choices.skills.find((skill) => skill.name === name);
       if (!choice) {
@@ -275,6 +513,29 @@ export class ProjectSetupService implements ProjectSkillsPort {
       }
       if (choice.refusal) throw ownInSharedProject("skill");
     }
+    const knowledgeBases =
+      input.knowledgeBases === undefined ? undefined : [...new Set(input.knowledgeBases)];
+    if (knowledgeBases && knowledgeBases.length > PROJECT_KNOWLEDGE_BASES_MAX) {
+      throw refused(
+        `A project attaches at most ${String(PROJECT_KNOWLEDGE_BASES_MAX)} Knowledge Bases`,
+        { reason: "project_knowledge_bases_limit" }
+      );
+    }
+    const storedKnowledge = new Set(project.knowledgeBases ?? []);
+    for (const name of knowledgeBases ?? []) {
+      if (storedKnowledge.has(name)) continue;
+      // With the module off nothing new is attached; what is attached may stay or go.
+      const choice = knowledgeChoices?.find((entry) => entry.name === name);
+      if (!choice) {
+        throw refused("This Knowledge Base cannot be attached to this project", {
+          reason: "project_knowledge_base_not_offered"
+        });
+      }
+      if (choice.refusal === "not_everyone_may_use") throw notEveryoneMayUse();
+      if (choice.refusal) throw ownInSharedProject("knowledge_base");
+    }
+    const nextSkills = skills ?? project.skills ?? [];
+    const nextKnowledge = knowledgeBases ?? project.knowledgeBases ?? [];
     const key = `${PROJECT_ASSET_KIND}:${project.name}`;
     await options.stores.transaction(async (stores) => {
       const asset = await stores.configAssets.getConfigAsset({
@@ -291,6 +552,7 @@ export class ProjectSetupService implements ProjectSkillsPort {
       const kept: Partial<typeof current.data> = { ...current.data };
       delete kept.defaultAgent;
       delete kept.skills;
+      delete kept.knowledgeBases;
       await stores.configAssets.applyConfigAssetMutations({
         clientInstanceId: options.clientInstanceId,
         baseRevisions: { [key]: asset.revision },
@@ -305,7 +567,8 @@ export class ProjectSetupService implements ProjectSkillsPort {
             config: {
               ...kept,
               ...(defaultAgent ? { defaultAgent } : {}),
-              ...(skills.length > 0 ? { skills } : {})
+              ...(nextSkills.length > 0 ? { skills: nextSkills } : {}),
+              ...(nextKnowledge.length > 0 ? { knowledgeBases: nextKnowledge } : {})
             }
           }
         ]
@@ -316,7 +579,7 @@ export class ProjectSetupService implements ProjectSkillsPort {
       projectId: project.id
     });
     const updated = await requireProjectReadable(options, user, after);
-    // Ids and counts only: an agent's or a skill's name can be a person's own.
+    // Ids and counts only: an agent's, a skill's or a Knowledge Base's name can be a person's own.
     await context.audit.record({
       type: "project.setup_changed",
       status: "success",
@@ -325,11 +588,14 @@ export class ProjectSetupService implements ProjectSkillsPort {
       correlationId: context.correlationId,
       metadata: {
         defaultAgentChanged: (project.defaultAgent ?? null) !== (updated.defaultAgent ?? null),
-        skillsAdded: skills.filter((name) => !stored.has(name)).length,
-        skillsRemoved: [...stored].filter((name) => !skills.includes(name)).length
+        skillsAdded: nextSkills.filter((name) => !stored.has(name)).length,
+        skillsRemoved: [...stored].filter((name) => !nextSkills.includes(name)).length,
+        knowledgeBasesAdded: nextKnowledge.filter((name) => !storedKnowledge.has(name)).length,
+        knowledgeBasesRemoved: [...storedKnowledge].filter((name) => !nextKnowledge.includes(name))
+          .length
       }
     });
-    return this.viewOf(updated, choices);
+    return this.viewOf(updated, choices, knowledgeChoices);
   }
 
   /**
@@ -355,6 +621,57 @@ export class ProjectSetupService implements ProjectSkillsPort {
     conversationId: string;
     user?: AuthenticatedUser;
   }): Promise<ProjectRunSkills | undefined> {
+    const found = await this.runProjectOf(input);
+    if (!found?.project.skills?.length) return undefined;
+    const { user, project } = found;
+    const choices = await this.choicesFor(user, project);
+    const attached = new Set(project.skills);
+    const offered = choices.skills.filter((skill) => attached.has(skill.name));
+    return {
+      shared: offered.filter((skill) => !skill.own).map((skill) => skill.name),
+      // The person's own even where the project is shared now: the offer gives them only to a
+      // chat that they alone read, which a chat of a shared project never is.
+      own: offered.filter((skill) => skill.own).map((skill) => skill.name)
+    };
+  }
+
+  /**
+   * The Knowledge Bases a run in a chat's project may search beside its agent's (PRJ-8): those
+   * attached that every reader of the chat may search now, and apart the person's own, which
+   * the conversation offer gives only a chat they alone read. One that stopped applying, as
+   * the project was shared since or its availability narrowed, answers in no chat of it.
+   */
+  async knowledgeBasesOf(input: {
+    clientInstanceId: string;
+    conversationId: string;
+    user?: AuthenticatedUser;
+  }): Promise<ProjectRunKnowledgeBases | undefined> {
+    const found = await this.runProjectOf(input);
+    const attached = found?.project.knowledgeBases ?? [];
+    if (!found || attached.length === 0) return undefined;
+    const { options } = this;
+    const { user, project } = found;
+    const scope = await this.knowledgeScope(user, project);
+    if (!scope) return undefined;
+    const records = await options.stores.configAssets.listConfigAssetsByKey({
+      clientInstanceId: options.clientInstanceId,
+      keys: attached.map((name) => ({ kind: KNOWLEDGE_BASE_ASSET_KIND, name }))
+    });
+    const shared: string[] = [];
+    const own: string[] = [];
+    for (const record of records) {
+      const choice = await this.knowledgeChoiceOf(scope, record);
+      if (!choice || choice.refusal || choice.unpublished) continue;
+      (choice.own ? own : shared).push(choice.name);
+    }
+    return { shared, own };
+  }
+
+  /** The project of a run's chat, where the module is on and the person reads it. */
+  private async runProjectOf(input: {
+    conversationId: string;
+    user?: AuthenticatedUser;
+  }): Promise<{ user: AuthenticatedUser; project: Project } | undefined> {
     const { options } = this;
     const { user } = input;
     if (!options.modules.isEnabled("projects") || !user || isAuthenticatedServicePrincipal(user)) {
@@ -378,10 +695,7 @@ export class ProjectSetupService implements ProjectSkillsPort {
       clientInstanceId: options.clientInstanceId,
       projectId: conversation.projectId
     });
-    if (
-      !project?.skills?.length ||
-      project.collaborationWorkspaceId !== conversation.collaborationWorkspaceId
-    ) {
+    if (!project || project.collaborationWorkspaceId !== conversation.collaborationWorkspaceId) {
       return undefined;
     }
     try {
@@ -390,15 +704,7 @@ export class ProjectSetupService implements ProjectSkillsPort {
       if (isAppError(error) && error.code === "NOT_FOUND") return undefined;
       throw error;
     }
-    const choices = await this.choicesFor(user, project);
-    const attached = new Set(project.skills);
-    const offered = choices.skills.filter((skill) => attached.has(skill.name));
-    return {
-      shared: offered.filter((skill) => !skill.own).map((skill) => skill.name),
-      // The person's own even where the project is shared now: the offer gives them only to a
-      // chat that they alone read, which a chat of a shared project never is.
-      own: offered.filter((skill) => skill.own).map((skill) => skill.name)
-    };
+    return { user, project };
   }
 }
 
@@ -406,12 +712,25 @@ function refused(message: string, details: { reason: string }): AppError {
   return new AppError("VALIDATION_FAILED", message, details, { exposeMessage: true });
 }
 
-/** The person's own agent or skill, in a project others read: sharing it opens it. */
+/** The person's own agent, skill or Knowledge Base, in a project others read: sharing it opens it. */
 function ownInSharedProject(kind: ProjectChoiceKind): AppError {
   return refused(
     kind === "agent"
       ? "An agent only you use cannot be the default of a project others read. Share it with the workspace first."
-      : "A skill only you use cannot be attached to a project others read. Share it with the workspace first.",
+      : kind === KNOWLEDGE_BASE_ASSET_KIND
+        ? "A Knowledge Base only you use cannot be attached to a project others read. Share it with the workspace first."
+        : "A skill only you use cannot be attached to a project others read. Share it with the workspace first.",
     { reason: "own_in_shared_project" }
+  );
+}
+
+/**
+ * A Knowledge Base not everyone in a project's audience may search: a chat's answers from it
+ * would reach readers without the right. Making it available in the workspace opens it.
+ */
+function notEveryoneMayUse(): AppError {
+  return refused(
+    "Not everyone who reads this project may use this Knowledge Base. Make it available in the workspace first.",
+    { reason: "not_everyone_may_use" }
   );
 }

@@ -58,7 +58,7 @@ export function registerProjectRoutes(route: Route, options: ChatServerOptions):
       })
   });
 
-  // A project's default agent and skills (PRJ-7).
+  // A project's default agent and skills (PRJ-7) and Knowledge Bases (PRJ-8).
   route(apiOperations["projects.setup.get"], ({ user, params, request }) =>
     setup.setup(user, params.projectId, resolveRequestLocale(options, request))
   );
@@ -68,7 +68,7 @@ export function registerProjectRoutes(route: Route, options: ChatServerOptions):
     changeClass: "reversible",
     authorize: authorizePerson("projects.setup.set"),
     resource: ({ projectId }) => ({ kind: "project", id: projectId }),
-    execute: ({ projectId, defaultAgent, skills }, context) =>
+    execute: ({ projectId, defaultAgent, skills, knowledgeBases }, context) =>
       setup.set(
         personOf(context.actor),
         {
@@ -77,7 +77,11 @@ export function registerProjectRoutes(route: Route, options: ChatServerOptions):
           ...(context.runtime.locale ? { locale: context.runtime.locale } : {})
         },
         projectId,
-        { defaultAgent, skills }
+        {
+          ...(defaultAgent === undefined ? {} : { defaultAgent }),
+          ...(skills === undefined ? {} : { skills }),
+          ...(knowledgeBases === undefined ? {} : { knowledgeBases })
+        }
       )
   });
 

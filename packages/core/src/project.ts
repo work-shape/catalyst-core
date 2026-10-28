@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   PROJECT_DESCRIPTION_MAX_LENGTH,
+  PROJECT_KNOWLEDGE_BASES_MAX,
   PROJECT_NAME_MAX_LENGTH,
   PROJECT_SKILLS_MAX,
   PROJECT_TITLE_MAX_LENGTH,
@@ -18,6 +19,8 @@ export {
   PROJECT_ASSET_KIND,
   PROJECT_AUDIENCES,
   PROJECT_DESCRIPTION_MAX_LENGTH,
+  PROJECT_CHOICE_REFUSALS,
+  PROJECT_KNOWLEDGE_BASES_MAX,
   PROJECT_SKILLS_MAX,
   PROJECT_TITLE_MAX_LENGTH,
   type ProjectAudience
@@ -49,6 +52,11 @@ export interface Project {
   defaultAgent?: string;
   /** The skills every run in the project is offered beside its agent's own (PRJ-7). */
   skills?: string[];
+  /**
+   * The Knowledge Bases every run in the project may search beside its agent's own (PRJ-8).
+   * Attaching grants nothing: each search asks the person's `knowledge_base.use`.
+   */
+  knowledgeBases?: string[];
 }
 
 /** The longest name of an agent or a skill a project names. */
@@ -64,6 +72,10 @@ export const projectDefinitionSchema = z
     skills: z
       .array(z.string().min(1).max(PROJECT_ASSET_NAME_MAX_LENGTH))
       .max(PROJECT_SKILLS_MAX)
+      .optional(),
+    knowledgeBases: z
+      .array(z.string().min(1).max(PROJECT_ASSET_NAME_MAX_LENGTH))
+      .max(PROJECT_KNOWLEDGE_BASES_MAX)
       .optional()
   })
   .strict();
@@ -143,10 +155,20 @@ export interface ProjectRunSkills {
   own: string[];
 }
 
-/** What a project names besides its files (PRJ-7): its default agent and its skills. */
-export type ProjectChoiceKind = ConfigAssetKindName;
+/**
+ * The Knowledge Bases a chat's project attaches, as a run of one person may search them (PRJ-8):
+ * those every reader of the chat may use, and the person's own, which only a chat they alone
+ * read is offered. One a reader of the chat may not use is in neither.
+ */
+export type ProjectRunKnowledgeBases = ProjectRunSkills;
 
-/** Where a run reads the skills of its chat's project. */
+/**
+ * What a project names besides its files: its default agent and its skills (PRJ-7), and its
+ * Knowledge Bases (PRJ-8).
+ */
+export type ProjectChoiceKind = ConfigAssetKindName | "knowledge_base";
+
+/** Where a run reads the skills and Knowledge Bases of its chat's project. */
 export interface ProjectSkillsPort {
   /** Nothing where the chat is in no project, the module is off or its person is not in its audience. */
   skillsOf(input: {
@@ -154,6 +176,12 @@ export interface ProjectSkillsPort {
     conversationId: string;
     user?: AuthenticatedUser;
   }): Promise<ProjectRunSkills | undefined>;
+  /** As `skillsOf`, and nothing where the module `knowledge` is off (PRJ-8). */
+  knowledgeBasesOf?(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: string;
+    user?: AuthenticatedUser;
+  }): Promise<ProjectRunKnowledgeBases | undefined>;
 }
 
 /** A project as a list shows it: with how many chats it holds and when it was last used. */
