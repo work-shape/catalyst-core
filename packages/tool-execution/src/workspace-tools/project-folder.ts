@@ -2,11 +2,13 @@ import type { z } from "zod";
 import {
   getRuntimeSubjectUserId,
   isAppError,
+  isProjectInstructionsPath,
   normalizeProjectFilePath,
   PROJECT_FOLDER_PREFIX,
   projectPathOf,
   type ConversationProjectFolder,
   type JsonObject,
+  type PolicyValue,
   type ProjectFileChange,
   type ProjectFolderPort,
   type ToolExecutionContext,
@@ -75,6 +77,18 @@ async function chatFolder(
     user: context.user
   });
   return folder ? { port, folder, runId: call.agentRunId } : undefined;
+}
+
+/**
+ * What a write to the project's instructions asks of the policy (PRJ-3): the person's click on
+ * the card that shows the change. Nothing for any other path, or where no project folder is
+ * reached through the file tools.
+ */
+export function projectInstructionsFloor(
+  deps: WorkspaceToolDependencies,
+  path: string
+): PolicyValue | undefined {
+  return deps.projectFolder && isProjectInstructionsPath(path) ? "confirm" : undefined;
 }
 
 /** The files of the chat's project folder, as `workspace.list_files` lists them. */

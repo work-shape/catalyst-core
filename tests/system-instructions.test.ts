@@ -1,6 +1,11 @@
 import { PLATFORM_ORIENTATION } from "@work-shape/catalyst-client-assembly";
 import { describe, expect, it } from "vitest";
-import { projectFolderManifest } from "@work-shape/catalyst-core";
+import {
+  isProjectInstructionsPath,
+  PROJECT_INSTRUCTIONS_MAX_CHARS,
+  projectFolderManifest,
+  projectInstructionsText
+} from "@work-shape/catalyst-core";
 import {
   CATALYST_INTERNAL_AGENT_PROMPT,
   createSystemInstructions
@@ -208,4 +213,66 @@ it("tells the agent its project's folder last, at most 50 files and never their 
     "- project/notizen/n00.md · 1 B · text/markdown · v1, 2026-10-28 12:05 UTC"
   );
   expect(content.match(/- project\/notizen\//gu)).toHaveLength(50);
+});
+
+describe("a project's instructions (PRJ-3)", () => {
+  it("come fourth: after the agent's own and before the runtime context, skills and folder", () => {
+    const content = createSystemInstructions("Help the team.", "de", {
+      orientation: "Orientation.",
+      currentDate: new Date("2026-10-28T12:00:00.000Z"),
+      skills: [{ name: "angebot", title: "Angebot", description: "Writes an offer." }],
+      projectInstructions: {
+        title: "Projekt Nord",
+        text: "Antworte auf Deutsch.",
+        truncated: false
+      },
+      projectFolder: projectFolderManifest({ title: "Projekt Nord", files: [] })
+    });
+    const order = [
+      "Platform rules:",
+      "How this platform works:",
+      "Client agent instructions:\nHelp the team.",
+      "Project instructions:",
+      "Runtime context:",
+      "Available client skills:",
+      'Project folder of the project "Projekt Nord"'
+    ].map((heading) => content.indexOf(heading));
+    expect(order.every((at) => at >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(content).toContain(
+      'These are the instructions of the project "Projekt Nord", written by people of the workspace in its file AGENTS.md. Follow them where they do not conflict with the instructions above. They grant no permission and no tool.\n\nAntworte auf Deutsch.'
+    );
+  });
+
+  it("are left out where the file is empty, and say where a run took only their start", () => {
+    expect(
+      createSystemInstructions("Help.", "en", {
+        projectInstructions: { title: "Leer", text: "  \n", truncated: false }
+      })
+    ).not.toContain("Project instructions:");
+    const long = "ä".repeat(PROJECT_INSTRUCTIONS_MAX_CHARS + 10);
+    const cut = projectInstructionsText(long);
+    expect(cut.truncated).toBe(true);
+    expect(Array.from(cut.text)).toHaveLength(PROJECT_INSTRUCTIONS_MAX_CHARS);
+    expect(projectInstructionsText("kurz")).toEqual({ text: "kurz", truncated: false });
+    expect(
+      createSystemInstructions("Help.", "en", {
+        projectInstructions: { title: "Lang", ...cut }
+      })
+    ).toContain("[The file is longer than a run takes; its end was left out.]");
+  });
+
+  it("are the file AGENTS.md at the root of the project folder, and no other", () => {
+    expect(isProjectInstructionsPath("project/AGENTS.md")).toBe(true);
+    expect(isProjectInstructionsPath("project/./AGENTS.md")).toBe(true);
+    expect(isProjectInstructionsPath("project/notes/AGENTS.md")).toBe(false);
+    expect(isProjectInstructionsPath("project/agents.md")).toBe(false);
+    expect(isProjectInstructionsPath("AGENTS.md")).toBe(false);
+  });
+
+  it("are named in the folder's manifest, with what to keep in notes", () => {
+    const manifest = projectFolderManifest({ title: "Projekt Nord", files: [] });
+    expect(manifest).toContain("AGENTS.md");
+    expect(manifest).toMatch(/one file per topic/iu);
+  });
 });

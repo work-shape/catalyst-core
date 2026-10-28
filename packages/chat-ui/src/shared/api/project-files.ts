@@ -31,8 +31,50 @@ const projectFileQueryKeys = {
   list: (apiBaseUrl: string, projectId: string) =>
     ["project-files", apiBaseUrl, projectId, "list"] as const,
   versions: (apiBaseUrl: string, projectId: string, path: string) =>
-    ["project-files", apiBaseUrl, projectId, "versions", path] as const
+    ["project-files", apiBaseUrl, projectId, "versions", path] as const,
+  text: (apiBaseUrl: string, projectId: string, path: string, version: number) =>
+    ["project-files", apiBaseUrl, projectId, "text", path, version] as const
 };
+
+/**
+ * The text of one version of a project file, such as the project's instructions (PRJ-3). A
+ * version never changes, so it is read once.
+ */
+export function useProjectFileTextQuery(
+  projectId: string | undefined,
+  path: string,
+  version: number | undefined
+) {
+  const { apiBaseUrl, client } = useProjectFilesClient();
+  return useQuery({
+    queryKey: projectFileQueryKeys.text(apiBaseUrl, projectId ?? "", path, version ?? 0),
+    queryFn: async () =>
+      (
+        await loadProjectFileBlob(requireClient(client), projectId ?? "", path, {
+          ...(version === undefined ? {} : { version })
+        })
+      ).text(),
+    enabled: client !== undefined && Boolean(projectId) && version !== undefined,
+    staleTime: Number.POSITIVE_INFINITY
+  });
+}
+
+/**
+ * Whether the instructions of a chat's project changed since the chat's last run took them
+ * (PRJ-3), with the project's title and the two versions.
+ */
+export function useConversationProjectInstructionsQuery(conversationId: string | undefined) {
+  const { apiBaseUrl, client } = useProjectFilesClient();
+  return useQuery({
+    queryKey: ["project-instructions", apiBaseUrl, conversationId ?? ""] as const,
+    queryFn: ({ signal }) =>
+      requireClient(client).conversations.project_instructions.get({
+        params: { conversationId: conversationId ?? "" },
+        signal
+      }),
+    enabled: client !== undefined && Boolean(conversationId)
+  });
+}
 
 /** The files of a project as they are now, with what it holds and may hold. */
 export function useProjectFilesQuery(projectId: string | undefined) {

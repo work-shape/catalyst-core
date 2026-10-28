@@ -40,6 +40,14 @@ export function AddFromProjectProvider({
   return <AddFromProjectContext.Provider value={target}>{children}</AddFromProjectContext.Provider>;
 }
 
+/**
+ * The open conversation and its project, where the module is on: what the line about the
+ * project's instructions and the card on an agent's change of them read (PRJ-3).
+ */
+export function useOpenConversationProject(): AddFromProjectTarget | undefined {
+  return useContext(AddFromProjectContext);
+}
+
 /** The composer's "Add from project", beside the paperclip; nothing without a target. */
 export function AddFromProjectButton({ className }: { className?: string }) {
   const { t } = useTranslation();

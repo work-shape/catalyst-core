@@ -1226,6 +1226,13 @@
       "when": 1793214612131,
       "tag": "0174_skill_draft_file_set",
       "breakpoints": true
+    },
+    {
+      "idx": 175,
+      "version": "7",
+      "when": 1793218512049,
+      "tag": "0175_agent_run_project",
+      "breakpoints": true
     }
   ]
 }

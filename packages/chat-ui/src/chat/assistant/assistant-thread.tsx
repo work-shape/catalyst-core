@@ -47,6 +47,7 @@ import {
 } from "../platform-report/platform-report";
 import { startGreeting, startStarters, type ConversationStart } from "../dock/subject-starters";
 import { creationTargetLine } from "../dock/creation-target";
+import { ProjectInstructionsNotice } from "../projects/project-instructions";
 
 /** How long the composer takes to settle at the bottom after the first message. */
 const COMPOSER_SETTLE_MS = 220;
@@ -394,6 +395,7 @@ export function AssistantThread({
                     <span>{t("newConversationPrivateHint")}</span>
                   </p>
                 ) : null}
+                <ProjectInstructionsNotice running={conversationRunning ?? false} />
                 {subjectLine}
                 {/* A conversation without a message is a draft and keeps the start page as it is. */}
                 {startPage ? null : (

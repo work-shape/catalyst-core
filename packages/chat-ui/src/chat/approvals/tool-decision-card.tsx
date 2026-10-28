@@ -16,6 +16,8 @@ import {
   Textarea
 } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
+import { ProjectInstructionsDecision } from "../projects/project-instructions";
+import { isProjectInstructionsCall } from "../projects/project-instructions-model";
 import {
   appPublishCall,
   useAppPublishConfirmation,
@@ -127,6 +129,8 @@ function ToolConfirmation({
   if (addedFiles) return <KnowledgeAddFilesDecisionCard files={addedFiles} {...props} />;
   const scheduled = scheduledStartCall(decision.operationId, decision.inputPreview);
   if (scheduled) return <ScheduledStartDecisionCard call={scheduled} {...props} />;
+  // A change of a project's AGENTS.md shows what changes for everyone in it (PRJ-3).
+  if (isProjectInstructionsCall(decision)) return <ProjectInstructionsDecisionCard {...props} />;
   return <ToolDecisionCardView {...props} />;
 }
 
@@ -145,6 +149,18 @@ function ScheduledStartDecisionCard({
           agentName={(name) => host?.agentDisplayName(name) ?? name}
         />
       }
+    />
+  );
+}
+
+/** The confirmation of a change of a project's instructions: before and after, for everyone. */
+function ProjectInstructionsDecisionCard(props: Parameters<typeof ToolDecisionCardView>[0]) {
+  const { t } = useTranslation();
+  return (
+    <ToolDecisionCardView
+      {...props}
+      title={t("projectInstructions.decisionTitle")}
+      summary={<ProjectInstructionsDecision call={props.decision} />}
     />
   );
 }

@@ -36,5 +36,24 @@ export const projectEvents = {
         operationRunId: { type: "string" }
       }
     }
+  },
+  // A run took the project's instructions into its system message (PRJ-3). The project and
+  // the version of AGENTS.md: never the path or the text.
+  "project.instructions_read": {
+    name: "project.instructions_read",
+    subject: "project",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["version", "runId"],
+      properties: {
+        version: { type: "integer", minimum: 1 },
+        runId: { type: "string" },
+        operationRunId: { type: "string" }
+      }
+    }
   }
 } as const satisfies Record<string, PlatformEventDefinition>;

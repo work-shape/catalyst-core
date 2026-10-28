@@ -183,6 +183,26 @@ export const addFromProjectRequestSchema = z.object({
   agentName: z.string().min(1).optional()
 });
 
+/**
+ * Whether the instructions of a chat's project, its `AGENTS.md`, changed since the chat's last
+ * run took them, from outside this chat (PRJ-3). Only the versions: the chat reads the text
+ * through the project's files.
+ */
+export const conversationProjectInstructionsSchema = z.object({
+  /** Absent where the chat is in no project. */
+  projectId: z.string().optional(),
+  projectTitle: z.string().optional(),
+  /** The current version of `AGENTS.md`; absent where there is none. */
+  currentVersion: z.number().int().positive().optional(),
+  /** The version the chat's last run took; absent where it took none. */
+  usedVersion: z.number().int().positive().optional(),
+  /** The chat's last run was in the project, and the instructions changed since elsewhere. */
+  changed: z.boolean()
+});
+
+export type ConversationProjectInstructionsView = z.infer<
+  typeof conversationProjectInstructionsSchema
+>;
 export type ProjectFileView = z.infer<typeof projectFileSchema>;
 export type ProjectFilesView = z.infer<typeof projectFilesSchema>;
 export type ProjectFileVersionView = z.infer<typeof projectFileVersionSchema>;

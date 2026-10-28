@@ -140,6 +140,31 @@ export interface ConversationOfferSource {
      */
     runId?: AgentRunId;
   }): Promise<ConversationOffer | undefined>;
+  /**
+   * The instructions of the project a run's chat is in (PRJ-3): its `AGENTS.md`, read once at
+   * the run's start and recorded on the run with its version. A run that goes on after a pause
+   * takes the version it recorded. Nothing where the chat is in no project, the person of the
+   * run is outside the project's audience, or the run is a Workflow step's.
+   */
+  projectInstructionsOf?(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    user?: AuthenticatedUser;
+    runId: AgentRunId;
+  }): Promise<ProjectInstructions | undefined>;
+}
+
+/** The instructions of a project as a run takes them into its system message (PRJ-3). */
+export interface ProjectInstructions {
+  projectId: string;
+  /** The project's title, named in the sentence that opens them. */
+  title: string;
+  /** The version of `AGENTS.md` the run took. */
+  version: number;
+  /** At most `PROJECT_INSTRUCTIONS_MAX_CHARS` characters. */
+  text: string;
+  /** The file is longer, and its end was left out. */
+  truncated: boolean;
 }
 
 /**

@@ -136,7 +136,7 @@ function versionAuthor(
   return version.by?.label ?? t("projectFiles.formerMember");
 }
 
-function ProjectFileVersions({
+export function ProjectFileVersions({
   projectId,
   path,
   onOpenConversation,

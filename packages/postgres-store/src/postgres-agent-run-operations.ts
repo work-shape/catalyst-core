@@ -805,6 +805,17 @@ export function createPostgresAgentRunsStore(
     async updateAgentRunStatus(input: UpdateAgentRunStatusInput): Promise<AgentRun> {
       return updateAgentRunStatus(db, input);
     },
+    async recordAgentRunProject(input: Parameters<AgentRunStore["recordAgentRunProject"]>[0]) {
+      await db
+        .update(agentRuns)
+        .set({
+          projectId: input.project.projectId,
+          projectInstructionsVersion: input.project.instructionsVersion ?? null
+        })
+        .where(
+          and(eq(agentRuns.clientInstanceId, input.clientInstanceId), eq(agentRuns.id, input.runId))
+        );
+    },
     async claimAgentRunForJob(input: Parameters<AgentRunStore["claimAgentRunForJob"]>[0]) {
       return claimAgentRunForJob(db, input);
     },

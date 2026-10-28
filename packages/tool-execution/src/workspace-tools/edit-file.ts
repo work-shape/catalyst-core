@@ -15,7 +15,11 @@ import { failed } from "../workspace-tool-results";
 import type { WorkspaceToolDependencies } from "./dependencies";
 import { checkWorkspaceRoom, resolveTextFilePath, storeTextFile } from "./stored-text-file";
 import { resolveWorkspaceHandle } from "./workspace";
-import { editProjectFolderFile, projectFolderTarget } from "./project-folder";
+import {
+  editProjectFolderFile,
+  projectFolderTarget,
+  projectInstructionsFloor
+} from "./project-folder";
 import { editTextBytes } from "./edited-text";
 
 export function workspaceEditFileTool(deps: WorkspaceToolDependencies) {
@@ -31,6 +35,9 @@ export function workspaceEditFileTool(deps: WorkspaceToolDependencies) {
     effect: "changing",
     // Runs on the agent's own call. Without a mode the instance default for changes would apply.
     permission: { mode: "allow" },
+    // The project's instructions enter every run of everyone in the project (PRJ-3): the agent
+    // changes them only with the person's click, whatever a setting says.
+    policyFloor: (_call, input) => projectInstructionsFloor(deps, input.path),
     description:
       "Replace exact text in one /workspace text file. Each oldText must occur exactly once in the file as it is now; all edits apply or none. For a new file or a full rewrite use workspace.write_file. Search, move, delete and scripts stay with workspace.exec.",
     inputSchema: workspaceEditFileInputSchema,
