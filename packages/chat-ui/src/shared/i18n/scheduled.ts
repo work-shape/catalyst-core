@@ -83,7 +83,8 @@ export const scheduled = defineTranslations({
     "scheduled.cronTooOften":
       "A scheduled prompt runs at most every {minutes} minutes. Choose a less frequent schedule.",
     "scheduled.timeZone": "Time zone",
-    "scheduled.timeZoneHint": "The times above are in this zone. It starts as the instance's.",
+    "scheduled.timeZoneHint":
+      "The times above are in this zone. It starts as the default for all workspaces.",
     "scheduled.saveFailed":
       "It could not be saved. Check the schedule and the agent, then try again.",
     "scheduled.deleteTitle": "Delete this scheduled prompt?",
@@ -92,7 +93,7 @@ export const scheduled = defineTranslations({
     "scheduled.confirm.when": "When",
     "scheduled.confirm.runsAs": "Runs as",
     "scheduled.confirm.runsAsYou": "You, with your rights at each run",
-    "scheduled.confirm.instanceZone": "the instance's time zone",
+    "scheduled.confirm.instanceZone": "the default time zone for all workspaces",
     "scheduled.confirm.start": "Scheduled prompt",
     "scheduled.confirm.unknownStart": "One of your scheduled prompts",
     "scheduled.confirm.change": "Change",
@@ -187,7 +188,7 @@ export const scheduled = defineTranslations({
       "Ein geplanter Prompt läuft höchstens alle {minutes} Minuten. Wähle einen selteneren Zeitplan.",
     "scheduled.timeZone": "Zeitzone",
     "scheduled.timeZoneHint":
-      "Die Zeiten oben gelten in dieser Zone. Sie beginnt mit der der Instanz.",
+      "Die Zeiten oben gelten in dieser Zone. Sie beginnt mit dem Standard für alle Arbeitsbereiche.",
     "scheduled.saveFailed":
       "Das konnte nicht gespeichert werden. Prüf Zeitplan und Agent und versuch es noch einmal.",
     "scheduled.deleteTitle": "Diesen geplanten Prompt löschen?",
@@ -197,7 +198,7 @@ export const scheduled = defineTranslations({
     "scheduled.confirm.when": "Wann",
     "scheduled.confirm.runsAs": "Läuft als",
     "scheduled.confirm.runsAsYou": "Du, mit deinen Rechten zum Zeitpunkt jedes Laufs",
-    "scheduled.confirm.instanceZone": "Zeitzone der Instanz",
+    "scheduled.confirm.instanceZone": "Standardzeitzone für alle Arbeitsbereiche",
     "scheduled.confirm.start": "Geplanter Prompt",
     "scheduled.confirm.unknownStart": "Einer deiner geplanten Prompts",
     "scheduled.confirm.change": "Änderung",

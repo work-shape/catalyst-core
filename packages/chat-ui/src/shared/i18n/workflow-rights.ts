@@ -35,7 +35,7 @@ export const workflowRights = defineTranslations({
     "workflowRights.hiddenChildren":
       "{count} child workflows you cannot see need rights. Ask an admin.",
     "workflowRights.whoGives":
-      "Only someone who administers technical accounts and holds these rights can give them, usually an instance admin. Ask them before you publish.",
+      "Only someone who administers technical accounts and holds these rights can give them, usually an admin for all workspaces. Ask them before you publish.",
     "workflowRights.give": "Give {count} rights",
     "workflowRights.giveOne": "Give 1 right",
     "workflowRights.giveConfirm":
@@ -107,7 +107,7 @@ export const workflowRights = defineTranslations({
     "workflowRights.hiddenChildren":
       "{count} Unter-Workflows, die du nicht sehen kannst, brauchen Rechte. Bitte einen Admin darum.",
     "workflowRights.whoGives":
-      "Diese Rechte kann nur geben, wer Technische Konten verwaltet und die Rechte selbst hat, meist ein Instanz-Admin. Bitte so jemanden darum, bevor du veröffentlichst.",
+      "Diese Rechte kann nur geben, wer Technische Konten verwaltet und die Rechte selbst hat, meist ein Admin für alle Arbeitsbereiche. Bitte so jemanden darum, bevor du veröffentlichst.",
     "workflowRights.give": "{count} Rechte geben",
     "workflowRights.giveOne": "1 Recht geben",
     "workflowRights.giveConfirm":

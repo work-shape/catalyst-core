@@ -28,7 +28,7 @@ export const administration = defineTranslations({
     displayName: "Display name",
     displayNameRequired: "Display name is required",
     "jobs.title": "Jobs",
-    "jobs.description": "What this instance works on in the background.",
+    "jobs.description": "What is being worked on in the background.",
     "jobs.byKind": "By kind",
     "jobs.list": "Jobs",
     "jobs.kind": "Kind",
@@ -71,9 +71,9 @@ export const administration = defineTranslations({
     "jobs.retryConflict":
       "This job can no longer be retried. It is already queued, a newer job does its work, or what it worked on is gone.",
     "infrastructure.description":
-      "What this instance runs on, where each provider processes data, and whether it answers. The instance asks every provider every {minutes} minutes.",
+      "The infrastructure, where each provider processes data, and whether it answers. Every provider is checked every {minutes} minutes.",
     "infrastructure.operatorManaged":
-      "The operator of this instance sets these in its release config. Nothing here can be changed, and no secret value is shown.",
+      "The operator sets these in the release config. Nothing here can be changed, and no secret value is shown.",
     "infrastructure.loadFailed": "The infrastructure could not be loaded.",
     "infrastructure.refreshFailed": "The infrastructure could not be refreshed.",
     "infrastructure.provider": "Provider",
@@ -120,9 +120,9 @@ export const administration = defineTranslations({
     "infrastructure.checkNowFailed": "The check could not be started.",
     "modules.title": "Modules",
     "modules.description":
-      "The optional features of the product and which of them this instance runs.",
+      "The optional features of the product and which of them are enabled here.",
     "modules.operatorManaged":
-      "The operator of this instance sets these in its release config. Nothing here can be changed.",
+      "The operator sets these in the release config. Nothing here can be changed.",
     "modules.module": "Module",
     "modules.state": "State",
     "modules.contributes": "Adds",
@@ -188,7 +188,7 @@ export const administration = defineTranslations({
     userRightApiAccessManage: "Manage API access",
     userRightApiAccessManageDescription: "Create and revoke access for the CLI and automation.",
     userRightAuditView: "View audit log",
-    userRightAuditViewDescription: "See who changed what in this instance.",
+    userRightAuditViewDescription: "See who changed what across all workspaces.",
     userRightConfigAssetsRead: "View agent configuration",
     userRightConfigAssetsReadDescription: "Open agents and skills in the administration.",
     userRightConfigAssetsWrite: "Edit agent configuration",
@@ -232,7 +232,7 @@ export const administration = defineTranslations({
     displayName: "Anzeigename",
     displayNameRequired: "Anzeigename ist erforderlich",
     "jobs.title": "Jobs",
-    "jobs.description": "Woran diese Instanz im Hintergrund arbeitet.",
+    "jobs.description": "Was im Hintergrund bearbeitet wird.",
     "jobs.byKind": "Nach Art",
     "jobs.list": "Jobs",
     "jobs.kind": "Art",
@@ -276,9 +276,9 @@ export const administration = defineTranslations({
       "Dieser Job kann nicht mehr erneut versucht werden. Er wartet bereits, ein neuerer Job erledigt seine Arbeit, oder sein Gegenstand ist nicht mehr da.",
     newPasswordsDoNotMatch: "Neue Passwörter stimmen nicht überein",
     "infrastructure.description":
-      "Worauf diese Instanz läuft, wo jeder Anbieter Daten verarbeitet und ob er antwortet. Die Instanz fragt jeden Anbieter alle {minutes} Minuten.",
+      "Die Infrastruktur, wo jeder Anbieter Daten verarbeitet und ob er antwortet. Jeder Anbieter wird alle {minutes} Minuten geprüft.",
     "infrastructure.operatorManaged":
-      "Der Betreiber dieser Instanz legt das in der Release-Konfiguration fest. Hier lässt sich nichts ändern, und kein Geheimnis wird angezeigt.",
+      "Der Betreiber legt das in der Release-Konfiguration fest. Hier lässt sich nichts ändern, und kein Geheimnis wird angezeigt.",
     "infrastructure.loadFailed": "Die Infrastruktur konnte nicht geladen werden.",
     "infrastructure.refreshFailed": "Die Infrastruktur konnte nicht aktualisiert werden.",
     "infrastructure.provider": "Anbieter",
@@ -326,9 +326,9 @@ export const administration = defineTranslations({
     "infrastructure.checkNowFailed": "Die Prüfung konnte nicht gestartet werden.",
     "modules.title": "Module",
     "modules.description":
-      "Die optionalen Funktionen des Produkts und welche davon diese Instanz ausführt.",
+      "Die optionalen Funktionen des Produkts und welche davon hier eingeschaltet sind.",
     "modules.operatorManaged":
-      "Der Betreiber dieser Instanz legt das in der Release-Konfiguration fest. Hier lässt sich nichts ändern.",
+      "Der Betreiber legt das in der Release-Konfiguration fest. Hier lässt sich nichts ändern.",
     "modules.module": "Modul",
     "modules.state": "Zustand",
     "modules.contributes": "Bringt mit",
@@ -395,7 +395,7 @@ export const administration = defineTranslations({
     userRightApiAccessManageDescription:
       "Zugänge für die CLI und Automatisierungen anlegen und sperren.",
     userRightAuditView: "Auditprotokoll ansehen",
-    userRightAuditViewDescription: "Sehen, wer in dieser Instanz was geändert hat.",
+    userRightAuditViewDescription: "Sehen, wer in allen Arbeitsbereichen was geändert hat.",
     userRightConfigAssetsRead: "Agenten-Konfiguration ansehen",
     userRightConfigAssetsReadDescription: "Agenten und Skills in der Administration öffnen.",
     userRightConfigAssetsWrite: "Agenten-Konfiguration bearbeiten",

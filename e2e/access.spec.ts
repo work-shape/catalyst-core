@@ -268,7 +268,7 @@ test("an administrator grants by level, checks, denies and revokes rights", asyn
     await expect(checkRow(page, "delete")).toContainText("Refused");
     await expect(checkRow(page, "delete")).toContainText("Deny on this asset");
     await expect(checkRow(page, "read")).toContainText("Allowed");
-    await expect(page.getByText("does not take away instance-wide rights")).toBeVisible();
+    await expect(page.getByText("does not take away rights across all workspaces")).toBeVisible();
 
     // At 390 wide the page keeps inside the window, on the result and on the grant list,
     // and nothing in the list scrolls sideways: a row stacks and keeps its menu in reach.

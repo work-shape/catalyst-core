@@ -36,7 +36,7 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.headerAdd": "Add header",
     "connectionCreate.headerRemove": "Remove header {name}",
     "connectionCreate.testPath": "Test path",
-    "connectionCreate.testPathHint": "Without it the instance asks the base address.",
+    "connectionCreate.testPathHint": "Without it the base address is requested.",
     "connectionCreate.personContextHeader": "Person context header",
     "connectionCreate.personContextHeaderHint":
       "Calls send the value mapped to the person or service principal in this header. Calls for anyone without a mapping are refused.",
@@ -51,7 +51,7 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.errorTestPath":
       "The test path gave no successful answer. Check the address, the key and the test path, then connect again.",
     "connectionCreate.errorEgress":
-      "A network rule of this instance blocks this destination. To have it allowed, send the team that runs this instance the host {host}.",
+      "A network rule blocks this destination. To have it allowed, send the technical team the host {host}.",
     "connectionCreate.errorKey":
       "The server refused the key. Enter it again or create a new one there.",
     "connectionCreate.errorKeyMissing": "The server asks for a key. Enter it and connect again.",
@@ -84,11 +84,11 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.authOAuthHint":
       "After Connect a person signs in at the provider. Every call uses that account.",
     "connectionCreate.authOAuthClientHint":
-      "The instance signs in as its own client, with client ID and client secret, without a person.",
+      "The connection signs in as its own client, with client ID and client secret, without a person.",
     "connectionCreate.oauthAuthorizationUrl": "Authorization URL",
     "connectionCreate.oauthAuthorizationUrlHint": "The provider's page where a person signs in.",
     "connectionCreate.oauthTokenUrl": "Token URL",
-    "connectionCreate.oauthTokenUrlHint": "Where the instance fetches its tokens.",
+    "connectionCreate.oauthTokenUrlHint": "Where the connection fetches its tokens.",
     "connectionCreate.oauthClientId": "Client ID",
     "connectionCreate.oauthClientSecret": "Client secret",
     "connectionCreate.oauthClientSecretHint":
@@ -98,7 +98,7 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.oauthScopesHint": "Separated by spaces, as the provider names them.",
     "connectionCreate.oauthRevocationUrl": "Revocation URL",
     "connectionCreate.oauthRevocationUrlHint":
-      "Disconnecting revokes the sign-in there. Without it, only the instance forgets it.",
+      "Disconnecting revokes the sign-in there. Without it, only the access stored here is deleted.",
     "connectionCreate.oauthAuthMethod": "Client authentication",
     "connectionCreate.oauthAuthMethodPost": "In the request body (client_secret_post)",
     "connectionCreate.oauthAuthMethodBasic": "HTTP Basic (client_secret_basic)",
@@ -242,7 +242,7 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.headerAdd": "Header hinzufügen",
     "connectionCreate.headerRemove": "Header {name} entfernen",
     "connectionCreate.testPath": "Testpfad",
-    "connectionCreate.testPathHint": "Ohne ihn fragt die Instanz die Basisadresse an.",
+    "connectionCreate.testPathHint": "Ohne ihn wird die Basisadresse angefragt.",
     "connectionCreate.personContextHeader": "Header für den Personenkontext",
     "connectionCreate.personContextHeaderHint":
       "Aufrufe schicken in diesem Header den Wert mit, der der Person oder dem technischen Konto zugeordnet ist. Aufrufe für jemanden ohne Zuordnung werden abgelehnt.",
@@ -258,7 +258,7 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.errorTestPath":
       "Der Testpfad hat nicht erfolgreich geantwortet. Prüf Adresse, Schlüssel und Testpfad und verbinde erneut.",
     "connectionCreate.errorEgress":
-      "Eine Netzwerkregel dieser Instanz sperrt dieses Ziel. Damit es erlaubt wird, schick dem Team, das diese Instanz betreibt, den Host {host}.",
+      "Eine Netzwerkregel sperrt dieses Ziel. Damit es erlaubt wird, schick dem technischen Team den Host {host}.",
     "connectionCreate.errorKey":
       "Der Server hat den Schlüssel abgelehnt. Gib ihn erneut ein oder erzeuge dort einen neuen.",
     "connectionCreate.errorKeyMissing":
@@ -293,12 +293,12 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.authOAuthHint":
       "Nach dem Verbinden meldet sich eine Person beim Anbieter an. Jeder Aufruf nutzt dieses Konto.",
     "connectionCreate.authOAuthClientHint":
-      "Die Instanz meldet sich mit Client-ID und Client-Secret selbst an, ohne Person.",
+      "Die Verbindung meldet sich mit Client-ID und Client-Secret selbst an, ohne Person.",
     "connectionCreate.oauthAuthorizationUrl": "Autorisierungs-URL",
     "connectionCreate.oauthAuthorizationUrlHint":
       "Die Seite des Anbieters, auf der sich eine Person anmeldet.",
     "connectionCreate.oauthTokenUrl": "Token-URL",
-    "connectionCreate.oauthTokenUrlHint": "Hier holt die Instanz ihre Tokens.",
+    "connectionCreate.oauthTokenUrlHint": "Hier holt die Verbindung ihre Tokens.",
     "connectionCreate.oauthClientId": "Client-ID",
     "connectionCreate.oauthClientSecret": "Client-Secret",
     "connectionCreate.oauthClientSecretHint":
@@ -309,7 +309,7 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.oauthScopesHint": "Durch Leerzeichen getrennt, wie der Anbieter sie nennt.",
     "connectionCreate.oauthRevocationUrl": "Widerrufs-URL",
     "connectionCreate.oauthRevocationUrlHint":
-      "Beim Trennen wird die Anmeldung dort widerrufen. Ohne sie vergisst nur die Instanz sie.",
+      "Beim Trennen wird die Anmeldung dort widerrufen. Ohne sie wird nur der hier gespeicherte Zugang gelöscht.",
     "connectionCreate.oauthAuthMethod": "Client-Authentifizierung",
     "connectionCreate.oauthAuthMethodPost": "Im Anfragetext (client_secret_post)",
     "connectionCreate.oauthAuthMethodBasic": "HTTP Basic (client_secret_basic)",

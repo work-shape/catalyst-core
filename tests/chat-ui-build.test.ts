@@ -429,7 +429,7 @@ describe("Studio frame", () => {
     expect(list).not.toContain("More actions");
     // The list says what Connections are and which of them are read-only, with rows and without.
     expect(list).toContain(
-      "Connections give agents, apps and workflows access to outside systems. Those that come with the instance&#x27;s setup are read-only here."
+      "Connections give agents, apps and workflows access to outside systems. Those that come with the system setup are read-only here."
     );
     // The address of a Connection the instance does not hold says so, and names the way back.
     const missing = render(
@@ -456,7 +456,7 @@ describe("Studio frame", () => {
       "No connections yet. A connection holds the access to an outside system."
     );
     expect(empty("de")).toContain(
-      "Verbindungen geben Agenten, Apps und Workflows Zugang zu externen Systemen. Die aus der Einrichtung der Instanz sind hier schreibgeschützt."
+      "Verbindungen geben Agenten, Apps und Workflows Zugang zu externen Systemen. Die aus der Einrichtung des Systems sind hier schreibgeschützt."
     );
     expect(empty("en")).toContain(">New connection<");
     expect(empty("de")).toContain(
@@ -506,7 +506,7 @@ describe("Studio frame", () => {
     );
 
     expect(unknown).toContain('aria-busy="true"');
-    expect(unknown).not.toContain("There is nothing to build on this instance yet.");
+    expect(unknown).not.toContain("There is nothing to build here yet.");
     expect(list).toContain('aria-busy="true"');
     expect(list).toContain('<option value="agents" selected="">Agents</option>');
     expect(list).not.toContain("No agents yet");
@@ -531,7 +531,7 @@ describe("Studio frame", () => {
     expect(area).toContain('role="alert"');
     expect(area).toContain("Studio could not be loaded.");
     expect(area).toContain("Try again");
-    expect(area).not.toContain("There is nothing to build on this instance yet.");
+    expect(area).not.toContain("There is nothing to build here yet.");
     expect(list).toContain('role="alert"');
     expect(list).toContain("The list could not be read.");
     expect(list).toContain("Try again");
@@ -541,7 +541,7 @@ describe("Studio frame", () => {
 
   it("says that there is nothing to build where the instance names no kind", () => {
     expect(render({}, { source: source({ overrides: { kinds: [] } }) })).toContain(
-      "There is nothing to build on this instance yet."
+      "There is nothing to build here yet."
     );
   });
 

@@ -23,7 +23,7 @@ export const personalConnections = defineTranslations({
     "personalConnections.disconnect": "Disconnect",
     "personalConnections.disconnectTitle": "Disconnect {title}?",
     "personalConnections.disconnectText":
-      "Agents can no longer use your account at {title}. The instance deletes its access and asks the provider to withdraw it.",
+      "Agents can no longer use your account at {title}. The stored access is deleted and the provider is asked to withdraw it.",
     "personalConnections.disconnectFailed": "Disconnecting did not work.",
     "personalConnections.providerKept":
       "Disconnected. The provider did not confirm that it withdrew the access: remove it in your account there.",
@@ -39,7 +39,7 @@ export const personalConnections = defineTranslations({
     "personalConnections.unknownPerson": "Unknown person",
     "personalConnections.accountUnnamed": "No account named",
     "personalConnections.providerGrantStays":
-      "Revoking deletes the stored access on this instance. The grant at the provider stays until the person removes it there or it expires.",
+      "Revoking deletes the access stored here. The grant at the provider stays until the person removes it there or it expires.",
     "personalConnections.revoke": "Revoke",
     "personalConnections.revokeTitle": "Revoke the sign-in of {name}?",
     "personalConnections.revokeText":
@@ -76,7 +76,7 @@ export const personalConnections = defineTranslations({
     "personalConnections.disconnect": "Trennen",
     "personalConnections.disconnectTitle": "{title} trennen?",
     "personalConnections.disconnectText":
-      "Agents können dein Konto bei {title} dann nicht mehr nutzen. Die Instanz löscht ihren Zugang und bittet den Anbieter, ihn zu widerrufen.",
+      "Agents können dein Konto bei {title} dann nicht mehr nutzen. Der gespeicherte Zugang wird gelöscht und der Anbieter gebeten, ihn zu widerrufen.",
     "personalConnections.disconnectFailed": "Das Trennen hat nicht geklappt.",
     "personalConnections.providerKept":
       "Getrennt. Der Anbieter hat nicht bestätigt, dass er den Zugang widerrufen hat: Entferne ihn dort in deinem Konto.",
@@ -94,7 +94,7 @@ export const personalConnections = defineTranslations({
     "personalConnections.unknownPerson": "Unbekannte Person",
     "personalConnections.accountUnnamed": "Kein Konto genannt",
     "personalConnections.providerGrantStays":
-      "Widerrufen löscht den gespeicherten Zugang auf dieser Instanz. Die Freigabe beim Anbieter bleibt, bis die Person sie dort entfernt oder sie abläuft.",
+      "Widerrufen löscht den hier gespeicherten Zugang. Die Freigabe beim Anbieter bleibt, bis die Person sie dort entfernt oder sie abläuft.",
     "personalConnections.revoke": "Widerrufen",
     "personalConnections.revokeTitle": "Anmeldung von {name} widerrufen?",
     "personalConnections.revokeText":

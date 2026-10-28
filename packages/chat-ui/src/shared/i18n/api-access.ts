@@ -42,14 +42,14 @@ export const apiAccess = defineTranslations({
     apiAccessReadGrantDescription:
       "Pull, inspect and compare agents, skills and other managed configuration.",
     apiAccessReleaseGrant: "Push configuration releases",
-    apiAccessReleaseGrantDescription: "Push managed configuration to this instance.",
+    apiAccessReleaseGrantDescription: "Push managed configuration for all workspaces.",
     apiAccessRevoke: "Revoke",
     apiAccessRevokeCredential: "Revoke API key?",
     apiAccessRevokeDescription:
       "This key will stop working immediately. This action cannot be undone.",
     apiAccessRevoked: "Revoked",
     apiAccessRightsActionNotGrantable:
-      "The instance does not give this right to a service principal: it can only be allowed to use a resource. Choose one of the rights offered here. If none fits, reload the page.",
+      "A service principal cannot hold this right: it can only be allowed to use a resource. Choose one of the rights offered here. If none fits, reload the page.",
     apiAccessRightsAdd: "Add right",
     apiAccessRightsChooseConnection: "Choose a Connection",
     apiAccessRightsChooseResource: "Choose a resource",
@@ -75,7 +75,7 @@ export const apiAccess = defineTranslations({
     apiAccessRightsGivenOn: "Given on {date}",
     apiAccessRightsHiddenResource: "A resource you cannot see",
     apiAccessRightsIncomplete: "Choose a resource.",
-    apiAccessRightsInstance: "Instance",
+    apiAccessRightsInstance: "Everyone",
     apiAccessRightsInvalidScope:
       "This resource no longer exists or is of another kind. Close this dialog, reload the page and choose the resource again.",
     apiAccessRightsKind: "Kind of resource",
@@ -85,7 +85,7 @@ export const apiAccess = defineTranslations({
     apiAccessRightsNoResources:
       "Nothing to choose: the service principal already holds this right on every resource you can see.",
     apiAccessRightsNoneGrantable:
-      "This instance has no kind of resource a service principal can be given a right on.",
+      "There is no kind of resource a service principal can be given a right on.",
     apiAccessRightsNotHeld: "You do not hold this right here yourself, so you cannot give it.",
     apiAccessRightsNotHeldAnywhere:
       "You do not hold this right on any of these resources yourself, so you cannot give it.",
@@ -165,14 +165,15 @@ export const apiAccess = defineTranslations({
     apiAccessReadGrantDescription:
       "Agenten, Skills und andere verwaltete Konfiguration abrufen, prüfen und vergleichen.",
     apiAccessReleaseGrant: "Konfiguration per Release einspielen",
-    apiAccessReleaseGrantDescription: "Verwaltete Konfiguration auf diese Instanz übertragen.",
+    apiAccessReleaseGrantDescription:
+      "Verwaltete Konfiguration für alle Arbeitsbereiche übertragen.",
     apiAccessRevoke: "Widerrufen",
     apiAccessRevokeCredential: "API-Schlüssel widerrufen?",
     apiAccessRevokeDescription:
       "Dieser Schlüssel funktioniert sofort nicht mehr. Dies kann nicht rückgängig gemacht werden.",
     apiAccessRevoked: "Widerrufen",
     apiAccessRightsActionNotGrantable:
-      "Die Instanz vergibt dieses Recht nicht an ein Technisches Konto: Es kann nur Ressourcen verwenden. Wähle eines der hier angebotenen Rechte. Passt keines, lade die Seite neu.",
+      "Ein Technisches Konto kann dieses Recht nicht erhalten: Es kann nur Ressourcen verwenden. Wähle eines der hier angebotenen Rechte. Passt keines, lade die Seite neu.",
     apiAccessRightsAdd: "Recht hinzufügen",
     apiAccessRightsChooseConnection: "Verbindung wählen",
     apiAccessRightsChooseResource: "Ressource wählen",
@@ -198,7 +199,7 @@ export const apiAccess = defineTranslations({
     apiAccessRightsGivenOn: "Vergeben am {date}",
     apiAccessRightsHiddenResource: "Eine Ressource, die du nicht sehen kannst",
     apiAccessRightsIncomplete: "Wähle eine Ressource.",
-    apiAccessRightsInstance: "Instanz",
+    apiAccessRightsInstance: "Alle",
     apiAccessRightsInvalidScope:
       "Diese Ressource gibt es nicht mehr oder sie ist von anderer Art. Schließe diesen Dialog, lade die Seite neu und wähle die Ressource erneut.",
     apiAccessRightsKind: "Art der Ressource",
@@ -208,7 +209,7 @@ export const apiAccess = defineTranslations({
     apiAccessRightsNoResources:
       "Nichts zu wählen: Das Technische Konto hat dieses Recht bereits auf jeder Ressource, die du siehst.",
     apiAccessRightsNoneGrantable:
-      "Diese Instanz hat keine Art von Ressource, auf der ein Technisches Konto ein Recht erhalten kann.",
+      "Es gibt keine Art von Ressource, auf der ein Technisches Konto ein Recht erhalten kann.",
     apiAccessRightsNotHeld:
       "Du hast dieses Recht hier selbst nicht und kannst es deshalb nicht weitergeben.",
     apiAccessRightsNotHeldAnywhere:

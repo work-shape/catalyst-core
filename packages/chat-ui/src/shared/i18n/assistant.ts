@@ -56,7 +56,7 @@ export const assistant = defineTranslations({
     followUpWaitingHint: "Sent once the agent has finished this whole answer.",
     chatStarters: "Suggestions to start with",
     genericWelcome: "How can I help?",
-    instanceNotConfigured: "This instance isn't configured yet. No agents have been published.",
+    instanceNotConfigured: "No agents have been published yet.",
     loadingConversation: "Loading conversation",
     messagePlaceholder: "Message",
     newConversationPrivateHint: "New conversations in this workspace are private to you.",
@@ -166,8 +166,7 @@ export const assistant = defineTranslations({
     followUpWaitingHint: "Wird gesendet, sobald der Agent mit der ganzen Antwort fertig ist.",
     chatStarters: "Vorschläge für den Einstieg",
     genericWelcome: "Wie kann ich helfen?",
-    instanceNotConfigured:
-      "Diese Instanz ist noch nicht konfiguriert. Es wurden noch keine Agenten veröffentlicht.",
+    instanceNotConfigured: "Es wurden noch keine Agenten veröffentlicht.",
     loadingConversation: "Unterhaltung wird geladen",
     messagePlaceholder: "Nachricht",
     newConversationPrivateHint:

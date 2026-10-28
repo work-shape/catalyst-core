@@ -14,7 +14,7 @@ export const knowledgeSources = defineTranslations({
     "knowledgeSources.noConnections": "No connection here syncs folders yet.",
     "knowledgeSources.noConnectionsFor": "To sync folders from {types}, create a connection first.",
     "knowledgeSources.noDocumentTypes":
-      "This instance connects no document source yet. Files are added under Documents.",
+      "No document source is connected yet. Files are added under Documents.",
     "knowledgeSources.connectionsFailed": "The connections could not be read.",
     "knowledgeSources.connection": "Connection",
     "knowledgeSources.folders": "Folder IDs",
@@ -128,7 +128,7 @@ export const knowledgeSources = defineTranslations({
     "knowledgeSources.noConnectionsFor":
       "Um Ordner aus {types} zu synchronisieren, lege zuerst eine Verbindung an.",
     "knowledgeSources.noDocumentTypes":
-      "Diese Instanz verbindet noch keine Dokumentquelle. Dateien fügst du unter Dokumente hinzu.",
+      "Es ist noch keine Dokumentquelle verbunden. Dateien fügst du unter Dokumente hinzu.",
     "knowledgeSources.connectionsFailed": "Die Verbindungen ließen sich nicht lesen.",
     "knowledgeSources.connection": "Verbindung",
     "knowledgeSources.folders": "Ordner-IDs",

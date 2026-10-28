@@ -948,8 +948,8 @@ describe("What uses a Data Store", () => {
     expect(read).toContain(">Direct access<");
     expect(read).toContain(">Reporting (technical account) · 2 more with access<");
     // The admins are said once, under the section, and on no line.
-    expect(read).toContain(">Instance admins always see everything.<");
-    expect(page.split("Instance admins").length - 1).toBe(1);
+    expect(read).toContain(">Admins for all workspaces always see everything.<");
+    expect(page.split("Admins for all workspaces").length - 1).toBe(1);
     // What the reader may not see is counted where it would stand: the hidden Workflow that
     // fills the store under Filled by, the two that read it under Read by.
     expect(filled).toContain("and 1 more you can&#x27;t see");
@@ -967,7 +967,7 @@ describe("What uses a Data Store", () => {
     expect(german).toContain(">Alle in Kai Spezis (14 Personen)<");
     expect(german).toContain(">Direkter Zugriff<");
     expect(german).toContain(">Reporting (technisches Konto) · 2 weitere mit Zugriff<");
-    expect(german).toContain(">Instanz-Admins sehen immer alles.<");
+    expect(german).toContain(">Admins für alle Arbeitsbereiche sehen immer alles.<");
     expect(german).toContain("und 1 weitere, die du nicht sehen kannst");
     expect(german).toContain("und 2 weitere, die du nicht sehen kannst");
   });
@@ -977,7 +977,7 @@ describe("What uses a Data Store", () => {
     expect(nothing).toContain("No published workflow or app adds rows to this store.");
     // Whoever may read the store is always said, admins at the least.
     expect(nothing).toContain(">Direct access<");
-    expect(nothing).toContain(">Only instance admins<");
+    expect(nothing).toContain(">Only admins for all workspaces<");
     const hidden = (fills: number, reads: number) =>
       render(address, {
         usedBy: ready({
@@ -1223,8 +1223,8 @@ describe("where an App's data comes from", () => {
         t,
         "en"
       );
-    expect(shared("instance", 12)).toBe("Whole instance (12 people)");
-    expect(shared("instance", 1)).toBe("Whole instance (1 person)");
+    expect(shared("instance", 12)).toBe("Everyone (12 people)");
+    expect(shared("instance", 1)).toBe("Everyone (1 person)");
     expect(shared("self", 1)).toBe("One selected person");
     expect(
       audienceLine(
@@ -1237,7 +1237,7 @@ describe("where an App's data comes from", () => {
         translate("de").t,
         "de"
       )
-    ).toBe("Ganze Instanz (12 Personen)");
+    ).toBe("Alle (12 Personen)");
     // An App for its workspace is said by that workspace, as before.
     expect(
       audienceLine(
@@ -1271,7 +1271,9 @@ describe("where an App's data comes from", () => {
     ).toBe(
       "Everyone in Kai Spezis (1 person) · Everyone with the role user · Group grp_sales · 1 more with access"
     );
-    expect(audienceLine({ holders: [], hiddenHolders: 0 }, t, "en")).toBe("Only instance admins");
+    expect(audienceLine({ holders: [], hiddenHolders: 0 }, t, "en")).toBe(
+      "Only admins for all workspaces"
+    );
     // A count with nobody named before it is not "more".
     expect(audienceLine({ holders: [], hiddenHolders: 4 }, t, "en")).toBe("4 with access");
     expect(audienceLine({ holders: [], hiddenHolders: 3 }, translate("de").t, "de")).toBe(

@@ -86,14 +86,14 @@ describe("the composer at a spend limit", () => {
       }
     });
     expect(usageLimitBlockReason(stopped, en)).toBe(
-      "This instance has reached its daily spend limit. It resets at midnight UTC. An administrator can raise it."
+      "The daily spend limit for all workspaces together has been reached. It resets at midnight UTC. An administrator can raise it."
     );
     expect(usageLimitBlockReason(usage(), en)).toBeUndefined();
     expect(usageLimitBlockReason(undefined, en)).toBeUndefined();
   });
 
   it("closes the composer with the sentence, which a queued send does not wait for", () => {
-    const reason = "This instance has reached its daily spend limit.";
+    const reason = "The daily spend limit for all workspaces together has been reached.";
     expect(
       workspaceSendBlock({
         attachmentBlockedReason: undefined,
@@ -214,7 +214,7 @@ describe("Settings > Instance > Limits", () => {
     );
     try {
       expect(page.container.textContent).toContain(
-        "The team that runs this instance allows at most €50.00 a day and €500.00 a month."
+        "The technical team allows at most €50.00 a day and €500.00 a month."
       );
       expect(page.container.textContent).toContain("93 % of the monthly limit of €30.00");
       const users = editor(page.container, "Every user");
@@ -243,12 +243,12 @@ describe("Settings > Instance > Limits", () => {
       )
     );
     try {
-      const instance = editor(page.container, "Instance");
+      const instance = editor(page.container, "All workspaces");
       await act(async () => typeInto(instance.monthly, "900"));
       await act(async () => instance.save.click());
       await waitForText(
         page.container,
-        "This is above the most the team that runs this instance allows: €500.00."
+        "This is above the most the technical team allows: €500.00."
       );
       expect(page.changes).toEqual([{ level: "instance", limits: { monthly: 900 } }]);
     } finally {

@@ -27,8 +27,7 @@ export const collaborationWorkspace = defineTranslations({
     collaborationWorkspaceAddMemberSubmit: "Add",
     collaborationWorkspaceApprove: "Approve",
     collaborationWorkspaceBrowse: "Browse workspaces",
-    collaborationWorkspaceBrowseDescription:
-      "Discoverable workspaces in this instance. Request access to join one.",
+    collaborationWorkspaceBrowseDescription: "Discoverable workspaces. Request access to join one.",
     collaborationWorkspaceBrowseShort: "Browse",
     collaborationWorkspaceBrowseTitle: "Browse workspaces",
     collaborationWorkspaceConversationVisibilityHelp:
@@ -82,7 +81,7 @@ export const collaborationWorkspace = defineTranslations({
       "This conversation still has work running. Wait for it to finish, then move it.",
     collaborationWorkspaceErrorInvalid: "This change is not allowed.",
     collaborationWorkspaceErrorInvitationsUnavailable:
-      "No active user with this email address exists in this instance. Email invitations are not available yet, so the person needs an account here first.",
+      "No active user with this email address exists here. Email invitations are not available yet, so the person needs an account here first.",
     collaborationWorkspaceErrorLastOwner: "A shared workspace has to keep at least one owner.",
     collaborationWorkspaceErrorMoveUnavailable:
       "This conversation or the chosen workspace is no longer available.",
@@ -113,7 +112,7 @@ export const collaborationWorkspace = defineTranslations({
     collaborationWorkspaceMemberCandidatesLabel: "Member suggestions",
     collaborationWorkspaceMemberCandidatesLoading: "Searching people…",
     collaborationWorkspaceMembersDescription:
-      "Members use this workspace's agents and apps and work in its conversations. Builders may also edit what this workspace owns, such as its agents and apps; Publishers may publish it. An instance admin grants these rights.",
+      "Members use this workspace's agents and apps and work in its conversations. Builders may also edit what this workspace owns, such as its agents and apps; Publishers may publish it. An admin for all workspaces grants these rights.",
     collaborationWorkspaceMembersLoadFailed: "Members could not be loaded.",
     collaborationWorkspaceMembersLoadRefused: "You may not see the members of this workspace.",
     collaborationWorkspaceNameLabel: "Name",
@@ -152,7 +151,7 @@ export const collaborationWorkspace = defineTranslations({
     collaborationWorkspaceSharedHeading: "Shared workspaces",
     collaborationWorkspaceVisibilityDiscoverable: "Discoverable",
     collaborationWorkspaceVisibilityDiscoverableHint:
-      "Everyone in this instance can find the workspace and request access.",
+      "Everyone can find the workspace and request access.",
     collaborationWorkspaceVisibilityLabel: "Visibility",
     collaborationWorkspaceVisibilityPrivate: "Private",
     collaborationWorkspaceVisibilityPrivateHint:
@@ -197,7 +196,7 @@ export const collaborationWorkspace = defineTranslations({
     collaborationWorkspaceApprove: "Genehmigen",
     collaborationWorkspaceBrowse: "Arbeitsbereiche durchsuchen",
     collaborationWorkspaceBrowseDescription:
-      "Auffindbare Arbeitsbereiche in dieser Instanz. Fordere Zugriff an, um beizutreten.",
+      "Auffindbare Arbeitsbereiche. Fordere Zugriff an, um beizutreten.",
     collaborationWorkspaceBrowseShort: "Durchsuchen",
     collaborationWorkspaceBrowseTitle: "Arbeitsbereiche durchsuchen",
     collaborationWorkspaceConversationVisibilityHelp:
@@ -256,7 +255,7 @@ export const collaborationWorkspace = defineTranslations({
       "In dieser Unterhaltung läuft noch Arbeit. Warte, bis sie fertig ist, und verschiebe sie dann.",
     collaborationWorkspaceErrorInvalid: "Diese Änderung ist nicht zulässig.",
     collaborationWorkspaceErrorInvitationsUnavailable:
-      "Es gibt keine aktive Person mit dieser E-Mail-Adresse in dieser Instanz. Einladungen per E-Mail sind noch nicht verfügbar – die Person braucht zuerst ein Konto hier.",
+      "Es gibt hier keine aktive Person mit dieser E-Mail-Adresse. Einladungen per E-Mail sind noch nicht verfügbar – die Person braucht zuerst ein Konto hier.",
     collaborationWorkspaceErrorLastOwner:
       "Ein geteilter Arbeitsbereich muss mindestens einen Besitzer behalten.",
     collaborationWorkspaceErrorMoveUnavailable:
@@ -292,7 +291,7 @@ export const collaborationWorkspace = defineTranslations({
     collaborationWorkspaceMemberCandidatesLabel: "Mitgliedervorschläge",
     collaborationWorkspaceMemberCandidatesLoading: "Personen werden gesucht…",
     collaborationWorkspaceMembersDescription:
-      "Mitglieder verwenden die Agenten und Apps dieses Arbeitsbereichs und arbeiten in seinen Unterhaltungen. Wer das Recht zum Bearbeiten hat, darf zusätzlich bearbeiten, was dem Arbeitsbereich gehört, etwa seine Agenten und Apps; wer das Recht zum Veröffentlichen hat, darf es veröffentlichen. Beide Rechte vergibt jemand, der die Instanz verwaltet.",
+      "Mitglieder verwenden die Agenten und Apps dieses Arbeitsbereichs und arbeiten in seinen Unterhaltungen. Wer das Recht zum Bearbeiten hat, darf zusätzlich bearbeiten, was dem Arbeitsbereich gehört, etwa seine Agenten und Apps; wer das Recht zum Veröffentlichen hat, darf es veröffentlichen. Beide Rechte vergibt ein Admin für alle Arbeitsbereiche.",
     collaborationWorkspaceMembersLoadFailed: "Mitglieder konnten nicht geladen werden.",
     collaborationWorkspaceMembersLoadRefused:
       "Du darfst die Mitglieder dieses Arbeitsbereichs nicht sehen.",
@@ -337,7 +336,7 @@ export const collaborationWorkspace = defineTranslations({
     collaborationWorkspaceSharedHeading: "Geteilte Arbeitsbereiche",
     collaborationWorkspaceVisibilityDiscoverable: "Auffindbar",
     collaborationWorkspaceVisibilityDiscoverableHint:
-      "Alle in dieser Instanz können den Arbeitsbereich finden und Zugriff anfragen.",
+      "Alle können den Arbeitsbereich finden und Zugriff anfragen.",
     collaborationWorkspaceVisibilityLabel: "Sichtbarkeit",
     collaborationWorkspaceVisibilityPrivate: "Privat",
     collaborationWorkspaceVisibilityPrivateHint:

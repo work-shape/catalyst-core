@@ -480,7 +480,7 @@ describe("inbox item", () => {
     expect(state({ status: "not-found" })).toContain("du darfst ihn nicht sehen");
     // ACCEPT-FIX-9 C13: the refusal named nobody. It names an instance admin to ask, where the
     // instance tells the person one, and otherwise says whom to ask without a name.
-    expect(state({ status: "not-found" })).toContain("Frag jemanden, der die Instanz verwaltet.");
+    expect(state({ status: "not-found" })).toContain("Frag einen Admin für alle Arbeitsbereiche.");
     const named = render(
       createElement(
         ApprovalRevisionHostProvider,
@@ -498,7 +498,7 @@ describe("inbox item", () => {
       )
     );
     expect(named).toContain(
-      "Diesen Vorschlag gibt es nicht mehr oder du darfst ihn nicht sehen. Frag jemanden, der die Instanz verwaltet, zum Beispiel Mara Lindqvist."
+      "Diesen Vorschlag gibt es nicht mehr oder du darfst ihn nicht sehen. Frag einen Admin für alle Arbeitsbereiche, zum Beispiel Mara Lindqvist."
     );
     expect(state({ status: "error", onRetry: () => undefined })).toContain(
       ">Erneut versuchen</button>"

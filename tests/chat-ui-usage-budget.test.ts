@@ -314,22 +314,22 @@ describe("Usage opens with the month's single answer (UXA-5)", () => {
     {
       locale: "en" as const,
       instanceAdminName: "Mara",
-      said: "You may not see the usage of this instance. Ask an instance admin, for example Mara."
+      said: "You may not see usage across all workspaces. Ask an admin for all workspaces, for example Mara."
     },
     {
       locale: "de" as const,
       instanceAdminName: "Mara",
-      said: "Du darfst die Nutzung dieser Instanz nicht sehen. Frag jemanden, der die Instanz verwaltet, zum Beispiel Mara."
+      said: "Du darfst die Nutzung in allen Arbeitsbereichen nicht sehen. Frag einen Admin für alle Arbeitsbereiche, zum Beispiel Mara."
     },
     {
       locale: "en" as const,
       instanceAdminName: undefined,
-      said: "You may not see the usage of this instance. Ask an instance admin."
+      said: "You may not see usage across all workspaces. Ask an admin for all workspaces."
     },
     {
       locale: "de" as const,
       instanceAdminName: undefined,
-      said: "Du darfst die Nutzung dieser Instanz nicht sehen. Frag jemanden, der die Instanz verwaltet."
+      said: "Du darfst die Nutzung in allen Arbeitsbereichen nicht sehen. Frag einen Admin für alle Arbeitsbereiche."
     }
   ])(
     "a refusal names whom to ask ($locale, $instanceAdminName)",

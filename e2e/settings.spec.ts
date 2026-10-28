@@ -19,11 +19,11 @@ test("an instance admin opens every group of the Settings rail", async ({ page }
   await settingsGear(page).click();
   const rail = settingsPages(page);
   await expect(page).toHaveURL(/\/settings\/instance\/users$/u);
-  for (const group of ["You", "Workspace", "Instance"]) {
+  for (const group of ["You", "Workspace", "All workspaces"]) {
     await expect(rail.getByRole("group", { name: group, exact: true })).toBeVisible();
   }
   await expect(
-    rail.getByRole("group", { name: "Instance", exact: true }).getByRole("button")
+    rail.getByRole("group", { name: "All workspaces", exact: true }).getByRole("button")
   ).toHaveText(["Users", "Access", "API access", "Usage", "Limits", "Audit", "Workspaces"]);
   // How the instance runs folds away at the end of Instance, under System (RIGHTS-1e).
   const system = rail.getByRole("group", { name: "System", exact: true });
@@ -135,7 +135,7 @@ test("a plain user finds only their own pages in the Settings rail", async ({
   for (const closed of ["Users", "Access", "API access", "Limits", "Audit", "Jobs", "System"]) {
     await expect(rail.getByRole("button", { name: closed, exact: true })).toHaveCount(0);
   }
-  await expect(rail.getByRole("group", { name: "Instance" })).toHaveCount(0);
+  await expect(rail.getByRole("group", { name: "All workspaces" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Studio", exact: true })).toHaveCount(0);
 
   // The server refuses what the rail hides: the list of users stays closed to this user.
@@ -163,7 +163,7 @@ test("a plain user finds only their own pages in the Settings rail", async ({
     ).toBeVisible();
     await expect(page.getByRole("heading", { name: "Usage", level: 1 })).toHaveCount(0);
     await expect(page.getByRole("tab", { name: /^Rights/u })).toHaveCount(0);
-    await expect(rail.getByRole("group", { name: "Instance" })).toHaveCount(0);
+    await expect(rail.getByRole("group", { name: "All workspaces" })).toHaveCount(0);
   }
 
   await page.getByRole("button", { name: "Open your profile", exact: true }).click();

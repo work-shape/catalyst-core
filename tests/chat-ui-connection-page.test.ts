@@ -201,7 +201,7 @@ describe("Connection page", () => {
     expect(markup).not.toContain(">sample-business<");
     expect(markup).toContain(">Everyone<");
     expect(markup).toContain(
-      "This connection comes with the instance&#x27;s setup. The team that runs this instance changes it there; it cannot be changed here."
+      "This connection comes with the system setup. The technical team changes it there; it cannot be changed here."
     );
     // Where it comes from is a sentence at the top of the page and no chip.
     expect(markup).not.toContain("Defined in release config");
@@ -217,7 +217,7 @@ describe("Connection page", () => {
     expect(markup).toContain('aria-label="More actions"');
     expect(markup).toContain(">Copy to edit<");
     expect(renderPage({ locale: "de" })).toContain(
-      "Diese Verbindung gehört zur Einrichtung der Instanz. Das Team, das diese Instanz betreibt, ändert sie dort; hier lässt sie sich nicht ändern."
+      "Diese Verbindung gehört zur Einrichtung des Systems. Das technische Team ändert sie dort; hier lässt sie sich nicht ändern."
     );
     expect(renderPage({ asset: connectionAsset("ledger", { origin: "runtime" }) })).not.toContain(
       "data-build-read-only"
@@ -278,7 +278,7 @@ describe("Connection page", () => {
     expect(readOnly).toContain(">Set<");
     expect(readOnly).not.toContain("version 2");
     expect(markup).toContain(
-      "The credential stays in the instance&#x27;s protected store. This page shows only whether it is there."
+      "The credential stays in protected storage. This page shows only whether it is there."
     );
     // The revision names the handle of the credential. The page reads named members only.
     expect(markup).not.toContain(FIXTURE_SECRET_HANDLE);
@@ -331,8 +331,8 @@ describe("Connection page", () => {
       [
         "networkDenied",
         "network_denied",
-        "The instance may not reach this address. Its host is not among the outside addresses allowed for it.",
-        "Die Instanz darf diese Adresse nicht erreichen. Ihr Host gehört nicht zu den externen Adressen, die für sie erlaubt sind."
+        "Access to this address is not allowed. Its host is not among the allowed outside addresses.",
+        "Der Zugriff auf diese Adresse ist nicht erlaubt. Ihr Host gehört nicht zu den erlaubten externen Adressen."
       ],
       [
         "unavailable",
@@ -343,14 +343,14 @@ describe("Connection page", () => {
       [
         "notConfigured",
         "not_configured",
-        "The credential of this connection is missing. Until the team that runs this instance supplies it, no call reaches the outside system.",
-        "Die Zugangsdaten dieser Verbindung fehlen. Bis das Team, das diese Instanz betreibt, sie bereitstellt, erreicht kein Aufruf das externe System."
+        "The credential of this connection is missing. Until the technical team supplies it, no call reaches the outside system.",
+        "Die Zugangsdaten dieser Verbindung fehlen. Bis das technische Team sie bereitstellt, erreicht kein Aufruf das externe System."
       ],
       [
         "secretUnreadable",
         "secret_unreadable",
-        "A credential is stored, but the instance cannot read it. Until it is set again, no call reaches the outside system.",
-        "Zugangsdaten sind gespeichert, aber die Instanz kann sie nicht lesen. Bis sie neu gesetzt sind, erreicht kein Aufruf das externe System."
+        "A credential is stored, but it cannot be read. Until it is set again, no call reaches the outside system.",
+        "Zugangsdaten sind gespeichert, lassen sich aber nicht lesen. Bis sie neu gesetzt sind, erreicht kein Aufruf das externe System."
       ]
     ];
     for (const [state, view, english, german] of states) {
@@ -363,33 +363,33 @@ describe("Connection page", () => {
     const steps: [keyof typeof recordedStates, string, string][] = [
       [
         "unauthorized",
-        "The team that runs this instance sets a new credential and restarts the instance. Then test again.",
-        "Das Team, das diese Instanz betreibt, setzt neue Zugangsdaten und startet die Instanz neu. Teste danach erneut."
+        "The technical team sets a new credential and restarts the system. Then test again.",
+        "Das technische Team setzt neue Zugangsdaten und startet das System neu. Teste danach erneut."
       ],
       [
         "networkDenied",
-        "The team that runs this instance lets it reach this host and restarts it. Then test again.",
-        "Das Team, das diese Instanz betreibt, erlaubt ihr diesen Host und startet sie neu. Teste danach erneut."
+        "The technical team allows access to this host and restarts the system. Then test again.",
+        "Das technische Team erlaubt den Zugriff auf diesen Host und startet das System neu. Teste danach erneut."
       ],
       [
         "unavailable",
-        "Check the address under Settings. The team that runs this instance can change it.",
-        "Prüfe die Adresse unter Einstellungen. Ändern kann sie das Team, das diese Instanz betreibt."
+        "Check the address under Settings. The technical team can change it.",
+        "Prüfe die Adresse unter Einstellungen. Ändern kann sie das technische Team."
       ],
       [
         "notConfigured",
-        "The team that runs this instance supplies the credential and restarts the instance. Then test again.",
-        "Das Team, das diese Instanz betreibt, stellt die Zugangsdaten bereit und startet die Instanz neu. Teste danach erneut."
+        "The technical team supplies the credential and restarts the system. Then test again.",
+        "Das technische Team stellt die Zugangsdaten bereit und startet das System neu. Teste danach erneut."
       ],
       [
         "secretUnreadable",
-        "The team that runs this instance restores the key the credential was stored with, or supplies the credential again, and restarts the instance. Then test again.",
-        "Das Team, das diese Instanz betreibt, stellt den Schlüssel wieder her, mit dem die Zugangsdaten gespeichert wurden, oder stellt die Zugangsdaten erneut bereit, und startet die Instanz neu. Teste danach erneut."
+        "The technical team restores the key the credential was stored with, or supplies the credential again, and restarts the system. Then test again.",
+        "Das technische Team stellt den Schlüssel wieder her, mit dem die Zugangsdaten gespeichert wurden, oder stellt die Zugangsdaten erneut bereit, und startet das System neu. Teste danach erneut."
       ],
       [
         "failedUnnamed",
-        "Test again. If it fails again, ask the team that runs this instance.",
-        "Teste erneut. Schlägt der Test wieder fehl, wende dich an das Team, das diese Instanz betreibt."
+        "Test again. If it fails again, ask the technical team.",
+        "Teste erneut. Schlägt der Test wieder fehl, wende dich an das technische Team."
       ]
     ];
     for (const [state, english, german] of steps) {
@@ -402,10 +402,10 @@ describe("Connection page", () => {
     // A reason the page does not know has its own sentence and borrows no other state's.
     const unnamed = renderPage({ detail: recordedStates.failedUnnamed });
     expect(healthOf(unnamed)).toBe("failed");
-    expect(unnamed).toContain("The test failed for a reason the instance does not name.");
+    expect(unnamed).toContain("The test failed without giving a reason.");
     expect(unnamed).not.toContain("The outside system did not answer the test.");
     expect(renderPage({ detail: recordedStates.failedUnnamed, locale: "de" })).toContain(
-      "Der Test ist aus einem Grund fehlgeschlagen, den die Instanz nicht nennt."
+      "Der Test ist ohne Angabe eines Grundes fehlgeschlagen."
     );
     expect(healthOf(renderPage({ detail: { health: "failed", lastTestedAt: undefined } }))).toBe(
       "failed"
@@ -425,11 +425,11 @@ describe("Connection page", () => {
   it("shows a running test and the answer of the test over what was recorded", () => {
     const running = renderPage({ detail: recordedStates.ready, run: { status: "running" } });
     expect(healthOf(running)).toBe("testing");
-    expect(running).toContain("The instance is asking the outside system. This can take a moment.");
+    expect(running).toContain("Asking the outside system. This can take a moment.");
     expect(running).toContain('aria-busy="true"');
     expect(running).not.toContain("Last tested ");
     expect(renderPage({ run: { status: "running" }, locale: "de" })).toContain(
-      "Die Instanz fragt das externe System an. Das kann einen Moment dauern."
+      "Das externe System wird angefragt. Das kann einen Moment dauern."
     );
 
     for (const status of ["ready", "unauthorized", "network_denied", "unavailable"] as const) {
@@ -549,10 +549,10 @@ describe("Connection page", () => {
     const readOnly = renderPage({ mayTest: false });
     expect(readOnly).not.toContain("Test connection");
     expect(readOnly).toContain(
-      "You can read this connection. Testing it needs the right to change connections on the instance."
+      "You can read this connection. Testing it needs the right to change connections across all workspaces."
     );
     expect(renderPage({ mayTest: false, locale: "de" })).toContain(
-      "Du kannst diese Verbindung lesen. Zum Testen brauchst du das Recht, Verbindungen der Instanz zu ändern."
+      "Du kannst diese Verbindung lesen. Zum Testen brauchst du das Recht, Verbindungen in allen Arbeitsbereichen zu ändern."
     );
     // The reader still sees the recorded state.
     expect(healthOf(renderPage({ mayTest: false, detail: recordedStates.ready }))).toBe("ready");
@@ -675,7 +675,7 @@ describe("Connection page", () => {
     }
     expect(row("list_customers")).toContain("Awaiting discovery");
     expect(row("list_customers")).toContain(
-      "The instance has not read this operation from the outside system yet."
+      "This operation has not been read from the outside system yet."
     );
 
     expect(row("update_customer")).toContain("Changing");
@@ -688,7 +688,7 @@ describe("Connection page", () => {
     expect(row("top_products")).toContain("The outside system does not offer this operation.");
     // An operation that is switched off reads as disabled.
     expect(row("delete_order")).toContain("Disabled");
-    expect(row("delete_order")).toContain("Switched off in the instance&#x27;s setup.");
+    expect(row("delete_order")).toContain("Switched off in the system setup.");
 
     const german = renderPage({ locale: "de" });
     for (const text of ["Lesend", "Ändernd", "Aufrufbar durch", "Prüfung nötig", "Bereit"]) {
@@ -1002,7 +1002,7 @@ describe("Connection page", () => {
     expect(markup).toContain("data-connection-catalogue-update");
     expect(markup).toContain("Set up from an earlier version of Mailbox");
     expect(markup).toContain(
-      "This connection was set up from version 1, and this instance has version 2."
+      "This connection was set up from version 1, and version 2 is available here."
     );
     expect(markup).toMatch(/data-connection-catalogue-update-apply=""[^>]*>Update to version 2</u);
     // Which settings change stands folded under the text.
@@ -1049,7 +1049,7 @@ describe("Connection page", () => {
     const managed = renderPage({ asset: personal, detail: detail("managed"), settings: true });
     expect(managed).toContain('data-connection-health="personal"');
     expect(managed).toContain(">Each person connects<");
-    expect(managed).toContain("This instance brings the app registration.");
+    expect(managed).toContain("The app registration is already set up.");
     expect(managed).not.toContain("Not configured");
     expect(managed).not.toContain("Enter the key under Credential");
     // Nor a shared sign-in nobody is meant to make.
@@ -1061,12 +1061,12 @@ describe("Connection page", () => {
       settings: true
     });
     expect(german).toContain(">Jede Person verbindet sich<");
-    expect(german).toContain("Die App-Registrierung bringt diese Instanz mit.");
+    expect(german).toContain("Die App-Registrierung ist bereits eingerichtet.");
     expect(german).not.toContain("Nicht konfiguriert");
     const own = renderPage({ asset: personal, detail: detail("preregistered"), settings: true });
     expect(own).toContain(">Each person connects<");
     expect(own).toContain("There is no key to enter here.");
-    expect(own).not.toContain("This instance brings the app registration.");
+    expect(own).not.toContain("The app registration is already set up.");
     // The list row says the same.
     expect(listedHealth("needs_configuration", true)).toBe("personal");
     expect(listedHealth("needs_configuration")).toBe("not_configured");
@@ -1206,7 +1206,7 @@ describe("Connection page", () => {
       expect(failed).toContain("Try again");
       const empty = renderPage({ asset, subjects: { status: "ready", subjects: [] } });
       expect(empty).toContain('data-person-context-list="empty"');
-      expect(empty).toContain("This instance has no people yet.");
+      expect(empty).toContain("There are no people yet.");
     });
 
     it("offers the mappings on a release Connection too, since they are instance data", () => {

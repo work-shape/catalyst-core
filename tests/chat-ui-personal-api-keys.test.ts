@@ -677,7 +677,7 @@ describe("You > API keys, for a person and an admin alike", () => {
       "en",
       createElement(ApiKeysPage)
     );
-    const said = "You may not issue this key. Ask an instance admin, for example Mara.";
+    const said = "You may not issue this key. Ask an admin for all workspaces, for example Mara.";
     const name = () => required(document.querySelector<HTMLInputElement>("dialog input"));
     const type = async (value: string) => {
       await act(async () => {
@@ -753,7 +753,7 @@ describe("You > API keys, for a person and an admin alike", () => {
       "en",
       createElement(ApiKeysPage)
     );
-    const said = "You may not revoke this key. Ask an instance admin, for example Mara.";
+    const said = "You may not revoke this key. Ask an admin for all workspaces, for example Mara.";
     try {
       await waitForText(mounted.container, "fabian-mbp");
       await act(async () => {
@@ -833,10 +833,10 @@ describe("You > API keys, for a person and an admin alike", () => {
     try {
       await waitForText(
         mounted.container,
-        "You may not see your keys. Ask an instance admin, for example Mara."
+        "You may not see your keys. Ask an admin for all workspaces, for example Mara."
       );
       const refusal = noticeSaying(
-        "You may not see your keys. Ask an instance admin, for example Mara."
+        "You may not see your keys. Ask an admin for all workspaces, for example Mara."
       );
       expect(refusal.getAttribute("data-tone")).toBe("info");
     } finally {
@@ -1017,7 +1017,7 @@ describe("You > API keys, for a person and an admin alike", () => {
       });
     try {
       expect(mounted.container.textContent).toContain(
-        "Lets the key run only the read-only check of the instance's providers"
+        "Lets the key run only the read-only check of the configured providers"
       );
       expect(
         scopeBox(mounted.container, "View the System pages").getAttribute("aria-checked")
@@ -1053,13 +1053,13 @@ describe("You > API keys, for a person and an admin alike", () => {
       locale: "en" as const,
       code: "FORBIDDEN" as const,
       instanceAdminName: "Mara",
-      said: "You may not issue this key. Ask an instance admin, for example Mara."
+      said: "You may not issue this key. Ask an admin for all workspaces, for example Mara."
     },
     {
       locale: "de" as const,
       code: "POLICY_DENIED" as const,
       instanceAdminName: undefined,
-      said: "Du darfst diesen Schlüssel nicht ausstellen. Frag jemanden, der die Instanz verwaltet."
+      said: "Du darfst diesen Schlüssel nicht ausstellen. Frag einen Admin für alle Arbeitsbereiche."
     }
   ])(
     "a refused confirmation names whom to ask, never a page ($locale)",

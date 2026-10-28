@@ -294,7 +294,7 @@ describe("the author of a draft", () => {
     expect(
       draftAuthorLabel({ userId: "u", name: "Ana Writer", conversationId: "c", release: false }, t)
     ).toBe("Ana Writer with the agent");
-    expect(draftAuthorLabel({ release: true }, t)).toBe("The team that runs this instance");
+    expect(draftAuthorLabel({ release: true }, t)).toBe("The technical team");
     expect(draftAuthorLabel({ userId: "u", release: false }, t)).toBe("A former member");
   });
 });

@@ -351,7 +351,7 @@ describe("the Documents section", () => {
 
     showDocument(long);
     expect(row("akte").textContent).toContain(
-      "Page limit reached. The current limit is 12,345 pages. Split the file, or ask the team that runs this instance for a higher limit and retry."
+      "Page limit reached. The current limit is 12,345 pages. Split the file, or ask the technical team for a higher limit and retry."
     );
     expect(button("Retry", row("akte"))).toBeDefined();
     showDocument(long, "de");
@@ -364,7 +364,7 @@ describe("the Documents section", () => {
     const withoutLimit = document_("akte", "failed", overLimit);
     showDocument(withoutLimit);
     expect(row("akte").textContent).toContain(
-      "Page limit reached. Split the file, or ask the team that runs this instance for a higher limit and retry."
+      "Page limit reached. Split the file, or ask the technical team for a higher limit and retry."
     );
     expect(row("akte").textContent).not.toMatch(/\d+ pages|undefined/);
     showDocument(withoutLimit, "de");

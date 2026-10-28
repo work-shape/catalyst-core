@@ -71,7 +71,7 @@ export const workflows = defineTranslations({
     "workflows.target.label": "Target",
     "workflows.liveOnce.button": "Run live once",
     "workflows.liveOnce.hint":
-      "In your next test run this step runs for real, under the instance's rules.",
+      "In your next test run this step runs for real, under the rules for all workspaces.",
     "workflows.liveOnce.done": "Runs live in your next test run.",
     "workflows.liveOnce.failed": "The step could not be set to run live.",
     "workflows.liveOnce.stale":
@@ -116,7 +116,7 @@ export const workflows = defineTranslations({
       "Run it again. If it fails again, pass the technical details to whoever builds the workflow.",
     "workflows.advice.outputInvalid":
       "Running it again ends the same way: whoever builds the workflow has to change what it returns.",
-    "workflows.advice.policy": "An administrator can allow it in the policy of the instance.",
+    "workflows.advice.policy": "An administrator can allow it in the policy for all workspaces.",
     "workflows.advice.reachPersonOnly":
       "A person signed in to Catalyst publishes the workflow again, or has the operations it calls exposed to outside clients on the Connection's page.",
     "workflows.advice.runKeyCycle":
@@ -202,7 +202,7 @@ export const workflows = defineTranslations({
     "workflows.flows.hiddenOnly": "{count} workflows you can't see do this.",
     "workflows.flows.hiddenOnlyOne": "One workflow you can't see does this.",
     "workflows.flows.truncated":
-      "The instance has more published workflows than one read looks through, so this list may be incomplete.",
+      "There are more published workflows than one read looks through, so this list may be incomplete.",
     "workflows.failed": "The workflow could not be loaded.",
     "workflows.kindAll": "All",
     "workflows.appCallers.one": "Started by the app {apps}",
@@ -223,7 +223,7 @@ export const workflows = defineTranslations({
     "workflows.noRuns": "No runs yet. Start one with “Start now”.",
     "workflows.notRunnable.badge": "Cannot start",
     "workflows.notRunnable.refused": "This workflow cannot be started now.",
-    "workflows.notRunnable.title": "This instance cannot run this workflow yet.",
+    "workflows.notRunnable.title": "This workflow cannot be run here yet.",
     "workflows.noRunsPlain": "No runs yet.",
     "workflows.ownerWorkspace": "This workspace",
     "workflows.panel.atOnce": "At once",
@@ -244,7 +244,7 @@ export const workflows = defineTranslations({
       "This step runs once for each entry. Open the loop to see the entries.",
     "workflows.panel.readsFrom": "Reads from",
     "workflows.panel.receives": "Receives",
-    "workflows.panel.reserved": "This instance shows this kind of step and cannot run it yet.",
+    "workflows.panel.reserved": "This kind of step is shown here and cannot be run yet.",
     "workflows.panel.run": "This run",
     "workflows.panel.started": "Started",
     "workflows.panel.startedBy": "Started",
@@ -286,7 +286,7 @@ export const workflows = defineTranslations({
     "workflows.settings.operation": "Action",
     "workflows.settings.operationMissing": "Choose the action.",
     "workflows.settings.operationNotListed":
-      "You may not call this action, or this instance does not have it now. Leave it, or choose another.",
+      "You may not call this action, or it is not available here now. Leave it, or choose another.",
     "workflows.settings.operationUnavailable": "This action cannot be reached now.",
     "workflows.settings.operationsFailed": "The actions could not be loaded.",
     "workflows.settings.optionalField": "{title} (optional)",
@@ -368,7 +368,7 @@ export const workflows = defineTranslations({
     "workflows.reason.dataMismatch":
       "The step did not get the data it needs from the steps before it.",
     "workflows.reason.durationLimit": "The run took longer than a run may and was stopped.",
-    "workflows.reason.guardrail": "A safety rule of the instance stopped this step.",
+    "workflows.reason.guardrail": "A safety rule for all workspaces stopped this step.",
     "workflows.reason.interrupted":
       "The run was interrupted while this step was changing data. The change may or may not have happened, and the step was not repeated.",
     "workflows.reason.stillRunning":
@@ -398,11 +398,12 @@ export const workflows = defineTranslations({
       "An outside client started this run, and the Connection “{connection}” does not let outside clients call this operation.",
     "workflows.reason.notExposedOutsideOfStep":
       "An outside client started this run, and this step reads data that is not open to outside clients.",
-    "workflows.reason.notSupported": "This instance cannot run this kind of step yet.",
-    "workflows.reason.operationMissing": "What this step uses no longer exists on this instance.",
+    "workflows.reason.notSupported": "This kind of step cannot be run here yet.",
+    "workflows.reason.operationMissing": "What this step uses no longer exists here.",
     "workflows.reason.other": "The step failed.",
     "workflows.reason.outputInvalid": "The result does not have the form the workflow promises.",
-    "workflows.reason.policy": "The policy of the instance does not allow this step in a workflow.",
+    "workflows.reason.policy":
+      "The policy for all workspaces does not allow this step in a workflow.",
     "workflows.reason.reachPersonOnly":
       "The workflow was published with an API key or a technical account, and it, or the workflow that starts it, reads data that is not open to outside clients.",
     "workflows.reason.runKeyCycle":
@@ -478,8 +479,7 @@ export const workflows = defineTranslations({
     "workflows.run.showFailedChildRuns": "Show failed child runs",
     "workflows.run.showFailedEntries": "Show failed entries",
     "workflows.run.soFar": "{duration} so far",
-    "workflows.run.stale":
-      "The page has not heard from the instance for {seconds} s. Trying again.",
+    "workflows.run.stale": "The page has received no update for {seconds} s. Trying again.",
     "workflows.run.startStepPerson": "Started by {person}",
     "workflows.run.startStepSchedule": "Started by the schedule",
     "workflows.run.startedByPerson": "started by {person}",
@@ -512,7 +512,7 @@ export const workflows = defineTranslations({
     "workflows.runs.partRevision": "New version",
     "workflows.runs.title": "Runs of {name}",
     "workflows.runs.unreadable": "The runs of this workflow are not available to you.",
-    "workflows.runsUnavailable": "This instance does not run workflows yet.",
+    "workflows.runsUnavailable": "Workflows cannot be run here yet.",
     "workflows.schedule.custom": "On a schedule",
     "workflows.schedule.daily": "Every day, {time}",
     "workflows.schedule.manualOnly": "Started by hand only",
@@ -541,7 +541,7 @@ export const workflows = defineTranslations({
     "workflows.startForm.notNumber": "Enter a number.",
     "workflows.startForm.notPattern": "This value does not have the form the workflow expects.",
     "workflows.startForm.notWhole": "Enter a whole number.",
-    "workflows.startForm.refused": "The instance did not accept these values.",
+    "workflows.startForm.refused": "These values were not accepted.",
     "workflows.startForm.required": "Enter a value.",
     "workflows.startForm.tooLong": "Enter at most {limit} characters.",
     "workflows.startForm.tooShort": "Enter at least {limit} characters.",
@@ -608,7 +608,7 @@ export const workflows = defineTranslations({
     "workflows.workflowSettings.onFailureWorkflow": "The workflow “{name}” starts.",
     "workflows.workflowSettings.onSchedule": "On a schedule",
     "workflows.workflowSettings.owner": "Owner",
-    "workflows.workflowSettings.ownerInstance": "The instance",
+    "workflows.workflowSettings.ownerInstance": "Everyone",
     "workflows.workflowSettings.ownerOther": "Another workspace",
     "workflows.workflowSettings.readOnly": "You may read these settings but not change them.",
     "workflows.workflowSettings.result": "Result",
@@ -688,8 +688,8 @@ export const workflows = defineTranslations({
     "workflows.mail.toOne": "To {first}",
     "workflows.mail.toMore": "To {first} and {count} more",
     "workflows.mail.nobody": "nobody",
-    "workflows.mail.systemSender": "this instance",
-    "workflows.mail.systemSenderLabel": "This instance",
+    "workflows.mail.systemSender": "the default sender",
+    "workflows.mail.systemSenderLabel": "Default sender",
     "workflows.mail.sentence": "Sends “{subject}” to {to} as {sender}.",
     "workflows.mail.sentenceNoSubject": "Sends an e-mail to {to} as {sender}.",
     "workflows.mail.simulated": "Simulated",
@@ -706,24 +706,23 @@ export const workflows = defineTranslations({
     "workflows.mail.text": "Text",
     "workflows.mail.replyTo": "Replies go to",
     "workflows.mail.language": "Language",
-    "workflows.mail.languageDefault": "The instance's language",
+    "workflows.mail.languageDefault": "The default language for all workspaces",
     "workflows.mail.languageEn": "English",
     "workflows.mail.languageDe": "German",
-    "workflows.mail.outside": "Outside the instance",
+    "workflows.mail.outside": "Outside all workspaces",
     "workflows.mail.maySendTo": "May send to {domains}",
     "workflows.mail.maySendAnywhere": "May send to any address",
-    "workflows.mail.onlyInstance": "Only to people of this instance",
+    "workflows.mail.onlyInstance": "Only to people with an account here",
     "workflows.mail.draftNote":
       "Simulated in a test run; “Run live once” sends it to the tester only.",
-    "workflows.mail.outsideAddress": "This instance does not send to {domain}.",
+    "workflows.mail.outsideAddress": "Sending to {domain} is not allowed here.",
     "workflows.mail.shortened": "Shortened: the run keeps only the start of this e-mail to show.",
     "workflows.mail.noContent":
       "What this run sent is shown only to people who may read the run's data.",
     "workflows.mail.operation": "Operation",
     "workflows.mail.recipientIds": "Recipient ids",
     "workflows.mail.stepId": "Step id",
-    "workflows.mail.unavailable":
-      "This instance sends no e-mail now: an administrator turns sending on.",
+    "workflows.mail.unavailable": "E-mail sending is not enabled: an administrator turns it on.",
     "workflows.mail.senderName": "Display name",
     "workflows.mail.senderNameHint":
       "The name the e-mail is sent with. The address stays {address}.",
@@ -738,7 +737,7 @@ export const workflows = defineTranslations({
     "workflows.mail.sampleLast": "With the values of the last run.",
     "workflows.mail.sampleNone": "No run yet: each value shows as its name.",
     "workflows.mail.unnamed": "Someone you cannot see",
-    "workflows.mail.replyToHint": "One address, or empty for the instance's own."
+    "workflows.mail.replyToHint": "One address, or empty for the default sender's own."
   },
   de: {
     "workflows.reason.confirmationUnattended":
@@ -810,7 +809,7 @@ export const workflows = defineTranslations({
     "workflows.target.label": "Ziel",
     "workflows.liveOnce.button": "Einmal live ausführen",
     "workflows.liveOnce.hint":
-      "In deinem nächsten Testlauf läuft dieser Schritt live, nach den Regeln der Instanz.",
+      "In deinem nächsten Testlauf läuft dieser Schritt live, nach den Regeln für alle Arbeitsbereiche.",
     "workflows.liveOnce.done": "Läuft in deinem nächsten Testlauf live.",
     "workflows.liveOnce.failed": "Der Schritt konnte nicht für einen Live-Lauf vorgemerkt werden.",
     "workflows.liveOnce.stale":
@@ -856,7 +855,8 @@ export const workflows = defineTranslations({
       "Starte ihn erneut. Schlägt er wieder fehl, gib die technischen Details an die Person weiter, die den Workflow baut.",
     "workflows.advice.outputInvalid":
       "Ein neuer Lauf endet genauso: Wer den Workflow baut, muss ändern, was er zurückgibt.",
-    "workflows.advice.policy": "Ein Administrator kann es in den Richtlinien der Instanz erlauben.",
+    "workflows.advice.policy":
+      "Ein Administrator kann es in den Richtlinien für alle Arbeitsbereiche erlauben.",
     "workflows.advice.reachPersonOnly":
       "Eine in Catalyst angemeldete Person veröffentlicht den Workflow erneut, oder lässt die Operationen, die er aufruft, auf der Seite der Verbindung für externe Clients freigeben.",
     "workflows.advice.runKeyCycle":
@@ -943,7 +943,7 @@ export const workflows = defineTranslations({
     "workflows.flows.hiddenOnly": "{count} Workflows, die du nicht sehen kannst, tun das.",
     "workflows.flows.hiddenOnlyOne": "Ein Workflow, den du nicht sehen kannst, tut das.",
     "workflows.flows.truncated":
-      "Die Instanz hat mehr veröffentlichte Workflows, als ein Lesezugriff durchsieht. Diese Liste kann unvollständig sein.",
+      "Es gibt mehr veröffentlichte Workflows, als ein Lesezugriff durchsieht. Diese Liste kann unvollständig sein.",
     "workflows.failed": "Der Workflow konnte nicht geladen werden.",
     "workflows.kindAll": "Alle",
     "workflows.appCallers.one": "Gestartet von der App {apps}",
@@ -964,7 +964,7 @@ export const workflows = defineTranslations({
     "workflows.noRuns": "Noch keine Läufe. Starte einen mit „Jetzt starten“.",
     "workflows.notRunnable.badge": "Nicht startbar",
     "workflows.notRunnable.refused": "Dieser Workflow kann gerade nicht gestartet werden.",
-    "workflows.notRunnable.title": "Diese Instanz kann diesen Workflow noch nicht ausführen.",
+    "workflows.notRunnable.title": "Dieser Workflow lässt sich hier noch nicht ausführen.",
     "workflows.noRunsPlain": "Noch keine Läufe.",
     "workflows.ownerWorkspace": "Dieser Arbeitsbereich",
     "workflows.panel.atOnce": "Gleichzeitig",
@@ -986,7 +986,7 @@ export const workflows = defineTranslations({
     "workflows.panel.readsFrom": "Liest aus",
     "workflows.panel.receives": "Bekommt",
     "workflows.panel.reserved":
-      "Diese Instanz zeigt diese Art von Schritt und kann sie noch nicht ausführen.",
+      "Diese Art von Schritt wird hier angezeigt und lässt sich noch nicht ausführen.",
     "workflows.panel.run": "Dieser Lauf",
     "workflows.panel.started": "Begonnen",
     "workflows.panel.startedBy": "Start",
@@ -1031,7 +1031,7 @@ export const workflows = defineTranslations({
     "workflows.settings.operation": "Aktion",
     "workflows.settings.operationMissing": "Wählen Sie die Aktion.",
     "workflows.settings.operationNotListed":
-      "Sie dürfen diese Aktion nicht aufrufen, oder diese Instanz hat sie gerade nicht. Lassen Sie sie, oder wählen Sie eine andere.",
+      "Du darfst diese Aktion nicht aufrufen, oder sie ist hier gerade nicht verfügbar. Lass sie, oder wähle eine andere.",
     "workflows.settings.operationUnavailable": "Diese Aktion ist gerade nicht erreichbar.",
     "workflows.settings.operationsFailed": "Die Aktionen konnten nicht geladen werden.",
     "workflows.settings.optionalField": "{title} (optional)",
@@ -1115,7 +1115,8 @@ export const workflows = defineTranslations({
       "Der Schritt hat von den Schritten davor nicht die Daten bekommen, die er braucht.",
     "workflows.reason.durationLimit":
       "Der Lauf hat länger gedauert, als ein Lauf darf, und wurde gestoppt.",
-    "workflows.reason.guardrail": "Eine Schutzregel der Instanz hat diesen Schritt gestoppt.",
+    "workflows.reason.guardrail":
+      "Eine Schutzregel für alle Arbeitsbereiche hat diesen Schritt gestoppt.",
     "workflows.reason.interrupted":
       "Der Lauf wurde unterbrochen, während dieser Schritt Daten änderte. Die Änderung kann geschehen sein oder nicht, und der Schritt wurde nicht wiederholt.",
     "workflows.reason.stillRunning":
@@ -1148,14 +1149,12 @@ export const workflows = defineTranslations({
       "Ein externer Client hat diesen Lauf gestartet, und die Verbindung „{connection}“ lässt externe Clients diese Operation nicht aufrufen.",
     "workflows.reason.notExposedOutsideOfStep":
       "Ein externer Client hat diesen Lauf gestartet, und dieser Schritt liest Daten, die nicht für externe Clients freigegeben sind.",
-    "workflows.reason.notSupported":
-      "Diese Instanz kann diese Art von Schritt noch nicht ausführen.",
-    "workflows.reason.operationMissing":
-      "Was dieser Schritt nutzt, gibt es auf dieser Instanz nicht mehr.",
+    "workflows.reason.notSupported": "Diese Art von Schritt lässt sich hier noch nicht ausführen.",
+    "workflows.reason.operationMissing": "Was dieser Schritt nutzt, gibt es hier nicht mehr.",
     "workflows.reason.other": "Der Schritt ist fehlgeschlagen.",
     "workflows.reason.outputInvalid": "Das Ergebnis hat nicht die Form, die der Workflow zusagt.",
     "workflows.reason.policy":
-      "Die Richtlinien der Instanz erlauben diesen Schritt in einem Workflow nicht.",
+      "Die Richtlinien für alle Arbeitsbereiche erlauben diesen Schritt in einem Workflow nicht.",
     "workflows.reason.reachPersonOnly":
       "Der Workflow wurde mit einem API-Schlüssel oder einem technischen Konto veröffentlicht, und er oder der Workflow, der ihn startet, liest Daten, die nicht für externe Clients freigegeben sind.",
     "workflows.reason.runKeyCycle":
@@ -1233,7 +1232,7 @@ export const workflows = defineTranslations({
     "workflows.run.showFailedEntries": "Fehlgeschlagene Einträge zeigen",
     "workflows.run.soFar": "bisher {duration}",
     "workflows.run.stale":
-      "Die Seite hat seit {seconds} s nichts von der Instanz gehört. Neuer Versuch.",
+      "Die Seite hat seit {seconds} s keine Aktualisierung erhalten. Neuer Versuch.",
     "workflows.run.startStepPerson": "Von {person} gestartet",
     "workflows.run.startStepSchedule": "Vom Zeitplan gestartet",
     "workflows.run.startedByPerson": "von {person} gestartet",
@@ -1266,7 +1265,7 @@ export const workflows = defineTranslations({
     "workflows.runs.partRevision": "Neue Version",
     "workflows.runs.title": "Läufe von {name}",
     "workflows.runs.unreadable": "Die Läufe dieses Workflows sind für dich nicht verfügbar.",
-    "workflows.runsUnavailable": "Diese Instanz führt noch keine Workflows aus.",
+    "workflows.runsUnavailable": "Workflows lassen sich hier noch nicht ausführen.",
     "workflows.schedule.custom": "Nach Zeitplan",
     "workflows.schedule.daily": "Jeden Tag, {time}",
     "workflows.schedule.manualOnly": "Startet nur von Hand",
@@ -1295,7 +1294,7 @@ export const workflows = defineTranslations({
     "workflows.startForm.notNumber": "Gib eine Zahl ein.",
     "workflows.startForm.notPattern": "Dieser Wert hat nicht die Form, die der Workflow erwartet.",
     "workflows.startForm.notWhole": "Gib eine ganze Zahl ein.",
-    "workflows.startForm.refused": "Die Instanz hat diese Werte nicht angenommen.",
+    "workflows.startForm.refused": "Diese Werte wurden nicht angenommen.",
     "workflows.startForm.required": "Gib einen Wert ein.",
     "workflows.startForm.tooLong": "Gib höchstens {limit} Zeichen ein.",
     "workflows.startForm.tooShort": "Gib mindestens {limit} Zeichen ein.",
@@ -1364,7 +1363,7 @@ export const workflows = defineTranslations({
     "workflows.workflowSettings.onFailureWorkflow": "Der Workflow „{name}“ startet.",
     "workflows.workflowSettings.onSchedule": "Nach Zeitplan",
     "workflows.workflowSettings.owner": "Besitzer",
-    "workflows.workflowSettings.ownerInstance": "Die Instanz",
+    "workflows.workflowSettings.ownerInstance": "Alle",
     "workflows.workflowSettings.ownerOther": "Ein anderer Arbeitsbereich",
     "workflows.workflowSettings.readOnly":
       "Du darfst diese Einstellungen lesen, aber nicht ändern.",
@@ -1448,8 +1447,8 @@ export const workflows = defineTranslations({
     "workflows.mail.toOne": "An {first}",
     "workflows.mail.toMore": "An {first} und {count} weitere",
     "workflows.mail.nobody": "niemanden",
-    "workflows.mail.systemSender": "diese Instanz",
-    "workflows.mail.systemSenderLabel": "Diese Instanz",
+    "workflows.mail.systemSender": "Standardabsender",
+    "workflows.mail.systemSenderLabel": "Standardabsender",
     "workflows.mail.sentence": "Sendet „{subject}“ an {to} als {sender}.",
     "workflows.mail.sentenceNoSubject": "Sendet eine E-Mail an {to} als {sender}.",
     "workflows.mail.simulated": "Simuliert",
@@ -1466,16 +1465,16 @@ export const workflows = defineTranslations({
     "workflows.mail.text": "Text",
     "workflows.mail.replyTo": "Antworten an",
     "workflows.mail.language": "Sprache",
-    "workflows.mail.languageDefault": "Sprache der Instanz",
+    "workflows.mail.languageDefault": "Standardsprache für alle Arbeitsbereiche",
     "workflows.mail.languageEn": "Englisch",
     "workflows.mail.languageDe": "Deutsch",
-    "workflows.mail.outside": "Außerhalb der Instanz",
+    "workflows.mail.outside": "Außerhalb aller Arbeitsbereiche",
     "workflows.mail.maySendTo": "Darf senden an {domains}",
     "workflows.mail.maySendAnywhere": "Darf an jede Adresse senden",
-    "workflows.mail.onlyInstance": "Nur an Personen dieser Instanz",
+    "workflows.mail.onlyInstance": "Nur an Personen mit einem Konto hier",
     "workflows.mail.draftNote":
       "Wird in einem Testlauf simuliert; „Einmal live ausführen“ sendet sie nur an die testende Person.",
-    "workflows.mail.outsideAddress": "Diese Instanz sendet nicht an {domain}.",
+    "workflows.mail.outsideAddress": "Das Senden an {domain} ist hier nicht erlaubt.",
     "workflows.mail.shortened":
       "Gekürzt: Der Lauf behält von dieser E-Mail nur den Anfang zum Anzeigen.",
     "workflows.mail.noContent":
@@ -1484,7 +1483,7 @@ export const workflows = defineTranslations({
     "workflows.mail.recipientIds": "Empfänger-IDs",
     "workflows.mail.stepId": "Schritt-ID",
     "workflows.mail.unavailable":
-      "Diese Instanz sendet gerade keine E-Mails: Eine Administratorin oder ein Administrator schaltet das Senden ein.",
+      "Der E-Mail-Versand ist gerade ausgeschaltet: Ein Administrator schaltet ihn ein.",
     "workflows.mail.senderName": "Anzeigename",
     "workflows.mail.senderNameHint":
       "Der Name, mit dem die E-Mail gesendet wird. Die Adresse bleibt {address}.",
@@ -1499,6 +1498,6 @@ export const workflows = defineTranslations({
     "workflows.mail.sampleLast": "Mit den Werten des letzten Laufs.",
     "workflows.mail.sampleNone": "Noch kein Lauf: Jeder Wert steht mit seinem Namen da.",
     "workflows.mail.unnamed": "Jemand, den du nicht sehen kannst",
-    "workflows.mail.replyToHint": "Eine Adresse, oder leer für die der Instanz."
+    "workflows.mail.replyToHint": "Eine Adresse, oder leer für die des Standardabsenders."
   }
 });

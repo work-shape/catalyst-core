@@ -86,12 +86,12 @@ describe("Workspace > Members, when a list cannot be read", () => {
     {
       list: "members",
       path: membersPath,
-      said: "Du darfst die Mitglieder dieses Arbeitsbereichs nicht sehen. Frag jemanden, der die Instanz verwaltet, zum Beispiel Mara."
+      said: "Du darfst die Mitglieder dieses Arbeitsbereichs nicht sehen. Frag einen Admin für alle Arbeitsbereiche, zum Beispiel Mara."
     },
     {
       list: "requests",
       path: requestsPath,
-      said: "Du darfst die Beitrittsanfragen dieses Arbeitsbereichs nicht sehen. Frag jemanden, der die Instanz verwaltet, zum Beispiel Mara."
+      said: "Du darfst die Beitrittsanfragen dieses Arbeitsbereichs nicht sehen. Frag einen Admin für alle Arbeitsbereiche, zum Beispiel Mara."
     }
   ])(
     "a refused $list list names whom to ask, as information without a retry",
@@ -144,13 +144,13 @@ describe("Workspace > Members, when a change is refused", () => {
       locale: "en" as const,
       approve: "Approve",
       requests: "Requests",
-      said: "You can't approve requests in this workspace. Ask an instance admin, for example Mara."
+      said: "You can't approve requests in this workspace. Ask an admin for all workspaces, for example Mara."
     },
     {
       locale: "de" as const,
       approve: "Genehmigen",
       requests: "Anfragen",
-      said: "Du darfst Anfragen in diesem Arbeitsbereich nicht genehmigen. Frag jemanden, der die Instanz verwaltet, zum Beispiel Mara."
+      said: "Du darfst Anfragen in diesem Arbeitsbereich nicht genehmigen. Frag einen Admin für alle Arbeitsbereiche, zum Beispiel Mara."
     }
   ])(
     "a refused Approve is said at the top of Requests, naming the action ($locale)",
@@ -195,11 +195,11 @@ describe("Workspace > Members, its description", () => {
   it.each([
     {
       locale: "en" as const,
-      said: "Members use this workspace's agents and apps and work in its conversations. Builders may also edit what this workspace owns, such as its agents and apps; Publishers may publish it. An instance admin grants these rights."
+      said: "Members use this workspace's agents and apps and work in its conversations. Builders may also edit what this workspace owns, such as its agents and apps; Publishers may publish it. An admin for all workspaces grants these rights."
     },
     {
       locale: "de" as const,
-      said: "Mitglieder verwenden die Agenten und Apps dieses Arbeitsbereichs und arbeiten in seinen Unterhaltungen. Wer das Recht zum Bearbeiten hat, darf zusätzlich bearbeiten, was dem Arbeitsbereich gehört, etwa seine Agenten und Apps; wer das Recht zum Veröffentlichen hat, darf es veröffentlichen. Beide Rechte vergibt jemand, der die Instanz verwaltet."
+      said: "Mitglieder verwenden die Agenten und Apps dieses Arbeitsbereichs und arbeiten in seinen Unterhaltungen. Wer das Recht zum Bearbeiten hat, darf zusätzlich bearbeiten, was dem Arbeitsbereich gehört, etwa seine Agenten und Apps; wer das Recht zum Veröffentlichen hat, darf es veröffentlichen. Beide Rechte vergibt ein Admin für alle Arbeitsbereiche."
     }
   ])("limits the extra rights to what this workspace owns ($locale)", async ({ locale, said }) => {
     const mounted = await mountMembers(locale, {

@@ -12,7 +12,7 @@ export const accessApp = defineTranslations({
     "access.scopeOnAppDescription": "One existing App.",
     "access.grantApp": "App",
     "access.chooseApp": "Choose an App",
-    "access.noApps": "This instance has no App yet.",
+    "access.noApps": "There is no App yet.",
     "access.appsLoadFailed": "The Apps could not be loaded."
   },
   de: {
@@ -24,7 +24,7 @@ export const accessApp = defineTranslations({
     "access.scopeOnAppDescription": "Eine vorhandene App.",
     "access.grantApp": "App",
     "access.chooseApp": "App wählen",
-    "access.noApps": "Auf dieser Instanz gibt es noch keine App.",
+    "access.noApps": "Es gibt noch keine App.",
     "access.appsLoadFailed": "Die Apps konnten nicht geladen werden."
   }
 });

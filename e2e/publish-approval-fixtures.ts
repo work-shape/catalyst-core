@@ -135,7 +135,7 @@ async function publishAndWait(page: Page, workspaceId: string, app: PublishedApp
   // The held publish says so in the dialog it was sent from (SHARE-1), and the live version
   // stays as it is.
   await expect(dialog.getByTestId("app-publish-waits")).toHaveText(
-    "Sent for approval. An instance admin decides in the Inbox; until then the live version stays as it is."
+    "Sent for approval. An admin for all workspaces decides in the Inbox; until then the live version stays as it is."
   );
   await dialog
     .getByRole("button", { name: "Close", exact: true })

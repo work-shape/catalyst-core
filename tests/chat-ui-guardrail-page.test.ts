@@ -147,14 +147,12 @@ describe("Guardrail page", () => {
     expect(markup).toContain(">No personal data in skills</h1>");
     // When it runs, in one line built from its event, filter, check and outcome.
     expect(markup).toContain(
-      "Runs before anyone asks for an approval of the kind Skill change, instance-wide, part of the instance&#x27;s setup. Checks the content for breaches of its rule, with a model. Blocks if the check fails."
+      "Runs before anyone asks for an approval of the kind Skill change, in all workspaces, part of the system setup. Checks the content for breaches of its rule, with a model. Blocks if the check fails."
     );
     expect(markup).toContain(">Everyone<");
     expect(markup).toContain("Check whether the text names a person.");
     expect(markup).toContain("The action does not happen. Whoever acted is told the reason.");
-    expect(markup).toContain(
-      "come with the instance&#x27;s setup always apply; further ones are written"
-    );
+    expect(markup).toContain("come with the system setup always apply; further ones are written");
     expect(markup).not.toContain("Save");
     // The judge's model binding is configuration, not something a reader acts on.
     expect(markup).not.toContain("judge");
@@ -232,7 +230,7 @@ describe("Guardrail page", () => {
         page.indexOf('data-guardrail-hit="require_approval"')
       );
     expect(markup).toContain(
-      "Runs before anyone saves a skill, instance-wide, part of the instance&#x27;s setup. Checks the content for a text pattern."
+      "Runs before anyone saves a skill, in all workspaces, part of the system setup. Checks the content for a text pattern."
     );
     expect(markup).toContain("Pattern");
     expect(markup).toContain("Skills hold no IBAN.");
@@ -400,7 +398,7 @@ describe("Guardrail page", () => {
   it("reads in German", () => {
     const markup = renderPage({ locale: "de" });
     expect(markup).toContain("Läuft, bevor jemand eine Freigabe der Art");
-    expect(markup).toContain("instanzweit, aus der Einrichtung der Instanz.");
+    expect(markup).toContain("in allen Arbeitsbereichen, aus der Einrichtung des Systems.");
     expect(markup).toContain("Noch keine Treffer.");
   });
 });

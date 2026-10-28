@@ -70,7 +70,7 @@ describe("the effective rights of a person", () => {
     expect(html).toContain("Rechnungen");
     expect(html).toContain("DATEV");
     expect(html).toContain("Direkt verweigert");
-    expect(html).toContain("Die Verweigerung gilt für: Ganze Instanz");
+    expect(html).toContain("Die Verweigerung gilt für: Alle");
     expect(html.match(/data-allowed="true"/g)).toHaveLength(2);
     expect(html.match(/data-allowed="false"/g)).toHaveLength(1);
     // Never an id or an action id in what a person reads.

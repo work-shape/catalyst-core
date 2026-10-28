@@ -509,7 +509,7 @@ describe("Studio refusals", () => {
         {
           field: "tools",
           message:
-            "The tool documents.read is not allowed in the workspace Tax. An instance admin sets its tools on Instance > Workspaces."
+            "The tool documents.read is not allowed in the workspace Tax. An admin for all workspaces sets its tools on Settings > All workspaces > Workspaces."
         }
       ]
     });
@@ -531,14 +531,14 @@ describe("Studio refusals", () => {
         {
           field: "tools",
           message:
-            "The tool documents.read is not allowed in the workspace Kai Spezis. An instance admin sets its tools on Instance > Workspaces."
+            "The tool documents.read is not allowed in the workspace Kai Spezis. An admin for all workspaces sets its tools on Settings > All workspaces > Workspaces."
         }
       ]),
       refused([
         {
           field: "model",
           message:
-            "The model reasoning is not allowed in the workspace Kai Spezis. An instance admin sets its models on Instance > Workspaces."
+            "The model reasoning is not allowed in the workspace Kai Spezis. An admin for all workspaces sets its models on Settings > All workspaces > Workspaces."
         }
       ]),
       refused([
@@ -564,7 +564,7 @@ describe("Studio refusals", () => {
     );
 
     expect(refusalsOf(outcome, "tools")).toEqual([
-      "Das Werkzeug documents.read ist im Arbeitsbereich Steuern nicht erlaubt. Seine Werkzeuge legt ein Instanz-Admin unter Instanz > Arbeitsbereiche fest."
+      "Das Werkzeug documents.read ist im Arbeitsbereich Steuern nicht erlaubt. Seine Werkzeuge legt ein Admin für alle Arbeitsbereiche unter Einstellungen > Alle Arbeitsbereiche > Arbeitsbereiche fest."
     ]);
   });
 

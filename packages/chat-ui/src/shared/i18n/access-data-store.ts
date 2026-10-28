@@ -13,7 +13,7 @@ export const accessDataStore = defineTranslations({
     "access.scopeOnDataStoreDescription": "One existing Data Store.",
     "access.grantDataStore": "Data Store",
     "access.chooseDataStore": "Choose a Data Store",
-    "access.noDataStores": "This instance has no Data Store yet.",
+    "access.noDataStores": "There is no Data Store yet.",
     "access.dataStoresLoadFailed": "The Data Stores could not be loaded."
   },
   de: {
@@ -27,7 +27,7 @@ export const accessDataStore = defineTranslations({
     "access.scopeOnDataStoreDescription": "Ein vorhandener Datenspeicher.",
     "access.grantDataStore": "Datenspeicher",
     "access.chooseDataStore": "Datenspeicher wählen",
-    "access.noDataStores": "Auf dieser Instanz gibt es noch keinen Datenspeicher.",
+    "access.noDataStores": "Es gibt noch keinen Datenspeicher.",
     "access.dataStoresLoadFailed": "Die Datenspeicher konnten nicht geladen werden."
   }
 });

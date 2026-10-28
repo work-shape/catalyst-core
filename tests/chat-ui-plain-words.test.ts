@@ -71,7 +71,9 @@ const REFUSED: { word: string; pattern: RegExp; in: readonly Locale[] }[] = [
   },
   // German says Skill: "Fähigkeit" beside it on one screen reads as a second thing.
   { word: "Fähigkeit", pattern: /Fähigkeit/u, in: ["de"] },
-  // SCOPE-WORDS: where an asset sits is asked "Wo", never "Geltungsbereich" (or Scope).
+  // SCOPE-WORDS: places use the ladder; global settings and rights say all workspaces.
+  { word: "instance", pattern: /instanz|\binstances?\b/iu, in: locales },
+  // Where an asset sits is asked "Wo", never "Geltungsbereich" (or Scope).
   { word: "Geltungsbereich", pattern: /Geltungsbereich/u, in: ["de"] }
 ];
 
@@ -196,7 +198,7 @@ describe("plain words in the audit view (UXA-1b2)", () => {
     for (const words of [
       "Lesen der Operationen einer Verbindung fehlgeschlagen",
       "Das externe System hat die Anmeldung abgelehnt.",
-      "Ein Fehler in der Instanz.",
+      "Ein interner Fehler.",
       "Befehl ausgeführt",
       "Der Anmeldung fehlt eine Berechtigung, die der Aufruf brauchte.",
       "Unterhaltung",

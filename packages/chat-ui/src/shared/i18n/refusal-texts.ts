@@ -32,9 +32,9 @@ export const refusals = defineTranslations({
     "refusals.rowsTooMany":
       "This change holds too many entries for one call. Split it across several calls.",
     "refusals.dataStoreIdHeld":
-      "A deleted data store still uses this name, and its database still exists. The name is free once an instance admin removes that database.",
+      "A deleted data store still uses this name, and its database still exists. The name is free once an admin for all workspaces removes that database.",
     "refusals.dataStoreScopeUnknown":
-      "The data store names a data area this instance does not know. Ask the agent to change it.",
+      "The data store names an unknown data area. Ask the agent to change it.",
     "refusals.dataStoreScopeMismatch":
       "The data store is written for a different place than where it is. Ask the agent to change it.",
     "refusals.dataStoreChangeApplied":
@@ -98,7 +98,7 @@ export const refusals = defineTranslations({
       "This change needs an approval, and it is too large to be held for one.",
     "refusals.appInstanceNeedsSharedWorkspace":
       "This app is “Only me”, so it cannot be for everyone. Build it in a team, or ask an admin.",
-    "refusals.moduleOff": "A part of the platform this needs is switched off on this instance.",
+    "refusals.moduleOff": "A part of the platform this needs is switched off.",
     "refusals.rightMissing": "You need the right “{right}” for this.",
     "refusals.rightDenied": "The right “{right}” is denied to you here.",
     "refusals.openDataStore": "Open data store",
@@ -136,9 +136,9 @@ export const refusals = defineTranslations({
     "refusals.rowsTooMany":
       "Diese Änderung enthält zu viele Einträge für einen Aufruf. Teile sie auf mehrere Aufrufe auf.",
     "refusals.dataStoreIdHeld":
-      "Ein gelöschter Datenspeicher belegt diesen Namen noch, und seine Datenbank gibt es noch. Der Name wird frei, sobald jemand, der die Instanz verwaltet, diese Datenbank entfernt.",
+      "Ein gelöschter Datenspeicher belegt diesen Namen noch, und seine Datenbank gibt es noch. Der Name wird frei, sobald ein Admin für alle Arbeitsbereiche diese Datenbank entfernt.",
     "refusals.dataStoreScopeUnknown":
-      "Der Datenspeicher nennt einen Datenbereich, den diese Instanz nicht kennt. Bitte den Agenten, ihn anzupassen.",
+      "Der Datenspeicher nennt einen unbekannten Datenbereich. Bitte den Agenten, ihn anzupassen.",
     "refusals.dataStoreScopeMismatch":
       "Der Datenspeicher ist für einen anderen Ort geschrieben, als er liegt. Bitte den Agenten, ihn anzupassen.",
     "refusals.dataStoreChangeApplied":
@@ -203,8 +203,7 @@ export const refusals = defineTranslations({
       "Diese Änderung braucht eine Freigabe und ist zu groß, um dafür zurückgehalten zu werden.",
     "refusals.appInstanceNeedsSharedWorkspace":
       "Diese App ist „Nur ich“ und kann darum nicht für Alle sein. Baue sie in einem Team, oder bitte einen Admin darum.",
-    "refusals.moduleOff":
-      "Ein Teil der Plattform, den das braucht, ist auf dieser Instanz ausgeschaltet.",
+    "refusals.moduleOff": "Ein Teil der Plattform, den das braucht, ist ausgeschaltet.",
     "refusals.rightMissing": "Dafür brauchst du das Recht „{right}“.",
     "refusals.rightDenied": "Das Recht „{right}“ ist dir hier verwehrt.",
     "refusals.openDataStore": "Datenspeicher öffnen",

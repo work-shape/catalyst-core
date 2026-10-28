@@ -15,7 +15,7 @@ export const personalApiKeys = defineTranslations({
     "personalApiKeys.revokeRefused": "You may not revoke this key.",
     "personalApiKeys.created": "Key {name} created",
     "personalApiKeys.createdDescription":
-      "Set it as CATALYST_API_KEY where the CLI or your script runs, with the instance address beside it.",
+      "Set it as CATALYST_API_KEY where the CLI or your script runs, with the server address beside it.",
     "personalApiKeys.yourKeys": "Your keys",
     "personalApiKeys.empty": "No personal API keys yet.",
     "personalApiKeys.owner": "Owner",
@@ -32,9 +32,9 @@ export const personalApiKeys = defineTranslations({
       "Use the Connections, Data Stores, Knowledge Bases and Workflows you may use. Needed to publish a Workflow whose technical account uses them.",
     "personalApiKeys.connectionUseCopies":
       "The results of these calls are copied to the computer that holds the key.",
-    "personalApiKeys.instanceLevel": "Instance",
+    "personalApiKeys.instanceLevel": "All workspaces",
     "personalApiKeys.instanceLevelHint":
-      "Lets the key run only the read-only check of the instance's providers, as catalyst models check does. It works only while you hold this right yourself, and not on a key limited to a workspace.",
+      "Lets the key run only the read-only check of the configured providers, as catalyst models check does. It works only while you hold this right yourself, and not on a key limited to a workspace.",
     "personalApiKeys.workspace": "Limit to a workspace",
     "personalApiKeys.workspaceHint":
       "The key then reaches only what this workspace owns. Everywhere: wherever you hold the chosen rights.",
@@ -84,7 +84,7 @@ export const personalApiKeys = defineTranslations({
     "personalApiKeys.revokeRefused": "Du darfst diesen Schlüssel nicht widerrufen.",
     "personalApiKeys.created": "Schlüssel {name} erstellt",
     "personalApiKeys.createdDescription":
-      "Setze ihn als CATALYST_API_KEY dort, wo die CLI oder dein Skript läuft, zusammen mit der Adresse der Instanz.",
+      "Setze ihn als CATALYST_API_KEY dort, wo die CLI oder dein Skript läuft, zusammen mit der Serveradresse.",
     "personalApiKeys.yourKeys": "Deine Schlüssel",
     "personalApiKeys.empty": "Noch keine persönlichen API-Schlüssel.",
     "personalApiKeys.owner": "Inhaber",
@@ -102,9 +102,9 @@ export const personalApiKeys = defineTranslations({
       "Verbindungen, Datenspeicher, Wissensbasen und Workflows verwenden, die du verwenden darfst. Nötig, um einen Workflow zu veröffentlichen, dessen technisches Konto sie verwendet.",
     "personalApiKeys.connectionUseCopies":
       "Die Ergebnisse dieser Aufrufe werden auf den Computer kopiert, auf dem der Schlüssel liegt.",
-    "personalApiKeys.instanceLevel": "Instanz",
+    "personalApiKeys.instanceLevel": "Alle Arbeitsbereiche",
     "personalApiKeys.instanceLevelHint":
-      "Erlaubt dem Schlüssel nur die lesende Prüfung der Anbieter der Instanz, wie catalyst models check sie ausführt. Das wirkt nur, solange du dieses Recht selbst hast, und nicht bei einem Schlüssel, der auf einen Arbeitsbereich begrenzt ist.",
+      "Erlaubt dem Schlüssel nur die lesende Prüfung der eingerichteten Anbieter, wie catalyst models check sie ausführt. Das wirkt nur, solange du dieses Recht selbst hast, und nicht bei einem Schlüssel, der auf einen Arbeitsbereich begrenzt ist.",
     "personalApiKeys.workspace": "Auf einen Arbeitsbereich begrenzen",
     "personalApiKeys.workspaceHint":
       "Der Schlüssel erreicht dann nur, was diesem Arbeitsbereich gehört. Überall: überall, wo du die gewählten Berechtigungen hast.",

@@ -48,10 +48,10 @@ describe("the sentence of when a guardrail runs", () => {
       setByOperator: false
     };
     expect(sentence(publish)).toBe(
-      "Runs before anyone publishes an App, instance-wide. Asks an admin to approve."
+      "Runs before anyone publishes an App, in all workspaces. Asks an admin to approve."
     );
     expect(sentence(publish, "de")).toBe(
-      "Läuft, bevor jemand eine App veröffentlicht, instanzweit. Bittet einen Admin um Freigabe."
+      "Läuft, bevor jemand eine App veröffentlicht, in allen Arbeitsbereichen. Bittet einen Admin um Freigabe."
     );
   });
 
@@ -65,10 +65,10 @@ describe("the sentence of when a guardrail runs", () => {
       setByOperator: true
     };
     expect(sentence(floor)).toBe(
-      "Runs before anyone asks for an approval of the kind Skill change, instance-wide, part of the instance's setup. Checks the content for breaches of its rule, with a model. Warns if the check fails."
+      "Runs before anyone asks for an approval of the kind Skill change, in all workspaces, part of the system setup. Checks the content for breaches of its rule, with a model. Warns if the check fails."
     );
     expect(sentence(floor, "de")).toBe(
-      "Läuft, bevor jemand eine Freigabe der Art Skill change anfragt, instanzweit, aus der Einrichtung der Instanz. Prüft den Inhalt mit einem Modell auf Verstöße gegen ihre Regel. Warnt, wenn die Prüfung anschlägt."
+      "Läuft, bevor jemand eine Freigabe der Art Skill change anfragt, in allen Arbeitsbereichen, aus der Einrichtung des Systems. Prüft den Inhalt mit einem Modell auf Verstöße gegen ihre Regel. Warnt, wenn die Prüfung anschlägt."
     );
   });
 

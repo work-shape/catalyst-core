@@ -11,7 +11,7 @@ export const accessGuardrail = defineTranslations({
     "access.scopeOnGuardrailDescription": "Guardrails are granted for one workspace.",
     "access.grantGuardrail": "Guardrail",
     "access.chooseGuardrail": "Choose a guardrail",
-    "access.noGuardrails": "This instance has no guardrail yet.",
+    "access.noGuardrails": "There is no guardrail yet.",
     "access.guardrailsLoadFailed": "The guardrails could not be loaded.",
     "access.kindGuardrail": "Guardrails",
     "access.objectGuardrail": "the guardrail {name}"
@@ -24,7 +24,7 @@ export const accessGuardrail = defineTranslations({
     "access.scopeOnGuardrailDescription": "Leitplanken werden für einen Arbeitsbereich vergeben.",
     "access.grantGuardrail": "Leitplanke",
     "access.chooseGuardrail": "Leitplanke wählen",
-    "access.noGuardrails": "Auf dieser Instanz gibt es noch keine Leitplanke.",
+    "access.noGuardrails": "Es gibt noch keine Leitplanke.",
     "access.guardrailsLoadFailed": "Die Leitplanken konnten nicht geladen werden.",
     "access.kindGuardrail": "Leitplanken",
     "access.objectGuardrail": "die Leitplanke {name}"

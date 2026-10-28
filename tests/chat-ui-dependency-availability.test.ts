@@ -259,7 +259,9 @@ describe("publishing an agent that uses what its workspaces lack", () => {
     await openPublish();
     await vi.waitFor(() => expect(missingBanner()).not.toBeNull(), { timeout: CONDITION_WAIT_MS });
 
-    expect(missingBanner()?.textContent).toContain("Ask an instance admin to make them available.");
+    expect(missingBanner()?.textContent).toContain(
+      "Ask an admin for all workspaces to make them available."
+    );
   });
 
   // ACCEPT-2d C-1: the dialog names the workspaces the list was read for, by the names the page

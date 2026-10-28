@@ -11,7 +11,7 @@ export const connectionTyped = defineTranslations({
     "connectionTyped.errorUnavailable":
       "{service} did not answer as expected. Check the fields and connect again.",
     "connectionTyped.errorEgress":
-      "A network rule of this instance blocks {service}. Ask the team that runs this instance to allow it.",
+      "A network rule blocks {service}. Ask the technical team to allow it.",
     "connectionTyped.saved":
       "{name} is saved already and is in the list. Correct the field and connect again."
   },
@@ -23,7 +23,7 @@ export const connectionTyped = defineTranslations({
     "connectionTyped.errorUnavailable":
       "{service} hat nicht wie erwartet geantwortet. Prüfe die Felder und verbinde noch einmal.",
     "connectionTyped.errorEgress":
-      "Eine Netzwerkregel dieser Instanz sperrt {service}. Bitte das Team, das diese Instanz betreibt, es freizugeben.",
+      "Eine Netzwerkregel sperrt {service}. Bitte das technische Team, es freizugeben.",
     "connectionTyped.saved":
       "{name} ist schon gespeichert und steht in der Liste. Korrigiere das Feld und verbinde noch einmal."
   }

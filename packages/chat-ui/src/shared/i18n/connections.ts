@@ -6,11 +6,11 @@ export const connections = defineTranslations({
     "connections.personContextAppUnavailable":
       "Person context is not available in Apps yet. Remove App exposure or the person context header.",
     "connections.description":
-      "Connections give agents, apps and workflows access to outside systems. Those that come with the instance's setup are read-only here.",
+      "Connections give agents, apps and workflows access to outside systems. Those that come with the system setup are read-only here.",
     "connections.catalogueUpdateRequired":
       "This connection was set up from an earlier version of its catalogue entry. Update it to the current version at the top of this page first.",
     "connections.releaseNotice":
-      "This connection comes with the instance's setup. The team that runs this instance changes it there; it cannot be changed here.",
+      "This connection comes with the system setup. The technical team changes it there; it cannot be changed here.",
     "connections.new": "New connection",
     "connections.titleLabel": "Name",
     "connections.deleteTitle": "Delete connection '{name}'?",
@@ -20,12 +20,12 @@ export const connections = defineTranslations({
     "connections.create": "Create connection",
     "connections.serverTitle": "Server",
     "connections.serverDescription":
-      "The remote MCP server this connection reaches. The instance reaches only hosts that are allowed for it.",
+      "The remote MCP server this connection reaches. Only allowed hosts can be reached.",
     "connections.url": "Server address",
     "connections.urlHint":
       "The https address of the server with the path of its MCP endpoint, as its provider gives it. Moving to another server removes the key entered for this one.",
     "connections.authTitle": "Authentication",
-    "connections.authDescription": "How the instance proves itself to the server.",
+    "connections.authDescription": "How the connection proves itself to the server.",
     "connections.authOAuth": "OAuth sign-in",
     "connections.authOAuthText":
       "A person signs in at the provider under Sign-in, and every call uses that account.",
@@ -37,7 +37,7 @@ export const connections = defineTranslations({
     "connections.authHeaderText": "The key is sent in a header the server names.",
     "connections.authOAuthClient": "OAuth client credentials",
     "connections.authOAuthClientText":
-      "The instance signs in as its own client, with client ID and client secret, without a person.",
+      "The connection signs in as its own client, with client ID and client secret, without a person.",
     "connections.headerName": "Header name",
     "connections.headerNameHint": "The header the server reads the key from, such as X-API-Key.",
     "connections.secret": "Key",
@@ -55,25 +55,25 @@ export const connections = defineTranslations({
     "connections.refusedAddress":
       "Enter the address as a web address that starts with https:// or http://, such as https://example.com/api, without user name, password, query (?) or fragment (#).",
     "connections.refusedHeaders":
-      "The instance did not accept these headers. Check each header's name and value.",
-    "connections.refusedName": "The instance did not accept this name. Choose another one.",
-    "connections.refusedOperation": "The instance did not accept this tool.",
+      "These headers were not accepted. Check each header's name and value.",
+    "connections.refusedName": "This name was not accepted. Choose another one.",
+    "connections.refusedOperation": "This tool was not accepted.",
     "connections.refusedSettings":
-      "The instance did not accept these settings. Check that the address starts with https:// or http:// and has no user name, password, query or fragment.",
+      "These settings were not accepted. Check that the address starts with https:// or http:// and has no user name, password, query or fragment.",
     "connections.refusedTestPath":
       "Enter the test path as a path that starts with /, without query (?).",
     "connections.refusedOAuth":
       "Check the OAuth addresses: https, without user name or fragment. Extra parameters may not name a parameter of the protocol.",
     "connections.refusedOAuthEgress":
-      "A network rule of this instance blocks an address of the sign-in server. Send the team that runs this instance the host named in the details.",
+      "A network rule blocks an address of the sign-in server. Send the technical team the host named in the details.",
     "connections.refusedUnknown":
-      "The instance did not accept this connection. An administrator of the instance sees why under Technical details.",
+      "This connection was not accepted. An admin for all workspaces sees why under Technical details.",
     "connections.writeFailed": "The change could not be saved.",
     "connections.discoveredTitle": "Discovered tools",
     "connections.discoveredDescription":
       "Tools the server offers that this connection does not accept. Nobody can call one until it is accepted.",
     "connections.discoveredEmpty": "The server offers no tool that is not accepted.",
-    "connections.discoveredWaiting": "The instance is reading the tools of the server.",
+    "connections.discoveredWaiting": "Reading the tools of the server.",
     "connections.discoveredNever": "The tools of the server have not been read yet.",
     "connections.discoveredFailed": "The tools could not be read. Test the connection to see why.",
     "connections.discoverAgain": "Read tools again",
@@ -102,20 +102,19 @@ export const connections = defineTranslations({
     "connections.disabled": "Disabled",
     "connections.empty": "No connections yet. A connection holds the access to an outside system.",
     "connections.healthFailed": "Failed",
-    "connections.healthFailedNext":
-      "Test again. If it fails again, ask the team that runs this instance.",
-    "connections.healthFailedText": "The test failed for a reason the instance does not name.",
+    "connections.healthFailedNext": "Test again. If it fails again, ask the technical team.",
+    "connections.healthFailedText": "The test failed without giving a reason.",
     "connections.healthNetworkDeniedNext":
-      "The team that runs this instance lets it reach this host and restarts it. Then test again.",
+      "The technical team allows access to this host and restarts the system. Then test again.",
     "connections.healthNotConfiguredNext":
-      "The team that runs this instance supplies the credential and restarts the instance. Then test again.",
+      "The technical team supplies the credential and restarts the system. Then test again.",
     "connections.healthSecretUnreadableNext":
-      "The team that runs this instance restores the key the credential was stored with, or supplies the credential again, and restarts the instance. Then test again.",
+      "The technical team restores the key the credential was stored with, or supplies the credential again, and restarts the system. Then test again.",
     "connections.healthUnauthorizedNext":
-      "The team that runs this instance sets a new credential and restarts the instance. Then test again.",
+      "The technical team sets a new credential and restarts the system. Then test again.",
     "connections.healthUnavailableNext":
-      "Check the address under Settings. The team that runs this instance can change it.",
-    "connections.statusDescription": "Whether the instance reaches the outside system.",
+      "Check the address under Settings. The technical team can change it.",
+    "connections.statusDescription": "Whether the outside system can be reached.",
     "connections.accessTitle": "Additional use rights",
     "connections.accessDescription":
       "People and service principals given a right on this Connection itself. Workspace members use it through Available in and are not listed here.",
@@ -134,7 +133,7 @@ export const connections = defineTranslations({
     "connections.connectorType": "Connector type",
     "connections.credential": "Credential",
     "connections.credentialNeverShown":
-      "The credential stays in the instance's protected store. This page shows only whether it is there.",
+      "The credential stays in protected storage. This page shows only whether it is there.",
     "connections.credentialNoneNeeded": "None needed",
     "connections.credentialNoneNeededText": "The outside system asks for no credential.",
     "connections.credentialNotSet": "Not set",
@@ -157,14 +156,14 @@ export const connections = defineTranslations({
     "connections.exposureWorkflow": "Workflows",
     "connections.healthNetworkDenied": "Network denied",
     "connections.healthNetworkDeniedText":
-      "The instance may not reach this address. Its host is not among the outside addresses allowed for it.",
+      "Access to this address is not allowed. Its host is not among the allowed outside addresses.",
     "connections.healthNeverTested": "Not tested",
     "connections.healthNeverTestedText": "This connection has not been tested yet.",
     "connections.healthPersonal": "Each person connects",
     "connections.healthPersonalText":
       "Each person connects their own account, in chat or under Settings > You > Connections. There is no key to enter here.",
     "connections.healthPersonalTextManaged":
-      "This instance brings the app registration. Each person connects their own account, in chat or under Settings > You > Connections. There is nothing to enter here.",
+      "The app registration is already set up. Each person connects their own account, in chat or under Settings > You > Connections. There is nothing to enter here.",
     "connections.healthSignInNeeded": "Sign-in needed",
     "connections.healthSignInNeededText":
       "This connection signs in at its provider with OAuth, and nobody is signed in.",
@@ -172,15 +171,14 @@ export const connections = defineTranslations({
       "An administrator signs in under Sign-in. Until then nothing can call the connection.",
     "connections.healthNotConfigured": "Not configured",
     "connections.healthNotConfiguredText":
-      "The credential of this connection is missing. Until the team that runs this instance supplies it, no call reaches the outside system.",
+      "The credential of this connection is missing. Until the technical team supplies it, no call reaches the outside system.",
     "connections.healthReady": "Ready",
     "connections.healthReadyText": "The outside system answered the test.",
     "connections.healthSecretUnreadable": "Credential unreadable",
     "connections.healthSecretUnreadableText":
-      "A credential is stored, but the instance cannot read it. Until it is set again, no call reaches the outside system.",
+      "A credential is stored, but it cannot be read. Until it is set again, no call reaches the outside system.",
     "connections.healthTesting": "Testing",
-    "connections.healthTestingText":
-      "The instance is asking the outside system. This can take a moment.",
+    "connections.healthTestingText": "Asking the outside system. This can take a moment.",
     "connections.healthUnauthorized": "Unauthorized",
     "connections.healthUnauthorizedText":
       "The outside system refused the credential. It may be wrong, expired or revoked.",
@@ -205,15 +203,15 @@ export const connections = defineTranslations({
     "connections.search": "Search connections",
     "connections.settingsTitle": "Settings",
     "connections.settingsDescription":
-      "How the instance reaches the outside system. No setting is a credential.",
+      "How the connection reaches the outside system. No setting is a credential.",
     "connections.sharedAccountTitle": "One shared account",
     "connections.sharedAccountText":
       "Every call through this connection uses the same account in the outside system. Everyone who may use the connection sees what that account sees, whatever their own rights there are.",
     "connections.statusAwaitingDiscovery": "Awaiting discovery",
     "connections.statusAwaitingDiscoveryText":
-      "The instance has not read this operation from the outside system yet. It cannot be called until then.",
+      "This operation has not been read from the outside system yet. It cannot be called until then.",
     "connections.statusDisabled": "Disabled",
-    "connections.statusDisabledText": "Switched off in the instance's setup.",
+    "connections.statusDisabledText": "Switched off in the system setup.",
     "connections.statusNeedsReview": "Needs review",
     "connections.statusNeedsReviewText":
       "The outside system now describes this operation differently than was accepted. It cannot be called until someone who may change this connection accepts the new description.",
@@ -227,7 +225,7 @@ export const connections = defineTranslations({
     "connections.testFailed": "The test could not be run.",
     "connections.testHeld": "The test waits for approval in the Inbox. It has not run yet.",
     "connections.testNotAllowed":
-      "You can read this connection. Testing it needs the right to change connections on the instance.",
+      "You can read this connection. Testing it needs the right to change connections across all workspaces.",
     "connections.testRefused": "You may not test this connection. You can read it.",
     "connections.toolsHeld": "Tools of connections this agent holds",
     "connections.personContextTitle": "Person context",
@@ -240,12 +238,12 @@ export const connections = defineTranslations({
     "connections.personContextKindUser": "Person",
     "connections.personContextSubjectId": "ID",
     "connections.personContextSubjectIdHint":
-      "The ID the instance gives the person or service principal.",
+      "The ID assigned to the person or service principal here.",
     "connections.personContextShow": "Show mapping",
     "connections.personContextChoosePerson": "Choose a person",
     "connections.personContextChoosePrincipal": "Choose a service principal",
-    "connections.personContextNoPeople": "This instance has no people yet.",
-    "connections.personContextNoPrincipals": "This instance has no service principals yet.",
+    "connections.personContextNoPeople": "There are no people yet.",
+    "connections.personContextNoPrincipals": "There are no service principals yet.",
     "connections.personContextListFailed": "The list could not be loaded.",
     "connections.personContextPeopleHidden":
       "Choosing a person by name needs the right to manage users. Someone with that right can map people here.",
@@ -277,11 +275,11 @@ export const connections = defineTranslations({
     "connections.personContextAppUnavailable":
       "Personenkontext ist in Apps noch nicht verfügbar. Entfernen Sie die App-Freigabe oder den Header für den Personenkontext.",
     "connections.description":
-      "Verbindungen geben Agenten, Apps und Workflows Zugang zu externen Systemen. Die aus der Einrichtung der Instanz sind hier schreibgeschützt.",
+      "Verbindungen geben Agenten, Apps und Workflows Zugang zu externen Systemen. Die aus der Einrichtung des Systems sind hier schreibgeschützt.",
     "connections.catalogueUpdateRequired":
       "Diese Verbindung wurde mit einer früheren Version ihres Katalogeintrags eingerichtet. Aktualisiere sie zuerst oben auf dieser Seite auf die aktuelle Version.",
     "connections.releaseNotice":
-      "Diese Verbindung gehört zur Einrichtung der Instanz. Das Team, das diese Instanz betreibt, ändert sie dort; hier lässt sie sich nicht ändern.",
+      "Diese Verbindung gehört zur Einrichtung des Systems. Das technische Team ändert sie dort; hier lässt sie sich nicht ändern.",
     "connections.new": "Neue Verbindung",
     "connections.titleLabel": "Name",
     "connections.deleteTitle": "Verbindung „{name}“ löschen?",
@@ -291,12 +289,12 @@ export const connections = defineTranslations({
     "connections.create": "Verbindung anlegen",
     "connections.serverTitle": "Server",
     "connections.serverDescription":
-      "Der entfernte MCP-Server, den diese Verbindung erreicht. Die Instanz erreicht nur Hosts, die für sie erlaubt sind.",
+      "Der entfernte MCP-Server, den diese Verbindung erreicht. Nur erlaubte Hosts können erreicht werden.",
     "connections.url": "Serveradresse",
     "connections.urlHint":
       "Die https-Adresse des Servers mit dem Pfad seines MCP-Endpunkts, wie sein Anbieter sie angibt. Beim Wechsel zu einem anderen Server wird der für diesen eingegebene Schlüssel entfernt.",
     "connections.authTitle": "Authentifizierung",
-    "connections.authDescription": "Wie sich die Instanz beim Server ausweist.",
+    "connections.authDescription": "Wie sich die Verbindung beim Server ausweist.",
     "connections.authOAuth": "Anmeldung mit OAuth",
     "connections.authOAuthText":
       "Eine Person meldet sich unter Anmeldung beim Anbieter an, und jeder Aufruf nutzt dieses Konto.",
@@ -309,7 +307,7 @@ export const connections = defineTranslations({
       "Der Schlüssel wird in einem Header gesendet, den der Server nennt.",
     "connections.authOAuthClient": "OAuth Client Credentials",
     "connections.authOAuthClientText":
-      "Die Instanz meldet sich mit Client-ID und Client-Secret selbst an, ohne Person.",
+      "Die Verbindung meldet sich mit Client-ID und Client-Secret selbst an, ohne Person.",
     "connections.headerName": "Header-Name",
     "connections.headerNameHint":
       "Der Header, aus dem der Server den Schlüssel liest, etwa X-API-Key.",
@@ -328,26 +326,25 @@ export const connections = defineTranslations({
     "connections.refusedAddress":
       "Gib die Adresse als Webadresse an, die mit https:// oder http:// beginnt, etwa https://example.com/api, ohne Benutzername, Passwort, Abfrage (?) oder Fragment (#).",
     "connections.refusedHeaders":
-      "Die Instanz hat diese Header nicht angenommen. Prüfe Name und Wert jedes Headers.",
-    "connections.refusedName":
-      "Die Instanz hat diesen Namen nicht angenommen. Wähle einen anderen.",
-    "connections.refusedOperation": "Die Instanz hat dieses Tool nicht angenommen.",
+      "Diese Header wurden nicht angenommen. Prüfe Name und Wert jedes Headers.",
+    "connections.refusedName": "Dieser Name wurde nicht angenommen. Wähle einen anderen.",
+    "connections.refusedOperation": "Dieses Tool wurde nicht angenommen.",
     "connections.refusedSettings":
-      "Die Instanz hat diese Einstellungen nicht angenommen. Prüfe, ob die Adresse mit https:// oder http:// beginnt und keinen Benutzernamen, kein Passwort, keine Abfrage und kein Fragment enthält.",
+      "Diese Einstellungen wurden nicht angenommen. Prüfe, ob die Adresse mit https:// oder http:// beginnt und keinen Benutzernamen, kein Passwort, keine Abfrage und kein Fragment enthält.",
     "connections.refusedTestPath":
       "Gib den Testpfad als Pfad an, der mit / beginnt, ohne Abfrage (?).",
     "connections.refusedOAuth":
       "Prüfe die OAuth-Adressen: https, ohne Benutzername oder Fragment. Zusätzliche Parameter dürfen keinen Parameter des Protokolls nennen.",
     "connections.refusedOAuthEgress":
-      "Eine Netzwerkregel dieser Instanz sperrt eine Adresse des Anmeldeservers. Schick dem Team, das diese Instanz betreibt, den Host aus den Details.",
+      "Eine Netzwerkregel sperrt eine Adresse des Anmeldeservers. Schick dem technischen Team den Host aus den Details.",
     "connections.refusedUnknown":
-      "Die Instanz hat diese Verbindung nicht angenommen. Ein Administrator der Instanz sieht den Grund unter Technische Details.",
+      "Diese Verbindung wurde nicht angenommen. Ein Admin für alle Arbeitsbereiche sieht den Grund unter Technische Details.",
     "connections.writeFailed": "Die Änderung konnte nicht gespeichert werden.",
     "connections.discoveredTitle": "Gefundene Tools",
     "connections.discoveredDescription":
       "Tools, die der Server anbietet und die diese Verbindung nicht akzeptiert. Niemand kann eines aufrufen, bevor es akzeptiert ist.",
     "connections.discoveredEmpty": "Der Server bietet kein Tool an, das nicht akzeptiert ist.",
-    "connections.discoveredWaiting": "Die Instanz liest die Tools des Servers.",
+    "connections.discoveredWaiting": "Die Tools des Servers werden gelesen.",
     "connections.discoveredNever": "Die Tools des Servers wurden noch nicht gelesen.",
     "connections.discoveredFailed":
       "Die Tools ließen sich nicht lesen. Teste die Verbindung, um den Grund zu sehen.",
@@ -375,21 +372,20 @@ export const connections = defineTranslations({
     "connections.healthUnavailableNextRuntime":
       "Prüfe die Adresse unter Einstellungen und ändere sie, wenn sie falsch ist.",
     "connections.healthFailed": "Fehlgeschlagen",
-    "connections.healthFailedText":
-      "Der Test ist aus einem Grund fehlgeschlagen, den die Instanz nicht nennt.",
+    "connections.healthFailedText": "Der Test ist ohne Angabe eines Grundes fehlgeschlagen.",
     "connections.healthFailedNext":
-      "Teste erneut. Schlägt der Test wieder fehl, wende dich an das Team, das diese Instanz betreibt.",
+      "Teste erneut. Schlägt der Test wieder fehl, wende dich an das technische Team.",
     "connections.healthNetworkDeniedNext":
-      "Das Team, das diese Instanz betreibt, erlaubt ihr diesen Host und startet sie neu. Teste danach erneut.",
+      "Das technische Team erlaubt den Zugriff auf diesen Host und startet das System neu. Teste danach erneut.",
     "connections.healthNotConfiguredNext":
-      "Das Team, das diese Instanz betreibt, stellt die Zugangsdaten bereit und startet die Instanz neu. Teste danach erneut.",
+      "Das technische Team stellt die Zugangsdaten bereit und startet das System neu. Teste danach erneut.",
     "connections.healthSecretUnreadableNext":
-      "Das Team, das diese Instanz betreibt, stellt den Schlüssel wieder her, mit dem die Zugangsdaten gespeichert wurden, oder stellt die Zugangsdaten erneut bereit, und startet die Instanz neu. Teste danach erneut.",
+      "Das technische Team stellt den Schlüssel wieder her, mit dem die Zugangsdaten gespeichert wurden, oder stellt die Zugangsdaten erneut bereit, und startet das System neu. Teste danach erneut.",
     "connections.healthUnauthorizedNext":
-      "Das Team, das diese Instanz betreibt, setzt neue Zugangsdaten und startet die Instanz neu. Teste danach erneut.",
+      "Das technische Team setzt neue Zugangsdaten und startet das System neu. Teste danach erneut.",
     "connections.healthUnavailableNext":
-      "Prüfe die Adresse unter Einstellungen. Ändern kann sie das Team, das diese Instanz betreibt.",
-    "connections.statusDescription": "Ob die Instanz das externe System erreicht.",
+      "Prüfe die Adresse unter Einstellungen. Ändern kann sie das technische Team.",
+    "connections.statusDescription": "Ob das externe System erreicht wird.",
     "connections.accessTitle": "Zusätzliche Nutzungsrechte",
     "connections.accessDescription":
       "Personen und Technische Konten mit einem Recht auf dieser Verbindung selbst. Mitglieder eines Arbeitsbereichs verwenden sie über „Verfügbar in“ und stehen nicht hier.",
@@ -408,7 +404,7 @@ export const connections = defineTranslations({
     "connections.connectorType": "Konnektortyp",
     "connections.credential": "Zugangsdaten",
     "connections.credentialNeverShown":
-      "Die Zugangsdaten bleiben im geschützten Speicher der Instanz. Diese Seite zeigt nur, ob sie vorhanden sind.",
+      "Die Zugangsdaten bleiben im geschützten Speicher. Diese Seite zeigt nur, ob sie vorhanden sind.",
     "connections.credentialNoneNeeded": "Nicht nötig",
     "connections.credentialNoneNeededText": "Das externe System verlangt keine Zugangsdaten.",
     "connections.credentialNotSet": "Nicht gesetzt",
@@ -434,14 +430,14 @@ export const connections = defineTranslations({
     "connections.exposureWorkflow": "Workflows",
     "connections.healthNetworkDenied": "Netzwerk gesperrt",
     "connections.healthNetworkDeniedText":
-      "Die Instanz darf diese Adresse nicht erreichen. Ihr Host gehört nicht zu den externen Adressen, die für sie erlaubt sind.",
+      "Der Zugriff auf diese Adresse ist nicht erlaubt. Ihr Host gehört nicht zu den erlaubten externen Adressen.",
     "connections.healthNeverTested": "Nicht getestet",
     "connections.healthNeverTestedText": "Diese Verbindung wurde noch nicht getestet.",
     "connections.healthPersonal": "Jede Person verbindet sich",
     "connections.healthPersonalText":
       "Jede Person verbindet ihr eigenes Konto, im Chat oder unter Einstellungen > Du > Verbindungen. Hier ist kein Schlüssel einzutragen.",
     "connections.healthPersonalTextManaged":
-      "Die App-Registrierung bringt diese Instanz mit. Jede Person verbindet ihr eigenes Konto, im Chat oder unter Einstellungen > Du > Verbindungen. Hier ist nichts einzutragen.",
+      "Die App-Registrierung ist bereits eingerichtet. Jede Person verbindet ihr eigenes Konto, im Chat oder unter Einstellungen > Du > Verbindungen. Hier ist nichts einzutragen.",
     "connections.healthSignInNeeded": "Anmeldung nötig",
     "connections.healthSignInNeededText":
       "Diese Verbindung meldet sich mit OAuth beim Anbieter an, und niemand ist angemeldet.",
@@ -449,15 +445,15 @@ export const connections = defineTranslations({
       "Eine Administratorin oder ein Administrator meldet sie unter Anmeldung an. Bis dahin kann nichts die Verbindung aufrufen.",
     "connections.healthNotConfigured": "Nicht konfiguriert",
     "connections.healthNotConfiguredText":
-      "Die Zugangsdaten dieser Verbindung fehlen. Bis das Team, das diese Instanz betreibt, sie bereitstellt, erreicht kein Aufruf das externe System.",
+      "Die Zugangsdaten dieser Verbindung fehlen. Bis das technische Team sie bereitstellt, erreicht kein Aufruf das externe System.",
     "connections.healthReady": "Bereit",
     "connections.healthReadyText": "Das externe System hat auf den Test geantwortet.",
     "connections.healthSecretUnreadable": "Zugangsdaten nicht lesbar",
     "connections.healthSecretUnreadableText":
-      "Zugangsdaten sind gespeichert, aber die Instanz kann sie nicht lesen. Bis sie neu gesetzt sind, erreicht kein Aufruf das externe System.",
+      "Zugangsdaten sind gespeichert, lassen sich aber nicht lesen. Bis sie neu gesetzt sind, erreicht kein Aufruf das externe System.",
     "connections.healthTesting": "Test läuft",
     "connections.healthTestingText":
-      "Die Instanz fragt das externe System an. Das kann einen Moment dauern.",
+      "Das externe System wird angefragt. Das kann einen Moment dauern.",
     "connections.healthUnauthorized": "Nicht autorisiert",
     "connections.healthUnauthorizedText":
       "Das externe System hat die Zugangsdaten abgelehnt. Sie können falsch, abgelaufen oder widerrufen sein.",
@@ -483,15 +479,15 @@ export const connections = defineTranslations({
     "connections.search": "Verbindungen durchsuchen",
     "connections.settingsTitle": "Einstellungen",
     "connections.settingsDescription":
-      "Wie die Instanz das externe System erreicht. Keine Einstellung enthält Zugangsdaten.",
+      "Wie die Verbindung das externe System erreicht. Keine Einstellung enthält Zugangsdaten.",
     "connections.sharedAccountTitle": "Ein gemeinsames Konto",
     "connections.sharedAccountText":
       "Jeder Aufruf über diese Verbindung nutzt dasselbe Konto im externen System. Alle, die die Verbindung nutzen dürfen, sehen, was dieses Konto sieht, unabhängig von ihren eigenen Rechten dort.",
     "connections.statusAwaitingDiscovery": "Wartet auf Erkennung",
     "connections.statusAwaitingDiscoveryText":
-      "Die Instanz hat diese Operation noch nicht vom externen System gelesen. Bis dahin kann sie nicht aufgerufen werden.",
+      "Diese Operation wurde noch nicht vom externen System gelesen. Bis dahin kann sie nicht aufgerufen werden.",
     "connections.statusDisabled": "Deaktiviert",
-    "connections.statusDisabledText": "In der Einrichtung der Instanz abgeschaltet.",
+    "connections.statusDisabledText": "In der Einrichtung des Systems abgeschaltet.",
     "connections.statusNeedsReview": "Prüfung nötig",
     "connections.statusNeedsReviewText":
       "Das externe System beschreibt diese Operation jetzt anders als akzeptiert. Sie kann erst wieder aufgerufen werden, wenn jemand, der diese Verbindung ändern darf, die neue Beschreibung akzeptiert.",
@@ -506,7 +502,7 @@ export const connections = defineTranslations({
     "connections.testHeld":
       "Der Test wartet auf eine Freigabe im Eingang. Er ist noch nicht gelaufen.",
     "connections.testNotAllowed":
-      "Du kannst diese Verbindung lesen. Zum Testen brauchst du das Recht, Verbindungen der Instanz zu ändern.",
+      "Du kannst diese Verbindung lesen. Zum Testen brauchst du das Recht, Verbindungen in allen Arbeitsbereichen zu ändern.",
     "connections.testRefused": "Du darfst diese Verbindung nicht testen. Lesen kannst du sie.",
     "connections.toolsHeld": "Werkzeuge von Verbindungen, die dieser Agent führt",
     "connections.personContextTitle": "Personenkontext",
@@ -519,12 +515,12 @@ export const connections = defineTranslations({
     "connections.personContextKindUser": "Person",
     "connections.personContextSubjectId": "ID",
     "connections.personContextSubjectIdHint":
-      "Die ID, die die Instanz der Person oder dem technischen Konto gibt.",
+      "Die ID, die der Person oder dem technischen Konto hier zugewiesen ist.",
     "connections.personContextShow": "Zuordnung anzeigen",
     "connections.personContextChoosePerson": "Person auswählen",
     "connections.personContextChoosePrincipal": "Technisches Konto auswählen",
-    "connections.personContextNoPeople": "Diese Instanz hat noch keine Personen.",
-    "connections.personContextNoPrincipals": "Diese Instanz hat noch keine technischen Konten.",
+    "connections.personContextNoPeople": "Es gibt noch keine Personen.",
+    "connections.personContextNoPrincipals": "Es gibt noch keine technischen Konten.",
     "connections.personContextListFailed": "Die Liste ließ sich nicht laden.",
     "connections.personContextPeopleHidden":
       "Um eine Person nach Namen auszuwählen, brauchst du das Recht, Benutzer zu verwalten. Wer es hat, kann Personen hier zuordnen.",

@@ -60,15 +60,9 @@ describe("A refused Connection address", () => {
     const [said] = refusalsOf(refusal, undefined);
     // ACCEPT-FIX-7 C9: a network rule of the instance blocks it, and the person sends the team that runs it
     // the host. Nobody is told to ask an administrator, and nothing English stands under it.
+    expect(said).toContain(locale === "en" ? "A network rule blocks" : "Netzwerkregel sperrt");
     expect(said).toContain(
-      locale === "en"
-        ? "A network rule of this instance blocks"
-        : "Netzwerkregel dieser Instanz sperrt"
-    );
-    expect(said).toContain(
-      locale === "en"
-        ? "send the team that runs this instance the host"
-        : "schick dem Team, das diese Instanz betreibt"
+      locale === "en" ? "send the technical team the host" : "schick dem technischen Team"
     );
     expect(said).not.toMatch(/administrator/iu);
     expect(said).not.toContain("egress");
@@ -232,14 +226,14 @@ describe("A refused new Connection", () => {
     "tells a refused address at the address field once, with the host to send the operator (%j)",
     async (roles) => {
       const page = await connectRefused(egressRefusal(), roles);
-      await vi.waitFor(() => expect(addressError(page)).toContain("Netzwerkregel dieser Instanz"));
+      await vi.waitFor(() => expect(addressError(page)).toContain("Netzwerkregel"));
       expect(addressError(page)).toBe(
-        "Eine Netzwerkregel dieser Instanz sperrt dieses Ziel. Damit es erlaubt wird, schick dem Team, das diese Instanz betreibt, den Host api.exampledata.test."
+        "Eine Netzwerkregel sperrt dieses Ziel. Damit es erlaubt wird, schick dem technischen Team den Host api.exampledata.test."
       );
       // ACCEPT-FIX-7 C9: told once, in German, with no English sentence under Technical details.
       expect(page.textContent).not.toContain("egress");
       expect(page.querySelector("[data-refusal-detail]")).toBeNull();
-      expect(page.textContent?.split("Netzwerkregel dieser Instanz").length).toBe(2);
+      expect(page.textContent?.split("Netzwerkregel").length).toBe(2);
       // Nothing was saved, so nothing is said to be in the list.
       expect(page.querySelector("[data-connection-create-saved]")).toBeNull();
     }
@@ -273,7 +267,7 @@ describe("A refused new Connection", () => {
     );
     await vi.waitFor(() =>
       expect(page.querySelector("[data-connection-create-error]")?.textContent).toContain(
-        "Die Instanz hat diese Verbindung nicht angenommen"
+        "Diese Verbindung wurde nicht angenommen"
       )
     );
     expect(page.textContent).not.toContain("expected a number");
@@ -284,7 +278,7 @@ describe("A refused save on the Connection page", () => {
   async function refusedSave(
     roles: string[],
     refusal: ApiError = egressRefusal(),
-    said = "A network rule of this instance blocks"
+    said = "A network rule blocks"
   ): Promise<HTMLElement> {
     const asset = connectionAsset("sample-business", { origin: "runtime" });
     const detailPath = apiOperations["connections.get"].path.replace(":name", asset.name);
@@ -354,7 +348,7 @@ describe("A refused save on the Connection page", () => {
 
   it("says how an address is written where the instance refused it in its own words", async () => {
     const page = await refusedSave(["user"], INVALID_ADDRESS, "starts with https://");
-    expect(page.textContent).toContain("The instance did not accept these settings.");
+    expect(page.textContent).toContain("These settings were not accepted.");
     expect(page.textContent).not.toContain("must be an http or https address");
   });
 });

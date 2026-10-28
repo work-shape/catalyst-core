@@ -475,7 +475,7 @@ describe("the Tools section of the agent page", () => {
     );
     expect(row(markup, "connection:crm")).toContain(">1/2<");
     // The sub-headings of the instance's own tools and of the Connections.
-    expect(markup).toContain(">This instance</h3>");
+    expect(markup).toContain(">For everyone</h3>");
     expect(markup).toContain(">Connections</h3>");
     // The heading counts the tools that are on: what the rows add up to.
     expect(/>Tools<\/h2><span[^>]*>(\d+)</u.exec(markup)?.[1]).toBe("3");
@@ -505,7 +505,7 @@ describe("the Tools section of the agent page", () => {
     const markup = page(["web_fetch"], "de");
 
     expect(markup).toContain(">Web<");
-    expect(markup).toContain(">Dieser Instanz</h3>");
+    expect(markup).toContain(">Für alle</h3>");
     expect(markup).toContain(">Verbindungen</h3>");
     expect(markup).toContain('aria-label="Alle Werkzeuge von Web"');
     expect(markup).toContain("Technische Details");

@@ -9,7 +9,7 @@ export const usageLimits = defineTranslations({
     "settings.limits": "Limits",
     "settings.ownUsage": "Usage",
     "limits.description":
-      "Spend limits per day and per month, in the currency of the rate card. A message is sent only while the person, the workspace and the instance are all under their limits. Days and months are counted in UTC.",
+      "Spend limits per day and per month, in the currency of the rate card. A message is sent only while the person, the workspace and all workspaces together are under their limits. Days and months are counted in UTC.",
     "limits.loadFailed": "The limits could not be loaded.",
     "limits.saveFailed": "The limit was not saved. Try again.",
     "limits.saved": "Saved. It applies from the next message.",
@@ -20,16 +20,14 @@ export const usageLimits = defineTranslations({
     "limits.save": "Save",
     "limits.remove": "Remove",
     "limits.add": "Add",
-    "limits.instance": "Instance",
+    "limits.instance": "All workspaces",
     "limits.instanceDescription":
-      "All usage on this instance. Without a value here, the upper limit of the team that runs this instance applies.",
-    "limits.ceiling":
-      "The team that runs this instance allows at most {daily} a day and {monthly} a month.",
-    "limits.ceilingDaily": "The team that runs this instance allows at most {daily} a day.",
-    "limits.ceilingMonthly": "The team that runs this instance allows at most {monthly} a month.",
-    "limits.ceilingNone": "The team that runs this instance sets no upper limit.",
-    "limits.aboveCeiling":
-      "This is above the most the team that runs this instance allows: {ceiling}.",
+      "All usage across all workspaces. Without a value here, the technical team's upper limit applies.",
+    "limits.ceiling": "The technical team allows at most {daily} a day and {monthly} a month.",
+    "limits.ceilingDaily": "The technical team allows at most {daily} a day.",
+    "limits.ceilingMonthly": "The technical team allows at most {monthly} a month.",
+    "limits.ceilingNone": "The technical team sets no upper limit.",
+    "limits.aboveCeiling": "This is above the most the technical team allows: {ceiling}.",
     "limits.inForce": "In force per day: {daily}; per month: {monthly}.",
     "limits.workspaces": "Shared workspaces",
     "limits.workspacesDescription":
@@ -60,7 +58,7 @@ export const usageLimits = defineTranslations({
     "ownUsage.spentNoLimit": "{spent}, no limit",
     "ownUsage.reached": "Limit reached. It resets {reset}.",
     "ownUsage.otherLevels":
-      "A limit of the workspace you work in or of the instance can also stop your messages. The composer says so when one does.",
+      "A limit of the workspace you work in or for all workspaces together can also stop your messages. The composer says so when one does.",
     "composerLimit.ownDay":
       "You have reached your daily spend limit ({spent} of {limit}). It resets at midnight UTC. An administrator can raise it.",
     "composerLimit.ownMonth":
@@ -78,9 +76,9 @@ export const usageLimits = defineTranslations({
     "composerLimit.workspaceMonthAmount":
       "This workspace has reached its monthly spend limit ({spent} of {limit}). It resets at the start of next month (UTC). An administrator can raise it; other workspaces keep working.",
     "composerLimit.instanceDay":
-      "This instance has reached its daily spend limit. It resets at midnight UTC. An administrator can raise it.",
+      "The daily spend limit for all workspaces together has been reached. It resets at midnight UTC. An administrator can raise it.",
     "composerLimit.instanceMonth":
-      "This instance has reached its monthly spend limit. It resets at the start of next month (UTC). An administrator can raise it.",
+      "The monthly spend limit for all workspaces together has been reached. It resets at the start of next month (UTC). An administrator can raise it.",
     "composerLimit.nearDay": "{amount} left of your daily spend limit.",
     "composerLimit.nearMonth": "{amount} left of your monthly spend limit.",
     "composerLimit.dismiss": "Dismiss"
@@ -89,7 +87,7 @@ export const usageLimits = defineTranslations({
     "settings.limits": "Limits",
     "settings.ownUsage": "Nutzung",
     "limits.description":
-      "Ausgabenlimits pro Tag und pro Monat, in der Währung der Preisliste. Eine Nachricht wird nur gesendet, solange die Person, der Arbeitsbereich und die Instanz alle unter ihren Limits sind. Tage und Monate zählen in UTC.",
+      "Ausgabenlimits pro Tag und pro Monat, in der Währung der Preisliste. Eine Nachricht wird nur gesendet, solange die Person, der Arbeitsbereich und alle Arbeitsbereiche zusammen unter ihren Limits sind. Tage und Monate zählen in UTC.",
     "limits.loadFailed": "Die Limits konnten nicht geladen werden.",
     "limits.saveFailed": "Das Limit wurde nicht gespeichert. Versuche es erneut.",
     "limits.saved": "Gespeichert. Es gilt ab der nächsten Nachricht.",
@@ -100,18 +98,16 @@ export const usageLimits = defineTranslations({
     "limits.save": "Speichern",
     "limits.remove": "Entfernen",
     "limits.add": "Hinzufügen",
-    "limits.instance": "Instanz",
+    "limits.instance": "Alle Arbeitsbereiche",
     "limits.instanceDescription":
-      "Die gesamte Nutzung dieser Instanz. Ohne Wert hier gilt die Obergrenze des Teams, das diese Instanz betreibt.",
+      "Die gesamte Nutzung in allen Arbeitsbereichen. Ohne Wert hier gilt die Obergrenze des technischen Teams.",
     "limits.ceiling":
-      "Das Team, das diese Instanz betreibt, erlaubt höchstens {daily} pro Tag und {monthly} pro Monat.",
-    "limits.ceilingDaily":
-      "Das Team, das diese Instanz betreibt, erlaubt höchstens {daily} pro Tag.",
-    "limits.ceilingMonthly":
-      "Das Team, das diese Instanz betreibt, erlaubt höchstens {monthly} pro Monat.",
-    "limits.ceilingNone": "Das Team, das diese Instanz betreibt, setzt keine Obergrenze.",
+      "Das technische Team erlaubt höchstens {daily} pro Tag und {monthly} pro Monat.",
+    "limits.ceilingDaily": "Das technische Team erlaubt höchstens {daily} pro Tag.",
+    "limits.ceilingMonthly": "Das technische Team erlaubt höchstens {monthly} pro Monat.",
+    "limits.ceilingNone": "Das technische Team setzt keine Obergrenze.",
     "limits.aboveCeiling":
-      "Das liegt über dem, was das Team, das diese Instanz betreibt, höchstens erlaubt: {ceiling}.",
+      "Das liegt über dem, was das technische Team höchstens erlaubt: {ceiling}.",
     "limits.inForce": "Es gilt pro Tag: {daily}; pro Monat: {monthly}.",
     "limits.workspaces": "Geteilte Arbeitsbereiche",
     "limits.workspacesDescription":
@@ -143,7 +139,7 @@ export const usageLimits = defineTranslations({
     "ownUsage.spentNoLimit": "{spent}, kein Limit",
     "ownUsage.reached": "Limit erreicht. Es wird {reset} zurückgesetzt.",
     "ownUsage.otherLevels":
-      "Auch ein Limit des Arbeitsbereichs, in dem du arbeitest, oder der Instanz kann deine Nachrichten stoppen. Das Eingabefeld sagt es dir, wenn das passiert.",
+      "Auch ein Limit des Arbeitsbereichs, in dem du arbeitest, oder für alle Arbeitsbereiche zusammen kann deine Nachrichten stoppen. Das Eingabefeld sagt es dir, wenn das passiert.",
     "composerLimit.ownDay":
       "Du hast dein tägliches Ausgabenlimit erreicht ({spent} von {limit}). Es wird um Mitternacht UTC zurückgesetzt. Ein Administrator kann es erhöhen.",
     "composerLimit.ownMonth":
@@ -161,9 +157,9 @@ export const usageLimits = defineTranslations({
     "composerLimit.workspaceMonthAmount":
       "Dieser Arbeitsbereich hat sein monatliches Ausgabenlimit erreicht ({spent} von {limit}). Es wird zu Beginn des nächsten Monats (UTC) zurückgesetzt. Ein Administrator kann es erhöhen; andere Arbeitsbereiche funktionieren weiter.",
     "composerLimit.instanceDay":
-      "Diese Instanz hat ihr tägliches Ausgabenlimit erreicht. Es wird um Mitternacht UTC zurückgesetzt. Ein Administrator kann es erhöhen.",
+      "Das tägliche Ausgabenlimit für alle Arbeitsbereiche zusammen ist erreicht. Es wird um Mitternacht UTC zurückgesetzt. Ein Administrator kann es erhöhen.",
     "composerLimit.instanceMonth":
-      "Diese Instanz hat ihr monatliches Ausgabenlimit erreicht. Es wird zu Beginn des nächsten Monats (UTC) zurückgesetzt. Ein Administrator kann es erhöhen.",
+      "Das monatliche Ausgabenlimit für alle Arbeitsbereiche zusammen ist erreicht. Es wird zu Beginn des nächsten Monats (UTC) zurückgesetzt. Ein Administrator kann es erhöhen.",
     "composerLimit.nearDay": "Von deinem täglichen Ausgabenlimit sind noch {amount} übrig.",
     "composerLimit.nearMonth": "Von deinem monatlichen Ausgabenlimit sind noch {amount} übrig.",
     "composerLimit.dismiss": "Ausblenden"
