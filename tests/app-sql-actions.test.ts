@@ -266,6 +266,34 @@ describe("a statement of an App on a Data Store", () => {
     });
     expect((await rowsOf(t.admin.id, "list_findings", listed)).rows).toEqual([]);
     expect((await t.findingRows()).filter((row) => row.client_id === "client-new")).toHaveLength(1);
+
+    // The draft's key answers the draft's call again from its run, and adds nothing to the copy.
+    const draftAgain = await t.callAction(
+      t.admin.id,
+      draft,
+      "add_finding",
+      { ...input, client: "client-draft" },
+      { "idempotency-key": "b3-insert-draft" }
+    );
+    expect(resultSchema.parse(draftAgain.json()).runId).toBe(
+      resultSchema.parse(inDraft.json()).runId
+    );
+    expect((await t.testCopyRows()).map((row) => row.client_id)).toEqual(["client-draft"]);
+    // A live call under the same key is carried out live: it is never answered with what the
+    // test copy answered.
+    const published = await t.openApp(t.admin.id, "published", "findings");
+    const liveAgain = await t.callAction(
+      t.admin.id,
+      published,
+      "add_finding",
+      { ...input, client: "client-draft" },
+      { "idempotency-key": "b3-insert-draft" }
+    );
+    expectStatus(liveAgain, 200);
+    const liveRun = resultSchema.parse(liveAgain.json()).runId;
+    expect(liveRun).not.toBe(resultSchema.parse(inDraft.json()).runId);
+    expect(await t.runOf(liveRun)).toMatchObject({ target: "live", status: "done" });
+    expect((await t.findingRows()).map((row) => row.client_id)).toContain("client-draft");
     await t.dropTestCopy();
   });
 

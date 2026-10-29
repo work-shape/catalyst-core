@@ -12,6 +12,7 @@ import { splitSeedStatements } from "@work-shape/catalyst-data-stores";
 import { z } from "zod";
 import { required } from "./support/assertions";
 import {
+  callContext,
   finding,
   init,
   manifest,
@@ -352,9 +353,11 @@ describe("the test copy of a Data Store", () => {
       code: "VALIDATION_FAILED",
       details: { reason: "test_copy_build_failed", code: "seed_failed", file: "seed/0001_bad.sql" }
     });
+    // The file and the statement's number, never its text: a seed statement holds values.
     expect(refused.message).toContain(
-      `'seed/0001_bad.sql' at statement 2 ("create table extra (id ...") needs a privilege its role does not hold (SQLSTATE 42501)`
+      `'seed/0001_bad.sql' at statement 2 needs a privilege its role does not hold (SQLSTATE 42501)`
     );
+    expect(refused.message).not.toContain("extra");
     expect(await databaseExists(copyDatabase(w))).toBe(false);
     expect(await copyRecord(w)).toBeUndefined();
     expect(audit.rows.map((row) => [row.type, row.metadata])).toEqual([
@@ -374,6 +377,10 @@ describe("the test copy of a Data Store", () => {
       select ${copyDatabase(w)} ~ '^catalyst_ds_[0-9a-f]+_test$' as copy,
         ${w.record.location.database} ~ '^catalyst_ds_[0-9a-f]+_test$' as live`;
     expect(matched).toEqual({ copy: true, live: false });
+    // A draft's call that resolved the store before it was retired, and runs after.
+    const queued = required(
+      await w.dataStores.operationSource.resolve(dataStoreOperationName("findings", "insert"))
+    );
 
     await db.store.transaction((stores) => w.dataStores.retire(stores, w.id));
     await w.worker.runDue();
@@ -381,6 +388,78 @@ describe("the test copy of a Data Store", () => {
     expect(await copyRecord(w)).toBeUndefined();
     // The store's own database outlives its asset, as before.
     expect(await databaseExists(w.record.location.database)).toBe(true);
+
+    // That call builds no copy of the retired store.
+    expect(
+      await refusal(
+        queued.execute(queued.inputSchema.parse({ table: "findings", rows: [finding(2)] }), {
+          ...callContext,
+          target: "test"
+        })
+      )
+    ).toMatchObject({ code: "NOT_FOUND", details: { reason: "store_retired" } });
+    expect(await databaseExists(copyDatabase(w))).toBe(false);
+    expect(await copyRecord(w)).toBeUndefined();
+  });
+
+  it("refuses a call that needs the copy's turn while another holds it, without waiting for it", async () => {
+    const w = await drafted("busy");
+    // Another build holds the turn, as a build of minutes does, in a transaction of its own.
+    let release: () => void = () => undefined;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let taken: () => void = () => undefined;
+    const holding = new Promise<void>((resolve) => {
+      taken = resolve;
+    });
+    const holder = db.store.transaction(async (stores) => {
+      expect(
+        await stores.dataStores.takeTestCopyTurn({
+          clientInstanceId: w.clientInstanceId,
+          storeId: w.id
+        })
+      ).toBe(true);
+      taken();
+      await released;
+    });
+    await holding;
+    try {
+      const started = Date.now();
+      expect(
+        await refusal(inTest(w, "insert", { table: "findings", rows: [finding(1)] }))
+      ).toMatchObject({
+        code: "CONFLICT",
+        details: { reason: "test_copy_busy" },
+        message: expect.stringContaining("is being built. Try again in a moment.")
+      });
+      expect(await refusal(execute(w, "data_store.findings.test_copy.reset", {}))).toMatchObject({
+        code: "CONFLICT",
+        details: { reason: "test_copy_busy" }
+      });
+      expect(Date.now() - started).toBeLessThan(5_000);
+      expect(await copyRecord(w)).toBeUndefined();
+    } finally {
+      release();
+      await holder;
+    }
+    // With the turn free, the call builds the copy.
+    await inTest(w, "insert", { table: "findings", rows: [finding(1, { client_id: "draft-1" })] });
+    expect((await copyRows(w)).map((row) => row.client_id)).toContain("draft-1");
+
+    // A copy that serves the draft is reached without the turn, while another holds it.
+    const again = db.store.transaction(async (stores) => {
+      await stores.dataStores.takeTestCopyTurn({
+        clientInstanceId: w.clientInstanceId,
+        storeId: w.id
+      });
+      await inTest(w, "insert", {
+        table: "findings",
+        rows: [finding(2, { client_id: "draft-2" })]
+      });
+    });
+    await again;
+    expect((await copyRows(w)).map((row) => row.client_id)).toContain("draft-2");
   });
 
   it("splits a seed file at the semicolons between statements, not those in quotes, names or comments", () => {

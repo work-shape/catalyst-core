@@ -73,7 +73,7 @@ const user: AuthenticatedUser = {
   authSource: "test"
 };
 
-const callContext: OperationExecutionContext = {
+export const callContext: OperationExecutionContext = {
   runId: createPlatformId<"OperationRunId">("opr"),
   actor: user,
   origin: { kind: "user" },

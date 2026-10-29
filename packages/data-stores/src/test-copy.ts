@@ -27,7 +27,7 @@ import { provisionDataStore } from "./provisioning";
 import { DATA_STORE_ROLE_LIMITS } from "./role-limits";
 import { platformIsSuperuser, writeStoreRoles } from "./roles";
 import type { DataStoreRuntime } from "./runtime";
-import { leadingWords, splitSeedStatements } from "./seed-statements";
+import { splitSeedStatements } from "./seed-statements";
 import { quoteIdentifier, testCopyDatabaseOf } from "./server";
 import { storeSizeBytes } from "./size";
 import type { PublishedStore } from "./verbs";
@@ -38,9 +38,11 @@ import type { PublishedStore } from "./verbs";
 // call makes it. It is reached as the store's own two roles, under their statement timeouts and
 // connection limits, so a copy needs no credential of its own and counts toward the store's.
 //
-// Who builds, changes or drops a copy holds the store's copy turn (`getTestCopy` with `lock`)
-// in a transaction of the platform's rows, from reading the record to writing it: two first
-// calls at once build one copy, and a reset waits for a build that runs.
+// Who builds, changes or drops a copy holds the store's copy turn (`takeTestCopyTurn`) in a
+// transaction of the platform's rows, from reading the record to writing it. Nobody waits for
+// the turn: a call that needs it while another holds it is refused with a sentence to try
+// again, so two first calls at once build one copy and parallel calls hold no connection of
+// the platform while a build runs. A copy that already serves the draft is reached without it.
 
 /** The size limit of a test copy where release config names none: 500 MB. */
 export const DEFAULT_TEST_COPY_SIZE_LIMIT_BYTES = 500 * 1024 ** 2;
@@ -235,8 +237,8 @@ async function loadSeed(
         }
       );
     } catch (error) {
-      const statement = statements[at];
-      const named = `'${file.path}' at statement ${at + 1}${statement ? ` ("${leadingWords(statement)}")` : ""}`;
+      // The file and the number of the statement, never its text: a seed statement holds values.
+      const named = `'${file.path}' at statement ${at + 1}`;
       const failure = describeDatabaseFailure(error, named);
       throw new TestCopyFailure("seed_failed", failure.sentence, file.path, failure.sqlState);
     }
@@ -313,12 +315,32 @@ async function bringToDraft(
   const { record } = store;
   const database = testCopyDatabaseOf(record.location.database);
   const signal = AbortSignal.timeout(TEST_COPY_BUILD_TIMEOUT_MS);
-  return runtime.stores.transaction(async (stores): Promise<Reached> => {
-    const copy = await stores.dataStores.getTestCopy({
+  // A copy that already serves the draft is reached without the turn, so the calls of a draft
+  // run side by side and none waits on another's check.
+  if (!reset) {
+    const current = await runtime.stores.dataStores.getTestCopy({
       clientInstanceId,
-      storeId: record.id,
-      lock: true
+      storeId: record.id
     });
+    if (current) {
+      const definition = await draftDefinition(runtime, runtime.stores, store);
+      const exists = await databaseExists(runtime, database, signal);
+      const seedHash = seedSha256(definition.seed ?? []);
+      if (planOf(current, exists, definition, seedHash, false).kind === "none") {
+        return { store: copyStore(runtime, store, current, definition) };
+      }
+    }
+  }
+  return runtime.stores.transaction(async (stores): Promise<Reached> => {
+    // The turn is taken or the call refused: no call holds a connection of the platform while
+    // a build of minutes runs.
+    if (!(await stores.dataStores.takeTestCopyTurn({ clientInstanceId, storeId: record.id }))) {
+      throw busyRefusal(record.name);
+    }
+    // The store may have been deleted since the call read it: a retired store gets no copy.
+    const current = await stores.dataStores.getDataStore({ clientInstanceId, id: record.id });
+    if (!current || current.status === "retired") throw retiredRefusal(record.name);
+    const copy = await stores.dataStores.getTestCopy({ clientInstanceId, storeId: record.id });
     const definition = await draftDefinition(runtime, stores, store);
     const seed = definition.seed ?? [];
     const seedHash = seedSha256(seed);
@@ -396,6 +418,26 @@ async function bringToDraft(
       return { store, failed };
     }
   });
+}
+
+/** The refusal of a call that came while another builds, changes or drops the copy. */
+function busyRefusal(name: string): AppError {
+  return new AppError(
+    "CONFLICT",
+    `The test copy of the Data Store '${name}' is being built. Try again in a moment.`,
+    { reason: "test_copy_busy" },
+    { exposeMessage: true }
+  );
+}
+
+/** The refusal of a call that would build a copy of a store whose asset was deleted. */
+function retiredRefusal(name: string): AppError {
+  return new AppError(
+    "NOT_FOUND",
+    `The Data Store '${name}' was deleted, so it has no test copy.`,
+    { reason: "store_retired" },
+    { exposeMessage: true }
+  );
 }
 
 /** The refusal of a call whose copy could not be built. */
@@ -499,11 +541,10 @@ export async function deleteTestCopy(
   const { clientInstanceId } = runtime;
   const database = testCopyDatabaseOf(store.location.database);
   const had = await runtime.stores.transaction(async (stores) => {
-    const copy = await stores.dataStores.getTestCopy({
-      clientInstanceId,
-      storeId: store.id,
-      lock: true
-    });
+    if (!(await stores.dataStores.takeTestCopyTurn({ clientInstanceId, storeId: store.id }))) {
+      throw busyRefusal(store.name);
+    }
+    const copy = await stores.dataStores.getTestCopy({ clientInstanceId, storeId: store.id });
     // Dropped also without a record: a build cut off before it wrote one leaves a database.
     await dropTestCopyDatabase(runtime, database, signal);
     if (copy) await stores.dataStores.deleteTestCopy({ clientInstanceId, storeId: store.id });

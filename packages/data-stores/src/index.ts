@@ -85,7 +85,7 @@ export {
   knowledgeChunkPrefix
 } from "./knowledge/builtin/chunking";
 export { dataStoreStateOperationName } from "./state";
-export { leadingWords, splitSeedStatements } from "./seed-statements";
+export { splitSeedStatements } from "./seed-statements";
 export type { TestCopyPart } from "./test-copy";
 
 /**

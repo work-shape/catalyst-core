@@ -354,16 +354,21 @@ export interface DataStoreRecordsStore {
    * owns is dropped: the record of a store of its own asset outlives the asset.
    */
   deleteDataStore(input: { clientInstanceId: ClientInstanceId; id: string }): Promise<void>;
-  /**
-   * The test copy of a store. `lock` first waits for, and then holds until the surrounding
-   * transaction ends, the one turn of the store's copy, also where no copy exists yet: whoever
-   * builds, changes or drops a copy holds that turn.
-   */
+  /** The test copy of a store. */
   getTestCopy(input: {
     clientInstanceId: ClientInstanceId;
     storeId: string;
-    lock?: true;
   }): Promise<DataStoreTestCopy | undefined>;
+  /**
+   * Takes the one turn of the store's copy, also where no copy exists yet, and holds it until
+   * the surrounding transaction ends: whoever builds, changes or drops a copy holds that turn.
+   * Never waits: answers false where another holds it, so no call holds a connection of the
+   * platform while a build of minutes runs.
+   */
+  takeTestCopyTurn(input: {
+    clientInstanceId: ClientInstanceId;
+    storeId: string;
+  }): Promise<boolean>;
   /** Inserts the record of a test copy, or replaces the one of the same store. */
   putTestCopy(copy: DataStoreTestCopy): Promise<void>;
   /** Removes the record of a test copy, once its database is dropped. */

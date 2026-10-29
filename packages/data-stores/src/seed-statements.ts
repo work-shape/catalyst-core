@@ -49,14 +49,6 @@ export function splitSeedStatements(sql: string): string[] {
   return statements;
 }
 
-/** The first words of a statement, for a sentence that names it. */
-export function leadingWords(statement: string): string {
-  const all = splitless(statement).trim().split(/\s+/u);
-  const words = all.slice(0, 4).join(" ");
-  if (words.length > 60) return `${words.slice(0, 57)}...`;
-  return all.length > 4 ? `${words} ...` : words;
-}
-
 /** Whether the character before `index` continues a word, so `$` or `E` there is part of a name. */
 function wordBefore(sql: string, index: number): boolean {
   return index > 0 && /[A-Za-z0-9_$]/u.test(sql[index - 1] ?? "");

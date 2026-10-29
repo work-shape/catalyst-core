@@ -184,11 +184,13 @@ export async function runOperation(
     // A changing call of a draft sent again under the key of a call that went live or to a
     // test target is answered by that call's run. It never carries that run out again: a
     // changing call of a draft goes live only through "Run live once" (ADR-0031).
-    const held = await deps.runs.findByIdempotencyKey({
-      clientInstanceId: deps.clientInstanceId,
-      actor,
-      idempotencyKey
-    });
+    const find = (key: string) =>
+      deps.runs.findByIdempotencyKey({
+        clientInstanceId: deps.clientInstanceId,
+        actor,
+        idempotencyKey: key
+      });
+    const held = (await find(idempotencyKey)) ?? (await find(testTargetKey(idempotencyKey)));
     if (held && !runsAgain(held, definition)) {
       return replay(held, definition, actor, inputHash, secretInput, deps);
     }
@@ -207,8 +209,15 @@ export async function runOperation(
       ).allowed
   });
   // A dry run holds no key: it would only ever answer a simulation again, and the same key
-  // stays free for the live call (ADR-0031).
-  const heldKey = target === "dry_run" ? undefined : idempotencyKey;
+  // stays free for the live call (ADR-0031). A call sent to a test target holds the key apart
+  // from a live call's: a live call under the same key is carried out live, never answered
+  // with what a test copy or a tester's mail answered.
+  const heldKey =
+    target === "dry_run" || idempotencyKey === undefined
+      ? undefined
+      : target === "test"
+        ? testTargetKey(idempotencyKey)
+        : idempotencyKey;
 
   for (let attempt = 0; attempt < IDEMPOTENCY_CLAIM_ATTEMPTS; attempt++) {
     const start: NewOperationRun = {
@@ -422,6 +431,11 @@ function runActor(call: OperationCall): OperationRunActor {
     label: actor.displayLabel,
     ...(actor.delegatedActor ? { delegatedActor: actor.delegatedActor } : {})
   };
+}
+
+/** The key a call to a test target holds, apart from the same key of a live call. */
+function testTargetKey(idempotencyKey: string): string {
+  return `test:${idempotencyKey}`;
 }
 
 function sameCall(

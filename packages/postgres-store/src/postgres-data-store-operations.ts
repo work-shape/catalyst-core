@@ -166,13 +166,14 @@ export function createPostgresDataStoreRecordsStore(db: PostgresConnection): Dat
         .delete(dataStores)
         .where(and(eq(dataStores.clientInstanceId, clientInstanceId), eq(dataStores.id, id)));
     },
-    async getTestCopy({ clientInstanceId, storeId, lock }) {
+    async takeTestCopyTurn({ clientInstanceId, storeId }) {
       // The turn of the store's copy, also before a first copy has a row to lock.
-      if (lock) {
-        await db.execute(
-          sql`select pg_advisory_xact_lock(hashtextextended(${JSON.stringify(["data-store-test-copy", clientInstanceId, storeId])}, 0))`
-        );
-      }
+      const [row] = await db.execute<{ taken: boolean }>(
+        sql`select pg_try_advisory_xact_lock(hashtextextended(${JSON.stringify(["data-store-test-copy", clientInstanceId, storeId])}, 0)) as taken`
+      );
+      return row?.taken === true;
+    },
+    async getTestCopy({ clientInstanceId, storeId }) {
       const [row] = await db
         .select()
         .from(dataStoreTestCopies)
