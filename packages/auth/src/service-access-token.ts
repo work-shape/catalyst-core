@@ -315,7 +315,7 @@ async function personalKeyIdentity(
       displayLabel: personal.key.name,
       authSource: PERSONAL_KEY_AUTH_SOURCE
     },
-    scopes: operationScopesOfPersonalApiKey(personal.key.scopes),
+    scopes: operationScopesOfPersonalApiKey(personal.key.scopes, personal.key.createdAt),
     keyScopes: personal.key.scopes
   };
 }

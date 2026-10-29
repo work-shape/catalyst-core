@@ -207,7 +207,7 @@ async function loadCurrentUser(
       ? {
           delegatedActor,
           keyScopes: key.scopes,
-          scopes: operationScopesOfPersonalApiKey(key.scopes)
+          scopes: operationScopesOfPersonalApiKey(key.scopes, key.createdAt)
         }
       : {})
   };

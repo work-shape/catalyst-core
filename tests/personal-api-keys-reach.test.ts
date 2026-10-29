@@ -41,15 +41,17 @@ function isTestOperation(name: string): name is TestOperationName {
 
 const namesSchema = z.object({ items: z.array(z.object({ name: z.string() })) });
 
+const NOW = new Date().toISOString();
+
 describe("what a personal key reaches", () => {
   it("adds only the infrastructure check for system.view, never administration or the rows scopes beyond the use level", () => {
     expect(requirePersonalApiKeyScopes(["system.view"])).toEqual([{ action: "system.view" }]);
-    expect(operationScopesOfPersonalApiKey(["system.view"])).toEqual([
+    expect(operationScopesOfPersonalApiKey(["system.view"], NOW)).toEqual([
       "me:read",
       "infrastructure:check",
       "instance:inspect"
     ]);
-    expect(new Set(operationScopesOfPersonalApiKey(PERSONAL_API_KEY_ACTIONS))).toEqual(
+    expect(new Set(operationScopesOfPersonalApiKey(PERSONAL_API_KEY_ACTIONS, NOW))).toEqual(
       KEY_OPERATION_SCOPES
     );
     expect(
@@ -67,7 +69,7 @@ describe("what a personal key reaches", () => {
     ).toBe(false);
     for (const scope of ["system.view:some-workspace", "system.view:some-workspace/store"]) {
       expect(() => requirePersonalApiKeyScopes([scope])).toThrow("no scope");
-      expect(operationScopesOfPersonalApiKey([scope])).toEqual(["me:read"]);
+      expect(operationScopesOfPersonalApiKey([scope], NOW)).toEqual(["me:read"]);
     }
   });
 

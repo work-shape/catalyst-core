@@ -213,6 +213,12 @@ export function personalApiKeyRowUseNeeds(
 }
 
 /**
+ * Keys issued before this moment keep the reach they had: a `system.view` key of before reads
+ * the infrastructure check only, and gains the instance reads once it is reissued (CLI-PARITY-6a).
+ */
+export const PERSONAL_API_KEY_INSPECT_ISSUED_FROM = "2026-10-29T00:00:00.000Z";
+
+/**
  * The instance level of a personal key (CLI-PARITY-6a): the rights to read the instance
  * itself, which no workspace or asset narrows. `usage.view` reads the model usage and the
  * budget, `audit.view` the audit events and every Operation Run, `system.view` the background
@@ -376,18 +382,23 @@ export function personalApiKeyNamesAction(scopes: readonly string[], action: str
  * infrastructure check, still subject to the owner's current right. The instance level
  * (`usage.view`, `audit.view`, `system.view`) adds `instance:inspect` for the read-only
  * operations that name it; each of them asks the right of its own, of the key and of its
- * owner (CLI-PARITY-6a). The use level adds none
+ * owner (CLI-PARITY-6a), but only for a key issued from `PERSONAL_API_KEY_INSPECT_ISSUED_FROM`:
+ * a `system.view` key issued before keeps its old reach until it is reissued. The use level adds none
  * for a Workflow's publish, which lends the rights of its account. It adds `workflow_runs:use`
  * for a Workflow's start, and `data_store_rows:use` for the four row operations of
  * CLI-PARITY-4. Every other operation under `data_store_rows:*` stays out of a key's reach.
  */
-export function operationScopesOfPersonalApiKey(scopes: readonly string[]): OperationScope[] {
+export function operationScopesOfPersonalApiKey(
+  scopes: readonly string[],
+  issuedAt: string
+): OperationScope[] {
+  const reachesInstance = Date.parse(issuedAt) >= Date.parse(PERSONAL_API_KEY_INSPECT_ISSUED_FROM);
   const granted = new Set<OperationScope>(["me:read"]);
   for (const scope of scopes) {
     const action = parsePersonalApiKeyScope(scope)?.action;
     if (action === undefined) continue;
     if (action === "system.view") granted.add("infrastructure:check");
-    if (isPersonalApiKeyInspectAction(action)) granted.add("instance:inspect");
+    if (reachesInstance && isPersonalApiKeyInspectAction(action)) granted.add("instance:inspect");
     if (action.endsWith(".read")) granted.add("config_assets:read");
     if (action.endsWith(".write") || action.endsWith(".delete")) {
       granted.add("config_assets:write");

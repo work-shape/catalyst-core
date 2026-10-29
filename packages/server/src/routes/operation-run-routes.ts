@@ -73,14 +73,21 @@ export function registerOperationRunRoutes(route: Route, options: ResolvedChatSe
     return toOperationRunResource(run, await readOperationRunApps(apps, [run]));
   });
 
-  route(apiOperations["operations.list_runs"], async ({ query, paging }) => {
+  // A personal key lists only its owner's runs unless it also names `audit.view`, as `get_run`
+  // reads another person's run (CLI-PARITY-6a). A person's own call is not narrowed.
+  route(apiOperations["operations.list_runs"], async ({ identity, query, paging }) => {
+    const ownRunsOnly =
+      !isAuthenticatedServicePrincipal(identity) &&
+      identity.keyScopes !== undefined &&
+      !personalApiKeyNamesAction(identity.keyScopes, "audit.view");
+    if (ownRunsOnly && query.actor !== undefined && query.actor !== identity.id) return [];
     const listed = await runs.list({
       clientInstanceId,
       filters: {
         operation: query.operation,
         effect: query.effect,
         status: query.status,
-        actorId: query.actor,
+        actorId: ownRunsOnly ? identity.id : query.actor,
         originKind: query.origin,
         workspaceId:
           query.workspaceId === undefined

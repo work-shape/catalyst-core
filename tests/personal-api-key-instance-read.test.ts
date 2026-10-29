@@ -3,12 +3,14 @@ import { z } from "zod";
 import {
   PERSONAL_API_KEY_ACTIONS,
   PERSONAL_API_KEY_INSPECT_ACTIONS,
+  PERSONAL_API_KEY_INSPECT_ISSUED_FROM,
   operationScopesOfPersonalApiKey,
   parsePersonalApiKeyScope,
   requirePersonalApiKeyScopes
 } from "@work-shape/catalyst-core";
 import { clientInstanceId, errorSchema, type AccessInstance } from "./support/access-instance";
 import { inDays, setupPersonalKeyInstance } from "./support/personal-api-keys";
+import { withTestSql } from "./support/test-sql";
 import type { TestOperationName } from "./support/operations";
 
 // CLI-PARITY-6a: the read-only instance level of a personal key. `usage.view`, `audit.view` and
@@ -54,6 +56,8 @@ async function read(
   return t.call(userId, operation, { query: queryOf(operation), headers });
 }
 
+const NOW = new Date().toISOString();
+
 describe("the instance level of a personal key", () => {
   it("is three whole-instance read rights, in the scopes a key may name and never in a workspace", () => {
     expect([...PERSONAL_API_KEY_INSPECT_ACTIONS]).toEqual([
@@ -64,12 +68,12 @@ describe("the instance level of a personal key", () => {
     for (const action of PERSONAL_API_KEY_INSPECT_ACTIONS) {
       expect(PERSONAL_API_KEY_ACTIONS).toContain(action);
       expect(requirePersonalApiKeyScopes([action])).toEqual([{ action }]);
-      expect(operationScopesOfPersonalApiKey([action])).toContain("instance:inspect");
+      expect(operationScopesOfPersonalApiKey([action], NOW)).toContain("instance:inspect");
       // A workspace or an asset cannot narrow an instance right: such a scope is no scope.
       for (const narrowed of [`${action}:ws-1`, `${action}:ws-1/store`]) {
         expect(parsePersonalApiKeyScope(narrowed)).toBeUndefined();
         expect(() => requirePersonalApiKeyScopes([narrowed])).toThrow("no scope");
-        expect(operationScopesOfPersonalApiKey([narrowed])).toEqual(["me:read"]);
+        expect(operationScopesOfPersonalApiKey([narrowed], NOW)).toEqual(["me:read"]);
       }
     }
     // Rights that decide, retry, change or administer stay out of a key's reach.
@@ -84,7 +88,7 @@ describe("the instance level of a personal key", () => {
       "operations.approve"
     ]) {
       expect(PERSONAL_API_KEY_ACTIONS).not.toContain(action);
-      expect(operationScopesOfPersonalApiKey([action])).toEqual(["me:read"]);
+      expect(operationScopesOfPersonalApiKey([action], NOW)).toEqual(["me:read"]);
     }
   });
 
@@ -284,5 +288,61 @@ describe("the instance level of a personal key", () => {
     // No input and no result, only the hash of the input.
     expect(seen.json()).not.toHaveProperty("input");
     expect(seen.json()).not.toHaveProperty("result");
+  });
+
+  it("lists only the owner's own Operation Runs for a key with system.view alone, and every run once it names audit.view", async () => {
+    const t = await setupPersonalKeyInstance();
+    const listSchema = z.object({
+      items: z.array(z.object({ actor: z.object({ id: z.string() }) }))
+    });
+    // The administrator holds audit.view and is given system.view; Root has runs of its own.
+    await allow(t, t.admin.id, "system.view");
+    await t.issue(["system.view"], t.root.id);
+    const actorsOf = async (scopes: string[], query: Record<string, string> = {}) => {
+      const headers = await t.tokenFor((await t.issue(scopes, t.admin.id)).secret);
+      const response = await t.call(t.admin.id, "operations.list_runs", { query, headers });
+      expect(response.statusCode, response.body).toBe(200);
+      return new Set(listSchema.parse(response.json()).items.map((run) => run.actor.id));
+    };
+    const own = await actorsOf(["system.view"]);
+    expect([...own].filter((id) => id !== t.admin.id)).toEqual([]);
+    // Asking for another person's runs from such a key finds none.
+    expect([...(await actorsOf(["system.view"], { actor: t.root.id }))]).toEqual([]);
+    // With audit.view on the key too, the owner's right decides and others' runs show.
+    const all = await actorsOf(["system.view", "audit.view"]);
+    expect(all.has(t.root.id)).toBe(true);
+    expect([...(await actorsOf(["system.view", "audit.view"], { actor: t.root.id }))]).toEqual([
+      t.root.id
+    ]);
+    // The person's own call, without a key, is not narrowed.
+    const person = await t.call(t.root.id, "operations.list_runs", {});
+    expect(
+      new Set(listSchema.parse(person.json()).items.map((run) => run.actor.id)).has(t.admin.id)
+    ).toBe(true);
+  });
+
+  it("gives the instance reads only to a system.view key issued from the cutoff on, and an older key keeps the infrastructure check alone", async () => {
+    const t = await setupPersonalKeyInstance();
+    expect(PERSONAL_API_KEY_INSPECT_ISSUED_FROM).toBe("2026-10-29T00:00:00.000Z");
+    const before = "2026-10-28T23:59:59.000Z";
+    expect(operationScopesOfPersonalApiKey(["system.view"], before)).toEqual([
+      "me:read",
+      "infrastructure:check"
+    ]);
+    expect(
+      operationScopesOfPersonalApiKey(["system.view"], PERSONAL_API_KEY_INSPECT_ISSUED_FROM)
+    ).toContain("instance:inspect");
+    // The same through the exchange: a key backdated to before the cutoff reads none of them.
+    const old = await t.issue(["system.view"], t.root.id);
+    await withTestSql(
+      (sql) => sql`update api_credentials set created_at = ${before} where id = ${old.key.id}`
+    );
+    const headers = await t.tokenFor(old.secret);
+    for (const [operation] of READS.filter(([, right]) => right === "system.view")) {
+      const response = await t.call(t.root.id, operation, { headers });
+      expect(response.statusCode, `${operation}: ${response.body}`).toBe(403);
+    }
+    const fresh = await read(t, t.root.id, "instance.jobs.summary", ["system.view"]);
+    expect(fresh.statusCode, fresh.body).toBe(200);
   });
 });
