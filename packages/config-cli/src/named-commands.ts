@@ -290,9 +290,9 @@ ${Object.values(commands)
 Workflow test and start --from read the request body {"input": {...}}; omitted, it sends {}.
 workflow start runs the published Workflow and needs workflow.use on the key. data-store
 rows, query and insert and knowledge-base query need the key's use level (Verwenden): name
-data_store.read (rows, query), data_store.insert (insert) or knowledge_base.use (knowledge-base
-query), with one of data_store.insert, data_store.execute or knowledge_base.use. A refusal names
-what the key lacks.
+data_store.execute (rows, query), data_store.insert (insert) or knowledge_base.use (knowledge-base
+query), as well as data_store.read for rows and query. Each is limited to the workspace and
+asset the key's scope names. A refusal names what the key lacks.
 Lists read every page. instance workspaces shows Shared Workspaces for agent availability
 and needs config_assets:write and agent.write; it is not the membership list.
 Options: --instance <name-or-url>, --dir <working-copy-dir>, --json, --help

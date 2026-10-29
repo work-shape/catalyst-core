@@ -20,6 +20,7 @@ import {
   hasAuthScope,
   isAuthenticatedServicePrincipal,
   isToolOperationAnswer,
+  personalApiKeyLacksAction,
   moduleOffError,
   operationDenialError,
   toErrorEnvelope,
@@ -453,12 +454,29 @@ export async function authorizeActor(
   context: Pick<RunContext, "definition" | "call" | "resource" | "resourceNotFound" | "runtime">,
   access: ActorAccess
 ): Promise<OperationAuthorization> {
+  const decision = await askActorsRight(context, access);
+  const { definition, call, resource } = context;
+  // A personal key names the action itself as well, narrowed to the resource it calls, where
+  // the operation says so: a scope of the key that is wider than that action opens nothing.
+  if (
+    decision.allowed &&
+    definition.personalKeyAction !== undefined &&
+    personalApiKeyLacksAction(call.actor, definition.personalKeyAction, resource)
+  ) {
+    return { allowed: false, action: definition.personalKeyAction, reason: "outside_key_scope" };
+  }
+  if (decision.allowed && definition.action !== null && context.resourceNotFound)
+    throw new AppError("NOT_FOUND", context.resourceNotFound);
+  return decision;
+}
+
+async function askActorsRight(
+  context: Pick<RunContext, "definition" | "call" | "resource" | "runtime">,
+  access: ActorAccess
+): Promise<OperationAuthorization> {
   const { definition, call, resource } = context;
   if (definition.action !== null) {
-    const decision = namedRight(access.authorize(definition.action, resource), definition.action);
-    if (decision.allowed && context.resourceNotFound)
-      throw new AppError("NOT_FOUND", context.resourceNotFound);
-    return decision;
+    return namedRight(access.authorize(definition.action, resource), definition.action);
   }
   return definition.authorize(call.input, {
     modelRoutes: context.runtime.modelRoutes,

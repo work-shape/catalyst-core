@@ -439,6 +439,7 @@ export const workflowOperations = {
     tag: "Workflows",
     auth: "principal",
     scope: "config_assets:write",
+    personalKeyScope: "workflow_runs:use",
     requires: [],
     effect: "changing",
     body: startWorkflowRunRequestSchema,

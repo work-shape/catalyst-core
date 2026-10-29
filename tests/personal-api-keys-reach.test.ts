@@ -28,8 +28,9 @@ const KEY_OPERATION_SCOPES = new Set([
   "config_assets:write",
   "config_assets:publish",
   "infrastructure:check",
-  // The use level of rows (CLI-PARITY-4), asked by four operations only.
-  "data_store_rows:use"
+  // The use level of rows (CLI-PARITY-4), asked by four operations only, and of a start.
+  "data_store_rows:use",
+  "workflow_runs:use"
 ]);
 
 function isTestOperation(name: string): name is TestOperationName {

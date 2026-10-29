@@ -383,6 +383,8 @@ function operationOf(
     // key, so a call that was cut off is made again under its key.
     ...(verb.effect === "changing" ? { repeatsUnderKey: true as const } : {}),
     ...rightsOf(store, verb),
+    // A personal key reads a store's rows only with its own `data_store.execute` on the store.
+    ...(verb.verb === "query" ? { personalKeyAction: DATA_STORE_ACTIONS.execute } : {}),
     // What a key must carry to call the verb over HTTP. The grants of its holder still decide.
     scope: DATA_STORE_OPERATION_SCOPES[verb.verb],
     auth: "principal",
@@ -415,6 +417,7 @@ function readOperation(
     recordsEveryCall: true,
     action: DATA_STORE_ACTIONS.read,
     scope: "data_store_rows:read",
+    ...(read.part === "rows" ? { personalKeyAction: DATA_STORE_ACTIONS.execute } : {}),
     auth: "principal",
     inputSchema: read.inputSchema,
     outputSchema: read.outputSchema,

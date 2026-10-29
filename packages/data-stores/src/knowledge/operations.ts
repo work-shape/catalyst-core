@@ -5,6 +5,7 @@ import { workflowDataFlowsSchema } from "@work-shape/catalyst-core";
 import { DATA_STORE_USED_BY_MAX_ASSETS, readWorkflowDataFlows } from "../workflow-data-flows";
 import { assetResource } from "../store-audience";
 import { sourceOperation } from "./source-operations";
+import { knowledgeBaseReadsClosedConnection } from "./outside-reach";
 import { writeOperation, type KnowledgeWritePart } from "./write-operations";
 import {
   AppError,
@@ -15,6 +16,8 @@ import {
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_BASE_ASSET_KIND,
   KNOWLEDGE_BASE_STATUSES,
+  CONNECTION_EXPOSURE_ACTION_PREFIX,
+  isOutsideCall,
   KNOWLEDGE_OPERATION_PREFIX,
   KNOWLEDGE_QUERY_TOOL_NAME,
   KNOWLEDGE_SEARCH_LIMIT_DEFAULT,
@@ -309,6 +312,26 @@ function queryOperation(
     module: KNOWLEDGE_MODULE,
     timeoutMs: RUN_TIMEOUT_MS,
     async execute(input, context) {
+      // What a Connection kept from outside clients is not read by a Knowledge Base for one
+      // (WF-OUT). The right to use the Knowledge Base was asked before; the refusal names no
+      // Connection.
+      if (
+        isOutsideCall(context.actor, context.origin) &&
+        (await knowledgeBaseReadsClosedConnection(
+          {
+            clientInstanceId: runtime.clientInstanceId,
+            configAssets: runtime.stores.configAssets
+          },
+          definition
+        ))
+      ) {
+        throw new AppError(
+          "FORBIDDEN",
+          `The Knowledge Base '${definition.name}' reads data that is not exposed to outside clients`,
+          { reason: "no_grant", action: `${CONNECTION_EXPOSURE_ACTION_PREFIX}outside` },
+          { exposeMessage: true }
+        );
+      }
       const asked = knowledgeQueryInputSchema.parse(input);
       const named =
         asked.query === undefined

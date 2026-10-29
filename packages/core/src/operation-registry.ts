@@ -244,6 +244,12 @@ interface OperationDefinitionBase<Input, Output> {
    * may not carry it.
    */
   recordsEveryCall?: true;
+  /**
+   * An action a personal API key must itself name for this operation, on the resource it
+   * calls, narrowed by the key's `<action>[:<workspace>[/<asset>]]` scopes, besides the right
+   * the operation asks (CLI-PARITY-4 review). Calls that carry no key are not asked.
+   */
+  personalKeyAction?: string;
   /** Personal connection calls retain metadata only, including while waiting. */
   personalConnection?: true;
   /**
