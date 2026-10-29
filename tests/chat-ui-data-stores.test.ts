@@ -249,7 +249,8 @@ function storeSource(answers: StoreAnswers = {}): DataStoreSource {
     review: answers.review ?? {
       useFlagged: () => ready({ items: [] }),
       decide: () => Promise.resolve(undefined)
-    }
+    },
+    testCopy: { reset: () => Promise.resolve(undefined), remove: () => Promise.resolve(undefined) }
   };
 }
 

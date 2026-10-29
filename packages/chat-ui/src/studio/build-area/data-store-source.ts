@@ -130,11 +130,24 @@ export interface DataStoreSource {
   ) => { href: string; open(): void } | undefined;
   /** "Prüfen" of a store with records rules. */
   review: DataStoreReviewSource;
+  /** The test copy a draft's calls reach (ADR-0031). */
+  testCopy: DataStoreTestCopySource;
+}
+
+/**
+ * The test copy of a store: built again from the draft, or dropped until a draft's next
+ * changing call makes it. Each answers the instance's sentence where it refused, and nothing
+ * where it was done; the state of the store is read again either way.
+ */
+export interface DataStoreTestCopySource {
+  reset(store: string): Promise<string | undefined>;
+  remove(store: string): Promise<string | undefined>;
 }
 
 /**
  * The Data Store pages on the instance: `data_stores.get`, `.describe`, `.list`, `.rows`,
- * `.value`, `.used_by`, `.records_flagged` and `.records_decide`.
+ * `.value`, `.used_by`, `.records_flagged`, `.records_decide`, `.test_copy_reset` and
+ * `.test_copy_delete`.
  */
 export function useDataStoreSource(): DataStoreSource {
   const { t } = useTranslation();
@@ -148,6 +161,16 @@ export function useDataStoreSource(): DataStoreSource {
     read,
     ...parts
   ];
+  const onTestCopy = async (store: string, call: () => Promise<unknown>) => {
+    try {
+      await call();
+      return undefined;
+    } catch (error) {
+      return instanceSentence(error, t) ?? "";
+    } finally {
+      await queryClient.invalidateQueries({ queryKey: key("state", store) });
+    }
+  };
   return {
     seesServerConditions: canViewSystem(platform),
     // A store being set up or migrated is read again until it settles, as the jobs run apart
@@ -205,6 +228,10 @@ export function useDataStoreSource(): DataStoreSource {
         await queryClient.invalidateQueries({ queryKey: key("rows", store) });
         return undefined;
       }
+    },
+    testCopy: {
+      reset: (store) => onTestCopy(store, () => calls.test_copy_reset({ params: { store } })),
+      remove: (store) => onTestCopy(store, () => calls.test_copy_delete({ params: { store } }))
     }
   };
 }

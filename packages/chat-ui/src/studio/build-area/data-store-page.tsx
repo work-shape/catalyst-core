@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react";
 import {
   Badge,
   Banner,
+  Button,
   EmptyState,
   InlineError,
   KeyValue,
@@ -57,7 +58,8 @@ import {
   serverConditionsShown,
   type DataStoreSchema,
   type DataStoreSource,
-  type DataStoreState
+  type DataStoreState,
+  type DataStoreTestCopySource
 } from "./data-store-source";
 
 type DataStoreTable = DataStoreSchema["tables"][number];
@@ -78,8 +80,8 @@ function textOf(config: Record<string, unknown>, key: string): string | undefine
  * The page of one Data Store: the header with the store's state, where its migrations stand and
  * how large it is, what the server leaves open around it, its tables with their columns, and the
  * first rows of one table. The rows are the answer of one preview, so the page holds as many as
- * the instance hands out and never the whole table. It writes nothing itself: Publish, Delete
- * and "Edit with the agent" are the frame's.
+ * the instance hands out and never the whole table. Its only writes are a decision in "Prüfen"
+ * and Reset or Delete of the test copy: Publish, Delete and "Edit with the agent" are the frame's.
  */
 export function DataStorePage(props: BuildAssetViewProps & { source: DataStoreSource }) {
   const { asset } = props;
@@ -288,6 +290,19 @@ function PublishedDataStorePage({
                 <EmptyState layout="inline">{t("dataStores.notReachable")}</EmptyState>
               )
           }
+        ]),
+    // The scratch database a draft's calls reach, apart from the live rows above.
+    ...(state === undefined
+      ? []
+      : [
+          {
+            id: "test-copy",
+            label: t("dataStores.testCopyTitle"),
+            description: t("dataStores.testCopyDescription"),
+            body: (
+              <DataStoreTestCopy store={asset.name} copy={state.testCopy} calls={source.testCopy} />
+            )
+          }
         ])
   ];
 
@@ -425,6 +440,85 @@ function DataStoreStatus({
         ) : null}
       </KeyValueList>
     </>
+  );
+}
+
+/**
+ * The test copy of the store: its level, when it was built, its seed files and its size against
+ * its own limit, with Reset and Delete. Without a copy, the sentence of when one is made.
+ */
+function DataStoreTestCopy({
+  store,
+  copy,
+  calls
+}: {
+  store: string;
+  copy: DataStoreState["testCopy"];
+  calls: DataStoreTestCopySource;
+}) {
+  const { locale, t } = useTranslation();
+  const [pending, setPending] = useState<"reset" | "remove" | undefined>(undefined);
+  const [failure, setFailure] = useState<string | undefined>(undefined);
+  const run = (action: "reset" | "remove") => {
+    setPending(action);
+    setFailure(undefined);
+    const done = (refused: string | undefined) => {
+      setPending(undefined);
+      if (refused !== undefined) setFailure(refused || t("dataStores.testCopyFailed"));
+    };
+    calls[action](store).then(done, () => done(""));
+  };
+  return (
+    <div className="grid min-w-0 gap-3" data-data-store-test-copy={copy ? "present" : "absent"}>
+      {copy ? (
+        <KeyValueList>
+          <KeyValue label={t("dataStores.schemaLevel")}>{copy.level}</KeyValue>
+          <KeyValue label={t("dataStores.testCopyBuilt")}>
+            {formatDateTime(copy.builtAt, locale)}
+          </KeyValue>
+          <KeyValue label={t("dataStores.testCopySeedFiles")}>{copy.seedFiles}</KeyValue>
+          <KeyValue label={t("dataStores.size")}>
+            {copy.bytes === undefined
+              ? t("dataStores.sizeNotMeasured", {
+                  limit: formatDataStoreSize(copy.limitBytes, locale)
+                })
+              : t("dataStores.sizeOfLimit", {
+                  size: formatDataStoreSize(copy.bytes, locale),
+                  limit: formatDataStoreSize(copy.limitBytes, locale)
+                })}
+          </KeyValue>
+        </KeyValueList>
+      ) : (
+        <EmptyState layout="inline">{t("dataStores.testCopyNone")}</EmptyState>
+      )}
+      {failure === undefined ? null : (
+        <InlineError data-data-store-test-copy-failed="">{failure}</InlineError>
+      )}
+      {copy ? (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            loading={pending === "reset"}
+            disabled={pending !== undefined}
+            data-data-store-test-copy-reset=""
+            onClick={() => run("reset")}
+          >
+            {t("dataStores.testCopyReset")}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            loading={pending === "remove"}
+            disabled={pending !== undefined}
+            data-data-store-test-copy-delete=""
+            onClick={() => run("remove")}
+          >
+            {t("dataStores.testCopyDelete")}
+          </Button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

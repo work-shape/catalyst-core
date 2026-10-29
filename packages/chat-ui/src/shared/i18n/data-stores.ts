@@ -266,6 +266,16 @@ export const dataStores = defineTranslations({
     "dataStores.tablesDescription": "The tables of the store with their columns and types.",
     "dataStores.tablesEmpty": "This store has no tables yet.",
     "dataStores.tablesTitle": "Tables",
+    "dataStores.testCopyBuilt": "Built",
+    "dataStores.testCopyDelete": "Delete test copy",
+    "dataStores.testCopyDescription":
+      "The scratch database a draft's calls reach, built from the draft's migrations and seed files. It never holds live rows.",
+    "dataStores.testCopyFailed": "The test copy could not be changed.",
+    "dataStores.testCopyNone":
+      "No test copy yet. A draft's first call that changes the store makes it.",
+    "dataStores.testCopyReset": "Reset",
+    "dataStores.testCopySeedFiles": "Seed files",
+    "dataStores.testCopyTitle": "Test copy",
     "dataStores.typeBoolean": "Yes or no",
     "dataStores.typeDate": "Date",
     "dataStores.typeInteger": "Whole number",
@@ -569,6 +579,16 @@ export const dataStores = defineTranslations({
     "dataStores.tablesDescription": "Die Tabellen des Speichers mit ihren Spalten und Typen.",
     "dataStores.tablesEmpty": "Dieser Speicher hat noch keine Tabellen.",
     "dataStores.tablesTitle": "Tabellen",
+    "dataStores.testCopyBuilt": "Erstellt",
+    "dataStores.testCopyDelete": "Testkopie löschen",
+    "dataStores.testCopyDescription":
+      "Die Übungsdatenbank, die die Aufrufe eines Entwurfs erreichen, gebaut aus den Migrationen und Seed-Dateien des Entwurfs. Sie enthält nie Live-Zeilen.",
+    "dataStores.testCopyFailed": "Die Testkopie konnte nicht geändert werden.",
+    "dataStores.testCopyNone":
+      "Noch keine Testkopie. Der erste Aufruf eines Entwurfs, der den Speicher ändert, legt sie an.",
+    "dataStores.testCopyReset": "Zurücksetzen",
+    "dataStores.testCopySeedFiles": "Seed-Dateien",
+    "dataStores.testCopyTitle": "Testkopie",
     "dataStores.typeBoolean": "Ja oder nein",
     "dataStores.typeDate": "Datum",
     "dataStores.typeInteger": "Ganzzahl",
