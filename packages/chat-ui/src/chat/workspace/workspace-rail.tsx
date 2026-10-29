@@ -84,7 +84,10 @@ interface WorkspaceRailProps {
   workflows?: boolean;
   /** The session has workspaces: the Scheduled row shows. */
   scheduled?: boolean;
-  /** The Projects module is on and the session has workspaces: the Projects row shows. */
+  /**
+   * The Projects module is on and the session has workspaces: the group "Projects" shows above
+   * "Recent", its only place in the rail.
+   */
   projects?: boolean;
   /**
    * Present while projects are on: a conversation's menu moves it into a project, for its
@@ -149,7 +152,6 @@ interface WorkspaceRailProps {
 export function WorkspaceRail(props: WorkspaceRailProps) {
   const { t } = useTranslation();
   const sections = shownRailSections(props.sections ?? railSections, {
-    projects: props.projects,
     agents: props.agents,
     inbox: props.inbox,
     apps: props.apps,
@@ -355,11 +357,12 @@ function RailBranding({ config }: { config: SafeConfig }) {
  * The projects of the open workspace used last, above "Recent", and a row to all of them
  * (PRJ-5). A private project carries the lock a private conversation carries. The active project
  * stands among them even when it was used earlier, and unfolds to its newest chats with a row to
- * its page. Nothing shows while the workspace has no project the person sees, or in the
- * collapsed strip.
+ * its page. Without a project the group shows its label with the plus alone, so a person finds
+ * where projects are made. Nothing shows while projects are off, or in the collapsed strip.
  */
 function RecentProjects(props: WorkspaceRailProps) {
   const {
+    projects = false,
     recentProjects = [],
     openProjectName,
     activeProject,
@@ -368,7 +371,7 @@ function RecentProjects(props: WorkspaceRailProps) {
     onViewChange
   } = props;
   const { t } = useTranslation();
-  if (useSidebarCollapsed() || recentProjects.length === 0) {
+  if (useSidebarCollapsed() || !projects) {
     return null;
   }
   const listed = recentProjects.slice(0, RAIL_PROJECTS_LIMIT);
@@ -427,14 +430,18 @@ function RecentProjects(props: WorkspaceRailProps) {
           </Fragment>
         );
       })}
-      <NavItem
-        // The words start where the names of the projects start.
-        className="pl-8 text-muted-foreground"
-        data-testid="rail-projects-all"
-        onClick={() => onViewChange("projects")}
-      >
-        {t("projects.railAll")}
-      </NavItem>
+      {rows.length > 0 ? (
+        <NavItem
+          // The words start where the names of the projects start.
+          className="pl-8 text-muted-foreground"
+          data-testid="rail-projects-all"
+          // The current row on the Projects page, as the project's row is on its page.
+          selected={props.view === "projects" && !rows.some(({ name }) => name === openProjectName)}
+          onClick={() => onViewChange("projects")}
+        >
+          {t("projects.railAll")}
+        </NavItem>
+      ) : null}
     </NavGroup>
   );
 }

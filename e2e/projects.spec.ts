@@ -127,13 +127,23 @@ test(NOT_FOUND_TEST, async ({ page, browser, baseURL, pageErrors }) => {
   });
   expect(older.ok()).toBe(true);
 
-  // The Projects row opens the page; the creator makes a shared and a private project.
+  // Projects have no section row: the group "Projekte" is their place in the rail, and without
+  // a project it shows its label with the plus alone.
   await page.goto(`/w/${workspaceId}`);
+  const nav = page.getByRole("navigation", { name: "Hauptnavigation" });
+  await expect(nav.getByRole("button", { name: "Projekte", exact: true })).toHaveCount(0);
+  const railGroup = page.getByTestId("rail-projects");
+  await expect(railGroup).toContainText("Projekte");
+  await expect(railGroup.getByTestId("rail-projects-all")).toHaveCount(0);
+  await shot(page, "projects-rail-empty");
+
+  // Its plus makes the first project; the creator makes a shared and a private one.
+  await railGroup.getByRole("button", { name: "Projekt hinzufügen" }).click();
+  await expect(page.getByRole("dialog", { name: "Neues Projekt" })).toBeVisible();
   await page
-    .getByRole("navigation", { name: "Hauptnavigation" })
-    .getByRole("button", { name: "Projekte", exact: true })
+    .getByRole("dialog", { name: "Neues Projekt" })
+    .getByRole("button", { name: "Abbrechen" })
     .click();
-  await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/projects$`, "u"));
   const sharedPath = await createProject(page, workspaceId, sharedTitle, /^Geteilt mit/u);
   await expect(page.getByTestId("project-audience-shared")).toBeVisible();
   await startChatInProject(page, sharedTitle, "Was fehlt noch in der Checkliste?");
@@ -158,9 +168,26 @@ test(NOT_FOUND_TEST, async ({ page, browser, baseURL, pageErrors }) => {
     page.getByTestId("project-conversation").filter({ hasText: olderTitle })
   ).toHaveCount(1);
   await shot(page, "project-shared");
-  await page.goto(`/w/${workspaceId}/projects`);
+  // "Alle Projekte" in the group opens the page.
+  await railGroup.getByTestId("rail-projects-all").click();
+  await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/projects$`, "u"));
   await expect(page.getByTestId("project-card")).toHaveCount(2);
   await shot(page, "projects-creator");
+
+  // On a phone the drawer holds the same group, with its plus and the row to all projects.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Seitenleiste öffnen" }).click();
+  const drawer = page.getByRole("dialog", { name: "Hauptnavigation" });
+  const drawerGroup = drawer.getByTestId("rail-projects");
+  await expect(drawerGroup.getByTestId("rail-project")).toHaveCount(2);
+  await expect(drawerGroup.getByRole("button", { name: "Projekt hinzufügen" })).toBeVisible();
+  await expect(drawerGroup.getByTestId("rail-projects-all")).toBeVisible();
+  await expect(drawer.getByRole("button", { name: "Projekte", exact: true })).toHaveCount(0);
+  if (shotsDir) {
+    await page.screenshot({ path: join(shotsDir, "projects-drawer-de-390.png") });
+  }
+  await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 1280, height: 800 });
 
   // The member sees the shared project with its two chats, and not the private one.
   await memberPage.goto(`/w/${workspaceId}/projects`);

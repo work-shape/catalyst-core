@@ -1166,6 +1166,34 @@ function between(html: string, from: string, to: string): string {
   return html.slice(start, end);
 }
 
+describe("the Projects group", () => {
+  it("is the only place of projects: a group with a plus, no section row", () => {
+    const html = renderProjectRail({ recentProjects: [nord, sued], onCreateProject: () => {} });
+    expect(html).toContain('data-testid="rail-projects"');
+    expect(html).toContain('aria-label="Projekt hinzufügen"');
+    expect(html.match(/data-testid="rail-project"/gu)).toHaveLength(2);
+    expect(between(html, "rail-projects", "rail-projects-all")).toContain("Projekt Süd");
+    expect(html).toContain("Alle Projekte");
+    // The group stands before "Recent", and no section row names projects.
+    expect(html.indexOf('data-testid="rail-projects"')).toBeLessThan(html.indexOf("Zuletzt"));
+    expect(html.slice(0, html.indexOf('data-testid="rail-projects"'))).not.toContain("Projekte");
+  });
+
+  it("shows its label and plus without a project, and no row to all of them", () => {
+    const html = renderProjectRail({ recentProjects: [], onCreateProject: () => {} });
+    expect(html).toContain('data-testid="rail-projects"');
+    expect(html).toContain("Projekte");
+    expect(html).toContain('aria-label="Projekt hinzufügen"');
+    expect(html).not.toContain('data-testid="rail-projects-all"');
+  });
+
+  it("is absent while projects are off", () => {
+    const html = renderProjectRail({ projects: false, recentProjects: [nord] });
+    expect(html).not.toContain('data-testid="rail-projects"');
+    expect(html).not.toContain("Projekte");
+  });
+});
+
 describe("the rail with an active project", () => {
   const inNord = [projectChat("n2", 5, "prj_nord"), projectChat("n1", 4, "prj_nord")];
   const conversations = [projectChat("free", 6), ...inNord, projectChat("s1", 3, "prj_sued")];
