@@ -191,6 +191,8 @@ const knowledge = createKnowledgeBases({
   embedding,
   documentFormats: KNOWLEDGE_TEXT_FORMATS,
   maxDocuments: 10_000_000,
+  // The stub provider has no quota: the probe indexes as wide as a deployment with a large one.
+  indexConcurrency: { perWorker: 32, total: 64 },
   logger
 });
 const fileJobs = knowledge.fileJobs(

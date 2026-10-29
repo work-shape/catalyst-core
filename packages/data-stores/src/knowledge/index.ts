@@ -193,6 +193,8 @@ export function createKnowledgeBases(input: {
   /** `knowledge.maxDocuments` of release config. */
   maxDocuments: number;
   maxPages?: number;
+  /** `knowledge.indexConcurrency` of release config. */
+  indexConcurrency?: { perWorker: number; total: number };
   logger: Logger;
   now?: () => Date;
 }): KnowledgeBases {
@@ -206,6 +208,7 @@ export function createKnowledgeBases(input: {
     documentFormats: input.documentFormats,
     maxDocuments: input.maxDocuments,
     ...(input.maxPages === undefined ? {} : { maxPages: input.maxPages }),
+    ...(input.indexConcurrency ? { indexConcurrency: input.indexConcurrency } : {}),
     logger: input.logger,
     now: input.now ?? (() => new Date())
   };

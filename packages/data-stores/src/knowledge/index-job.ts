@@ -3,9 +3,11 @@ import { knowledgeProcessingOf, validateKnowledgeProcessingOutput } from "./docu
 import {
   AppError,
   defineJobHandler,
+  defineJobKind,
   enqueueKnowledgeIndex,
   isModelUsageLimitReached,
   KNOWLEDGE_BASE_ASSET_KIND,
+  KNOWLEDGE_INDEX_CONCURRENCY_DEFAULTS,
   KNOWLEDGE_MAX_PAGES_PER_DOCUMENT,
   type KnowledgeProcessorOutput,
   knowledgeIndexJob,
@@ -442,9 +444,11 @@ export function createKnowledgeIndexJobHandler(
     return { vectors };
   }
 
+  const concurrency = runtime.indexConcurrency ?? KNOWLEDGE_INDEX_CONCURRENCY_DEFAULTS;
   return defineJobHandler({
-    kind: knowledgeIndexJob,
-    slots: 32,
+    // The same kind, with the limit across workers of release config.
+    kind: defineJobKind({ ...knowledgeIndexJob, concurrency: { global: concurrency.total } }),
+    slots: concurrency.perWorker,
     async run(job, control) {
       const { payload } = job;
       const { signal } = control;

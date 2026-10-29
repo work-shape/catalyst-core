@@ -596,8 +596,16 @@ export const knowledgeExtractJobPayloadSchema = knowledgeContentJobPayloadSchema
 export type KnowledgeExtractJobPayload = z.infer<typeof knowledgeExtractJobPayloadSchema>;
 
 /**
+ * How many index jobs run side by side: on one worker, and across all workers of the instance.
+ * Each sends its passages to the embedding model, so the instance's quota with the model
+ * provider sets how far a deployment raises them (`knowledge.indexConcurrency`).
+ */
+export const KNOWLEDGE_INDEX_CONCURRENCY_DEFAULTS = { perWorker: 8, total: 16 } as const;
+
+/**
  * The index job. Every write it makes is idempotent: a rerun replaces the content's chunks.
- * No limit per Knowledge Base, so many contents of one are indexed side by side.
+ * No limit per Knowledge Base, so many contents of one are indexed side by side. The limit
+ * across workers is the default; a worker serves the kind with the limit of release config.
  */
 export const knowledgeIndexJob = defineJobKind({
   kind: KNOWLEDGE_BASE_INDEX_JOB_KIND,
@@ -605,7 +613,7 @@ export const knowledgeIndexJob = defineJobKind({
   maxAttempts: 5,
   backoff: { baseMs: 10_000, maxMs: 10 * 60_000 },
   leaseMs: 2 * 60_000,
-  concurrency: { global: 64 }
+  concurrency: { global: KNOWLEDGE_INDEX_CONCURRENCY_DEFAULTS.total }
 });
 
 /** The extract job. Its worker's slots bound how many convert at once. */

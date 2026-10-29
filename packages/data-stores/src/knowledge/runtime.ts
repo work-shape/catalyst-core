@@ -41,6 +41,8 @@ export interface KnowledgeRuntime {
   /** How many documents one Knowledge Base holds at most (`knowledge.maxDocuments`). */
   maxDocuments: number;
   maxPages?: number;
+  /** How many contents are indexed side by side (`knowledge.indexConcurrency`). */
+  indexConcurrency?: { perWorker: number; total: number };
   logger: Logger;
   now(): Date;
 }
