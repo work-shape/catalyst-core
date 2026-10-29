@@ -55,7 +55,7 @@ export const projectSettings = defineTranslations({
       "The project holds chats by others, which would leave them. Take those chats out of the project first.",
     "projectSettings.memberOnly": "Only a member of both workspaces moves a project.",
     "projectSettings.changed": "Who sees the project changed meanwhile. Close and look again.",
-    "projectSettings.deleteChatsOff": "Chats cannot be deleted on this instance."
+    "projectSettings.deleteChatsOff": "Deleting chats is turned off here. Keep them instead."
   },
   de: {
     "projectSettings.share": "Mit Arbeitsbereich teilen",
@@ -113,6 +113,6 @@ export const projectSettings = defineTranslations({
       "Nur wer in beiden Arbeitsbereichen Mitglied ist, verschiebt ein Projekt.",
     "projectSettings.changed":
       "Wer das Projekt sieht, hat sich inzwischen geändert. Schließ den Dialog und sieh noch einmal nach.",
-    "projectSettings.deleteChatsOff": "Chats lassen sich auf dieser Instanz nicht löschen."
+    "projectSettings.deleteChatsOff": "Chats löschen ist hier ausgeschaltet. Behalten Sie sie stattdessen."
   }
 });
