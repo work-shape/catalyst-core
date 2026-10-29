@@ -30,7 +30,7 @@ describe("shipped tool references", () => {
     ),
     ...Object.entries(config.connections).flatMap(([name, connection]) =>
       modules.isEnabled("connections")
-        ? connection.operations
+        ? (connection.operations ?? [])
             .filter((operation) => operation.exposure.includes("agent"))
             .map((operation) => connectionOperationName(name, operation.name))
         : []
