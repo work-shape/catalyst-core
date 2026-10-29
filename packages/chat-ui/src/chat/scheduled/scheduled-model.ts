@@ -2,6 +2,7 @@ import {
   parseCron,
   SCHEDULED_START_MIN_INTERVAL_MINUTES,
   shortestCronGapMinutes,
+  type CollaborationWorkspaceKind,
   type SCHEDULED_START_STATES
 } from "@work-shape/catalyst-core";
 import type { BadgeTone } from "@work-shape/catalyst-ui";
@@ -27,6 +28,15 @@ export interface ScheduledStart {
   createdAt: string;
   updatedAt: string;
 }
+
+/**
+ * A deactivated person's start as an instance admin reads it: never its prompt, which only its
+ * owner reads. The workspace's kind says whether it can be handed over; one in a Personal
+ * Workspace is only deleted.
+ */
+export type WithheldScheduledStart = Omit<ScheduledStart, "prompt"> & {
+  workspaceKind: CollaborationWorkspaceKind;
+};
 
 /** One time a scheduled prompt was due, and what came of it. */
 export interface ScheduledRun {

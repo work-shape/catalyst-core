@@ -17,7 +17,7 @@ import {
   SkeletonList
 } from "@work-shape/catalyst-ui";
 import { createScheduledStartsSource } from "../../chat/scheduled/scheduled-source";
-import { headingOf, scheduleLine, type ScheduledStart } from "../../chat/scheduled/scheduled-model";
+import { scheduleLine, type WithheldScheduledStart } from "../../chat/scheduled/scheduled-model";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { personName } from "../../shared/person-name";
 import { useSettingsPage } from "../../shared/settings-page-context";
@@ -28,7 +28,9 @@ const PAGE_SIZE = 50;
 /**
  * Users > a deactivated person: the scheduled prompts they own. They are paused and run as
  * nobody; an instance admin hands each to another person, who gets it paused, or deletes it.
- * The server decides who may take one: an active member of its workspace who may use its agent.
+ * The admin never reads their wording: a row names its agent, schedule and workspace. One in the
+ * person's Personal Workspace can only be deleted. The server decides who may take one: an active
+ * member of its workspace who may use its agent.
  */
 export function OwnerScheduledStartsCard({
   owner,
@@ -57,17 +59,17 @@ export function OwnerScheduledStartsCard({
   const refresh = () =>
     queryClient.invalidateQueries({ queryKey: ["scheduled-starts", apiBaseUrl] });
   const handover = useMutation({
-    mutationFn: (input: { start: ScheduledStart; ownerUserId: string }) =>
+    mutationFn: (input: { start: WithheldScheduledStart; ownerUserId: string }) =>
       source.handover(input.start.id, input.ownerUserId),
     onSuccess: refresh
   });
   const remove = useMutation({
-    mutationFn: (start: ScheduledStart) => source.remove(start.id),
+    mutationFn: (start: WithheldScheduledStart) => source.remove(start.id),
     onSuccess: refresh
   });
-  const [handing, setHanding] = useState<ScheduledStart>();
+  const [handing, setHanding] = useState<WithheldScheduledStart>();
   const [newOwner, setNewOwner] = useState("");
-  const [deleting, setDeleting] = useState<ScheduledStart>();
+  const [deleting, setDeleting] = useState<WithheldScheduledStart>();
   const [done, setDone] = useState<string>();
   const candidates = people.filter(
     (person) => person.id !== owner.id && person.status === "active"
@@ -94,54 +96,64 @@ export function OwnerScheduledStartsCard({
           <p className="text-sm text-muted-foreground">{t("scheduled.handover.none")}</p>
         ) : (
           <ul aria-label={t("scheduled.handover.title")} className="grid gap-2">
-            {rows.map((start) => (
-              <li
-                key={start.id}
-                className="flex flex-wrap items-center gap-3 rounded-md border bg-card p-3 text-sm"
-              >
-                <div className="grid min-w-0 flex-1 gap-1">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <strong className="truncate font-medium">{headingOf(start.prompt)}</strong>
-                    <Badge tone="neutral">{t("scheduled.paused")}</Badge>
+            {rows.map((start) => {
+              const schedule = scheduleLine(start, { t, locale });
+              return (
+                <li
+                  key={start.id}
+                  className="flex flex-wrap items-center gap-3 rounded-md border bg-card p-3 text-sm"
+                >
+                  <div className="grid min-w-0 flex-1 gap-1">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <strong className="truncate font-medium">{start.agentName}</strong>
+                      <Badge tone="neutral">{t("scheduled.paused")}</Badge>
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {`${schedule} · ${t(
+                        start.workspaceKind === "personal"
+                          ? "scheduled.handover.personal"
+                          : "scheduled.handover.shared"
+                      )}`}
+                    </span>
+                  </div>
+                  <span className="flex shrink-0 items-center gap-2">
+                    {start.workspaceKind === "shared" ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          handover.reset();
+                          setDone(undefined);
+                          setNewOwner("");
+                          setHanding(start);
+                        }}
+                      >
+                        <UserRoundCog size={15} aria-hidden="true" />
+                        {t("scheduled.handover.action")}
+                      </Button>
+                    ) : null}
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="text-muted-foreground hover:text-destructive"
+                      aria-label={t("scheduled.handover.deleteLabel", {
+                        agent: start.agentName,
+                        schedule
+                      })}
+                      onClick={() => {
+                        remove.reset();
+                        setDone(undefined);
+                        setDeleting(start);
+                      }}
+                    >
+                      <Trash2 size={16} aria-hidden="true" />
+                    </Button>
                   </span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    {`${start.agentName} · ${scheduleLine(start, { t, locale })}`}
-                  </span>
-                </div>
-                <span className="flex shrink-0 items-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      handover.reset();
-                      setDone(undefined);
-                      setNewOwner("");
-                      setHanding(start);
-                    }}
-                  >
-                    <UserRoundCog size={15} aria-hidden="true" />
-                    {t("scheduled.handover.action")}
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="text-muted-foreground hover:text-destructive"
-                    aria-label={t("scheduled.handover.deleteLabel", {
-                      heading: headingOf(start.prompt)
-                    })}
-                    onClick={() => {
-                      remove.reset();
-                      setDone(undefined);
-                      setDeleting(start);
-                    }}
-                  >
-                    <Trash2 size={16} aria-hidden="true" />
-                  </Button>
-                </span>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         )}
         {done ? <FormNotice tone="success">{done}</FormNotice> : null}
@@ -149,9 +161,7 @@ export function OwnerScheduledStartsCard({
       <ConfirmDialog
         open={handing !== undefined}
         tone="primary"
-        title={t("scheduled.handover.dialogTitle", {
-          heading: handing === undefined ? "" : headingOf(handing.prompt)
-        })}
+        title={t("scheduled.handover.dialogTitle")}
         confirmLabel={t("scheduled.handover.action")}
         confirmDisabled={newOwner === ""}
         loading={handover.isPending}
@@ -209,11 +219,7 @@ export function OwnerScheduledStartsCard({
         onClose={() => setDeleting(undefined)}
       >
         <div className="grid gap-3">
-          <p>
-            {t("scheduled.deleteBody", {
-              heading: deleting === undefined ? "" : headingOf(deleting.prompt)
-            })}
-          </p>
+          <p>{t("scheduled.handover.deleteBody")}</p>
           {remove.isError ? (
             <FormNotice tone="error">{t("scheduled.deleteFailed")}</FormNotice>
           ) : null}
@@ -227,5 +233,6 @@ export function OwnerScheduledStartsCard({
 function handoverRefusal(error: unknown): TranslationKey {
   if (error instanceof ApiError && error.status === 403) return "scheduled.handover.noRights";
   if (error instanceof ApiError && error.status === 404) return "scheduled.handover.notMember";
+  if (error instanceof ApiError && error.status === 409) return "scheduled.handover.personalOnly";
   return "scheduled.handover.failed";
 }

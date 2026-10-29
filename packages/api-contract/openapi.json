@@ -32042,7 +32042,7 @@
     "/api/v1/scheduled-starts": {
       "get": {
         "operationId": "scheduled_starts.list",
-        "summary": "List your own scheduled prompts, or as an instance admin a deactivated person's",
+        "summary": "List your own scheduled prompts, or as an instance admin a deactivated person's without their prompts",
         "tags": [
           "Scheduled starts"
         ],
@@ -32108,69 +32108,143 @@
                     "items": {
                       "type": "array",
                       "items": {
-                        "type": "object",
-                        "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "clientInstanceId": {
-                            "type": "string"
-                          },
-                          "ownerUserId": {
-                            "type": "string"
-                          },
-                          "collaborationWorkspaceId": {
-                            "type": "string"
-                          },
-                          "agentName": {
-                            "type": "string"
-                          },
-                          "prompt": {
-                            "type": "string"
-                          },
-                          "cron": {
-                            "type": "string"
-                          },
-                          "timeZone": {
-                            "type": "string"
-                          },
-                          "state": {
-                            "type": "string",
-                            "enum": [
-                              "active",
-                              "paused"
-                            ]
-                          },
-                          "nextRunAt": {
-                            "anyOf": [
-                              {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "clientInstanceId": {
+                                "type": "string"
+                              },
+                              "ownerUserId": {
+                                "type": "string"
+                              },
+                              "collaborationWorkspaceId": {
+                                "type": "string"
+                              },
+                              "agentName": {
+                                "type": "string"
+                              },
+                              "prompt": {
+                                "type": "string"
+                              },
+                              "cron": {
+                                "type": "string"
+                              },
+                              "timeZone": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "active",
+                                  "paused"
+                                ]
+                              },
+                              "nextRunAt": {
+                                "anyOf": [
+                                  {
+                                    "$ref": "#/components/schemas/Timestamp"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "createdAt": {
                                 "$ref": "#/components/schemas/Timestamp"
                               },
-                              {
-                                "type": "null"
+                              "updatedAt": {
+                                "$ref": "#/components/schemas/Timestamp"
                               }
+                            },
+                            "required": [
+                              "id",
+                              "clientInstanceId",
+                              "ownerUserId",
+                              "collaborationWorkspaceId",
+                              "agentName",
+                              "prompt",
+                              "cron",
+                              "timeZone",
+                              "state",
+                              "nextRunAt",
+                              "createdAt",
+                              "updatedAt"
                             ]
                           },
-                          "createdAt": {
-                            "$ref": "#/components/schemas/Timestamp"
-                          },
-                          "updatedAt": {
-                            "$ref": "#/components/schemas/Timestamp"
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "clientInstanceId": {
+                                "type": "string"
+                              },
+                              "ownerUserId": {
+                                "type": "string"
+                              },
+                              "collaborationWorkspaceId": {
+                                "type": "string"
+                              },
+                              "agentName": {
+                                "type": "string"
+                              },
+                              "cron": {
+                                "type": "string"
+                              },
+                              "timeZone": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "active",
+                                  "paused"
+                                ]
+                              },
+                              "nextRunAt": {
+                                "anyOf": [
+                                  {
+                                    "$ref": "#/components/schemas/Timestamp"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "createdAt": {
+                                "$ref": "#/components/schemas/Timestamp"
+                              },
+                              "updatedAt": {
+                                "$ref": "#/components/schemas/Timestamp"
+                              },
+                              "workspaceKind": {
+                                "type": "string",
+                                "enum": [
+                                  "personal",
+                                  "shared"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "clientInstanceId",
+                              "ownerUserId",
+                              "collaborationWorkspaceId",
+                              "agentName",
+                              "cron",
+                              "timeZone",
+                              "state",
+                              "nextRunAt",
+                              "createdAt",
+                              "updatedAt",
+                              "workspaceKind"
+                            ]
                           }
-                        },
-                        "required": [
-                          "id",
-                          "clientInstanceId",
-                          "ownerUserId",
-                          "collaborationWorkspaceId",
-                          "agentName",
-                          "prompt",
-                          "cron",
-                          "timeZone",
-                          "state",
-                          "nextRunAt",
-                          "createdAt",
-                          "updatedAt"
                         ]
                       }
                     },
@@ -32877,9 +32951,6 @@
                     "agentName": {
                       "type": "string"
                     },
-                    "prompt": {
-                      "type": "string"
-                    },
                     "cron": {
                       "type": "string"
                     },
@@ -32908,6 +32979,13 @@
                     },
                     "updatedAt": {
                       "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "workspaceKind": {
+                      "type": "string",
+                      "enum": [
+                        "personal",
+                        "shared"
+                      ]
                     }
                   },
                   "required": [
@@ -32916,13 +32994,13 @@
                     "ownerUserId",
                     "collaborationWorkspaceId",
                     "agentName",
-                    "prompt",
                     "cron",
                     "timeZone",
                     "state",
                     "nextRunAt",
                     "createdAt",
-                    "updatedAt"
+                    "updatedAt",
+                    "workspaceKind"
                   ]
                 }
               }

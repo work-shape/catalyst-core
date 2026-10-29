@@ -3,7 +3,11 @@ import { randomUUID } from "node:crypto";
 import { runOperation } from "@work-shape/catalyst-tool-execution";
 import { identityOf } from "./support/connection-operations";
 import { z } from "zod";
-import { apiUserSchema, scheduledStartSchema } from "@work-shape/catalyst-api-contract";
+import {
+  apiUserSchema,
+  scheduledStartSchema,
+  withheldScheduledStartSchema
+} from "@work-shape/catalyst-api-contract";
 import {
   asAgentRunId,
   asToolCallId,
@@ -67,12 +71,6 @@ async function fixture(cookieIdentity = false) {
     headers: cookieIdentity ? { origin: "http://localhost", "x-session-cookie": "yes" } : {}
   };
 }
-
-const listed = (response: { json(): unknown }) =>
-  z
-    .object({ items: z.array(scheduledStartSchema) })
-    .parse(response.json())
-    .items.map((row) => row.id);
 
 /** Only this start's queued tick is moved to the database's present. No wall-clock sleep. */
 async function fireDue(t: { instance: Parameters<typeof getTestJobs>[0] }, id: string) {
@@ -761,9 +759,12 @@ describe("scheduled prompts API", () => {
     await t.stores.users.updateUser({ clientInstanceId, userId: t.kai.id, status: "disabled" });
     expect((await t.call(t.lena.id, "scheduled_starts.handover", handover)).statusCode).toBe(403);
     // The admin finds the deactivated person's starts to hand them over; nobody else does.
-    expect(listed(await t.expectOk(t.admin.id, "scheduled_starts.list", kaiStarts))).toEqual([
-      start.id
-    ]);
+    expect(
+      z
+        .object({ items: z.array(withheldScheduledStartSchema) })
+        .parse((await t.expectOk(t.admin.id, "scheduled_starts.list", kaiStarts)).json())
+        .items.map((row) => row.id)
+    ).toEqual([start.id]);
     expect((await t.call(t.lena.id, "scheduled_starts.list", kaiStarts)).statusCode).toBe(403);
     // A start goes only to someone who may use its agent there: denied, Lena gets nothing.
     const agentId = await t.assetId("agent", fields.agentName);
@@ -774,7 +775,7 @@ describe("scheduled prompts API", () => {
       (await t.stores.scheduledStarts.get({ clientInstanceId, id: start.id }))?.ownerUserId
     ).toBe(t.kai.id);
     await t.expectOk(t.admin.id, "permissions.revoke", { params: { grantId: denial } });
-    const moved = scheduledStartSchema.parse(
+    const moved = withheldScheduledStartSchema.parse(
       (await t.expectOk(t.admin.id, "scheduled_starts.handover", handover)).json()
     );
     expect(moved).toMatchObject({
@@ -814,6 +815,82 @@ describe("scheduled prompts API", () => {
       (
         await t.expectOk(t.admin.id, "scheduled_starts.delete", {
           params: { scheduledStartId: start.id }
+        })
+      ).json()
+    ).toEqual({ deleted: true });
+  });
+
+  it("never shows an admin a deactivated person's prompt, and hands over none from their Personal Workspace", async () => {
+    const { t, workspace } = await fixture();
+    const team = await t.sharedWorkspace("Withheld prompts team");
+    for (const user of [t.kai, t.lena])
+      await t.stores.workspaces.addMembership({
+        clientInstanceId,
+        collaborationWorkspaceId: team,
+        userId: user.id,
+        role: "member"
+      });
+    const create = async (collaborationWorkspaceId: string, prompt: string) =>
+      scheduledStartSchema.parse(
+        (
+          await t.expectOk(t.kai.id, "scheduled_starts.create", {
+            payload: { ...fields, prompt, collaborationWorkspaceId }
+          })
+        ).json()
+      );
+    const personalPrompt = "Draft my private note to the doctor";
+    const sharedPrompt = "Summarise the team's open tickets";
+    const personal = await create(workspace.id, personalPrompt);
+    const shared = await create(team, sharedPrompt);
+    await t.stores.users.updateUser({ clientInstanceId, userId: t.kai.id, status: "disabled" });
+
+    const response = await t.expectOk(t.admin.id, "scheduled_starts.list", {
+      query: { ownerUserId: t.kai.id }
+    });
+    const body = response.body;
+    expect(body).not.toContain(personalPrompt);
+    expect(body).not.toContain(sharedPrompt);
+    expect(body).not.toContain('"prompt"');
+    const items = z
+      .object({ items: z.array(withheldScheduledStartSchema) })
+      .parse(response.json()).items;
+    expect(Object.fromEntries(items.map((row) => [row.id, row.workspaceKind]))).toEqual({
+      [personal.id]: "personal",
+      [shared.id]: "shared"
+    });
+
+    // Only the person reads a Personal Workspace: its start is deleted, never handed over.
+    const refused = await t.call(t.admin.id, "scheduled_starts.handover", {
+      params: { scheduledStartId: personal.id },
+      payload: { ownerUserId: t.lena.id }
+    });
+    expect(refused.statusCode).toBe(409);
+    expect(refused.body).not.toContain(personalPrompt);
+    expect(
+      (await t.stores.scheduledStarts.get({ clientInstanceId, id: personal.id }))?.ownerUserId
+    ).toBe(t.kai.id);
+
+    const moved = await t.expectOk(t.admin.id, "scheduled_starts.handover", {
+      params: { scheduledStartId: shared.id },
+      payload: { ownerUserId: t.lena.id }
+    });
+    expect(moved.body).not.toContain(sharedPrompt);
+    expect(withheldScheduledStartSchema.parse(moved.json())).toMatchObject({
+      ownerUserId: t.lena.id,
+      workspaceKind: "shared"
+    });
+    // The new owner reads it in full, as her own.
+    expect(
+      z
+        .object({ items: z.array(scheduledStartSchema) })
+        .parse((await t.expectOk(t.lena.id, "scheduled_starts.list")).json())
+        .items.map((row) => row.prompt)
+    ).toEqual([sharedPrompt]);
+
+    expect(
+      (
+        await t.expectOk(t.admin.id, "scheduled_starts.delete", {
+          params: { scheduledStartId: personal.id }
         })
       ).json()
     ).toEqual({ deleted: true });

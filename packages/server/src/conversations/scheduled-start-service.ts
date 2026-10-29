@@ -14,6 +14,7 @@ import {
   shortestCronGapMinutes,
   type ActorAccess,
   type AuthenticatedUser,
+  type CollaborationWorkspaceKind,
   type OperationExecutionContext,
   type PlatformStores,
   type ScheduledStart,
@@ -50,6 +51,32 @@ export function nextScheduledPrompt(cron: string, timeZone: string, after: Date)
       "This schedule has no supported next run. Choose a recurring time"
     );
   return due.toISOString();
+}
+
+/** A start as somebody other than its owner reads it: everything but the prompt. */
+type WithheldScheduledStart = Omit<ScheduledStart, "prompt" | "personalConnectionsAllowed"> & {
+  workspaceKind: CollaborationWorkspaceKind;
+};
+
+/**
+ * Only its owner reads a start's prompt (ADR-0015 for a Personal Workspace; a Shared Workspace
+ * the admin may not open). Built field by field, so nothing new on a start reaches an admin.
+ */
+function withheld(start: ScheduledStart, kind: CollaborationWorkspaceKind): WithheldScheduledStart {
+  return {
+    id: start.id,
+    clientInstanceId: start.clientInstanceId,
+    ownerUserId: start.ownerUserId,
+    collaborationWorkspaceId: start.collaborationWorkspaceId,
+    workspaceKind: kind,
+    agentName: start.agentName,
+    cron: start.cron,
+    timeZone: start.timeZone,
+    state: start.state,
+    nextRunAt: start.nextRunAt,
+    createdAt: start.createdAt,
+    updatedAt: start.updatedAt
+  };
 }
 
 function person(context: OperationExecutionContext): AuthenticatedUser {
@@ -118,16 +145,40 @@ export class ScheduledStartsWorkflow {
   ) {
     const user = person(context);
     const ownerUserId = query.ownerUserId ?? getSubjectUserId(user);
+    const own = ownerUserId === getSubjectUserId(user);
     // An instance admin reads a deactivated person's starts to hand them over or delete them.
-    if (ownerUserId !== getSubjectUserId(user))
-      await this.requireDeactivatedOwner(context, ownerUserId, this.options.stores);
+    if (!own) await this.requireDeactivatedOwner(context, ownerUserId, this.options.stores);
     const workspaceId = query.collaborationWorkspaceId;
-    return this.options.stores.scheduledStarts.list({
+    const starts = await this.options.stores.scheduledStarts.list({
       clientInstanceId: this.options.clientInstanceId,
       ownerUserId,
       ...(workspaceId ? { collaborationWorkspaceId: asCollaborationWorkspaceId(workspaceId) } : {}),
       page
     });
+    if (own) return starts;
+    const kinds = new Map<string, CollaborationWorkspaceKind>();
+    const withheldStarts: WithheldScheduledStart[] = [];
+    for (const start of starts) {
+      let kind = kinds.get(start.collaborationWorkspaceId);
+      if (!kind) {
+        kind = await this.workspaceKind(this.options.stores, start);
+        kinds.set(start.collaborationWorkspaceId, kind);
+      }
+      withheldStarts.push(withheld(start, kind));
+    }
+    return withheldStarts;
+  }
+
+  /** The kind of a start's workspace; one that is gone counts as personal: nobody takes it. */
+  private async workspaceKind(
+    stores: PlatformStores,
+    start: ScheduledStart
+  ): Promise<CollaborationWorkspaceKind> {
+    const workspace = await stores.workspaces.getWorkspace(
+      start.clientInstanceId,
+      start.collaborationWorkspaceId
+    );
+    return workspace?.kind ?? "personal";
   }
 
   async runs(context: OperationExecutionContext, id: string, page: StorePage) {
@@ -282,6 +333,16 @@ export class ScheduledStartsWorkflow {
       });
       if (!current) throw new AppError("NOT_FOUND", "Scheduled prompt is not available");
       await this.requireDeactivatedOwner(context, current.ownerUserId, tx);
+      const workspace = await tx.workspaces.getWorkspace(
+        current.clientInstanceId,
+        current.collaborationWorkspaceId
+      );
+      // A Personal Workspace has its person alone: a start there is deleted, never handed over.
+      if (!workspace || workspace.kind !== "shared")
+        throw new AppError(
+          "CONFLICT",
+          "A scheduled prompt in a personal workspace cannot be handed over; delete it instead"
+        );
       const target = await tx.users.getUser({
         clientInstanceId: current.clientInstanceId,
         userId: asUserId(ownerUserId)
@@ -296,16 +357,10 @@ export class ScheduledStartsWorkflow {
       if (!member) throw new AppError("NOT_FOUND", "New owner is not a member of this workspace");
       // The new owner must hold what the start needs: its agent, offered to them in its
       // workspace (available there, and `agent.use` where it is limited). It runs as them.
-      const workspace = await tx.workspaces.getWorkspace(
-        current.clientInstanceId,
-        current.collaborationWorkspaceId
-      );
       const access = await callerAccess(this.options, scheduledOwner(target));
-      const offered =
-        workspace &&
-        (await getWorkspaceAssetSnapshot(this.options, workspace, access)).agents.some(
-          (agent) => agent.name === current.agentName
-        );
+      const offered = (
+        await getWorkspaceAssetSnapshot(this.options, workspace, access)
+      ).agents.some((agent) => agent.name === current.agentName);
       if (!offered)
         throw new AppError(
           "FORBIDDEN",
@@ -316,13 +371,14 @@ export class ScheduledStartsWorkflow {
         clientInstanceId: current.clientInstanceId,
         scheduledStartId: id
       });
-      return tx.scheduledStarts.update({
+      const saved = await tx.scheduledStarts.update({
         clientInstanceId: current.clientInstanceId,
         id,
         ownerUserId: current.ownerUserId,
         patch: { ownerUserId, state: "paused", nextRunAt: null, personalConnectionsAllowed: false },
         now: new Date().toISOString()
       });
+      return withheld(saved, workspace.kind);
     });
   }
 
