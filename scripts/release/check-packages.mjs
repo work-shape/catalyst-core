@@ -33,6 +33,8 @@ const MAX_TARBALL_BYTES_BY_DIR = {
   "chat-ui": 960_000,
   // Bundled server assembly: routes, workers and built-in capabilities.
   "client-assembly": 360_000,
+  // The command line client: config push, validate and the skill draft commands.
+  "config-cli": 360_000,
   // Domain types and logic every other package builds on.
   core: 360_000,
   // Built documentation site.
