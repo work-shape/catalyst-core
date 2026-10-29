@@ -25,7 +25,7 @@
     "docs:preview": "pnpm --filter @work-shape/catalyst-docs preview",
     "format": "catalyst-quality format --write",
     "format:check": "catalyst-quality format",
-    "release:check": "node scripts/release/check-lock-integrity.mjs && node scripts/release/check-packages.mjs",
+    "release:check": "pnpm exec vitest run tests/shipped-tool-references.test.ts && node scripts/release/check-lock-integrity.mjs && node scripts/release/check-packages.mjs",
     "release:cut": "node scripts/release/cut.mjs",
     "release:check:public": "node scripts/release/check-public-tarball.mjs",
     "release:metadata": "node scripts/release/package-metadata.mjs --write",

@@ -26,3 +26,5 @@ export {
   formerReleaseToolWarnings,
   isFormerToolName
 } from "./former-tool-names";
+
+export { findShippedToolReferenceIssues } from "./shipped-tool-references";

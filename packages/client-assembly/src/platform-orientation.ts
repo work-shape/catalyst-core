@@ -1,6 +1,7 @@
 import { SCHEDULED_START_TOOL_NAMES } from "@work-shape/catalyst-tool-execution";
 import { CATALYST_INTERNAL_AGENT_PROMPT } from "@work-shape/catalyst-agent-runtime";
 import {
+  ASK_QUESTION_TOOL_NAME,
   DATA_STORE_DESCRIPTION_TOOL_NAME,
   DATA_STORE_USE_TOOL_NAME,
   RUN_AGENT_TOOL_NAME
@@ -11,6 +12,9 @@ import {
   CONNECTION_DRAFT_TOOL_NAME,
   CONNECTION_OFFER_TOOL_NAME,
   CONNECTION_PROPOSE_TOOL_NAME,
+  APP_EDIT_TOOL_NAME,
+  APP_SAVE_TOOL_NAME,
+  WORKSPACE_OPEN_TOOL_NAME,
   APP_PUBLISH_TOOL_NAME,
   PREVIEW_CAPTURE_TOOL_NAME,
   APP_TRY_TOOL_NAMES,
@@ -73,7 +77,7 @@ export const PLATFORM_TOOL_NAMES: readonly string[] = [
  * Workflow testing and result reads are also offered to agents that hold platform tools.
  * No release needs to enable them individually.
  */
-export const PLATFORM_MODULE_TOOL_NAMES: readonly string[] = [
+const PLATFORM_MODULE_TOOL_NAMES: readonly string[] = [
   DATA_STORE_DESCRIPTION_TOOL_NAME,
   DATA_STORE_USE_TOOL_NAME,
   CONNECTION_PROPOSE_TOOL_NAME,
@@ -103,6 +107,11 @@ export function agentListableToolNames(enabledByRelease: Iterable<string>): stri
       ...enabledByRelease,
       ...PLATFORM_TOOL_NAMES,
       ...PLATFORM_MODULE_TOOL_NAMES,
+      "read_skill",
+      ASK_QUESTION_TOOL_NAME,
+      WORKSPACE_OPEN_TOOL_NAME,
+      APP_SAVE_TOOL_NAME,
+      APP_EDIT_TOOL_NAME,
       RUN_AGENT_TOOL_NAME
     ])
   ];

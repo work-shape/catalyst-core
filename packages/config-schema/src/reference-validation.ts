@@ -161,7 +161,7 @@ function isDataStoreOperationName(name: string): boolean {
  * name of nothing and is reported.
  */
 export function findMissingAgentToolReferences(
-  agents: readonly AgentConfig[],
+  agents: readonly Pick<AgentConfig, "name" | "toolNames">[],
   enabledToolNames: readonly string[]
 ): MissingAgentReference[] {
   return findMissingAgentReferences(agents, enabledToolNames, (agent) =>
@@ -174,10 +174,10 @@ export function findMissingAgentToolReferences(
   );
 }
 
-function findMissingAgentReferences(
-  agents: readonly AgentConfig[],
+function findMissingAgentReferences<Agent extends Pick<AgentConfig, "name">>(
+  agents: readonly Agent[],
   availableNames: readonly string[],
-  selectReferences: (agent: AgentConfig) => readonly string[]
+  selectReferences: (agent: Agent) => readonly string[]
 ): MissingAgentReference[] {
   const available = new Set(availableNames);
   const issues: MissingAgentReference[] = [];

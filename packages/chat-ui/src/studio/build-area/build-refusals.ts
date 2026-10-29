@@ -118,11 +118,24 @@ const ISSUE_SENTENCES: Readonly<Record<string, TranslationKey>> = {
   read_only_origin: "build.refusedReadOnlyOrigin"
 };
 
+const UNAVAILABLE_AGENT_TOOL =
+  /^Agent '([^']+)' references unavailable tool '([^']+)' in (?:instructions line (\d+)|(toolNames\[\d+\]))$/u;
+
 /**
  * An issue's sentence in the reader's language where its code is known, else the instance's.
  * A refused egress is told whole in the sentence, with nothing in English under it.
  */
 export function issueRefusal(issue: RefusalIssue, t: Translate): BuildRefusal {
+  const tool = UNAVAILABLE_AGENT_TOOL.exec(issue.message);
+  if (tool) {
+    return {
+      message: t("build.refusedAgentTool", {
+        agent: tool[1] ?? "",
+        tool: tool[2] ?? "",
+        location: tool[3] ? t("build.instructionsLine", { line: tool[3] }) : (tool[4] ?? "")
+      })
+    };
+  }
   const key = issue.code === undefined ? undefined : ISSUE_SENTENCES[issue.code];
   if (key === undefined) return { message: issue.message, asSent: true };
   return issue.code === EGRESS_DENIED
@@ -361,14 +374,19 @@ export function readBuildRefusal(
     return {
       ok: false,
       conflict: false,
-      refusals: issues.map((issue) => {
-        const concerned = issue.path
-          .map((segment) =>
-            typeof segment === "string" ? FIELD_OF_CONFIG_KEY.get(segment) : undefined
-          )
-          .find((candidate) => candidate !== undefined);
-        return { ...(concerned ? { field: concerned } : {}), ...issueRefusal(issue, t) };
-      })
+      refusals: [
+        ...(issues.some((issue) => UNAVAILABLE_AGENT_TOOL.test(issue.message))
+          ? [{ message: t("build.refusedAgentTools") }]
+          : []),
+        ...issues.map((issue) => {
+          const concerned = issue.path
+            .map((segment) =>
+              typeof segment === "string" ? FIELD_OF_CONFIG_KEY.get(segment) : undefined
+            )
+            .find((candidate) => candidate !== undefined);
+          return { ...(concerned ? { field: concerned } : {}), ...issueRefusal(issue, t) };
+        })
+      ]
     };
   }
   const told = tellRefusal(refusalDetailsOf(error), t, place);

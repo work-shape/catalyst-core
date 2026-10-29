@@ -8,6 +8,7 @@ import {
   AppError,
   appActionOperationName,
   connectionOperationName,
+  parseAppActionOperationName,
   type OperationListScope
 } from "@work-shape/catalyst-core";
 import { readDefinitionField, readDefinitionName } from "./asset-kinds/shared";
@@ -120,5 +121,5 @@ function warningMessage(agent: string, name: string): string {
 }
 
 function isStoredDataTool(name: string): boolean {
-  return name.startsWith("connection.") || name.startsWith("app.");
+  return name.startsWith("connection.") || parseAppActionOperationName(name) !== undefined;
 }
