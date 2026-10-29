@@ -11,7 +11,6 @@ import { connectionProposalCatalogue } from "./connection-proposal-catalogue";
 import { HTTP_API_CONNECTOR_TYPE, type Catalogue } from "@work-shape/catalyst-connections";
 import {
   ASK_QUESTION_TOOL_NAME,
-  RUN_AGENT_TOOL_NAME,
   DATA_STORE_ASSET_KIND,
   DATA_STORE_DESCRIPTION_TOOL_NAME,
   DATA_STORE_USE_TOOL_NAME,
@@ -74,7 +73,7 @@ import {
 } from "@work-shape/catalyst-tool-execution";
 import type { AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
 import {
-  PLATFORM_MODULE_TOOL_NAMES,
+  agentListableToolNames,
   PLATFORM_ORIENTATION,
   PLATFORM_TOOL_NAMES
 } from "./platform-orientation";
@@ -724,17 +723,7 @@ export function createPlatformTools(
     registry(tools: AnyToolDefinition[], enabledByRelease: ReadonlySet<string>): ToolRegistry {
       attached.tools = new ToolRegistry({
         tools,
-        enabledToolNames: new Set([
-          ...enabledByRelease,
-          ...PLATFORM_TOOL_NAMES,
-          ...PLATFORM_MODULE_TOOL_NAMES,
-          READ_SKILL_TOOL,
-          RUN_AGENT_TOOL_NAME,
-          ASK_QUESTION_TOOL_NAME,
-          WORKSPACE_OPEN_TOOL_NAME,
-          APP_SAVE_TOOL_NAME,
-          APP_EDIT_TOOL_NAME
-        ]),
+        enabledToolNames: new Set(agentListableToolNames(enabledByRelease)),
         modules: input.modules
       });
       return attached.tools;

@@ -68,7 +68,7 @@ export function useGiveToAgent(input: {
   /** The agent was written: the outcome, and the tools the give added, as it asked them. */
   onGiven?(agent: GiveAgent, outcome: GiveOutcome, tools: readonly GiveTool[]): void;
 }): GiveSteps {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const { host, connection, suggested, onBack, onClose } = input;
   const enabled = host !== undefined && input.enabled !== false;
   const [load, setLoad] = useState<Load>({ status: "loading" });
@@ -120,7 +120,7 @@ export function useGiveToAgent(input: {
     const agent = agentOf(asked.agent);
     if (!host || !agent) return;
     setBusy(true);
-    const outcome = await giveTools(host.source, asked);
+    const outcome = await giveTools(host.source, asked, { t, locale });
     setBusy(false);
     if (outcome.status === "published" || outcome.status === "waits") {
       host.given?.();
@@ -379,7 +379,11 @@ function OutcomeNotice({
       );
     case "failed":
       return (
-        <FormNotice tone="error" data-connection-give-outcome="failed">
+        <FormNotice
+          tone="error"
+          className="whitespace-pre-line"
+          data-connection-give-outcome="failed"
+        >
           {outcome.message ?? t("connectionGive.failed")}
         </FormNotice>
       );

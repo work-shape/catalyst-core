@@ -1,5 +1,7 @@
 import type { ApiClient } from "@work-shape/catalyst-api-client";
 import { apiErrorCode, apiErrorMessage } from "../../shared/workspace-utils";
+import type { TranslationContextValue } from "../../shared/i18n";
+import { readBuildRefusal } from "./build-refusals";
 import { operationTitle } from "./connection-approval-model";
 
 // "Einem Agenten geben" (CS-5d; ruling of 2026-10-24): the approved tools of a Connection go to
@@ -120,7 +122,8 @@ export async function planGive(
 /** Gives the tools the plan names, over the published agent the plan read. */
 export async function giveTools(
   source: ConnectionGiveSource,
-  plan: Extract<GivePlan, { status: "ready" }>
+  plan: Extract<GivePlan, { status: "ready" }>,
+  wording?: Pick<TranslationContextValue, "t" | "locale">
 ): Promise<GiveOutcome> {
   try {
     const done = await source.give(plan.agent, {
@@ -132,15 +135,24 @@ export async function giveTools(
   } catch (error) {
     const code = apiErrorCode(error);
     if (code === "REVISION_CONFLICT" || code === "CONFLICT") return { status: "changed" };
-    return { status: "failed", ...messageOf(error) };
+    return { status: "failed", ...messageOf(error, wording) };
   }
 }
 
 /**
- * The instance's sentence on a give it refused or could not serve. A give meets no reason of the
- * refusal table (REFUSE-1), so the sentence is shown as the instance said it.
+ * The same localized validator diagnostics as Save draft, with the instance's sentence
+ * retained for refusals the interface does not know.
  */
-function messageOf(error: unknown): { message?: string } {
+function messageOf(
+  error: unknown,
+  wording?: Pick<TranslationContextValue, "t" | "locale">
+): { message?: string } {
+  if (wording && apiErrorCode(error) !== undefined) {
+    const outcome = readBuildRefusal(error, wording.t, wording.locale);
+    if (!outcome.ok && !outcome.conflict) {
+      return { message: outcome.refusals.map((refusal) => refusal.message).join("\n") };
+    }
+  }
   const message = apiErrorCode(error) === undefined ? undefined : apiErrorMessage(error, undefined);
   return message === undefined ? {} : { message };
 }

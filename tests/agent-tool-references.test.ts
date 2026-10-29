@@ -91,11 +91,11 @@ describe("the tools the agent page is told of", () => {
     "validates the incident sentence against the assembled registry (apps enabled: %s)",
     async (enabled) => {
       const workspaceObjectRoot = await mkdtemp(join(tmpdir(), "catalyst-page-references-"));
-      const pageTools = ["workspace.open", "app.save"];
+      const pageTools = ["workspace.open", "app.save", "app.edit"];
       const config = createTestConfig({
         executionWorkspaces: { enabled: true },
         workspaceObjectRoot,
-        tools: ["workspace.write_file", ...(enabled ? pageTools : [])].map((name) => ({
+        tools: ["workspace.write_file"].map((name) => ({
           name,
           enabled: true
         }))
@@ -136,7 +136,7 @@ describe("the tools the agent page is told of", () => {
           skillNames: [],
           initialPrompts: [],
           instructions:
-            "Help.\nShow it in the chat with workspace.open. When the user wants to keep it, save it as an App with app.save."
+            "Help.\nShow it in the chat with workspace.open. When the user wants to keep it, save it as an App with app.save and reload with app.edit."
         };
         const validation = await instance.call("assets.validate", {
           params: { kind: "agent" },

@@ -5,12 +5,14 @@ import {
   ConnectionGiveCardView,
   giveTools,
   planGive,
+  readBuildRefusal,
   readConnectionOffer,
   type ConnectionGiveSource,
   type GiveAgent,
   type GivePlan,
   type GiveTool
 } from "@work-shape/catalyst-chat-ui/build-area";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // "Einem Agenten geben" (CS-5d; ruling of 2026-10-24): the approved tools of a Connection go to
@@ -120,6 +122,55 @@ describe("the give of a Connection's tools to an agent", () => {
       expect(await giveTools(source, plan)).toEqual({ status: "changed" });
     }
   });
+
+  it.each(["en", "de"] as const)(
+    "explains the validator lines and next step for give and save in %s",
+    async (locale) => {
+      const { t } = createTranslationContext(locale);
+      const refused = {
+        code: "VALIDATION_FAILED",
+        payload: {
+          error: {
+            code: "VALIDATION_FAILED",
+            message: "Config asset bundle is invalid",
+            details: {
+              issues: [
+                {
+                  message:
+                    "Agent 'workshaper' references unavailable tool 'app.edit' in instructions line 46"
+                },
+                {
+                  message:
+                    "Agent 'workshaper' references unavailable tool 'app.save' in instructions line 46"
+                },
+                {
+                  message:
+                    "Agent 'workshaper' references unavailable tool 'app.edit' in instructions line 47"
+                }
+              ]
+            }
+          }
+        }
+      };
+      const { source } = fakeSource({ refused });
+      const plan = ready(await planGive(source, { agent, tools }));
+      const given = await giveTools(source, plan, { t, locale });
+      expect(given.status).toBe("failed");
+      if (given.status !== "failed") throw new Error("Expected refused give");
+      const saved = readBuildRefusal(refused, t, locale);
+      if (saved.ok || saved.conflict) throw new Error("Expected refused save");
+      expect(given.message).toBe(saved.refusals.map(({ message }) => message).join("\n"));
+      expect(given.message).toContain("app.edit");
+      expect(given.message).toContain("app.save");
+      expect(given.message).toContain(locale === "de" ? "Zeile 46" : "line 46");
+      expect(given.message).toContain(locale === "de" ? "Zeile 47" : "line 47");
+      expect(given.message).toContain(
+        locale === "de" ? "Es wurde nichts gespeichert" : "Nothing was saved"
+      );
+      expect(given.message).toContain(locale === "de" ? "Administrator" : "administrator");
+      expect(given.message).not.toContain("Config asset bundle is invalid");
+    }
+  );
 
   it("says why a give is refused", async () => {
     const { source } = fakeSource({

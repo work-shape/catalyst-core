@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
 import { z } from "zod";
 import { ALLOWED_URL, plantConnection, removeConnection } from "./connection-fixtures";
+import { requestAnswered } from "./allowed-page-errors";
 import { signIn } from "./inbox-fixtures";
 import { sendToolCall } from "./page-surface-fixtures";
 import {
@@ -20,6 +21,23 @@ import { expect, test } from "./test";
 // conversation calls the new tool from the next message. An agent with somebody else's draft
 // gets the tools live too, and the draft keeps its author and content, gains the tools and can
 // still be published. Fails without the change: a draft by somebody else refuses the give.
+
+test.use({
+  allowedPageErrors: {
+    errors: [
+      {
+        name: "give-agent-validation-refused",
+        reason:
+          "The spec deliberately returns T33’s 422 validator response and checks every diagnostic, the next step and that no agent revision was saved.",
+        matches: requestAnswered(422),
+        path: /^\/api\/v1\/agents\/e2e_give_[a-z0-9]+\/give-tools$/u,
+        tests: [
+          "the agent's offer gives a Connection's tools to the agent, which calls them in the same conversation"
+        ]
+      }
+    ]
+  }
+});
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
@@ -63,7 +81,7 @@ test("the agent's offer gives a Connection's tools to the agent, which calls the
   // It plants a Connection no release config names.
   releaseConnections: _releaseConnections
 }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(360_000);
   const tag = randomUUID().slice(0, 8);
   const name = `e2e_give_${tag}`;
   const displayName = `Give probe ${tag}`;
@@ -129,6 +147,85 @@ test("the agent's offer gives a Connection's tools to the agent, which calls the
     await expect(ask).toContainText(`${displayName} gets these tools live at once.`);
     await expect(ask.locator("[data-connection-give-draft]")).toHaveCount(0);
     expect(await toolNamesOf(page, name)).toEqual([OFFER_TOOL]);
+
+    // T33: an invalid agent reports all validator lines, the next step and no save.
+    const beforeRefusal = await assetRevision(page, agentPath(name));
+    const giveUrl = `${apiBaseUrl}/api/v1/agents/${name}/give-tools`;
+    await page.route(giveUrl, (route) =>
+      route.fulfill({
+        status: 422,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: {
+            code: "VALIDATION_FAILED",
+            message: "Config asset bundle is invalid",
+            details: {
+              issues: [
+                {
+                  message:
+                    "Agent 'workshaper' references unavailable tool 'app.edit' in instructions line 46"
+                },
+                {
+                  message:
+                    "Agent 'workshaper' references unavailable tool 'app.save' in instructions line 46"
+                },
+                {
+                  message:
+                    "Agent 'workshaper' references unavailable tool 'app.edit' in instructions line 47"
+                }
+              ]
+            }
+          }
+        })
+      })
+    );
+    for (const locale of ["en", "de"]) {
+      for (const width of [1280, 390]) {
+        for (const theme of ["light", "dark"]) {
+          await page.evaluate(
+            ([language, scheme]) => {
+              localStorage.setItem("vivd-catalyst:locale", language);
+              localStorage.setItem("vivd-catalyst:theme", scheme);
+            },
+            [locale, theme] as const
+          );
+          await page.setViewportSize({ width, height: 760 });
+          await page.reload();
+          await card.locator("[data-connection-give]").click();
+          await dialog.locator("[data-connection-give-next]").click();
+          await dialog.locator("[data-connection-give-confirm]").click();
+          await expect(dialog).toContainText(
+            locale === "de" ? "Es wurde nichts gespeichert" : "Nothing was saved"
+          );
+          await expect(dialog).toContainText(locale === "de" ? "Zeile 46" : "line 46");
+          await expect(dialog).toContainText(locale === "de" ? "Zeile 47" : "line 47");
+          await expect(dialog).toContainText(locale === "de" ? "Administrator" : "administrator");
+          await expect(dialog).not.toContainText("Config asset bundle is invalid");
+          await expect(dialog).toContainText("app.edit");
+          await expect(dialog).toContainText("app.save");
+          const bounds = await dialog.boundingBox();
+          expect(bounds?.x).toBeGreaterThanOrEqual(0);
+          expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(width);
+          const screenshot = test.info().outputPath(`evidence-t33-${locale}-${width}-${theme}.png`);
+          await page.screenshot({ path: screenshot });
+          await test.info().attach(`t33-${locale}-${width}-${theme}`, {
+            path: screenshot,
+            contentType: "image/png"
+          });
+        }
+      }
+    }
+    expect(await assetRevision(page, agentPath(name))).toBe(beforeRefusal);
+    expect(await toolNamesOf(page, name)).toEqual([OFFER_TOOL]);
+    await page.unroute(giveUrl);
+    await page.evaluate(() => {
+      localStorage.setItem("vivd-catalyst:locale", "en");
+      localStorage.setItem("vivd-catalyst:theme", "light");
+    });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.reload();
+    await card.locator("[data-connection-give]").click();
+    await dialog.locator("[data-connection-give-next]").click();
 
     // The confirmation publishes the agent with the tool, as one revision and no draft.
     const before = await assetRevision(page, agentPath(name));
