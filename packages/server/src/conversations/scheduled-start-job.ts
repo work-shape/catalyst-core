@@ -61,7 +61,7 @@ export function schedulePromptJob(
 }
 
 /** The owner of a scheduled prompt as the run that starts it acts. */
-function scheduledOwner(owner: UserRecord): AuthenticatedUser {
+export function scheduledOwner(owner: UserRecord): AuthenticatedUser {
   const identity = owner.identities[0];
   return {
     id: owner.id,

@@ -1,0 +1,19 @@
+# The two people of the Scheduled handover spec, used by no other spec: the owner of a scheduled
+# prompt, whom the spec deactivates, and the member it hands the prompt to. The labels sort after
+# every other for the reason in e2e-app.yaml.
+- email: e2e-scheduled-owner@example.test
+  displayLabel: E2E Zz Scheduled Owner
+  passwordEnvName: E2E_SCHEDULED_OWNER_PASSWORD
+  developmentPassword: e2e-scheduled-owner-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
+- email: e2e-scheduled-taker@example.test
+  displayLabel: E2E Zz Scheduled Taker
+  passwordEnvName: E2E_SCHEDULED_TAKER_PASSWORD
+  developmentPassword: e2e-scheduled-taker-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

@@ -765,6 +765,15 @@ describe("scheduled prompts API", () => {
       start.id
     ]);
     expect((await t.call(t.lena.id, "scheduled_starts.list", kaiStarts)).statusCode).toBe(403);
+    // A start goes only to someone who may use its agent there: denied, Lena gets nothing.
+    const agentId = await t.assetId("agent", fields.agentName);
+    const denial = await t.grant(t.lena.id, "agent.use", { assetId: agentId }, "deny");
+    const refused = await t.call(t.admin.id, "scheduled_starts.handover", handover);
+    expect(refused.statusCode).toBe(403);
+    expect(
+      (await t.stores.scheduledStarts.get({ clientInstanceId, id: start.id }))?.ownerUserId
+    ).toBe(t.kai.id);
+    await t.expectOk(t.admin.id, "permissions.revoke", { params: { grantId: denial } });
     const moved = scheduledStartSchema.parse(
       (await t.expectOk(t.admin.id, "scheduled_starts.handover", handover)).json()
     );

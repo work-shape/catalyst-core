@@ -54,13 +54,16 @@ export function UserDetail({
   onResetPassword,
   onResetTwoFactor,
   onSendInvitation,
-  rights
+  rights,
+  scheduledStarts
 }: {
   user: AdministeredUser;
   canManageSuperadminAccess: boolean;
   canDeleteUser: boolean;
   /** The person's effective rights with where each comes from; read-only. */
   rights?: ReactNode;
+  /** A deactivated person's scheduled prompts, to hand over or delete. */
+  scheduledStarts?: ReactNode;
   mutating: boolean;
   onBack(): void;
   onUpdateUser(userId: string, input: UpdateAdministeredUserRequest): Promise<AdministeredUser>;
@@ -124,6 +127,7 @@ export function UserDetail({
             mutating={mutating}
             onUpdateUser={onUpdateUser}
           />
+          {scheduledStarts}
           {rights}
           <IdentitiesCard
             user={user}
