@@ -58,7 +58,12 @@ export const FIRST_PARTY_AUTH_SCOPES = [
   // store and its migrations stay under `config_assets:*`. A scope caps what a key may be
   // used for; whether its holder may do it is decided by the grants.
   "data_store_rows:read",
-  "data_store_rows:write"
+  "data_store_rows:write",
+  // What the use level of a personal key reaches of those rows (CLI-PARITY-4): a read of a
+  // store's rows, an insert and a query of a Knowledge Base, and nothing else under
+  // `data_store_rows:*`. Only a personal key's call is asked for it, through the operation's
+  // `personalKeyScope`; every other credential keeps the scopes above.
+  "data_store_rows:use"
 ] as const;
 
 export type ChatSessionAuthScope = (typeof CHAT_SESSION_AUTH_SCOPES)[number];

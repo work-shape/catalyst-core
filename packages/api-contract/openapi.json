@@ -14367,6 +14367,11 @@
             "accessToken": [
               "data_store_rows:write"
             ]
+          },
+          {
+            "accessToken": [
+              "data_store_rows:use"
+            ]
           }
         ],
         "parameters": [
@@ -14699,6 +14704,11 @@
           {
             "accessToken": [
               "data_store_rows:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "data_store_rows:use"
             ]
           }
         ],
@@ -15583,6 +15593,11 @@
           {
             "accessToken": [
               "data_store_rows:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "data_store_rows:use"
             ]
           }
         ],
@@ -25705,6 +25720,11 @@
           {
             "accessToken": [
               "data_store_rows:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "data_store_rows:use"
             ]
           }
         ],
@@ -45751,7 +45771,8 @@
           "config_assets:publish",
           "config_assets:release",
           "data_store_rows:read",
-          "data_store_rows:write"
+          "data_store_rows:write",
+          "data_store_rows:use"
         ]
       },
       "CancelRunRequest": {
@@ -49672,7 +49693,8 @@
                 "config_assets:publish",
                 "config_assets:release",
                 "data_store_rows:read",
-                "data_store_rows:write"
+                "data_store_rows:write",
+                "data_store_rows:use"
               ]
             }
           },

@@ -73,7 +73,7 @@ describe("api operation catalog", () => {
     expect(artifact).toEqual(JSON.parse(JSON.stringify(createOpenApiDocument())));
   });
 
-  it("declares personal-key scopes only for own calls and requests and the read-only infrastructure check", () => {
+  it("declares personal-key scopes only for own calls and requests, the read-only infrastructure check and the use level of rows", () => {
     const alternatives = Object.values(apiOperations).flatMap((operation) =>
       "personalKeyScope" in operation ? [[operation.id, operation.personalKeyScope]] : []
     );
@@ -82,7 +82,11 @@ describe("api operation catalog", () => {
       ["approval_requests.count_pending", "me:read"],
       ["approval_requests.withdraw", "config_assets:write"],
       ["instance.infrastructure.check", "infrastructure:check"],
-      ["operations.get_run", "me:read"]
+      ["operations.get_run", "me:read"],
+      ["data_stores.query", "data_store_rows:use"],
+      ["data_stores.insert", "data_store_rows:use"],
+      ["data_stores.rows", "data_store_rows:use"],
+      ["knowledge_bases.query", "data_store_rows:use"]
     ]);
     expect(apiOperations["instance.infrastructure.check"]).toMatchObject({
       auth: "user",

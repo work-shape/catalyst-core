@@ -102,6 +102,18 @@ These commands print readable YAML; add `--json` for JSON. Paginated lists read 
 
 `app actions` without a name lists published Apps' actions; with a name it reads the draft if you may write it, otherwise the published revision. `keys list` reads only your own key metadata, never secrets. `instance workspaces` lists Shared Workspaces for agent availability through `instance.workspaces.list`, requiring `config_assets:write` and `agent.write`; it does not list your memberships. Keep `hasMore`, hidden counts and `truncated` in mind when reading hits, dependencies and actions.
 
+## Use a Workflow, Data Store or Knowledge Base
+
+```sh
+catalyst workflow start month-end --from input.json  # {"input":{"month":"2026-10"}}
+catalyst data-store rows reporting --table bookings --limit 20
+catalyst data-store query reporting --sql "select id from bookings where id = 1"
+catalyst data-store insert reporting --from rows.json  # {"table":"bookings","rows":[{"id":1}]}
+catalyst knowledge-base query accounts --sql "select name from accounts"
+```
+
+These need the key's use level. A refusal names the right the key lacks; treat it as final and tell the person, who ticks it in Settings > API keys. Start a Workflow, read rows or insert rows only when asked: `workflow start` runs the published Workflow for real, and `data-store insert` adds rows that stay. `--from <file|->` reads the JSON request body shown above; `knowledge-base query` also takes `{"query": "<named query>", "parameters": {...}}`. `data-store rows` prints one page: pass the `next` it printed as `--after` for the following one.
+
 ## Follow a held call
 
 A change that exits 3 prints its Operation Run id. Follow it with `catalyst operation show <run-id>` and list your requests with `catalyst requests`. Add `--json` for the full record or list. A held run still exits 3; a failed, denied or expired run exits 1. Withdraw your own request with `catalyst requests --withdraw <id>` only when the person asks; the key needs an asset write or delete scope. Do not send the held change again.

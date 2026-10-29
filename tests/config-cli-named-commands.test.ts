@@ -95,6 +95,50 @@ const cases: CommandCase[] = [
     response: workflowRun
   },
   {
+    args: ["workflow", "start", "month-end"],
+    operation: "workflows.start",
+    params: { workflow: "month-end" },
+    body: {},
+    response: { ...workflowRun, mode: "live" }
+  },
+  {
+    args: ["data-store", "rows", "reporting", "--table", "bookings", "--limit", "5"],
+    operation: "data_stores.rows",
+    params: { store: "reporting" },
+    query: { table: "bookings", limit: "5" },
+    response: {
+      table: "bookings",
+      columns: [{ name: "id", type: "integer", nativeType: "int4" }],
+      order: { by: "key", columns: ["id"] },
+      rows: [{ at: "1", values: { id: 1 } }],
+      next: "1",
+      valueMaxChars: 200
+    }
+  },
+  {
+    args: ["data-store", "query", "reporting", "--sql", "select id from bookings"],
+    operation: "data_stores.query",
+    params: { store: "reporting" },
+    body: { sql: "select id from bookings" },
+    response: {
+      columns: [{ name: "id", type: "integer", nativeType: "int4" }],
+      rows: [{ id: 1 }],
+      truncated: false
+    }
+  },
+  {
+    args: ["knowledge-base", "query", "accounts", "--sql", "select name from accounts"],
+    operation: "knowledge_bases.query",
+    params: { knowledgeBase: "accounts" },
+    body: { sql: "select name from accounts" },
+    response: {
+      columns: [{ name: "name", type: "text", nativeType: "text" }],
+      rows: [{ name: "Acme" }],
+      truncated: false,
+      source: { knowledgeBase: "accounts", title: "Accounts", tables: ["accounts"] }
+    }
+  },
+  {
     args: ["workflow", "runs", "month-end"],
     operation: "workflows.list_runs",
     params: { workflow: "month-end" },
@@ -607,6 +651,111 @@ describe("named CLI operation faces", () => {
       err: "Refused by the instance (HTTP 403 FORBIDDEN): Missing the right 'agent.write'\n"
     });
   });
+
+  it("sends the request body of workflow start, data-store insert and the queries from a file or stdin", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "cli-use-input-"));
+    directories.push(cwd);
+    const bodies: Record<string, unknown> = {};
+    const fetchImpl = apiFetch(async (request) => {
+      bodies[new URL(request.url).pathname] = await request.json();
+      return Response.json({}, { status: 200 });
+    });
+    const start = { input: { month: "2026-10" }, key: "2026-10/1" };
+    const insert = { table: "bookings", rows: [{ id: 1 }, { id: 2 }], onConflict: "skip" };
+    const query = { sql: "select id from bookings where id = $1", parameters: [1] };
+    const named = { query: "by_name", parameters: { name: "Acme" } };
+    await writeFile(join(cwd, "insert.json"), JSON.stringify(insert));
+    await writeFile(join(cwd, "query.json"), JSON.stringify(query));
+    const runs: [string[], string?][] = [
+      [["workflow", "start", "month-end", "--from", "-"], JSON.stringify(start)],
+      [["data-store", "insert", "reporting", "--from", "insert.json"]],
+      [["data-store", "query", "reporting", "--from", "query.json"]],
+      [["knowledge-base", "query", "accounts", "--from", "-"], JSON.stringify(named)]
+    ];
+    for (const [args, stdin] of runs) {
+      // The answers are not the operations' own, so only the sent request is looked at.
+      await run(args, { cwd, stdin: Readable.from(stdin === undefined ? [] : [stdin]), fetchImpl });
+    }
+    expect(bodies).toEqual({
+      [apiOperations["workflows.start"].buildPath({ params: { workflow: "month-end" } })]: start,
+      [apiOperations["data_stores.insert"].buildPath({ params: { store: "reporting" } })]: insert,
+      [apiOperations["data_stores.query"].buildPath({ params: { store: "reporting" } })]: query,
+      [apiOperations["knowledge_bases.query"].buildPath({
+        params: { knowledgeBase: "accounts" }
+      })]: named
+    });
+  });
+
+  it.each([
+    ["data-store rows without a table", ["data-store", "rows", "reporting"]],
+    [
+      "data-store rows with a flag of another command",
+      ["data-store", "rows", "reporting", "--table", "b", "--sql", "select 1"]
+    ],
+    ["data-store query without a statement", ["data-store", "query", "reporting"]],
+    [
+      "data-store query with --sql and --from",
+      ["data-store", "query", "reporting", "--sql", "select 1", "--from", "-"]
+    ],
+    ["data-store insert without a body", ["data-store", "insert", "reporting"]],
+    ["data-store insert with --sql", ["data-store", "insert", "reporting", "--sql", "select 1"]],
+    [
+      "knowledge-base query with a table flag",
+      ["knowledge-base", "query", "accounts", "--sql", "select 1", "--table", "t"]
+    ],
+    ["workflow start with --table", ["workflow", "start", "month-end", "--table", "t"]]
+  ])("refuses %s as a usage error before contacting the instance", async (_name, args) => {
+    const fetchImpl = vi.fn<typeof fetch>();
+    expect((await run(args, { fetchImpl, stdin: Readable.from(["{}"]) })).code).toBe(2);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  // A key without the use level is refused by the instance, naming what the key lacks; the
+  // refusal is printed as it is and the command exits 1.
+  it.each([
+    [
+      ["workflow", "start", "month-end"],
+      "The API key of this call does not cover 'workflow.use' here. Its owner holds the right; issue a key whose scopes name it",
+      "workflow.use"
+    ],
+    [
+      ["data-store", "rows", "reporting", "--table", "bookings"],
+      "The API key of this call does not carry the use level, which 'data_stores.rows' needs: its scopes must name 'data_store.read' and one of 'data_store.insert', 'data_store.execute', 'knowledge_base.use'. Use a key with the use level (Verwenden)",
+      "data_store.read"
+    ],
+    [
+      ["data-store", "query", "reporting", "--sql", "select 1"],
+      "The API key of this call does not carry the use level, which 'data_stores.query' needs: its scopes must name 'data_store.read' and one of 'data_store.insert', 'data_store.execute', 'knowledge_base.use'. Use a key with the use level (Verwenden)",
+      "data_store.read"
+    ],
+    [
+      ["data-store", "insert", "reporting", "--from", "-"],
+      "The API key of this call does not carry the use level, which 'data_stores.insert' needs: its scopes must name 'data_store.insert'. Use a key with the use level (Verwenden)",
+      "data_store.insert"
+    ],
+    [
+      ["knowledge-base", "query", "accounts", "--sql", "select 1"],
+      "The API key of this call does not carry the use level, which 'knowledge_bases.query' needs: its scopes must name 'knowledge_base.use'. Use a key with the use level (Verwenden)",
+      "knowledge_base.use"
+    ]
+  ])(
+    "prints a key's refusal of %s with the missing right named and exits 1",
+    async (args, message, right) => {
+      const result = await run(args, {
+        stdin: Readable.from(['{"table":"bookings","rows":[{"id":1}]}']),
+        fetchImpl: apiFetch(() =>
+          Response.json(
+            { error: { code: "FORBIDDEN", message, details: { action: right } } },
+            { status: 403 }
+          )
+        )
+      });
+      expect(result.code).toBe(1);
+      expect(result.out).toBe("");
+      expect(result.err).toBe(`Refused by the instance (HTTP 403 FORBIDDEN): ${message}\n`);
+      expect(result.err).toContain(`'${right}'`);
+    }
+  );
 
   it("returns 3 for a held change in both output modes without claiming it ran", async () => {
     const pending = {

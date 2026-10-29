@@ -445,6 +445,7 @@ export const knowledgeOperations = {
   "knowledge_bases.query": defineRegisteredOperation({
     ...BASE,
     id: "knowledge_bases.query",
+    personalKeyScope: "data_store_rows:use",
     method: "POST",
     path: "/api/v1/knowledge-bases/:knowledgeBase/query",
     summary:

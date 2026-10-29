@@ -382,6 +382,7 @@ export const dataStoreOperations = {
   "data_stores.query": defineRegisteredOperation({
     ...READ,
     id: "data_stores.query",
+    personalKeyScope: "data_store_rows:use",
     method: "POST",
     path: "/api/v1/data-stores/:store/query",
     summary: "Read rows of one Data Store with one read-only statement and bound parameters",
@@ -390,6 +391,7 @@ export const dataStoreOperations = {
   }),
   "data_stores.insert": defineRegisteredOperation({
     id: "data_stores.insert",
+    personalKeyScope: "data_store_rows:use",
     method: "POST",
     path: "/api/v1/data-stores/:store/insert",
     summary: "Add rows to one table of one Data Store",
@@ -473,6 +475,7 @@ export const dataStoreOperations = {
   "data_stores.rows": defineRegisteredOperation({
     ...READ,
     id: "data_stores.rows",
+    personalKeyScope: "data_store_rows:use",
     method: "GET",
     path: "/api/v1/data-stores/:store/rows",
     summary:

@@ -24,7 +24,15 @@ interface NamedCommand {
   from?: boolean;
   /** What `--from` must hold, for the usage error when it does not. */
   fromShape?: string;
+  /** `--sql <statement>` stands for `--from` with `{"sql": "<statement>"}`. */
+  sql?: boolean;
+  /** The flags that become the query of the call. */
+  queryFlags?: readonly QueryFlag[];
+  requiredFlags?: readonly QueryFlag[];
 }
+
+const QUERY_FLAGS = ["table", "limit", "after"] as const;
+type QueryFlag = (typeof QUERY_FLAGS)[number];
 
 // Each face names an existing operation. Rights, policy and execution stay in the instance.
 const commands: Readonly<Record<string, NamedCommand>> = {
@@ -86,6 +94,47 @@ const commands: Readonly<Record<string, NamedCommand>> = {
     operation: apiOperations["instance.workspaces.list"],
     usage: "instance workspaces"
   },
+  "workflow start": {
+    operation: apiOperations["workflows.start"],
+    usage: "workflow start <name> [--from <file|->]",
+    param: "workflow",
+    from: true,
+    fromShape:
+      'Workflow start input must be a JSON object: {"input": {...}, "key": "<run key>"}; both are optional.'
+  },
+  "data-store rows": {
+    operation: apiOperations["data_stores.rows"],
+    usage: "data-store rows <name> --table <table> [--limit <n>] [--after <cursor>]",
+    param: "store",
+    queryFlags: QUERY_FLAGS,
+    requiredFlags: ["table"]
+  },
+  "data-store query": {
+    operation: apiOperations["data_stores.query"],
+    usage: "data-store query <name> (--sql <statement> | --from <file|->)",
+    param: "store",
+    from: true,
+    sql: true,
+    fromShape:
+      'Data Store query input must be a JSON object: {"sql": "select ... where id = $1", "parameters": [...]}.'
+  },
+  "data-store insert": {
+    operation: apiOperations["data_stores.insert"],
+    usage: "data-store insert <name> --from <file|->",
+    param: "store",
+    from: true,
+    fromShape:
+      'Data Store insert input must be a JSON object: {"table": "<table>", "rows": [{...}], "onConflict": "fail|skip"}.'
+  },
+  "knowledge-base query": {
+    operation: apiOperations["knowledge_bases.query"],
+    usage: "knowledge-base query <name> (--sql <statement> | --from <file|->)",
+    param: "knowledgeBase",
+    from: true,
+    sql: true,
+    fromShape:
+      'Knowledge Base query input must be a JSON object: {"sql": "select ..."} or {"query": "<named query>", "parameters": {...}}.'
+  },
   "limits show": { operation: apiOperations["usage.limits.get"], usage: "limits show" },
   "limits set": {
     operation: apiOperations["usage.limits.set"],
@@ -127,7 +176,11 @@ export async function runNamedCommand(
           dir: { type: "string" },
           json: { type: "boolean" },
           help: { type: "boolean", short: "h" },
-          from: { type: "string" }
+          from: { type: "string" },
+          sql: { type: "string" },
+          table: { type: "string" },
+          limit: { type: "string" },
+          after: { type: "string" }
         },
         allowPositionals: true,
         strict: true
@@ -145,7 +198,13 @@ export async function runNamedCommand(
     if (
       (command.optionalName ? positionals.length > 1 : positionals.length !== count) ||
       (name !== undefined && name === "") ||
-      (!command.from && values.from !== undefined)
+      (!command.from && values.from !== undefined) ||
+      (!command.sql && values.sql !== undefined) ||
+      (values.sql !== undefined && values.from !== undefined) ||
+      QUERY_FLAGS.some(
+        (flag) => values[flag] !== undefined && !command.queryFlags?.includes(flag)
+      ) ||
+      (command.requiredFlags ?? []).some((flag) => !values[flag])
     ) {
       throw new UsageError(`Usage: catalyst ${command.usage}`);
     }
@@ -153,11 +212,13 @@ export async function runNamedCommand(
     if (command.from) {
       const source = values.from;
       const text =
-        source === undefined
-          ? "{}"
-          : source === "-"
-            ? await readStdin(base.stdin ?? process.stdin)
-            : await readFile(resolve(base.cwd, source), "utf8");
+        values.sql !== undefined
+          ? JSON.stringify({ sql: values.sql })
+          : source === undefined
+            ? "{}"
+            : source === "-"
+              ? await readStdin(base.stdin ?? process.stdin)
+              : await readFile(resolve(base.cwd, source), "utf8");
       try {
         const input: unknown = JSON.parse(text);
         // This is the operation's request body, not the generic call envelope.
@@ -170,8 +231,15 @@ export async function runNamedCommand(
     const { api } = await openInstance(options);
     const params =
       command.param !== undefined && name !== undefined ? { [command.param]: name } : undefined;
-    const query: Record<string, string> =
-      command.optionalName && name !== undefined ? { app: name } : {};
+    const query: Record<string, string> = {
+      ...(command.optionalName && name !== undefined ? { app: name } : {}),
+      ...Object.fromEntries(
+        (command.queryFlags ?? []).flatMap((flag) => {
+          const value = values[flag];
+          return value === undefined ? [] : [[flag, value] as const];
+        })
+      )
+    };
     let result: unknown;
     const listField =
       command.operation.response.kind === "page"
@@ -219,7 +287,12 @@ ${Object.values(commands)
   .map((command) => `  ${command.usage} (${command.operation.id})`)
   .join("\n")}
 
-Workflow test --from reads the request body {"input": {...}}; omitted, it sends {}.
+Workflow test and start --from read the request body {"input": {...}}; omitted, it sends {}.
+workflow start runs the published Workflow and needs workflow.use on the key. data-store
+rows, query and insert and knowledge-base query need the key's use level (Verwenden): name
+data_store.read (rows, query), data_store.insert (insert) or knowledge_base.use (knowledge-base
+query), with one of data_store.insert, data_store.execute or knowledge_base.use. A refusal names
+what the key lacks.
 Lists read every page. instance workspaces shows Shared Workspaces for agent availability
 and needs config_assets:write and agent.write; it is not the membership list.
 Options: --instance <name-or-url>, --dir <working-copy-dir>, --json, --help
