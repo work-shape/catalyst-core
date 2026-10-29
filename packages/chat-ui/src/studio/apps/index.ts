@@ -75,6 +75,7 @@ export {
   parseAppOpens,
   parseRailAppsOpen,
   railApps,
+  railAppsShown,
   RAIL_APPS_LIMIT,
   withAppOpen,
   type RailApp

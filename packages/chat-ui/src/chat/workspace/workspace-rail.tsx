@@ -27,7 +27,13 @@ import {
   Skeleton,
   useSidebarCollapsed
 } from "@work-shape/catalyst-ui";
-import { RAIL_APPS_LIMIT, useRailAppsOpen, type RailApp } from "../../studio/apps/rail-apps";
+import {
+  RAIL_APPS_LIMIT,
+  railAppsShown,
+  useRailAppsOpen,
+  type RailApp
+} from "../../studio/apps/rail-apps";
+import { alphabetically } from "./rail-order";
 import { ConversationButton } from "../conversation/conversation-button";
 import { useTranslation } from "../../shared/i18n";
 import { ClientBrandingLogo, clientBrandingFrom } from "./client-branding";
@@ -117,7 +123,8 @@ interface WorkspaceRailProps {
   onCreateProject?: () => void;
   /**
    * The published Apps the person may open, most recently used first. The first
-   * `RAIL_APPS_LIMIT` fold under the Apps row, whose caret opens and folds them; the row
+   * `RAIL_APPS_LIMIT` fold under the Apps row, shown alphabetically so that opening one never
+   * moves it. The caret of the row opens and folds them; the row
    * itself opens the page with every App.
    */
   publishedApps?: readonly RailApp[];
@@ -227,7 +234,7 @@ function RailHeader({
   // The Apps under their row, as the conversations stand under "Recent": the strip of icons
   // has no room for a list. An App that is listed and open is the current row itself, while
   // its row is in view.
-  const appRows = iconsOnly ? [] : publishedApps.slice(0, RAIL_APPS_LIMIT);
+  const appRows = iconsOnly ? [] : railAppsShown(publishedApps);
   const listedOpenApp = appRows.some((app) => app.name === openAppName) ? openAppName : undefined;
   const appsFold = useRailAppsOpen(listedOpenApp);
   const appsGroupId = useId();
@@ -357,8 +364,9 @@ function RailBranding({ config }: { config: SafeConfig }) {
 
 /**
  * The projects of the open workspace used last, above "Recent", under a label that links to the
- * Projects page with all of them (PRJ-5, Felix 2026-10-29: no "All projects" row). A private project carries the lock a private conversation carries. The active project
- * stands among them even when it was used earlier, and unfolds to its newest chats with a row to
+ * Projects page with all of them (PRJ-5, Felix 2026-10-29: no "All projects" row). A private
+ * project carries the lock a private conversation carries. The active project stands among them
+ * even when it was used earlier, and unfolds to its newest chats with a row to
  * its page. Without a project the group shows its label with the plus alone, so a person finds
  * where projects are made. Nothing shows while projects are off, or in the collapsed strip.
  */
@@ -381,7 +389,12 @@ function RecentProjects(props: WorkspaceRailProps) {
   const olderActive = activeProject
     ? recentProjects.slice(RAIL_PROJECTS_LIMIT).find(({ id }) => id === activeProject.id)
     : undefined;
-  const rows = olderActive ? [...listed, olderActive] : listed;
+  // The five used last, shown alphabetically, so opening one never moves it (Felix, 2026-10-29).
+  const rows = alphabetically(
+    olderActive ? [...listed, olderActive] : listed,
+    (project) => project.title,
+    (project) => project.name
+  );
   return (
     <NavGroup
       label={t("projects.title")}

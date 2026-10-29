@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AssetSummary } from "@work-shape/catalyst-api-client";
 import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
+import { alphabetically } from "../../chat/workspace/rail-order";
 import { useAppList } from "./app-data";
 import { appState } from "./app-model";
 
@@ -44,6 +45,21 @@ export function railApps(
         left.app.name.localeCompare(right.app.name)
     )
     .map(({ app }) => ({ name: app.name, title: app.title.trim() || app.name }));
+}
+
+/**
+ * The Apps the rail shows under its Apps row: the first `limit` of `apps`, which stand in the
+ * order of use, shown alphabetically so that opening one never moves it.
+ */
+export function railAppsShown(
+  apps: readonly RailApp[],
+  limit: number = RAIL_APPS_LIMIT
+): readonly RailApp[] {
+  return alphabetically(
+    apps.slice(0, limit),
+    (app) => app.title,
+    (app) => app.name
+  );
 }
 
 /** `opens` with this App opened at `at`. */

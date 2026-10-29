@@ -12,6 +12,7 @@ import {
   parseAppOpens,
   parseRailAppsOpen,
   railApps,
+  railAppsShown,
   RAIL_APPS_LIMIT,
   withAppOpen,
   WorkspaceRail
@@ -128,6 +129,28 @@ describe("published Apps for the rail", () => {
     expect(railApps([], {})).toEqual([]);
   });
 
+  it("shows the Apps used last alphabetically, so opening one never moves it", () => {
+    const rows = ["Zebra", "Äpfel", "Mitte", "beta", "Omega", "Alt", "Eins"].map((title) =>
+      summary(title.toLowerCase(), { title })
+    );
+    const shown = (opens: Record<string, number>) =>
+      railAppsShown(railApps(rows, opens)).map(({ title }) => title);
+
+    // Five of seven: the ones opened last, in German alphabetical order ("Äpfel" with "A").
+    const opens = { zebra: 7, äpfel: 6, mitte: 5, beta: 4, omega: 3 };
+    expect(shown(opens)).toEqual(["Äpfel", "beta", "Mitte", "Omega", "Zebra"]);
+    // Opening one of them puts it first in the order of use and leaves the display as it was.
+    expect(shown({ ...opens, omega: 99 })).toEqual(["Äpfel", "beta", "Mitte", "Omega", "Zebra"]);
+    // Opening one that was not shown brings it in, at its alphabetical place.
+    expect(shown({ ...opens, alt: 99 })).toEqual(["Alt", "Äpfel", "beta", "Mitte", "Zebra"]);
+    expect(railAppsShown([], 5)).toEqual([]);
+    // The list handed in is not reordered.
+    const used = railApps(rows, opens);
+    const before = used.map(({ name }) => name);
+    railAppsShown(used);
+    expect(used.map(({ name }) => name)).toEqual(before);
+  });
+
   it("reads what the browser kept as opens and takes anything else as nothing", () => {
     expect(parseAppOpens(JSON.stringify({ a: 3, b: "x", c: null }))).toEqual({ a: 3 });
     expect(parseAppOpens(null)).toEqual({});
@@ -211,7 +234,7 @@ describe("workspace rail published Apps", () => {
 
     expect(markup).toMatch(/role="group"[^>]*aria-label="Published apps"/u);
     expect(markup).toContain('aria-expanded="true"');
-    const order = ["lucide-layout-grid", "Fee estimate", "Customer list", "lucide-inbox", "Recent"];
+    const order = ["lucide-layout-grid", "Customer list", "Fee estimate", "lucide-inbox", "Recent"];
     const positions = order.map((part) => markup.indexOf(part));
     expect(positions.every((position) => position >= 0)).toBe(true);
     expect([...positions].sort((left, right) => left - right)).toEqual(positions);
@@ -221,7 +244,7 @@ describe("workspace rail published Apps", () => {
     );
     // Each App carries its mark and its whole name for the pointer.
     expect(markup).toMatch(/data-kind="app"[^>]*>CL</u);
-    expect(itemsIn(markup)).toEqual(["Fee estimate", "Customer list"]);
+    expect(itemsIn(markup)).toEqual(["Customer list", "Fee estimate"]);
 
     // An App that is open and not listed leaves the fold shut and the Apps row the current one.
     const unlisted = renderRail({

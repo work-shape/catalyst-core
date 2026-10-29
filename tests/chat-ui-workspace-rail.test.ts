@@ -1192,6 +1192,41 @@ describe("the Projects group", () => {
     expect(html).toMatch(/<a [^>]*href="\/w\/ws_1\/projects"[^>]*>Projekte<\/a>/u);
   });
 
+  it("shows the five used last alphabetically, so opening one never moves it", () => {
+    const used = ["Zeta", "Äpfel", "Mitte", "Beta", "Omega", "Alt"].map((title) =>
+      railProject(`prj_${title}`, title)
+    );
+    const names = (html: string) =>
+      [...html.matchAll(/<[^>]*data-testid="rail-project"[^>]*>/gu)].map(
+        (match) => /title="([^"]+)"/u.exec(match[0])?.[1] ?? ""
+      );
+    const html = renderProjectRail({ recentProjects: used });
+    // The sixth, least recently used, is left out; the five are in German alphabetical order.
+    expect(names(html)).toEqual(["Äpfel", "Beta", "Mitte", "Omega", "Zeta"]);
+    // Using a shown one last moves it first in the order of use, not in the rail.
+    const [, , , beta = nord, , alt = nord] = used;
+    const reused = [beta, ...used.filter((project) => project !== beta)];
+    expect(names(renderProjectRail({ recentProjects: reused }))).toEqual(names(html));
+    // Using the sixth brings it in, at its alphabetical place.
+    const brought = [alt, ...used.slice(0, 5)];
+    expect(names(renderProjectRail({ recentProjects: brought }))).toEqual([
+      "Alt",
+      "Äpfel",
+      "Beta",
+      "Mitte",
+      "Zeta"
+    ]);
+    // The open project used earlier stands among them in its alphabetical place.
+    expect(
+      names(
+        renderProjectRail({
+          recentProjects: used,
+          activeProject: { id: "prj_Alt", chats: [] }
+        })
+      )
+    ).toEqual(["Alt", "Äpfel", "Beta", "Mitte", "Omega", "Zeta"]);
+  });
+
   it("shows its label and plus without a project", () => {
     const html = renderProjectRail({ recentProjects: [], onCreateProject: () => {} });
     expect(html).toContain('data-testid="rail-projects"');
