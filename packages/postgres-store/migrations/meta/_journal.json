@@ -1240,6 +1240,13 @@
       "when": 1793231893790,
       "tag": "0176_project_file_author_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 177,
+      "version": "7",
+      "when": 1793255622390,
+      "tag": "0177_project_idle_notice",
+      "breakpoints": true
     }
   ]
 }
