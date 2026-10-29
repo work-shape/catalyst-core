@@ -334,6 +334,7 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
       : KNOWLEDGE_TEXT_FORMATS,
     maxDocuments: parts.config.knowledge.maxDocuments,
     maxPages: parts.config.knowledge.maxPagesPerDocument,
+    indexConcurrency: parts.config.knowledge.indexConcurrency,
     assertFieldBudgetPriced: () => assertFieldBudgetPriced?.(),
     logger: parts.logger
   });

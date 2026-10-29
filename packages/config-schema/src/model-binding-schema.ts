@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  KNOWLEDGE_INDEX_CONCURRENCY_DEFAULTS,
   KNOWLEDGE_MAX_PAGES_PER_DOCUMENT,
   MODEL_BINDING_KINDS,
   MODEL_EMBEDDING_MAX_DIMENSIONS,
@@ -89,13 +90,28 @@ export const modelBindingConfigSchema = z
  * it is refused with the limit named. `maxPagesPerDocument` is how many pages of one PDF or
  * DOCX extraction reads: a longer one fails with `knowledge_file_too_many_pages`, counted
  * before conversion. It applies to Knowledge Bases only; chat uploads keep their own limits.
+ * `indexConcurrency` is how many contents are indexed at once, each sending its passages to the
+ * embedding model: `perWorker` on one knowledge worker, `total` across all of them. Raise them
+ * only where the embedding quota of the deployment allows.
  */
 export const knowledgeConfigSchema = z
   .object({
     defaultEmbeddingBinding: z.string().min(1).optional(),
     withdrawShareConfirm: z.number().min(0).max(1).default(0.2),
     maxDocuments: z.number().int().positive().max(1_000_000).default(10_000),
-    maxPagesPerDocument: z.number().int().positive().default(KNOWLEDGE_MAX_PAGES_PER_DOCUMENT)
+    maxPagesPerDocument: z.number().int().positive().default(KNOWLEDGE_MAX_PAGES_PER_DOCUMENT),
+    indexConcurrency: z
+      .object({
+        perWorker: z
+          .number()
+          .int()
+          .min(1)
+          .max(256)
+          .default(KNOWLEDGE_INDEX_CONCURRENCY_DEFAULTS.perWorker),
+        total: z.number().int().min(1).max(1024).default(KNOWLEDGE_INDEX_CONCURRENCY_DEFAULTS.total)
+      })
+      .strict()
+      .prefault({})
   })
   .strict()
   .prefault({});

@@ -187,7 +187,9 @@ describe("knowledge-import probe", () => {
       pools: {
         platform: Number(process.env.PROBE_POOL_SIZE ?? 10),
         store: Number(process.env.PROBE_STORE_POOL ?? 10)
-      }
+      },
+      // `knowledge.indexConcurrency`, as the worker of the probe sets it (above the defaults).
+      indexConcurrency: { perWorker: 32, total: 64 }
     };
   }
 

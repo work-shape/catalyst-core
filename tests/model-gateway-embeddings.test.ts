@@ -79,6 +79,7 @@ describe("embedding bindings in release config", () => {
       defaultEmbeddingBinding: "embedding",
       maxDocuments: 10_000,
       maxPagesPerDocument: 500,
+      indexConcurrency: { perWorker: 8, total: 16 },
       withdrawShareConfirm: 0.2
     });
   });
@@ -91,6 +92,7 @@ describe("embedding bindings in release config", () => {
     expect(config.knowledge).toEqual({
       maxDocuments: 10_000,
       maxPagesPerDocument: 500,
+      indexConcurrency: { perWorker: 8, total: 16 },
       withdrawShareConfirm: 0.2
     });
   });
