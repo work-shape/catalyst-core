@@ -5,6 +5,7 @@ import {
   useId,
   type ButtonHTMLAttributes,
   type HTMLAttributes,
+  type MouseEventHandler,
   type ReactNode
 } from "react";
 import { cn } from "../cn";
@@ -187,6 +188,12 @@ export interface NavGroupProps extends HTMLAttributes<HTMLDivElement> {
    * the label never moves. Needs a `label`; a collapsed sidebar and a group that folds show none.
    */
   labelAction?: ReactNode;
+  /**
+   * The label is a link to the page that holds all of the group's items. It reads as a label,
+   * underlines on the pointer and takes the keyboard. `onClick` may route in place of the
+   * browser. Needs a `label`; a group that folds takes none.
+   */
+  labelLink?: { href: string; onClick?: MouseEventHandler<HTMLAnchorElement> };
   /** The label folds the group away and shows a caret. */
   collapsible?: boolean;
   open?: boolean;
@@ -212,6 +219,7 @@ export function NavGroup({
   className,
   label,
   labelAction,
+  labelLink,
   collapsible = false,
   open,
   defaultOpen = true,
@@ -240,20 +248,41 @@ export function NavGroup({
     );
   }
   if (!collapsible) {
+    const labelText = labelLink ? (
+      <a
+        id={labelId}
+        href={labelLink.href}
+        onClick={labelLink.onClick}
+        className={cn(
+          "min-w-0 truncate rounded-sm underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+          labelAction === undefined && "flex-1"
+        )}
+      >
+        {label}
+      </a>
+    ) : null;
     return (
       <div role="group" aria-labelledby={labelId} className={groupClassName} {...props}>
         {labelAction === undefined ? (
-          <span id={labelId} data-nav-group-label="" className={labelClassName}>
-            {label}
-          </span>
+          labelText ? (
+            <div data-nav-group-label="" className={labelClassName}>
+              {labelText}
+            </div>
+          ) : (
+            <span id={labelId} data-nav-group-label="" className={labelClassName}>
+              {label}
+            </span>
+          )
         ) : (
           <div
             data-nav-group-label=""
             className={cn(labelClassName, "justify-between gap-1 pr-0.5")}
           >
-            <span id={labelId} className="min-w-0 truncate">
-              {label}
-            </span>
+            {labelText ?? (
+              <span id={labelId} className="min-w-0 truncate">
+                {label}
+              </span>
+            )}
             <span
               data-nav-group-action=""
               className="flex shrink-0 opacity-0 transition-opacity group-hover/nav-group:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100"

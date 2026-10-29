@@ -134,7 +134,7 @@ test(NOT_FOUND_TEST, async ({ page, browser, baseURL, pageErrors }) => {
   await expect(nav.getByRole("button", { name: "Projekte", exact: true })).toHaveCount(0);
   const railGroup = page.getByTestId("rail-projects");
   await expect(railGroup).toContainText("Projekte");
-  await expect(railGroup.getByTestId("rail-projects-all")).toHaveCount(0);
+  await expect(railGroup.getByText("Alle Projekte")).toHaveCount(0);
   await shot(page, "projects-rail-empty");
 
   // Its plus makes the first project; the creator makes a shared and a private one.
@@ -168,20 +168,21 @@ test(NOT_FOUND_TEST, async ({ page, browser, baseURL, pageErrors }) => {
     page.getByTestId("project-conversation").filter({ hasText: olderTitle })
   ).toHaveCount(1);
   await shot(page, "project-shared");
-  // "Alle Projekte" in the group opens the page.
-  await railGroup.getByTestId("rail-projects-all").click();
+  // The group's label opens the page; no "Alle Projekte" row stands under the projects.
+  await expect(railGroup.getByText("Alle Projekte")).toHaveCount(0);
+  await railGroup.getByRole("link", { name: "Projekte", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/projects$`, "u"));
   await expect(page.getByTestId("project-card")).toHaveCount(2);
   await shot(page, "projects-creator");
 
-  // On a phone the drawer holds the same group, with its plus and the row to all projects.
+  // On a phone the drawer holds the same group, with its plus and its label to the page.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: "Seitenleiste öffnen" }).click();
   const drawer = page.getByRole("dialog", { name: "Hauptnavigation" });
   const drawerGroup = drawer.getByTestId("rail-projects");
   await expect(drawerGroup.getByTestId("rail-project")).toHaveCount(2);
   await expect(drawerGroup.getByRole("button", { name: "Projekt hinzufügen" })).toBeVisible();
-  await expect(drawerGroup.getByTestId("rail-projects-all")).toBeVisible();
+  await expect(drawerGroup.getByRole("link", { name: "Projekte", exact: true })).toBeVisible();
   await expect(drawer.getByRole("button", { name: "Projekte", exact: true })).toHaveCount(0);
   if (shotsDir) {
     await page.screenshot({ path: join(shotsDir, "projects-drawer-de-390.png") });

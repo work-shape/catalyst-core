@@ -102,6 +102,7 @@ import {
 } from "./chat/workspace/workspace-chrome";
 import { WorkspaceRail } from "./chat/workspace/workspace-rail";
 import { type WorkspaceRoute, type WorkspaceRouteChangeOptions } from "./shared/workspace-route";
+import { workspaceRoutePath } from "./shared/routes";
 import { useWorkspaceChatModel, WORKSPACE_AUTH_SCOPE } from "./chat/workspace/workspace-chat-model";
 import { WorkspaceProviders } from "./chat/workspace/workspace-providers";
 import { useRequestLocale } from "./shared/api/workspace-api-client";
@@ -791,6 +792,14 @@ function ChatWorkspaceContent({
                 });
               }
             }}
+            projectsHref={
+              railAppsWorkspaceId
+                ? workspaceRoutePath({
+                    kind: "projects",
+                    collaborationWorkspaceId: railAppsWorkspaceId
+                  })
+                : undefined
+            }
             onCreateProject={() => {
               closeDrawer();
               setCreatingProject(true);

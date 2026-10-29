@@ -1167,24 +1167,37 @@ function between(html: string, from: string, to: string): string {
 }
 
 describe("the Projects group", () => {
-  it("is the only place of projects: a group with a plus, no section row", () => {
-    const html = renderProjectRail({ recentProjects: [nord, sued], onCreateProject: () => {} });
+  it("is the only place of projects: a group whose label links to the page, with a plus", () => {
+    const html = renderProjectRail({
+      recentProjects: [nord, sued],
+      projectsHref: "/w/ws_1/projects",
+      onCreateProject: () => {}
+    });
     expect(html).toContain('data-testid="rail-projects"');
+    expect(html).toMatch(/<a [^>]*href="\/w\/ws_1\/projects"[^>]*>Projekte<\/a>/u);
     expect(html).toContain('aria-label="Projekt hinzufügen"');
     expect(html.match(/data-testid="rail-project"/gu)).toHaveLength(2);
-    expect(between(html, "rail-projects", "rail-projects-all")).toContain("Projekt Süd");
-    expect(html).toContain("Alle Projekte");
+    // The label is the way to the page; no row stands for it.
+    expect(html).not.toContain("Alle Projekte");
     // The group stands before "Recent", and no section row names projects.
     expect(html.indexOf('data-testid="rail-projects"')).toBeLessThan(html.indexOf("Zuletzt"));
     expect(html.slice(0, html.indexOf('data-testid="rail-projects"'))).not.toContain("Projekte");
   });
 
-  it("shows its label and plus without a project, and no row to all of them", () => {
+  it("has no row to all projects, however many there are", () => {
+    const six = [1, 2, 3, 4, 5, 6].map((n) => railProject(`prj_${n}`, `Projekt ${n}`));
+    const html = renderProjectRail({ recentProjects: six, projectsHref: "/w/ws_1/projects" });
+    expect(html.match(/data-testid="rail-project"/gu)).toHaveLength(5);
+    expect(html).not.toContain("Alle Projekte");
+    expect(html).toMatch(/<a [^>]*href="\/w\/ws_1\/projects"[^>]*>Projekte<\/a>/u);
+  });
+
+  it("shows its label and plus without a project", () => {
     const html = renderProjectRail({ recentProjects: [], onCreateProject: () => {} });
     expect(html).toContain('data-testid="rail-projects"');
     expect(html).toContain("Projekte");
     expect(html).toContain('aria-label="Projekt hinzufügen"');
-    expect(html).not.toContain('data-testid="rail-projects-all"');
+    expect(html).not.toContain("Alle Projekte");
   });
 
   it("is absent while projects are off", () => {
@@ -1209,7 +1222,10 @@ describe("the rail with an active project", () => {
     expect(html).toContain('aria-label="Chats in Projekt Nord"');
     const group = between(html, "rail-project-chats", "rail-project-chats-all");
     expect(rows(group)).toEqual(["Chat n2", "Chat n1"]);
-    expect(between(html, "rail-project-chats-all", "rail-projects-all")).toContain("Alle Chats");
+    expect(between(html, "rail-project-chats", "rail-project-chats-all")).not.toContain(
+      "Projekt Süd"
+    );
+    expect(between(html, "rail-project-chats-all", "rail-project")).toContain("Alle Chats");
     // The rows under the project carry no project mark: the row above says it.
     expect(group).not.toContain('data-testid="conversation-project-marker"');
     expect(group).toMatch(/data-selected="true"[^]*Chat n1/u);
@@ -1228,7 +1244,7 @@ describe("the rail with an active project", () => {
       activeProject: { id: "prj_nord", chats: inNord },
       conversations
     });
-    const recent = html.slice(html.indexOf('data-testid="rail-projects-all"'));
+    const recent = html.slice(html.indexOf("Zuletzt"));
     expect(recent).toContain("Zuletzt");
     expect(rows(recent)).toEqual(["Chat free", "Chat s1"]);
     expect(rows(html)).toEqual(["Chat n2", "Chat n1", "Chat free", "Chat s1"]);
@@ -1254,7 +1270,7 @@ describe("the rail with an active project", () => {
     });
     expect(html.match(/data-testid="rail-project"/gu)).toHaveLength(6);
     expect(html).toContain("Projekt Alt");
-    expect(between(html, "rail-project-chats", "rail-projects-all")).toContain("Chat a1");
+    expect(html.slice(html.indexOf('data-testid="rail-project-chats"'))).toContain("Chat a1");
   });
 
   it("unfolds nothing without an active project", () => {
