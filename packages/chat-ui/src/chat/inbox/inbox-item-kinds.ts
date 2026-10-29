@@ -6,6 +6,7 @@ import {
   MessageSquareText,
   FileText,
   LayoutGrid,
+  ListChecks,
   Palette,
   Share2,
   UserCheck,
@@ -35,6 +36,7 @@ import { parseSkillChangePreview } from "../approvals/skill-change-preview";
 import type { TranslationContextValue, TranslationKey } from "../../shared/i18n";
 import type { InboxItemActions } from "./inbox-item-actions";
 import { NoticeBody, NoticeFoot, parseNoticePreview } from "./notice-item";
+import { WorkflowStepBody, parseWorkflowStepPreview } from "./workflow-step-item";
 import { FeedbackBody, feedbackAgentLabel, parseFeedbackPreview } from "./feedback-item";
 import {
   DataStoreReviewBody,
@@ -377,6 +379,29 @@ const dataStoreReview: InboxItemKind = {
   Foot: NoticeFoot
 };
 
+/**
+ * A Workflow step that waits for a person (`approval`): approved or rejected with one click,
+ * a comment optional. Nobody edits the run from here, so there is no request for changes.
+ */
+const workflowStep: InboxItemKind = {
+  kind: "workflow_step",
+  label: "inbox.kindWorkflowStep",
+  icon: ListChecks,
+  heading(item, t) {
+    const step = parseWorkflowStepPreview(item.preview);
+    return step
+      ? t("inbox.workflowStepHeading", { step: step.step.title, workflow: step.workflow.title })
+      : undefined;
+  },
+  subject: (item) => parseWorkflowStepPreview(item.preview)?.workflow.title,
+  rowDetail: (item) => parseWorkflowStepPreview(item.preview)?.step.title,
+  Body: WorkflowStepBody,
+  decisions: [
+    { decision: "reject", label: "operations.callDecline" },
+    { decision: "approve", label: "operations.callApprove" }
+  ]
+};
+
 /** A request to share an asset up the ladder ("Teilen mit…", SHARE-1) is accepted or declined. */
 const assetMoveDecisions: InboxDecisionEntries = [
   { decision: "reject", label: "inbox.moveDecline" },
@@ -412,6 +437,7 @@ export const inboxItemKinds: readonly InboxItemKind[] = [
   publishKind("form_page_publish", "inbox.kindFormPagePublish", Palette),
   publishKind("agent_publish", "inbox.kindAgentPublish", Bot),
   notice,
+  workflowStep,
   feedbackReview,
   dataStoreReview,
   ...assetMoveKinds
