@@ -34,7 +34,7 @@ export const personalApiKeys = defineTranslations({
       "The results of these calls are copied to the computer that holds the key.",
     "personalApiKeys.instanceLevel": "All workspaces",
     "personalApiKeys.instanceLevelHint":
-      "Lets the key run only the read-only check of the configured providers, as catalyst models check does. It works only while you hold this right yourself, and not on a key limited to a workspace.",
+      "Lets the key only read the instance: usage, audit events, background jobs, Operation Runs, Modules and infrastructure, and run the read-only check of the configured providers, as catalyst models check does. It changes nothing. It works only while you hold the same right yourself, and not on a key limited to a workspace. The key that catalyst setup creates never has it.",
     "personalApiKeys.workspace": "Limit to a workspace",
     "personalApiKeys.workspaceHint":
       "The key then reaches only what this workspace owns. Everywhere: wherever you hold the chosen rights.",
@@ -104,7 +104,7 @@ export const personalApiKeys = defineTranslations({
       "Die Ergebnisse dieser Aufrufe werden auf den Computer kopiert, auf dem der Schlüssel liegt.",
     "personalApiKeys.instanceLevel": "Alle Arbeitsbereiche",
     "personalApiKeys.instanceLevelHint":
-      "Erlaubt dem Schlüssel nur die lesende Prüfung der eingerichteten Anbieter, wie catalyst models check sie ausführt. Das wirkt nur, solange du dieses Recht selbst hast, und nicht bei einem Schlüssel, der auf einen Arbeitsbereich begrenzt ist.",
+      "Erlaubt dem Schlüssel nur, die Instanz zu lesen: Nutzung, Audit-Ereignisse, Hintergrundaufträge, Operation Runs, Module und Infrastruktur, und die lesende Prüfung der eingerichteten Anbieter auszuführen, wie catalyst models check sie ausführt. Er ändert nichts. Das wirkt nur, solange du das gleiche Recht selbst hast, und nicht bei einem Schlüssel, der auf einen Arbeitsbereich begrenzt ist. Der Schlüssel, den catalyst setup anlegt, hat es nie.",
     "personalApiKeys.workspace": "Auf einen Arbeitsbereich begrenzen",
     "personalApiKeys.workspaceHint":
       "Der Schlüssel erreicht dann nur, was diesem Arbeitsbereich gehört. Überall: überall, wo du die gewählten Berechtigungen hast.",

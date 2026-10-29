@@ -73,7 +73,7 @@ describe("api operation catalog", () => {
     expect(artifact).toEqual(JSON.parse(JSON.stringify(createOpenApiDocument())));
   });
 
-  it("declares personal-key scopes only for own calls and requests, the read-only infrastructure check and the use levels of rows and starts", () => {
+  it("declares personal-key scopes only for own calls and requests, the read-only infrastructure check, the read-only instance level and the use levels of rows and starts", () => {
     const alternatives = Object.values(apiOperations).flatMap((operation) =>
       "personalKeyScope" in operation ? [[operation.id, operation.personalKeyScope]] : []
     );
@@ -81,8 +81,17 @@ describe("api operation catalog", () => {
       ["approval_requests.list_mine", "me:read"],
       ["approval_requests.count_pending", "me:read"],
       ["approval_requests.withdraw", "config_assets:write"],
+      ["instance.modules.list", "instance:inspect"],
+      ["instance.infrastructure.get", "instance:inspect"],
       ["instance.infrastructure.check", "infrastructure:check"],
+      ["audit_events.list", "instance:inspect"],
+      ["audit_activities.list", "instance:inspect"],
+      ["usage.get_summary", "instance:inspect"],
+      ["usage.breakdown.get", "instance:inspect"],
+      ["instance.jobs.summary", "instance:inspect"],
+      ["instance.jobs.list", "instance:inspect"],
       ["operations.get_run", "me:read"],
+      ["operations.list_runs", "instance:inspect"],
       ["workflows.start", "workflow_runs:use"],
       ["data_stores.query", "data_store_rows:use"],
       ["data_stores.insert", "data_store_rows:use"],

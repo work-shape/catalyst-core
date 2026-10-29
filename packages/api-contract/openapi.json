@@ -20566,6 +20566,11 @@
             "sessionToken": [
               "governance:read"
             ]
+          },
+          {
+            "accessToken": [
+              "instance:inspect"
+            ]
           }
         ],
         "parameters": [],
@@ -20633,6 +20638,11 @@
           {
             "sessionToken": [
               "governance:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "instance:inspect"
             ]
           }
         ],
@@ -20898,6 +20908,11 @@
             "sessionToken": [
               "user_admin:read"
             ]
+          },
+          {
+            "accessToken": [
+              "instance:inspect"
+            ]
           }
         ],
         "parameters": [],
@@ -21022,6 +21037,11 @@
             "accessToken": [
               "governance:read"
             ]
+          },
+          {
+            "accessToken": [
+              "instance:inspect"
+            ]
           }
         ],
         "parameters": [
@@ -21135,6 +21155,11 @@
           {
             "accessToken": [
               "governance:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "instance:inspect"
             ]
           }
         ],
@@ -21331,6 +21356,11 @@
           {
             "accessToken": [
               "governance:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "instance:inspect"
             ]
           }
         ],
@@ -22115,6 +22145,11 @@
             "sessionToken": [
               "governance:read"
             ]
+          },
+          {
+            "accessToken": [
+              "instance:inspect"
+            ]
           }
         ],
         "parameters": [],
@@ -22171,6 +22206,11 @@
           {
             "sessionToken": [
               "governance:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "instance:inspect"
             ]
           }
         ],
@@ -29803,6 +29843,11 @@
           {
             "accessToken": [
               "governance:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "instance:inspect"
             ]
           }
         ],
@@ -45859,7 +45904,8 @@
           "data_store_rows:read",
           "data_store_rows:write",
           "data_store_rows:use",
-          "workflow_runs:use"
+          "workflow_runs:use",
+          "instance:inspect"
         ]
       },
       "CancelRunRequest": {
@@ -49877,7 +49923,8 @@
                 "data_store_rows:read",
                 "data_store_rows:write",
                 "data_store_rows:use",
-                "workflow_runs:use"
+                "workflow_runs:use",
+                "instance:inspect"
               ]
             }
           },

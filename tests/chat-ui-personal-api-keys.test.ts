@@ -148,6 +148,29 @@ describe("personal API key model", () => {
     expect(setupKeyActions(holder)).toEqual(["agent.read"]);
   });
 
+  it("offers usage.view, audit.view and system.view as the instance level, each only to a person who holds it, and never in the key `catalyst setup` asks for", () => {
+    const all: PlatformContext = {
+      ...platformContext(),
+      instanceActions: ["service_principals.manage", "usage.view", "audit.view", "system.view"],
+      authoringActions: ["agent.read", "agent.write"],
+      useActions: ["workflow.use"]
+    };
+    // Never the administration rights beside them.
+    expect(personalKeyInstanceOffer(all)).toEqual(["usage.view", "audit.view", "system.view"]);
+    expect(
+      personalKeyInstanceOffer({ ...all, instanceActions: ["audit.view", "jobs.retry"] })
+    ).toEqual(["audit.view"]);
+    expect(personalKeyInstanceOffer({ ...all, instanceActions: ["usage.view_users"] })).toEqual([]);
+    expect(setupKeyActions(all)).toEqual(["agent.read", "agent.write", "workflow.use"]);
+    for (const action of ["usage.view", "audit.view", "system.view"]) {
+      expect(setupKeyActions(all)).not.toContain(action);
+      // An instance right is no scope of a key limited to a workspace.
+      expect(buildPersonalKeyScopes([action], { workspaceId: "ws-tax", assetName: "" })).toEqual(
+        []
+      );
+    }
+  });
+
   it("sends system.view only on a key over the whole instance, never narrowed to a workspace or asset", () => {
     const everywhere = { workspaceId: "", assetName: "" };
     expect(buildPersonalKeyScopes(["agent.read", "system.view"], everywhere)).toEqual([
@@ -1017,7 +1040,7 @@ describe("You > API keys, for a person and an admin alike", () => {
       });
     try {
       expect(mounted.container.textContent).toContain(
-        "Lets the key run only the read-only check of the configured providers"
+        "Lets the key only read the instance: usage, audit events"
       );
       expect(
         scopeBox(mounted.container, "View the System pages").getAttribute("aria-checked")

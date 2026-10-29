@@ -26,13 +26,49 @@ interface NamedCommand {
   fromShape?: string;
   /** `--sql <statement>` stands for `--from` with `{"sql": "<statement>"}`. */
   sql?: boolean;
-  /** The flags that become the query of the call. */
-  queryFlags?: readonly QueryFlag[];
+  /** The flags that become the query of the call, each with the query field it fills. */
+  queryFlags?: Readonly<Partial<Record<QueryFlag, string>>>;
   requiredFlags?: readonly QueryFlag[];
+  /**
+   * Prints the one page asked for with its `nextCursor`, where the feed is too long to read to
+   * its end (audit events, jobs, Operation Runs). `--limit` sets its size, `--cursor` takes the
+   * next page.
+   */
+  onePage?: boolean;
 }
 
-const QUERY_FLAGS = ["table", "limit", "after"] as const;
-type QueryFlag = (typeof QUERY_FLAGS)[number];
+/** Every flag that fills a query. A command takes only the ones it names in `queryFlags`. */
+const QUERY_FLAG_OPTIONS = {
+  table: { type: "string" },
+  limit: { type: "string" },
+  after: { type: "string" },
+  cursor: { type: "string" },
+  kind: { type: "string" },
+  status: { type: "string" },
+  operation: { type: "string" },
+  effect: { type: "string" },
+  actor: { type: "string" },
+  origin: { type: "string" },
+  workspace: { type: "string" },
+  since: { type: "string" },
+  start: { type: "string" },
+  end: { type: "string" },
+  "group-by": { type: "string" },
+  agent: { type: "string" },
+  app: { type: "string" },
+  workflow: { type: "string" },
+  model: { type: "string" }
+} as const;
+type QueryFlag = keyof typeof QUERY_FLAG_OPTIONS;
+
+function isQueryFlag(flag: string): flag is QueryFlag {
+  return Object.hasOwn(QUERY_FLAG_OPTIONS, flag);
+}
+
+const QUERY_FLAGS = Object.keys(QUERY_FLAG_OPTIONS).filter(isQueryFlag);
+
+/** The page flags of the feeds that print one page. */
+const PAGE_FLAGS = { limit: "limit", cursor: "cursor" } as const;
 
 // Each face names an existing operation. Rights, policy and execution stay in the instance.
 const commands: Readonly<Record<string, NamedCommand>> = {
@@ -106,7 +142,7 @@ const commands: Readonly<Record<string, NamedCommand>> = {
     operation: apiOperations["data_stores.rows"],
     usage: "data-store rows <name> --table <table> [--limit <n>] [--after <cursor>]",
     param: "store",
-    queryFlags: QUERY_FLAGS,
+    queryFlags: { table: "table", limit: "limit", after: "after" },
     requiredFlags: ["table"]
   },
   "data-store query": {
@@ -135,6 +171,64 @@ const commands: Readonly<Record<string, NamedCommand>> = {
     fromShape:
       'Knowledge Base query input must be a JSON object: {"sql": "select ..."} or {"query": "<named query>", "parameters": {...}}.'
   },
+  // The instance level of a key (CLI-PARITY-6a): read-only, one command per read operation.
+  "usage show": { operation: apiOperations["usage.get_summary"], usage: "usage show" },
+  "usage breakdown": {
+    operation: apiOperations["usage.breakdown.get"],
+    usage:
+      "usage breakdown --start <YYYY-MM-DD> --end <YYYY-MM-DD> --group-by <dimension> [--workspace <id>] [--agent <name>] [--app <name>] [--workflow <name>] [--model <name>] [--origin <origin>]",
+    queryFlags: {
+      start: "from",
+      end: "to",
+      "group-by": "groupBy",
+      workspace: "workspace",
+      agent: "agent",
+      app: "app",
+      workflow: "workflow",
+      model: "model",
+      origin: "origin"
+    },
+    requiredFlags: ["start", "end", "group-by"]
+  },
+  "audit events": {
+    operation: apiOperations["audit_events.list"],
+    usage: "audit events [--limit <n>] [--cursor <cursor>]",
+    queryFlags: PAGE_FLAGS,
+    onePage: true
+  },
+  "audit activities": {
+    operation: apiOperations["audit_activities.list"],
+    usage: "audit activities"
+  },
+  "jobs summary": { operation: apiOperations["instance.jobs.summary"], usage: "jobs summary" },
+  "jobs list": {
+    operation: apiOperations["instance.jobs.list"],
+    usage:
+      "jobs list [--kind <kind>] [--status <status[,status]>] [--limit <n>] [--cursor <cursor>]",
+    queryFlags: { ...PAGE_FLAGS, kind: "kind", status: "status" },
+    onePage: true
+  },
+  "operation runs": {
+    operation: apiOperations["operations.list_runs"],
+    usage:
+      "operation runs [--operation <id>] [--effect reading|changing] [--status <status>] [--actor <id>] [--origin <kind>] [--workspace <id>] [--since <timestamp>] [--limit <n>] [--cursor <cursor>]",
+    queryFlags: {
+      ...PAGE_FLAGS,
+      operation: "operation",
+      effect: "effect",
+      status: "status",
+      actor: "actor",
+      origin: "origin",
+      workspace: "workspaceId",
+      since: "since"
+    },
+    onePage: true
+  },
+  "modules list": { operation: apiOperations["instance.modules.list"], usage: "modules list" },
+  "infrastructure show": {
+    operation: apiOperations["instance.infrastructure.get"],
+    usage: "infrastructure show"
+  },
   "limits show": { operation: apiOperations["usage.limits.get"], usage: "limits show" },
   "limits set": {
     operation: apiOperations["usage.limits.set"],
@@ -155,7 +249,10 @@ export function isNamedCommand(argv: readonly string[]): boolean {
 
 /** `keys` and `instance`: the words that only lead named operations, for their help. */
 export function isNamedNoun(noun: string | undefined): boolean {
-  return Object.keys(commands).some((command) => command.split(" ")[0] === noun);
+  // `operation` leads `operation show` of the asset commands too, which keep its bare help.
+  return (
+    noun !== "operation" && Object.keys(commands).some((command) => command.split(" ")[0] === noun)
+  );
 }
 
 class UsageError extends Error {}
@@ -178,9 +275,7 @@ export async function runNamedCommand(
           help: { type: "boolean", short: "h" },
           from: { type: "string" },
           sql: { type: "string" },
-          table: { type: "string" },
-          limit: { type: "string" },
-          after: { type: "string" }
+          ...QUERY_FLAG_OPTIONS
         },
         allowPositionals: true,
         strict: true
@@ -202,7 +297,7 @@ export async function runNamedCommand(
       (!command.sql && values.sql !== undefined) ||
       (values.sql !== undefined && values.from !== undefined) ||
       QUERY_FLAGS.some(
-        (flag) => values[flag] !== undefined && !command.queryFlags?.includes(flag)
+        (flag) => values[flag] !== undefined && !Object.hasOwn(command.queryFlags ?? {}, flag)
       ) ||
       (command.requiredFlags ?? []).some((flag) => !values[flag])
     ) {
@@ -234,19 +329,21 @@ export async function runNamedCommand(
     const query: Record<string, string> = {
       ...(command.optionalName && name !== undefined ? { app: name } : {}),
       ...Object.fromEntries(
-        (command.queryFlags ?? []).flatMap((flag) => {
-          const value = values[flag];
-          return value === undefined ? [] : [[flag, value] as const];
+        Object.entries(command.queryFlags ?? {}).flatMap(([flag, field]) => {
+          const value = isQueryFlag(flag) ? values[flag] : undefined;
+          return value === undefined ? [] : [[field, value] as const];
         })
       )
     };
     let result: unknown;
     const listField =
-      command.operation.response.kind === "page"
-        ? "items"
-        : name === undefined
-          ? command.listField
-          : undefined;
+      command.onePage === true
+        ? undefined
+        : command.operation.response.kind === "page"
+          ? "items"
+          : name === undefined
+            ? command.listField
+            : undefined;
     if (listField !== undefined) {
       const items: unknown[] = [];
       let cursor: string | undefined;
@@ -293,6 +390,16 @@ rows, query and insert and knowledge-base query need the key's use level (Verwen
 data_store.execute (rows, query), data_store.insert (insert) or knowledge_base.use (knowledge-base
 query), as well as data_store.read for rows and query. Each is limited to the workspace and
 asset the key's scope names. A refusal names what the key lacks.
+usage show and breakdown, audit events and activities, jobs summary and list, operation runs,
+modules list and infrastructure show read the instance and need the key's read-only instance
+level: the key names usage.view (usage), audit.view (audit), or system.view (jobs, operation
+runs, modules, infrastructure), and you hold the same right yourself at the moment of the call.
+The key catalyst setup creates does not carry it; tick it when you issue a key in Settings > API
+keys. audit events and activities show the instance's minimized governance events, never a
+payload; operation runs show hashes of inputs, never inputs. The three feeds (audit events,
+jobs list, operation runs) print one page, 50 entries unless --limit says otherwise (up to 200),
+with the nextCursor for --cursor. Reading another person's Operation Run by id (operation show)
+needs audit.view on the key.
 Lists read every page. instance workspaces shows Shared Workspaces for agent availability
 and needs config_assets:write and agent.write; it is not the membership list.
 Options: --instance <name-or-url>, --dir <working-copy-dir>, --json, --help

@@ -67,7 +67,12 @@ export const FIRST_PARTY_AUTH_SCOPES = [
   // What the use level of a personal key reaches of Workflows: starting a run by hand, with
   // `workflow.use` alone (CLI-PARITY-4 review). Only a personal key's call is asked for it, through
   // the operation's `personalKeyScope`.
-  "workflow_runs:use"
+  "workflow_runs:use",
+  // What the instance level of a personal key reads of the instance (CLI-PARITY-6a): usage,
+  // audit events, background jobs, Operation Runs, Modules and the last infrastructure check,
+  // each still asking the right of its own (`usage.view`, `audit.view`, `system.view`). Only
+  // a personal key's call is asked for it, through the operation's `personalKeyScope`.
+  "instance:inspect"
 ] as const;
 
 export type ChatSessionAuthScope = (typeof CHAT_SESSION_AUTH_SCOPES)[number];

@@ -4,6 +4,7 @@ import {
   WAITING_OPERATION_RUN_STATUSES,
   asCollaborationWorkspaceId,
   isAuthenticatedServicePrincipal,
+  personalApiKeyNamesAction,
   type ActorAccess,
   type AuthenticatedIdentity,
   type OperationRun
@@ -56,8 +57,13 @@ export function registerOperationRunRoutes(route: Route, options: ResolvedChatSe
       throw new AppError("NOT_FOUND", "Operation run not found");
     }
     if (!isCallerOf(run, identity)) {
-      // A personal key follows only its owner's calls, never another person's evidence.
-      if (!isAuthenticatedServicePrincipal(identity) && identity.keyScopes !== undefined) {
+      // A personal key follows only its owner's calls, never another person's evidence, unless
+      // it names `audit.view` (CLI-PARITY-6a): then the owner's right of the same name decides.
+      if (
+        !isAuthenticatedServicePrincipal(identity) &&
+        identity.keyScopes !== undefined &&
+        !personalApiKeyNamesAction(identity.keyScopes, "audit.view")
+      ) {
         throw new AppError("NOT_FOUND", "Operation run not found");
       }
       if (!(await waitsFor(run, identity, access))) {
