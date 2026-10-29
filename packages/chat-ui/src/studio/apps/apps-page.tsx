@@ -1,5 +1,5 @@
 import { CalendarDays, Calculator, LayoutGrid, MoreHorizontal, Plus } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AssetSummary, LocaleCode } from "@work-shape/catalyst-api-client";
 import {
   Avatar,
@@ -51,6 +51,7 @@ import {
   type AppRowAction,
   type AppState
 } from "./app-model";
+import { useAppRename } from "./app-rename";
 import { useAppsHost, type AppsWorkspace } from "./apps-host";
 
 /** Two Apps a business builds, as the chat's starters show what an agent does. */
@@ -116,6 +117,10 @@ export function AppsPage() {
   const details = useApp(workspace?.id ?? "", detailsOf?.name ?? "", detailsOf !== undefined);
   const detailActions = useAppActions(detailsOf?.name ?? "", detailsOf !== undefined);
   const detailSources = useAppDataSources(detailsOf?.name ?? "", detailsOf !== undefined);
+  // The name is renamed on its card; the focus goes back to the card's menu after.
+  const rename = useAppRename(workspace?.id, "title-sm", (app) =>
+    document.querySelector<HTMLElement>(`[data-app-menu="${CSS.escape(app)}"]`)?.focus()
+  );
   // The ages are counted from when the list last arrived.
   const rows = list.rows;
   const now = useMemo(() => new Date(), [rows]);
@@ -128,6 +133,9 @@ export function AppsPage() {
     switch (action) {
       case "details":
         setDetailsOf(app);
+        break;
+      case "rename":
+        rename.start(app.name, appDisplayName(app));
         break;
       case "copy_link":
         // The item copies by itself and answers in place.
@@ -162,6 +170,9 @@ export function AppsPage() {
         now={now}
         onOpenRoute={show}
         onAction={act}
+        {...(rename.app === undefined
+          ? {}
+          : { renaming: { app: rename.app, field: rename.field } })}
         // The agent opens in the dock, as a New button opens it. Where the dock creates nothing,
         // in a workspace whose conversations its members read, a new chat opens instead.
         onBuild={host.startNew ?? host.startChat}
@@ -201,12 +212,15 @@ export function AppsPageView({
   onOpenRoute,
   onAction,
   onBuild,
-  onNew
+  onNew,
+  renaming
 }: {
   workspace: AppsWorkspace;
   rights: AppRights;
   list: AppList;
   now: Date;
+  /** The App being renamed, and the field that stands in its name's place on its card. */
+  renaming?: { app: string; field: ReactNode };
   onOpenRoute(route: WorkspaceRoute): void;
   onAction(action: AppMenuAction, app: AssetSummary): void;
   /** Opens the agent with this text in its composer: offered to a reader who may build Apps. */
@@ -290,6 +304,7 @@ export function AppsPageView({
                       locale={locale}
                       onOpenRoute={onOpenRoute}
                       onAction={onAction}
+                      {...(renaming?.app === app.name ? { titleEditor: renaming.field } : {})}
                     />
                   </li>
                 ))}
@@ -324,6 +339,7 @@ export function AppsPageView({
 type AppMenuAction = Exclude<AppRowAction, "open" | "edit">;
 
 const MENU_ACTION_LABELS = {
+  rename: "apps.rename",
   details: "apps.details",
   copy_link: "apps.copyLink",
   delete: "apps.delete"
@@ -345,7 +361,8 @@ function AppCard({
   now,
   locale,
   onOpenRoute,
-  onAction
+  onAction,
+  titleEditor
 }: {
   app: AssetSummary;
   workspace: AppsWorkspace;
@@ -354,6 +371,8 @@ function AppCard({
   locale: LocaleCode;
   onOpenRoute(route: WorkspaceRoute): void;
   onAction(action: AppMenuAction, app: AssetSummary): void;
+  /** Stands in the name's place while the App is renamed. */
+  titleEditor?: ReactNode;
 }) {
   const { t } = useTranslation();
   const titleId = useId();
@@ -376,10 +395,17 @@ function AppCard({
       <CardHeader>
         <div className="flex min-w-0 items-center gap-3">
           <Avatar kind="app" name={name} />
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <CardTitle id={titleId} clamp className="min-w-0">
-              {name}
-            </CardTitle>
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            {titleEditor === undefined ? (
+              <CardTitle id={titleId} clamp className="min-w-0">
+                {name}
+              </CardTitle>
+            ) : (
+              // The field lies above the card's target, so a press in it never opens the App.
+              <CardReachable>
+                <div className="min-w-0 flex-1">{titleEditor}</div>
+              </CardReachable>
+            )}
             {/*
               Whoever uses Apps is shown the App: the number of its revision is a builder's.
               That nothing is published yet is said to everybody, since such a card opens
@@ -432,7 +458,11 @@ function AppCard({
             {menu.length > 0 ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <IconButton size="sm" label={t("apps.actionsOf", { name })}>
+                  <IconButton
+                    size="sm"
+                    label={t("apps.actionsOf", { name })}
+                    data-app-menu={app.name}
+                  >
                     <MoreHorizontal aria-hidden="true" />
                   </IconButton>
                 </DropdownMenuTrigger>

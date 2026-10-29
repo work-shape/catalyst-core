@@ -603,4 +603,75 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   ).toBeVisible();
   await expect(discard).toBeHidden();
   await expect(edit).not.toContainText(HELD_HOST);
+  // T34: a builder renames the App where its name stands, on its page and on its card. Only the
+  // name people read changes, at once for what is published: the address stays, and no draft
+  // waits to be published.
+  const newName = attempt === 0 ? "Revenue dashboard" : `Revenue dashboard ${attempt}`;
+  const view = page.getByTestId("app-view");
+  const nameField = page.getByRole("textbox", { name: "App name", exact: true });
+  const renameFromHead = async () => {
+    await view.getByRole("button", { name: "More actions" }).click();
+    await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
+    await expect(nameField).toBeFocused();
+  };
+  await page.goto(appPath);
+  await viewReady();
+  // Escape leaves the name as it was.
+  await renameFromHead();
+  await expect(nameField).toHaveValue(appName);
+  await page.keyboard.press("Escape");
+  await expect(nameField).toBeHidden();
+  await expect(view.getByRole("heading", { name: appName })).toBeVisible();
+  await renameFromHead();
+  await nameField.fill(newName);
+  if (shotsDir) {
+    await page.screenshot({
+      path: join(shotsDir, "app-rename-head-light-en-1440.png"),
+      animations: "disabled"
+    });
+  }
+  await nameField.press("Enter");
+  await expect(nameField).toBeHidden();
+  await expect(view.getByRole("heading", { name: newName })).toBeVisible();
+  await expect(view.getByRole("heading", { name: newName })).toBeFocused();
+  await expect(page).toHaveURL(new RegExp(`${appPath}$`, "u"));
+  // The draft has the same name, and nothing waits to be published.
+  await page.goto(draftPathOf(appPath));
+  await expect(edit.getByRole("heading", { name: newName })).toBeVisible();
+  await expect(edit).toContainText("Live: version 1 · since");
+  await expect(edit).not.toContainText("Draft: changed since");
+  // On its card: the menu's Rename puts the field in the name's place, Enter saves it, and the
+  // focus goes back to the card's menu.
+  await page.goto(appsPath);
+  const renamedCard = area.getByRole("listitem").filter({ hasText: newName });
+  await expect(
+    renamedCard.getByRole("link", { name: `Open ${newName}`, exact: true })
+  ).toHaveAttribute("href", appPath);
+  await renamedCard.getByRole("button", { name: `Actions for ${newName}` }).click();
+  await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
+  await expect(nameField).toBeFocused();
+  await expect(nameField).toHaveValue(newName);
+  await nameField.fill(appName);
+  if (shotsDir) {
+    await page.screenshot({
+      path: join(shotsDir, "apps-list-rename-light-en-1440.png"),
+      animations: "disabled"
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(nameField).toBeVisible();
+    await page.screenshot({
+      path: join(shotsDir, "apps-list-rename-light-en-390.png"),
+      animations: "disabled"
+    });
+    await page.setViewportSize({ width: 1440, height: 900 });
+  }
+  await nameField.press("Enter");
+  await expect(nameField).toBeHidden();
+  await expect(
+    area
+      .getByRole("listitem")
+      .filter({ hasText: appName })
+      .getByRole("link", { name: `Open ${appName}`, exact: true })
+  ).toHaveAttribute("href", appPath);
+  await expect(area.getByRole("button", { name: `Actions for ${appName}` })).toBeFocused();
 });

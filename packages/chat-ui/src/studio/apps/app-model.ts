@@ -115,7 +115,7 @@ export function appDraftRevision(app: Pick<AssetSummary, "revision" | "draftRevi
 }
 
 /** What a row of the Apps list offers, in the order of its menu. */
-export type AppRowAction = "open" | "edit" | "details" | "copy_link" | "delete";
+export type AppRowAction = "open" | "edit" | "rename" | "details" | "copy_link" | "delete";
 
 /**
  * The actions of one App for this reader. An action the reader may not take is absent. An App
@@ -131,6 +131,8 @@ export function appRowActions(
   return [
     ...(published ? (["open"] as const) : []),
     ...(rights.write && draftShown ? (["edit"] as const) : []),
+    // Renaming is editing: the name is the App's, not its draft's.
+    ...(rights.write ? (["rename"] as const) : []),
     ...(rights.read ? (["details"] as const) : []),
     ...(published ? (["copy_link"] as const) : []),
     ...(rights.delete ? (["delete"] as const) : [])

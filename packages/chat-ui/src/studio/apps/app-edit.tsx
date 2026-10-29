@@ -1,4 +1,4 @@
-import { History, Trash2 } from "lucide-react";
+import { History, PencilLine, Trash2 } from "lucide-react";
 import { useId, useState, type ReactNode } from "react";
 import type {
   Asset,
@@ -51,6 +51,7 @@ import { useAppEditWithAgent } from "./app-edit-with-agent";
 import { AppPreview, AppPreviewNotice } from "./app-preview";
 import { AskedPublishDialog, askToPublish, type PublishAsk } from "./app-publish-dialog";
 import { AppStoredDataFact } from "./app-publish-data";
+import { focusAppName, useAppRename } from "./app-rename";
 import { useAppsHost, type AppsWorkspace } from "./apps-host";
 import { RevisionsDrawer } from "./revisions-drawer";
 import { RefusalNotice } from "../refusal-notice";
@@ -119,6 +120,7 @@ export function AppEdit({ app }: { app: string }) {
   const [shown, setShown] = useState<AppPreviewResponse>();
   // The publish was sent and waits for an approver: the live revision stays until then.
   const [publishWaits, setPublishWaits] = useState(false);
+  const rename = useAppRename(workspace?.id, "title", focusAppName);
   // Each save of the draft, also the agent's from the dock, is another revision: the frame asks
   // for its address anew. The first read of the record is the revision the frame starts with.
   const draftNow = record.app ? appDraftRevision(record.app) : undefined;
@@ -241,6 +243,8 @@ export function AppEdit({ app }: { app: string }) {
           }
         }}
         onBack={backToList}
+        titleEditor={rename.field}
+        onRename={() => rename.start(app, name)}
         onPublish={
           asset && draft !== undefined
             ? () => {
@@ -446,7 +450,9 @@ export function AppEditFrame({
   onPublish,
   onDiscard,
   onRevisions,
-  onDelete
+  onDelete,
+  titleEditor,
+  onRename
 }: {
   name: string;
   /** What the App does, in one line after its name. */
@@ -483,6 +489,10 @@ export function AppEditFrame({
   onDiscard?: () => void;
   onRevisions?: () => void;
   onDelete?: () => void;
+  /** Stands in the name's place while the App is renamed. */
+  titleEditor?: ReactNode;
+  /** Renames the App in place. */
+  onRename?: () => void;
 }) {
   const { t } = useTranslation();
   const missingRightId = useId();
@@ -524,6 +534,7 @@ export function AppEditFrame({
         <>
           <AppHeader
             name={name}
+            titleEditor={titleEditor}
             description={description}
             editingLine={editWithAgent.editingLine}
             state={
@@ -587,6 +598,11 @@ export function AppEditFrame({
             menu={
               known ? (
                 <>
+                  {onRename ? (
+                    <DropdownMenuItem icon={<PencilLine aria-hidden="true" />} onSelect={onRename}>
+                      {t("apps.rename")}
+                    </DropdownMenuItem>
+                  ) : null}
                   {app === undefined ? null : <CopyIdItem id={app} />}
                   <DropdownMenuItem icon={<History aria-hidden="true" />} onSelect={onRevisions}>
                     {t("apps.revisions")}

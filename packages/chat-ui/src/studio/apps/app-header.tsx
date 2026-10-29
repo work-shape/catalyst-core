@@ -140,6 +140,7 @@ export function AppStateBadge({
  */
 export function AppHeader({
   name,
+  titleEditor,
   description,
   editingLine,
   state,
@@ -152,6 +153,8 @@ export function AppHeader({
   onBack
 }: {
   name: string;
+  /** Stands in the name's place while a person renames the App. */
+  titleEditor?: ReactNode;
   /** What the App does, in one line after its name. */
   description?: string;
   /** Other people currently editing this draft; remains readable at phone width. */
@@ -194,6 +197,7 @@ export function AppHeader({
           </PageHeaderBack>
         }
         title={name}
+        titleEditor={titleEditor}
         description={description}
         state={stateUnderHead ? undefined : state}
         secondaryActions={secondaryActions}
