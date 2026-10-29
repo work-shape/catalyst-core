@@ -215,6 +215,26 @@ function asChanged(asset: ConfigAssetRecord, change: DataHandoverPublish): Confi
   };
 }
 
+/** An asset the change makes, as it would be stored: no id or revision of its own yet. */
+function madeBy(
+  clientInstanceId: DataStoreRuntime["clientInstanceId"],
+  change: DataHandoverPublish
+): ConfigAssetRecord {
+  return {
+    id: `new:${change.kind}:${change.name}`,
+    clientInstanceId,
+    kind: change.kind,
+    name: change.name,
+    scope: { kind: "instance" },
+    status: "active",
+    activeRevisionId: "",
+    revision: 0,
+    config: change.config ?? null,
+    createdAt: "",
+    updatedAt: ""
+  };
+}
+
 /** One sha256 over who the change hands which source's data to, as the confirmation. */
 function confirmationOf(
   newly: ReadonlyMap<string, Set<string>>,
@@ -260,15 +280,20 @@ async function checkDataHandover(
   const { clientInstanceId, stores } = runtime;
   const assetOf = (kind: string, name: string) =>
     stores.configAssets.getConfigAsset({ clientInstanceId, kind, name });
-  // Each asset as it would be once the change is made.
+  // Each asset as it would be once the change is made. One the change makes is read as it
+  // would be made, and nothing of it is there before.
   const found = (
     await Promise.all(
       changes.map(async (change) => {
         const asset = await assetOf(change.kind, change.name);
-        return asset?.status === "active" ? [{ asset, change }] : [];
+        if (asset?.status === "active") return [{ asset, change, fresh: change.fresh === true }];
+        return change.config
+          ? [{ asset: madeBy(clientInstanceId, change), change, fresh: true }]
+          : [];
       })
     )
   ).flat();
+  const fresh = new Set(found.flatMap(({ asset, fresh }) => (fresh ? [asset.id] : [])));
   const candidates = found.map(({ asset, change }) => asChanged(asset, change));
   const availability = new Map(
     found.flatMap(({ asset, change }) =>
@@ -309,7 +334,9 @@ async function checkDataHandover(
     Math.max(apps.length, workflows.length, knowledgeBases.length, agents.length) >
     DATA_STORE_USED_BY_MAX_ASSETS;
   const active = (assets: readonly ConfigAssetRecord[]) =>
-    assets.slice(0, DATA_STORE_USED_BY_MAX_ASSETS).filter((asset) => asset.status === "active");
+    assets
+      .slice(0, DATA_STORE_USED_BY_MAX_ASSETS)
+      .filter((asset) => asset.status === "active" && !fresh.has(asset.id));
   const now: PublishedAssets = {
     apps: active(apps),
     workflows: active(workflows),

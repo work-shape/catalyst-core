@@ -32,6 +32,12 @@ export interface DataHandoverPublish {
   scope?: { kind: "instance" } | { kind: "workspace"; workspaceId: string };
   /** Of a Knowledge Base: the workspaces it is offered in afterwards. */
   availability?: AgentAvailability;
+  /**
+   * The asset is not live before the change: an agent made with it, or published for the first
+   * time. Nothing of it counts as before, so each source it adds is new. An asset that does not
+   * exist yet is fresh whatever this says.
+   */
+  fresh?: boolean;
 }
 
 /** One source of one store the change reaches, and who the change newly hands its data to. */
@@ -212,9 +218,54 @@ export function dataHandoverSubject(answer: DataHandoverAnswer): JsonObject | un
   return {
     [HANDOVER_SUBJECT_KEY]: {
       confirmation: answer.confirmation,
-      connections: [...connections.values()]
+      connections: [...connections.values()],
+      // What the approver is shown, as the caller was: each store and source by name, and how
+      // many people. The Inbox words it with the titles its reader may see.
+      pairs: dataHandoverGaps(answer).map((gap) => ({
+        store: { kind: gap.store.kind, name: gap.store.name },
+        connection: { name: gap.connection.name, assetId: gap.connection.assetId },
+        people: gap.newlyLacking
+      })),
+      ...(answer.truncated ? { truncated: true } : {})
     }
   };
+}
+
+/** One hand-over a held call's approval confirms, as its subject keeps it. */
+export interface DataHandoverSubjectPair {
+  store: { kind: string; name: string };
+  connection: { name: string; assetId: string };
+  people: number;
+}
+
+/** The hand-overs a held call's subject was filed with, or nothing where it hands none on. */
+export function dataHandoverSubjectPairs(
+  subject: JsonValue | undefined
+): { pairs: DataHandoverSubjectPair[]; truncated: boolean } | undefined {
+  const handover = isJsonObject(subject) ? subject[HANDOVER_SUBJECT_KEY] : undefined;
+  if (!isJsonObject(handover) || !Array.isArray(handover.pairs)) return undefined;
+  const pairs = handover.pairs.flatMap((pair): DataHandoverSubjectPair[] => {
+    if (!isJsonObject(pair)) return [];
+    const { store, connection, people } = pair;
+    if (
+      !isJsonObject(store) ||
+      typeof store.kind !== "string" ||
+      typeof store.name !== "string" ||
+      !isJsonObject(connection) ||
+      typeof connection.name !== "string" ||
+      typeof connection.assetId !== "string" ||
+      typeof people !== "number"
+    )
+      return [];
+    return [
+      {
+        store: { kind: store.kind, name: store.name },
+        connection: { name: connection.name, assetId: connection.assetId },
+        people
+      }
+    ];
+  });
+  return { pairs, truncated: handover.truncated === true };
 }
 
 /** The confirmation a held call's subject was filed with, or nothing. */
@@ -360,4 +411,56 @@ export function dataHandoverLines(
       })
     ]
   };
+}
+
+/**
+ * What the Inbox item of a held hand-over says to who decides it: the lines the caller was
+ * shown, each store and source by the title the reader may see, and that approving confirms it.
+ */
+export function dataHandoverApprovalLines(
+  handover: {
+    pairs: readonly {
+      store: { kind: string; title?: string };
+      connection: { title?: string };
+      people: number;
+    }[];
+    truncated: boolean;
+  },
+  locale: LocaleCode
+): string[] {
+  const de = locale === "de";
+  const quote = (name: string) => (de ? `„${name}“` : `“${name}”`);
+  const lines = handover.pairs.map(({ store, connection, people }) => {
+    const one = people === 1;
+    const read =
+      store.title !== undefined
+        ? quote(store.title)
+        : store.kind === "data_store"
+          ? de
+            ? "einen für dich verborgenen Datenspeicher"
+            : "a store hidden from you"
+          : de
+            ? "eine für dich verborgene Wissensbasis"
+            : "a Knowledge Base hidden from you";
+    const source =
+      connection.title !== undefined
+        ? quote(connection.title)
+        : de
+          ? "eine für dich verborgene Quelle"
+          : "a source hidden from you";
+    return de
+      ? `${people} ${one ? "Person, die" : "Personen, die"} ${read} danach ${one ? "liest, darf" : "lesen, dürfen"} ${source} nicht nutzen.`
+      : `${people} ${one ? "person who reads" : "people who read"} ${read} afterwards may not use ${source}.`;
+  });
+  return [
+    ...(handover.truncated
+      ? [
+          de
+            ? "Nicht alle veröffentlichten Assets konnten gelesen werden, deshalb ist nicht sicher, wer welche Daten erhält."
+            : "Not every published asset could be read, so who receives which data is not certain."
+        ]
+      : []),
+    ...lines,
+    de ? "Mit Freigeben bestätigst du die Weitergabe." : "Approving confirms the hand-over."
+  ];
 }

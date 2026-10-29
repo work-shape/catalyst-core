@@ -9,6 +9,7 @@ import {
   auditActorFromIdentity,
   parseConnectionOperationName,
   type AgentAvailability,
+  type DataHandoverPublish,
   type WorkspaceUseAssetKind,
   type ActorAccess,
   type OperationAuthorization,
@@ -295,4 +296,39 @@ export async function agentDependencyWarnings(
       ? `'${summary.displayName}' ist nicht überall verfügbar, wo dieser Agent angeboten wird. Prüfe die Abhängigkeiten vor dem Veröffentlichen.`
       : `'${summary.displayName}' is not available everywhere this agent is offered. Review its dependencies before publishing.`
   }));
+}
+
+/**
+ * The Knowledge Bases that the consent to make an agent's dependencies available offers in
+ * more workspaces, each with the availability it gets: as the widening check reads a Knowledge
+ * Base's availability change (DS-13c). Nothing without the agent's availability.
+ */
+export async function dependencyAvailabilityChanges(
+  options: Pick<AssetWorkflowOptions, "clientInstanceId" | "configAssets">,
+  config: unknown,
+  wanted: AgentAvailability | undefined
+): Promise<DataHandoverPublish[]> {
+  const parsed = agentConfigSchema.safeParse(config);
+  if (!wanted || !parsed.success) return [];
+  const { clientInstanceId } = options;
+  const store = options.configAssets.store;
+  const changes: DataHandoverPublish[] = [];
+  for (const name of new Set(parsed.data.knowledgeBases ?? [])) {
+    const asset = await store.getConfigAsset({ clientInstanceId, kind: "knowledge_base", name });
+    if (asset?.status !== "active") continue;
+    const current = (
+      await store.listAgentAvailability({
+        clientInstanceId,
+        kind: "knowledge_base",
+        agentName: name
+      })
+    ).get(name);
+    if (availabilityCovers(current, wanted)) continue;
+    changes.push({
+      kind: "knowledge_base",
+      name,
+      availability: unionAvailability(current, wanted)
+    });
+  }
+  return changes;
 }

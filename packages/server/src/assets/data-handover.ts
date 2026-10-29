@@ -27,14 +27,21 @@ import {
   type PolicyValue
 } from "@work-shape/catalyst-core";
 import type { AssetWorkflowOptions } from "../types";
-import { recordAssetEvent, recordCommitted } from "./asset-target";
+import { readDefinitionName } from "../asset-kinds/shared";
 import type { AssetCall } from "./asset-access";
+import { withGivenTools } from "./agent-drafts";
+import { dependencyAvailabilityChanges } from "./agent-dependency-availability";
+import type { AssetSyncInput } from "./asset-sync-refusals";
+import { toJsonObject } from "./asset-write-rules";
+
+const AGENT_KIND = "agent";
 
 // The widening check (DS-13c), on the server and inside each change that can widen who reads a
 // store's rows or add a source to it: a publish of an App (with the Workflows it makes live), a
 // Workflow, a Knowledge Base or an agent; a Knowledge Base's availability; a move to a wider
-// owner. The check itself is the stored-data module's (`DataHandover`); this is how a change is
-// held for it. A change that hands a source's data on waits in the Inbox for an approval that
+// owner; an agent made with its tools or given tools, and the Knowledge Bases an agent's consent
+// offers where it is offered. The check itself is the stored-data module's (`DataHandover`);
+// this is how a change is held for it. A change that hands a source's data on waits in the Inbox for an approval that
 // asks `connection.write` on each source of who decides it, a person; that approval is the
 // confirmation. A person in the interface who holds `connection.write` confirms it with the
 // change itself. A key, a service principal, an agent and an embedding host never confirm.
@@ -202,35 +209,30 @@ export class DataHandoverGate<I extends HandoverConfirmed> {
   }
 
   /**
-   * Records each hand-over a committed change made with a confirmation: how many people, the
-   * store and the source, and who confirmed it. Never who receives the data.
+   * The call with the hand-overs its change confirmed, which the change records in its own
+   * transaction (`recordHandover`): how many people, the store and the source, and who
+   * confirmed it. Never who receives the data.
    */
-  async record(
-    call: AssetCall,
+  confirming<C extends AssetCall>(
+    call: C,
     about: { kind: string; name: string; change: string },
     executed: { answer: DataHandoverAnswer; confirmed: HandoverConfirmedBy } | undefined
-  ): Promise<void> {
-    if (!executed) return;
+  ): C {
+    if (!executed) return call;
     const { answer, confirmed } = executed;
-    await recordCommitted(
-      this.options,
-      call,
-      dataHandoverGaps(answer).map(
-        (gap) => () =>
-          recordAssetEvent(call, "data_store.handover_confirmed", {
-            store: gap.store.name,
-            storeKind: gap.store.kind,
-            connection: gap.connection.name,
-            people: gap.newlyLacking,
-            kind: about.kind,
-            name: about.name,
-            change: about.change,
-            confirmedBy: confirmed.by,
-            ...(confirmed.by === "approver" ? { approverId: confirmed.approverId } : {}),
-            ...(answer.truncated ? { truncated: true } : {})
-          })
-      )
-    );
+    const handover = dataHandoverGaps(answer).map((gap): JsonObject => ({
+      store: gap.store.name,
+      storeKind: gap.store.kind,
+      connection: gap.connection.name,
+      people: gap.newlyLacking,
+      kind: about.kind,
+      name: about.name,
+      change: about.change,
+      confirmedBy: confirmed.by,
+      ...(confirmed.by === "approver" ? { approverId: confirmed.approverId } : {}),
+      ...(answer.truncated ? { truncated: true } : {})
+    }));
+    return handover.length === 0 ? call : { ...call, handover };
   }
 
   /** What the question before the change says of the check, in the reader's language. */
@@ -259,6 +261,8 @@ interface HandoverPublishInput extends HandoverConfirmed {
   revision: number;
   audience?: AppAudience;
   workflows?: readonly { name: string; revision: number }[] | undefined;
+  /** Of an agent: its publish offers the Knowledge Bases it uses where it is offered. */
+  makeDependenciesAvailable?: boolean | undefined;
 }
 
 /**
@@ -286,9 +290,27 @@ function appAvailabilityOf(
 /** The kinds whose revision a publish makes live from a stored revision. */
 const REVISION_KINDS: readonly string[] = ["app", WORKFLOW_ASSET_KIND, KNOWLEDGE_BASE_ASSET_KIND];
 
+/** The agent a change leaves, and the Knowledge Bases its consent offers in more workspaces. */
+async function agentChanges(
+  options: Pick<AssetWorkflowOptions, "clientInstanceId" | "configAssets">,
+  agent: { name: string; config: JsonObject; fresh: boolean },
+  wanted: AgentAvailability | undefined
+): Promise<DataHandoverPublish[]> {
+  return [
+    {
+      kind: AGENT_KIND,
+      name: agent.name,
+      config: agent.config,
+      ...(agent.fresh ? { fresh: true } : {})
+    },
+    ...(await dependencyAvailabilityChanges(options, agent.config, wanted))
+  ];
+}
+
 /**
  * The assets one publish makes live, as the check reads them: the revision of an App, a
  * Workflow or a Knowledge Base, each Workflow an App makes live with it, and an agent's draft.
+ * An agent that awaits its first publish was live for nobody: each of its sources is new.
  */
 function publishChanges(
   options: Pick<AssetWorkflowOptions, "clientInstanceId" | "configAssets">,
@@ -318,9 +340,20 @@ function publishChanges(
     };
   };
   return async (input, actor) => {
-    if (input.kind === "agent") {
+    if (input.kind === AGENT_KIND) {
       const config = await agentConfig(input);
-      return config ? [{ kind: input.kind, name: input.name, config }] : undefined;
+      if (!config) return undefined;
+      const fresh = await store.agentAwaitsFirstPublish({
+        clientInstanceId,
+        agentName: input.name
+      });
+      // The consent offers its Knowledge Bases where the agent is offered (`publishAgentDraft`).
+      const wanted = input.makeDependenciesAvailable
+        ? (await store.listAgentAvailability({ clientInstanceId, agentName: input.name })).get(
+            input.name
+          )
+        : undefined;
+      return agentChanges(options, { name: input.name, config, fresh }, wanted);
     }
     if (!REVISION_KINDS.includes(input.kind)) return undefined;
     const changes = await Promise.all([
@@ -333,27 +366,144 @@ function publishChanges(
   };
 }
 
-/** A Knowledge Base offered in other workspaces, as the check reads it. */
-export function availabilityChanges(): HandoverChanges<
+/** An availability as a call names it. */
+function availabilityOf(input: {
+  mode: AgentAvailability["mode"];
+  personalWorkspaces?: boolean;
+  collaborationWorkspaceIds?: readonly string[];
+}): AgentAvailability {
+  const selected = input.mode === "selected";
+  return {
+    mode: input.mode,
+    personalWorkspaces: selected && input.personalWorkspaces === true,
+    collaborationWorkspaceIds: selected
+      ? (input.collaborationWorkspaceIds ?? []).map(asCollaborationWorkspaceId)
+      : []
+  };
+}
+
+/**
+ * A Knowledge Base offered in other workspaces, as the check reads it, and the Knowledge Bases
+ * an agent's consent offers where the agent is offered (`makeDependenciesAvailable`).
+ */
+export function availabilityChanges(
+  options: Pick<AssetWorkflowOptions, "clientInstanceId" | "configAssets">
+): HandoverChanges<
   HandoverConfirmed & {
     kind: string;
     name: string;
     mode: AgentAvailability["mode"];
     personalWorkspaces?: boolean;
     collaborationWorkspaceIds?: string[];
+    makeDependenciesAvailable?: boolean;
   }
 > {
-  return (input) => {
-    if (input.kind !== KNOWLEDGE_BASE_ASSET_KIND) return Promise.resolve(undefined);
-    const selected = input.mode === "selected";
-    const availability: AgentAvailability = {
-      mode: input.mode,
-      personalWorkspaces: selected && input.personalWorkspaces === true,
-      collaborationWorkspaceIds: selected
-        ? (input.collaborationWorkspaceIds ?? []).map(asCollaborationWorkspaceId)
-        : []
-    };
-    return Promise.resolve([{ kind: input.kind, name: input.name, availability }]);
+  return async (input) => {
+    if (input.kind === KNOWLEDGE_BASE_ASSET_KIND)
+      return [{ kind: input.kind, name: input.name, availability: availabilityOf(input) }];
+    if (input.kind !== AGENT_KIND || !input.makeDependenciesAvailable) return undefined;
+    const agent = await options.configAssets.store.getConfigAsset({
+      clientInstanceId: options.clientInstanceId,
+      kind: AGENT_KIND,
+      name: input.name
+    });
+    if (agent?.status !== "active") return undefined;
+    return dependencyAvailabilityChanges(options, agent.config, availabilityOf(input));
+  };
+}
+
+/** Whether an agent of the name is live: a write of it is its draft then, not a new agent. */
+async function agentExists(
+  options: Pick<AssetWorkflowOptions, "clientInstanceId" | "configAssets">,
+  name: string
+): Promise<boolean> {
+  const asset = await options.configAssets.store.getConfigAsset({
+    clientInstanceId: options.clientInstanceId,
+    kind: AGENT_KIND,
+    name
+  });
+  return asset?.status === "active";
+}
+
+/**
+ * An agent a write makes (`assets.put`), as the check reads it: it is live at once with its
+ * tools, none of them there before, and its consent offers its Knowledge Bases where it starts.
+ * A write of an agent that exists is its draft, which the publish asks about.
+ */
+export function createChanges(
+  options: Pick<AssetWorkflowOptions, "clientInstanceId" | "configAssets">
+): HandoverChanges<
+  HandoverConfirmed & {
+    kind: string;
+    name: string;
+    config?: Record<string, unknown> | undefined;
+    makeDependenciesAvailable?: boolean | undefined;
+    expectedAvailability?:
+      | {
+          mode: AgentAvailability["mode"];
+          personalWorkspaces: boolean;
+          collaborationWorkspaceIds: string[];
+        }
+      | undefined;
+  }
+> {
+  return async (input) => {
+    if (input.kind !== AGENT_KIND || input.config === undefined) return undefined;
+    if (await agentExists(options, input.name)) return undefined;
+    return agentChanges(
+      options,
+      { name: input.name, config: toJsonObject(input.config), fresh: true },
+      input.makeDependenciesAvailable && input.expectedAvailability
+        ? availabilityOf(input.expectedAvailability)
+        : undefined
+    );
+  };
+}
+
+/** The agents a batch makes (`assets.sync`), each as `createChanges` reads one. */
+export function syncChanges(
+  options: Pick<AssetWorkflowOptions, "clientInstanceId" | "configAssets">
+): HandoverChanges<HandoverConfirmed & AssetSyncInput> {
+  return async (input) => {
+    const changes: DataHandoverPublish[] = [];
+    for (const item of input.items) {
+      if (item.type !== "put" || item.kind !== AGENT_KIND) continue;
+      const name = readDefinitionName(item.config);
+      if (!name || (await agentExists(options, name))) continue;
+      changes.push({ kind: AGENT_KIND, name, config: toJsonObject(item.config), fresh: true });
+    }
+    return changes.length > 0 ? changes : undefined;
+  };
+}
+
+/** The names of the agents a batch writes, as its hand-over's audit row names them. */
+export function syncedAgentNames(input: AssetSyncInput): string {
+  return input.items
+    .flatMap((item) =>
+      item.type === "put" && item.kind === AGENT_KIND ? [readDefinitionName(item.config) ?? ""] : []
+    )
+    .filter((name) => name !== "")
+    .join(", ");
+}
+
+/** The tools given to the live agent (`agents.give_tools`): what goes live, as the check reads it. */
+export function giveToolsChanges(
+  options: Pick<AssetWorkflowOptions, "clientInstanceId" | "configAssets">
+): HandoverChanges<HandoverConfirmed & { name: string; toolNames: readonly string[] }> {
+  return async (input) => {
+    const agent = await options.configAssets.store.getConfigAsset({
+      clientInstanceId: options.clientInstanceId,
+      kind: AGENT_KIND,
+      name: input.name
+    });
+    if (agent?.status !== "active" || !agent.config) return undefined;
+    return [
+      {
+        kind: AGENT_KIND,
+        name: input.name,
+        config: toJsonObject(withGivenTools(agent.config, input.toolNames))
+      }
+    ];
   };
 }
 

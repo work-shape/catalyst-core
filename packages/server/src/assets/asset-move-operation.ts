@@ -107,7 +107,8 @@ export async function moveAsset(
     await executeAssetMove(options, plan, {
       actor: moveActor(call.actor),
       correlationId: call.correlationId,
-      ...(call.runId ? { runId: call.runId } : {})
+      ...(call.runId ? { runId: call.runId } : {}),
+      ...(call.handover?.length ? { handover: call.handover } : {})
     });
     return { status: "moved", ...assetMoveView(plan, call.access) };
   }
@@ -159,7 +160,13 @@ export async function moveAsset(
       kind,
       // The name of the operation. The Inbox words the item in the reader's language.
       summary: "assets.move",
-      payload: assetMoveRequestPayload(plan, actor.id, input.acceptBreaks === true, locale)
+      payload: assetMoveRequestPayload(
+        plan,
+        actor.id,
+        input.acceptBreaks === true,
+        locale,
+        call.handover
+      )
     }
   );
   return { status: "requested", requestId: request.id, ...assetMoveView(plan, call.access) };
@@ -168,12 +175,14 @@ export async function moveAsset(
 /**
  * What a request holds: the ids, kinds and names of what moves, from where to where, and who
  * asked. No content. `subject` is what lists and the reviewer's narrower right are matched on.
+ * The hand-overs the move confirmed are recorded once it is made, not as it is filed (DS-13c).
  */
 function assetMoveRequestPayload(
   plan: AssetMovePlan,
   requesterId: string,
   acceptBreaks: boolean,
-  locale: LocaleCode
+  locale: LocaleCode,
+  handover: readonly JsonObject[] | undefined
 ): JsonObject {
   return {
     subject: {
@@ -195,7 +204,8 @@ function assetMoveRequestPayload(
     // Built here, never from the caller's input: who is asked again when it is decided.
     requesterId,
     acceptBreaks,
-    locale
+    locale,
+    ...(handover?.length ? { handover: [...handover] } : {})
   };
 }
 

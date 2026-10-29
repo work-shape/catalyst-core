@@ -271,6 +271,11 @@ export interface OperationCallPreview {
   confirmation?: true;
   /** The confirmation offers "Always allow": allowing can also stop it asking again (OP-6). */
   alwaysAllow?: true;
+  /**
+   * What a call that hands a source's data on says to who decides it (DS-13c), one line each,
+   * worded by the server with only the titles the reader may see.
+   */
+  handover?: string[];
 }
 
 /**
@@ -295,6 +300,9 @@ export function parseOperationCallPreview(preview: unknown): OperationCallPrevie
   const workspaceId = readText(preview.workspaceId);
   const expiresAt = readText(preview.expiresAt);
   const targetTitle = readText(preview.targetTitle);
+  const handover = Array.isArray(preview.handover)
+    ? preview.handover.filter((line): line is string => typeof line === "string")
+    : [];
   const asset = parseAsset(preview.asset);
   const review = parseReview(preview.review);
   const inputs = Array.isArray(preview.inputs)
@@ -319,6 +327,7 @@ export function parseOperationCallPreview(preview: unknown): OperationCallPrevie
       ? { alwaysAllow: true as const }
       : {}),
     ...(targetTitle ? { targetTitle } : {}),
+    ...(handover.length > 0 ? { handover } : {}),
     ...(asset ? { asset } : {}),
     ...(review ? { review } : {}),
     ...(workspaceId ? { workspaceId } : {}),

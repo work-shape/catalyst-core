@@ -5,6 +5,7 @@ import {
   type CollaborationWorkspaceId,
   type JsonObject
 } from "@work-shape/catalyst-core";
+import { agent } from "./support/access-instance";
 import { required } from "./support/assertions";
 import {
   clientInstanceId,
@@ -84,6 +85,28 @@ const importing = (name: string, connection: string, store = "findings"): JsonOb
     ]
   }
 });
+/** A Connection whose one call an agent may be given. */
+const connectionOf = (name: string, displayName: string): JsonObject => ({
+  name,
+  displayName,
+  connectorType: "http_api",
+  origin: "release",
+  enabled: true,
+  ownerPrincipalId: "system",
+  authScheme: "none",
+  credentialMode: "shared",
+  settings: { baseUrl: "https://example.com" },
+  operations: [
+    {
+      name: "list",
+      enabled: true,
+      effect: "reading",
+      exposure: ["agent"],
+      method: "GET",
+      path: "/list"
+    }
+  ]
+});
 const overview: JsonObject = {
   title: "Overview",
   manifest: {
@@ -131,9 +154,9 @@ describe("the widening check inside a change", () => {
           type: "upsert",
           kind: "connection",
           name: "exampledata",
-          config: { displayName: "Exampledata" }
+          config: connectionOf("exampledata", "Exampledata")
         },
-        { type: "upsert", kind: "connection", name: "crm", config: { displayName: "CRM" } }
+        { type: "upsert", kind: "connection", name: "crm", config: connectionOf("crm", "CRM") }
       ]
     });
 
@@ -455,5 +478,147 @@ describe("the widening check inside a change", () => {
     const confirmed = await offer(token);
     expect(confirmed.statusCode, confirmed.body).toBe(200);
     expect(await handedOver()).toHaveLength(1);
+  });
+
+  it("holds an agent made or given tools that add a source, and shows its approver what it hands on", async () => {
+    const world = await start(
+      true,
+      undefined,
+      developmentAuth,
+      undefined,
+      { apiAccess: true, connections: true },
+      true
+    );
+    const { stores } = world;
+    const { members, workspace, write, grant, handedOver, crm, exampledata } = await team(world);
+    await write("app", "overview", overview, { workspaceId: workspace.id });
+    await grant("keeper", "operations.approve");
+    await grant("keeper", "connection.write", crm);
+    const agentOf = async (name: string) =>
+      stores.configAssets.getConfigAsset({ clientInstanceId, kind: "agent", name });
+    const approve = async (requestId: string) => {
+      const response = await world.api.call("approval_requests.decide", {
+        params: { requestId },
+        payload: { decision: "approve" },
+        headers: as("keeper")
+      });
+      await getTestJobs(world.api).runDue();
+      return response;
+    };
+    const tools = ["data_store.findings.insert", "connection.crm.list"];
+    // The instance's own agent, which has no tools yet.
+    await stores.configAssets.applyConfigAssetMutations({
+      clientInstanceId,
+      baseRevisions: { "agent:helper": null },
+      baseDefaultAgentName: null,
+      mutations: [
+        { type: "upsert", kind: "agent", name: "helper", config: agent("helper") },
+        { type: "setDefaultAgent", agentName: "helper" }
+      ]
+    });
+
+    // An agent made with the store's row tools and a Connection's call at once is live at once:
+    // nothing of it was there before, so its source is new, and it waits for a person.
+    const made = await world.api.call("assets.put", {
+      params: { kind: "agent", name: "assistant" },
+      payload: {
+        expectedRevision: null,
+        config: agent("assistant", { toolNames: tools })
+      },
+      headers: as("user-1")
+    });
+    expect(made.statusCode, made.body).toBe(202);
+    const madeRequest = heldSchema.parse(made.json()).approvalRequestId;
+    expect(await agentOf("assistant")).toBeUndefined();
+
+    // Who decides it reads what the caller was told: how many people, the store only where
+    // they may see it, and the source they may change.
+    const opened = await world.api.call("approval_requests.get", {
+      params: { requestId: madeRequest },
+      headers: as("keeper")
+    });
+    expect(opened.statusCode, opened.body).toBe(200);
+    expect(opened.json()).toMatchObject({
+      preview: {
+        handover: [
+          "3 people who read a store hidden from you afterwards may not use “CRM”.",
+          "Approving confirms the hand-over."
+        ]
+      }
+    });
+    for (const member of members) expect(opened.body).not.toContain(member.id);
+
+    const approved = await approve(madeRequest);
+    expect(approved.statusCode, approved.body).toBe(200);
+    expect(await agentOf("assistant")).toMatchObject({ config: { toolNames: tools } });
+    const created = await handedOver();
+    expect(created).toHaveLength(1);
+    expect(JSON.stringify(created)).toContain('"change":"create"');
+    expect(JSON.stringify(created)).toContain('"confirmedBy":"approver"');
+
+    // Tools given to a live agent are a publish of them: one that adds a source waits as well.
+    await grant("keeper", "connection.write", exampledata);
+    const giving = ["data_store.findings.insert", "connection.exampledata.list"];
+    const helper = required(await agentOf("helper"));
+    const given = await world.api.call("agents.give_tools", {
+      params: { name: "helper" },
+      payload: { agentId: helper.id, toolNames: giving, expectedLiveRevision: helper.revision },
+      headers: as("user-1")
+    });
+    expect(given.statusCode, given.body).toBe(202);
+    expect(await agentOf("helper")).toMatchObject({ config: { toolNames: [] } });
+    const givenApproved = await approve(heldSchema.parse(given.json()).approvalRequestId);
+    expect(givenApproved.statusCode, givenApproved.body).toBe(200);
+    expect(await agentOf("helper")).toMatchObject({ config: { toolNames: giving } });
+    const both = await handedOver();
+    expect(both).toHaveLength(2);
+    expect(JSON.stringify(both)).toContain('"change":"give_tools"');
+    expect(JSON.stringify(both)).toContain('"connection":"exampledata"');
+
+    // An agent offered everywhere with the consent to offer what it uses offers its Knowledge
+    // Base on the store as well: a reader of another team reads the rows through it now, so it
+    // waits as the Knowledge Base's own availability does.
+    const other = await stores.workspaces.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Other",
+      creatorUserId: asUserId((await person(world, "reviewer", ["user"])).id)
+    });
+    expect(other.id).toBeTruthy();
+    await write(
+      "knowledge_base",
+      "guide",
+      { title: "Guide", backend: { dataStore: "findings" } },
+      {}
+    );
+    const saved = await stores.configAssets.applyConfigAssetMutations({
+      clientInstanceId,
+      baseRevisions: { "agent:berater": null },
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: "berater",
+          config: agent("berater", { knowledgeBases: ["guide"] })
+        }
+      ]
+    });
+    const offered = await world.api.call("assets.set_availability", {
+      params: { kind: "agent", name: "berater" },
+      payload: {
+        mode: "all",
+        makeDependenciesAvailable: true,
+        expectedRevision: required(saved.revisions["agent:berater"])
+      },
+      headers: as("user-1")
+    });
+    expect(offered.statusCode, offered.body).toBe(202);
+    heldSchema.parse(offered.json());
+    const guideOffered = await stores.configAssets.listAgentAvailability({
+      clientInstanceId,
+      kind: "knowledge_base",
+      agentName: "guide"
+    });
+    expect(guideOffered.get("guide")?.mode).not.toBe("all");
   });
 });

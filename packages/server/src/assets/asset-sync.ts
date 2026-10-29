@@ -24,7 +24,12 @@ import {
   type AssetSet,
   type AssetSetIssue
 } from "./asset-set";
-import { errorIssues, type AssetCall } from "./asset-access";
+import {
+  errorIssues,
+  recordHandover,
+  transactionalAssetCall,
+  type AssetCall
+} from "./asset-access";
 import {
   assertDeleteWithinLimits,
   assertUpsertWithinLimits,
@@ -444,8 +449,9 @@ async function applyBatch(options: AssetWorkflowOptions, call: AssetCall, checke
     (entry) => entry.item.type === "delete" && !entry.absent && entry.kind.withinWrite !== undefined
   );
   const followUps: AssetWriteFollowUp[] = [];
+  // A hand-over the batch's new agents confirmed is recorded with it (DS-13c).
   const writing =
-    removes.length === 0
+    removes.length === 0 && !call.handover?.length
       ? apply(options)
       : options.stores.transaction(async (stores) => {
           const result = await apply({
@@ -453,6 +459,9 @@ async function applyBatch(options: AssetWorkflowOptions, call: AssetCall, checke
             stores,
             configAssets: { ...options.configAssets, store: stores.configAssets }
           });
+          await recordHandover(
+            transactionalAssetCall(call, options.clientInstanceId, stores.audit)
+          );
           for (const entry of removes) {
             const followUp = await entry.kind.withinWrite?.({
               clientInstanceId: options.clientInstanceId,

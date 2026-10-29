@@ -6,7 +6,12 @@ import {
   type AgentProposal
 } from "@work-shape/catalyst-core";
 import type { AssetWorkflowOptions } from "../types";
-import { transactionalAssetCall, type AssetCall } from "./asset-access";
+import {
+  recordHandover,
+  transactionalAssetCall,
+  withoutHandover,
+  type AssetCall
+} from "./asset-access";
 import type { AssetTarget } from "./asset-target";
 import { makeAgentDependenciesAvailable } from "./agent-dependency-availability";
 import { authorizeInteractiveWrite } from "./asset-write-rules";
@@ -37,7 +42,9 @@ export async function publishAgentDraft(
     return write(within, called);
   };
   const offers = await firstOffering(options, target.asset);
-  if (!consent.makeDependenciesAvailable && offers === undefined) return publish(options, call);
+  // A hand-over the publish confirmed is recorded in its transaction (DS-13c).
+  if (!consent.makeDependenciesAvailable && offers === undefined && !call.handover?.length)
+    return publish(options, call);
   const { expectedAvailability } = consent;
   if (consent.makeDependenciesAvailable && expectedAvailability === undefined)
     throw new AppError(
@@ -74,8 +81,9 @@ export async function publishAgentDraft(
       await makeAgentDependenciesAvailable(within, called, draft.config, reviewed);
     }
     // The writer compares the live and draft revisions under the same lock again.
-    const written = await publish(within, called);
+    const written = await publish(within, withoutHandover(called));
     if (offers !== undefined) await offerInOwnWorkspace(within, called, target, offers);
+    await recordHandover(called);
     return written;
   });
 }
@@ -104,6 +112,7 @@ export async function publishFirstVersion(
     const called = transactionalAssetCall(call, options.clientInstanceId, stores.audit);
     // Version 1 as it was checked: a revision written meanwhile refuses the offering.
     await offerInOwnWorkspace(within, called, target, offers, revision);
+    await recordHandover(called);
   });
   return { revision: asset.revision };
 }

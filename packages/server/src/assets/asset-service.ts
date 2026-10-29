@@ -14,6 +14,7 @@ import { SkillDraftWorkflow } from "./skill-drafts";
 import { AssetDraftWorkflow } from "./asset-draft-service";
 import { readDefinitionName, type WorkflowAssetKind } from "../asset-kinds/shared";
 import { decide, deleteDecision, type AssetCall } from "./asset-access";
+import { committingHandover } from "./handover-commit";
 import {
   assetSyncPolicyTargets,
   authorizeAssetSync,
@@ -82,11 +83,16 @@ export class AssetWorkflow {
       giveTools: async (call, target, config, write) => {
         // A person's change of the live agent: the editing switch and its record, as a publish.
         await authorizeInteractiveWrite(options, call.actor, call, call.audit);
-        return this.upsert(call, target, config, {
-          expectedRevision: write.expectedRevision,
-          agentToolsGiven: write.toolNames,
-          audit: "config_asset.updated"
-        });
+        const give = (workflow: AssetWorkflow, called: AssetCall) =>
+          workflow.upsert(called, target, config, {
+            expectedRevision: write.expectedRevision,
+            agentToolsGiven: write.toolNames,
+            audit: "config_asset.updated"
+          });
+        // A hand-over the give confirmed is recorded in its transaction (DS-13c).
+        return committingHandover(options, call, (within, called) =>
+          give(within === options ? this : new AssetWorkflow(within), called)
+        );
       }
     });
     this.skillDrafts = new SkillDraftWorkflow(options, {

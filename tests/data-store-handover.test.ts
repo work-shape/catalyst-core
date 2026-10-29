@@ -616,7 +616,7 @@ describe("the widening check of a publish", () => {
       })
     );
     expect(dataHandoverSubject(blind)).toEqual({
-      handover: { confirmation: "b".repeat(64), connections: [] }
+      handover: { confirmation: "b".repeat(64), connections: [], pairs: [], truncated: true }
     });
     expect(dataHandoverRights(dataHandoverSubject(cut))).toEqual([
       {

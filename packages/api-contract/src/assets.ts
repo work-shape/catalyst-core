@@ -535,7 +535,7 @@ export const assetWriteResponseSchema = z.object({
  * service principal or an agent is refused, and a change without one that hands data on waits
  * in the Inbox for such a person's approval. A stale one is refused with the new confirmation.
  */
-const confirmHandoverSchema = z
+export const confirmHandoverSchema = z
   .string()
   .regex(/^[a-f0-9]{64}$/u)
   .optional();

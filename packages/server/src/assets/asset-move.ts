@@ -613,6 +613,8 @@ export interface AssetMoveWriteCall {
   correlationId: string;
   runId?: string;
   requestId?: string;
+  /** The hand-overs the move confirmed (DS-13c), recorded with it as it is made. */
+  handover?: readonly JsonObject[];
 }
 
 /**
@@ -658,6 +660,19 @@ export async function writeAssetMove(
       ...(call.runId ? { operationRunId: call.runId } : {})
     }
   });
+  for (const metadata of call.handover ?? [])
+    await stores.audit.appendAuditEvent({
+      clientInstanceId,
+      type: "data_store.handover_confirmed",
+      status: "success",
+      actor: call.actor,
+      correlationId: call.correlationId,
+      metadata: {
+        ...metadata,
+        ...(call.requestId ? { requestId: call.requestId } : {}),
+        ...(call.runId ? { operationRunId: call.runId } : {})
+      }
+    });
   return result;
 }
 

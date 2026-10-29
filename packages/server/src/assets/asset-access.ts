@@ -1,5 +1,6 @@
 import {
   asCollaborationWorkspaceId,
+  auditActorFromIdentity,
   INSTANCE_ASSET_SCOPE,
   liveRevisionId,
   type AccessResource,
@@ -13,6 +14,7 @@ import {
   type CollaborationWorkspaceId,
   type ConversationId,
   type ConfigAssetKey,
+  type JsonObject,
   type OperationAuthorization,
   type OperationCallRuntime,
   type OperationRunId,
@@ -46,6 +48,33 @@ export interface AssetCall {
   workspaceId?: CollaborationWorkspaceId;
   /** The language the request names, where a person's request made the call. */
   runtime?: Pick<OperationCallRuntime, "locale">;
+  /**
+   * The hand-overs the change confirmed (DS-13c), as the metadata of their
+   * `data_store.handover_confirmed` rows: the transaction that makes the change records them
+   * with it (`recordHandover`), so a change never commits without them.
+   */
+  handover?: readonly JsonObject[];
+}
+
+/**
+ * Records the hand-overs of the call through `called`, the call of the transaction that makes
+ * the change: they commit or roll back with it.
+ */
+export async function recordHandover(called: AssetCall): Promise<void> {
+  for (const metadata of called.handover ?? [])
+    await called.audit.record({
+      type: "data_store.handover_confirmed",
+      status: "success",
+      actor: auditActorFromIdentity(called.actor),
+      correlationId: called.correlationId,
+      metadata
+    });
+}
+
+/** The call without the hand-overs it confirmed: for a write that is not the change itself. */
+export function withoutHandover(call: AssetCall): AssetCall {
+  const { handover: _handover, ...rest } = call;
+  return rest;
 }
 
 /** Mutation events inside an asset transaction commit with the state they describe. */
