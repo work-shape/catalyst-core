@@ -5,7 +5,7 @@ export const build = defineTranslations({
   en: {
     "build.instructionsLine": "instructions, line {line}",
     "build.refusedAgentTools":
-      "Nothing was saved because the agent refers to tools unavailable here. Ask an administrator to check its instructions and the tools enabled on this instance.",
+      "Nothing was saved because the agent refers to tools unavailable here. Ask an administrator to check its instructions and which tools are enabled here.",
     "build.refusedAgentTool": "Agent ‘{agent}’: tool ‘{tool}’ is unavailable ({location}).",
     "build.examples": "Examples to start with",
     "build.changeCount": "{count} change",
@@ -200,7 +200,7 @@ export const build = defineTranslations({
   de: {
     "build.instructionsLine": "Anweisungen, Zeile {line}",
     "build.refusedAgentTools":
-      "Es wurde nichts gespeichert, weil der Agent hier nicht verfügbare Tools nennt. Bitte lass einen Administrator seine Anweisungen und die auf dieser Instanz aktivierten Tools prüfen.",
+      "Es wurde nichts gespeichert, weil der Agent hier nicht verfügbare Tools nennt. Bitte lass einen Administrator seine Anweisungen und die hier aktivierten Tools prüfen.",
     "build.refusedAgentTool": "Agent „{agent}“: Tool „{tool}“ ist nicht verfügbar ({location}).",
     "build.examples": "Beispiele für den Einstieg",
     "build.changeCount": "{count} Änderung",
