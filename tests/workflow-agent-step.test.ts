@@ -43,6 +43,8 @@ const outputSchema = {
   additionalProperties: false
 };
 const changed: string[] = [];
+/** The calls a day the Workflow's unattended bucket holds when a person's safeguard is 1. */
+const LIMITED_CALLS = 10;
 
 type Mode =
   | "test"
@@ -55,7 +57,9 @@ type Mode =
   | "confirm"
   | "approval"
   | "workflow"
-  | "test_confirm";
+  | "test_confirm"
+  /** The agent calls a tool, and the usage safeguard refuses the model call that follows. */
+  | "limit";
 interface FixtureOptions {
   /** Exercises EW-TEXT through the input of a Child Agent Run. */
   composedInput?: boolean;
@@ -94,7 +98,10 @@ async function fixture(
         modelContentText(message.content).includes("Repair the rejected answer")
     );
     const hasToolResult = request.messages.some((message) => message.role === "tool");
+    // A run no person started shares the bucket of 10 times a person's calls (limits spec 3.1):
+    // the agent keeps calling its tool until that bucket is spent.
     const call =
+      (mode === "limit" && requests.length <= LIMITED_CALLS) ||
       ((draft || mode === "confirm" || mode === "approval") && !hasToolResult && !repair) ||
       (mode === "repair_tool" && repair);
     return {
@@ -191,8 +198,15 @@ async function fixture(
     ]
   };
   config.infrastructure.models = { local: { provider: "workflow-scripted", model: "local" } };
+  // One model call a day a person: the calls of a run no person started share 10 of them.
+  if (mode === "limit") {
+    config.usage = {
+      ...config.usage,
+      safeguards: { ...config.usage.safeguards, modelCallsPerDay: 1 }
+    };
+  }
   const policies: CentralPolicySetting[] =
-    mode === "test" || mode === "workflow"
+    mode === "test" || mode === "workflow" || mode === "limit"
       ? [{ operation: calledToolName, value: "allow" }]
       : mode === "approval"
         ? [{ operation: toolName, value: "approval" }]
@@ -1041,6 +1055,26 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
     expect(step.error).toMatchObject({ code: "confirmation_unattended", operation: toolName });
     expect(step.error?.message).toContain(toolName);
     expect(changed).toEqual([]);
+  });
+
+  // Fails without the change: a run whose model call a usage limit refused ended `failed`, like
+  // a fault of the workflow, and said nothing of the limit (limits spec 3.1, LU-5).
+  it("ends the run as limit_reached when a usage limit refuses the agent's model call", async () => {
+    const f = await fixture("limit");
+    const step = await f.ended("limit_reached");
+    expect(step.status).toBe("failed");
+    expect(step.error).toMatchObject({
+      code: "MODEL_USAGE_LIMIT_REACHED",
+      usageLimit: { period: "day", metric: "modelCallCount" }
+    });
+    const run = required(
+      await f.app.stores.workflowRuns.readRun({ clientInstanceId: f.clientInstanceId, id: f.runId })
+    );
+    expect(run.status).toBe("limit_reached");
+    expect(run.error).toMatchObject({
+      code: "MODEL_USAGE_LIMIT_REACHED",
+      usageLimit: { period: "day", metric: "modelCallCount" }
+    });
   });
 
   it("fails a draft test's confirm call as the published run would", async () => {

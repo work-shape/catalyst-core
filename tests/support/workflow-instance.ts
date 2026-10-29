@@ -76,7 +76,8 @@ export const runSchema = z.object({
       action: z.string().optional(),
       connection: z.string().optional(),
       connectionTitle: z.string().optional(),
-      stepRunId: z.string().optional()
+      stepRunId: z.string().optional(),
+      usageLimit: z.object({ period: z.string(), metric: z.string(), scope: z.string() }).optional()
     })
     .optional(),
   outputPreview: z.object({ text: z.string(), truncated: z.boolean() }).optional(),
@@ -118,7 +119,10 @@ export const stepRunsSchema = z.object({
           message: z.string(),
           action: z.string().optional(),
           connection: z.string().optional(),
-          connectionTitle: z.string().optional()
+          connectionTitle: z.string().optional(),
+          usageLimit: z
+            .object({ period: z.string(), metric: z.string(), scope: z.string() })
+            .optional()
         })
         .optional(),
       inputPreview: z.object({ text: z.string(), truncated: z.boolean() }).optional(),

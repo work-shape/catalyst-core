@@ -222,6 +222,35 @@ describe("usage breakdown", () => {
     ]);
   });
 
+  // Fails without LU-5: a model call made inside an operation a Workflow step ran, such as a
+  // search that embeds its query, carried no Workflow, so its cost stood under "no Workflow".
+  it("names the Workflow of a model call that an operation step made", async () => {
+    const clientInstanceId = db.clientInstance("opstep");
+    const workflowRunId = `wfrun_${randomUUID()}`;
+    const operationRunId = `oprun_${randomUUID()}`;
+    await db.sql`
+      insert into workflow_runs (id, client_instance_id, workflow, definition_revision_id, mode,
+        trigger, status, definition, input, principal_id, principal_name, principal_label,
+        started_by, deadline_at, correlation_id, created_at, depth, root_run_id)
+      values (${workflowRunId}, ${clientInstanceId}, 'nightly-sync', 'rev', 'live', 'schedule',
+        'done', '{}', '{}', 'sp', 'sp', 'sp', '{}', now(), 'c', now(), 0, ${workflowRunId})`;
+    await db.sql`
+      insert into operation_runs (id, client_instance_id, operation, effect, actor_kind, actor_id,
+        actor, origin_kind, origin, input_hash, status, correlation_id, created_at, updated_at)
+      values (${operationRunId}, ${clientInstanceId}, 'knowledge.search', 'reading', 'service_principal',
+        'sp', '{"kind": "service", "id": "sp", "label": "Workflow"}', 'workflow',
+        ${db.sql.json({ kind: "workflow", workflowRunId })},
+        'hash', 'done', 'corr', now(), now())`;
+    await record(clientInstanceId, agentCall("searcher", undefined, undefined, { operationRunId }));
+
+    expect(
+      (await breakdown(clientInstanceId, "workflow")).map((row) => [row.key, row.modelCallCount])
+    ).toEqual([["nightly-sync", 1]]);
+    expect(
+      (await breakdown(clientInstanceId, "origin")).map((row) => [row.key, row.modelCallCount])
+    ).toEqual([["workflow", 1]]);
+  });
+
   it("sums to the same total by every dimension (check 13)", async () => {
     const { clientInstanceId } = await arrange("totals");
     const days = await breakdown(clientInstanceId, "day");

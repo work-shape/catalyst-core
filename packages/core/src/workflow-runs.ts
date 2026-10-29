@@ -1,3 +1,4 @@
+import type { ModelUsageRefusal } from "./errors";
 import type { WorkflowDatasetReference } from "./workflows";
 import type { WorkflowRunDataset } from "./workflow-datasets";
 import {
@@ -75,6 +76,11 @@ export interface WorkflowRunError {
   operation?: string;
   /** On a run: the step run it ended at. */
   stepRunId?: WorkflowStepRunId;
+  /**
+   * On `MODEL_USAGE_LIMIT_REACHED`: which usage limit refused a model call of the run. Never its
+   * counts.
+   */
+  usageLimit?: ModelUsageRefusal;
 }
 
 /**

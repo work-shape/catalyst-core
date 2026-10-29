@@ -1,5 +1,8 @@
 import {
   APP_ERROR_STATUS_CODES,
+  MODEL_USAGE_LIMIT_METRICS,
+  MODEL_USAGE_LIMIT_PERIODS,
+  MODEL_USAGE_LIMIT_SCOPES,
   type AppErrorCode,
   type ModelUsageRefusal
 } from "@work-shape/catalyst-asset-schemas";
@@ -53,6 +56,29 @@ export class ModelUsageLimitReachedError extends AppError {
     super("FORBIDDEN", message, { reason: MODEL_USAGE_LIMIT_REACHED_CODE, ...refusal });
     this.refusal = refusal;
   }
+}
+
+/**
+ * The limit a refusal names, read from the details of an error that crossed a boundary: nothing
+ * unless they carry the reason of a usage limit and all three parts of it. A value this release
+ * does not know leaves it out, so the reader says that a limit was reached without naming it.
+ */
+export function modelUsageRefusalOf(details: unknown): ModelUsageRefusal | undefined {
+  if (typeof details !== "object" || details === null) return undefined;
+  const { reason, period, metric, scope } = Object.fromEntries(Object.entries(details));
+  const known = <Value extends string>(values: readonly Value[], value: unknown) =>
+    values.find((candidate) => candidate === value);
+  const parts = {
+    period: known(MODEL_USAGE_LIMIT_PERIODS, period),
+    metric: known(MODEL_USAGE_LIMIT_METRICS, metric),
+    scope: known(MODEL_USAGE_LIMIT_SCOPES, scope)
+  };
+  return reason === MODEL_USAGE_LIMIT_REACHED_CODE &&
+    parts.period !== undefined &&
+    parts.metric !== undefined &&
+    parts.scope !== undefined
+    ? { period: parts.period, metric: parts.metric, scope: parts.scope }
+    : undefined;
 }
 
 export function isModelUsageLimitReached(error: unknown): error is ModelUsageLimitReachedError {

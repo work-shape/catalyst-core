@@ -1,6 +1,9 @@
 import { WORKFLOW_KINDS } from "@work-shape/catalyst-asset-schemas";
 import {
   AGENT_RUN_STATUSES,
+  MODEL_USAGE_LIMIT_METRICS,
+  MODEL_USAGE_LIMIT_PERIODS,
+  MODEL_USAGE_LIMIT_SCOPES,
   OPERATION_EFFECTS,
   OPERATION_TARGETS,
   PRINCIPAL_HOLDER_KINDS,
@@ -59,7 +62,20 @@ const workflowRunErrorSchema = z.object({
   /** On `confirmation_unattended`: the operation an agent step called that needed one. */
   operation: z.string().optional(),
   /** On a run: the step run it ended at. */
-  stepRunId: z.string().optional()
+  stepRunId: z.string().optional(),
+  /**
+   * On `MODEL_USAGE_LIMIT_REACHED`: the usage limit that refused a model call of the run, by its
+   * window, what it counts and whose counter it is. A value this contract does not know is left
+   * out, so the reader says that a limit was reached without naming it.
+   */
+  usageLimit: z
+    .object({
+      period: z.enum(MODEL_USAGE_LIMIT_PERIODS),
+      metric: z.enum(MODEL_USAGE_LIMIT_METRICS),
+      scope: z.enum(MODEL_USAGE_LIMIT_SCOPES)
+    })
+    .optional()
+    .catch(undefined)
 });
 
 const workflowOutputPreviewSchema = z.object({

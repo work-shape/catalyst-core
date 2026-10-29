@@ -1,7 +1,13 @@
-import type { AppWorkflowRefusal, DataStoreRefusal } from "@work-shape/catalyst-core";
+import {
+  MODEL_USAGE_LIMIT_REACHED_CODE,
+  modelUsageRefusalOf,
+  type AppWorkflowRefusal,
+  type DataStoreRefusal
+} from "@work-shape/catalyst-core";
 import { knownActionLabel } from "../../admin/access/right-words";
 import type { TranslationContextValue, TranslationKey } from "../i18n";
 import type { WorkspaceRoute } from "../routes";
+import { usageLimitWords } from "./usage-limit-words";
 
 // REFUSE-1 (apps-and-pages.md, Going live without getting lost): the interface says its own
 // sentence for a refusal it knows by `details.reason`. The instance keeps its English sentence
@@ -298,6 +304,16 @@ function referenceSentence(
  */
 const REFUSALS: Readonly<Record<string, RefusalRow>> = {
   ...DATA_STORE_ROWS,
+  // A call that needs a model while a usage limit holds (LU-5). A limit this release cannot
+  // name is still told: only that one was reached.
+  [MODEL_USAGE_LIMIT_REACHED_CODE]: {
+    sentence: (details, t) => {
+      const limit = modelUsageRefusalOf(details);
+      return limit
+        ? { key: "refusals.usageLimitNamed", values: usageLimitWords(limit, t) }
+        : { key: "refusals.usageLimitReached" };
+    }
+  },
   data_store_not_ready: { sentence: plain("refusals.dataStoreNotReady") },
   data_store_key_reused: { sentence: plain("refusals.dataStoreKeyReused") },
   rows_too_large: { sentence: plain("refusals.rowsTooLarge") },

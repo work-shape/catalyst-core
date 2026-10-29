@@ -101,6 +101,10 @@ export const refusals = defineTranslations({
     "refusals.moduleOff": "A part of the platform this needs is switched off.",
     "refusals.rightMissing": "You need the right “{right}” for this.",
     "refusals.rightDenied": "The right “{right}” is denied to you here.",
+    "refusals.usageLimitReached":
+      "A usage limit was reached, so this could not run. It works again once the limit resets or an admin for all workspaces raises it.",
+    "refusals.usageLimitNamed":
+      "The {period} limit on {metric} was reached. It counts {scope} and resets {reset}. An admin for all workspaces can raise it.",
     "refusals.openDataStore": "Open data store",
     "refusals.openWorkflow": "Open Workflow",
     "refusals.openApp": "Open app"
@@ -206,6 +210,10 @@ export const refusals = defineTranslations({
     "refusals.moduleOff": "Ein Teil der Plattform, den das braucht, ist ausgeschaltet.",
     "refusals.rightMissing": "Dafür brauchst du das Recht „{right}“.",
     "refusals.rightDenied": "Das Recht „{right}“ ist dir hier verwehrt.",
+    "refusals.usageLimitReached":
+      "Eine Nutzungsgrenze wurde erreicht, deshalb konnte das nicht laufen. Es geht wieder, sobald die Grenze zurückgesetzt oder von einem Admin für alle Arbeitsbereiche erhöht wird.",
+    "refusals.usageLimitNamed":
+      "Die {period} Grenze für {metric} wurde erreicht. Sie zählt {scope} und wird {reset} zurückgesetzt. Ein Admin für alle Arbeitsbereiche kann sie erhöhen.",
     "refusals.openDataStore": "Datenspeicher öffnen",
     "refusals.openWorkflow": "Workflow öffnen",
     "refusals.openApp": "App öffnen"

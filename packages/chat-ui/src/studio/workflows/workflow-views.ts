@@ -1,5 +1,6 @@
 import {
   NOTIFY_CHANNELS,
+  type ModelUsageRefusal,
   type WorkflowKind,
   OPERATION_EFFECTS,
   type OperationSourceKind,
@@ -368,6 +369,8 @@ export type WorkflowFailureReason =
   | "loopEntry"
   | "stepLimit"
   | "durationLimit"
+  /** A usage limit refused a model call of the run. It is no fault of the workflow. */
+  | "usageLimit"
   /** A `workflow` step's run key is held by a run in its own call chain. */
   | "runKeyCycle"
   /**
@@ -396,6 +399,8 @@ export interface WorkflowFailure {
   workflow?: string;
   /** On a confirmation an agent step could not get: the operation that needed it. */
   operation?: string;
+  /** On `usageLimit`: which limit it was, where the instance names it. */
+  usageLimit?: ModelUsageRefusal;
 }
 
 /** The start of what a run or a step returned, as JSON. */
