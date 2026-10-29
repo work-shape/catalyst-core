@@ -79,6 +79,8 @@ interface UserAdministrationPanelProps {
   onSendInvitation?(userId: string): Promise<unknown>;
   /** The effective rights of one person, shown read-only on the person's page. */
   userRights?(userId: string): ReactNode;
+  /** A deactivated person's scheduled prompts, to hand over or delete; shown on their page. */
+  ownedScheduledStarts?(user: AdministeredUser): ReactNode;
 }
 
 export function UserAdministrationPanel({
@@ -97,7 +99,8 @@ export function UserAdministrationPanel({
   viewerId,
   onResetTwoFactor,
   onSendInvitation,
-  userRights
+  userRights,
+  ownedScheduledStarts
 }: UserAdministrationPanelProps) {
   const [selectedUserId, setSelectedUserId] = useState<string | undefined>();
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(() => new Set());
@@ -140,6 +143,9 @@ export function UserAdministrationPanel({
         onResetTwoFactor={selectedUser.id === viewerId ? undefined : onResetTwoFactor}
         onSendInvitation={onSendInvitation}
         rights={userRights?.(selectedUser.id)}
+        scheduledStarts={
+          selectedUser.status === "disabled" ? ownedScheduledStarts?.(selectedUser) : undefined
+        }
       />
     );
   }

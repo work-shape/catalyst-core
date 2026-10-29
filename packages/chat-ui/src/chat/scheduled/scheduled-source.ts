@@ -33,6 +33,14 @@ export interface ScheduledStartsSource {
   setState(scheduledStartId: string, state: ScheduledStart["state"]): Promise<ScheduledStart>;
   runNow(scheduledStartId: string): Promise<void>;
   remove(scheduledStartId: string): Promise<void>;
+  /** An instance admin's read of a deactivated person's starts, in every workspace. */
+  listOwnedBy(
+    ownerUserId: string,
+    paging: ScheduledPaging,
+    signal: AbortSignal
+  ): Promise<ScheduledPage<ScheduledStart>>;
+  /** Gives a deactivated person's start to another person, paused. */
+  handover(scheduledStartId: string, ownerUserId: string): Promise<ScheduledStart>;
 }
 
 /** A change of one's own scheduled start never waits for somebody else's approval. */
@@ -88,6 +96,21 @@ export function createScheduledStartsSource(client: ApiClient): ScheduledStartsS
     },
     remove: async (scheduledStartId) => {
       completedOutput(await client.scheduled_starts.delete({ params: { scheduledStartId } }), HELD);
-    }
+    },
+    listOwnedBy: async (ownerUserId, paging, signal) => {
+      const page = await client.scheduled_starts.list({
+        query: { ownerUserId, ...withCursor(paging) },
+        signal
+      });
+      return { items: page.items, ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) };
+    },
+    handover: async (scheduledStartId, ownerUserId) =>
+      completedOutput(
+        await client.scheduled_starts.handover({
+          params: { scheduledStartId },
+          body: { ownerUserId }
+        }),
+        HELD
+      )
   };
 }

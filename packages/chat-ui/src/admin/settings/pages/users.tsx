@@ -2,6 +2,7 @@ import { useTranslation } from "../../../shared/i18n";
 import { useSuperadminUserMutations } from "../../../shared/api/workspace-mutations";
 import { useWorkspaceUsersQuery } from "../../../shared/api/workspace-queries";
 import { UserAdministrationPanel } from "../../control-plane/user-administration-panel";
+import { OwnerScheduledStartsCard } from "../../control-plane/owner-scheduled-starts";
 import { apiErrorMessage } from "../../../shared/workspace-utils";
 import { useSettingsPage } from "../../../shared/settings-page-context";
 import { UserEffectiveRightsCard } from "../../access/effective-rights";
@@ -59,6 +60,13 @@ export function UsersPage() {
           : undefined
       }
       userRights={(userId) => <UserEffectiveRightsCard key={userId} holderId={userId} />}
+      ownedScheduledStarts={(owner) => (
+        <OwnerScheduledStartsCard
+          key={`scheduled-${owner.id}`}
+          owner={owner}
+          people={usersQuery.data ?? []}
+        />
+      )}
     />
   );
 }

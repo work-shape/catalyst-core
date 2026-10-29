@@ -101,7 +101,26 @@ export const scheduled = defineTranslations({
     "scheduled.confirm.resume": "Resume it: it runs again at its next time.",
     "scheduled.confirm.delete": "Delete it. The conversations it already started stay.",
     "scheduled.schedule.weekdays": "Every weekday, {time}",
-    "scheduled.schedule.custom": "Custom: {cron}"
+    "scheduled.schedule.custom": "Custom: {cron}",
+    "scheduled.handover.title": "Scheduled prompts",
+    "scheduled.handover.description":
+      "This account is deactivated, so its scheduled prompts are paused and run as nobody. Hand each to someone who keeps the work, or delete it.",
+    "scheduled.handover.listFailed": "The scheduled prompts could not be loaded.",
+    "scheduled.handover.none": "This person owns no scheduled prompts.",
+    "scheduled.handover.action": "Hand over",
+    "scheduled.handover.deleteLabel": "Delete “{heading}”",
+    "scheduled.handover.dialogTitle": "Hand over “{heading}”?",
+    "scheduled.handover.dialogBody":
+      "The new owner gets it paused and resumes it when it suits them. It then runs with their rights and their personal connections, never with this account's.",
+    "scheduled.handover.newOwner": "New owner",
+    "scheduled.handover.choose": "Choose a person",
+    "scheduled.handover.noRights":
+      "This person may not use the agent of this prompt in its workspace. Choose someone who may.",
+    "scheduled.handover.notMember":
+      "This person is not active or not a member of the prompt's workspace. Choose a member.",
+    "scheduled.handover.failed": "It could not be handed over. Try again.",
+    "scheduled.handover.done": "Handed over to {name}, paused.",
+    "scheduled.handover.deleted": "Deleted."
   },
   de: {
     "scheduled.title": "Geplant",
@@ -206,6 +225,25 @@ export const scheduled = defineTranslations({
     "scheduled.confirm.resume": "Fortsetzen: Er läuft wieder zu seinem nächsten Termin.",
     "scheduled.confirm.delete": "Löschen. Die Unterhaltungen, die er schon gestartet hat, bleiben.",
     "scheduled.schedule.weekdays": "Werktags, {time}",
-    "scheduled.schedule.custom": "Eigener Zeitplan: {cron}"
+    "scheduled.schedule.custom": "Eigener Zeitplan: {cron}",
+    "scheduled.handover.title": "Geplante Prompts",
+    "scheduled.handover.description":
+      "Dieses Konto ist deaktiviert, deshalb sind seine geplanten Prompts pausiert und laufen für niemanden. Übergib jeden an jemanden, der die Arbeit weiterführt, oder lösche ihn.",
+    "scheduled.handover.listFailed": "Die geplanten Prompts konnten nicht geladen werden.",
+    "scheduled.handover.none": "Diese Person hat keine geplanten Prompts.",
+    "scheduled.handover.action": "Übergeben",
+    "scheduled.handover.deleteLabel": "„{heading}“ löschen",
+    "scheduled.handover.dialogTitle": "„{heading}“ übergeben?",
+    "scheduled.handover.dialogBody":
+      "Die neue Person bekommt ihn pausiert und setzt ihn fort, wenn es ihr passt. Dann läuft er mit ihren Rechten und ihren persönlichen Verbindungen, nie mit denen dieses Kontos.",
+    "scheduled.handover.newOwner": "Neue Person",
+    "scheduled.handover.choose": "Person wählen",
+    "scheduled.handover.noRights":
+      "Diese Person darf den Agenten dieses Prompts in seinem Workspace nicht nutzen. Wähle jemanden, der es darf.",
+    "scheduled.handover.notMember":
+      "Diese Person ist nicht aktiv oder kein Mitglied im Workspace des Prompts. Wähle ein Mitglied.",
+    "scheduled.handover.failed": "Die Übergabe hat nicht geklappt. Versuch es noch einmal.",
+    "scheduled.handover.done": "An {name} übergeben, pausiert.",
+    "scheduled.handover.deleted": "Gelöscht."
   }
 });

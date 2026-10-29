@@ -21,8 +21,12 @@ import {
 } from "@work-shape/catalyst-core";
 import type { ChatServerOptions } from "../types";
 import { ConversationWorkflow } from "./conversation-service";
-import { getWorkspaceAssetSnapshot, requireAgentUse } from "../workspaces/agent-availability";
-import { scheduledPromptJob, schedulePromptJob } from "./scheduled-start-job";
+import {
+  callerAccess,
+  getWorkspaceAssetSnapshot,
+  requireAgentUse
+} from "../workspaces/agent-availability";
+import { scheduledOwner, scheduledPromptJob, schedulePromptJob } from "./scheduled-start-job";
 
 type Fields = { agentName: string; prompt: string; cron: string; timeZone?: string };
 
@@ -290,6 +294,23 @@ export class ScheduledStartsWorkflow {
         userId: asUserId(ownerUserId)
       });
       if (!member) throw new AppError("NOT_FOUND", "New owner is not a member of this workspace");
+      // The new owner must hold what the start needs: its agent, offered to them in its
+      // workspace (available there, and `agent.use` where it is limited). It runs as them.
+      const workspace = await tx.workspaces.getWorkspace(
+        current.clientInstanceId,
+        current.collaborationWorkspaceId
+      );
+      const access = await callerAccess(this.options, scheduledOwner(target));
+      const offered =
+        workspace &&
+        (await getWorkspaceAssetSnapshot(this.options, workspace, access)).agents.some(
+          (agent) => agent.name === current.agentName
+        );
+      if (!offered)
+        throw new AppError(
+          "FORBIDDEN",
+          "The new owner may not use this scheduled prompt's agent in its workspace"
+        );
       await this.withdraw(tx, current);
       await tx.scheduledStarts.detachRuns({
         clientInstanceId: current.clientInstanceId,
