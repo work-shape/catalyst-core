@@ -118,10 +118,15 @@ describe("projects and who reaches them", () => {
   const reads = async (userId: string, conversationId: string) =>
     (await t.call(userId, "conversations.thread.get", { params: { conversationId } }))
       .statusCode === 200;
-  const setProject = (userId: string, conversationId: string, projectId: string | null) =>
+  const setProject = (
+    userId: string,
+    conversationId: string,
+    projectId: string | null,
+    hideFromOthers?: true
+  ) =>
     t.call(userId, "conversations.set_project", {
       params: { conversationId },
-      payload: { projectId }
+      payload: { projectId, ...(hideFromOthers ? { hideFromOthers } : {}) }
     });
   const reason = (response: { json(): unknown }) =>
     errorSchema.parse(response.json()).error.details?.reason;
@@ -321,8 +326,14 @@ describe("projects and who reaches them", () => {
     expect(out.projectId).toBeUndefined();
     expect(out.visibility).toBe("workspace");
 
+    // The others read it now: into a private project only once the author saw they no
+    // longer will (PRJ-6).
+    expect(reason(await setProject(t.kai.id, own.id, kaisPrivate.id))).toBe(
+      "project_hides_conversation"
+    );
+    expect(await reads(t.lena.id, own.id)).toBe(true);
     const intoPrivate = conversationSchema.parse(
-      (await setProject(t.kai.id, own.id, kaisPrivate.id)).json()
+      (await setProject(t.kai.id, own.id, kaisPrivate.id, true)).json()
     );
     expect(intoPrivate.visibility).toBe("private");
     expect(await reads(t.lena.id, own.id)).toBe(false);

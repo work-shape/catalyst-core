@@ -12,6 +12,7 @@ import {
   retryPendingConversationCleanup,
   type ConversationCleanupRetrySummary
 } from "./conversation-cleanup";
+import { runProjectRetention } from "../projects/project-retention";
 import type { ChatServerOptions, ConversationRetentionOptions } from "../types";
 
 export interface ConversationRetentionRunSummary {
@@ -125,7 +126,27 @@ export class ConversationRetentionWorkflow {
       logger.error({ error }, "Orphaned file cleanup failed");
       failures.push(error);
     }
+    try {
+      const projects = await this.runProjectRetention();
+      if (projects.cleanupPendingCount > 0) {
+        logger.error(
+          { cleanupPendingCount: projects.cleanupPendingCount },
+          "Project data cleanup is pending"
+        );
+      }
+    } catch (error) {
+      logger.error({ error }, "Project retention failed");
+      failures.push(error);
+    }
     if (failures.length > 0) throw failures[0];
+  }
+
+  /**
+   * Finishes deleted projects whose cleanup failed, and, with `retention.projectIdleDays`,
+   * gives notice of idle projects and deletes those noticed seven days ago (PRJ-6).
+   */
+  runProjectRetention() {
+    return runProjectRetention(this.options, { now: this.now(), batchSize: this.batchSize });
   }
 
   /**

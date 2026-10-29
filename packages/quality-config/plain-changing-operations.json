@@ -220,6 +220,7 @@
     "projects.files.list": "workspace_role",
     "projects.files.versions": "workspace_role",
     "projects.get": "workspace_role",
+    "projects.impact": "workspace_role",
     "projects.list": "workspace_role",
     "projects.list_mine": "workspace_role",
     "projects.setup.get": "workspace_role",

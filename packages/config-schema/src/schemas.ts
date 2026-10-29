@@ -538,7 +538,15 @@ export const clientInstanceConfigSchema = z.object({
        * comment is worth reading after its conversation is gone. The job `feedback.prune`
        * deletes older ones once a day.
        */
-      feedbackDays: z.number().int().positive().max(3650).default(365)
+      feedbackDays: z.number().int().positive().max(3650).default(365),
+      /**
+       * Empty keeps every project. With a value, the retention job deletes a project with its
+       * files once nothing happened in it for that many days: no chat in it changed, no file
+       * changed, nobody changed it. Seven days before, its creator and, for a shared project,
+       * the workspace's Owners get a notice; any activity keeps the project. Chats in the
+       * project stay in the workspace and expire by `conversationDays`.
+       */
+      projectIdleDays: z.number().int().min(8).max(3650).optional()
     })
     .default({
       conversationDays: 30,

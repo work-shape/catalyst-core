@@ -6,6 +6,7 @@ import {
   type ConversationListItem,
   type ProjectAudienceView,
   type ProjectSetupView,
+  type ProjectDeletionConversationsView,
   type ProjectView
 } from "@work-shape/catalyst-api-client";
 import { WORKSPACE_AUTH_SCOPE } from "../../chat/workspace/workspace-chat-state";
@@ -163,11 +164,19 @@ export function useSetConversationProjectMutation(heldMessage: string) {
   const { apiBaseUrl, client } = useWorkspaceApiClient();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { conversationId: string; projectId: string | null }) =>
+    mutationFn: async (input: {
+      conversationId: string;
+      projectId: string | null;
+      /** Into a private project: the person saw that the others no longer read it. */
+      hideFromOthers?: boolean;
+    }) =>
       completedOutput(
         await requireClient(client).conversations.set_project({
           params: { conversationId: input.conversationId },
-          body: { projectId: input.projectId }
+          body: {
+            projectId: input.projectId,
+            ...(input.hideFromOthers ? { hideFromOthers: true } : {})
+          }
         }),
         heldMessage
       ),
@@ -241,5 +250,126 @@ export function useSetProjectSetupMutation(projectId: string, heldMessage: strin
     onSuccess: (setup: ProjectSetupView) => {
       queryClient.setQueryData(projectQueryKeys.setup(apiBaseUrl, projectId), setup);
     }
+  });
+}
+
+/**
+ * What a change to the whole project touches, for its dialogs (PRJ-6): its chats and files,
+ * those of others, and the chats that keep it from being shared.
+ */
+export function useProjectImpactQuery(projectId: string, enabled: boolean) {
+  const { apiBaseUrl, client } = useWorkspaceApiClient();
+  return useQuery({
+    queryKey: [...projectQueryKeys.all(apiBaseUrl), "impact", projectId] as const,
+    queryFn: ({ signal }) =>
+      requireClient(client).projects.impact({ params: { projectId }, signal }),
+    enabled: client !== undefined && enabled,
+    // The counts are read when the dialog opens, never from an earlier one.
+    gcTime: 0,
+    staleTime: 0
+  });
+}
+
+/**
+ * Reads the projects and the chat lists of the workspaces a whole project's change touched. The
+ * project's own queries are not read again with their old workspace, which would answer as not
+ * found: a moved project's page takes its new place first, a deleted one's page is left.
+ */
+function useProjectChangeRefresh() {
+  const { apiBaseUrl } = useWorkspaceApiClient();
+  const queryClient = useQueryClient();
+  return (
+    workspaceIds: readonly string[],
+    change?: { moved: ProjectView } | { deleted: ProjectView }
+  ) => {
+    const project = change && ("moved" in change ? change.moved : change.deleted);
+    const own = (key: readonly unknown[]) =>
+      project !== undefined && (key[3] === project.name || key[3] === project.id);
+    if (change && "moved" in change) {
+      queryClient.setQueryData(projectQueryKeys.one(apiBaseUrl, change.moved.name), change.moved);
+      queryClient.removeQueries({
+        queryKey: projectQueryKeys.all(apiBaseUrl),
+        predicate: (query) => query.queryKey[3] === change.moved.id
+      });
+    }
+    queryClient
+      .invalidateQueries({
+        queryKey: projectQueryKeys.all(apiBaseUrl),
+        predicate: (query) => !own(query.queryKey)
+      })
+      .catch(() => undefined);
+    for (const id of workspaceIds) {
+      queryClient
+        .invalidateQueries({
+          queryKey: workspaceQueryKeys.conversations(apiBaseUrl, WORKSPACE_AUTH_SCOPE, id)
+        })
+        .catch(() => undefined);
+    }
+  };
+}
+
+/** Shares the project with its workspace, or makes it private to its creator, with its chats. */
+export function useSetProjectAudienceMutation(heldMessage: string) {
+  const { client } = useWorkspaceApiClient();
+  const refresh = useProjectChangeRefresh();
+  return useMutation({
+    mutationFn: async (input: { project: ProjectView; audience: ProjectAudienceView }) =>
+      completedOutput(
+        await requireClient(client).projects.set_audience({
+          params: { projectId: input.project.id },
+          body: { audience: input.audience, expectedAudience: input.project.audience }
+        }),
+        heldMessage
+      ),
+    onSuccess: (change) => refresh([change.project.collaborationWorkspaceId])
+  });
+}
+
+/** Moves the project with its chats and files to another workspace of the person. */
+export function useMoveProjectMutation(heldMessage: string) {
+  const { client } = useWorkspaceApiClient();
+  const refresh = useProjectChangeRefresh();
+  return useMutation({
+    mutationFn: async (input: {
+      project: ProjectView;
+      collaborationWorkspaceId: string;
+      /** Out of a Personal Workspace: who reads it in the Shared Workspace. */
+      audience?: ProjectAudienceView;
+    }) =>
+      completedOutput(
+        await requireClient(client).projects.move({
+          params: { projectId: input.project.id },
+          body: {
+            collaborationWorkspaceId: input.collaborationWorkspaceId,
+            ...(input.audience ? { audience: input.audience } : {})
+          }
+        }),
+        heldMessage
+      ),
+    onSuccess: (moved, input) =>
+      refresh([input.project.collaborationWorkspaceId, moved.project.collaborationWorkspaceId], {
+        moved: moved.project
+      })
+  });
+}
+
+/** Deletes the project with its files; its chats stay in the workspace or go with it. */
+export function useDeleteProjectMutation(heldMessage: string) {
+  const { client } = useWorkspaceApiClient();
+  const refresh = useProjectChangeRefresh();
+  return useMutation({
+    mutationFn: async (input: {
+      project: ProjectView;
+      conversations: ProjectDeletionConversationsView;
+    }) =>
+      completedOutput(
+        await requireClient(client).projects.delete({
+          params: { projectId: input.project.id },
+          body: { conversations: input.conversations }
+        }),
+        heldMessage
+      ),
+    onSuccess: (_deleted, input) =>
+      refresh([input.project.collaborationWorkspaceId], { deleted: input.project })
   });
 }

@@ -55,7 +55,8 @@ export const projects = defineTranslations({
     "projects.moveDescription": 'Choose a project of {workspace} for "{title}".',
     "projects.moveNone": "This workspace has no project you can move the chat to.",
     "projects.moveShared": "Everyone in {workspace} will see this chat.",
-    "projects.movePrivate": "Only you will see this chat.",
+    "projects.movePrivate":
+      "Only you will see this chat. The others in {workspace} no longer will.",
     "projects.move": "Move",
     "projects.removeTitle": 'Remove "{title}" from its project?',
     "projects.removeBody": "The chat stays in {workspace}, and who sees it stays as it is.",
@@ -115,7 +116,8 @@ export const projects = defineTranslations({
     "projects.moveNone":
       "Dieser Arbeitsbereich hat kein Projekt, in das du den Chat verschieben kannst.",
     "projects.moveShared": "Alle in {workspace} sehen diesen Chat.",
-    "projects.movePrivate": "Nur du siehst diesen Chat.",
+    "projects.movePrivate":
+      "Nur du siehst diesen Chat. Die anderen in {workspace} sehen ihn nicht mehr.",
     "projects.move": "Verschieben",
     "projects.removeTitle": "„{title}“ aus dem Projekt entfernen?",
     "projects.removeBody": "Der Chat bleibt in {workspace}, und wer ihn sieht, bleibt gleich.",

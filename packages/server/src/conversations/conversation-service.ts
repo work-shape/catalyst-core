@@ -233,13 +233,16 @@ export class ConversationWorkflow {
    * `null` (PRJ-1, section 3). Only its author moves it in, and only into a project they are in
    * the audience of; it then takes the project's audience. Anyone who reads it may take it out;
    * it keeps its visibility. A conversation that must stay private does not enter a shared
-   * project.
+   * project. A conversation others read enters a private project only where the person said
+   * they saw that only they read it from then on (PRJ-6); the store reads the project's
+   * audience again under the lock.
    */
   async setConversationProject(
     conversationId: ConversationId,
     user: AuthenticatedUser,
     context: { correlationId: string; audit: AuditRecorder },
-    projectId: string | null
+    projectId: string | null,
+    consent: { hideFromOthers?: boolean } = {}
   ): Promise<Conversation> {
     const conversation = await this.requireChatConversationAccess(conversationId, user);
     const current = conversation.projectId ?? null;
@@ -281,6 +284,19 @@ export class ConversationWorkflow {
       // Personal data keeps it private as well; the store decides that under the row lock.
       if (visibility === "workspace" && workspace.kind !== "personal" && conversation.subject) {
         throw subjectConversationPrivateError();
+      }
+      if (
+        visibility === "private" &&
+        conversation.visibility === "workspace" &&
+        workspace.kind !== "personal" &&
+        consent.hideFromOthers !== true
+      ) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          "The other members read this conversation now: in a private project only its author reads it",
+          { reason: "project_hides_conversation" },
+          { exposeMessage: true }
+        );
       }
     }
     if (visibility !== conversation.visibility) {

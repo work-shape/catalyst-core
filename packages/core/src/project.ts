@@ -18,12 +18,14 @@ export {
   PROJECT_ACTIONS,
   PROJECT_ASSET_KIND,
   PROJECT_AUDIENCES,
+  PROJECT_DELETION_CONVERSATIONS,
   PROJECT_DESCRIPTION_MAX_LENGTH,
   PROJECT_CHOICE_REFUSALS,
   PROJECT_KNOWLEDGE_BASES_MAX,
   PROJECT_SKILLS_MAX,
   PROJECT_TITLE_MAX_LENGTH,
-  type ProjectAudience
+  type ProjectAudience,
+  type ProjectDeletionConversations
 } from "@work-shape/catalyst-asset-schemas";
 
 /**
@@ -192,6 +194,59 @@ export interface ProjectListEntry extends Project {
   lastActivityAt: ISODateString;
 }
 
+/**
+ * What a change to a whole project reaches (PRJ-6): the dialogs of an audience change, a move
+ * and a deletion count it before the person confirms.
+ */
+export interface ProjectImpact {
+  /** The active chats in the project, drafts included. */
+  conversations: number;
+  /** Of those, the chats someone other than the project's creator started. */
+  conversationsOfOthers: number;
+  /**
+   * Of those, the chats that must stay private: one holding personal data, one that reads a
+   * Data Store a person added, or one about an asset. They keep a project from being shared.
+   */
+  conversationsKeptPrivate: number;
+  /** The files of the project as they are now, deleted ones not counted. */
+  files: number;
+  /** Of those, the files whose current version someone other than the creator made. */
+  filesOfOthers: number;
+  /**
+   * The files with a kept version that a chat which must stay private wrote, or a chat that is
+   * gone. They keep a project from being shared until they or their versions are removed.
+   */
+  filesKeptPrivate: number;
+}
+
+/** What an audience change did to the project's chats. */
+export interface ProjectAudienceChange {
+  project: Project;
+  /** Chats every member of the workspace reads from now on. */
+  conversationsShared: number;
+  /** Chats of other members that left the project and stay in the workspace, shared. */
+  conversationsLeft: number;
+  /** The creator's own chats that only the creator reads from now on. */
+  conversationsMadePrivate: number;
+}
+
+/** What a move did. */
+export interface ProjectMove {
+  project: Project;
+  /** The chats that moved with the project. */
+  conversationsMoved: number;
+  /** The grants on the project that ended with the move. */
+  grantsDropped: number;
+}
+
+/** The criterion of the retention job's deletion of an idle project, re-read under the lock. */
+export interface ProjectIdleCriterion {
+  /** The last activity must be at or before this. */
+  idleBefore: ISODateString;
+  /** The notice must have gone out at or before this, with no activity since. */
+  noticedBefore: ISODateString;
+}
+
 export interface CreateProjectRecordInput {
   clientInstanceId: ClientInstanceId;
   assetId: string;
@@ -232,6 +287,101 @@ export interface ProjectStore {
     clientInstanceId: ClientInstanceId;
     userId: string;
   }): Promise<string[]>;
+  /** What a change to the whole project reaches; zeros for a project that is gone. */
+  getProjectImpact(input: {
+    clientInstanceId: ClientInstanceId;
+    projectId: string;
+  }): Promise<ProjectImpact>;
+  /** The active chats in a project, drafts included. */
+  listProjectConversationIds(input: {
+    clientInstanceId: ClientInstanceId;
+    projectId: string;
+  }): Promise<string[]>;
+  /**
+   * Changes who reads a project, under its row lock (PRJ-6). To `workspace`: every chat in it
+   * is shared, refused whole (`CONFLICT`, `project_conversations_stay_private`) while one must
+   * stay private. To `private`: other members' chats leave the project and stay shared in the
+   * workspace; the creator's own become private. `CONFLICT` where the audience is no longer
+   * `expectedAudience`.
+   */
+  setProjectAudience(input: {
+    clientInstanceId: ClientInstanceId;
+    projectId: string;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
+    expectedAudience: ProjectAudience;
+    audience: ProjectAudience;
+    changedAt: ISODateString;
+  }): Promise<ProjectAudienceChange>;
+  /**
+   * Moves a project to another workspace in one transaction: the asset's owner, its audience,
+   * and every chat in it with its run threads, which take the project's audience (`workspace`
+   * in a Personal Workspace). Grants on the project end. The files stay under the project's
+   * own prefix. Refused (`CONFLICT`) into a Personal Workspace while it holds chats of
+   * someone else, and into a shared audience while a chat must stay private.
+   */
+  moveProject(input: {
+    clientInstanceId: ClientInstanceId;
+    projectId: string;
+    fromCollaborationWorkspaceId: CollaborationWorkspaceId;
+    toCollaborationWorkspaceId: CollaborationWorkspaceId;
+    audience: ProjectAudience;
+    movedAt: ISODateString;
+  }): Promise<ProjectMove>;
+  /**
+   * The claim of a deletion (PRJ-6): under the project's row lock, an active project is marked
+   * deleted and every chat that still names it leaves it, keeping its visibility. From here
+   * no file is written into it and nobody reads it. With `idle`, the retention job's criterion
+   * is evaluated again under the lock first. The stored bytes and the rows are the cleanup's,
+   * after the claim.
+   */
+  claimProjectDeletion(input: {
+    clientInstanceId: ClientInstanceId;
+    projectId: string;
+    collaborationWorkspaceId?: CollaborationWorkspaceId;
+    idle?: ProjectIdleCriterion;
+    /** The person chose to delete the chats in the project with it: they are claimed too. */
+    deleteConversations?: boolean;
+    deletedAt: ISODateString;
+  }): Promise<
+    | {
+        status: "claimed";
+        /** The active chats that were in the project and now stand in its workspace alone. */
+        conversationIds: string[];
+        /** The chats claimed for deletion with the project; their cleanup follows. */
+        deletedConversationIds: string[];
+      }
+    | { status: "not_claimed" }
+  >;
+  /** Projects claimed for deletion whose cleanup has not finished: the retry's work. */
+  listDeletedProjectIds(input: {
+    clientInstanceId: ClientInstanceId;
+    limit: number;
+  }): Promise<string[]>;
+  /**
+   * Forgets the idle notice of every project with activity after it, so that the next idle
+   * period is noticed again. Returns how many.
+   */
+  clearIdleNoticesAfterActivity(input: { clientInstanceId: ClientInstanceId }): Promise<number>;
+  /** Active projects without a notice whose last activity is at or before `idleBefore`. */
+  listProjectsToNotice(input: {
+    clientInstanceId: ClientInstanceId;
+    idleBefore: ISODateString;
+    limit: number;
+  }): Promise<Project[]>;
+  /**
+   * Records the idle notice under the project's row lock where it is still idle and not yet
+   * noticed; false where not. Call it in the transaction that files the notice.
+   */
+  markIdleNotice(input: {
+    clientInstanceId: ClientInstanceId;
+    projectId: string;
+    idleBefore: ISODateString;
+    noticedAt: ISODateString;
+  }): Promise<boolean>;
+  /** Active projects the idle criterion deletes now. */
+  listIdleProjectsToDelete(
+    input: ProjectIdleCriterion & { clientInstanceId: ClientInstanceId; limit: number }
+  ): Promise<string[]>;
   /**
    * Deletes projects with their definition, audience and file rows. Every conversation that
    * names one, a deleted one too, leaves it first. The stored objects are the caller's.

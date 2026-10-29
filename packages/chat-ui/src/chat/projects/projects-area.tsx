@@ -41,6 +41,8 @@ import {
   useProjectQuery,
   useProjectsQuery
 } from "../../shared/api/projects";
+import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
+import { useWorkspaceMeQuery } from "../../shared/api/workspace-queries";
 import { AreaFrame, useAreaTitleFocus } from "../../shared/area-frame";
 import { conversationTitle } from "../../shared/conversation-title";
 import { useTranslation } from "../../shared/i18n";
@@ -54,6 +56,11 @@ import { ProjectInstructionsTile } from "./project-instructions";
 import { ProjectComposerAgent, ProjectSetupTile } from "./project-setup";
 import { ProjectKnowledgeTile } from "./project-knowledge";
 import type { BuildWorkspace } from "../../shared/build-rights";
+import {
+  ProjectSettingsDialogs,
+  ProjectSettingsMenu,
+  type ProjectSetting
+} from "./project-settings-dialogs";
 
 /** The workspace the projects belong to, as the pages name it. */
 interface ProjectsWorkspace {
@@ -505,6 +512,8 @@ function ProjectPage({
   const areaRef = useAreaTitleFocus(true);
   const query = useProjectQuery(projectName);
   const project = query.data;
+  const me = useWorkspaceMeQuery(useWorkspaceApiClient());
+  const [setting, setSetting] = useState<ProjectSetting>();
   const projectsRoute: WorkspaceRoute = {
     kind: "projects",
     collaborationWorkspaceId: workspace.id
@@ -566,6 +575,34 @@ function ProjectPage({
               title={project.title}
               state={<AudienceBadge project={project} workspace={workspace.name} />}
               description={project.description}
+              menu={
+                <ProjectSettingsMenu
+                  project={project}
+                  workspace={workspace}
+                  workspaces={workspaces}
+                  currentUserId={me.data?.id}
+                  onOpen={setSetting}
+                />
+              }
+            />
+            <ProjectSettingsDialogs
+              open={setting}
+              project={project}
+              workspace={workspace}
+              workspaces={workspaces}
+              onClose={() => setSetting(undefined)}
+              onMoved={(moved) => {
+                setSetting(undefined);
+                onOpenRoute({
+                  kind: "project",
+                  collaborationWorkspaceId: moved.collaborationWorkspaceId,
+                  project: moved.name
+                });
+              }}
+              onDeleted={() => {
+                setSetting(undefined);
+                onOpenRoute(projectsRoute);
+              }}
             />
             {/* The page's body measures its own width: the page frame is no container. */}
             <div className="@container/project">

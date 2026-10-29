@@ -27,7 +27,13 @@ export const projects = pgTable(
     clientInstanceId: text("client_instance_id").notNull(),
     createdByUserId: text("created_by_user_id").notNull(),
     audience: text("audience").$type<ProjectAudience>().notNull(),
-    audienceChangedAt: timestamp("audience_changed_at", { withTimezone: true }).notNull()
+    audienceChangedAt: timestamp("audience_changed_at", { withTimezone: true }).notNull(),
+    /**
+     * When the retention job told the creator and, for a shared project, the Owners that the
+     * idle project goes in seven days (PRJ-6). Null while no notice is out; activity after it
+     * clears it.
+     */
+    idleNoticeAt: timestamp("idle_notice_at", { withTimezone: true })
   },
   (table) => [check("projects_audience_check", sql`${table.audience} in ('workspace', 'private')`)]
 );

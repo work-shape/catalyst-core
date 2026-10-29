@@ -86,7 +86,13 @@ function tierForType(type: string): AuditActivityTier {
     type.startsWith("collaboration_workspace.") ||
     type === "conversation.deleted" ||
     type.startsWith("conversation.cleanup") ||
-    type.startsWith("conversation.retention")
+    type.startsWith("conversation.retention") ||
+    // Who may reach a project and its deletion (PRJ-6).
+    type === "project.audience_changed" ||
+    type === "project.moved" ||
+    type === "project.deleted" ||
+    type === "project.retention_deleted" ||
+    type.startsWith("project.cleanup")
   ) {
     return "governance";
   }

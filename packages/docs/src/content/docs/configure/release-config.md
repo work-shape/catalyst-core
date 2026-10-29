@@ -101,10 +101,13 @@ usage:
 | `retention.auditDays`           | `365`   | How long audit events are kept.                                                                                                                |
 | `retention.allowUserDelete`     | `true`  | Lets users delete their own Conversations.                                                                                                     |
 | `retention.feedbackDays` | `365` | How long a comment of the module [`feedback`](/configure/modules/#feedback) is kept, in days, whatever became of its Conversation. |
+| `retention.projectIdleDays` | empty | Empty keeps every Project. With a value (8 to 3,650), a Project in which nothing happened for that many days is deleted with its files. |
 
 With `extendOnActivity: true`, every message a user sends moves the deletion date to `conversationDays` after that message, and never to an earlier date. Opening, reading, renaming or moving a Conversation, the generated title and background jobs do not move it. A Conversation someone keeps writing in is therefore never deleted for age. Set `extendOnActivity: false` when the instance has promised a maximum age: the date set at creation then stands, whatever is written later.
 
 Changing `conversationDays` or `extendOnActivity` does not rewrite the dates of existing Conversations. A Conversation takes the new period with its next message, when `extendOnActivity` is on.
+
+A Project and its files do not expire by themselves: a person put them there. With `projectIdleDays` set, the retention job deletes a Project once no chat in it, no file of it and nothing of the Project itself changed for that many days. Seven days before, its creator and, for a shared Project, the Owners of its workspace get an Inbox notice; anything that happens in the Project in those seven days keeps it. Chats in a deleted Project stay in the workspace, keep who reads them, and expire by `conversationDays` like every other.
 
 In its last seven days, or the last half of a period shorter than fourteen days, a Conversation carries a clock in the list, and the open Conversation shows one line above the message field with the deletion date. With `extendOnActivity: true` the line adds that a new message keeps the Conversation.
 
