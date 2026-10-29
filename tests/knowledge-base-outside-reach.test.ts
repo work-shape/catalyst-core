@@ -101,6 +101,28 @@ describe("a Knowledge Base query from an outside client", () => {
     });
   }
 
+  /** A live agent with these tools. */
+  async function liveAgent(world: DataStoreInstance, name: string, toolNames: string[]) {
+    await world.stores.configAssets.applyConfigAssetMutations({
+      clientInstanceId,
+      baseRevisions: { [`agent:${name}`]: null },
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name,
+          config: {
+            name,
+            displayName: { de: name },
+            instructions: "Help",
+            toolNames,
+            knowledgeBases: []
+          }
+        }
+      ]
+    });
+  }
+
   async function keyHeaders(world: DataStoreInstance, scopes: string[]) {
     const issued = await world.api.call("me.api_keys.create", {
       payload: {
@@ -153,6 +175,26 @@ describe("a Knowledge Base query from an outside client", () => {
     expect(person.statusCode, person.body).toBe(200);
   });
 
+  it("counts an agent that adds rows to the store and calls a closed Connection, and none that only reads", async () => {
+    const world = await setup();
+    await connection(world, "crm", [
+      { name: "read", exposure: ["workflow", "agent"] },
+      { name: "open", exposure: ["agent", "outside"] }
+    ]);
+    const headers = await keyHeaders(world, ["knowledge_base.use"]);
+    await liveAgent(world, "reader", ["connection.crm.read", "data_store.findings.query"]);
+    await liveAgent(world, "open-writer", ["connection.crm.open", "data_store.findings.insert"]);
+    expect((await ask(world, headers)).statusCode).toBe(200);
+    await liveAgent(world, "writer", ["connection.crm.read", "data_store.findings.insert"]);
+    const refused = await ask(world, headers);
+    expect(refused.statusCode, refused.body).toBe(403);
+    expect(errorSchema.parse(refused.json()).error.details).toMatchObject({
+      reason: "no_grant",
+      action: "connection_exposure:outside"
+    });
+    expect(refused.body).not.toContain("crm");
+  });
+
   it("refuses a key where the Connection is gone, as it never guesses open", async () => {
     const world = await setup();
     await publishFlow(world, "fill-findings", [
@@ -202,7 +244,9 @@ describe("what makes a Knowledge Base read a closed Connection", () => {
     configAssets: {
       getConfigAsset: ({ kind, name }: { kind: ConfigAssetKind; name: string }) =>
         Promise.resolve(assets.find((entry) => entry.kind === kind && entry.name === name)),
-      listPublishedConfigAssets: ({ kind }: { kind: ConfigAssetKind }) =>
+      listPublishedConfigAssets: ({ kind }: { kind?: string }) =>
+        Promise.resolve(assets.filter((entry) => entry.kind === kind)),
+      listActiveConfigAssets: ({ kind }: { kind?: string }) =>
         Promise.resolve(assets.filter((entry) => entry.kind === kind))
     }
   });
@@ -228,5 +272,42 @@ describe("what makes a Knowledge Base read a closed Connection", () => {
     await expect(
       knowledgeBaseReadsClosedConnection(deps([]), { ...synced, sources: undefined })
     ).resolves.toBe(false);
+  });
+
+  const onStore: Parameters<typeof knowledgeBaseReadsClosedConnection>[1] = {
+    name: "accounts",
+    title: "Accounts",
+    description: "Accounts.",
+    methods: ["structured"],
+    backend: { dataStore: "ledger" },
+    tables: [{ name: "entries", description: "Entries." }]
+  };
+  const workflow = (name: string, publishedConfig: JsonObject) => ({
+    ...asset("workflow", name, publishedConfig),
+    publishedConfig
+  });
+
+  it("counts a writer set that cannot be read as closed: an unreadable Workflow, App or agent", async () => {
+    for (const unreadable of [
+      workflow("odd", { manifest: "no steps" }),
+      asset("app", "odd", { manifest: "no actions" }),
+      asset("agent", "odd", { name: "odd" })
+    ]) {
+      await expect(
+        knowledgeBaseReadsClosedConnection(deps([unreadable]), onStore),
+        unreadable.kind
+      ).resolves.toBe(true);
+    }
+    await expect(knowledgeBaseReadsClosedConnection(deps([]), onStore)).resolves.toBe(false);
+  });
+
+  it("counts a writer set too large to read as closed", async () => {
+    const crowd = Array.from({ length: 5_000 }, (_, index) =>
+      asset("agent", `agent-${String(index).padStart(5, "0")}`, { toolNames: [] })
+    );
+    const many = { ...deps(crowd), configAssets: { ...deps(crowd).configAssets } };
+    // Every page is full, so the pages never end within what a read looks through.
+    many.configAssets.listActiveConfigAssets = () => Promise.resolve(crowd.slice(0, 500));
+    await expect(knowledgeBaseReadsClosedConnection(many, onStore)).resolves.toBe(true);
   });
 });
