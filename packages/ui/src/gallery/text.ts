@@ -72,6 +72,8 @@ export interface GalleryText
   moreActions: string;
   name: string;
   namePlaceholder: string;
+  rename: string;
+  renameField: string;
   searchPlaceholder: string;
   invalidValue: string;
   instructions: string;
@@ -327,6 +329,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     moreActions: "More actions",
     name: "Name",
     namePlaceholder: "Support assistant",
+    rename: "Rename",
+    renameField: "New name",
     searchPlaceholder: "Search agents",
     invalidValue: "Not a valid name",
     instructions: "Instructions",
@@ -618,6 +622,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     moreActions: "Weitere Aktionen",
     name: "Name",
     namePlaceholder: "Support-Assistent",
+    rename: "Umbenennen",
+    renameField: "Neuer Name",
     searchPlaceholder: "Agenten suchen",
     invalidValue: "Kein gültiger Name",
     instructions: "Anweisungen",

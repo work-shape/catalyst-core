@@ -67,6 +67,11 @@ export interface PageHeaderProps extends Omit<HTMLAttributes<HTMLElement>, "titl
   back?: ReactNode;
   /** The page's or the object's name. */
   title: ReactNode;
+  /**
+   * Stands in the name's place while a person renames what the page shows: a `RenameField`.
+   * The heading returns when it is gone.
+   */
+  titleEditor?: ReactNode;
   /** `1` for the page's own heading; `2` where the header sits inside a page that has one. */
   headingLevel?: 1 | 2;
   /** The scope chip, after the name. */
@@ -402,6 +407,7 @@ export function PageHeader({
   variant = "list",
   back,
   title,
+  titleEditor,
   headingLevel = 1,
   scope,
   state,
@@ -500,17 +506,19 @@ export function PageHeader({
               {back}
             </div>
           )}
-          <div className="min-w-0">
-            <Heading
-              // An area puts the focus here when it opens; a title is no control and shows no
-              // ring. Two lines of the name fit the head's height; a longer one is cut after the
-              // second.
-              className={cn("line-clamp-2 wrap-anywhere outline-none", "text-title")}
-              title={typeof title === "string" ? title : undefined}
-            >
-              {title}
-            </Heading>
-            {typeof title === "string" ? (
+          <div className={cn("min-w-0", titleEditor === undefined ? undefined : "flex-1")}>
+            {titleEditor ?? (
+              <Heading
+                // An area puts the focus here when it opens; a title is no control and shows no
+                // ring. Two lines of the name fit the head's height; a longer one is cut after
+                // the second.
+                className={cn("line-clamp-2 wrap-anywhere outline-none", "text-title")}
+                title={typeof title === "string" ? title : undefined}
+              >
+                {title}
+              </Heading>
+            )}
+            {typeof title === "string" && titleEditor === undefined ? (
               // The name on one line, unseen and without height: the row's least width stays the
               // whole name, so the actions wrap before the name does.
               <span
@@ -568,12 +576,15 @@ export function PageHeader({
           {/* The title's line is as tall as a control, so the title sits the same with or
               without an action beside it or a description under it. */}
           <div className="flex min-h-9 min-w-0 flex-wrap items-center gap-2">
-            <Heading
-              // An area puts the focus here when it opens; a title is no control and shows no ring.
-              className={cn("min-w-0 break-words outline-none", "text-title-lg")}
-            >
-              {title}
-            </Heading>
+            {titleEditor ?? (
+              <Heading
+                // An area puts the focus here when it opens; a title is no control and shows no
+                // ring.
+                className={cn("min-w-0 break-words outline-none", "text-title-lg")}
+              >
+                {title}
+              </Heading>
+            )}
             {scope}
             {state}
           </div>
