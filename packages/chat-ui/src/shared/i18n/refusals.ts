@@ -2,6 +2,7 @@ import {
   MODEL_USAGE_LIMIT_REACHED_CODE,
   modelUsageRefusalOf,
   type AppWorkflowRefusal,
+  type DataHandoverRefusal,
   type DataStoreRefusal
 } from "@work-shape/catalyst-core";
 import { knownActionLabel } from "../../admin/access/right-words";
@@ -188,6 +189,40 @@ const DATA_STORE_ROWS = {
   }
 } satisfies Record<DataStoreRefusal, RefusalRow>;
 
+/**
+ * A publish that hands a source's data to readers of a store who may not use the source
+ * (DS-13c): how many people, never who, and the source only where the reader may see it.
+ */
+const handoverSentence =
+  (named: TranslationKey, hidden?: TranslationKey): RefusalRow["sentence"] =>
+  (details): RowSentence | undefined => {
+    const dataStore = text(details, "title") || text(details, "dataStore");
+    const readers = details.readers;
+    if (dataStore === "" || typeof readers !== "number") return undefined;
+    const connection = text(details, "connectionTitle");
+    if (connection === "" && hidden !== undefined)
+      return { key: hidden, values: { dataStore, readers: String(readers) } };
+    return { key: named, values: { dataStore, readers: String(readers), connection } };
+  };
+
+/**
+ * Every refusal of the widening check, by the reason `core` names it with: a reason added there
+ * does not compile until it has its sentence here.
+ */
+const DATA_HANDOVER_ROWS = {
+  data_handover_needs_owner: {
+    sentence: handoverSentence(
+      "refusals.dataHandoverNeedsOwner",
+      "refusals.dataHandoverNeedsOwnerHidden"
+    ),
+    action: toDataStore
+  },
+  data_handover_unconfirmed: {
+    sentence: handoverSentence("refusals.dataHandoverUnconfirmed"),
+    action: toDataStore
+  }
+} satisfies Record<DataHandoverRefusal, RefusalRow>;
+
 /** A Workflow's definition that cannot run, by the code of the check that found it. */
 const WORKFLOW_DEFINITION_REASONS = [
   "definition_invalid",
@@ -304,6 +339,7 @@ function referenceSentence(
  */
 const REFUSALS: Readonly<Record<string, RefusalRow>> = {
   ...DATA_STORE_ROWS,
+  ...DATA_HANDOVER_ROWS,
   // A call that needs a model while a usage limit holds (LU-5). A limit this release cannot
   // name is still told: only that one was reached.
   [MODEL_USAGE_LIMIT_REACHED_CODE]: {

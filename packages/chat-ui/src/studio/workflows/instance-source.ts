@@ -543,11 +543,15 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
     },
     // A draft is published and discarded as the draft of any asset is.
     drafts: {
-      publish: async (workflow, revision) => {
+      publish: async (workflow, revision, confirmHandover) => {
         done(
           await client.assets.publish({
             params: { kind: WORKFLOW_ASSET_KIND, name: workflow },
-            body: { revision, ...ownerOf(workflow) }
+            body: {
+              revision,
+              ...ownerOf(workflow),
+              ...(confirmHandover ? { confirmHandover } : {})
+            }
           })
         );
       },

@@ -1,0 +1,11 @@
+# The person of the widening-check spec (DS-13c). No other spec uses them: the spec saves an App,
+# and an App's id is taken once for the whole instance.
+- email: e2e-data-handover@example.test
+  displayLabel: Zz E2E Data Handover
+  passwordEnvName: E2E_DATA_HANDOVER_PASSWORD
+  developmentPassword: e2e-data-handover-password
+  roles:
+    - user
+    - admin
+  permissionRefs:
+    - demo-tools

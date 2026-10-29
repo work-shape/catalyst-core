@@ -332,6 +332,24 @@ export const assetSchema = z.object({
    * warnings for the revision this read returns.
    */
   publishNarrative: publishNarrativeSchema.optional(),
+  /**
+   * Of an App, a Workflow or a Knowledge Base whose revision reaches a Data Store with a
+   * source, for whoever may publish it: the widening check (DS-13c). `holds` where everyone who
+   * would read the store may use each of its sources, and then one line that says so; otherwise
+   * one line per source the publish hands on, with how many people and who confirms. People are
+   * counted, never named. `confirmation` is offered only to who may confirm the hand-over, and
+   * the publish passes it as `confirmHandover`.
+   */
+  publishHandover: z
+    .object({
+      holds: z.boolean(),
+      lines: z.array(z.string()),
+      confirmation: z
+        .string()
+        .regex(/^[a-f0-9]{64}$/u)
+        .optional()
+    })
+    .optional(),
   /** Other visible workspace members with an unsaved checkout of this App's current draft. */
   appEditors: z
     .array(
@@ -514,6 +532,15 @@ export const publishAssetRequestSchema = z.object({
   audience: appAudienceSchema.optional(),
   /** Confirmation of the Knowledge Base processing count and cost; stale reviews are refused. */
   confirmProcessing: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/u)
+    .optional(),
+  /**
+   * Confirmation of the hand-over the publish question names (`publishHandover.confirmation`,
+   * DS-13c): a holder of `connection.write` on the source agrees that its data reaches readers
+   * of the store who may not use it. A stale one is refused with the new confirmation.
+   */
+  confirmHandover: z
     .string()
     .regex(/^[a-f0-9]{64}$/u)
     .optional(),

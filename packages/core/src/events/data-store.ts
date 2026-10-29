@@ -69,6 +69,28 @@ export const dataStoreEvents = {
       }
     }
   },
+  // A holder of `connection.write` confirmed that a publish hands a source's data to people who
+  // read the store and may not use the source (DS-13c). It names the store, the source, the
+  // asset published and how many people; never who.
+  "data_store.handover_confirmed": {
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    name: "data_store.handover_confirmed",
+    subject: "data_store",
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["store", "connection", "people", "kind", "name"],
+      properties: {
+        store: { type: "string" },
+        connection: { type: "string" },
+        people: { type: "integer" },
+        kind: { type: "string" },
+        name: { type: "string" }
+      }
+    }
+  },
   "data_store.migrated": {
     ...LEGACY_AUDIT,
     name: "data_store.migrated",

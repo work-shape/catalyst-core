@@ -20,6 +20,7 @@ export interface Values {
   field?: string;
   asset?: string;
   confirm?: string;
+  "confirm-handover"?: string;
   audience?: string;
   withdraw?: string;
   json: boolean;

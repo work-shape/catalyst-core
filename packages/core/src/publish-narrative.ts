@@ -1,4 +1,5 @@
 import type { AppAudience } from "./app-audience";
+import type { DataHandover } from "./data-handover";
 import type { ActorAccess } from "./permissions";
 
 // The plain sentence a publish question opens with (PUBQ-1), and what the stored-data module
@@ -81,4 +82,6 @@ export interface PublishNarrativeStoredData {
     access: ActorAccess,
     stores: readonly string[]
   ): Promise<readonly PublishNarrativeStoreReaders[]>;
+  /** The widening check of a publish (DS-13c). */
+  handover?: DataHandover;
 }

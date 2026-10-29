@@ -201,7 +201,7 @@ export function useWorkflowDraft(
     setWaits(false);
     try {
       await (change === "publish"
-        ? writes?.publish(workflow, draft.revision)
+        ? writes?.publish(workflow, draft.revision, draft.handoverConfirmation)
         : writes?.discard(workflow, draft.revision));
       setAsking(undefined);
     } catch (failure) {

@@ -217,6 +217,7 @@ export const apps = defineTranslations({
     "apps.publishWaits":
       "Sent for approval. An admin for all workspaces decides in the Inbox; until then the live version stays as it is.",
     "apps.publishTogether": "Published with it",
+    "apps.publishHandover": "Hand-over of source data",
     "apps.publishTogetherWorkflow": "Workflow “{title}”",
     "apps.publishTogetherNew": "New",
     "apps.publishTogetherChanged": "Changed",
@@ -495,6 +496,7 @@ export const apps = defineTranslations({
     "apps.publishWaits":
       "Zur Freigabe gesendet. Ein Admin für alle Arbeitsbereiche entscheidet im Eingang; bis dahin bleibt die live Version, wie sie ist.",
     "apps.publishTogether": "Wird zusammen veröffentlicht",
+    "apps.publishHandover": "Weitergabe von Quelldaten",
     "apps.publishTogetherWorkflow": "Workflow „{title}“",
     "apps.publishTogetherNew": "Neu",
     "apps.publishTogetherChanged": "Geändert",

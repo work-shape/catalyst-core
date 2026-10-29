@@ -145,14 +145,16 @@ export function createAssetWrites(client: ApiClient) {
       name,
       workspaceId,
       revision,
-      confirmProcessing
-    }: AssetAddress & { revision: number; confirmProcessing?: string }) =>
+      confirmProcessing,
+      confirmHandover
+    }: AssetAddress & { revision: number; confirmProcessing?: string; confirmHandover?: string }) =>
       client.assets.publish({
         params: { kind, name },
         body: {
           revision,
           ...scopeOf(workspaceId),
-          ...(confirmProcessing ? { confirmProcessing } : {})
+          ...(confirmProcessing ? { confirmProcessing } : {}),
+          ...(confirmHandover ? { confirmHandover } : {})
         }
       }),
     revert: ({

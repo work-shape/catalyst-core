@@ -44575,6 +44575,28 @@
           "publishNarrative": {
             "$ref": "#/components/schemas/PublishNarrative"
           },
+          "publishHandover": {
+            "type": "object",
+            "properties": {
+              "holds": {
+                "type": "boolean"
+              },
+              "lines": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "confirmation": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            },
+            "required": [
+              "holds",
+              "lines"
+            ]
+          },
           "appEditors": {
             "type": "array",
             "items": {
@@ -53666,6 +53688,10 @@
             "$ref": "#/components/schemas/AppAudience"
           },
           "confirmProcessing": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "confirmHandover": {
             "type": "string",
             "pattern": "^[a-f0-9]{64}$"
           },

@@ -24,6 +24,12 @@ export const refusals = defineTranslations({
       "A change to the data store “{dataStore}” could not be applied. The app is not published.",
     "refusals.dataStoreMigrating":
       "The data store “{dataStore}” is still being updated. Try again in a minute.",
+    "refusals.dataHandoverNeedsOwner":
+      "{readers} people who would read the data store “{dataStore}” may not use “{connection}”. Ask a person who may change “{connection}” to publish this version and confirm the hand-over, or narrow who reads the data store.",
+    "refusals.dataHandoverNeedsOwnerHidden":
+      "{readers} people who would read the data store “{dataStore}” may not use one of its sources. Ask a person who may change that source to publish this version and confirm the hand-over, or narrow who reads the data store.",
+    "refusals.dataHandoverUnconfirmed":
+      "Who would read the data store “{dataStore}” has changed since the question was shown. Open the dialog again, read who receives the data and publish again.",
     "refusals.dataStoreNotReady": "The data store is not ready yet. Try again in a moment.",
     "refusals.dataStoreKeyReused":
       "The app sent this change twice with different content. Reload the app and try again.",
@@ -131,6 +137,12 @@ export const refusals = defineTranslations({
       "Eine Änderung am Datenspeicher „{dataStore}“ ließ sich nicht anwenden. Die App ist nicht veröffentlicht.",
     "refusals.dataStoreMigrating":
       "Der Datenspeicher „{dataStore}“ wird noch umgestellt. Versuche es in einer Minute noch einmal.",
+    "refusals.dataHandoverNeedsOwner":
+      "{readers} Personen, die den Datenspeicher „{dataStore}“ danach lesen, dürfen „{connection}“ nicht nutzen. Bitte eine Person, die „{connection}“ verwalten darf, diese Version zu veröffentlichen und die Weitergabe zu bestätigen, oder schränke ein, wer den Datenspeicher liest.",
+    "refusals.dataHandoverNeedsOwnerHidden":
+      "{readers} Personen, die den Datenspeicher „{dataStore}“ danach lesen, dürfen eine seiner Quellen nicht nutzen. Bitte eine Person, die diese Quelle verwalten darf, diese Version zu veröffentlichen und die Weitergabe zu bestätigen, oder schränke ein, wer den Datenspeicher liest.",
+    "refusals.dataHandoverUnconfirmed":
+      "Wer den Datenspeicher „{dataStore}“ liest, hat sich seit der Frage geändert. Öffne den Dialog erneut, lies, wer die Daten erhält, und veröffentliche noch einmal.",
     "refusals.dataStoreNotReady":
       "Der Datenspeicher ist noch nicht bereit. Versuche es gleich noch einmal.",
     "refusals.dataStoreKeyReused":

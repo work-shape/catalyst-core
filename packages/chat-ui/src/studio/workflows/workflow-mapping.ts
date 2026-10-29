@@ -849,7 +849,13 @@ export function toWorkflow(
   pointers: Partial<
     Pick<
       Asset,
-      "draftRevision" | "publishedRevision" | "publishQuestion" | "allowed" | "scope" | "stepFacts"
+      | "draftRevision"
+      | "publishedRevision"
+      | "publishQuestion"
+      | "publishHandover"
+      | "allowed"
+      | "scope"
+      | "stepFacts"
     >
   > = {}
 ): WorkflowView {
@@ -878,6 +884,9 @@ export function toWorkflow(
             testForm: startFormOf(definition.inputs),
             ...(pointers.publishQuestion?.length
               ? { publishQuestion: pointers.publishQuestion }
+              : {}),
+            ...(pointers.publishHandover?.confirmation
+              ? { handoverConfirmation: pointers.publishHandover.confirmation }
               : {}),
             ...(pointers.publishedRevision === undefined
               ? {}

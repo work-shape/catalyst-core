@@ -35,6 +35,7 @@ const PUBLISH_PATH_FILES = [
   "data-stores/src/scoped-tables.ts",
   "server/src/apps/app-closure.ts",
   "server/src/apps/app-publish-together.ts",
+  "core/src/data-handover.ts",
   "workflows/src/child-contracts.ts",
   "workflows/src/dataset-contracts.ts",
   "workflows/src/runner-packages.ts",
@@ -84,6 +85,7 @@ const NAMED = {
   column: "tenant",
   step: "send",
   runAs: "buchhaltung",
+  readers: 3,
   issues: [{ path: ["steps"], message: "No steps" }]
 };
 
@@ -117,6 +119,19 @@ const DATA_STORE_REFUSALS: Record<DataStoreRefusal, Record<string, unknown>> = {
 
 const PUBLISH_REFUSALS: [reason: string, details: Record<string, unknown>][] = [
   ...Object.entries(DATA_STORE_REFUSALS),
+  // The widening check of an App's, a Workflow's or a Knowledge Base's Publish (DS-13c).
+  [
+    "data_handover_needs_owner",
+    {
+      dataStore: "belege",
+      title: "Belege",
+      readers: 3,
+      connection: "exampledata",
+      connectionTitle: "Exampledata"
+    }
+  ],
+  ["data_handover_needs_owner", { dataStore: "belege", title: "Belege", readers: 3 }],
+  ["data_handover_unconfirmed", { dataStore: "belege", title: "Belege", readers: 3 }],
   // The App's Publish.
   ["workflow_unavailable", { workflow: "monatsabschluss" }],
   [
@@ -295,6 +310,34 @@ describe("the refusals of the publish paths, in the reader's language", () => {
     expect(say({ reason: "app_instance_needs_shared_workspace" })).toBe(
       "Diese App ist „Nur ich“ und kann darum nicht für Alle sein. Baue sie in einem Team, oder bitte einen Admin darum."
     );
+  });
+
+  it("tells a hand-over of a source's data by how many people, and who confirms it", () => {
+    const say = (details: Record<string, unknown>, t = de) => tellRefusal(details, t)?.message;
+    const facts = { dataStore: "belege", title: "Belege", readers: 3 };
+    expect(
+      say({
+        reason: "data_handover_needs_owner",
+        ...facts,
+        connection: "exampledata",
+        connectionTitle: "Exampledata"
+      })
+    ).toBe(
+      "3 Personen, die den Datenspeicher „Belege“ danach lesen, dürfen „Exampledata“ nicht nutzen. Bitte eine Person, die „Exampledata“ verwalten darf, diese Version zu veröffentlichen und die Weitergabe zu bestätigen, oder schränke ein, wer den Datenspeicher liest."
+    );
+    // A source the reader may not see is not named.
+    expect(say({ reason: "data_handover_needs_owner", ...facts })).toBe(
+      "3 Personen, die den Datenspeicher „Belege“ danach lesen, dürfen eine seiner Quellen nicht nutzen. Bitte eine Person, die diese Quelle verwalten darf, diese Version zu veröffentlichen und die Weitergabe zu bestätigen, oder schränke ein, wer den Datenspeicher liest."
+    );
+    expect(say({ reason: "data_handover_unconfirmed", ...facts })).toBe(
+      "Wer den Datenspeicher „Belege“ liest, hat sich seit der Frage geändert. Öffne den Dialog erneut, lies, wer die Daten erhält, und veröffentliche noch einmal."
+    );
+    expect(
+      tellRefusal({ reason: "data_handover_needs_owner", ...facts }, de, opensAll)?.action
+    ).toEqual({
+      label: "Datenspeicher öffnen",
+      route: { kind: "build-asset", assetKind: "data-stores", name: "belege" }
+    });
   });
 
   it("words the store refusals of an App as written", () => {

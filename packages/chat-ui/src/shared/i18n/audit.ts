@@ -91,6 +91,8 @@ export const audit = defineTranslations({
     "audit.event.conversation.title_generated": "Gave a conversation a title",
     "audit.event.conversation.title_generation_failed": "Giving a conversation a title failed",
     "audit.event.data_store.dropped": "Removed a data store's tables",
+    "audit.event.data_store.handover_confirmed":
+      "Confirmed handing a source's data to readers of a data store",
     "audit.event.data_store.migrated": "Updated a data store's tables",
     "audit.event.data_store.migration_failed": "Updating a data store's tables failed",
     "audit.event.data_store.provisioned": "Set up a data store",
@@ -399,6 +401,8 @@ export const audit = defineTranslations({
     "audit.event.conversation.title_generation_failed":
       "Titel für eine Unterhaltung fehlgeschlagen",
     "audit.event.data_store.dropped": "Tabellen eines Datenspeichers entfernt",
+    "audit.event.data_store.handover_confirmed":
+      "Weitergabe der Daten einer Quelle an Leser eines Datenspeichers bestätigt",
     "audit.event.data_store.migrated": "Tabellen eines Datenspeichers aktualisiert",
     "audit.event.data_store.migration_failed":
       "Aktualisieren der Tabellen eines Datenspeichers fehlgeschlagen",

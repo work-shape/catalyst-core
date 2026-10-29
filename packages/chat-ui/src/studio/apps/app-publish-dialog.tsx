@@ -14,11 +14,13 @@ import {
   type AppAudience,
   type AppAudienceOffer,
   type AppPublishDataRead,
+  type AppPublishHandover,
   type AppPublishTogetherRead
 } from "./app-data";
 import { NameList } from "./app-header";
 import { appManifestSummary, appReadsStoredData, type AppManifestSummary } from "./app-model";
 import { AppPublishDataView } from "./app-publish-data";
+import { AppPublishHandoverView, appPublishHandoverAllows } from "./app-publish-handover";
 import {
   AppPublishTogetherView,
   appPublishTogetherNamed,
@@ -116,6 +118,7 @@ export function AskedPublishDialog({
     errorAction: publishing.errorAction,
     waits: publishing.waits,
     narrative: question.narrative,
+    handover: question.handover,
     together,
     audience: {
       offer: question.audience,
@@ -127,7 +130,8 @@ export function AskedPublishDialog({
         .send(
           props.ask.revision,
           question.audience === undefined ? undefined : selected,
-          appPublishTogetherNamed(together)
+          appPublishTogetherNamed(together),
+          question.handover?.confirmation
         )
         .then((outcome) => afterPublishSend(outcome, { ...props, onPublished }))
         .catch(() => undefined);
@@ -208,6 +212,7 @@ export function PublishDialog({
   narrative = NO_NARRATIVE,
   audience,
   together,
+  handover,
   waits = false,
   onConfirm,
   onClose
@@ -222,6 +227,8 @@ export function PublishDialog({
   waits?: boolean;
   /** The Workflows the Publish makes live with the App. Absent, as in a sample, it names none. */
   together?: AppPublishTogetherRead;
+  /** The widening check for the audience shown (DS-13c). Absent: nothing to say. */
+  handover?: AppPublishHandover | undefined;
 }) {
   const { t } = useTranslation();
   const host = useAppsHost();
@@ -272,7 +279,11 @@ export function PublishDialog({
             <Button variant="outline" disabled={loading} onClick={onClose}>
               {t("cancel")}
             </Button>
-            <Button loading={loading} disabled={waitsForData || !changes} onClick={onConfirm}>
+            <Button
+              loading={loading}
+              disabled={waitsForData || !changes || !appPublishHandoverAllows(handover)}
+              onClick={onConfirm}
+            >
               {t("apps.publish")}
             </Button>
           </>
@@ -292,6 +303,7 @@ export function PublishDialog({
         <AppAudienceChange offer={offer} selected={selected} workspaceName={workspace.name} />
         <div className="grid gap-3">
           <PublishNarrativeReadLead read={narrative} />
+          <AppPublishHandoverView handover={handover} />
           {together ? <AppPublishTogetherView read={together} /> : null}
           {narrative.status === "none" && offer === undefined ? (
             lists

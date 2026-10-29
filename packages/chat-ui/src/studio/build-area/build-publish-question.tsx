@@ -20,6 +20,11 @@ export interface PublishQuestionAnswer {
    * `lines`, which the dialog words in the reader's language in its place.
    */
   processing?: PublishProcessing;
+  /**
+   * The widening check (DS-13c): its lines are among `lines`; where it fails, Publish sends the
+   * confirmation, offered only to who may give it.
+   */
+  handover?: { holds: boolean; confirmation?: string };
 }
 
 /** The count and cost of the contents a Knowledge Base's publish processes again. */

@@ -3,6 +3,7 @@ import { appCallersByWorkflow } from "../workflows/app-callers";
 import { workflowCallers } from "../workflows/workflow-callers";
 import { agentDependencyAvailability } from "./agent-dependency-availability";
 import { appAudienceReview } from "../apps/app-audience";
+import { publishHandoverQuestion } from "./data-handover";
 import type { AppAudience, AuditActor } from "@work-shape/catalyst-core";
 import {
   agentConfigSchema,
@@ -422,6 +423,21 @@ export class AssetReadWorkflow {
     // What the caller may do here, decided as each write decides it, so the page offers no
     // action the instance refuses and hides none it allows (AD-4).
     const allowed = allowedOn(target.kind, call, target.resource);
+    // The widening check (DS-13c), for who may publish the revision: the publish asks it again.
+    const publishHandover =
+      locale && allowed.includes("publish")
+        ? await publishHandoverQuestion(
+            this.options,
+            call,
+            {
+              kind: target.kind.kind,
+              name: asset.name,
+              revision: content.contentRevision ?? asset.revision,
+              ...(address.audience ? { audience: address.audience } : {})
+            },
+            locale
+          )
+        : undefined;
     const saveApproval = await this.saveApproval(call, target);
     // The version the draft's head names: the newest publication, while something is live.
     const liveVersion =
@@ -469,7 +485,12 @@ export class AssetReadWorkflow {
       ...(target.kind.kind === "app" && !publishedOnly && asset.publishedRevision !== undefined
         ? { draftChangedSinceLive: asset.revision !== asset.publishedRevision }
         : {}),
-      ...(publishQuestion?.length ? { publishQuestion } : {}),
+      // A Workflow's and a Knowledge Base's question and the CLI show the check's lines with
+      // the rest; the App's Publish dialog reads them from `publishHandover`.
+      ...(publishQuestion?.length || publishHandover
+        ? { publishQuestion: [...(publishQuestion ?? []), ...(publishHandover?.lines ?? [])] }
+        : {}),
+      ...(publishHandover ? { publishHandover } : {}),
       ...(publishConfirmation ? { publishConfirmation } : {}),
       ...(publishProcessing ? { publishProcessing } : {}),
       ...(publishNarrative ? { publishNarrative } : {}),

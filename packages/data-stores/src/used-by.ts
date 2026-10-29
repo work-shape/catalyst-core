@@ -178,7 +178,7 @@ const workflowConfigSchema = z.object({
  * definition's own walker, so a block a later engine runs is followed here as soon as a
  * definition may hold it.
  */
-function workflowUse(
+export function workflowUse(
   asset: ConfigAssetRecord,
   store: string
 ): (StoreUse & { runAs?: string }) | undefined {
@@ -203,7 +203,7 @@ const agentUseSchema = z.object({
 });
 
 /** An agent carries its live row tools; its separate shared draft grants no access. */
-function agentUse(
+export function agentUse(
   asset: ConfigAssetRecord,
   store: string,
   locale: DataStoreRuntime["defaultLocale"]
