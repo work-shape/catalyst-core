@@ -1,4 +1,5 @@
-export { shippedSkillsOf } from "./shipped-skills";
+export { shippedSkillsOf, offeredSkillNames } from "./shipped-skills";
+export { shippedAgentsOf } from "./shipped-agents";
 export { readRunnerPackageManifest, RUNNER_PACKAGE_MANIFEST_PATH } from "./runner-packages";
 export type { ClientInstanceEnv } from "./env";
 export { loadCatalogueEntries, type CatalogueEntry } from "@work-shape/catalyst-connections";
@@ -58,7 +59,11 @@ export { createInstanceConnections, type InstanceConnections } from "./connectio
 export { createConfigAssetSource } from "./config-asset-source";
 export { createPlatformTools } from "./conversation-offer";
 export { mailSendToolRights, mailSendersOf, outboundMailOf, releaseToolNames } from "./mail";
-export { PLATFORM_ORIENTATION, PLATFORM_TOOL_NAMES } from "./platform-orientation";
+export {
+  PLATFORM_ORIENTATION,
+  PLATFORM_TOOL_NAMES,
+  agentListableToolNames
+} from "./platform-orientation";
 export { platformDocsSkill } from "./platform-docs-skill";
 export {
   createInstanceWorkflows,
