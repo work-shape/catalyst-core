@@ -395,9 +395,7 @@ export function ConnectionPage({
             description: t("connections.accessDescription"),
             count:
               holders.status === "ready"
-                ? holders.access.roles.length +
-                  holders.access.holders.length +
-                  holders.access.hidden
+                ? holders.access.roles.length + holders.access.holders.length
                 : undefined,
             body: <ConnectionHolders read={holders} principalHref={source.principalHref} />
           }
@@ -555,7 +553,8 @@ function ConnectionSettings({
  * Who may use the Connection (CONN-WHO-1): the roles first, then each person, group and service
  * principal with a right of its own, each with the verbs of what it may do. A person is a round
  * avatar; a role, a group and a service principal are square ones that say what they are in
- * words, and a service principal opens its own page. Whom the reader may not be shown is a count.
+ * words, and a service principal opens its own page. A reader who manages no users sees the
+ * built-in roles and a line that says who sees the rest, never a name or a count of it.
  */
 function ConnectionHolders({
   read,
@@ -578,8 +577,9 @@ function ConnectionHolders({
       </InlineError>
     );
   }
-  const { roles, holders, hidden } = read.access;
-  if (roles.length + holders.length + hidden === 0) {
+  const { roles, holders, holdersShown } = read.access;
+  // Only a reader who is shown everybody can be told that nobody holds a right.
+  if (holdersShown && roles.length + holders.length === 0) {
     return <EmptyState layout="inline">{t("connections.accessEmpty")}</EmptyState>;
   }
   const verbs = (list: readonly RightVerb[]) => list.map((verb) => verbLabel(verb, t)).join(", ");
@@ -668,13 +668,11 @@ function ConnectionHolders({
           );
         })}
       </List>
-      {hidden > 0 ? (
-        <p className="text-caption text-muted-foreground" data-holders-hidden={hidden}>
-          {hidden === 1
-            ? t("connections.accessHiddenOne")
-            : t("connections.accessHiddenMany", { count: hidden })}
+      {holdersShown ? null : (
+        <p className="text-caption text-muted-foreground" data-holders-not-shown="">
+          {t("connections.accessHoldersNotShown")}
         </p>
-      ) : null}
+      )}
     </div>
   );
 }
