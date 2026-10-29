@@ -6,16 +6,20 @@ import {
   parseClientInstanceConfig,
   findShippedToolReferenceIssues
 } from "@work-shape/catalyst-config-schema";
-import { resolveInstanceModules, releaseToolNames } from "@work-shape/catalyst-client-assembly";
+import {
+  resolveInstanceModules,
+  releaseToolNames,
+  agentListableToolNames,
+  shippedAgentsOf,
+  shippedSkillsOf,
+  offeredSkillNames
+} from "@work-shape/catalyst-client-assembly";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   connectionOperationName,
   DATA_STORE_ACTIONS,
   RUN_AGENT_TOOL_NAME
 } from "@work-shape/catalyst-core";
-import { agentListableToolNames } from "../packages/client-assembly/src/platform-orientation";
-import { shippedAgentsOf } from "../packages/client-assembly/src/shipped-agents";
-import { shippedSkillsOf, offeredSkillNames } from "../packages/client-assembly/src/shipped-skills";
 
 // Runs in release:check as well as the PR suite, against the actual shipped definitions and
 // reference client's assembly switches. No database or deployment credentials are needed.
