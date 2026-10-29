@@ -44,9 +44,18 @@ import { searchKnowledgeStore } from "./search";
 // it there, and starting the first generation makes sure of it once more. A `pending` content
 // keeps why it waits (`KNOWLEDGE_DOCUMENT_WAIT_CODES`) in `failure_code`, which holds a
 // failure code only while it is `failed`: the store's tables need no new column for it.
+//
+// Short transactions (KB-ISO-3b). A content's chunks are written in batches of at most 500,
+// each its own transaction of at most 30 seconds, beside the chunks search reads: at the slot of
+// the revision the live ones do not hold (`slotBeside`). One short transaction then switches
+// the content to them, at once where nothing is embedded, else as its `staged_revision` and
+// after its passages have their vectors (`completeContent`). The chunks of every other revision
+// are deleted in batches after the switch. Search reads only chunks at the content's
+// `chunking_revision`, so a half-written content stays invisible and a re-index keeps the old
+// passages answering until the switch. A search never waits long for the store behind it.
 
-/** How long one write of chunks may take, a large text included. */
-const KNOWLEDGE_INDEX_WRITE_TIMEOUT_MS = 300_000;
+/** How long one transaction of chunks may take: a batch written or deleted (KB-ISO-3b). */
+const KNOWLEDGE_CHUNK_WRITE_TIMEOUT_MS = 30_000;
 
 /** How long a read, a failure mark or a retry may take. */
 const KNOWLEDGE_DOCUMENTS_TIMEOUT_MS = 30_000;
@@ -54,8 +63,8 @@ const KNOWLEDGE_DOCUMENTS_TIMEOUT_MS = 30_000;
 /** How long one search of the store may take: each of its two reads, not the embedding. */
 const KNOWLEDGE_SEARCH_TIMEOUT_MS = 15_000;
 
-/** How many chunks one insert statement writes. */
-const CHUNK_INSERT_BATCH = 500;
+/** How many chunks one transaction writes or deletes (KB-ISO-3b). */
+const CHUNK_BATCH = 500;
 
 // Bound cross-database file lookups while finding a live original among shared copies.
 const CONTENT_COPY_BATCH = 100;
@@ -68,8 +77,8 @@ const contentCopyRow = z.object({
   file_name: z.string()
 });
 
-/** How long a write of one batch of vectors may take. */
-const KNOWLEDGE_EMBEDDINGS_WRITE_TIMEOUT_MS = 120_000;
+/** How long a write of one batch of vectors may take (KB-ISO-3b). */
+const KNOWLEDGE_EMBEDDINGS_WRITE_TIMEOUT_MS = 30_000;
 
 const generationRow = z.object({
   generation: z.number().int().min(1),
@@ -82,6 +91,21 @@ const generationRow = z.object({
 const passageRow = z.object({ id: z.string(), heading: z.string().nullable(), text: z.string() });
 
 const countRow = z.object({ count: z.number().int() });
+
+/**
+ * The revision a new set of chunks is written at, beside those search reads. Both sets of one
+ * content may be cut by the same chunking revision, so each revision has two slots, `r` and
+ * `-r`, and the new set takes the one the live set does not hold. `Math.abs` of a stored
+ * revision is the chunking revision.
+ */
+function slotBeside(live: number | null, revision: number): number {
+  return live === revision ? -revision : revision;
+}
+
+/** A stored revision as the chunking revision it was cut by. */
+function revisionOf(stored: number | null): number | undefined {
+  return stored === null ? undefined : Math.abs(stored);
+}
 
 /** The table of a generation's vectors. The generation is a whole number the store gave out. */
 function embeddingsTable(generation: number): string {
@@ -127,14 +151,14 @@ function assertDimensions(model: KnowledgeEmbeddingModel): void {
 
 /**
  * Whether chunk `c` is one a re-index embeds and a switch waits for: of a content not failed,
- * chunked at the content's revision, that a document not withdrawn holds. A content still
- * `pending` is in it, because its index job may have read the generations before this one was
- * started; it then has its vector before the switch.
+ * chunked at the content's revision or staged beside it, that a document not withdrawn holds.
+ * A content still `pending`, and a staged set, are in it, because their index job may have read
+ * the generations before this one was started; they then have their vectors before the switch.
  */
 const REINDEXED_CHUNK = `exists (
     select 1 from catalyst_kb.contents ct
     where ct.sha256 = c.content_sha256 and ct.state <> 'failed'
-      and ct.chunking_revision = c.chunking_revision
+      and (ct.chunking_revision = c.chunking_revision or ct.staged_revision = c.chunking_revision)
   )
   and exists (
     select 1 from catalyst_kb.documents d
@@ -173,6 +197,7 @@ const contentRow = z.object({
   format: z.enum(KNOWLEDGE_DOCUMENT_FORMATS),
   state: z.enum(KNOWLEDGE_CONTENT_STATES),
   chunking_revision: z.number().int().nullable(),
+  staged_revision: z.number().int().nullable(),
   processing_key: z.string().nullable(),
   requested_processing_key: z.string().nullable(),
   processor_revision: z.string().nullable(),
@@ -219,6 +244,40 @@ export function createBuiltinDocumentStore(
       );
     } catch (error) {
       throw databaseFailureError(error, what);
+    }
+  }
+
+  /**
+   * Deletes the content's chunks of every revision but `keep`, in batches of their own
+   * transactions. False where the content is gone.
+   */
+  async function dropChunksBeside(
+    contentSha256: string,
+    keep: number | null,
+    signal: AbortSignal | undefined
+  ): Promise<boolean> {
+    for (;;) {
+      const deleted = await inStore(
+        "Deleting old passages",
+        KNOWLEDGE_CHUNK_WRITE_TIMEOUT_MS,
+        signal,
+        async (sql) => {
+          // Locked as a rewrite did, so a writer of vectors holding the content finishes first.
+          if (!(await lockContent(sql, contentSha256))) return undefined;
+          const rows = await sql.run(
+            `delete from catalyst_kb.chunks where id in (
+               select id from catalyst_kb.chunks
+               where content_sha256 = $1::pg_catalog.text
+                 and chunking_revision is distinct from $2::pg_catalog.int4
+               limit $3::pg_catalog.int4
+             ) returning 1 as gone`,
+            [contentSha256, keep, CHUNK_BATCH]
+          );
+          return rows.length;
+        }
+      );
+      if (deleted === undefined) return false;
+      if (deleted < CHUNK_BATCH) return true;
     }
   }
 
@@ -316,7 +375,7 @@ export function createBuiltinDocumentStore(
       return inStore("Reading the content", KNOWLEDGE_DOCUMENTS_TIMEOUT_MS, signal, async (sql) => {
         const [row] = z.array(contentRow).parse(
           await sql.run(
-            `select c.format, c.state, c.chunking_revision, c.processing_key, c.processor_revision, c.requested_processing_key,
+            `select c.format, c.state, c.chunking_revision, c.staged_revision, c.processing_key, c.processor_revision, c.requested_processing_key,
                (select path from catalyst_kb.source_items where document_id=d.id limit 1) as path,
                (select mime from catalyst_kb.source_items where document_id=d.id limit 1) as mime,
                exists (select 1 from catalyst_kb.documents s where s.content_sha256=c.sha256 and s.source_item_id is not null and s.withdrawn_at is null) as synced,
@@ -375,7 +434,12 @@ export function createBuiltinDocumentStore(
           synced: row.synced,
           format: row.format,
           state: row.state,
-          ...(row.chunking_revision === null ? {} : { chunkingRevision: row.chunking_revision }),
+          ...(row.chunking_revision === null
+            ? {}
+            : { chunkingRevision: revisionOf(row.chunking_revision) }),
+          ...(row.staged_revision === null
+            ? {}
+            : { stagedRevision: revisionOf(row.staged_revision) }),
           ...(row.processing_key === null ? {} : { processingKey: row.processing_key }),
           ...(row.requested_processing_key === null
             ? {}
@@ -394,85 +458,159 @@ export function createBuiltinDocumentStore(
       });
     },
 
-    writeChunks(input, signal) {
-      return inStore(
+    async writeChunks(input, signal) {
+      // The slot beside the chunks search reads. A set staged before is given up: these replace it.
+      const begun = await inStore(
         "Writing the passages",
-        KNOWLEDGE_INDEX_WRITE_TIMEOUT_MS,
+        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
         signal,
         async (sql) => {
-          if (!(await lockContent(sql, input.contentSha256))) return;
-          await sql.run(
-            "delete from catalyst_kb.chunks where content_sha256 = $1::pg_catalog.text",
-            [input.contentSha256]
-          );
-          for (let start = 0; start < input.chunks.length; start += CHUNK_INSERT_BATCH) {
+          const [row] = await liveRevisions(sql, input.contentSha256);
+          if (!row || row.state === "failed") return undefined;
+          if (row.staged_revision !== null) {
+            await sql.run(
+              "update catalyst_kb.contents set staged_revision = null where sha256 = $1::pg_catalog.text",
+              [input.contentSha256]
+            );
+          }
+          return {
+            live: row.chunking_revision,
+            slot: slotBeside(row.chunking_revision, input.chunkingRevision)
+          };
+        }
+      );
+      if (!begun) return;
+      // What an attempt that ended before its switch left at the slot.
+      if (!(await dropChunksBeside(input.contentSha256, begun.live, signal))) return;
+      for (let start = 0; start < input.chunks.length; start += CHUNK_BATCH) {
+        const written = await inStore(
+          "Writing the passages",
+          KNOWLEDGE_CHUNK_WRITE_TIMEOUT_MS,
+          signal,
+          async (sql) => {
+            // Held against a failure mark or a switch, which lock the row for update.
+            const held = await sql.run(
+              "select 1 as held from catalyst_kb.contents where sha256 = $1::pg_catalog.text for share",
+              [input.contentSha256]
+            );
+            if (held.length === 0) return false;
             await insertChunks(
               sql,
               input.contentSha256,
-              input.chunkingRevision,
-              input.chunks.slice(start, start + CHUNK_INSERT_BATCH)
+              begun.slot,
+              input.chunks.slice(start, start + CHUNK_BATCH)
+            );
+            return true;
+          }
+        );
+        if (!written) return;
+      }
+      const switched = await inStore(
+        "Switching the passages",
+        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        signal,
+        async (sql) => {
+          const [row] = await liveRevisions(sql, input.contentSha256);
+          if (!row || row.state === "failed") return false;
+          // Another attempt of the same content wrote or switched meanwhile: this one is
+          // retried rather than switch to a set it did not see whole.
+          const [count] = z.array(countRow).parse(
+            await sql.run(
+              `select count(*)::pg_catalog.int4 as count from catalyst_kb.chunks
+                 where content_sha256 = $1::pg_catalog.text and chunking_revision = $2::pg_catalog.int4`,
+              [input.contentSha256, begun.slot]
+            )
+          );
+          if (row.chunking_revision !== begun.live || count?.count !== input.chunks.length) {
+            throw new AppError(
+              "CONFLICT",
+              "The passages of the content changed while they were written"
             );
           }
           await sql.run(
             `update catalyst_kb.contents
-           set state = $5::pg_catalog.text, failure_code = null,
-             chunking_revision = $2::pg_catalog.int4, extraction_revision = $3::pg_catalog.int4,
+           set state = case when $8::pg_catalog.bool then 'extracted' else state end,
+             chunking_revision = case when $8::pg_catalog.bool then $2::pg_catalog.int4
+               else chunking_revision end,
+             staged_revision = case when $8::pg_catalog.bool then null else $2::pg_catalog.int4 end,
+             failure_code = null, extraction_revision = $3::pg_catalog.int4,
              page_count = $4::pg_catalog.int4, updated_at = now(),
-             document_type=$6::text, processor_revision=$7::text, processing_key=$8::text, requested_processing_key=null
+             document_type=$5::text, processor_revision=$6::text, processing_key=$7::text,
+             requested_processing_key=null
            where sha256 = $1::pg_catalog.text`,
             [
               input.contentSha256,
-              input.chunkingRevision,
+              begun.slot,
               input.extractionRevision,
               input.pageCount,
-              input.complete ? "extracted" : "pending",
               input.documentType ?? null,
               input.processorRevision ?? null,
-              input.processingKey ?? null
+              input.processingKey ?? null,
+              input.complete
             ]
           );
+          return input.complete;
         }
       );
+      if (switched) await dropChunksBeside(input.contentSha256, begun.slot, signal);
     },
 
-    failContent(input, signal) {
-      return inStore(
+    async failContent(input, signal) {
+      const failed = await inStore(
         "Marking the content failed",
         KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
         signal,
         async (sql) => {
-          if (!(await lockContent(sql, input.contentSha256))) return;
-          await sql.run(
-            "delete from catalyst_kb.chunks where content_sha256 = $1::pg_catalog.text",
-            [input.contentSha256]
-          );
-          // Its chunks are gone, so it is chunked afresh when it is retried.
+          if (!(await lockContent(sql, input.contentSha256))) return false;
+          // Its chunks go, so it is chunked afresh when it is retried. Search reads none of a
+          // failed content's, so they are deleted in batches after.
           await sql.run(
             `update catalyst_kb.contents
            set state = 'failed', failure_code = $2::pg_catalog.text, chunking_revision = null,
-             page_count = $3::pg_catalog.int4, updated_at = now()
+             staged_revision = null, page_count = $3::pg_catalog.int4, updated_at = now()
            where sha256 = $1::pg_catalog.text`,
             [input.contentSha256, input.code, input.pageCount ?? null]
           );
+          return true;
         }
       );
+      if (failed) await dropChunksBeside(input.contentSha256, null, signal);
     },
 
-    completeContent(input, signal) {
-      return inStore(
+    async completeContent(input, signal) {
+      const live = await inStore(
         "Marking the content indexed",
         KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
         signal,
         async (sql) => {
-          await sql.run(
-            `update catalyst_kb.contents
-           set state = 'extracted', failure_code = null, updated_at = now()
-           where sha256 = $1::pg_catalog.text and state = 'pending'
-             and chunking_revision = $2::pg_catalog.int4`,
-            [input.contentSha256, input.chunkingRevision]
-          );
+          const [row] = await liveRevisions(sql, input.contentSha256);
+          if (!row || row.state === "failed") return undefined;
+          if (row.staged_revision !== null) {
+            if (revisionOf(row.staged_revision) !== input.chunkingRevision) return undefined;
+            // The switch: search reads the staged chunks from here on.
+            await sql.run(
+              `update catalyst_kb.contents
+             set state = 'extracted', failure_code = null, chunking_revision = staged_revision,
+               staged_revision = null, updated_at = now()
+             where sha256 = $1::pg_catalog.text`,
+              [input.contentSha256]
+            );
+            return row.staged_revision;
+          }
+          if (revisionOf(row.chunking_revision) !== input.chunkingRevision) return undefined;
+          if (row.state === "pending") {
+            await sql.run(
+              `update catalyst_kb.contents
+             set state = 'extracted', failure_code = null, updated_at = now()
+             where sha256 = $1::pg_catalog.text`,
+              [input.contentSha256]
+            );
+          }
+          return row.chunking_revision;
         }
       );
+      // The chunks an earlier set left, also where an attempt ended between switch and cleanup.
+      if (live !== undefined) await dropChunksBeside(input.contentSha256, live, signal);
     },
 
     waitContent(input, signal) {
@@ -552,8 +690,10 @@ export function createBuiltinDocumentStore(
           const rows = z.array(passageRow).parse(
             await sql.run(
               `select c.id, c.heading, c.text from catalyst_kb.chunks c
+             join catalyst_kb.contents ct on ct.sha256 = c.content_sha256
              where c.content_sha256 = $1::pg_catalog.text
-               and c.chunking_revision = $2::pg_catalog.int4
+               and c.chunking_revision = coalesce(ct.staged_revision, ct.chunking_revision)
+               and pg_catalog.abs(c.chunking_revision) = $2::pg_catalog.int4
                and not exists (
                  select 1 from ${embeddingsTable(input.generation)} e where e.chunk_id = c.id
                )
@@ -969,6 +1109,26 @@ export function createBuiltinDocumentStore(
   };
 }
 
+const revisionsRow = z.object({
+  state: z.enum(KNOWLEDGE_CONTENT_STATES),
+  chunking_revision: z.number().int().nullable(),
+  staged_revision: z.number().int().nullable()
+});
+
+/** The content's state and stored revisions, its row locked for the transaction. */
+async function liveRevisions(
+  sql: PostgresChangeStatements,
+  contentSha256: string
+): Promise<z.infer<typeof revisionsRow>[]> {
+  return z.array(revisionsRow).parse(
+    await sql.run(
+      `select state, chunking_revision, staged_revision from catalyst_kb.contents
+       where sha256 = $1::pg_catalog.text for update`,
+      [contentSha256]
+    )
+  );
+}
+
 /** Locks the content's row for the transaction. False where the content is gone. */
 async function lockContent(sql: PostgresChangeStatements, contentSha256: string): Promise<boolean> {
   const rows = await sql.run(
@@ -993,7 +1153,8 @@ async function insertChunks(
        c.token_count
      from unnest($3::pg_catalog.int4[], $4::pg_catalog.int4[], $5::pg_catalog.text[],
        $6::pg_catalog.text[], $7::pg_catalog.int4[])
-       as c (position, page, heading, text, token_count)`,
+       as c (position, page, heading, text, token_count)
+     on conflict do nothing`,
     [
       contentSha256,
       chunkingRevision,

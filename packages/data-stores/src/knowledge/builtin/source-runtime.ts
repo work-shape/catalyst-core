@@ -25,6 +25,12 @@ export interface KnowledgeSourceJobsInput {
    * sets a smaller one to cross it with a small fixture. Release config never sets it.
    */
   firstPassStop?: number;
+  /**
+   * The fetch window of a Knowledge Base: `KNOWLEDGE_FETCH_WINDOW_ITEMS` and
+   * `KNOWLEDGE_FETCH_WINDOW_BYTES` unless a test sets a smaller one to fill it with a small
+   * fixture (KB-ISO-3b). Release config never sets it.
+   */
+  fetchWindow?: { items: number; bytes: number };
   openSource(
     connection: string,
     signal: AbortSignal

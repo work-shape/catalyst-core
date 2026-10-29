@@ -147,6 +147,21 @@ export function enqueueKnowledgeWorkflowSourceEnd(
  */
 export const KNOWLEDGE_FIRST_PASS_STOP = 10_000;
 
+/**
+ * The fetch window of a Knowledge Base (KB-ISO-3b): at most this many fetched items, and at
+ * most `KNOWLEDGE_FETCH_WINDOW_BYTES` of them, whose content has not yet left `pending`. A fetch
+ * batch that finds it full queues its rest after `KNOWLEDGE_FETCH_WINDOW_WAIT_MS` and spends no
+ * attempt, which bounds the object store and the spool while indexing is paused or slower than
+ * fetching. Constants, not settings.
+ */
+export const KNOWLEDGE_FETCH_WINDOW_ITEMS = 2_000;
+
+/** The bytes of the fetch window, by the sizes the source listed: 2 GiB. */
+export const KNOWLEDGE_FETCH_WINDOW_BYTES = 2 * 1024 ** 3;
+
+/** How long the rest of a fetch batch that found the window full waits. */
+export const KNOWLEDGE_FETCH_WINDOW_WAIT_MS = 60_000;
+
 /** How often the fetch of one item is attempted before it fails with `knowledge_fetch_failed`. */
 export const KNOWLEDGE_FETCH_MAX_ATTEMPTS = 3;
 

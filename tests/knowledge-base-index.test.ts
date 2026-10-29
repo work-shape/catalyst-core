@@ -251,7 +251,7 @@ describe("indexing the documents of a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(record).toMatchObject({ status: "ready", level: 16 });
+      expect(record).toMatchObject({ status: "ready", level: 17 });
       return required(record);
     });
   }
@@ -386,6 +386,104 @@ describe("indexing the documents of a Knowledge Base", () => {
     for (const event of events) {
       expect(JSON.stringify(event)).not.toMatch(/Mietvertrag\.md|Heizung|Kaution/u);
     }
+  });
+
+  it("writes a re-index beside the passages search reads: half-written it stays invisible, and the old passages answer until the switch (KB-ISO-3b)", async () => {
+    const { instance, record } = await instanceWith();
+    // 620 sections, one passage each: two batches of chunks, 500 and 120.
+    const content = [
+      "# Baubeschreibung",
+      ...Array.from(
+        { length: 619 },
+        (_, index) => `## Raum ${index}\n\nDer Raum ${index} hat Parkett.`
+      )
+    ].join("\n\n");
+    const document = await add(instance, {
+      filename: "Baubeschreibung.md",
+      contentType: "text/markdown",
+      content
+    });
+    await runJobs(instance);
+    const indexed = await chunkRows(record);
+    expect(indexed.length).toBeGreaterThan(500);
+    const search = async (query: string) => {
+      const answered = await instance.api.call("knowledge_bases.search", {
+        params: { knowledgeBase: KB },
+        payload: { query, limit: 20 }
+      });
+      expect(answered.statusCode, answered.body).toBe(200);
+      return z
+        .object({ passages: z.array(z.object({ text: z.string() })) })
+        .parse(answered.json())
+        .passages.map((passage) => passage.text);
+    };
+    // The passages as an earlier chunking revision cut them: each holds a word the new cut
+    // does not, so a hit tells which set answered.
+    await inStore(
+      record,
+      (sql) => sql`update catalyst_kb.chunks
+        set chunking_revision = 0, id = content_sha256 || ':0:' || position, text = text || ' Altbestand'`
+    );
+    await inStore(record, (sql) => sql`update catalyst_kb.contents set chunking_revision = 0`);
+    expect((await search("Altbestand")).length).toBeGreaterThan(0);
+
+    // A worker that stops between two batches: the store refuses the second.
+    await inStore(record, (sql) =>
+      sql.unsafe(`
+        create function catalyst_kb.stop_after_first_batch() returns trigger language plpgsql as
+          $$ begin if new.position >= 500 then raise exception 'worker stopped'; end if; return new; end $$;
+        create trigger stop_after_first_batch before insert on catalyst_kb.chunks
+          for each row execute function catalyst_kb.stop_after_first_batch();`)
+    );
+    const reindex = () =>
+      instance.stores.jobs.enqueue(
+        knowledgeIndexJob,
+        {
+          knowledgeBaseId: record.id,
+          contentSha256: sha256(content),
+          fileId: document.fileId,
+          operationRunId: "reindex"
+        },
+        { clientInstanceId }
+      );
+    await reindex();
+    await runJobs(instance);
+    const revisions = () =>
+      inStore(
+        record,
+        (sql) => sql<{ revision: number; count: number }[]>`
+          select chunking_revision as revision, count(*)::int as count from catalyst_kb.chunks
+          group by chunking_revision order by chunking_revision`
+      );
+    // The first batch is in beside the old passages; the content still reads the old ones.
+    expect(await revisions()).toEqual([
+      { revision: 0, count: indexed.length },
+      { revision: 1, count: 500 }
+    ]);
+    expect(
+      await inStore(
+        record,
+        (sql) => sql`select state, chunking_revision, staged_revision from catalyst_kb.contents`
+      )
+    ).toEqual([{ state: "extracted", chunking_revision: 0, staged_revision: null }]);
+    expect((await list(instance)).documents).toMatchObject([{ state: "indexed" }]);
+    const halfway = await search("Parkett Raum 7");
+    expect(halfway.length).toBeGreaterThan(0);
+    expect(halfway.every((text) => text.endsWith(" Altbestand"))).toBe(true);
+
+    // The next attempt finishes it: the switch, then the old passages go. No chunk twice.
+    await inStore(record, (sql) =>
+      sql.unsafe(`drop trigger stop_after_first_batch on catalyst_kb.chunks;
+        drop function catalyst_kb.stop_after_first_batch();`)
+    );
+    await reindex();
+    await runJobs(instance);
+    expect(await revisions()).toEqual([{ revision: 1, count: indexed.length }]);
+    expect(await chunkRows(record)).toEqual(indexed);
+    expect(await search("Altbestand")).toEqual([]);
+    const after = await search("Parkett Raum 7");
+    expect(after.length).toBeGreaterThan(0);
+    expect(after.some((text) => text.endsWith(" Altbestand"))).toBe(false);
   });
 
   it("fails a file that is no text and one without text with their codes, and Retry indexes it again", async () => {

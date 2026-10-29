@@ -171,7 +171,7 @@ describe("searching the documents of a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${name}`
       });
-      expect(record).toMatchObject({ status: "ready", level: 16 });
+      expect(record).toMatchObject({ status: "ready", level: 17 });
       return required(record);
     });
   }

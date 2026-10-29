@@ -358,6 +358,17 @@ const WORKFLOW_SOURCE_END = `
     where workflow_revision is not null;
 `;
 
+/**
+ * Short store transactions and the fetch window (KB-ISO-3b). `staged_revision` is the revision
+ * of a content's chunks written beside those search reads and complete, until the switch makes
+ * them its `chunking_revision`. The partial index finds the contents still `pending`, which the
+ * fetch window counts before each group of items it fetches.
+ */
+const CHUNK_SWITCH_FETCH_WINDOW = `
+  alter table catalyst_kb.contents add column staged_revision integer;
+  create index contents_pending_idx on catalyst_kb.contents (sha256) where state = 'pending';
+`;
+
 /** The tables of the store of a built-in Knowledge Base, in the order a store applies them. */
 const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   { number: 1, name: "documents", sql: DOCUMENTS },
@@ -400,7 +411,8 @@ const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   { number: 13, name: "workflow_ingest", sql: WORKFLOW_INGEST },
   { number: 14, name: "item_removal_hold", sql: ITEM_REMOVAL_HOLD },
   { number: 15, name: "workflow_source_end", sql: WORKFLOW_SOURCE_END },
-  { number: 16, name: "record_corrected_value", sql: RECORD_FIELDS_CORRECTED_VALUE }
+  { number: 16, name: "record_corrected_value", sql: RECORD_FIELDS_CORRECTED_VALUE },
+  { number: 17, name: "chunk_switch_fetch_window", sql: CHUNK_SWITCH_FETCH_WINDOW }
 ];
 
 /** A later applied number never proves that earlier migrations were applied. */

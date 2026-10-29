@@ -297,7 +297,8 @@ describe("adding files to a Knowledge Base", () => {
         drop table catalyst_kb.field_budgets;
         drop table catalyst_kb.source_cursors, catalyst_kb.sync_runs, catalyst_kb.source_items;
         drop table catalyst_kb.ingest_failures, catalyst_kb.ingest_items, catalyst_kb.ingest_waiting;
-        alter table catalyst_kb.contents drop column document_type, drop column processor_revision, drop column processing_key, drop column requested_processing_key;
+        drop index catalyst_kb.contents_pending_idx;
+        alter table catalyst_kb.contents drop column document_type, drop column processor_revision, drop column processing_key, drop column requested_processing_key, drop column staged_revision;
         delete from catalyst_kb.migrations where number >= 2;`)
     );
     await instance.stores.dataStores.putDataStore({
@@ -330,11 +331,11 @@ describe("adding files to a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(current).toMatchObject({ status: "ready", level: 16 });
+      expect(current).toMatchObject({ status: "ready", level: 17 });
       return required(current);
     });
     expect(upgraded.migrations.map(({ number }) => number)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
     ]);
 
     const added = await addFiles(instance, [source]);

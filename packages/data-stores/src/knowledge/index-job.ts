@@ -506,10 +506,26 @@ export function createKnowledgeIndexJobHandler(
         // A failure waits for Retry.
         if (content.state === "failed" && !changed) return;
         const semantic = target.methods.includes("semantic");
-        const chunked = content.chunkingRevision === KNOWLEDGE_CHUNKING_REVISION && !changed;
+        // Chunks written whole at this revision: those search reads, or a set staged beside them
+        // that waits for its vectors and its switch (KB-ISO-3b).
+        const chunked =
+          (content.stagedRevision ?? content.chunkingRevision) === KNOWLEDGE_CHUNKING_REVISION &&
+          !changed;
         // The skip rule. A Knowledge Base that searches by meaning looks for passages without a
-        // vector, which costs no call where there are none.
-        if (content.state === "extracted" && chunked && !semantic) return;
+        // vector, which costs no call where there are none. Completing again only deletes what
+        // an attempt ended between its switch and the deletion of the old chunks left.
+        if (
+          content.state === "extracted" &&
+          chunked &&
+          !semantic &&
+          content.stagedRevision === undefined
+        ) {
+          await store.completeContent(
+            { contentSha256: payload.contentSha256, chunkingRevision: KNOWLEDGE_CHUNKING_REVISION },
+            signal
+          );
+          return;
+        }
         let written: { chunks: number; pages: number } | undefined;
         if (!chunked) {
           const pages = await pagesOf(
