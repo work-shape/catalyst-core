@@ -1,15 +1,21 @@
 import type { PlatformEventDefinition } from "./definition";
 import type { JsonObject } from "../json";
 
-// The ids a feedback event carries: the comment, the agent and the workspace of the conversation.
+// The ids a feedback event carries: the comment, what it is about (the agent of an answer, the
+// App, or the Workflow and its run) and the workspace it was sent in.
 const FEEDBACK_IDS_PAYLOAD: JsonObject = {
   type: "object",
   additionalProperties: false,
-  required: ["feedbackId", "agentName"],
+  required: ["feedbackId", "subjectKind"],
   properties: {
     feedbackId: { type: "string" },
+    subjectKind: { type: "string", enum: ["message", "app", "workflow_run"] },
     agentName: { type: "string" },
     agentAssetId: { type: "string" },
+    appName: { type: "string" },
+    workflowName: { type: "string" },
+    workflowRunId: { type: "string" },
+    assetId: { type: "string" },
     workspaceId: { type: "string" }
   }
 };

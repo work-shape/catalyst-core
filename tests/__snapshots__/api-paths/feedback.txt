@@ -2,7 +2,10 @@ feedback.annotate  POST /api/v1/feedback/:feedbackId/annotation
 feedback.get  GET /api/v1/feedback/:feedbackId
 feedback.list  GET /api/v1/feedback
 feedback.list_own  GET /api/v1/conversations/:conversationId/feedback
+feedback.list_own_on_result  GET /api/v1/approval-requests/:requestId/feedback
 feedback.mark_handled  POST /api/v1/feedback/:feedbackId/handled
 feedback.send  POST /api/v1/conversations/:conversationId/feedback
+feedback.send_from_app  POST /api/v1/app-content-sessions/:pageSessionId/feedback
+feedback.send_on_result  POST /api/v1/approval-requests/:requestId/feedback
 feedback.update  POST /api/v1/conversations/:conversationId/feedback/:feedbackId
 feedback.withdraw  POST /api/v1/conversations/:conversationId/feedback/:feedbackId/withdraw

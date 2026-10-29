@@ -1,7 +1,10 @@
-import { and, asc, desc, eq, inArray, lt } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, or } from "drizzle-orm";
 import {
   AppError,
+  FEEDBACK_ASSET_KIND_OF,
   asClientInstanceId,
+  type CreateFeedbackInput,
+  type FeedbackAsset,
   type FeedbackRecord,
   type FeedbackRemoval,
   type FeedbackStore
@@ -21,18 +24,56 @@ function iso(value: Date): string {
   return value.toISOString();
 }
 
+/** What a comment is about: the agent of an answer, or the App or Workflow of the others. */
+function assetOf(row: FeedbackRow): FeedbackAsset {
+  const asAgent = row.subjectKind === "message";
+  const name = (asAgent ? row.agentName : row.assetName) ?? "";
+  const id = asAgent ? row.agentAssetId : row.assetId;
+  const revision = asAgent ? row.agentRevision : row.assetRevision;
+  const workspaceId = asAgent ? row.agentWorkspaceId : row.assetWorkspaceId;
+  return {
+    kind: FEEDBACK_ASSET_KIND_OF[row.subjectKind],
+    name,
+    ...(id ? { id } : {}),
+    ...(revision === null ? {} : { revision }),
+    ...(workspaceId ? { workspaceId } : {})
+  };
+}
+
+/** The columns of what a comment is about. */
+function assetColumns(input: CreateFeedbackInput) {
+  const { asset } = input;
+  const columns = {
+    name: asset.name,
+    id: asset.id ?? null,
+    revision: asset.revision ?? null,
+    workspaceId: asset.workspaceId ?? null
+  };
+  return input.subjectKind === "message"
+    ? {
+        agentName: columns.name,
+        agentAssetId: columns.id,
+        agentRevision: columns.revision,
+        agentWorkspaceId: columns.workspaceId
+      }
+    : {
+        assetName: columns.name,
+        assetId: columns.id,
+        assetRevision: columns.revision,
+        assetWorkspaceId: columns.workspaceId
+      };
+}
+
 function mapFeedback(row: FeedbackRow, authorDisplayLabel?: string | null): FeedbackRecord {
   return {
     id: row.id,
     clientInstanceId: asClientInstanceId(row.clientInstanceId),
     subjectKind: row.subjectKind,
+    asset: assetOf(row),
     ...(row.messageId ? { messageId: row.messageId } : {}),
-    agentName: row.agentName,
-    ...(row.agentAssetId ? { agentAssetId: row.agentAssetId } : {}),
-    ...(row.agentRevision === null ? {} : { agentRevision: row.agentRevision }),
-    ...(row.agentWorkspaceId ? { agentWorkspaceId: row.agentWorkspaceId } : {}),
     ...(row.conversationId ? { conversationId: row.conversationId } : {}),
     ...(row.agentRunId ? { agentRunId: row.agentRunId } : {}),
+    ...(row.workflowRunId ? { workflowRunId: row.workflowRunId } : {}),
     ...(row.workspaceId ? { workspaceId: row.workspaceId } : {}),
     authorUserId: row.authorUserId,
     ...(authorDisplayLabel ? { authorDisplayLabel } : {}),
@@ -104,14 +145,12 @@ export function createPostgresFeedbackStore(db: PostgresConnection): FeedbackSto
           id: input.id,
           clientInstanceId: input.clientInstanceId,
           subjectKind: input.subjectKind,
-          messageId: input.messageId,
-          agentName: input.agentName,
-          agentAssetId: input.agentAssetId ?? null,
-          agentRevision: input.agentRevision ?? null,
-          agentWorkspaceId: input.agentWorkspaceId ?? null,
-          conversationId: input.conversationId,
-          agentRunId: input.agentRunId,
-          workspaceId: input.workspaceId,
+          ...assetColumns(input),
+          messageId: input.messageId ?? null,
+          conversationId: input.conversationId ?? null,
+          agentRunId: input.agentRunId ?? null,
+          workflowRunId: input.workflowRunId ?? null,
+          workspaceId: input.workspaceId ?? null,
           authorUserId: input.authorUserId,
           text: input.text,
           exchangeQuestion: input.exchange?.question ?? null,
@@ -123,7 +162,7 @@ export function createPostgresFeedbackStore(db: PostgresConnection): FeedbackSto
         .onConflictDoNothing()
         .returning({ id: feedback.id });
       if (inserted.length === 0) {
-        throw new AppError("CONFLICT", "You already sent feedback on this message", {
+        throw new AppError("CONFLICT", "You already sent feedback on this", {
           reason: "feedback_exists"
         });
       }
@@ -143,7 +182,9 @@ export function createPostgresFeedbackStore(db: PostgresConnection): FeedbackSto
           and(
             eq(feedback.clientInstanceId, input.clientInstanceId),
             eq(feedback.authorUserId, input.authorUserId),
-            eq(feedback.conversationId, input.conversationId)
+            "workflowRunId" in input
+              ? eq(feedback.workflowRunId, input.workflowRunId)
+              : eq(feedback.conversationId, input.conversationId)
           )
         )
         .orderBy(asc(feedback.createdAt), asc(feedback.id))
@@ -152,7 +193,7 @@ export function createPostgresFeedbackStore(db: PostgresConnection): FeedbackSto
     },
 
     async listFeedback(input) {
-      if (input.agentAssetIds?.length === 0) return [];
+      if (input.assetIds?.length === 0) return [];
       const rows = await db
         .select(columns)
         .from(feedback)
@@ -160,8 +201,11 @@ export function createPostgresFeedbackStore(db: PostgresConnection): FeedbackSto
         .where(
           and(
             eq(feedback.clientInstanceId, input.clientInstanceId),
-            input.agentAssetIds
-              ? inArray(feedback.agentAssetId, [...input.agentAssetIds])
+            input.assetIds
+              ? or(
+                  inArray(feedback.agentAssetId, [...input.assetIds]),
+                  inArray(feedback.assetId, [...input.assetIds])
+                )
               : undefined,
             input.agentName ? eq(feedback.agentName, input.agentName) : undefined,
             input.state ? eq(feedback.state, input.state) : undefined,

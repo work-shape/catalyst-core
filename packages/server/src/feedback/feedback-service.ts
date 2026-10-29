@@ -1,11 +1,18 @@
-import type {
-  FeedbackView,
-  OwnFeedback,
-  SendFeedbackRequest,
-  UpdateFeedbackRequest
+import {
+  APP_ASSET_KIND,
+  type FeedbackView,
+  type OwnFeedback,
+  type SendFeedbackRequest,
+  type UpdateFeedbackRequest
 } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
+  NOTICE_KIND,
+  WORKFLOW_ASSET_KIND,
+  type ConfigAssetRecord,
+  type CreateFeedbackInput,
+  type FeedbackAsset,
+  type FeedbackAssetKind,
   personalConversationPrivateError,
   rootConversationOf,
   FEEDBACK_REVIEW_ACTION,
@@ -28,17 +35,20 @@ import {
   type OperationAuthorization,
   type StorePage
 } from "@work-shape/catalyst-core";
+import type { FrameSession } from "../apps/action-call";
 import { ApprovalRequestWorkflow } from "../approvals/approval-request-service";
+import { noticeContentSchema, type NoticePayload } from "../notices/notice-kind";
 import {
   requireChatConversationAccess,
   requireConversationAccess
 } from "../conversations/conversation-access";
 import type { ChatServerOptions } from "../types";
 import {
-  feedbackAgentResource,
+  feedbackAssetResource,
   feedbackEventIds,
   feedbackReviewPayload,
-  removeFeedback
+  removeFeedback,
+  reviewedAssets
 } from "./feedback-review-kind";
 
 type FeedbackOptions = Pick<
@@ -71,18 +81,22 @@ function ownFeedbackView(record: FeedbackRecord): OwnFeedback {
 
 /** A comment as its reviewer reads it. */
 function feedbackView(record: FeedbackRecord): FeedbackView {
+  const { asset } = record;
+  const about = {
+    name: asset.name,
+    ...(asset.id ? { assetId: asset.id } : {}),
+    ...(asset.revision === undefined ? {} : { revision: asset.revision }),
+    ...(asset.workspaceId ? { workspaceId: asset.workspaceId } : {})
+  };
   return {
     id: record.id,
     subjectKind: record.subjectKind,
+    about: { kind: asset.kind, ...about },
     ...(record.messageId ? { messageId: record.messageId } : {}),
-    agent: {
-      name: record.agentName,
-      ...(record.agentAssetId ? { assetId: record.agentAssetId } : {}),
-      ...(record.agentRevision === undefined ? {} : { revision: record.agentRevision }),
-      ...(record.agentWorkspaceId ? { workspaceId: record.agentWorkspaceId } : {})
-    },
+    ...(asset.kind === "agent" ? { agent: about } : {}),
     ...(record.conversationId ? { conversationId: record.conversationId } : {}),
     ...(record.agentRunId ? { agentRunId: record.agentRunId } : {}),
+    ...(record.workflowRunId ? { workflowRunId: record.workflowRunId } : {}),
     ...(record.workspaceId ? { workspaceId: record.workspaceId } : {}),
     author: {
       id: record.authorUserId,
@@ -136,7 +150,7 @@ export function authorizeReviewer(
     : { allowed: false, action: FEEDBACK_REVIEW_ACTION, reason: "no_grant" };
 }
 
-function personOf(actor: AuthenticatedIdentity): AuthenticatedUser {
+export function personOf(actor: AuthenticatedIdentity): AuthenticatedUser {
   if (isAuthenticatedServicePrincipal(actor)) {
     throw new AppError("FORBIDDEN", "Only a person leaves feedback on an answer");
   }
@@ -215,21 +229,12 @@ export class FeedbackWorkflow {
       name: run.agentName
     });
     const exchange = this.exchangeOf(input.includeExchange, question?.text, answer.text);
-    const record = await stores.feedback.createFeedback({
+    return this.deliver(context, user, {
       id: createFeedbackId(),
       clientInstanceId: this.clientInstanceId,
       subjectKind: "message",
+      asset: { kind: "agent", name: run.agentName, ...liveAsset(agent, "active") },
       messageId: answer.id,
-      agentName: run.agentName,
-      ...(agent && agent.status === "active"
-        ? {
-            agentAssetId: agent.id,
-            agentRevision: agent.revision,
-            ...(agent.scope.kind === "workspace"
-              ? { agentWorkspaceId: agent.scope.workspaceId }
-              : {})
-          }
-        : {}),
       conversationId: conversation.id,
       agentRunId: run.id,
       workspaceId: conversation.collaborationWorkspaceId,
@@ -237,13 +242,108 @@ export class FeedbackWorkflow {
       text: input.text,
       ...(exchange ? { exchange } : {})
     });
+  }
+
+  /**
+   * A comment from inside a published App (LU-6). The frame the call names says which App and
+   * which revision it is about: the Page sends nothing but the text. Nothing of the App's data
+   * is copied; the reviewer opens the App.
+   */
+  async sendFromApp(
+    context: CallContext,
+    frame: Pick<FrameSession, "mode" | "appName" | "workspaceId">,
+    text: string
+  ): Promise<OwnFeedback> {
+    const user = personOf(context.actor);
+    if (frame.mode !== "published" || !frame.appName) {
+      throw new AppError("NOT_FOUND", "Feedback is sent from a published App", {
+        reason: "feedback_app_unpublished"
+      });
+    }
+    const app = await this.options.stores.configAssets.getConfigAsset({
+      clientInstanceId: this.clientInstanceId,
+      kind: APP_ASSET_KIND,
+      name: frame.appName
+    });
+    return this.deliver(context, user, {
+      id: createFeedbackId(),
+      clientInstanceId: this.clientInstanceId,
+      subjectKind: "app",
+      asset: { kind: "app", name: frame.appName, ...liveAsset(app, "published") },
+      ...(frame.workspaceId ? { workspaceId: frame.workspaceId } : {}),
+      authorUserId: getSubjectUserId(user),
+      text
+    });
+  }
+
+  /** The caller's own comment on the Workflow run a notice in their Inbox reports. */
+  async listOwnOnResult(
+    context: CallContext,
+    requestId: string
+  ): Promise<{ items: OwnFeedback[] }> {
+    const user = personOf(context.actor);
+    const result = await this.reportedResult(user, requestId);
+    const records = await this.options.stores.feedback.listOwnFeedback({
+      clientInstanceId: this.clientInstanceId,
+      authorUserId: getSubjectUserId(user),
+      workflowRunId: result.runId
+    });
+    return { items: records.map(ownFeedbackView) };
+  }
+
+  /**
+   * A comment on the result of a Workflow run that reached the caller's Inbox as a notice
+   * (LU-6): one per person per run. The notice is the caller's own, so whoever it reached may
+   * say something about it; nothing of the run is copied.
+   */
+  async sendOnResult(context: CallContext, requestId: string, text: string): Promise<OwnFeedback> {
+    const user = personOf(context.actor);
+    const result = await this.reportedResult(user, requestId);
+    const { stores } = this.options;
+    const run = await stores.workflowRuns.readRun({
+      clientInstanceId: this.clientInstanceId,
+      id: result.runId
+    });
+    if (!run || run.workflow !== result.workflowId) {
+      throw new AppError("NOT_FOUND", "The Workflow run was not found");
+    }
+    const workflow = await stores.configAssets.getConfigAsset({
+      clientInstanceId: this.clientInstanceId,
+      kind: WORKFLOW_ASSET_KIND,
+      name: run.workflow
+    });
+    const asset = liveAsset(workflow, run.definitionRevisionId);
+    return this.deliver(context, user, {
+      id: createFeedbackId(),
+      clientInstanceId: this.clientInstanceId,
+      subjectKind: "workflow_run",
+      asset: { kind: "workflow", name: run.workflow, ...asset },
+      workflowRunId: run.id,
+      // The notice stands in the reader's own workspace; the run belongs to its Workflow.
+      ...(asset.workspaceId ? { workspaceId: asset.workspaceId } : {}),
+      authorUserId: getSubjectUserId(user),
+      text
+    });
+  }
+
+  /**
+   * Stores a comment and files the `feedback_review` item that brings it to its reviewers. The
+   * item names the asset, never the comment: its summary is read by every reviewer. A comment
+   * no reviewer can find is no comment, so it goes with an item that failed.
+   */
+  private async deliver(
+    context: CallContext,
+    user: AuthenticatedUser,
+    input: CreateFeedbackInput
+  ): Promise<OwnFeedback> {
+    const { stores } = this.options;
+    const record = await stores.feedback.createFeedback(input);
     let requestId: string;
     try {
-      // The item names the agent, never the comment: its summary is read by every reviewer.
       const request = await stores.approvals.createApprovalRequest({
         clientInstanceId: this.clientInstanceId,
         kind: FEEDBACK_REVIEW_KIND,
-        summary: `Feedback on the agent '${run.agentName}'`,
+        summary: `Feedback on the ${ASSET_WORDS[record.asset.kind]} '${record.asset.name}'`,
         payload: feedbackReviewPayload(record),
         requestedBy: { id: user.id, displayLabel: user.displayLabel }
       });
@@ -254,7 +354,6 @@ export class FeedbackWorkflow {
         approvalRequestId: requestId
       });
     } catch (error) {
-      // A comment no reviewer can find is no comment: it goes with the item that failed.
       await stores.feedback.deleteFeedback({
         clientInstanceId: this.clientInstanceId,
         id: record.id
@@ -270,6 +369,25 @@ export class FeedbackWorkflow {
       metadata: feedbackEventIds(record)
     });
     return ownFeedbackView({ ...record, approvalRequestId: requestId });
+  }
+
+  /**
+   * The Workflow run a notice in the caller's own Inbox reports. Any other item, and a notice
+   * of somebody else, reads as one that does not exist.
+   */
+  private async reportedResult(
+    user: AuthenticatedUser,
+    requestId: string
+  ): Promise<{ workflowId: string; runId: string }> {
+    const request = await this.options.stores.approvals.getApprovalRequest({
+      clientInstanceId: this.clientInstanceId,
+      requestId
+    });
+    const link = request?.kind === NOTICE_KIND ? noticeLinkOf(request.payload) : undefined;
+    if (!request || request.addresseeUserId !== user.id || link?.kind !== "workflow_run") {
+      throw new AppError("NOT_FOUND", "The Workflow result was not found");
+    }
+    return { workflowId: link.workflowId, runId: link.runId };
   }
 
   async update(
@@ -336,10 +454,10 @@ export class FeedbackWorkflow {
     page: StorePage | undefined
   ): Promise<FeedbackView[]> {
     const reach = await this.reviewReach(context.access);
-    if (reach.agentAssetIds?.length === 0) return [];
+    if (reach.assetIds?.length === 0) return [];
     const records = await this.options.stores.feedback.listFeedback({
       clientInstanceId: this.clientInstanceId,
-      ...(reach.agentAssetIds ? { agentAssetIds: reach.agentAssetIds } : {}),
+      ...(reach.assetIds ? { assetIds: reach.assetIds } : {}),
       ...(query.agent ? { agentName: query.agent } : {}),
       ...(query.state ? { state: query.state } : {}),
       ...(page ? { page } : {})
@@ -430,37 +548,19 @@ export class FeedbackWorkflow {
   }
 
   /**
-   * The agents whose comments the caller reads. All of them where the right on the instance
-   * holds and no deny lies on one; otherwise the agents it is decided on one by one.
+   * The agents, Apps and Workflows whose comments the caller reads. All of them where the
+   * right on the instance holds and no deny lies on one; otherwise those it is decided on one
+   * by one.
    */
-  private async reviewReach(access: ActorAccess): Promise<{ agentAssetIds?: string[] }> {
+  private async reviewReach(access: ActorAccess): Promise<{ assetIds?: string[] }> {
     if (
       access.authorize(FEEDBACK_REVIEW_ACTION).allowed &&
       access.denials(FEEDBACK_REVIEW_ACTION).length === 0
     ) {
       return {};
     }
-    const agents = await this.options.stores.configAssets.listActiveConfigAssets({
-      clientInstanceId: this.clientInstanceId,
-      kind: "agent"
-    });
-    return {
-      agentAssetIds: agents
-        .filter(
-          (agent) =>
-            access.authorize(
-              FEEDBACK_REVIEW_ACTION,
-              feedbackAgentResource({
-                agentName: agent.name,
-                agentAssetId: agent.id,
-                ...(agent.scope.kind === "workspace"
-                  ? { agentWorkspaceId: agent.scope.workspaceId }
-                  : {})
-              })
-            ).allowed
-        )
-        .map((agent) => agent.id)
-    };
+    const assets = await reviewedAssets(this.options, access);
+    return { assetIds: assets.flatMap((asset) => asset.id ?? []) };
   }
 
   private async reviewedRecord(access: ActorAccess, feedbackId: string): Promise<FeedbackRecord> {
@@ -470,7 +570,7 @@ export class FeedbackWorkflow {
     });
     if (
       !record ||
-      !access.authorize(FEEDBACK_REVIEW_ACTION, feedbackAgentResource(record)).allowed
+      !access.authorize(FEEDBACK_REVIEW_ACTION, feedbackAssetResource(record.asset)).allowed
     ) {
       throw feedbackNotFound();
     }
@@ -528,6 +628,44 @@ export class FeedbackWorkflow {
       : undefined;
     return { question: question?.text ?? "", answer: answer.text };
   }
+}
+
+/** How an Inbox item's summary names what a comment is about. */
+const ASSET_WORDS: Record<FeedbackAssetKind, string> = {
+  agent: "agent",
+  app: "App",
+  workflow: "Workflow"
+};
+
+/**
+ * The id, the revision and the owner of the asset a comment is about, as they stand now: the
+ * live revision of an agent, the published one of an App, or the one a Workflow run ran on
+ * while it is still the published or the draft revision. A deleted asset gives nothing.
+ */
+function liveAsset(
+  asset: ConfigAssetRecord | undefined,
+  revision: "active" | "published" | string
+): Pick<FeedbackAsset, "id" | "revision" | "workspaceId"> {
+  if (!asset || asset.status !== "active") return {};
+  const number =
+    revision === "active"
+      ? asset.revision
+      : revision === "published" || revision === asset.publishedRevisionId
+        ? asset.publishedRevision
+        : revision === asset.activeRevisionId
+          ? asset.revision
+          : undefined;
+  return {
+    id: asset.id,
+    ...(number === undefined ? {} : { revision: number }),
+    ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
+  };
+}
+
+/** The link of a notice's payload, where it is one. */
+function noticeLinkOf(payload: unknown): NoticePayload["link"] {
+  const parsed = noticeContentSchema.safeParse(payload);
+  return parsed.success ? parsed.data.link : undefined;
 }
 
 function handledAlready(): AppError {

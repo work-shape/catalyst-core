@@ -131,8 +131,13 @@ export function auditSubjectOf(event: AuditEvent): AuditSubjectReference | undef
       return workflow ? { kind: "workflow", name: workflow } : { kind: "workflow_run" };
     }
     case "feedback": {
+      // A comment's row names what it is about: the agent, the App or the Workflow.
       const agent = metadataString(event, "agentName");
-      return agent ? { kind: "agent", name: agent } : { kind: "feedback" };
+      if (agent) return { kind: "agent", name: agent };
+      const app = metadataString(event, "appName");
+      if (app) return { kind: "app", name: app };
+      const workflow = metadataString(event, "workflowName");
+      return workflow ? { kind: "workflow", name: workflow } : { kind: "feedback" };
     }
     default:
       break;

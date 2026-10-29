@@ -1,17 +1,21 @@
 import {
   AppError,
+  FEEDBACK_ASSET_KINDS,
   auditActorFromUser,
   FEEDBACK_REVIEW_ACTION,
   FEEDBACK_REVIEW_KIND,
   isAppError,
   type AccessResource,
+  type ActorAccess,
   type ApprovalRequestHandler,
   type ApprovalRequestStore,
   type ApprovalStaleness,
   type AuditActor,
   type AuditRecorder,
   type ClientInstanceId,
+  type ConfigAssetRecord,
   type ConfigAssetStore,
+  type FeedbackAsset,
   type FeedbackRecord,
   type FeedbackRemoval,
   type FeedbackStore,
@@ -19,23 +23,41 @@ import {
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 
-// The Inbox item of a comment on an agent's answer (LU-4). Whoever holds `feedback.review` on
-// the agent, on the instance or on the workspace that owns it, sees it among the items to
-// decide; its one answer is "mark handled", with an optional note. The item holds the
-// comment's id and the agent, never the comment: the preview reads the comment itself, so a
-// comment the author changed or withdrew reads as it is now. The author never sees the item.
+// The Inbox item of a comment on an agent's answer (LU-4), on an App or on a Workflow result
+// (LU-6). Whoever holds `feedback.review` on what it is about, on the instance or on the
+// workspace that owns it, sees it among the items to decide; its one answer is "mark handled",
+// with an optional note. The item holds the comment's id and the asset, never the comment: the
+// preview reads the comment itself, so a comment the author changed or withdrew reads as it is
+// now. The author never sees the item.
 
-/** What the item holds: the comment by its id, and the agent it is about. */
-const payloadSchema = z.object({
-  feedbackId: z.string().min(1),
-  /** What the item is about, as a reviewer with the right on some agents only finds it. */
-  subject: z
-    .object({ agentAssetId: z.string().min(1) })
-    .strict()
-    .optional(),
-  agentName: z.string().min(1),
-  agentWorkspaceId: z.string().min(1).optional()
-});
+/**
+ * What the item holds: the comment by its id, and what it is about. An item of a comment on an
+ * answer names the agent as LU-4 stored it; any other names its App or Workflow in `about`.
+ */
+const payloadSchema = z
+  .object({
+    feedbackId: z.string().min(1),
+    /** What the item is about, as a reviewer with the right on some assets only finds it. */
+    subject: z
+      .union([
+        z.object({ agentAssetId: z.string().min(1) }).strict(),
+        z.object({ assetId: z.string().min(1) }).strict()
+      ])
+      .optional(),
+    agentName: z.string().min(1).optional(),
+    agentWorkspaceId: z.string().min(1).optional(),
+    about: z
+      .object({
+        kind: z.enum(FEEDBACK_ASSET_KINDS).exclude(["agent"]),
+        name: z.string().min(1),
+        workspaceId: z.string().min(1).optional()
+      })
+      .strict()
+      .optional()
+  })
+  .refine((payload) => (payload.agentName === undefined) !== (payload.about === undefined), {
+    message: "A feedback item names an agent or another asset"
+  });
 
 export type FeedbackReviewPayload = z.infer<typeof payloadSchema>;
 
@@ -49,35 +71,131 @@ export interface FeedbackReviewDeps {
   auditRecorder: AuditRecorder;
 }
 
-/** The agent a comment is about, as the right to review it is asked on it. */
-export function feedbackAgentResource(input: {
-  agentName: string;
-  agentAssetId?: string;
-  agentWorkspaceId?: string;
-}): AccessResource {
+/** The asset a comment is about, as the right to review it is asked on it. */
+export function feedbackAssetResource(
+  asset: Pick<FeedbackAsset, "kind" | "name" | "id" | "workspaceId">
+): AccessResource {
   return {
-    kind: "agent",
-    name: input.agentName,
-    ...(input.agentAssetId ? { assetId: input.agentAssetId } : {}),
-    ...(input.agentWorkspaceId ? { workspaceId: input.agentWorkspaceId } : {})
+    kind: asset.kind,
+    name: asset.name,
+    ...(asset.id ? { assetId: asset.id } : {}),
+    ...(asset.workspaceId ? { workspaceId: asset.workspaceId } : {})
   };
 }
 
+/** What a reviewer's list finds an item by: the agent as LU-4 stored it, or the asset. */
+function reviewSubjectOf(asset: Pick<FeedbackAsset, "kind" | "id">): JsonObject | undefined {
+  if (!asset.id) return undefined;
+  return asset.kind === "agent" ? { agentAssetId: asset.id } : { assetId: asset.id };
+}
+
 export function feedbackReviewPayload(record: FeedbackRecord): FeedbackReviewPayload {
-  return {
+  const { asset } = record;
+  const subject = reviewSubjectOf(asset);
+  const payload = {
     feedbackId: record.id,
-    ...(record.agentAssetId ? { subject: { agentAssetId: record.agentAssetId } } : {}),
-    agentName: record.agentName,
-    ...(record.agentWorkspaceId ? { agentWorkspaceId: record.agentWorkspaceId } : {})
+    ...(subject ? { subject } : {}),
+    ...(asset.kind === "agent"
+      ? {
+          agentName: asset.name,
+          ...(asset.workspaceId ? { agentWorkspaceId: asset.workspaceId } : {})
+        }
+      : {
+          about: {
+            kind: asset.kind,
+            name: asset.name,
+            ...(asset.workspaceId ? { workspaceId: asset.workspaceId } : {})
+          }
+        })
   };
+  return payloadSchema.parse(payload);
+}
+
+/** The asset an item's payload is about. */
+function payloadAsset(payload: FeedbackReviewPayload): Omit<FeedbackAsset, "revision"> {
+  const subject = payload.subject;
+  const id = subject ? ("agentAssetId" in subject ? subject.agentAssetId : subject.assetId) : "";
+  if (payload.about) {
+    return {
+      kind: payload.about.kind,
+      name: payload.about.name,
+      ...(id ? { id } : {}),
+      ...(payload.about.workspaceId ? { workspaceId: payload.about.workspaceId } : {})
+    };
+  }
+  return {
+    kind: "agent",
+    name: payload.agentName ?? "",
+    ...(id ? { id } : {}),
+    ...(payload.agentWorkspaceId ? { workspaceId: payload.agentWorkspaceId } : {})
+  };
+}
+
+/**
+ * The agents, Apps and Workflows whose comments the holder reads one by one: those the right
+ * covers, on the instance or on the workspace that owns each.
+ */
+export async function reviewedAssets(
+  deps: {
+    clientInstanceId: ClientInstanceId;
+    stores: Pick<FeedbackReviewDeps["stores"], "configAssets">;
+  },
+  access: ActorAccess
+): Promise<Omit<FeedbackAsset, "revision">[]> {
+  const lists = await Promise.all(
+    FEEDBACK_ASSET_KINDS.map((kind) =>
+      deps.stores.configAssets.listActiveConfigAssets({
+        clientInstanceId: deps.clientInstanceId,
+        kind
+      })
+    )
+  );
+  return lists.flatMap((assets, index) =>
+    assets.flatMap((record) => {
+      const asset = {
+        kind: FEEDBACK_ASSET_KINDS[index] ?? "agent",
+        name: record.name,
+        id: record.id,
+        ...(record.scope.kind === "workspace" ? { workspaceId: record.scope.workspaceId } : {})
+      };
+      return access.authorize(FEEDBACK_REVIEW_ACTION, feedbackAssetResource(asset)).allowed
+        ? [asset]
+        : [];
+    })
+  );
+}
+
+/**
+ * The name people read for an asset: an agent's display name, an App's title, a Workflow's
+ * name from its definition.
+ */
+function displayNameOf(asset: ConfigAssetRecord): string | undefined {
+  const config = asset.kind === "agent" ? asset.config : (asset.publishedConfig ?? asset.config);
+  const manifest = config?.manifest;
+  const value =
+    asset.kind === "agent"
+      ? config?.displayName
+      : asset.kind === "workflow"
+        ? typeof manifest === "object" && manifest !== null && !Array.isArray(manifest)
+          ? manifest.name
+          : undefined
+        : config?.title;
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
 
 /** The ids the events of a comment carry: never its text or the exchange. */
 export function feedbackEventIds(record: FeedbackRecord): JsonObject {
+  const { asset } = record;
   return {
     feedbackId: record.id,
-    agentName: record.agentName,
-    ...(record.agentAssetId ? { agentAssetId: record.agentAssetId } : {}),
+    subjectKind: record.subjectKind,
+    ...(asset.kind === "agent"
+      ? { agentName: asset.name, ...(asset.id ? { agentAssetId: asset.id } : {}) }
+      : {
+          ...(asset.kind === "app" ? { appName: asset.name } : { workflowName: asset.name }),
+          ...(asset.id ? { assetId: asset.id } : {})
+        }),
+    ...(record.workflowRunId ? { workflowRunId: record.workflowRunId } : {}),
     ...(record.workspaceId ? { workspaceId: record.workspaceId } : {})
   };
 }
@@ -86,17 +204,23 @@ export function feedbackEventIds(record: FeedbackRecord): JsonObject {
 function feedbackReviewPreview(
   record: FeedbackRecord,
   inList: boolean,
-  agentDisplayName?: string
+  assetDisplayName?: string
 ): JsonObject {
+  const { asset } = record;
+  const about = {
+    name: asset.name,
+    ...(assetDisplayName ? { displayName: assetDisplayName } : {}),
+    ...(asset.id ? { assetId: asset.id } : {}),
+    ...(asset.revision === undefined ? {} : { revision: asset.revision }),
+    ...(asset.workspaceId ? { workspaceId: asset.workspaceId } : {})
+  };
   return {
     feedbackId: record.id,
-    agent: {
-      name: record.agentName,
-      ...(agentDisplayName ? { displayName: agentDisplayName } : {}),
-      ...(record.agentAssetId ? { assetId: record.agentAssetId } : {}),
-      ...(record.agentRevision === undefined ? {} : { revision: record.agentRevision }),
-      ...(record.agentWorkspaceId ? { workspaceId: record.agentWorkspaceId } : {})
-    },
+    subjectKind: record.subjectKind,
+    // The agent of an answer, where an interface of LU-4 reads it, and what it is about.
+    ...(asset.kind === "agent" ? { agent: about } : {}),
+    about: { kind: asset.kind, ...about },
+    ...(record.workflowRunId ? { workflowRunId: record.workflowRunId } : {}),
     author: {
       id: record.authorUserId,
       ...(record.authorDisplayLabel ? { displayLabel: record.authorDisplayLabel } : {})
@@ -140,49 +264,34 @@ export function createFeedbackReviewHandler(
     kind: FEEDBACK_REVIEW_KIND,
     hiddenFromRequester: true,
     requiredPermission: FEEDBACK_REVIEW_ACTION,
-    resourceOf: (payload) =>
-      feedbackAgentResource({
-        agentName: payload.agentName,
-        ...(payload.subject ? { agentAssetId: payload.subject.agentAssetId } : {}),
-        ...(payload.agentWorkspaceId ? { agentWorkspaceId: payload.agentWorkspaceId } : {})
-      }),
+    resourceOf: (payload) => feedbackAssetResource(payloadAsset(payload)),
     async reviewableSubjects(access) {
-      const agents = await deps.stores.configAssets.listActiveConfigAssets({
-        clientInstanceId: deps.clientInstanceId,
-        kind: "agent"
-      });
-      return agents
-        .filter(
-          (agent) =>
-            access.authorize(
-              FEEDBACK_REVIEW_ACTION,
-              feedbackAgentResource({
-                agentName: agent.name,
-                agentAssetId: agent.id,
-                ...(agent.scope.kind === "workspace"
-                  ? { agentWorkspaceId: agent.scope.workspaceId }
-                  : {})
-              })
-            ).allowed
-        )
-        .map((agent) => ({ agentAssetId: agent.id }));
+      const reviewed = await reviewedAssets(deps, access);
+      return reviewed
+        .map(reviewSubjectOf)
+        .filter((subject): subject is JsonObject => subject !== undefined);
     },
     validate: (payload) => payloadSchema.parse(payload),
     async preview(payload, context) {
       const record = await read(payload.feedbackId);
       if (!record) {
-        return { feedbackId: payload.feedbackId, agent: { name: payload.agentName }, gone: true };
+        const asset = payloadAsset(payload);
+        return {
+          feedbackId: payload.feedbackId,
+          ...(asset.kind === "agent" ? { agent: { name: asset.name } } : {}),
+          about: { kind: asset.kind, name: asset.name },
+          gone: true
+        };
       }
-      const agent = await deps.stores.configAssets.getConfigAsset({
+      const asset = await deps.stores.configAssets.getConfigAsset({
         clientInstanceId: deps.clientInstanceId,
-        kind: "agent",
-        name: record.agentName
+        kind: record.asset.kind,
+        name: record.asset.name
       });
-      const displayName = agent?.config?.displayName;
       return feedbackReviewPreview(
         record,
         context.viewer?.inList ?? false,
-        typeof displayName === "string" ? displayName : undefined
+        asset ? displayNameOf(asset) : undefined
       );
     },
     async isStale(payload, context): Promise<false | ApprovalStaleness> {
