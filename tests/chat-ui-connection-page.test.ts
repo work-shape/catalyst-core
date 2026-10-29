@@ -811,65 +811,73 @@ describe("Connection page", () => {
     );
   });
 
-  it("has no section on additional use rights for a reader who is not shown rights", () => {
+  it("has no section on who may use it for a reader the instance refuses it", () => {
     const markup = renderPage();
-    expect(markup).not.toContain("Additional use rights");
+    expect(markup).not.toContain("Who may use it");
     expect(markup).not.toContain('id="access"');
   });
 
-  it("lists the service principals that may use it beside the people, told apart and linked", () => {
-    const markup = renderPage({
-      holders: {
-        status: "ready",
-        holders: [
+  // CONN-WHO-1: the roles first, then each holder of a right of its own, each with its verbs.
+  it("lists the roles first, then people and service principals with their verbs", () => {
+    const holders: ConnectionHoldersRead = {
+      status: "ready",
+      access: {
+        roles: [
           {
-            grantId: "g1",
-            kind: "person",
-            id: "user_kai",
-            name: "Kai Example",
-            detail: "kai@example.test",
-            disabled: false
+            id: "superadmin",
+            name: "superadmin",
+            builtIn: true,
+            verbs: ["read", "use", "write", "delete", "approve"]
           },
+          { id: "admin", name: "admin", builtIn: true, verbs: ["read", "use", "write"] },
+          { id: "role_bookkeeping", name: "Bookkeeping", builtIn: false, verbs: ["use"] }
+        ],
+        holders: [
+          { kind: "user", id: "user_kai", title: "Kai Example", verbs: ["read", "use"] },
           {
-            grantId: "g2",
             kind: "service_principal",
             id: "spn_1",
-            name: "Monthly check",
-            detail: "monthly-check",
-            disabled: true
+            title: "Monthly check",
+            disabled: true,
+            verbs: ["use"]
           }
-        ]
+        ],
+        hidden: 2
       }
-    });
+    };
+    const markup = renderPage({ holders });
     expect(markup).toContain('id="access"');
-    expect(markup).toContain(">Additional use rights<");
-    const person = /<li[^>]*data-holder-kind="person".*?<\/li>/su.exec(markup)?.[0] ?? "";
-    const service =
-      /<li[^>]*data-holder-kind="service_principal".*?<\/li>/su.exec(markup)?.[0] ?? "";
-    // A person is a round avatar with an address and no link.
-    expect(person).toContain('data-kind="person"');
-    expect(person).toContain("kai@example.test");
-    expect(person).not.toContain("<a ");
-    // A service principal is a square one, says what it is in words and opens its page.
+    expect(markup).toContain(">Who may use it<");
+    const kinds = [...markup.matchAll(/data-holder-kind="([a-z_]+)"/gu)].map((match) => match[1]);
+    expect(kinds).toEqual(["role", "role", "role", "person", "service_principal"]);
+    const row = (kind: string, text: string) =>
+      [...markup.matchAll(new RegExp(`<li[^>]*data-holder-kind="${kind}".*?</li>`, "gsu"))]
+        .map((match) => match[0])
+        .find((li) => li.includes(text)) ?? "";
+    expect(row("role", "Bookkeeping")).toContain(">Use<");
+    expect(row("role", "Bookkeeping")).toContain(">Role<");
+    expect(row("person", "Kai Example")).toContain("View, Use");
+    expect(row("person", "Kai Example")).not.toContain("<a ");
+    const service = row("service_principal", "Monthly check");
     expect(service).toContain('data-kind="service"');
     expect(service).toContain(">Service principal<");
     expect(service).toContain(">Disabled<");
     expect(service).toContain('href="/settings/instance/api-access?principal=spn_1"');
-    expect(service).not.toContain("monthly-check");
+    expect(markup).toContain("2 more you are not shown");
+
+    const german = renderPage({ holders, locale: "de" });
+    expect(german).toContain(">Wer sie verwenden darf<");
+    expect(german).toContain("Ansehen, Verwenden");
+    expect(german).toContain("2 weitere, die du nicht sehen darfst");
+    expect(german).toContain("über „Verfügbar in“");
   });
 
-  // The list holds rights on the Connection itself; workspace members use it through Available
-  // in, so an empty list never reads as "nobody may use it".
-  it("says the list holds additional rights only, and that members use it through Available in", () => {
-    const markup = renderPage({ holders: { status: "ready", holders: [] } });
-    expect(markup).toContain("Nobody has an additional right on this Connection.");
+  it("says when no role and nobody has a right on it", () => {
+    const markup = renderPage({
+      holders: { status: "ready", access: { roles: [], holders: [], hidden: 0 } }
+    });
+    expect(markup).toContain("No role and nobody has a right on this Connection.");
     expect(markup).toContain("Workspace members use it through Available in");
-    expect(markup).not.toContain("Who may use it");
-    expect(markup).not.toContain("Access page");
-    const german = renderPage({ holders: { status: "ready", holders: [] }, locale: "de" });
-    expect(german).toContain("Zusätzliche Nutzungsrechte");
-    expect(german).toContain("über „Verfügbar in“");
-    expect(german).not.toContain("Seite Zugriff");
   });
   it("shows the whole new description of an operation whose description is accepted again", () => {
     const runtime = connectionAsset("ledger", { origin: "runtime" });

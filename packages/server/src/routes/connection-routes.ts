@@ -20,6 +20,7 @@ import {
   type OperationResource
 } from "@work-shape/catalyst-core";
 import { accessResource, decide } from "../assets/asset-access";
+import { readConnectionAccess } from "../connections/connection-access";
 import { requestConnectionDiscovery } from "../connections/connection-jobs";
 import type { ConnectionManagementPort } from "../connections/connection-management-port";
 import type { Route } from "../http/route";
@@ -165,6 +166,24 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
           )
         );
       })
+  });
+
+  // Who may use the Connection, under the right that reads its page.
+  route.operation(apiOperations["connections.access"], {
+    authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.read, input.name),
+    resource: connectionResource,
+    module: CONNECTIONS_MODULE,
+    execute: async (input, context) => {
+      const { actor, access } = context;
+      if (isAuthenticatedServicePrincipal(actor)) {
+        throw new AppError("FORBIDDEN", "A service principal reads no holders of a Connection");
+      }
+      const assetId = (await required().resource(input.name))?.assetId;
+      if (assetId === undefined) {
+        throw new AppError("NOT_FOUND", "Connection not found");
+      }
+      return readConnectionAccess(options, { actor, access }, assetId);
+    }
   });
 
   route.operation(apiOperations["connections.test"], {

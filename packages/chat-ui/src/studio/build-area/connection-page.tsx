@@ -1,5 +1,5 @@
 // @rights-screen: included in the rights wording guard.
-import { KeyRound } from "lucide-react";
+import { KeyRound, Shield, Users } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import {
   Avatar,
@@ -22,6 +22,8 @@ import {
   Section,
   SkeletonList
 } from "@work-shape/catalyst-ui";
+import { roleLabelKey } from "../../admin/access/role-model";
+import { verbLabel, type RightVerb } from "../../admin/access/right-words";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { usePageShown } from "./asset-editor-shell";
 import {
@@ -133,7 +135,7 @@ export function ConnectionPage({
     editing && discovers ? { since: Date.now() } : undefined
   );
   const read = source.useDetail(asset.name, wait);
-  const holders = source.useHolders(asset.id);
+  const holders = source.useHolders(asset.name);
   const detail = read.status === "ready" ? read.detail : undefined;
   const waiting =
     wait !== undefined && detail !== undefined && waitsForDiscovery(wait, detail, Date.now());
@@ -383,7 +385,7 @@ export function ConnectionPage({
           }
         ]
       : []),
-    // Who was given this Connection is shown to who is shown rights at all.
+    // Who may use the Connection is read under the right that reads this page.
     ...(holders.status === "hidden"
       ? []
       : [
@@ -391,7 +393,12 @@ export function ConnectionPage({
             id: "access",
             label: t("connections.accessTitle"),
             description: t("connections.accessDescription"),
-            count: holders.status === "ready" ? holders.holders.length : undefined,
+            count:
+              holders.status === "ready"
+                ? holders.access.roles.length +
+                  holders.access.holders.length +
+                  holders.access.hidden
+                : undefined,
             body: <ConnectionHolders read={holders} principalHref={source.principalHref} />
           }
         ])
@@ -545,9 +552,10 @@ function ConnectionSettings({
 }
 
 /**
- * The people and the service principals that were given this Connection by itself. A person is
- * a round avatar with an address; a service principal is a square one with a key, says what it
- * is in words, and opens its own page. Neither is named by an id.
+ * Who may use the Connection (CONN-WHO-1): the roles first, then each person, group and service
+ * principal with a right of its own, each with the verbs of what it may do. A person is a round
+ * avatar; a role, a group and a service principal are square ones that say what they are in
+ * words, and a service principal opens its own page. Whom the reader may not be shown is a count.
  */
 function ConnectionHolders({
   read,
@@ -570,47 +578,103 @@ function ConnectionHolders({
       </InlineError>
     );
   }
-  if (read.holders.length === 0) {
+  const { roles, holders, hidden } = read.access;
+  if (roles.length + holders.length + hidden === 0) {
     return <EmptyState layout="inline">{t("connections.accessEmpty")}</EmptyState>;
   }
+  const verbs = (list: readonly RightVerb[]) => list.map((verb) => verbLabel(verb, t)).join(", ");
   return (
-    <List aria-label={t("connections.accessTitle")}>
-      {read.holders.map((holder) => {
-        if (holder.kind === "person") {
-          const name = holder.name ?? t("connections.accessUnknownPerson");
+    <div className="flex flex-col gap-2">
+      <List aria-label={t("connections.accessTitle")}>
+        {roles.map((role) => {
+          const label = roleLabelKey(role.id);
+          const name = role.builtIn && label ? t(label) : role.name;
           return (
             <ListRow
-              key={holder.grantId}
-              data-holder-kind="person"
-              leading={<Avatar kind="person" size="sm" name={name} />}
+              key={`role:${role.id}`}
+              data-holder-kind="role"
+              leading={
+                <Avatar
+                  kind="workspace"
+                  size="sm"
+                  name={name}
+                  icon={<Shield aria-hidden="true" />}
+                />
+              }
               title={name}
-              description={holder.detail}
+              description={verbs(role.verbs)}
+              chips={<Chip size="sm">{t("connections.accessRole")}</Chip>}
             />
           );
-        }
-        const name = holder.name ?? t("connections.accessUnknownPrincipal");
-        return (
-          <ListRow
-            key={holder.grantId}
-            data-holder-kind="service_principal"
-            leading={
-              <Avatar kind="service" size="sm" name={name} icon={<KeyRound aria-hidden="true" />} />
-            }
-            title={name}
-            chips={
-              <>
-                <Chip size="sm">{t("connections.accessServicePrincipal")}</Chip>
-                {holder.disabled ? (
-                  <Badge tone="neutral" size="sm">
-                    {t("connections.accessPrincipalDisabled")}
-                  </Badge>
-                ) : null}
-              </>
-            }
-            link={holder.name === undefined ? undefined : <a href={principalHref(holder.id)} />}
-          />
-        );
-      })}
-    </List>
+        })}
+        {holders.map((holder) => {
+          const key = `${holder.kind}:${holder.id}`;
+          if (holder.kind === "user") {
+            return (
+              <ListRow
+                key={key}
+                data-holder-kind="person"
+                leading={<Avatar kind="person" size="sm" name={holder.title} />}
+                title={holder.title}
+                description={verbs(holder.verbs)}
+              />
+            );
+          }
+          if (holder.kind === "group") {
+            return (
+              <ListRow
+                key={key}
+                data-holder-kind="group"
+                leading={
+                  <Avatar
+                    kind="workspace"
+                    size="sm"
+                    name={holder.title}
+                    icon={<Users aria-hidden="true" />}
+                  />
+                }
+                title={holder.title}
+                description={verbs(holder.verbs)}
+                chips={<Chip size="sm">{t("connections.accessGroup")}</Chip>}
+              />
+            );
+          }
+          return (
+            <ListRow
+              key={key}
+              data-holder-kind="service_principal"
+              leading={
+                <Avatar
+                  kind="service"
+                  size="sm"
+                  name={holder.title}
+                  icon={<KeyRound aria-hidden="true" />}
+                />
+              }
+              title={holder.title}
+              description={verbs(holder.verbs)}
+              chips={
+                <>
+                  <Chip size="sm">{t("connections.accessServicePrincipal")}</Chip>
+                  {holder.disabled ? (
+                    <Badge tone="neutral" size="sm">
+                      {t("connections.accessPrincipalDisabled")}
+                    </Badge>
+                  ) : null}
+                </>
+              }
+              link={<a href={principalHref(holder.id)} />}
+            />
+          );
+        })}
+      </List>
+      {hidden > 0 ? (
+        <p className="text-caption text-muted-foreground" data-holders-hidden={hidden}>
+          {hidden === 1
+            ? t("connections.accessHiddenOne")
+            : t("connections.accessHiddenMany", { count: hidden })}
+        </p>
+      ) : null}
+    </div>
   );
 }
