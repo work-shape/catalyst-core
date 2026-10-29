@@ -189,6 +189,10 @@ export async function appActionDefinition(
     name: host.operationName(action.name),
     effect: action.effect,
     ...(draftOperation === undefined ? {} : { draftTarget: "test" as const }),
+    // The test target is the called asset's, such as a Data Store's test copy (ADR-0031): the
+    // App has none of its own. The call path sends a draft's call there, and the operation
+    // the action hands on to reads the run's `target`.
+    ...(target?.testTarget && offModule === undefined ? { testTarget: target.testTarget } : {}),
     // A read of a customer's system or of a customer's rows is recorded, every time.
     ...(action.effect === "reading" ? { recordsEveryCall: true as const } : {}),
     ...(floor === undefined || floor === "allow" ? {} : { policyFloor: floor }),

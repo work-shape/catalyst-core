@@ -884,6 +884,8 @@ ENV
   "${run[@]}" "$scripts/backup-postgres.sh" > "$host/output" 2> "$host/errors"
   # A database left invalid by an interrupted DROP DATABASE is named, not dumped.
   assert_contains "$host/errors" "invalid after an interrupted DROP DATABASE (drop them): catalyst_ds_dropped"
+  # The test copy of a Data Store is rebuilt from its draft and never backed up (ADR-0031).
+  assert_contains "$log" "and datname !~ '^catalyst_ds_[0-9a-f]+_test\$'"
   local compose="docker compose --env-file $host/app.env -f $host/app/docker-compose.prod.yml exec -T postgres"
   assert_contains "$log" "$compose pg_dumpall -U catalyst --globals-only"
   assert_contains "$log" "$compose pg_dump -U catalyst -Fc -d agent_chat"

@@ -8,6 +8,7 @@ import { PAGE_ACTION_OPERATION_PREFIX } from "./app-actions";
 import { DATA_STORE_OPERATION_PREFIX, type DataStoreRecordsStore } from "./data-stores";
 import { KNOWLEDGE_OPERATION_PREFIX } from "./knowledge";
 import { dataToolPrefixOf } from "./data-tool-names";
+import type { DraftTestTarget } from "./draft-calls";
 import { AppError } from "./errors";
 import type { PlatformEventName } from "./events";
 import type { OperationBeforeEvent } from "./guardrail-events";
@@ -102,10 +103,10 @@ export interface OperationExecutionContext {
   /** Writes audit rows that carry the run's id and correlation id. */
   audit: AuditRecorder;
   /**
-   * Where the call goes, as its run says (ADR-0031). `test` is a call of a draft that "Run
-   * live once" sent to the operation's own test target (`liveOnceTarget`), such as a mail to
-   * the tester alone. Absent where the caller built the context without a run's target, which
-   * is a live call.
+   * Where the call goes, as its run says (ADR-0031). `test` is a call of a draft sent to the
+   * operation's own test target: the test copy of a Data Store (`testTarget`), or, after "Run
+   * live once", a target such as a mail to the tester alone (`liveOnceTarget`). Absent where the
+   * caller built the context without a run's target, which is a live call.
    */
   target?: OperationTarget;
   /**
@@ -326,6 +327,14 @@ interface OperationDefinitionBase<Input, Output> {
   batch?: true;
   /** A Workflow start called by a draft starts a test run of its published revision. */
   draftTarget?: "test";
+  /**
+   * The test target of the asset the operation belongs to (ADR-0031): a Data Store's test copy.
+   * `state()` says whether it exists (`present`), or does not and a changing call of a draft
+   * makes it (`made_on_change`). Every call of a draft goes to a target that is present, reading
+   * and changing alike; a changing call goes to one it makes. The operation reads `target` of
+   * its context and acts on the test target where it is `test`. Asked only for a call of a draft.
+   */
+  testTarget?: { state(): Promise<DraftTestTarget> };
   /**
    * A step of a Workflow may name it by its exact name, and `platform.assets.operations` lists it
    * for a step: an operation a capability brings for Workflows sets it (ADR-0033). The

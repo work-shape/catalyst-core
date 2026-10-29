@@ -14,7 +14,7 @@ import type {
 } from "@work-shape/catalyst-core";
 import type { DataStoreRole } from "./credentials";
 import { platformIsSuperuser, writeStoreRoles } from "./roles";
-import { quoteIdentifier, type DataStoreServer } from "./server";
+import { quoteIdentifier, testCopyDatabaseOf, type DataStoreServer } from "./server";
 
 // The one place a store's database, its roles and their grants are made, and dropped. Every
 // statement is built from names this package derived, never from a caller's text.
@@ -44,14 +44,14 @@ const SESSION_VIEWS = ["pg_stat_activity", "pg_stat_replication", "pg_stat_ssl",
 
 /**
  * Whether a role of the store may connect to the platform's database, and to any other
- * database of the server but its own.
+ * database of the server but its own and its test copy's.
  */
 const REACH = `
   select pg_catalog.has_database_privilege($1, $2, 'CONNECT') as platform,
     coalesce((
       select pg_catalog.bool_or(pg_catalog.has_database_privilege($1, d.oid, 'CONNECT'))
       from pg_catalog.pg_database d
-      where d.datallowconn and d.datname <> $2 and d.datname <> $3
+      where d.datallowconn and d.datname <> $2 and d.datname <> $3 and d.datname <> $4
     ), false) as server
 `;
 
@@ -80,7 +80,12 @@ async function readReach(
     ...server.asPlatform(server.platformDatabase),
     signal,
     sql: REACH,
-    parameters: [record.roles.app, server.platformDatabase, record.location.database]
+    parameters: [
+      record.roles.app,
+      server.platformDatabase,
+      record.location.database,
+      testCopyDatabaseOf(record.location.database)
+    ]
   });
   return reachRow.parse(read.rows[0]);
 }
@@ -264,6 +269,10 @@ export async function dropStoreDatabase(
     },
     async (sql) => {
       await sql.script(`drop database if exists ${quoteIdentifier(names.database)} with (force)`);
+      // A role is dropped only once no database grants it anything: the test copy's goes first.
+      await sql.script(
+        `drop database if exists ${quoteIdentifier(testCopyDatabaseOf(names.database))} with (force)`
+      );
       await sql.script(`drop role if exists ${quoteIdentifier(names.app)}`);
       await sql.script(`drop role if exists ${quoteIdentifier(names.migration)}`);
     }

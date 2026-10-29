@@ -130,6 +130,29 @@ export async function enqueueStoreDrop(
   );
 }
 
+/** Drops the test copy of a store whose asset was deleted (DT-2). The store's own database stays. */
+export const dropTestCopyJob = defineJobKind({
+  ...storeJob,
+  kind: DATA_STORE_JOB_KINDS.dropTestCopy
+});
+
+/** Queues the drop of a retired store's test copy, in the transaction that retires it. */
+export async function enqueueTestCopyDrop(
+  stores: Pick<PlatformStores, "jobs">,
+  record: Pick<DataStoreRecord, "id" | "clientInstanceId">
+): Promise<void> {
+  await stores.jobs.enqueue(
+    dropTestCopyJob,
+    { storeId: record.id },
+    {
+      clientInstanceId: record.clientInstanceId,
+      subject: record.id,
+      dedupeKey: subjectDedupeKey(dropTestCopyJob.kind, record.id),
+      concurrencyKey: record.id
+    }
+  );
+}
+
 // Keep legacy ticks empty: workers of the preceding release still serve these names.
 // Cursor jobs have distinct names, so those workers cannot claim or reject their payloads.
 const maintenancePageJob = {

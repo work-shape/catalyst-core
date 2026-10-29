@@ -10,6 +10,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { DATA_STORE_SIZE_WARNING_RATIO } from "./size";
+import { testCopyStateSchema } from "./test-copy";
 import type { PublishedStore } from "./verbs";
 
 // The state of one store, for the screen that shows it: where its migrations stand, how large
@@ -72,7 +73,12 @@ const dataStoreStateSchema = z.object({
     migration: migrationSchema.optional(),
     /** A code and a sentence, never a value of a row. */
     failure: z.object({ code: z.string(), message: z.string() }).optional()
-  })
+  }),
+  /**
+   * The store's test copy (ADR-0031, DT-2): the level it was brought to, when it was last
+   * built and how large it was then. Missing while the store has none.
+   */
+  testCopy: testCopyStateSchema.optional()
 });
 
 type DataStoreState = z.infer<typeof dataStoreStateSchema>;
@@ -140,7 +146,11 @@ export function dataStoreStateOperationName(store: string): string {
  * holder of `system.view` alone. A personal key's `system.view` reaches only the
  * infrastructure check, never these server details.
  */
-export function stateOperation(store: PublishedStore, module: string): OperationDefinition {
+export function stateOperation(
+  store: PublishedStore,
+  module: string,
+  readTestCopy: () => Promise<z.infer<typeof testCopyStateSchema> | undefined>
+): OperationDefinition {
   return {
     name: dataStoreStateOperationName(store.record.name),
     effect: "reading",
@@ -153,14 +163,17 @@ export function stateOperation(store: PublishedStore, module: string): Operation
     resource: () => store.resource,
     module,
     timeoutMs: DATA_STORE_STATE_TIMEOUT_MS,
-    execute: (_input, context) =>
-      Promise.resolve(
-        stateOf(
+    execute: async (_input, context) => {
+      const testCopy = await readTestCopy();
+      return {
+        ...stateOf(
           store,
           (isAuthenticatedServicePrincipal(context.actor) ||
             context.actor.keyScopes === undefined) &&
             context.access.authorize(SEES_SERVER_CONDITIONS).allowed
-        )
-      )
+        ),
+        ...(testCopy ? { testCopy } : {})
+      };
+    }
   };
 }

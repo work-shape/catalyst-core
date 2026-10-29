@@ -68,6 +68,14 @@ export interface DataStoreServer {
 /** How many connections the role of one Knowledge Base may hold to its store at once. */
 export const DATA_STORE_READER_CONNECTION_LIMIT = 5;
 
+/**
+ * The database of a store's test copy (ADR-0031, DT-2): the store's own database name with
+ * `_test`, on the same server. The backups leave every such database out by this name.
+ */
+export function testCopyDatabaseOf(storeDatabase: string): string {
+  return `${storeDatabase}_test`;
+}
+
 /** Quotes a name for a statement. Every name this package quotes is one it made or read from a catalog. */
 export function quoteIdentifier(name: string): string {
   return `"${name.replaceAll('"', '""')}"`;

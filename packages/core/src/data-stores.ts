@@ -7,7 +7,7 @@ import { z } from "zod";
 import { DATA_STORE_OPERATION_PREFIX } from "./data-store-operation-names";
 
 import type { AssetKindActions, AssetScope } from "./asset-kinds";
-import type { DataStoreRecord } from "./data-store-records";
+import type { DataStoreRecord, DataStoreTestCopy } from "./data-store-records";
 import { AppError, isAppError, type AppErrorCode } from "./errors";
 import type { OperationScope } from "./identity";
 import type { ClientInstanceId } from "./ids";
@@ -297,8 +297,8 @@ export function dataStoreOperationName(store: string, verb: DataStoreOperationVe
  * Retryable `_page` jobs persist the scan cursor. Legacy empty ticks remain served for
  * rolling-release drain; new schedules use distinct tick names so old workers cannot take
  * new startup work. `drop` removes the database, roles and record of a store whose
- * Knowledge Base was deleted. Spec: One data store
- * primitive; Knowledge Base on top.
+ * Knowledge Base was deleted; `drop_test_copy` drops the test copy of a store whose asset was
+ * deleted. Spec: One data store primitive; Knowledge Base on top; Test copy.
  */
 export const DATA_STORE_JOB_KINDS = {
   provision: "data_store.provision",
@@ -309,7 +309,8 @@ export const DATA_STORE_JOB_KINDS = {
   upgradeOwnedTick: "data_store.upgrade_owned_tick",
   measureSizePage: "data_store.measure_size_page",
   upgradeOwnedPage: "data_store.upgrade_owned_page",
-  drop: "data_store.drop"
+  drop: "data_store.drop",
+  dropTestCopy: "data_store.drop_test_copy"
 } as const;
 
 export type DataStoreJobKind = (typeof DATA_STORE_JOB_KINDS)[keyof typeof DATA_STORE_JOB_KINDS];
@@ -353,6 +354,20 @@ export interface DataStoreRecordsStore {
    * owns is dropped: the record of a store of its own asset outlives the asset.
    */
   deleteDataStore(input: { clientInstanceId: ClientInstanceId; id: string }): Promise<void>;
+  /**
+   * The test copy of a store. `lock` first waits for, and then holds until the surrounding
+   * transaction ends, the one turn of the store's copy, also where no copy exists yet: whoever
+   * builds, changes or drops a copy holds that turn.
+   */
+  getTestCopy(input: {
+    clientInstanceId: ClientInstanceId;
+    storeId: string;
+    lock?: true;
+  }): Promise<DataStoreTestCopy | undefined>;
+  /** Inserts the record of a test copy, or replaces the one of the same store. */
+  putTestCopy(copy: DataStoreTestCopy): Promise<void>;
+  /** Removes the record of a test copy, once its database is dropped. */
+  deleteTestCopy(input: { clientInstanceId: ClientInstanceId; storeId: string }): Promise<void>;
 }
 
 /** A Data Store as a manifest names it. Spec: apps-and-pages.md, Manifest, `dataStores`. */

@@ -237,17 +237,36 @@ describe("a statement of an App on a Data Store", () => {
     expect((await t.findingRows()).filter((row) => row.client_id === "client-new")).toMatchObject([
       { run_id: "run-7", severity: "error", amount: "12.50", revision: 2 }
     ]);
-    // A draft runs in safe mode: the change is simulated and not carried out, whoever asks.
+    // A draft's change goes to the store's test copy, which the platform makes at this first
+    // changing call (DT-2, check 25 of operations-and-policy): the row is in the copy and not
+    // live, and a reading action of the same draft returns it while the published App does not.
     const draft = await t.openApp(t.admin.id, "draft", "findings");
-    const inDraft = await t.callAction(t.admin.id, draft, "add_finding", input, {
-      "idempotency-key": "b3-insert-draft"
-    });
+    const inDraft = await t.callAction(
+      t.admin.id,
+      draft,
+      "add_finding",
+      { ...input, client: "client-draft" },
+      { "idempotency-key": "b3-insert-draft" }
+    );
     expectStatus(inDraft, 200);
-    expect(inDraft.json()).toMatchObject({ status: "dry_run" });
-    expect(await t.runOf(inDraft.headers["operation-run-id"])).toMatchObject({
-      target: "dry_run"
+    expect(inDraft.json()).toMatchObject({ status: "done", result: { inserted: 1 } });
+    expect(await t.runOf(resultSchema.parse(inDraft.json()).runId)).toMatchObject({
+      target: "test"
     });
+    expect((await t.findingRows()).map((row) => row.client_id)).not.toContain("client-draft");
+    expect((await t.testCopyRows()).map((row) => row.client_id)).toEqual(["client-draft"]);
+    const listed = { client: "client-draft", severity: "error", limit: 10, offset: 0 };
+    const readInDraft = await t.callAction(t.admin.id, draft, "list_findings", listed);
+    expectStatus(readInDraft, 200);
+    expect(rowsSchema.parse(resultSchema.parse(readInDraft.json()).result).rows).toMatchObject([
+      { client_id: "client-draft" }
+    ]);
+    expect(await t.runOf(resultSchema.parse(readInDraft.json()).runId)).toMatchObject({
+      target: "test"
+    });
+    expect((await rowsOf(t.admin.id, "list_findings", listed)).rows).toEqual([]);
     expect((await t.findingRows()).filter((row) => row.client_id === "client-new")).toHaveLength(1);
+    await t.dropTestCopy();
   });
 
   it("asks the publisher of an App for the right on the store its actions use, and a writer of a draft for their own", async () => {

@@ -1005,3 +1005,42 @@ describe("data-store review", () => {
     expect(bodies).toHaveLength(1);
   });
 });
+
+describe("data-store test-copy", () => {
+  it("resets and deletes the test copy of a store, and refuses a call without one store offline", async () => {
+    const requests: { method: string; path: string }[] = [];
+    const fetchImpl = apiFetch((request) => {
+      requests.push({ method: request.method, path: new URL(request.url).pathname });
+      return Response.json(
+        request.method === "DELETE"
+          ? { testCopy: null }
+          : {
+              testCopy: {
+                level: 2,
+                seedFiles: 1,
+                builtAt: "2026-10-29T10:00:00.000Z",
+                limitBytes: 524288000
+              }
+            }
+      );
+    });
+    const reset = await run(["data-store", "test-copy", "reset", "findings"], { fetchImpl });
+    expect(reset.code, reset.err).toBe(0);
+    expect(reset.out).toContain("level: 2");
+    const deleted = await run(["data-store", "test-copy", "delete", "findings", "--json"], {
+      fetchImpl
+    });
+    expect(deleted.code, deleted.err).toBe(0);
+    expect(deleted.out).toContain('"testCopy": null');
+    const params = { params: { store: "findings" } };
+    expect(requests).toEqual([
+      { method: "POST", path: apiOperations["data_stores.test_copy_reset"].buildPath(params) },
+      { method: "DELETE", path: apiOperations["data_stores.test_copy_delete"].buildPath(params) }
+    ]);
+    for (const bad of [["reset"], ["reset", "a", "b"], ["drop", "findings"]]) {
+      const refused = await run(["data-store", "test-copy", ...bad], { fetchImpl });
+      expect(refused.code, bad.join(" ")).toBe(1);
+    }
+    expect(requests).toHaveLength(2);
+  });
+});

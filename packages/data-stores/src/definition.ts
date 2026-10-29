@@ -33,10 +33,18 @@ const DATA_STORE_MANIFEST_MAX_BYTES = 16_384;
 const DATA_STORE_MAX_MIGRATIONS = 500;
 /** The largest migration file. A write with a larger one is refused. */
 const DATA_STORE_MIGRATION_MAX_BYTES = 262_144;
-/** The folder of the migration files and the folder of optional seed data, which is stored only. */
+/**
+ * The folder of the migration files and the folder of optional seed data. A `.sql` file below
+ * `seed/` is loaded into the store's test copy after the migrations, in the order of its path;
+ * any other file there is stored only.
+ */
 const MIGRATIONS_FOLDER = "migrations/";
 const SEED_FOLDER = "seed/";
 const MIGRATION_FILE = /^migrations\/(\d{4})_([a-z0-9]+(?:_[a-z0-9]+)*)\.sql$/u;
+const SEED_FILE = /^seed\/(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+\.sql$/u;
+/** How many seed files one store has at most, and how large one may be. */
+const DATA_STORE_MAX_SEED_FILES = 100;
+const DATA_STORE_SEED_MAX_BYTES = 1_048_576;
 const BYTES_PER_UNIT = { MB: 1024 ** 2, GB: 1024 ** 3 } as const;
 const SIZE_LIMIT = /^([1-9]\d{0,5})(MB|GB)$/u;
 
@@ -64,6 +72,13 @@ const migrationSchema = z.strictObject({
   sql: z.string().min(1).max(DATA_STORE_MIGRATION_MAX_BYTES)
 });
 
+/** One `.sql` file below `seed/`, which adds rows to the test copy as the store's app role. */
+const seedSchema = z.strictObject({
+  path: z.string().regex(SEED_FILE),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/u),
+  sql: z.string().min(1).max(DATA_STORE_SEED_MAX_BYTES)
+});
+
 /**
  * The definition of a Data Store as a revision holds it: the manifest's fields and the
  * migration files in the order they are applied, numbered from 1 without a gap.
@@ -78,7 +93,9 @@ export const dataStoreDefinitionSchema = z
     sizeLimitBytes: z.number().int().positive().optional(),
     records: z.array(dataStoreRecordsRuleSchema).optional(),
     tables: scopedTablesSchema.optional(),
-    migrations: z.array(migrationSchema).max(DATA_STORE_MAX_MIGRATIONS)
+    migrations: z.array(migrationSchema).max(DATA_STORE_MAX_MIGRATIONS),
+    /** The seed files in the order of their paths. Absent where the folder holds none. */
+    seed: z.array(seedSchema).max(DATA_STORE_MAX_SEED_FILES).optional()
   })
   .superRefine((definition, context) => {
     const tables = new Set<string>();
@@ -111,6 +128,7 @@ export const dataStoreDefinitionSchema = z
 
 export type DataStoreDefinition = z.infer<typeof dataStoreDefinitionSchema>;
 export type DataStoreMigration = DataStoreDefinition["migrations"][number];
+export type DataStoreSeedFile = NonNullable<DataStoreDefinition["seed"]>[number];
 
 /**
  * A statement that opens, ends or splits a transaction, by how it starts. A column or a table
@@ -217,6 +235,7 @@ export function readDataStoreFiles(
 ): JsonObject {
   const issues: AssetValidationIssue[] = [];
   const migrations: DataStoreMigration[] = [];
+  const seed: DataStoreSeedFile[] = [];
   let manifest: z.infer<typeof manifestSchema> | undefined;
   for (const file of files) {
     if (file.path === DATA_STORE_MANIFEST_FILE) {
@@ -224,6 +243,9 @@ export function readDataStoreFiles(
     } else if (file.path.startsWith(MIGRATIONS_FOLDER)) {
       const migration = readMigration(file, issues);
       if (migration) migrations.push(migration);
+    } else if (file.path.startsWith(SEED_FOLDER) && file.path.endsWith(".sql")) {
+      const read = readSeed(file, issues);
+      if (read) seed.push(read);
     } else if (!file.path.startsWith(SEED_FOLDER)) {
       issues.push({
         message: `'${file.path}' is no file of a Data Store: it holds '${DATA_STORE_MANIFEST_FILE}', '${MIGRATIONS_FOLDER}NNNN_name.sql' and files below '${SEED_FOLDER}'`,
@@ -237,6 +259,12 @@ export function readDataStoreFiles(
       path: [MIGRATIONS_FOLDER]
     });
   }
+  if (seed.length > DATA_STORE_MAX_SEED_FILES) {
+    issues.push({
+      message: `The store has ${seed.length} seed files. It has at most ${DATA_STORE_MAX_SEED_FILES} (DATA_STORE_MAX_SEED_FILES).`,
+      path: [SEED_FOLDER]
+    });
+  }
   if (!manifest || issues.length > 0) throw refused(issues);
   const definition = dataStoreDefinitionSchema.safeParse({
     name: manifest.id,
@@ -248,7 +276,10 @@ export function readDataStoreFiles(
     ...(manifest.sizeLimit === undefined
       ? {}
       : { sizeLimitBytes: sizeLimitBytes(manifest.sizeLimit) }),
-    migrations: migrations.sort((left, right) => left.number - right.number)
+    migrations: migrations.sort((left, right) => left.number - right.number),
+    ...(seed.length === 0
+      ? {}
+      : { seed: seed.sort((left, right) => (left.path < right.path ? -1 : 1)) })
   });
   if (!definition.success) throw refused(definition.error.issues);
   return definition.data;
@@ -320,6 +351,32 @@ function readMigration(
     sha256: createHash("sha256").update(file.bytes).digest("hex"),
     sql
   };
+}
+
+function readSeed(
+  file: { path: string; bytes: Uint8Array },
+  issues: AssetValidationIssue[]
+): DataStoreSeedFile | undefined {
+  if (!SEED_FILE.test(file.path)) {
+    issues.push({
+      message: `'${file.path}' is not named as a seed file: letters, digits, '_', '.' and '-' in each part of its path, ending in '.sql', such as '${SEED_FOLDER}0001_examples.sql'`,
+      path: [file.path]
+    });
+    return undefined;
+  }
+  if (file.bytes.byteLength > DATA_STORE_SEED_MAX_BYTES) {
+    issues.push({
+      message: `'${file.path}' has ${file.bytes.byteLength} bytes. A seed file has at most ${DATA_STORE_SEED_MAX_BYTES} (DATA_STORE_SEED_MAX_BYTES).`,
+      path: [file.path]
+    });
+    return undefined;
+  }
+  const sql = readText(file.bytes);
+  if (sql === undefined || sql.trim() === "") {
+    issues.push({ message: `'${file.path}' holds no SQL text`, path: [file.path] });
+    return undefined;
+  }
+  return { path: file.path, sha256: createHash("sha256").update(file.bytes).digest("hex"), sql };
 }
 
 /** The bytes of a size as `store.yaml` and release config write it, such as `500MB`. */

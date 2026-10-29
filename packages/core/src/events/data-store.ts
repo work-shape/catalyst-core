@@ -27,6 +27,65 @@ export const dataStoreEvents = {
       properties: { name: { type: "string" } }
     }
   },
+  // The test copy of a store was built from nothing (DT-2): by a draft's first changing call
+  // (`made`), because a migration or seed file it was built from changed in the draft
+  // (`rebuilt`), or by a reset. It names the store, the level and the number of seed files; the
+  // actor is the person whose draft called or who reset it. It holds no row and no SQL.
+  "data_store.test_copy_built": {
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    name: "data_store.test_copy_built",
+    subject: "data_store",
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["name", "reason", "level", "seedFiles"],
+      properties: {
+        name: { type: "string" },
+        reason: { type: "string", enum: ["made", "rebuilt", "reset"] },
+        level: { type: "integer" },
+        seedFiles: { type: "integer" }
+      }
+    }
+  },
+  // Building or bringing a test copy to its draft failed, and the copy is left unbuilt. It
+  // names the file and the SQLSTATE, never the statement's text or a value.
+  "data_store.test_copy_failed": {
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    name: "data_store.test_copy_failed",
+    subject: "data_store",
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["name", "code"],
+      properties: {
+        name: { type: "string" },
+        code: { type: "string" },
+        file: { type: "string" },
+        sqlState: { type: "string" }
+      }
+    }
+  },
+  // The test copy of a store was dropped: by Delete, or with the store's asset (`store_deleted`).
+  "data_store.test_copy_deleted": {
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    name: "data_store.test_copy_deleted",
+    subject: "data_store",
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["name", "reason"],
+      properties: {
+        name: { type: "string" },
+        reason: { type: "string", enum: ["deleted", "store_deleted"] }
+      }
+    }
+  },
   "data_store.rows_written": {
     legacy: false,
     audited: true,

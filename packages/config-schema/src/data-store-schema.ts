@@ -23,6 +23,15 @@ export const dataStoresConfigSchema = z
       .string()
       .regex(SIZE_PATTERN, "a whole number of MB or GB, such as 500MB or 5GB")
       .default("5GB"),
+    /**
+     * The most the test copy of one store may hold (ADR-0031, DT-2), never more than the store
+     * itself: a copy is built from the draft's migrations and `seed/` files, and at the limit
+     * its changing calls are refused as the store's are.
+     */
+    testCopySizeLimit: z
+      .string()
+      .regex(SIZE_PATTERN, "a whole number of MB or GB, such as 500MB or 5GB")
+      .default("500MB"),
     /** Whole-cursor deadline for Workflow dataset queries. Ordinary reads keep their inline bounds. */
     queryTimeoutMs: z.number().int().positive().default(DATA_STORE_QUERY_DEFAULT_TIMEOUT_MS),
     poolMaxConnections: z.number().int().min(1).max(10).default(5),

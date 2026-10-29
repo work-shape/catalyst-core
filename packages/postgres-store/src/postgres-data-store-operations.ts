@@ -1,9 +1,46 @@
-import { and, asc, eq, gt, inArray, or } from "drizzle-orm";
-import type { DataStoreRecord, DataStoreRecordsStore } from "@work-shape/catalyst-core";
+import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
+import type {
+  DataStoreRecord,
+  DataStoreRecordsStore,
+  DataStoreTestCopy
+} from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
-import { dataStores } from "./schema";
+import { dataStoreTestCopies, dataStores } from "./schema";
 
 type Row = typeof dataStores.$inferSelect;
+type TestCopyRow = typeof dataStoreTestCopies.$inferSelect;
+
+function mapTestCopy(row: TestCopyRow): DataStoreTestCopy {
+  return {
+    storeId: row.storeId,
+    clientInstanceId: row.clientInstanceId,
+    database: row.databaseName,
+    migrations: row.migrations,
+    seedSha256: row.seedSha256,
+    seedFiles: row.seedFiles,
+    ...(row.sizeBytes === null ? {} : { sizeBytes: row.sizeBytes }),
+    builtAt: row.builtAt.toISOString(),
+    builtBy: row.builtBy,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString()
+  };
+}
+
+function testCopyRowOf(copy: DataStoreTestCopy): TestCopyRow {
+  return {
+    storeId: copy.storeId,
+    clientInstanceId: copy.clientInstanceId,
+    databaseName: copy.database,
+    migrations: copy.migrations,
+    seedSha256: copy.seedSha256,
+    seedFiles: copy.seedFiles,
+    sizeBytes: copy.sizeBytes ?? null,
+    builtAt: new Date(copy.builtAt),
+    builtBy: copy.builtBy,
+    createdAt: new Date(copy.createdAt),
+    updatedAt: new Date(copy.updatedAt)
+  };
+}
 
 function mapRecord(row: Row): DataStoreRecord {
   return {
@@ -128,6 +165,42 @@ export function createPostgresDataStoreRecordsStore(db: PostgresConnection): Dat
       await db
         .delete(dataStores)
         .where(and(eq(dataStores.clientInstanceId, clientInstanceId), eq(dataStores.id, id)));
+    },
+    async getTestCopy({ clientInstanceId, storeId, lock }) {
+      // The turn of the store's copy, also before a first copy has a row to lock.
+      if (lock) {
+        await db.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${JSON.stringify(["data-store-test-copy", clientInstanceId, storeId])}, 0))`
+        );
+      }
+      const [row] = await db
+        .select()
+        .from(dataStoreTestCopies)
+        .where(
+          and(
+            eq(dataStoreTestCopies.clientInstanceId, clientInstanceId),
+            eq(dataStoreTestCopies.storeId, storeId)
+          )
+        )
+        .limit(1);
+      return row ? mapTestCopy(row) : undefined;
+    },
+    async putTestCopy(copy) {
+      const { storeId, createdAt, ...changed } = testCopyRowOf(copy);
+      await db
+        .insert(dataStoreTestCopies)
+        .values({ storeId, createdAt, ...changed })
+        .onConflictDoUpdate({ target: dataStoreTestCopies.storeId, set: changed });
+    },
+    async deleteTestCopy({ clientInstanceId, storeId }) {
+      await db
+        .delete(dataStoreTestCopies)
+        .where(
+          and(
+            eq(dataStoreTestCopies.clientInstanceId, clientInstanceId),
+            eq(dataStoreTestCopies.storeId, storeId)
+          )
+        );
     }
   };
 }

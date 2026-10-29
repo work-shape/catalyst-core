@@ -9,6 +9,7 @@ import {
   operationBatchFailureSchema,
   DATA_STORE_ACTIONS,
   DATA_STORE_DESCRIPTION_TOOL_NAME,
+  DATA_STORE_OPERATION_PREFIX,
   DATA_STORE_OPERATION_RIGHTS,
   dataStoreOperationName,
   dataStoreLoadInputSchema,
@@ -22,7 +23,8 @@ import {
   dataStoreStateOperationName,
   dataStoresModule,
   sizeLimitBytes,
-  type DataStores
+  type DataStores,
+  type TestCopyPart
 } from "@work-shape/catalyst-data-stores";
 import { PLATFORM_SECRET_NAMES } from "./infrastructure";
 import { workflowRunDatasetPort } from "./workflow-run-datasets";
@@ -126,6 +128,23 @@ const registerStoreRoutes: RouteRegistration = (routes) => {
     right: DATA_STORE_ACTIONS.read,
     notFound: STORE_NOT_AVAILABLE
   });
+  // The store's test copy: reset builds it again from the draft, delete drops it (DT-2).
+  const testCopy = (part: TestCopyPart) => ({
+    target: ({ store }: { store: string }) => ({
+      operation: `${DATA_STORE_OPERATION_PREFIX}${store}.${part}`,
+      input: {}
+    }),
+    right: DATA_STORE_ACTIONS.write,
+    notFound: STORE_NOT_AVAILABLE
+  });
+  routes.resourceOperation(
+    apiOperations["data_stores.test_copy_reset"],
+    testCopy("test_copy.reset")
+  );
+  routes.resourceOperation(
+    apiOperations["data_stores.test_copy_delete"],
+    testCopy("test_copy.delete")
+  );
 };
 
 /**
@@ -176,6 +195,7 @@ export const assembleDataStores: ModuleSeam = async (parts) => {
     keyring: await loadSecretKeyring({ keys: config.secretStore.keys, secrets }),
     limits: {
       sizeLimitBytes: sizeLimitBytes(config.dataStores.sizeLimit),
+      testCopySizeLimitBytes: sizeLimitBytes(config.dataStores.testCopySizeLimit),
       poolMaxConnections: config.dataStores.poolMaxConnections,
       load: config.dataStores.load,
       streamRowBytes: config.workflows.datasets.rowBytes,

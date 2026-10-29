@@ -40,6 +40,14 @@ import { rows, value } from "./rows";
 import { DATA_STORE_STATE_VERB, stateOperation } from "./state";
 import { DATA_STORE_USED_BY_PART, usedByOperation } from "./used-by";
 import {
+  TEST_COPY_PARTS,
+  copyActorOf,
+  reachTestCopy,
+  testCopyOperation,
+  testCopyState,
+  testCopyStateOf
+} from "./test-copy";
+import {
   AnsweredBefore,
   CommitOutcomeUnknown,
   tableUnknown,
@@ -200,11 +208,18 @@ function parseOperationName(name: string): { store: string; verb: StoreVerb } | 
  */
 async function runVerb(
   runtime: DataStoreRuntime,
-  store: PublishedStore,
+  published: PublishedStore,
   verb: Pick<StoreVerb, "effect" | "run" | "outputSchema"> & { verb: string },
   input: unknown,
   context: OperationExecutionContext
 ): Promise<unknown> {
+  // A call of a draft that `runOperation()` sent to the store's test target reaches the copy,
+  // reading and changing alike, made or brought to the draft first (ADR-0031, DT-2). Every
+  // verb below reads the store's database, level and size limit from this record alone.
+  const store =
+    context.target === "test"
+      ? await reachTestCopy(runtime, published, copyActorOf(context))
+      : published;
   const { record } = store;
   const { signal } = context.runtime;
   // A changing call that carried a key is recorded in the store with its rows.
@@ -245,7 +260,9 @@ async function runVerb(
         input
       );
       // A proposal that leaves fields for a person tells the store's reviewers, once.
-      if (verb.verb === "records.propose") await fileReviewNotice(runtime, store);
+      // A proposal in the test copy is a draft's and asks no reviewer.
+      if (verb.verb === "records.propose" && context.target !== "test")
+        await fileReviewNotice(runtime, store);
       return output;
     }
     // The app role as the platform gave it, before anything runs as that role.
@@ -383,6 +400,8 @@ function operationOf(
     // key, so a call that was cut off is made again under its key.
     ...(verb.effect === "changing" ? { repeatsUnderKey: true as const } : {}),
     ...rightsOf(store, verb),
+    // A call of a draft goes to the store's test copy (ADR-0031, DT-2).
+    testTarget: { state: () => testCopyState(runtime, store) },
     // A personal key reads a store's rows only with its own `data_store.execute` on the store.
     ...(verb.verb === "query" ? { personalKeyAction: DATA_STORE_ACTIONS.execute } : {}),
     // What a key must carry to call the verb over HTTP. The grants of its holder still decide.
@@ -416,6 +435,7 @@ function readOperation(
     effect: "reading",
     recordsEveryCall: true,
     action: DATA_STORE_ACTIONS.read,
+    testTarget: { state: () => testCopyState(runtime, store) },
     scope: "data_store_rows:read",
     ...(read.part === "rows" ? { personalKeyAction: DATA_STORE_ACTIONS.execute } : {}),
     auth: "principal",
@@ -448,7 +468,21 @@ export function createDataStoreOperationSource(runtime: DataStoreRuntime): Opera
       if (split?.part === DATA_STORE_STATE_VERB) {
         // The state of a store is answered from its record, whether its database is there or not.
         const store = await readStore(lookup, split.store);
-        return store && stateOperation(store, DATA_STORES_MODULE);
+        return (
+          store &&
+          stateOperation(store, DATA_STORES_MODULE, async () => {
+            const copy = await runtime.stores.dataStores.getTestCopy({
+              clientInstanceId: runtime.clientInstanceId,
+              storeId: store.record.id
+            });
+            return copy && testCopyStateOf(runtime, store.record, copy);
+          })
+        );
+      }
+      const copyPart = TEST_COPY_PARTS.find((part) => part === split?.part);
+      if (split && copyPart) {
+        const store = await readStore(lookup, split.store);
+        return store && testCopyOperation(runtime, store, copyPart, DATA_STORES_MODULE);
       }
       if (split?.part === DATA_STORE_USED_BY_PART) {
         const store = await readStore(lookup, split.store);

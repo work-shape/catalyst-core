@@ -511,7 +511,8 @@ describe("the names of a Data Store and of a Knowledge Base", () => {
       upgradeOwnedTick: "data_store.upgrade_owned_tick",
       measureSizePage: "data_store.measure_size_page",
       upgradeOwnedPage: "data_store.upgrade_owned_page",
-      drop: "data_store.drop"
+      drop: "data_store.drop",
+      dropTestCopy: "data_store.drop_test_copy"
     });
     expectTypeOf<DataStoreJobKind>().toEqualTypeOf<
       | "data_store.provision"
@@ -523,6 +524,7 @@ describe("the names of a Data Store and of a Knowledge Base", () => {
       | "data_store.measure_size_page"
       | "data_store.upgrade_owned_page"
       | "data_store.drop"
+      | "data_store.drop_test_copy"
     >();
   });
 
@@ -736,7 +738,9 @@ describe("the modules workflows and dataStores", () => {
         "data_stores.rows",
         "data_stores.value",
         "data_stores.used_by",
-        "data_stores.app_sources"
+        "data_stores.app_sources",
+        "data_stores.test_copy_reset",
+        "data_stores.test_copy_delete"
       ],
       jobKinds: Object.values(DATA_STORE_JOB_KINDS)
     });

@@ -16,6 +16,11 @@ import type { DataStoreServer, DataStoreStatementLimits } from "./server";
 export interface DataStoreLimits {
   /** The most one store may hold. A store's manifest may name less and never more. */
   sizeLimitBytes: number;
+  /**
+   * The most the test copy of one store may hold, never more than the store itself
+   * (`dataStores.testCopySizeLimit`, 500 MB when unset).
+   */
+  testCopySizeLimitBytes?: number;
   /** Operator ceilings for one atomic load; defaults come from release config. */
   load?: { rows: number; bytes: number; timeoutMs: number };
   /** Maximum row size of the workflow dataset writer receiving query results. */
@@ -99,7 +104,7 @@ export interface DataStoreRuntime {
   };
   /** A Workflow run's datasets for `knowledge.<id>.ingest`; absent without dataset storage. */
   workflowDatasets?: WorkflowRunDatasetPort;
-  /** The stores this process has seen to hold the table of their call records, by id. */
+  /** The store databases this process has seen to hold the table of their call records, by name. */
   callRecords: Map<string, Promise<void>>;
   logger: Logger;
 }

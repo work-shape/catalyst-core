@@ -136,6 +136,7 @@ describe("a Data Store on an assembled instance", () => {
   it("has the size ceiling and the pool cap of a store in release config, with the spec's defaults", () => {
     expect(parseClientInstanceConfig(createTestConfig()).dataStores).toEqual({
       sizeLimit: "5GB",
+      testCopySizeLimit: "500MB",
       poolMaxConnections: 5,
       queryTimeoutMs: 600_000,
       load: { rows: 100_000, bytes: 67_108_864, timeoutMs: 600_000 }
@@ -378,7 +379,8 @@ describe("a Data Store on an assembled instance", () => {
         retries: [
           DATA_STORE_JOB_KINDS.provision,
           DATA_STORE_JOB_KINDS.migrate,
-          DATA_STORE_JOB_KINDS.drop
+          DATA_STORE_JOB_KINDS.drop,
+          DATA_STORE_JOB_KINDS.dropTestCopy
         ]
       });
     });

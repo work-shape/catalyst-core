@@ -98,7 +98,9 @@ postgres_exec() {
 # Store and whatever else it holds, so a store the platform has not recorded yet is not missed.
 # Left out: the templates, "postgres" (initdb's empty maintenance database, unless it is the
 # platform's), and the scratch and replaced databases that restore-postgres.sh names
-# <database>_restore_<timestamp> and <database>_replaced_<timestamp>. Also left out, as
+# <database>_restore_<timestamp> and <database>_replaced_<timestamp>, and the test copy of a
+# Data Store, <store database>_test: it is built again from the store's draft and never holds a
+# live row (ADR-0031), and the platform rebuilds a copy it finds missing. Also left out, as
 # pg_dumpall does, is a database an interrupted DROP DATABASE left invalid: nothing can connect
 # to it, so it would fail every backup until it is dropped.
 databases="$(postgres_exec psql -X -q -At -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
@@ -107,6 +109,7 @@ databases="$(postgres_exec psql -X -q -At -v ON_ERROR_STOP=1 -U "$POSTGRES_USER"
     and datconnlimit <> -2
     and (datname <> 'postgres' or datname = '$POSTGRES_DB')
     and datname !~ '_(restore|replaced)_[0-9]{8}t[0-9]{6}z\$'
+    and datname !~ '^catalyst_ds_[0-9a-f]+_test\$'
   order by datname")"
 
 invalid_databases="$(postgres_exec psql -X -q -At -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" \

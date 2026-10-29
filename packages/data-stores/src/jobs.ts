@@ -10,6 +10,7 @@ import {
   upgradeOwnedTickJob,
   measureSizePageJob,
   upgradeOwnedPageJob,
+  dropTestCopyJob,
   enqueueStoreJob,
   DATA_STORE_JOB_SLOTS,
   DATA_STORE_MEASURE_INTERVAL_MS,
@@ -59,6 +60,7 @@ import {
 import { platformIsSuperuser, writeStoreRoles } from "./roles";
 import type { DataStoreRuntime } from "./runtime";
 import { measureDataStores, recordStoreSize } from "./size";
+import { deleteTestCopy } from "./test-copy";
 
 // The jobs that bring a store's database to its published revision. Publishing writes the
 // store's record and enqueues in the same transaction; the handlers read the record anew,
@@ -665,6 +667,36 @@ async function migrateOwnedStore(
     }
 }
 
+/**
+ * Drops the test copy of a store whose asset was deleted. A store published again since keeps
+ * its copy: its drafts reach it again.
+ */
+async function dropRetiredTestCopy(
+  runtime: DataStoreRuntime,
+  job: Job<StorePayload>,
+  control: JobControl
+): Promise<void> {
+  const record = await control.transaction((stores) =>
+    stores.dataStores.getDataStore({
+      clientInstanceId: runtime.clientInstanceId,
+      id: job.payload.storeId
+    })
+  );
+  if (record?.status !== "retired") return;
+  try {
+    await deleteTestCopy(
+      runtime,
+      record,
+      { recorder: runtime.auditRecorder, correlationId: job.correlationId },
+      "store_deleted",
+      control.signal
+    );
+  } catch (error) {
+    const failure = describeDatabaseFailure(error, "Dropping the test copy of the Data Store");
+    throw new AppError("CONFLICT", failure.sentence, { reason: "drop_failed" });
+  }
+}
+
 /** The handlers, the schedules and the manual retries of the store's job kinds. */
 export function createDataStoreJobs(runtime: DataStoreRuntime): {
   handlers: RegisteredJobHandler[];
@@ -727,6 +759,11 @@ export function createDataStoreJobs(runtime: DataStoreRuntime): {
         kind: dropJob,
         slots: DATA_STORE_JOB_SLOTS,
         run: (job, control) => drop(runtime, job, control)
+      }),
+      defineJobHandler({
+        kind: dropTestCopyJob,
+        slots: DATA_STORE_JOB_SLOTS,
+        run: (job, control) => dropRetiredTestCopy(runtime, job, control)
       })
     ],
     schedules: [
@@ -742,7 +779,8 @@ export function createDataStoreJobs(runtime: DataStoreRuntime): {
     retries: [
       { kind: provisionJob, restoreSubject: restoreStore },
       { kind: migrateJob, restoreSubject: restoreStore },
-      { kind: dropJob }
+      { kind: dropJob },
+      { kind: dropTestCopyJob }
     ]
   };
 }

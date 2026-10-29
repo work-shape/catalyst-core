@@ -13,16 +13,27 @@ import type { ISODateString } from "./time";
 // cleared once its draft changes, so an approval given for one draft never carries over.
 
 /**
- * Where a call of a draft goes, by what it does and whether its caller's "Run live once"
- * covers it: a read goes live, a change is simulated unless switched live. `runOperation()`
- * decides a call by this rule, and what shows a draft's parts says the same with it. DT-2 and
- * DT-3 add the test target of the called asset here, which every call of a draft then reaches.
+ * The test target of the asset a call of a draft reaches (ADR-0031): `present` where it
+ * exists, such as a Data Store's test copy; `made_on_change` where it does not and a changing
+ * call of a draft makes it. An asset without one has none.
+ */
+export type DraftTestTarget = "present" | "made_on_change";
+
+/**
+ * Where a call of a draft goes, by what it does, the called asset's test target and whether its
+ * caller's "Run live once" covers it. A read goes to a test target that is present and live
+ * otherwise. A change goes live where switched live, else to a test target, present or made by
+ * the change, else nowhere: it is simulated. `runOperation()` decides a call by this rule, and
+ * what shows a draft's parts says the same with it.
  */
 export function draftCallTarget(input: {
   effect: OperationEffect;
   liveOnce: boolean;
+  testTarget?: DraftTestTarget;
 }): OperationTarget {
-  return input.effect === "reading" || input.liveOnce ? "live" : "dry_run";
+  if (input.effect === "reading") return input.testTarget === "present" ? "test" : "live";
+  if (input.liveOnce) return "live";
+  return input.testTarget === undefined ? "dry_run" : "test";
 }
 
 /** One switch: an action or a step of one draft revision, whose it is, and its use. */

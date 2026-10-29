@@ -90,8 +90,8 @@ describe("an App on a Data Store, from its folder to a member's row", () => {
         policy: "confirm",
         // No agent carries an action of a draft.
         agentTool: false,
-        // A change from the draft is simulated (ADR-0031).
-        target: "dry_run"
+        // A change from the draft goes to the store's test copy, which it makes (ADR-0031, DT-2).
+        target: "test"
       },
       {
         name: "list_findings",
