@@ -16,6 +16,13 @@ export const PROJECT_ASSET_KIND = "project";
 export const PROJECT_AUDIENCES = ["workspace", "private"] as const;
 export type ProjectAudience = (typeof PROJECT_AUDIENCES)[number];
 
+/**
+ * What a project's deletion does with its chats (PRJ-6): they stay in the workspace, outside a
+ * project, or are deleted with it.
+ */
+export const PROJECT_DELETION_CONVERSATIONS = ["keep", "delete"] as const;
+export type ProjectDeletionConversations = (typeof PROJECT_DELETION_CONVERSATIONS)[number];
+
 /** Who made a version of a project file: a person on the page, an agent in a chat, an upload. */
 export const PROJECT_FILE_ORIGINS = ["person", "agent", "upload"] as const;
 

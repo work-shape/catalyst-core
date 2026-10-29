@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   PROJECT_AUDIENCES,
+  PROJECT_DELETION_CONVERSATIONS,
   PROJECT_FILE_CHANGES,
   PROJECT_FILE_ORIGINS,
   PROJECT_DESCRIPTION_MAX_LENGTH,
@@ -58,7 +59,77 @@ export const createProjectRequestSchema = z.object({
 
 /** A project of the conversation's own workspace, or `null` to take it out of its project. */
 export const setConversationProjectRequestSchema = z.object({
-  projectId: z.string().min(1).nullable()
+  projectId: z.string().min(1).nullable(),
+  /**
+   * Into a private project, a chat others read now is read by its author alone from then on:
+   * `true` says the person saw that (PRJ-6). Without it such a move is refused
+   * (`VALIDATION_FAILED`, `project_hides_conversation`).
+   */
+  hideFromOthers: z.boolean().optional()
+});
+
+// Moving, sharing and deleting a whole project (PRJ-6).
+
+/** What a change to the whole project reaches, counted for its dialog. */
+export const projectImpactSchema = z.object({
+  /** The chats in the project. */
+  conversations: z.number().int().nonnegative(),
+  /** Of those, the chats someone other than its creator started. */
+  conversationsOfOthers: z.number().int().nonnegative(),
+  /** Chats that must stay private and keep the project from being shared. */
+  conversationsKeptPrivate: z.number().int().nonnegative(),
+  /** The project's files as they are now. */
+  files: z.number().int().nonnegative(),
+  /** Of those, the files someone other than its creator changed last. */
+  filesOfOthers: z.number().int().nonnegative(),
+  /** Files a chat that must stay private wrote, or one that is gone; they keep it unshared. */
+  filesKeptPrivate: z.number().int().nonnegative()
+});
+
+/** Only the creator changes who reads a project, and only in a Shared Workspace. */
+export const setProjectAudienceRequestSchema = z.object({
+  audience: projectAudienceSchema,
+  /** The audience the person saw; a project changed since is refused with `CONFLICT`. */
+  expectedAudience: projectAudienceSchema
+});
+
+export const projectAudienceChangeSchema = z.object({
+  project: projectSchema,
+  /** Chats every member of the workspace reads from now on. */
+  conversationsShared: z.number().int().nonnegative(),
+  /** Other members' chats that left the project and stay shared in the workspace. */
+  conversationsLeft: z.number().int().nonnegative(),
+  /** The creator's own chats that only the creator reads from now on. */
+  conversationsMadePrivate: z.number().int().nonnegative()
+});
+
+export const moveProjectRequestSchema = z.object({
+  /** A workspace the caller is a member of, as of the project's own. */
+  collaborationWorkspaceId: z.string().min(1),
+  /**
+   * Out of a Personal Workspace only: who reads the project in the Shared Workspace. Missing:
+   * only its creator. Elsewhere a project keeps its audience; into a Personal Workspace it is
+   * that person's.
+   */
+  audience: projectAudienceSchema.optional()
+});
+
+export const projectMoveSchema = z.object({
+  project: projectSchema,
+  /** The chats that moved with the project. */
+  conversationsMoved: z.number().int().nonnegative()
+});
+
+/** The one choice of a deletion: the project's chats stay in the workspace, or go too. */
+export const deleteProjectRequestSchema = z.object({
+  conversations: z.enum(PROJECT_DELETION_CONVERSATIONS)
+});
+
+export const projectDeletionSchema = z.object({
+  /** Chats deleted with the project. */
+  conversationsDeleted: z.number().int().nonnegative(),
+  /** Chats that stayed in the workspace, each read as it was before. */
+  conversationsKept: z.number().int().nonnegative()
 });
 
 /**
@@ -142,8 +213,12 @@ export type ProjectSetupView = z.infer<typeof projectSetupSchema>;
 export type ProjectAgentChoiceView = z.infer<typeof projectAgentChoiceSchema>;
 export type ProjectSkillChoiceView = z.infer<typeof projectSkillChoiceSchema>;
 export type ProjectKnowledgeBaseChoiceView = z.infer<typeof projectKnowledgeBaseChoiceSchema>;
+export type ProjectImpactView = z.infer<typeof projectImpactSchema>;
 export type ProjectListItemView = z.infer<typeof projectListItemSchema>;
 export type ProjectAudienceView = z.infer<typeof projectAudienceSchema>;
+export type ProjectDeletionConversationsView = z.infer<
+  typeof deleteProjectRequestSchema
+>["conversations"];
 
 // Project files (PRJ-2): one folder per project that people and agents write in place. Every
 // change is a version; a change to a file that changed since its writer read it is kept beside

@@ -1,0 +1,20 @@
+# The two people of the spec of a whole project (PRJ-6), used by no other spec: one shares their
+# project, makes it private again, moves it to another workspace and deletes it; the other is a
+# member of the first workspace and sees the project only while it is shared.
+# The labels sort after every other for the reason in e2e-app.yaml.
+- email: e2e-project-settings@example.test
+  displayLabel: E2E Zz Project Settings
+  passwordEnvName: E2E_PROJECT_SETTINGS_PASSWORD
+  developmentPassword: e2e-project-settings-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
+- email: e2e-project-settings-member@example.test
+  displayLabel: E2E Zz Project Settings Member
+  passwordEnvName: E2E_PROJECT_SETTINGS_MEMBER_PASSWORD
+  developmentPassword: e2e-project-settings-member-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

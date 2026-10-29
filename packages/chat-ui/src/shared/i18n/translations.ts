@@ -58,6 +58,7 @@ import { projectFiles } from "./project-files";
 import { projectInstructions } from "./project-instructions";
 import { projectSetup } from "./project-setup";
 import { projectKnowledge } from "./project-knowledge";
+import { projectSettings } from "./project-settings";
 import { projects } from "./projects";
 import { publishNarrative } from "./publish-narrative";
 import { refusals } from "./refusal-texts";
@@ -144,6 +145,7 @@ export const translations = combineTranslations(common)
   .and(projectInstructions)
   .and(projectSetup)
   .and(projectKnowledge)
+  .and(projectSettings)
   .and(publishNarrative)
   .and(refusals)
   .and(rights)

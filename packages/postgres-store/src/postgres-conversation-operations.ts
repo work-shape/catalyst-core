@@ -16,6 +16,7 @@ import {
   type ChatMessage,
   type ClientInstanceId,
   type Conversation,
+  type ConversationVisibility,
   type AddConversationDataStoreInput,
   type ConversationCreatedAssetInput,
   type ConversationDataStore,
@@ -66,13 +67,35 @@ export async function createConversation(
         collaborationWorkspaceId: input.collaborationWorkspaceId
       });
       if (!project) throw new AppError("NOT_FOUND", "Project is not available");
-      if (project.audience !== input.visibility) {
-        throw new AppError("INTERNAL", "A conversation in a project takes the project's audience");
-      }
+      requireProjectAudience(project, {
+        visibility: input.visibility,
+        createdByUserId: input.createdByUserId
+      });
       return insertConversation(tx, input);
     });
   }
   return insertConversation(db, input);
+}
+
+/**
+ * A chat in a project is read by exactly the project's audience: it takes the project's
+ * audience as its visibility, and a private project holds only its creator's chats.
+ */
+function requireProjectAudience(
+  project: { audience: ConversationVisibility; createdByUserId: string },
+  conversation: { visibility: ConversationVisibility; createdByUserId: string }
+): void {
+  if (project.audience === "private" && conversation.createdByUserId !== project.createdByUserId) {
+    throw new AppError("NOT_FOUND", "Project is not available");
+  }
+  if (project.audience !== conversation.visibility) {
+    throw new AppError(
+      "CONFLICT",
+      "Who reads the project changed meanwhile",
+      { reason: "project_audience_changed" },
+      { exposeMessage: true }
+    );
+  }
 }
 
 async function insertConversation(
@@ -287,6 +310,12 @@ async function setConversationProject(
         collaborationWorkspaceId: conversation.collaborationWorkspaceId
       });
       if (!project) throw new AppError("NOT_FOUND", "Project is not available");
+      // The audience is read again under the lock: a change of it since the caller's check
+      // must not put the chat where its readers differ from the project's (PRJ-6).
+      requireProjectAudience(project, {
+        visibility: input.visibility,
+        createdByUserId: conversation.createdByUserId
+      });
     }
     if (input.visibility !== "private") {
       const [workspace] = await tx

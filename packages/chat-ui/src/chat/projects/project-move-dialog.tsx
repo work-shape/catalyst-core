@@ -53,8 +53,11 @@ export function ProjectChangeDialogs({
         pending={mutation.isPending}
         failed={mutation.isError}
         onClose={close}
-        onMove={(conversationId, projectId) =>
-          mutation.mutate({ conversationId, projectId }, { onSuccess: onClose })
+        onMove={(conversationId, projectId, hideFromOthers) =>
+          mutation.mutate(
+            { conversationId, projectId, ...(hideFromOthers ? { hideFromOthers } : {}) },
+            { onSuccess: onClose }
+          )
         }
       />
       <ConfirmDialog
@@ -101,7 +104,8 @@ function MoveDialog({
   pending: boolean;
   failed: boolean;
   onClose(): void;
-  onMove(conversationId: string, projectId: string): void;
+  /** `hideFromOthers`: the person saw that the others no longer read the conversation. */
+  onMove(conversationId: string, projectId: string, hideFromOthers: boolean): void;
 }) {
   const { t } = useTranslation();
   const [projectId, setProjectId] = useState<string>();
@@ -130,7 +134,13 @@ function MoveDialog({
             loading={pending}
             disabled={!destination || !conversation}
             onClick={() => {
-              if (destination && conversation) onMove(conversation.id, destination.id);
+              if (destination && conversation) {
+                onMove(
+                  conversation.id,
+                  destination.id,
+                  destination.audience === "private" && conversation.visibility === "workspace"
+                );
+              }
             }}
           >
             {t("projects.move")}
@@ -163,12 +173,13 @@ function MoveDialog({
         {destination && conversation && destination.audience !== conversation.visibility ? (
           <Banner
             layout="inline"
-            tone={destination.audience === "workspace" ? "warning" : "info"}
+            // Either way others' reading changes: shown to all, or hidden from those who read it.
+            tone="warning"
             data-testid="project-move-audience"
           >
             {destination.audience === "workspace"
               ? t("projects.moveShared", { workspace: workspaceName })
-              : t("projects.movePrivate")}
+              : t("projects.movePrivate", { workspace: workspaceName })}
           </Banner>
         ) : null}
         {failed ? <FormNotice tone="error">{t("projects.moveFailed")}</FormNotice> : null}

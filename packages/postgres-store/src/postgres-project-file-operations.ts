@@ -8,7 +8,7 @@ import {
   type WriteProjectFileVersionResult
 } from "@work-shape/catalyst-core";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
-import { projectFiles, projectFileVersions, projects } from "./schema";
+import { configAssets, projectFiles, projectFileVersions, projects } from "./schema";
 
 // The files of a project with their versions (PRJ-2). Every change takes the project's row
 // lock, so the caps hold and two writes of one file are ordered: the second sees the first
@@ -177,6 +177,11 @@ export function createPostgresProjectFileStore(db: PostgresConnection): ProjectF
   };
 }
 
+/**
+ * Takes the project's row lock for a change of its files. Only an active project takes a
+ * write: once its deletion is claimed (PRJ-6) a write waits for the claim and is refused, so
+ * the cleanup that follows finds every object the files name.
+ */
 async function lockProject(
   tx: PostgresTransaction,
   input: { clientInstanceId: string; projectId: string }
@@ -184,13 +189,15 @@ async function lockProject(
   const [project] = await tx
     .select({ id: projects.assetId })
     .from(projects)
+    .innerJoin(configAssets, eq(configAssets.id, projects.assetId))
     .where(
       and(
         eq(projects.assetId, input.projectId),
-        eq(projects.clientInstanceId, input.clientInstanceId)
+        eq(projects.clientInstanceId, input.clientInstanceId),
+        eq(configAssets.status, "active")
       )
     )
-    .for("update")
+    .for("update", { of: projects })
     .limit(1);
   if (!project) throw new AppError("NOT_FOUND", "Project is not available");
 }

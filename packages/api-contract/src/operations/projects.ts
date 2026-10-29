@@ -19,7 +19,14 @@ import {
   projectSetupSchema,
   projectsSchema,
   setConversationProjectRequestSchema,
-  setProjectSetupRequestSchema
+  setProjectSetupRequestSchema,
+  deleteProjectRequestSchema,
+  moveProjectRequestSchema,
+  projectAudienceChangeSchema,
+  projectDeletionSchema,
+  projectImpactSchema,
+  projectMoveSchema,
+  setProjectAudienceRequestSchema
 } from "../projects";
 import { conversationSchema, draftAttachmentUploadResponseSchema } from "../conversations";
 import { blob, defineOperation, defineRegisteredOperation, json } from "./define-operation";
@@ -121,6 +128,69 @@ export const projectOperations = {
     body: setProjectSetupRequestSchema,
     response: json(projectSetupSchema),
     errors: ["NOT_FOUND", "CONFLICT", "VALIDATION_FAILED"],
+    rateClass: "write"
+  }),
+  // A whole project (PRJ-6): who reads it, its workspace, its deletion.
+  "projects.impact": defineOperation({
+    id: "projects.impact",
+    method: "GET",
+    path: "/api/v1/project-settings/:projectId/impact",
+    summary:
+      "Count what a change to the whole project reaches: its chats and files, and whose they are",
+    tag: "Projects",
+    auth: "user",
+    scope: "conversation:read",
+    requires: [],
+    effect: "reading",
+    response: json(projectImpactSchema),
+    errors: ["NOT_FOUND"],
+    rateClass: "read"
+  }),
+  "projects.set_audience": defineRegisteredOperation({
+    id: "projects.set_audience",
+    method: "PUT",
+    path: "/api/v1/project-settings/:projectId/audience",
+    summary:
+      "Share a project with its workspace or make it private to its creator, with every chat in it",
+    tag: "Projects",
+    auth: "user",
+    scope: "conversation:write",
+    requires: [],
+    effect: "changing",
+    body: setProjectAudienceRequestSchema,
+    response: json(projectAudienceChangeSchema),
+    errors: ["NOT_FOUND", "CONFLICT", "VALIDATION_FAILED"],
+    rateClass: "write"
+  }),
+  "projects.move": defineRegisteredOperation({
+    id: "projects.move",
+    method: "POST",
+    path: "/api/v1/project-settings/:projectId/move",
+    summary:
+      "Move a project with its chats and files to another workspace the caller is a member of",
+    tag: "Projects",
+    auth: "user",
+    scope: "conversation:write",
+    requires: [],
+    effect: "changing",
+    body: moveProjectRequestSchema,
+    response: json(projectMoveSchema),
+    errors: ["NOT_FOUND", "CONFLICT", "VALIDATION_FAILED"],
+    rateClass: "write"
+  }),
+  "projects.delete": defineRegisteredOperation({
+    id: "projects.delete",
+    method: "POST",
+    path: "/api/v1/project-settings/:projectId/delete",
+    summary: "Delete a project with its files; its chats stay in the workspace or are deleted too",
+    tag: "Projects",
+    auth: "user",
+    scope: "conversation:write",
+    requires: [],
+    effect: "changing",
+    body: deleteProjectRequestSchema,
+    response: json(projectDeletionSchema),
+    errors: ["NOT_FOUND", "CONFLICT", "FORBIDDEN"],
     rateClass: "write"
   }),
   "conversations.set_project": defineRegisteredOperation({

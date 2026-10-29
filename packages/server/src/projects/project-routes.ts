@@ -16,6 +16,7 @@ import { conversationIdParam } from "../routes/request-context";
 import type { ChatServerOptions } from "../types";
 import { addDraftAttachmentFromBytes } from "../routes/draft-attachment-routes";
 import { ProjectFileService } from "./project-files";
+import { ProjectLifecycleWorkflow } from "./project-lifecycle";
 import { ProjectWorkflow } from "./project-service";
 import { ProjectSetupService } from "./project-setup";
 import { resolveRequestLocale } from "../routes/request-context";
@@ -30,6 +31,7 @@ export function registerProjectRoutes(route: Route, options: ChatServerOptions):
   const conversations = new ConversationWorkflow(options);
   const files = new ProjectFileService(options);
   const setup = new ProjectSetupService(options);
+  const lifecycle = new ProjectLifecycleWorkflow(options);
 
   route(apiOperations["projects.list"], ({ user, params }) =>
     projects.list(user, asCollaborationWorkspaceId(params.collaborationWorkspaceId))
@@ -42,8 +44,8 @@ export function registerProjectRoutes(route: Route, options: ChatServerOptions):
   );
 
   route.operation(apiOperations["projects.create"], {
-    // Nothing deletes a project yet: it stays once made.
-    changeClass: "irreversible",
+    // Deleted again with `projects.delete`.
+    changeClass: "reversible",
     authorize: authorizePerson("projects.create"),
     resource: ({ collaborationWorkspaceId }) => ({
       kind: "collaboration_workspace",
@@ -90,13 +92,51 @@ export function registerProjectRoutes(route: Route, options: ChatServerOptions):
     changeClass: "reversible",
     authorize: authorizePerson("conversations.set_project"),
     resource: ({ conversationId }) => ({ kind: "conversation", id: conversationId }),
-    execute: ({ conversationId, projectId }, context) =>
+    execute: ({ conversationId, projectId, hideFromOthers }, context) =>
       conversations.setConversationProject(
         conversationIdParam({ conversationId }),
         personOf(context.actor),
         context,
-        projectId
+        projectId,
+        { hideFromOthers: hideFromOthers === true }
       )
+  });
+
+  // A whole project (PRJ-6). The workflow asks the project's audience on every call.
+  route(apiOperations["projects.impact"], ({ user, params }) =>
+    lifecycle.impact(user, params.projectId)
+  );
+
+  route.operation(apiOperations["projects.set_audience"], {
+    // The creator changes it back, though other members' chats that left stay out.
+    changeClass: "reversible",
+    authorize: authorizePerson("projects.set_audience"),
+    resource: ({ projectId }) => ({ kind: "project", id: projectId }),
+    execute: ({ projectId, audience, expectedAudience }, context) =>
+      lifecycle.setAudience(personOf(context.actor), context, projectId, {
+        audience,
+        expectedAudience
+      })
+  });
+
+  route.operation(apiOperations["projects.move"], {
+    // Moved back by the same call; the grants that ended do not come back.
+    changeClass: "reversible",
+    authorize: authorizePerson("projects.move"),
+    resource: ({ projectId }) => ({ kind: "project", id: projectId }),
+    execute: ({ projectId, collaborationWorkspaceId, audience }, context) =>
+      lifecycle.move(personOf(context.actor), context, projectId, {
+        collaborationWorkspaceId: asCollaborationWorkspaceId(collaborationWorkspaceId),
+        ...(audience ? { audience } : {})
+      })
+  });
+
+  route.operation(apiOperations["projects.delete"], {
+    changeClass: "irreversible",
+    authorize: authorizePerson("projects.delete"),
+    resource: ({ projectId }) => ({ kind: "project", id: projectId }),
+    execute: ({ projectId, conversations: choice }, context) =>
+      lifecycle.delete(personOf(context.actor), context, projectId, { conversations: choice })
   });
 
   // Project files (PRJ-2). The service asks the project's audience on every call.
