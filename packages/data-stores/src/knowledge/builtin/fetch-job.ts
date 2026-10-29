@@ -29,8 +29,7 @@ import {
   createSourceStore,
   sourceTransaction,
   sourceFormat,
-  type SourceItem,
-  type KnowledgeSourceStore
+  type SourceItem
 } from "./source-store";
 import { sourceTarget, sourceCall, type SourceJobRuntime } from "./source-runtime";
 
@@ -40,6 +39,8 @@ const FETCH_BACKOFF_BASE_MS = knowledgeFetchJob.backoff.baseMs;
 const SOURCE_RATE_LIMIT_WAIT_MS = 60_000;
 // Bounds the copy window that the existing file-cleanup job protects after a killed worker.
 const FETCH_BATCH_TIMEOUT_MS = 240_000;
+// Items fetched, then adopted together: one transaction and one document lock for the group.
+const FETCH_GROUP_ITEMS = 25;
 
 async function queueAgain(
   runtime: SourceJobRuntime,
@@ -62,36 +63,29 @@ async function queueAgain(
     )
   );
 }
-async function queueIndex(
+/**
+ * Whether a fetched item's content still needs an index job: not when it failed, and not when
+ * it is indexed and its extracted text is kept.
+ */
+async function needsIndex(
   runtime: SourceJobRuntime,
-  control: JobControl,
-  store: KnowledgeSourceStore,
-  payload: KnowledgeFetchJobPayload,
-  id: string,
+  knowledgeBaseId: string,
+  content: { state: string; contentSha256: string },
   retained: Set<string>
 ) {
-  const content = await store.indexPayload(id);
-  if (!content) return;
-  if (content.state === "failed") return content;
-  if (content.state === "extracted") {
-    if (retained.has(content.contentSha256)) return content;
-    if (
-      await hasStoredKnowledgeExtraction(runtime.input.files, {
-        knowledgeBaseId: payload.knowledgeBaseId,
-        contentSha256: content.contentSha256
-      })
-    ) {
-      retained.add(content.contentSha256);
-      return content;
-    }
-  }
-  await control.transaction((stores) =>
-    enqueueKnowledgeIndex(stores.jobs, knowledgeIndexPayloadOfFetch(payload, content), {
-      clientInstanceId: runtime.data.clientInstanceId,
-      dedupe: true
+  if (content.state === "failed") return false;
+  if (content.state !== "extracted") return true;
+  if (retained.has(content.contentSha256)) return false;
+  if (
+    await hasStoredKnowledgeExtraction(runtime.input.files, {
+      knowledgeBaseId,
+      contentSha256: content.contentSha256
     })
-  );
-  return content;
+  ) {
+    retained.add(content.contentSha256);
+    return false;
+  }
+  return true;
 }
 
 export async function releaseCopy(
@@ -125,6 +119,8 @@ export async function releaseCopy(
     copies.map((copy) => ({ ...copy, deleted: copy.status === "deleted" }))
   );
 }
+
+type FetchedDocument = Awaited<ReturnType<typeof fetchItem>>;
 
 class SourceFormatRefusal extends Error {
   constructor(readonly code: KnowledgeDocumentFailureCode) {
@@ -237,6 +233,7 @@ export function createKnowledgeFetchHandler(runtime: SourceJobRuntime): Register
       const { payload } = job;
       const found = await sourceTarget(runtime, payload);
       if (!found) return;
+      const boundaryKey = sourceBoundaryKey(found.source);
       const active = await createSourceStore(
         runtime.data,
         payload.knowledgeBaseId,
@@ -277,146 +274,187 @@ export function createKnowledgeFetchHandler(runtime: SourceJobRuntime): Register
       );
       const retry: string[] = [];
       let retryMs = 0;
+      // The contents of this batch whose copies no index job queued by it will release.
       const releases = new Map<
         string,
         ReturnType<typeof knowledgeIndexPayloadOfFetch> & { fileIds: string[] }
       >();
       const retained = new Set<string>();
-      async function handoff(id: string) {
-        const content = await queueIndex(runtime, control, store, payload, id, retained);
-        if (content) {
+      // Hands fetched items to indexing: their contents in one read, their index jobs in one
+      // transaction. The copies a queued index job will release are left to it.
+      async function handoff(ids: readonly string[]) {
+        if (!ids.length) return;
+        const contents = await store.indexPayloads(ids);
+        const queue: ReturnType<typeof knowledgeIndexPayloadOfFetch>[] = [];
+        for (const id of ids) {
+          const content = contents.get(id);
+          if (!content) continue;
+          const indexPayload = knowledgeIndexPayloadOfFetch(payload, content);
           const previous = releases.get(content.contentSha256);
           if (previous) previous.fileIds.push(content.fileId);
-          else
-            releases.set(content.contentSha256, {
-              ...knowledgeIndexPayloadOfFetch(payload, content),
-              fileIds: [content.fileId]
-            });
+          else releases.set(content.contentSha256, { ...indexPayload, fileIds: [content.fileId] });
+          if (await needsIndex(runtime, payload.knowledgeBaseId, content, retained))
+            queue.push(indexPayload);
         }
+        if (!queue.length) return;
+        await control.transaction(async (stores) => {
+          for (const content of queue) {
+            const queued = await enqueueKnowledgeIndex(stores.jobs, content, {
+              clientInstanceId: runtime.data.clientInstanceId,
+              dedupe: true
+            });
+            // A job that has not started will release this copy at its end, after the document
+            // committed above. One already running may have passed its scan: the release job.
+            if (queued.status === "queued") releases.delete(content.contentSha256);
+          }
+        });
       }
-      const fetchBatch = async () => {
-        for (let index = 0; index < payload.sourceItemIds.length; index++) {
-          const id = payload.sourceItemIds[index];
-          if (!id) continue;
-          control.signal.throwIfAborted();
-          if (signal.aborted) {
-            await queueAgain(
-              runtime,
-              control,
-              payload,
-              [...retry, ...payload.sourceItemIds.slice(index)],
-              0
-            );
-            return;
-          }
-          const previous = await store.item(id, payload.sourceId);
-          if (previous?.state === "fetched") {
-            await handoff(id);
-            continue;
-          }
-          // The executor owns the job lease; the item owns its fetch. Even a duplicate job
-          // without a concurrency key cannot create another Managed File for this version.
-          const item = await sourceTransaction(runtime.data, payload, control, (store) =>
-            store.claim(id, payload.sourceId, job.id)
-          );
-          if (!item || item.state === "failed" || item.state === "withdrawn") continue;
-          let document;
-          try {
-            document = await fetchItem(
-              { ...runtime, authority },
-              control,
-              payload,
-              item,
-              found.source.connection,
-              found.source.folders,
-              signal
-            );
-          } catch (error) {
-            control.signal.throwIfAborted();
-            if (signal.aborted) {
-              await store.release([id], job.id);
-              await queueAgain(
-                runtime,
-                control,
-                payload,
-                [...retry, ...payload.sourceItemIds.slice(index)],
-                0
-              );
-              return;
-            }
-            if (error instanceof SourceFormatRefusal) {
-              await sourceTransaction(runtime.data, payload, control, (store) =>
-                store.failure(payload, item, error.code)
-              );
-              continue;
-            }
-            const code = documentSourceErrorCodeOf(error);
-            if (code === "rate_limited") {
-              await store.release([id], job.id);
-              const wait =
-                error instanceof DocumentSourceError
-                  ? (error.retryAfterMs ?? SOURCE_RATE_LIMIT_WAIT_MS)
-                  : SOURCE_RATE_LIMIT_WAIT_MS;
-              // Earlier ordinary failures keep their own backoff. They must not move this
-              // rate-limited remainder away from the time the source named.
-              await queueAgain(runtime, control, payload, retry, retryMs);
-              await queueAgain(runtime, control, payload, payload.sourceItemIds.slice(index), wait);
-              return;
-            }
-            if (code === "forbidden" || code === "not_found") {
-              await sourceTransaction(runtime.data, payload, control, (store) =>
-                store.withdraw(payload, [item.id])
-              );
-              continue;
-            }
-            if (code === "unauthorized") {
-              await store.release([id], job.id);
-              await sourceTransaction(runtime.data, payload, control, (store) =>
-                store.finish(payload, "knowledge_source_refused")
-              );
-              return;
-            }
-            const failure =
-              code === "over_limit"
-                ? "knowledge_file_over_limit"
-                : item.attempts + 1 >= KNOWLEDGE_FETCH_MAX_ATTEMPTS
-                  ? "knowledge_fetch_failed"
-                  : undefined;
-            await sourceTransaction(runtime.data, payload, control, (store) =>
-              store.failure(payload, item, failure)
-            );
-            if (!failure) {
-              retry.push(id);
-              retryMs = Math.max(retryMs, FETCH_BACKOFF_BASE_MS * 2 ** item.attempts);
-            }
-            continue;
-          }
-          // The owned rows commit before the queue. A replay restores the index handoff.
-          // Clean an unadopted copy on refusal or failure; the durable cleanup job also
-          // covers a process killed before this check.
-          let adopted = false;
-          try {
-            const current = await sourceTarget(runtime, payload);
-            if (current && sourceBoundaryKey(current.source) === sourceBoundaryKey(found.source)) {
-              adopted = await sourceTransaction(runtime.data, payload, control, (store) =>
-                store.fetched(payload, item, document, document.byteSize, job.id)
-              );
-            }
-          } catch (error) {
-            // Preserve the handoff failure if cleanup also fails.
+      type Fetched = { item: SourceItem; document: FetchedDocument };
+      // Adopts what a group fetched, in one transaction, and hands it to indexing. False when
+      // the source changed or an item did, and the pass ends here.
+      async function adopt(group: readonly Fetched[]): Promise<boolean> {
+        if (!group.length) return true;
+        let adopted: Set<string>;
+        try {
+          const current = await sourceTarget(runtime, payload);
+          adopted =
+            current && sourceBoundaryKey(current.source) === boundaryKey
+              ? await sourceTransaction(runtime.data, payload, control, (store) =>
+                  store.fetchedMany(
+                    payload,
+                    group.map(({ item, document }) => ({
+                      item,
+                      document,
+                      byteSize: document.byteSize
+                    })),
+                    job.id
+                  )
+                )
+              : new Set();
+        } catch (error) {
+          // Preserve the handoff failure if cleanup also fails.
+          for (const { document } of group)
             await releaseCopy(runtime, payload, document.fileId).catch(() => {
               runtime.data.logger.warn(
                 { knowledgeBaseId: payload.knowledgeBaseId },
                 "Source copy cleanup will be retried"
               );
             });
-            throw error;
+          throw error;
+        }
+        for (const { item, document } of group)
+          if (!adopted.has(item.id)) await releaseCopy(runtime, payload, document.fileId);
+        await handoff(group.filter(({ item }) => adopted.has(item.id)).map(({ item }) => item.id));
+        return adopted.size === group.length;
+      }
+      const fetchBatch = async () => {
+        const ids = payload.sourceItemIds.filter((id) => id !== "");
+        // Items an earlier attempt fetched need only their handoff.
+        const known = ids.length ? await store.items(ids, payload.sourceId) : [];
+        const fetched = new Set(
+          known.filter((row) => row.state === "fetched").map((row) => row.id)
+        );
+        await handoff([...fetched]);
+        for (let start = 0; start < payload.sourceItemIds.length; start += FETCH_GROUP_ITEMS) {
+          const groupIds = payload.sourceItemIds
+            .slice(start, start + FETCH_GROUP_ITEMS)
+            .filter((id) => id !== "" && !fetched.has(id));
+          const later = () => payload.sourceItemIds.slice(start + FETCH_GROUP_ITEMS);
+          control.signal.throwIfAborted();
+          // The executor owns the job lease; the item owns its fetch. Even a duplicate job
+          // without a concurrency key cannot create another Managed File for this version.
+          const items = groupIds.length
+            ? await store.claimMany(groupIds, payload.sourceId, job.id)
+            : [];
+          const group: Fetched[] = [];
+          /** Gives back the claims of the items not yet fetched; their ids go to a new job. */
+          const leave = async (from: number) => {
+            const rest = items.slice(from).map((each) => each.id);
+            if (rest.length) await store.release(rest, job.id);
+            return rest;
+          };
+          for (let index = 0; index < items.length; index++) {
+            const item = items[index];
+            if (!item) continue;
+            control.signal.throwIfAborted();
+            if (signal.aborted) {
+              const rest = await leave(index);
+              await adopt(group);
+              await queueAgain(runtime, control, payload, [...retry, ...rest, ...later()], 0);
+              return;
+            }
+            try {
+              group.push({
+                item,
+                document: await fetchItem(
+                  { ...runtime, authority },
+                  control,
+                  payload,
+                  item,
+                  found.source.connection,
+                  found.source.folders,
+                  signal
+                )
+              });
+            } catch (error) {
+              control.signal.throwIfAborted();
+              if (signal.aborted) {
+                const rest = await leave(index);
+                await adopt(group);
+                await queueAgain(runtime, control, payload, [...retry, ...rest, ...later()], 0);
+                return;
+              }
+              if (error instanceof SourceFormatRefusal) {
+                await sourceTransaction(runtime.data, payload, control, (store) =>
+                  store.failure(payload, item, error.code)
+                );
+                continue;
+              }
+              const code = documentSourceErrorCodeOf(error);
+              if (code === "rate_limited") {
+                const rest = await leave(index);
+                await adopt(group);
+                const wait =
+                  error instanceof DocumentSourceError
+                    ? (error.retryAfterMs ?? SOURCE_RATE_LIMIT_WAIT_MS)
+                    : SOURCE_RATE_LIMIT_WAIT_MS;
+                // Earlier ordinary failures keep their own backoff. They must not move this
+                // rate-limited remainder away from the time the source named.
+                await queueAgain(runtime, control, payload, retry, retryMs);
+                await queueAgain(runtime, control, payload, [...rest, ...later()], wait);
+                return;
+              }
+              if (code === "forbidden" || code === "not_found") {
+                await sourceTransaction(runtime.data, payload, control, (store) =>
+                  store.withdraw(payload, [item.id])
+                );
+                continue;
+              }
+              if (code === "unauthorized") {
+                await leave(index);
+                await adopt(group);
+                await sourceTransaction(runtime.data, payload, control, (store) =>
+                  store.finish(payload, "knowledge_source_refused")
+                );
+                return;
+              }
+              const failure =
+                code === "over_limit"
+                  ? "knowledge_file_over_limit"
+                  : item.attempts + 1 >= KNOWLEDGE_FETCH_MAX_ATTEMPTS
+                    ? "knowledge_fetch_failed"
+                    : undefined;
+              await sourceTransaction(runtime.data, payload, control, (store) =>
+                store.failure(payload, item, failure)
+              );
+              if (!failure) {
+                retry.push(item.id);
+                retryMs = Math.max(retryMs, FETCH_BACKOFF_BASE_MS * 2 ** item.attempts);
+              }
+            }
           }
-          if (!adopted) {
-            await releaseCopy(runtime, payload, document.fileId);
-            return;
-          }
-          await handoff(id);
+          // The owned rows commit before the queue. A replay restores the index handoff.
+          if (!(await adopt(group))) return;
         }
         await queueAgain(runtime, control, payload, retry, retryMs);
         await sourceTransaction(runtime.data, payload, control, (store) => store.finish(payload));

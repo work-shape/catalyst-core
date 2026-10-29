@@ -4,6 +4,7 @@ import {
   KNOWLEDGE_JOB_KINDS,
   defineJobHandler,
   defineJobKind,
+  subjectDedupeKey,
   type BuiltinKnowledgeTarget,
   type JobRetry,
   type KnowledgeFiles,
@@ -86,26 +87,37 @@ const ownerOf = (knowledgeBaseId: string): ManagedFileOwner => ({
  * Queues the job that removes what this call may leave behind. The window holds every copy the
  * call makes within its timeout; the job looks once that timeout has passed for every call that
  * could have made a copy in the window.
+ *
+ * Calls in the same timeout-long stretch share one job whose window holds that whole stretch and
+ * the timeout after it. A source import makes a call for every batch of a hundred items: a job
+ * for each would look again at every copy of the minutes around it, so the work grew with the
+ * square of the import.
  */
 export async function enqueueKnowledgeFileCleanup(
   runtime: Pick<KnowledgeRuntime, "clientInstanceId" | "stores" | "now">,
   target: BuiltinKnowledgeTarget
 ): Promise<void> {
-  const now = runtime.now().getTime();
-  const createdBefore = now + KNOWLEDGE_ADD_FILES_TIMEOUT_MS + CLOCK_MARGIN_MS;
+  const stretchStart =
+    Math.floor(runtime.now().getTime() / KNOWLEDGE_ADD_FILES_TIMEOUT_MS) *
+    KNOWLEDGE_ADD_FILES_TIMEOUT_MS;
+  const createdBefore = stretchStart + 2 * KNOWLEDGE_ADD_FILES_TIMEOUT_MS + CLOCK_MARGIN_MS;
   await runtime.stores.jobs.enqueue(
     cleanupJob,
     {
       knowledgeBaseId: target.assetId,
       knowledgeBase: target.name,
-      createdAfter: new Date(now - CLOCK_MARGIN_MS).toISOString(),
+      createdAfter: new Date(stretchStart - CLOCK_MARGIN_MS).toISOString(),
       createdBefore: new Date(createdBefore).toISOString()
     },
     {
       clientInstanceId: runtime.clientInstanceId,
       subject: target.assetId,
       runAfter: new Date(createdBefore + KNOWLEDGE_ADD_FILES_TIMEOUT_MS + CLOCK_MARGIN_MS),
-      concurrencyKey: target.assetId
+      concurrencyKey: target.assetId,
+      dedupeKey: subjectDedupeKey(
+        KNOWLEDGE_FILE_CLEANUP_JOB_KIND,
+        `${target.assetId}:${stretchStart}`
+      )
     }
   );
 }
