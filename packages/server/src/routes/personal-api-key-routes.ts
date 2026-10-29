@@ -2,7 +2,8 @@ import { apiOperations } from "@work-shape/catalyst-api-contract";
 import type { Route } from "../http/route";
 import {
   PersonalApiKeysWorkflow,
-  authorizeOwnKeyChange
+  authorizeOwnKeyChange,
+  authorizeOwnKeyRevocation
 } from "../access/personal-api-keys-service";
 import type { ChatServerOptions } from "../types";
 
@@ -29,8 +30,9 @@ export function registerPersonalApiKeyRoutes(route: Route, options: ChatServerOp
   });
 
   route.operation(revokeOwn, {
-    // A revoked key stays revoked.
-    authorize: authorizeOwnKeyChange(revokeOwn.id),
+    // A revoked key stays revoked. A key with the account level revokes its person's keys,
+    // itself included (CLI-PARITY-5); it issues none.
+    authorize: authorizeOwnKeyRevocation(revokeOwn.id),
     resource: ({ keyId }) => ({ kind: "api_credential", id: keyId }),
     execute: ({ keyId }, context) => workflow.revokeOwnKey(context, keyId)
   });

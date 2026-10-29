@@ -72,7 +72,15 @@ export const FIRST_PARTY_AUTH_SCOPES = [
   // audit events, background jobs, Operation Runs, Modules and the last infrastructure check,
   // each still asking the right of its own (`usage.view`, `audit.view`, `system.view`). Only
   // a personal key's call is asked for it, through the operation's `personalKeyScope`.
-  "instance:inspect"
+  "instance:inspect",
+  // What the account and workspaces level of a personal key reaches (CLI-PARITY-5): the
+  // person's name and model preference and the revocation of their own keys, never a new key,
+  // a confirmed connect code, the password or the account's deletion; and the Shared
+  // Workspaces as the person's role in each allows, never a workspace's usage. Only a personal
+  // key's call is asked for them, through the operation's `personalKeyScope`; `me:write` and
+  // `collaboration_workspace:*` stay off every key.
+  "account:manage",
+  "workspaces:manage"
 ] as const;
 
 export type ChatSessionAuthScope = (typeof CHAT_SESSION_AUTH_SCOPES)[number];

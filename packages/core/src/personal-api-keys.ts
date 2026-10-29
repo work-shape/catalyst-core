@@ -240,18 +240,55 @@ export function isPersonalApiKeyInspectAction(
 }
 
 /**
+ * The account and workspaces level of a personal key (CLI-PARITY-5). No grant gives these two,
+ * so they are no rights of the platform: every person changes their own account and creates
+ * a Shared Workspace, and what they may do in one is their role there. A key carries them only
+ * where its person ticks them; the key `catalyst setup` creates never does.
+ *
+ * - `account.manage`: the person's name and model preference, and revoking their own keys.
+ *   Over the whole account, so no workspace narrows it. Issuing a key, confirming a connect
+ *   code, the password and deleting the account stay with the person signed in.
+ * - `collaboration_workspace.manage`: listing, creating, changing and deleting Shared
+ *   Workspaces, their members and their access requests, each through the checks of the
+ *   screen. A key may limit it to one workspace (`collaboration_workspace.manage:<workspace>`);
+ *   such a key reaches that workspace only, and neither lists nor creates workspaces.
+ */
+export const PERSONAL_API_KEY_ACCOUNT_ACTION = "account.manage" as const;
+export const PERSONAL_API_KEY_WORKSPACES_ACTION = "collaboration_workspace.manage" as const;
+export const PERSONAL_API_KEY_ACCOUNT_LEVEL_ACTIONS = [
+  PERSONAL_API_KEY_ACCOUNT_ACTION,
+  PERSONAL_API_KEY_WORKSPACES_ACTION
+] as const;
+export type PersonalApiKeyAccountLevelAction =
+  (typeof PERSONAL_API_KEY_ACCOUNT_LEVEL_ACTIONS)[number];
+
+/** What a key's scope may name: a right of the platform, or one of the account level. */
+export type PersonalApiKeyAction = PlatformAction | PersonalApiKeyAccountLevelAction;
+
+/** Whether an action is of the account and workspaces level, which no grant gives. */
+export function isPersonalApiKeyAccountLevelAction(
+  action: string
+): action is PersonalApiKeyAccountLevelAction {
+  return PERSONAL_API_KEY_ACCOUNT_LEVEL_ACTIONS.some((level) => level === action);
+}
+
+/**
  * The actions a personal key can name: reading, writing, deleting and publishing what the
- * owner builds, the use level, and the read-only instance level (`PERSONAL_API_KEY_INSPECT_ACTIONS`).
+ * owner builds, the use level, the read-only instance level (`PERSONAL_API_KEY_INSPECT_ACTIONS`)
+ * and the account and workspaces level (`PERSONAL_API_KEY_ACCOUNT_LEVEL_ACTIONS`).
  * Approving and administering stay with a signed-in person. A project's rights are carried by
  * membership alone and held by nobody as a right a key could narrow (PRJ-1).
  */
-export const PERSONAL_API_KEY_ACTIONS: readonly PlatformAction[] = ACTIONS.filter(
-  (action) =>
-    !PROJECT_ACTIONS.some((project) => project === action) &&
-    (/\.(read|write|delete|publish)$/u.test(action) ||
-      isPersonalApiKeyInspectAction(action) ||
-      PERSONAL_API_KEY_USE_ACTIONS.some((use) => use === action))
-);
+export const PERSONAL_API_KEY_ACTIONS: readonly PersonalApiKeyAction[] = [
+  ...ACTIONS.filter(
+    (action) =>
+      !PROJECT_ACTIONS.some((project) => project === action) &&
+      (/\.(read|write|delete|publish)$/u.test(action) ||
+        isPersonalApiKeyInspectAction(action) ||
+        PERSONAL_API_KEY_USE_ACTIONS.some((use) => use === action))
+  ),
+  ...PERSONAL_API_KEY_ACCOUNT_LEVEL_ACTIONS
+];
 
 /** What a key's workspace and asset are compared with: the resource of a check. */
 interface ScopedResource {
@@ -264,7 +301,7 @@ interface ScopedResource {
  * and within it one asset by name.
  */
 export interface PersonalApiKeyScope {
-  action: PlatformAction;
+  action: PersonalApiKeyAction;
   workspaceId?: string;
   assetName?: string;
 }
@@ -286,14 +323,19 @@ export function parsePersonalApiKeyScope(scope: string): PersonalApiKeyScope | u
   const known = PERSONAL_API_KEY_ACTIONS.find((candidate) => candidate === action);
   if (known === undefined) return undefined;
   if (separator === -1) return { action: known };
-  // These scopes read the instance itself, so a workspace or asset cannot narrow them.
-  if (isPersonalApiKeyInspectAction(known)) return undefined;
+  // These scopes read the instance itself or change the person's own account, so a workspace
+  // or asset cannot narrow them.
+  if (isPersonalApiKeyInspectAction(known) || known === PERSONAL_API_KEY_ACCOUNT_ACTION) {
+    return undefined;
+  }
   const resource = scope.slice(separator + 1);
   const slash = resource.indexOf("/");
   const workspaceId = slash === -1 ? resource : resource.slice(0, slash);
   const assetName = slash === -1 ? undefined : resource.slice(slash + 1);
   if (!SCOPE_WORKSPACE_PATTERN.test(workspaceId)) return undefined;
   if (assetName === undefined) return { action: known, workspaceId };
+  // A workspace is the narrowest the workspaces level goes: it names no asset.
+  if (known === PERSONAL_API_KEY_WORKSPACES_ACTION) return undefined;
   return SCOPE_ASSET_PATTERN.test(assetName)
     ? { action: known, workspaceId, assetName }
     : undefined;
@@ -377,8 +419,8 @@ export function personalApiKeyNamesAction(scopes: readonly string[], action: str
 
 /**
  * The operation scopes a personal key's calls carry: reading the owner's own account, and the
- * asset operations of what its scopes read, write or publish. A key reaches no conversation,
- * no administration and none of the account's changes. `system.view` adds the read-only
+ * asset operations of what its scopes read, write or publish. A key reaches no conversation
+ * and no administration. `system.view` adds the read-only
  * infrastructure check, still subject to the owner's current right. The instance level
  * (`usage.view`, `audit.view`, `system.view`) adds `instance:inspect` for the read-only
  * operations that name it; each of them asks the right of its own, of the key and of its
@@ -387,6 +429,9 @@ export function personalApiKeyNamesAction(scopes: readonly string[], action: str
  * for a Workflow's publish, which lends the rights of its account. It adds `workflow_runs:use`
  * for a Workflow's start, and `data_store_rows:use` for the four row operations of
  * CLI-PARITY-4. Every other operation under `data_store_rows:*` stays out of a key's reach.
+ * The account and workspaces level adds `account:manage` and `workspaces:manage`, which only
+ * the operations of CLI-PARITY-5 accept from a key; `me:write` and `collaboration_workspace:*`
+ * stay off every key.
  */
 export function operationScopesOfPersonalApiKey(
   scopes: readonly string[],
@@ -408,6 +453,8 @@ export function operationScopesOfPersonalApiKey(
       granted.add("data_store_rows:use");
     }
     if (action === PERSONAL_API_KEY_WORKFLOW_USE_ACTION) granted.add("workflow_runs:use");
+    if (action === PERSONAL_API_KEY_ACCOUNT_ACTION) granted.add("account:manage");
+    if (action === PERSONAL_API_KEY_WORKSPACES_ACTION) granted.add("workspaces:manage");
   }
   return [...granted];
 }

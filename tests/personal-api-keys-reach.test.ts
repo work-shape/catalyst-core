@@ -32,7 +32,10 @@ const KEY_OPERATION_SCOPES = new Set([
   "data_store_rows:use",
   "workflow_runs:use",
   // The read-only instance level (CLI-PARITY-6a): usage, audit, jobs, runs, Modules, infrastructure.
-  "instance:inspect"
+  "instance:inspect",
+  // The account and workspaces level (CLI-PARITY-5): the own account, the Shared Workspaces.
+  "account:manage",
+  "workspaces:manage"
 ]);
 
 function isTestOperation(name: string): name is TestOperationName {
