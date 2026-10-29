@@ -404,38 +404,44 @@ describe("Always allow on the confirmation card (OP-6)", () => {
 describe("a tool call whose run waits for a decision", () => {
   function renderCall(
     parts: AgentRunProjection["parts"],
-    props: { result?: unknown } = {}
+    props: { result?: unknown; embedded?: boolean } = {}
   ): string {
+    const inSession = (node: ReactNode) =>
+      props.embedded
+        ? createElement(EmbeddedSessionProvider, { user: { embedded: true }, children: null }, node)
+        : node;
     return inLocale(
       "en",
-      createElement(
-        QueryClientProvider,
-        { client: new QueryClient() },
-        createElement(WorkspaceApiClientProvider, {
-          apiBaseUrl: "http://127.0.0.1:1",
-          children: createElement(
-            ToolDisplayPanelProvider,
-            null,
-            createElement(ToolDecisionsProvider, {
-              parts,
-              children: createElement(ToolCallPart, {
-                toolName: TOOL,
-                toolCallId: "call_1",
-                args: { customer: "Müller GmbH" },
-                argsText: '{"customer":"Müller GmbH"}',
-                result: props.result,
-                type: "tool-call" as const,
-                status:
-                  props.result === undefined
-                    ? { type: "running" as const }
-                    : { type: "complete" as const },
-                addResult: () => undefined,
-                resume: () => undefined,
-                respondToApproval: () => undefined
+      inSession(
+        createElement(
+          QueryClientProvider,
+          { client: new QueryClient() },
+          createElement(WorkspaceApiClientProvider, {
+            apiBaseUrl: "http://127.0.0.1:1",
+            children: createElement(
+              ToolDisplayPanelProvider,
+              null,
+              createElement(ToolDecisionsProvider, {
+                parts,
+                children: createElement(ToolCallPart, {
+                  toolName: TOOL,
+                  toolCallId: "call_1",
+                  args: { customer: "Müller GmbH" },
+                  argsText: '{"customer":"Müller GmbH"}',
+                  result: props.result,
+                  type: "tool-call" as const,
+                  status:
+                    props.result === undefined
+                      ? { type: "running" as const }
+                      : { type: "complete" as const },
+                  addResult: () => undefined,
+                  resume: () => undefined,
+                  respondToApproval: () => undefined
+                })
               })
-            })
-          )
-        })
+            )
+          })
+        )
       )
     );
   }
@@ -452,6 +458,16 @@ describe("a tool call whose run waits for a decision", () => {
     const markup = renderCall([part]);
     expect(markup).toContain('data-testid="tool-decision-card"');
     expect(markup).toContain('data-mode="confirm"');
+  });
+
+  it("holds Allow until the run's own read answers, but not in an embedding host's session", () => {
+    const allow = (markup: string) =>
+      markup.match(/<button[^>]*>Allow<\/button>/u)?.[0] ?? "no Allow button";
+    // The run is read for the Inbox item it may wait in. A host's token may not read it, and
+    // the card needs none: its buttons are there at once.
+    expect(allow(renderCall([part]))).toContain('disabled=""');
+    expect(allow(renderCall([part], { embedded: true }))).not.toContain('disabled=""');
+    expect(allow(renderCall([part], { embedded: true }))).toContain("Allow");
   });
 
   it("is the plain tool call once the call answered, and without a decision", () => {

@@ -4,7 +4,6 @@ import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { z } from "zod";
 import { expect, test } from "./test";
-import { requestAnswered } from "./allowed-page-errors";
 import { apiOrigin, signIn, uiOrigin } from "./view-fixtures";
 
 // A chat embedded in another site acts with the host's session token, which the server does not
@@ -18,25 +17,7 @@ const TOOL = "e2e.confirm_reversible";
 
 // The interface in German, as the browser asks for it.
 test.use({
-  locale: "de-DE",
-  allowedPageErrors: {
-    errors: [
-      {
-        name: "embedded-confirmation-run-read",
-        reason:
-          "Chromium's own log line: the confirmation card reads its Operation Run to learn whether " +
-          "it waits in the Inbox, and an embedding host's token has no `governance:read` scope, so " +
-          "the instance answers 403 and the card shows its buttons without it. Known, not caused by " +
-          "this change.",
-        matches: requestAnswered(403),
-        path: /^\/api\/v1\/operations\/runs\/[^/]+$/u,
-        tests: [
-          "an embedded chat offers a confirmation without Always allow at 390",
-          "an embedded chat offers a confirmation without Always allow at 1280"
-        ]
-      }
-    ]
-  }
+  locale: "de-DE"
 });
 
 const meSchema = z.object({ id: z.string(), embedded: z.literal(true).optional() });
@@ -135,7 +116,7 @@ for (const width of [390, 1280]) {
 
     const card = page.getByTestId("tool-decision-card");
     await expect(card).toBeVisible();
-    // Its buttons are held until the run's own read answers, which an embedding host's token is refused.
+    // The card asks for no run of governance: its buttons are there at once, with no console error.
     await expect(card.getByRole("button", { name: "Erlauben", exact: true })).toBeEnabled();
     await expect(card.getByRole("button", { name: "Ablehnen", exact: true })).toBeVisible();
     await expect(card.getByRole("button", { name: "Immer erlauben" })).toHaveCount(0);
