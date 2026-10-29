@@ -1,6 +1,13 @@
+import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { type Locator, type Page } from "@playwright/test";
+import {
+  ALLOWED_URL,
+  plantConnection,
+  removeConnection,
+  removeGrantsOn
+} from "./connection-fixtures";
 import { expect, test } from "./test";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 
@@ -520,5 +527,83 @@ test("the roles of the instance: built-in first, superadmin read-only, a custom 
       }
     }
     await rootContext.close();
+  }
+});
+
+// CONN-WHO-1: the Connection page says who may use it, the roles first, then each person with
+// their verbs, and to a reader who manages no users only the roles and how many more there are.
+test("a Connection says who may use it: the roles first, then each person with their verbs", async ({
+  page,
+  browser,
+  baseURL,
+  // The test plants a Connection and gives rights on it: the turn on Connections and grants.
+  releaseConnections: _releaseConnections
+}) => {
+  const suffix = randomUUID().slice(0, 8);
+  const connection = {
+    id: `cfga_${randomUUID()}`,
+    name: `e2e-who-${suffix}`,
+    displayName: `Who may use ${suffix}`,
+    url: ALLOWED_URL,
+    authScheme: "none" as const
+  };
+  const readerContext = await browser.newContext({ baseURL, viewport: WIDE });
+  const reader = await readerContext.newPage();
+  await signInViaApi(reader, rightsHolder);
+  const me = await reader.request.get(`${apiBaseUrl}/api/v1/me`);
+  expect(me.ok()).toBe(true);
+  const { id: readerId }: { id: string } = await me.json();
+  await signInViaApi(page, adminUser);
+  await plantConnection(connection);
+  try {
+    for (const action of ["connection.read", "connection.use"]) {
+      const granted = await requestWithOrigin(
+        page,
+        "post",
+        `${apiBaseUrl}/api/v1/instance/access/grants`,
+        {
+          data: {
+            holderKind: "user",
+            holderId: readerId,
+            action,
+            effect: "allow",
+            scopeKind: "asset",
+            scopeId: connection.id
+          }
+        }
+      );
+      expect(granted.ok(), await granted.text()).toBe(true);
+    }
+
+    // The administrator manages users: the roles, then the person with what they may do.
+    await page.setViewportSize(WIDE);
+    await page.goto(`/build/connections/${connection.name}`);
+    const section = page.locator('[id="access"]');
+    await expect(section.getByText("Who may use it", { exact: true })).toBeVisible();
+    const rows = section.locator("[data-holder-kind]");
+    await expect(rows.last()).toHaveAttribute("data-holder-kind", "person");
+    const kinds = await rows.evaluateAll((items) =>
+      items.map((item) => item.getAttribute("data-holder-kind"))
+    );
+    expect(kinds.indexOf("person")).toBeGreaterThan(kinds.lastIndexOf("role"));
+    await expect(rows.filter({ hasText: "Admin" }).first()).toContainText(
+      "View, Use, Edit, Delete, Approve"
+    );
+    const person = rows.filter({ hasText: "E2E Zz Access Rights" });
+    await expect(person).toHaveAttribute("data-holder-kind", "person");
+    await expect(person).toContainText("View, Use");
+    await expect(person).not.toContainText("Edit");
+
+    // The person reads the page and manages no users: the roles, and a count of the rest.
+    await reader.goto(`/build/connections/${connection.name}`);
+    const readerSection = reader.locator('[id="access"]');
+    await expect(readerSection.getByText("Who may use it", { exact: true })).toBeVisible();
+    await expect(readerSection.locator('[data-holder-kind="role"]').first()).toBeVisible();
+    await expect(readerSection.locator('[data-holder-kind="person"]')).toHaveCount(0);
+    await expect(readerSection.getByText("1 more you are not shown")).toBeVisible();
+  } finally {
+    await readerContext.close();
+    await removeGrantsOn(connection.id);
+    await removeConnection(connection.id);
   }
 });

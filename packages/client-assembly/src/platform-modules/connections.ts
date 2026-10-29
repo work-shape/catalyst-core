@@ -18,6 +18,7 @@ export const connectionsModule = defineModule({
     "connections.people",
     "connections.revoke_person",
     "connections.get",
+    "connections.access",
     "connections.test",
     "connections.set_secret",
     "connections.discover",

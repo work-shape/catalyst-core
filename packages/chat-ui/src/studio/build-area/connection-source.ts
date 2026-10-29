@@ -1,18 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
 import type {
+  ConnectionAccess,
   ConnectionDetail,
   ConnectionOAuthStart,
   ConnectionPersonContext,
   ConnectionTestResult
 } from "@work-shape/catalyst-api-client";
 import { loadFailure } from "../../admin/access/access-model";
-import { useAssetGrantsQuery } from "../../admin/access/access-queries";
-import {
-  principalHref,
-  resourceHolders,
-  type ResourceHolder
-} from "../../admin/access/principal-grants-model";
+import { principalHref } from "../../admin/access/principal-grants-model";
 import {
   usePlatformContextQuery,
   useServicePrincipalsQuery,
@@ -40,16 +36,13 @@ import type { SignInRead } from "./connection-sign-in-model";
 /** The action that lets a person test a Connection. */
 const CONNECTION_WRITE_ACTION = "connection.write";
 
-/** The action that lets a person or a service principal call a Connection's operations. */
-const CONNECTION_USE_ACTION = "connection.use";
-
-/** Who was given one Connection by itself, as its page asked for it. */
+/** Who may use one Connection, as its page asked for it (CONN-WHO-1). */
 export type ConnectionHoldersRead =
-  /** The reader is not shown who holds rights: the page has no such section. */
+  /** The reader may not read it: the page has no such section. */
   | { status: "hidden" }
   | { status: "loading" }
   | { status: "failed"; retry(): void }
-  | { status: "ready"; holders: ResourceHolder[] };
+  | { status: "ready"; access: ConnectionAccess };
 
 /** What the instance says of one Connection beyond its revision, as its page asked for it. */
 export type ConnectionDetailRead =
@@ -203,10 +196,10 @@ export interface ConnectionSource {
    */
   give?: ConnectionGiveHost;
   /**
-   * A hook: the people and service principals with a right to use this one Connection. A
-   * service principal is among them for a reader who is shown service principals.
+   * A hook: who may use the Connection of this name: the roles with a right on it, then each
+   * holder of a right of its own, as far as the reader may be shown them.
    */
-  useHolders(assetId: string): ConnectionHoldersRead;
+  useHolders(name: string): ConnectionHoldersRead;
   /** Where a service principal is read. */
   principalHref(principalId: string): string;
   /**
@@ -323,31 +316,23 @@ export function useConnectionSource(): ConnectionSource {
       }
       return { status: "loading" };
     },
-    useHolders(assetId) {
-      const grants = useAssetGrantsQuery({
-        ...api,
-        assetId,
-        action: CONNECTION_USE_ACTION,
-        enabled: seesHolders
+    useHolders(name) {
+      // Read under the Connection's own read right; the instance names only whom the reader
+      // may be shown and counts the rest.
+      const query = useQuery({
+        queryKey: ["connection-access", apiBaseUrl, authScope, name],
+        queryFn: ({ signal }) => calls.access({ params: { name }, signal }),
+        retry: false
       });
-      const users = useWorkspaceUsersQuery({ ...api, enabled: seesHolders });
-      const principals = useServicePrincipalsQuery({ ...api, enabled: seesPrincipals });
-      const failure = loadFailure(grants.error);
-      if (!seesHolders || failure === "forbidden") {
+      const failure = loadFailure(query.error);
+      if (failure === "forbidden") {
         return { status: "hidden" };
       }
-      if (grants.data) {
-        return {
-          status: "ready",
-          holders: resourceHolders(grants.data, {
-            action: CONNECTION_USE_ACTION,
-            users: users.data ?? [],
-            principals: principals.data ?? []
-          })
-        };
+      if (query.data) {
+        return { status: "ready", access: query.data };
       }
-      return failure === "failed" && !grants.isFetching
-        ? { status: "failed", retry: () => void grants.refetch().catch(() => undefined) }
+      return failure === "failed" && !query.isFetching
+        ? { status: "failed", retry: () => void query.refetch().catch(() => undefined) }
         : { status: "loading" };
     },
     async setSecret(name, value, expectedVersion, expectedRevision) {

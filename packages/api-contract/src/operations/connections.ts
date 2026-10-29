@@ -401,6 +401,44 @@ export const connectionPersonContextSchema = personContextSubjectSchema.extend({
 });
 export type ConnectionPersonContext = z.infer<typeof connectionPersonContextSchema>;
 
+/** What a right on a Connection lets its holder do, in the order of its levels. */
+export const CONNECTION_ACCESS_VERBS = ["read", "use", "write", "delete", "approve"] as const;
+const connectionAccessVerbsSchema = z.array(z.enum(CONNECTION_ACCESS_VERBS));
+
+/**
+ * Who may use one Connection (CONN-WHO-1): the roles that hold a right on it, then each person,
+ * group and service principal that holds one by a row of its own, each with what it may do. A
+ * role's people hold their rights through the role and are not listed again. A custom role, a
+ * person and a group are named only to a caller who manages users, a service principal only to
+ * one who also sees service principals; every other holder is counted in `hidden`.
+ */
+export const connectionAccessSchema = z.object({
+  /** The built-in roles first, from `superadmin` down, then custom roles by name. */
+  roles: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      builtIn: z.boolean(),
+      verbs: connectionAccessVerbsSchema
+    })
+  ),
+  holders: z.array(
+    z.object({
+      // A role is listed with the roles above.
+      kind: z.enum(GRANT_HOLDER_KINDS).exclude(["role"]),
+      id: z.string(),
+      /** What people read: a person's or an account's label; a group by its id. */
+      title: z.string(),
+      /** A service principal that is switched off: it keeps its rights and can use none. */
+      disabled: z.boolean().optional(),
+      verbs: connectionAccessVerbsSchema
+    })
+  ),
+  /** How many more roles and holders hold a right on it whom the caller may not be shown. */
+  hidden: z.number().int()
+});
+
+export type ConnectionAccess = z.infer<typeof connectionAccessSchema>;
 export type ConnectionDetail = z.infer<typeof connectionDetailSchema>;
 export type ConnectionSecretState = z.infer<typeof connectionSecretStateSchema>;
 export type ConnectionDiscoveredTool = z.infer<typeof connectionDiscoveredToolSchema>;
@@ -550,6 +588,21 @@ export const connectionOperations = {
     requires: [],
     effect: "reading",
     response: json(connectionDetailSchema),
+    errors: ["NOT_FOUND"],
+    rateClass: "read"
+  }),
+  "connections.access": defineRegisteredOperation({
+    id: "connections.access",
+    method: "GET",
+    path: "/api/v1/connections/:name/access",
+    summary:
+      "Read who may use one Connection: the roles with a right on it, then each holder with what it may do",
+    tag: "Connections",
+    auth: "user",
+    scope: "config_assets:read",
+    requires: [],
+    effect: "reading",
+    response: json(connectionAccessSchema),
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),

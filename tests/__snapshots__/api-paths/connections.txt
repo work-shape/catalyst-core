@@ -1,3 +1,4 @@
+connections.access  GET /api/v1/connections/:name/access
 connections.connector_types  GET /api/v1/connector-types
 connections.disconnect  POST /api/v1/connections/:name/disconnect
 connections.discover  POST /api/v1/connections/:name/discover
