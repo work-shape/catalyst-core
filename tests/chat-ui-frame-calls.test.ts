@@ -16,6 +16,7 @@ import {
   contextMessage,
   createFrameCalls,
   createPageBridge,
+  feedbackResultMessage,
   frameCallFailure,
   workflowRunResultMessage,
   frameSessionProof,
@@ -407,6 +408,55 @@ describe("a call a Page asks the interface to make", () => {
     ]);
   });
 
+  // Fails before LU-6: the bridge read no comment of a Page.
+  it("sends a Page's feedback once and answers it under the id the Page gave, and refuses it where the frame cannot send any", async () => {
+    const texts: string[] = [];
+    const { made, posted, page, from, message } = bridge({
+      writeStorage: () => Promise.resolve(),
+      can: () => Promise.resolve(undefined),
+      run: () => Promise.reject(new Error("not asked")),
+      workflowRun: () => Promise.reject(new Error("not asked")),
+      sendFeedback: (text) => {
+        texts.push(text);
+        return Promise.resolve({ ok: true });
+      }
+    });
+    const comment = {
+      type: "feedback",
+      session: "s-1",
+      requestId: "r-1",
+      text: " Die Summe fehlt. "
+    };
+    made.receive(from(page, message(comment)));
+    // A comment that names the App itself is no message of the bridge: the interface names it.
+    made.receive(from(page, message({ ...comment, requestId: "r-2", app: "other-app" })));
+    made.receive(from(page, message({ ...comment, requestId: "r-3", text: "   " })));
+    await settled();
+    expect(texts).toEqual(["Die Summe fehlt."]);
+    expect(posted).toEqual([
+      { message: feedbackResultMessage("s-1", "r-1", { ok: true }), targetOrigin: "*" }
+    ]);
+
+    // Calls that bring no way to send feedback, such as a draft's capture, refuse at once.
+    const without = bridge({
+      writeStorage: () => Promise.resolve(),
+      can: () => Promise.resolve(undefined),
+      run: () => Promise.reject(new Error("not asked")),
+      workflowRun: () => Promise.reject(new Error("not asked"))
+    });
+    without.made.receive(without.from(without.page, without.message(comment)));
+    await settled();
+    expect(without.posted).toEqual([
+      {
+        message: feedbackResultMessage("s-1", "r-1", {
+          ok: false,
+          error: { code: "not_available", message: "This frame cannot make calls." }
+        }),
+        targetOrigin: "*"
+      }
+    ]);
+  });
+
   it("is refused where the frame has no way to the instance, and the context names no action", async () => {
     const { made, posted, page, from, message } = bridge(undefined);
 
@@ -516,6 +566,70 @@ describe("the calls of a frame", () => {
         request: { params: { pageSessionId: "session-1", runId: "wfr-1" }, body: proof }
       }
     ]);
+  });
+
+  // Fails before LU-6: a frame had no way to send its viewer's feedback.
+  it("send feedback with the frame's proof and the text only, and tell the Page what refused it", async () => {
+    const sent: unknown[] = [];
+    const sessions = {
+      write_storage: () => Promise.reject(new Error("not asked")),
+      context: () => Promise.reject(new Error("not asked")),
+      call_action: () => Promise.reject(new Error("not asked")),
+      get_workflow_run: () => Promise.reject(new Error("not asked"))
+    };
+    const own = {
+      id: "fb-1",
+      state: "new" as const,
+      text: "Die Summe fehlt.",
+      includesExchange: false,
+      createdAt: "2026-10-29T10:00:00.000Z",
+      updatedAt: "2026-10-29T10:00:00.000Z"
+    };
+    const calls = createFrameCalls(
+      {
+        apps: { sessions },
+        feedback: {
+          send_from_app: (request: unknown) => {
+            sent.push(request);
+            return sent.length === 1
+              ? Promise.resolve({
+                  status: "done" as const,
+                  output: own,
+                  operationRunId: "op-1",
+                  replayed: false
+                })
+              : Promise.reject(
+                  refusal(404, "NOT_FOUND", "Only a published App takes feedback.", {
+                    reason: "feedback_app_unpublished"
+                  })
+                );
+          }
+        }
+      },
+      address
+    );
+    if (!calls?.sendFeedback) throw new Error("The address names a frame that sends feedback");
+
+    expect(await calls.sendFeedback("Die Summe fehlt.")).toEqual({ ok: true });
+    expect(await calls.sendFeedback("Noch etwas.")).toEqual({
+      ok: false,
+      error: {
+        code: "feedback_app_unpublished",
+        message: "Only a published App takes feedback.",
+        retryable: false
+      }
+    });
+    expect(sent[0]).toEqual({
+      params: { pageSessionId: "session-1" },
+      body: { fileSetId: "set-2", token: "token-3", text: "Die Summe fehlt." }
+    });
+
+    // A client that reaches no feedback tells the Page it cannot send any.
+    const without = createFrameCalls({ apps: { sessions } }, address);
+    expect(await without?.sendFeedback?.("x")).toMatchObject({
+      ok: false,
+      error: { code: "not_available" }
+    });
   });
 
   it("tell a Page a fixed word for what refused it, the right where one is missing, and that trying again will not help", () => {

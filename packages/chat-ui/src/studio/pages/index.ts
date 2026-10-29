@@ -4,6 +4,7 @@ export {
   callResultMessage,
   contextMessage,
   createPageBridge,
+  feedbackResultMessage,
   FRAME_CAPTURE_TIMEOUT_MS,
   readPageMessage,
   themeMessage,

@@ -1,15 +1,22 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
+import { AppActionCalls } from "../apps/action-call";
 import type { Route } from "../http/route";
-import type { ChatServerOptions } from "../types";
-import { FeedbackWorkflow, authorizeAuthor, authorizeReviewer } from "./feedback-service";
+import type { ResolvedChatServerOptions } from "../types";
+import { FeedbackWorkflow, authorizeAuthor, authorizeReviewer, personOf } from "./feedback-service";
 
 /**
- * Feedback on agent answers (LU-4). Every call is a registered operation, so the CLI, the API
- * and an MCP client reach the same eight. The module `feedback` refuses all of them where it is
- * off.
+ * Feedback on agent answers (LU-4), from inside an App and on Workflow results in the Inbox
+ * (LU-6). Every call is a registered operation, so the CLI, the API and an MCP client reach the
+ * same ones. The module `feedback` refuses all of them where it is off.
  */
-export function registerFeedbackRoutes(route: Route, options: ChatServerOptions): void {
+export function registerFeedbackRoutes(route: Route, options: ResolvedChatServerOptions): void {
   const workflow = new FeedbackWorkflow(options);
+  // The frame a comment from an App names is checked as a call of the App's actions is.
+  const frames = new AppActionCalls(options);
+  const inboxItem = ({ requestId }: { requestId: string }) => ({
+    kind: "approval_request",
+    id: requestId
+  });
   const conversation = ({ conversationId }: { conversationId: string }) => ({
     kind: "conversation",
     id: conversationId
@@ -47,6 +54,37 @@ export function registerFeedbackRoutes(route: Route, options: ChatServerOptions)
     execute: ({ conversationId, feedbackId }, context) =>
       workflow.withdraw(context, conversationId, feedbackId)
   });
+
+  route.operation(apiOperations["feedback.send_from_app"], {
+    changeClass: "reversible",
+    // The frame's address carries a token, which never enters a held input or an audit row.
+    inputWithoutSecrets: (input) => ({ ...input, token: "[redacted]" }),
+    authorize: authorizeAuthor,
+    resource: ({ pageSessionId }) => ({ kind: "app_content_session", id: pageSessionId }),
+    execute: async ({ pageSessionId, fileSetId, token, text }, context) => {
+      const frame = await frames.session(
+        { user: personOf(context.actor), access: context.access },
+        { pageSessionId, fileSetId, token }
+      );
+      return workflow.sendFromApp(context, frame, text);
+    }
+  });
+
+  // A comment on a result is sent from its notice, which only an instance with an Inbox holds.
+  if (options.approvalRequests) {
+    route.operation(apiOperations["feedback.list_own_on_result"], {
+      authorize: authorizeAuthor,
+      resource: inboxItem,
+      execute: ({ requestId }, context) => workflow.listOwnOnResult(context, requestId)
+    });
+
+    route.operation(apiOperations["feedback.send_on_result"], {
+      changeClass: "reversible",
+      authorize: authorizeAuthor,
+      resource: inboxItem,
+      execute: ({ requestId, text }, context) => workflow.sendOnResult(context, requestId, text)
+    });
+  }
 
   route.operation(apiOperations["feedback.list"], {
     authorize: authorizeReviewer,

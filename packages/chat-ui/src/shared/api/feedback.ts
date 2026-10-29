@@ -76,3 +76,51 @@ export function useOwnFeedbackMutations(input: OwnFeedbackInput & { heldMessage:
   });
   return { send, update, withdraw };
 }
+
+// The person's feedback on the result of a Workflow run (LU-6), from the notice that tells
+// them of it: one comment per run, sent once and read back with its state.
+
+interface ResultFeedbackInput {
+  apiBaseUrl: string;
+  client: ApiClient | undefined;
+  /** The notice in the person's Inbox that names the run. */
+  requestId: string;
+}
+
+function resultFeedbackKey(apiBaseUrl: string, requestId: string) {
+  return ["feedback", "result", apiBaseUrl, requestId] as const;
+}
+
+/** The person's comment on the run the notice names, or nothing while they sent none. */
+export function useResultFeedbackQuery(input: ResultFeedbackInput & { enabled: boolean }) {
+  return useQuery({
+    queryKey: resultFeedbackKey(input.apiBaseUrl, input.requestId),
+    queryFn: async (): Promise<OwnFeedback | null> => {
+      const { items } = await requireClient(input.client).feedback.list_own_on_result({
+        params: { requestId: input.requestId }
+      });
+      return items[0] ?? null;
+    },
+    enabled: input.enabled && input.client !== undefined,
+    staleTime: 60_000
+  });
+}
+
+/** Sending the comment on the run. The notice reads it back after. */
+export function useSendResultFeedback(input: ResultFeedbackInput & { heldMessage: string }) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (text: string) =>
+      completedOutput(
+        await requireClient(input.client).feedback.send_on_result({
+          params: { requestId: input.requestId },
+          body: { text }
+        }),
+        input.heldMessage
+      ),
+    onSettled: () =>
+      queryClient.invalidateQueries({
+        queryKey: resultFeedbackKey(input.apiBaseUrl, input.requestId)
+      })
+  });
+}

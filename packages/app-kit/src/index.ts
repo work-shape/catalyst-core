@@ -6,6 +6,7 @@ export {
   actions,
   createAppClient,
   createFrameTransport,
+  feedback,
   getContext,
   navigate,
   onThemeChange,
@@ -16,6 +17,7 @@ export {
   type Transport
 } from "./client";
 export { mountApp } from "./mount";
+export { APP_FEEDBACK_MAX_LENGTH, AppFeedback, type AppFeedbackProps } from "./feedback";
 export { useWorkflowRun, workflowRunEnded, type FollowedWorkflowRun } from "./workflow-run";
 export type {
   AppActionPermission,

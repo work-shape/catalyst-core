@@ -6,7 +6,10 @@ import type { AppBridgeContext } from "@work-shape/catalyst-api-client";
  * it, in which workspace, and how the interface looks. The workspace shell provides it around
  * the conversation and the surface slot.
  */
-export type PageHost = Pick<AppBridgeContext, "viewer" | "workspace" | "theme" | "mode">;
+export type PageHost = Pick<AppBridgeContext, "viewer" | "workspace" | "theme" | "mode"> & {
+  /** The instance has the feedback module on: a published App may offer feedback (LU-6). */
+  feedbackModule?: boolean;
+};
 
 const PageHostContext = createContext<PageHost | undefined>(undefined);
 const PageConversationContext = createContext<string | undefined>(undefined);
@@ -17,6 +20,7 @@ export function PageHostProvider({
   workspace,
   theme,
   mode,
+  feedbackModule = false,
   children
 }: PageHost & {
   /** The conversation that is open: the one a Page card in the thread belongs to. */
@@ -35,9 +39,10 @@ export function PageHostProvider({
           ? null
           : { id: workspaceId, name: workspaceName },
       theme,
-      mode
+      mode,
+      feedbackModule
     }),
-    [mode, theme, viewerId, viewerName, workspaceId, workspaceName]
+    [feedbackModule, mode, theme, viewerId, viewerName, workspaceId, workspaceName]
   );
   return (
     <PageHostContext.Provider value={value}>

@@ -1,0 +1,11 @@
+# The author of the feedback spec, used by no other spec: a member of the workspace that owns
+# the App, and the reader of the Workflow's notice. The label sorts after every other for the
+# reason in e2e-app.yaml.
+- email: e2e-feedback@example.test
+  displayLabel: E2E Zz Feedback Author
+  passwordEnvName: E2E_FEEDBACK_PASSWORD
+  developmentPassword: e2e-feedback-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

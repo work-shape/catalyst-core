@@ -12,6 +12,7 @@ import {
 import type {
   FrameCallAnswer,
   FrameCalls,
+  FrameFeedbackAnswer,
   FrameTestRun,
   FrameWorkflowRunAnswer
 } from "./frame-calls";
@@ -112,6 +113,21 @@ export function workflowRunResultMessage(
   return appBridgeHostMessageSchema.parse({
     [APP_BRIDGE_MARK]: APP_BRIDGE_VERSION,
     type: "workflow_run_result",
+    session,
+    requestId,
+    ...answer
+  });
+}
+
+/** The answer to one comment of a Page, named by the id the Page gave it. */
+export function feedbackResultMessage(
+  session: string,
+  requestId: string,
+  answer: FrameFeedbackAnswer
+): AppBridgeHostMessage {
+  return appBridgeHostMessageSchema.parse({
+    [APP_BRIDGE_MARK]: APP_BRIDGE_VERSION,
+    type: "feedback_result",
     session,
     requestId,
     ...answer
@@ -308,6 +324,19 @@ export function createPageBridge(input: {
             if (post(source, workflowRunResultMessage(input.session, requestId, result))) {
               noteTestRun(result);
             }
+          })
+          .catch(() => undefined);
+      } else if (message.type === "feedback") {
+        const { requestId } = message;
+        const calls = input.calls?.();
+        const answer: Promise<FrameFeedbackAnswer> = calls?.sendFeedback
+          ? calls.sendFeedback(message.text)
+          : Promise.resolve({ ok: false, error: NOT_AVAILABLE });
+        answer
+          // The Page always gets an answer, so that it never waits for nothing.
+          .catch((): FrameFeedbackAnswer => ({ ok: false, error: NOT_MADE }))
+          .then((result) => {
+            post(source, feedbackResultMessage(input.session, requestId, result));
           })
           .catch(() => undefined);
       } else if (message.type === "connection_call") {

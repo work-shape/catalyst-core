@@ -456,6 +456,7 @@ export function LivePagePreview({
   route,
   address,
   makesCalls = true,
+  offersFeedback = false,
   onPreviewIsNoApp
 }: {
   /** Names the frame for someone who does not see it. */
@@ -476,6 +477,11 @@ export function LivePagePreview({
    * kind brings stands in for every call and is answered that it can make none.
    */
   makesCalls?: boolean;
+  /**
+   * Whether the frame shows a published App, which may offer the viewer to send feedback
+   * (LU-6). The frame is told so only where the instance has the feedback module on.
+   */
+  offersFeedback?: boolean;
   /** A call was refused because the frame is a preview of a conversation, which is no App. */
   onPreviewIsNoApp?: () => void;
 }) {
@@ -505,7 +511,11 @@ export function LivePagePreview({
   const closeTestRun = useCallback(() => setTestRun(undefined), []);
   const context: AppBridgeContext | undefined = host
     ? {
-        ...host,
+        viewer: host.viewer,
+        workspace: host.workspace,
+        theme: host.theme,
+        mode: host.mode,
+        ...(host.feedbackModule === true && offersFeedback && calls ? { feedback: true } : {}),
         locale,
         pageId,
         fileSetNumber: number,

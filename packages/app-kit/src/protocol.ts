@@ -45,6 +45,12 @@ export interface AppContext {
   initialRoute: string;
   /** Per named action of the manifest. Empty where the interface told none. */
   can: Record<string, AppActionPermission>;
+  /**
+   * Whether the viewer can send written feedback on this App to the people who build it: the
+   * instance has feedback on and the Page is a published App. Never in a draft or in a Page
+   * of a conversation, where it is absent. The kit's `AppFeedback` shows nothing without it.
+   */
+  feedback?: boolean;
 }
 
 /**
@@ -130,7 +136,8 @@ export type PageMessage =
       input: Record<string, unknown>;
       idempotencyKey?: string;
     }
-  | { type: "workflow_run"; session: string; requestId: string; runId: string };
+  | { type: "workflow_run"; session: string; requestId: string; runId: string }
+  | { type: "feedback"; session: string; requestId: string; text: string };
 
 /** What the interface sends. */
 export type HostMessage =
@@ -141,6 +148,9 @@ export type HostMessage =
     ))
   | ({ type: "workflow_run_result"; session: string; requestId: string } & (
       { ok: true; run: AppWorkflowRun } | { ok: false; error: AppCallFailure }
+    ))
+  | ({ type: "feedback_result"; session: string; requestId: string } & (
+      { ok: true } | { ok: false; error: AppCallFailure }
     ));
 
 const THEME_KEYS = [
@@ -334,7 +344,8 @@ function readContext(value: unknown): AppContext | undefined {
     pageId: value.pageId,
     fileSetNumber: value.fileSetNumber,
     initialRoute: value.initialRoute,
-    can: readCan(value.can)
+    can: readCan(value.can),
+    ...(value.feedback === true ? { feedback: true } : {})
   };
 }
 
@@ -379,6 +390,16 @@ export function readHostMessage(data: unknown): HostMessage | undefined {
     return error
       ? { type: "workflow_run_result", session, requestId, ok: false, error }
       : undefined;
+  }
+  if (
+    data.type === "feedback_result" &&
+    typeof data.session === "string" &&
+    typeof data.requestId === "string"
+  ) {
+    const { session, requestId } = data;
+    if (data.ok === true) return { type: "feedback_result", session, requestId, ok: true };
+    const error = readCallFailure(data.error);
+    return error ? { type: "feedback_result", session, requestId, ok: false, error } : undefined;
   }
   return undefined;
 }

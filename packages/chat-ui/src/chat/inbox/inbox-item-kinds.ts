@@ -37,7 +37,12 @@ import type { TranslationContextValue, TranslationKey } from "../../shared/i18n"
 import type { InboxItemActions } from "./inbox-item-actions";
 import { NoticeBody, NoticeFoot, parseNoticePreview } from "./notice-item";
 import { WorkflowStepBody, parseWorkflowStepPreview } from "./workflow-step-item";
-import { FeedbackBody, feedbackAgentLabel, parseFeedbackPreview } from "./feedback-item";
+import {
+  FeedbackBody,
+  feedbackAboutLabel,
+  feedbackHeadingKey,
+  parseFeedbackPreview
+} from "./feedback-item";
 import {
   DataStoreReviewBody,
   parseDataStoreReviewPreview,
@@ -324,8 +329,8 @@ const notice: InboxItemKind = {
 };
 
 /**
- * A comment on an agent's answer, for those who review the agent (LU-4). Its one answer is
- * "mark handled", with an optional note in the comment field.
+ * A comment on an agent's answer, an App or a Workflow's result, for those who review it (LU-4,
+ * LU-6). Its one answer is "mark handled", with an optional note in the comment field.
  */
 const feedbackReview: InboxItemKind = {
   kind: "feedback_review",
@@ -334,20 +339,21 @@ const feedbackReview: InboxItemKind = {
   heading(item, t) {
     const feedback = parseFeedbackPreview(item.preview);
     return feedback
-      ? t("feedback.reviewHeading", { agent: feedbackAgentLabel(feedback) })
+      ? t(feedbackHeadingKey(feedback), { agent: feedbackAboutLabel(feedback) })
       : undefined;
   },
   subject(item) {
     const feedback = parseFeedbackPreview(item.preview);
-    return feedback ? feedbackAgentLabel(feedback) : undefined;
+    return feedback ? feedbackAboutLabel(feedback) : undefined;
   },
-  // The author asked; the heading names the agent.
+  // The author asked; the heading names what it is about.
   asked: (item, t) => t("feedback.from", { author: personName(item.requestedBy.displayLabel, t) }),
   rowDetail: (item) => parseFeedbackPreview(item.preview)?.text,
+  // Only a comment on an answer has an agent to filter by.
   agentOf(item) {
     const feedback = parseFeedbackPreview(item.preview);
-    return feedback
-      ? { name: feedback.agent.name, label: feedbackAgentLabel(feedback) }
+    return feedback?.about.kind === "agent"
+      ? { name: feedback.about.name, label: feedbackAboutLabel(feedback) }
       : undefined;
   },
   Body: FeedbackBody,

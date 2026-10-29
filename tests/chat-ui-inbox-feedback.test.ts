@@ -75,6 +75,56 @@ describe("inbox item of feedback", () => {
     expect(markup).toContain("Added to the checklist.");
   });
 
+  // LU-6: a comment from a published App, or on a Workflow's result, names what it is about and
+  // leads there; it has no exchange to speak of and no agent to filter by.
+  it("names the App a comment is about and leads to it", () => {
+    const markup = renderItem(
+      {
+        ...feedback("offers"),
+        preview: {
+          feedbackId: "fb_app",
+          subjectKind: "app",
+          about: {
+            kind: "app",
+            name: "offers",
+            displayName: "Offers",
+            revision: 2,
+            workspaceId: "cws_team"
+          },
+          text: "The total leaves out the open offers.",
+          gone: false
+        }
+      },
+      { locale: "en" }
+    );
+    expect(markup).toMatch(/<h3[^>]*>Feedback on the App Offers<\/h3>/u);
+    expect(markup).toContain("Version 2");
+    expect(markup).toContain("The total leaves out the open offers.");
+    expect(markup).toMatch(/href="\/w\/cws_team\/apps\/offers"[^>]*>Open the App<\/a>/u);
+    expect(markup).not.toContain("did not include the question");
+    expect(markup).not.toContain("Open the agent");
+  });
+
+  it("names the Workflow whose result a comment is about and leads to the run, in German", () => {
+    const preview = {
+      feedbackId: "fb_run",
+      subjectKind: "workflow_run",
+      about: { kind: "workflow", name: "monthly-check", displayName: "Monatscheck" },
+      workflowRunId: "wfr_1",
+      workspaceId: "cws_team",
+      text: "Der Kontoauszug war doch da.",
+      gone: false
+    };
+    const markup = renderItem({ ...feedback("monthly"), preview }, { locale: "de" });
+    expect(markup).toMatch(/<h3[^>]*>Feedback zu einem Ergebnis von Monatscheck<\/h3>/u);
+    expect(markup).toMatch(
+      /href="\/w\/cws_team\/workflows\/monthly-check\/runs\/wfr_1"[^>]*>Lauf öffnen<\/a>/u
+    );
+    expect(markup).not.toContain("nicht mitgeschickt");
+    const kind = inboxItemKinds.find((entry) => entry.kind === "feedback_review");
+    expect(kind?.agentOf?.(item({ ...feedback("monthly"), preview }))).toBeUndefined();
+  });
+
   it("is filtered by agent", () => {
     const kind = inboxItemKinds.find((entry) => entry.kind === "feedback_review");
     const agentOf = (entry: ApprovalRequestView) => kind?.agentOf?.(entry);

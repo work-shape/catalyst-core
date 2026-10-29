@@ -103,6 +103,7 @@ describe("the two halves of the bridge", () => {
     client.resize(812.5);
     void client.actions.call("load", { limit: 20 }, { idempotencyKey: "key-1" }).catch(() => 0);
     void client.workflowRuns.get("wfr-1").catch(() => 0);
+    void client.feedback.send("  Die Summe fehlt.  ").catch(() => 0);
     await sentCalls();
 
     expect(sent.map((message) => message.type)).toEqual([
@@ -110,7 +111,8 @@ describe("the two halves of the bridge", () => {
       "navigate",
       "resize",
       "action",
-      "workflow_run"
+      "workflow_run",
+      "feedback"
     ]);
     for (const message of sent) {
       expect(appBridgePageMessageSchema.safeParse(envelope(message)).success).toBe(true);
@@ -122,6 +124,7 @@ describe("the two halves of the bridge", () => {
     const client = createAppClient(recordingTransport().transport);
     expect(Object.keys(client).sort()).toEqual([
       "actions",
+      "feedback",
       "getContext",
       "navigate",
       "onThemeChange",
@@ -135,14 +138,21 @@ describe("the two halves of the bridge", () => {
   // Fails before kit 1.7.0: a call without the interface said only "The interface did not
   // answer.", and an agent added retries to the App for a fault of the host.
   // Fails before kit 1.8.0: a Page could not tell a test run its draft started (DP-1).
-  it("ship kit 1.8.0 with personal JSON storage, without a free call of a Connection, naming the host's fault and test runs", () => {
-    expect(RELEASED_KIT_VERSIONS.at(-1)).toBe("1.8.0");
-    const kit = loadAppKitFiles().get("1.8.0")?.get("kit.js")?.bytes.toString("utf8");
+  // Fails before kit 1.9.0: a published App could not send feedback to its builders (LU-6).
+  it("ship kit 1.9.0 with personal JSON storage, without a free call of a Connection, naming the host's fault, test runs and feedback", () => {
+    expect(RELEASED_KIT_VERSIONS.at(-1)).toBe("1.9.0");
+    const files = loadAppKitFiles();
+    const kit = files.get("1.9.0")?.get("kit.js")?.bytes.toString("utf8");
     expect(kit).not.toMatch(/connection/u);
     expect(kit).toMatch(/\bas actions\b/u);
     expect(kit).toMatch(/\bas storage\b/u);
     expect(kit).toMatch(/trying again inside the App does not help/u);
     expect(kit).toMatch(/simulatedSteps/u);
+    expect(kit).toMatch(/\bas AppFeedback\b/u);
+    expect(kit).toMatch(/feedback_result/u);
+    // A released version stays as it was: 1.8.0 knows no feedback.
+    const previous = files.get("1.8.0")?.get("kit.js")?.bytes.toString("utf8");
+    expect(previous).not.toMatch(/feedback_result/u);
   });
 
   it("agree on what the interface sends: the client reads what the schema allows", () => {
@@ -187,6 +197,26 @@ describe("the two halves of the bridge", () => {
       error: { code: "forbidden", message: "Not allowed", right: "connection.use", runId: "run-2" }
     } as const;
     expect(readHostMessage(hostMessage(refused))).toEqual(refused);
+    const thanked = { type: "feedback_result", session: "s", requestId: "3", ok: true } as const;
+    expect(readHostMessage(hostMessage(thanked))).toEqual(thanked);
+    const unpublished = {
+      type: "feedback_result",
+      session: "s",
+      requestId: "4",
+      ok: false,
+      error: { code: "feedback_app_unpublished", message: "Only a published App takes feedback." }
+    } as const;
+    expect(readHostMessage(hostMessage(unpublished))).toEqual(unpublished);
+    // The context says feedback is offered only where the interface says so.
+    expect(
+      readHostMessage(
+        hostMessage({ type: "context", session: "s", context: { ...context, feedback: true } })
+      )
+    ).toMatchObject({ context: { feedback: true } });
+    const quiet = readHostMessage(
+      hostMessage({ type: "context", session: "s", context: { ...context, feedback: false } })
+    );
+    expect(quiet?.type === "context" && "feedback" in quiet.context).toBe(false);
   });
 
   it("reads nothing out of what is no message of the interface", () => {
@@ -428,6 +458,60 @@ describe("the kit client", () => {
     expect(await tried).toEqual(dryRun);
     expect(await read).toEqual(ended);
     await expect(missing).rejects.toMatchObject({ name: "AppCallError" });
+  });
+
+  // Fails before LU-6: a Page had no way to send feedback on its App.
+  it("sends feedback as text only and settles on the answer that names it", async () => {
+    const { transport, sent, deliver } = recordingTransport();
+    const client = createAppClient(transport);
+    const asked = client.getContext();
+    deliver(hostMessage({ type: "context", session: "session-1", context }));
+    await asked;
+
+    const thanked = client.feedback.send("Die Summe fehlt.");
+    const refused = client.feedback.send("Noch etwas.");
+    await sentCalls();
+    const [first, second] = sent.slice(1);
+    if (first?.type !== "feedback" || second?.type !== "feedback")
+      throw new Error("Two comments were sent");
+    // The Page names nothing but the text: the interface knows which App it shows.
+    expect(first).toEqual({
+      type: "feedback",
+      session: "session-1",
+      requestId: expect.any(String),
+      text: "Die Summe fehlt."
+    });
+    expect(appBridgePageMessageSchema.safeParse(envelope(first)).success).toBe(true);
+    deliver(
+      hostMessage({
+        type: "feedback_result",
+        session: "session-1",
+        requestId: first.requestId,
+        ok: true
+      })
+    );
+    deliver(
+      hostMessage({
+        type: "feedback_result",
+        session: "session-1",
+        requestId: second.requestId,
+        ok: false,
+        error: { code: "feedback_app_unpublished", message: "Only a published App takes feedback." }
+      })
+    );
+    await expect(thanked).resolves.toBeUndefined();
+    await expect(refused).rejects.toMatchObject({
+      name: "AppCallError",
+      code: "feedback_app_unpublished"
+    });
+  });
+
+  it("refuses an empty comment and one beyond the limit before the interface reads it", () => {
+    const message = (text: string) =>
+      envelope({ type: "feedback", session: "s", requestId: "1", text });
+    expect(appBridgePageMessageSchema.safeParse(message("   ")).success).toBe(false);
+    expect(appBridgePageMessageSchema.safeParse(message("x".repeat(4001))).success).toBe(false);
+    expect(appBridgePageMessageSchema.safeParse(message("x".repeat(4000))).success).toBe(true);
   });
 
   it("ends a call nothing answers", async () => {

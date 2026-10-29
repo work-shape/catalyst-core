@@ -1,17 +1,25 @@
 import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
+import { FEEDBACK_ASSET_KINDS, type FeedbackAssetKind } from "@work-shape/catalyst-core";
 import { Badge, Disclosure, DisclosureContent, DisclosureTrigger } from "@work-shape/catalyst-ui";
 import { RouteLink } from "../../studio/route-link";
 import { AGENTS_BUILD_PATH } from "../../shared/build-route";
-import { useTranslation } from "../../shared/i18n";
-import { useApprovalRevisionHost } from "../approvals/approval-revision-host";
+import { useTranslation, type TranslationKey } from "../../shared/i18n";
+import type { WorkspaceRoute } from "../../shared/workspace-route";
+import { useApprovalRevisionHost, type InboxPlaces } from "../approvals/approval-revision-host";
 
-// A comment on an agent's answer in its reviewer's Inbox (LU-4): what the author wrote, a
-// workflow's summary beside it where one exists, the agent and its revision, the date, the
-// author, and the question and the answer where the author included them. Its one answer is
-// "mark handled", with an optional note.
+// A comment in its reviewer's Inbox: on an agent's answer (LU-4), on an App or on the result of
+// a Workflow run (LU-6). What the author wrote, a workflow's summary beside it where one exists,
+// what it is about and its revision, the date, the author, and for an answer the question and
+// the answer where the author included them. Its one answer is "mark handled", with an
+// optional note.
 
 export interface FeedbackPreview {
-  agent: { name: string; displayName?: string; revision?: number };
+  /** The agent, App or Workflow the comment is about. */
+  about: { kind: FeedbackAssetKind; name: string; displayName?: string; revision?: number };
+  /** The workspace the asset or the comment belongs to, where there is one. */
+  workspaceId?: string;
+  /** The run whose result a comment on a Workflow is about. */
+  workflowRunId?: string;
   text?: string;
   summary?: { text: string; category?: string };
   exchange?: { question: string; answer: string };
@@ -19,20 +27,46 @@ export interface FeedbackPreview {
   gone: boolean;
 }
 
+/**
+ * What a comment is about. An item of LU-4 names only its agent; a later one names what it is
+ * about in `about`.
+ */
+function parseAbout(preview: Record<string, unknown>) {
+  const about = isRecord(preview.about)
+    ? preview.about
+    : isRecord(preview.agent)
+      ? { ...preview.agent, kind: "agent" }
+      : undefined;
+  if (!about || typeof about.name !== "string" || typeof about.kind !== "string") return undefined;
+  const kind = FEEDBACK_ASSET_KINDS.find((known) => known === about.kind);
+  if (!kind) return undefined;
+  return {
+    about: {
+      kind,
+      name: about.name,
+      ...(typeof about.displayName === "string" ? { displayName: about.displayName } : {}),
+      ...(typeof about.revision === "number" ? { revision: about.revision } : {})
+    },
+    workspaceId:
+      typeof about.workspaceId === "string"
+        ? about.workspaceId
+        : typeof preview.workspaceId === "string"
+          ? preview.workspaceId
+          : undefined
+  };
+}
+
 /** The comment of an item's preview, or nothing where the preview is not one. */
 export function parseFeedbackPreview(preview: unknown): FeedbackPreview | undefined {
-  if (!isRecord(preview) || !isRecord(preview.agent)) return undefined;
-  const { agent } = preview;
-  const name = agent.name;
-  if (typeof name !== "string") return undefined;
+  if (!isRecord(preview)) return undefined;
+  const parsed = parseAbout(preview);
+  if (!parsed) return undefined;
   const summary = isRecord(preview.annotation) ? preview.annotation : undefined;
   const exchange = isRecord(preview.exchange) ? preview.exchange : undefined;
   return {
-    agent: {
-      name,
-      ...(typeof agent.displayName === "string" ? { displayName: agent.displayName } : {}),
-      ...(typeof agent.revision === "number" ? { revision: agent.revision } : {})
-    },
+    about: parsed.about,
+    ...(parsed.workspaceId ? { workspaceId: parsed.workspaceId } : {}),
+    ...(typeof preview.workflowRunId === "string" ? { workflowRunId: preview.workflowRunId } : {}),
     ...(typeof preview.text === "string" ? { text: preview.text } : {}),
     ...(summary && typeof summary.summary === "string"
       ? {
@@ -49,9 +83,66 @@ export function parseFeedbackPreview(preview: unknown): FeedbackPreview | undefi
   };
 }
 
-/** The agent's name as people read it. */
-export function feedbackAgentLabel(preview: FeedbackPreview): string {
-  return preview.agent.displayName ?? preview.agent.name;
+/** The name of what the comment is about, as people read it. */
+export function feedbackAboutLabel(preview: FeedbackPreview): string {
+  return preview.about.displayName ?? preview.about.name;
+}
+
+/** The heading of the item: which kind of thing the comment is about. */
+export function feedbackHeadingKey(preview: FeedbackPreview): TranslationKey {
+  return preview.about.kind === "app"
+    ? "feedback.reviewHeadingApp"
+    : preview.about.kind === "workflow"
+      ? "feedback.reviewHeadingWorkflow"
+      : "feedback.reviewHeading";
+}
+
+/**
+ * Where the reviewer opens what the comment is about, and the words of the link. In a workspace
+ * the Inbox's places decide, so no link ends on a page the reviewer may not read; an App or a
+ * Workflow the reviewer cannot open there gets none.
+ */
+function aboutLink(
+  preview: FeedbackPreview,
+  places: InboxPlaces | undefined
+): { route: WorkspaceRoute; label: TranslationKey } | undefined {
+  const { about, workspaceId } = preview;
+  if (about.kind === "agent") {
+    return {
+      route: { kind: "build-asset", assetKind: AGENTS_BUILD_PATH, name: about.name },
+      label: "feedback.openAgent"
+    };
+  }
+  if (about.kind === "app") {
+    if (!workspaceId) return undefined;
+    const route: WorkspaceRoute | undefined = places
+      ? places.route({ kind: "app", workspaceId, app: about.name })
+      : { kind: "app", collaborationWorkspaceId: workspaceId, app: about.name };
+    return route ? { route, label: "feedback.openApp" } : undefined;
+  }
+  const run = preview.workflowRunId;
+  if (!run) return undefined;
+  // A Workflow the instance owns opens in the reviewer's own workspace.
+  const workflow = places
+    ? places.route({
+        kind: "workflow",
+        ...(workspaceId ? { workspaceId } : {}),
+        workflow: about.name
+      })
+    : workspaceId
+      ? { kind: "workflow" as const, collaborationWorkspaceId: workspaceId, workflow: about.name }
+      : undefined;
+  return workflow?.kind === "workflow"
+    ? {
+        route: {
+          kind: "workflow-run",
+          collaborationWorkspaceId: workflow.collaborationWorkspaceId,
+          workflow: about.name,
+          run
+        },
+        label: "feedback.openRun"
+      }
+    : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -66,12 +157,13 @@ export function FeedbackBody({ item }: { item: ApprovalRequestView }) {
   if (feedback.gone) {
     return <p className="text-muted-foreground">{t("feedback.gone")}</p>;
   }
-  // The head of the item says who wrote it and when; the revision is the agent's at the time.
+  // The head of the item says who wrote it and when; the revision is the asset's at the time.
+  const link = aboutLink(feedback, host?.places);
   return (
     <div className="grid min-w-0 gap-4" data-testid="inbox-feedback">
-      {feedback.agent.revision === undefined ? null : (
+      {feedback.about.revision === undefined ? null : (
         <p className="text-caption text-muted-foreground">
-          {t("feedback.revision", { revision: feedback.agent.revision })}
+          {t("feedback.revision", { revision: feedback.about.revision })}
         </p>
       )}
       <blockquote className="min-w-0 border-l-2 pl-3 whitespace-pre-wrap break-words">
@@ -101,19 +193,21 @@ export function FeedbackBody({ item }: { item: ApprovalRequestView }) {
             <ExchangePart label={t("feedback.answer")} text={feedback.exchange.answer} />
           </DisclosureContent>
         </Disclosure>
-      ) : (
+      ) : feedback.about.kind === "agent" ? (
         <p className="text-caption text-muted-foreground">{t("feedback.noExchange")}</p>
-      )}
-      <div>
-        <RouteLink
-          route={{ kind: "build-asset", assetKind: AGENTS_BUILD_PATH, name: feedback.agent.name }}
-          variant="link"
-          className="px-0"
-          onOpen={(route) => host?.openRoute?.(route)}
-        >
-          {t("feedback.openAgent")}
-        </RouteLink>
-      </div>
+      ) : null}
+      {link ? (
+        <div>
+          <RouteLink
+            route={link.route}
+            variant="link"
+            className="px-0"
+            onOpen={(route) => host?.openRoute?.(route)}
+          >
+            {t(link.label)}
+          </RouteLink>
+        </div>
+      ) : null}
     </div>
   );
 }

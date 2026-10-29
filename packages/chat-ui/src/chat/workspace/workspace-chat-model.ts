@@ -1381,6 +1381,7 @@ export function useWorkspaceChatModel({
         routeState.showRoute({ kind: "legacy-conversation", conversationId }),
       openInboxItem: (itemId) => routeState.showRoute({ kind: "inbox-item", itemId }),
       openRoute: (route) => routeState.showRoute(route),
+      resultFeedback: configQuery.data?.modules.feedback?.enabled === true,
       places: inboxPlaces({
         context: platformContextQuery.data,
         workspaces: collaborationWorkspace.collaborationWorkspaces,

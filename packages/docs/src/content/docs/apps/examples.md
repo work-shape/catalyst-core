@@ -12,7 +12,7 @@ A dashboard for one client of an accounting data source: it reads bookings from 
 ```yaml title="app.yaml"
 id: accounting-dashboard
 name: Accounting dashboard
-kit: 1.8.0
+kit: 1.9.0
 connections:
   - accounting_source
 dataStores:
@@ -160,7 +160,7 @@ The same call from a plain HTML App, with one action on the Connection.
 ```yaml title="app.yaml"
 id: accounting-bookings
 name: Accounting bookings
-kit: 1.8.0
+kit: 1.9.0
 entry: index.html
 connections:
   - accounting_source

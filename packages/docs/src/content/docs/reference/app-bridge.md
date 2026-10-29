@@ -13,7 +13,7 @@ The bridge protocol is version 1. Every message of either side carries `catalyst
 - Changes to version 1 are additive only: a new message type, a new call of the kit, or a new optional field. An App written against version 1 keeps working.
 - A new call needs a named App that cannot be built without it. It is added as a new member, never by renaming one.
 - A breaking change, such as removing or renaming a message, a field or a call, or changing what one means, is version 2. Version 2 runs beside version 1, and the interface keeps answering version 1.
-- A kit version is frozen too. An App names the exact kit version it was built with (`kit` in `app.yaml`) and keeps loading those files. A new Page or App names kit 1.8.0.
+- A kit version is frozen too. An App names the exact kit version it was built with (`kit` in `app.yaml`) and keeps loading those files. A new Page or App names kit 1.9.0.
 
 ## Calls of the kit
 
@@ -27,6 +27,8 @@ The bridge protocol is version 1. Every message of either side carries `catalyst
 | `workflowRuns.get(runId)`                         | Reads a Workflow Run that a `workflow` action of the App started, as the viewer who started it. Kit 1.3.0 and later.                                                                                                                                        |
 | `useWorkflowRun(runId)`                           | A React hook that reads the run every second until it ended. Kit 1.3.0 and later.                                                                                                                                                                           |
 | `storage.get(key)` / `storage.set(key, value)`    | Kit 1.6.0 and later. Small JSON state private to the current App and person (64 KiB). A save waits for persistence; shared records belong in a Data Store.                                                                                                  |
+| `feedback.send(text)`                             | Kit 1.9.0 and later. Sends the viewer's written comment on the published App to its reviewers (at most 4000 characters). Rejects with an `AppCallError` where the frame is no published App or the instance has feedback off. |
+| `<AppFeedback />`                                 | Kit 1.9.0 and later. A field and a send button built from the shared UI library. It shows nothing unless the context says `feedback: true`.                                                                                                                 |
 | `mountApp({ routeTree, element? })`               | Renders a React App with its routes and the look of the interface.                                                                                                                                                                                          |
 
 An App reaches a Connection, a Data Store or a Workflow only through a named action in its folder: `actions/<name>.action.yaml` for an operation of a Connection or a Workflow, `actions/<name>.sql` for a statement on a Data Store. Each call goes through the policy, the audit and the viewer's rights.
@@ -41,6 +43,7 @@ An App reaches a Connection, a Data Store or a Workflow only through a named act
 | `action`        | `session`, `requestId`, `name`, `input` (an object), optional `idempotencyKey`                  | `action_result`       |
 | `storage_write` | `session`, `requestId`, `mutation` (`set` with string key/value, `remove` with key, or `clear`) | `storage_result`      |
 | `workflow_run`  | `session`, `requestId`, `runId`                                                                 | `workflow_run_result` |
+| `feedback`      | `session`, `requestId`, `text` (1 to 4000 characters)                                           | `feedback_result`     |
 | `report`        | `report`: the platform's guard reports what the page did (`settled`, optional `empty`, at most 10 `entries`, `more`) | nothing |
 | `capture_result` | `requestId`, and `image` (WebP bytes, at most 400 KB), `width` (at most 1280) and `height` (at most 1600), or `unavailable: true` | nothing |
 
@@ -63,11 +66,12 @@ Kits 1.1.0 to 1.3.0 have `connections.call(connection, operation, input)`, which
 | `action_result`       | `session`, `requestId`, `ok`, and `result` or `error` |
 | `storage_result`      | `session`, `requestId`, `ok`                          |
 | `workflow_run_result` | `session`, `requestId`, `ok`, and `run` or `error`    |
+| `feedback_result`     | `session`, `requestId`, `ok`, and `error` where not ok |
 | `capture`             | `requestId`                                           |
 
 `capture` asks the platform's guard, not the kit, for a picture of the page; the interface sends it only when an agent's run that serves the viewer asks to look at the preview.
 
-The context holds `viewer` (`kind: member`, `id`, `displayName`), `workspace` (`id`, `name`, or `null`), `locale`, `theme` (seven colours: `surfaceColor`, `backgroundColor`, `textColor`, `mutedTextColor`, `borderColor`, `accentColor`, `accentStrongColor`), `mode` (`light` or `dark`), `pageId`, `fileSetNumber`, `initialRoute`, and `can`: for each action, what a call of the viewer would come to now (`allow`, `confirm`, `approval` or `deny`). `can` is a hint for what the App shows; each call is checked again.
+The context holds `viewer` (`kind: member`, `id`, `displayName`), `workspace` (`id`, `name`, or `null`), `locale`, `theme` (seven colours: `surfaceColor`, `backgroundColor`, `textColor`, `mutedTextColor`, `borderColor`, `accentColor`, `accentStrongColor`), `mode` (`light` or `dark`), `pageId`, `fileSetNumber`, `initialRoute`, `feedback` (`true` where the frame shows a published App and the instance has the feedback module on), and `can`: for each action, what a call of the viewer would come to now (`allow`, `confirm`, `approval` or `deny`). `can` is a hint for what the App shows; each call is checked again.
 
 The result of an action is one of:
 

@@ -103,6 +103,7 @@ export function AppPreview({
         url={pageFrameAddress(shown.url, apiBaseUrl, window.location.href)}
         route={route}
         address={shown}
+        offersFeedback={mode === "published"}
       />
     );
   }

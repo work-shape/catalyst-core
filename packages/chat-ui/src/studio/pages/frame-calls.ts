@@ -73,7 +73,13 @@ export interface FrameCalls {
   run(call: FrameCall): Promise<FrameCallAnswer>;
   /** Reads a Workflow Run that a `workflow` action of the frame started. */
   workflowRun(runId: string): Promise<FrameWorkflowRunAnswer>;
+  /** Sends the viewer's written feedback on the App the frame shows (LU-6). Absent, none is sent. */
+  sendFeedback?(text: string): Promise<FrameFeedbackAnswer>;
 }
+
+/** How one comment of a frame came out, as the frame is told. */
+export type FrameFeedbackAnswer =
+  { ok: true } | { ok: false; error: NonNullable<CallAnswer["error"]> };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -112,6 +118,8 @@ const FINAL_REFUSALS: readonly string[] = [
   "draft_safe_mode",
   // A Page of a conversation reaches no Data Store; only an App does.
   "data_store_needs_app",
+  // Only a published App takes feedback; its draft never does.
+  "feedback_app_unpublished",
   "input_invalid"
 ];
 
@@ -179,6 +187,8 @@ export interface FrameCallClient {
       "call_action" | "context" | "get_workflow_run" | "write_storage"
     >;
   };
+  /** Absent where the client reaches no feedback: a frame is then told it cannot send any. */
+  feedback?: Pick<ApiClient["feedback"], "send_from_app">;
 }
 
 /** The calls of the frame at `address`, made with the session of `client`. */
@@ -240,6 +250,25 @@ export function createFrameCalls(
           body: { fileSetId, token }
         });
         return { ok: true, run };
+      } catch (error) {
+        return { ok: false, error: frameCallFailure(error, texts) };
+      }
+    },
+    async sendFeedback(text) {
+      if (!client.feedback) {
+        return {
+          ok: false,
+          error: { code: "not_available", message: "This frame cannot send feedback." }
+        };
+      }
+      try {
+        completedOutput(
+          await client.feedback.send_from_app({
+            params: { pageSessionId },
+            body: { fileSetId, token, text }
+          })
+        );
+        return { ok: true };
       } catch (error) {
         return { ok: false, error: frameCallFailure(error, texts) };
       }
