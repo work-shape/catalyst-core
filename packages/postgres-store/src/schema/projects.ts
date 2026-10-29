@@ -3,6 +3,7 @@ import {
   bigint,
   check,
   foreignKey,
+  index,
   integer,
   pgTable,
   primaryKey,
@@ -61,7 +62,11 @@ export const projectFiles = pgTable(
   (table) => [
     primaryKey({ name: "project_files_pk", columns: [table.projectId, table.path] }),
     check("project_files_origin_check", sql`${table.origin} in ${ORIGIN_CHECK}`),
-    check("project_files_version_check", sql`${table.currentVersion} > 0`)
+    check("project_files_version_check", sql`${table.currentVersion} > 0`),
+    // A person's deletion clears the files they last wrote (forgetProjectFileAuthor).
+    index("project_files_updated_by_idx")
+      .on(table.clientInstanceId, table.updatedByUserId)
+      .where(sql`${table.updatedByUserId} is not null`)
   ]
 );
 
@@ -98,6 +103,10 @@ export const projectFileVersions = pgTable(
     })
       .onDelete("cascade")
       .onUpdate("cascade"),
-    check("project_file_versions_origin_check", sql`${table.origin} in ${ORIGIN_CHECK}`)
+    check("project_file_versions_origin_check", sql`${table.origin} in ${ORIGIN_CHECK}`),
+    // A person's deletion clears them as author of every version (forgetProjectFileAuthor).
+    index("project_file_versions_by_user_idx")
+      .on(table.clientInstanceId, table.byUserId)
+      .where(sql`${table.byUserId} is not null`)
   ]
 );

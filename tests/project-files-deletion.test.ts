@@ -138,6 +138,49 @@ describe("project files when their people and workspaces go", () => {
     expect(authors?.named).toBe(0);
   });
 
+  it("finds the files and versions a deleted person wrote through their author indexes", async () => {
+    const { t } = await arrange(db, "prjauthorindex");
+    const clientInstanceId = t.scope.clientInstanceId;
+    // 20,000 versions of 2,000 files, spread over 50 people, in one project.
+    await db.sql`
+      insert into config_assets
+        (id, client_instance_id, kind, name, status, active_revision_id, created_at, updated_at)
+      values ('bulkproject', ${clientInstanceId}, 'project', 'bulk', 'active', 'bulkrev', now(), now())`;
+    await db.sql`
+      insert into project_files
+        (project_id, client_instance_id, path, current_version, byte_size, origin,
+         updated_by_user_id, updated_at)
+      select 'bulkproject', ${clientInstanceId}, 'f' || n, 10, 1, 'person',
+        'bulkuser' || (n % 50), now()
+      from generate_series(1, 2000) as n`;
+    await db.sql`
+      insert into project_file_versions
+        (project_id, client_instance_id, path, version, byte_size, origin, by_user_id, at)
+      select 'bulkproject', ${clientInstanceId}, 'f' || f, v, 1, 'person',
+        'bulkuser' || ((f + v) % 50), now()
+      from generate_series(1, 2000) as f, generate_series(1, 10) as v`;
+    await db.sql`analyze project_files`;
+    await db.sql`analyze project_file_versions`;
+    // The statements of forgetProjectFileAuthor, planned and not run.
+    const planOf = async (statement: string) => {
+      const rows = await db.sql.unsafe<Array<Record<string, string>>>(`explain ${statement}`, [
+        clientInstanceId,
+        "bulkuser7"
+      ]);
+      return rows.map((row) => Object.values(row).join(" ")).join("\n");
+    };
+    const versions = await planOf(
+      "update project_file_versions set by_user_id = null where client_instance_id = $1 and by_user_id = $2"
+    );
+    expect(versions).toContain("project_file_versions_by_user_idx");
+    expect(versions).not.toContain("Seq Scan");
+    const files = await planOf(
+      "update project_files set updated_by_user_id = null where client_instance_id = $1 and updated_by_user_id = $2"
+    );
+    expect(files).toContain("project_files_updated_by_idx");
+    expect(files).not.toContain("Seq Scan");
+  });
+
   it("leaves no row and no stored byte of a deleted workspace's projects", async () => {
     const { t, project, upload, rowsOf, objectsOf } = await arrange(db, "prjworkspace");
     const owner = await t.createUser("owner", ["user", "admin", "superadmin"]);
