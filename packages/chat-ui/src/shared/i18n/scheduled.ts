@@ -104,12 +104,15 @@ export const scheduled = defineTranslations({
     "scheduled.schedule.custom": "Custom: {cron}",
     "scheduled.handover.title": "Scheduled prompts",
     "scheduled.handover.description":
-      "This account is deactivated, so its scheduled prompts are paused and run as nobody. Hand each to someone who keeps the work, or delete it.",
+      "This account is deactivated, so its scheduled prompts are paused and run as nobody. Hand each to someone who keeps the work, or delete it. Their wording stays private, and one in the personal workspace can only be deleted.",
     "scheduled.handover.listFailed": "The scheduled prompts could not be loaded.",
     "scheduled.handover.none": "This person owns no scheduled prompts.",
     "scheduled.handover.action": "Hand over",
-    "scheduled.handover.deleteLabel": "Delete “{heading}”",
-    "scheduled.handover.dialogTitle": "Hand over “{heading}”?",
+    "scheduled.handover.personal": "Personal workspace",
+    "scheduled.handover.shared": "Shared workspace",
+    "scheduled.handover.deleteLabel": "Delete the scheduled prompt for {agent}, {schedule}",
+    "scheduled.handover.dialogTitle": "Hand over this scheduled prompt?",
+    "scheduled.handover.deleteBody": "It stops running. The conversations it already started stay.",
     "scheduled.handover.dialogBody":
       "The new owner gets it paused and resumes it when it suits them. It then runs with their rights and their personal connections, never with this account's.",
     "scheduled.handover.newOwner": "New owner",
@@ -118,6 +121,8 @@ export const scheduled = defineTranslations({
       "This person may not use the agent of this prompt in its workspace. Choose someone who may.",
     "scheduled.handover.notMember":
       "This person is not active or not a member of the prompt's workspace. Choose a member.",
+    "scheduled.handover.personalOnly":
+      "A prompt in a personal workspace cannot be handed over. Delete it instead.",
     "scheduled.handover.failed": "It could not be handed over. Try again.",
     "scheduled.handover.done": "Handed over to {name}, paused.",
     "scheduled.handover.deleted": "Deleted."
@@ -228,12 +233,16 @@ export const scheduled = defineTranslations({
     "scheduled.schedule.custom": "Eigener Zeitplan: {cron}",
     "scheduled.handover.title": "Geplante Prompts",
     "scheduled.handover.description":
-      "Dieses Konto ist deaktiviert, deshalb sind seine geplanten Prompts pausiert und laufen für niemanden. Übergib jeden an jemanden, der die Arbeit weiterführt, oder lösche ihn.",
+      "Dieses Konto ist deaktiviert, deshalb sind seine geplanten Prompts pausiert und laufen für niemanden. Übergib jeden an jemanden, der die Arbeit weiterführt, oder lösche ihn. Ihr Wortlaut bleibt privat, und einen im persönlichen Workspace kannst du nur löschen.",
     "scheduled.handover.listFailed": "Die geplanten Prompts konnten nicht geladen werden.",
     "scheduled.handover.none": "Diese Person hat keine geplanten Prompts.",
     "scheduled.handover.action": "Übergeben",
-    "scheduled.handover.deleteLabel": "„{heading}“ löschen",
-    "scheduled.handover.dialogTitle": "„{heading}“ übergeben?",
+    "scheduled.handover.personal": "Persönlicher Workspace",
+    "scheduled.handover.shared": "Geteilter Workspace",
+    "scheduled.handover.deleteLabel": "Geplanten Prompt für {agent} löschen, {schedule}",
+    "scheduled.handover.dialogTitle": "Diesen geplanten Prompt übergeben?",
+    "scheduled.handover.deleteBody":
+      "Er läuft nicht mehr. Die Unterhaltungen, die er schon gestartet hat, bleiben.",
     "scheduled.handover.dialogBody":
       "Die neue Person bekommt ihn pausiert und setzt ihn fort, wenn es ihr passt. Dann läuft er mit ihren Rechten und ihren persönlichen Verbindungen, nie mit denen dieses Kontos.",
     "scheduled.handover.newOwner": "Neue Person",
@@ -242,6 +251,8 @@ export const scheduled = defineTranslations({
       "Diese Person darf den Agenten dieses Prompts in seinem Workspace nicht nutzen. Wähle jemanden, der es darf.",
     "scheduled.handover.notMember":
       "Diese Person ist nicht aktiv oder kein Mitglied im Workspace des Prompts. Wähle ein Mitglied.",
+    "scheduled.handover.personalOnly":
+      "Einen Prompt im persönlichen Workspace kannst du nicht übergeben. Lösch ihn stattdessen.",
     "scheduled.handover.failed": "Die Übergabe hat nicht geklappt. Versuch es noch einmal.",
     "scheduled.handover.done": "An {name} übergeben, pausiert.",
     "scheduled.handover.deleted": "Gelöscht."

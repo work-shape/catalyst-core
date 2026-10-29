@@ -1,5 +1,10 @@
 import { completedOutput, type ApiClient } from "@work-shape/catalyst-api-client";
-import type { ScheduledRun, ScheduledStart, ScheduledStartInput } from "./scheduled-model";
+import type {
+  ScheduledRun,
+  ScheduledStart,
+  ScheduledStartInput,
+  WithheldScheduledStart
+} from "./scheduled-model";
 
 // The one place that names the operations of scheduled starts. Every screen reads through
 // `ScheduledStartsSource`.
@@ -33,14 +38,14 @@ export interface ScheduledStartsSource {
   setState(scheduledStartId: string, state: ScheduledStart["state"]): Promise<ScheduledStart>;
   runNow(scheduledStartId: string): Promise<void>;
   remove(scheduledStartId: string): Promise<void>;
-  /** An instance admin's read of a deactivated person's starts, in every workspace. */
+  /** An instance admin's read of a deactivated person's starts, in every workspace, unworded. */
   listOwnedBy(
     ownerUserId: string,
     paging: ScheduledPaging,
     signal: AbortSignal
-  ): Promise<ScheduledPage<ScheduledStart>>;
-  /** Gives a deactivated person's start to another person, paused. */
-  handover(scheduledStartId: string, ownerUserId: string): Promise<ScheduledStart>;
+  ): Promise<ScheduledPage<WithheldScheduledStart>>;
+  /** Gives a deactivated person's start in a Shared Workspace to another person, paused. */
+  handover(scheduledStartId: string, ownerUserId: string): Promise<WithheldScheduledStart>;
 }
 
 /** A change of one's own scheduled start never waits for somebody else's approval. */
@@ -61,7 +66,9 @@ export function createScheduledStartsSource(client: ApiClient): ScheduledStartsS
         },
         signal
       });
-      return { items: page.items, ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) };
+      // Read without an owner, the list is the person's own: every item carries its prompt.
+      const items = page.items.flatMap((item) => ("prompt" in item ? [item] : []));
+      return { items, ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) };
     },
     runs: async (scheduledStartId, paging, signal) => {
       const page = await client.scheduled_starts.runs({
@@ -102,7 +109,9 @@ export function createScheduledStartsSource(client: ApiClient): ScheduledStartsS
         query: { ownerUserId, ...withCursor(paging) },
         signal
       });
-      return { items: page.items, ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) };
+      // Read for somebody else, the server words no item: none carries a prompt.
+      const items = page.items.flatMap((item) => ("workspaceKind" in item ? [item] : []));
+      return { items, ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) };
     },
     handover: async (scheduledStartId, ownerUserId) =>
       completedOutput(

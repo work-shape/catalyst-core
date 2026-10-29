@@ -6,7 +6,8 @@ import { requestWithOrigin } from "./request-with-origin";
 
 // NL-10: a deactivated person's scheduled prompts are paused and run as nobody. On the person's
 // page under Settings > Users an instance admin hands one to another member of its workspace,
-// who gets it paused; it is gone from the deactivated person's list.
+// who gets it paused; it is gone from the deactivated person's list. The admin never reads the
+// prompts' wording, and one in the person's Personal Workspace can only be deleted.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
@@ -21,6 +22,9 @@ const taker = {
 };
 
 const idSchema = z.object({ id: z.string() });
+const workspaceListSchema = z.object({
+  items: z.array(z.object({ id: z.string(), kind: z.string() }))
+});
 const startsSchema = z.object({
   items: z.array(z.object({ id: z.string(), ownerUserId: z.string(), state: z.string() }))
 });
@@ -36,7 +40,24 @@ async function signIn(page: Page, user: { email: string; password: string }): Pr
   return idSchema.parse(await me.json()).id;
 }
 
-test("an admin hands a deactivated person's scheduled prompt to a member, paused", async ({
+/** The person's Personal Workspace, which the first visit of the interface sets up. */
+async function personalWorkspace(page: Page): Promise<string> {
+  let id = "";
+  await expect
+    .poll(async () => {
+      const response = await page.request.get(`${apiBaseUrl}/api/v1/workspaces?limit=100`);
+      if (!response.ok()) return "";
+      id =
+        workspaceListSchema
+          .parse(await response.json())
+          .items.find((workspace) => workspace.kind === "personal")?.id ?? "";
+      return id;
+    })
+    .not.toBe("");
+  return id;
+}
+
+test("an admin hands a deactivated person's scheduled prompt to a member, paused, without reading it", async ({
   page
 }) => {
   test.setTimeout(90_000);
@@ -61,18 +82,25 @@ test("an admin hands a deactivated person's scheduled prompt to a member, paused
   }
 
   await signIn(page, owner);
+  await page.goto("/");
+  const ownWorkspaceId = await personalWorkspace(page);
+  const schedule = async (collaborationWorkspaceId: string, prompt: string, cron: string) => {
+    const start = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/scheduled-starts`, {
+      data: {
+        collaborationWorkspaceId,
+        agentName: "application_assistant",
+        prompt,
+        cron,
+        timeZone: "Europe/Berlin"
+      }
+    });
+    expect(start.ok(), await start.text()).toBe(true);
+    return idSchema.parse(await start.json()).id;
+  };
   const prompt = `Weekly digest ${randomUUID().slice(0, 8)}`;
-  const start = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/scheduled-starts`, {
-    data: {
-      collaborationWorkspaceId: workspaceId,
-      agentName: "application_assistant",
-      prompt,
-      cron: "0 9 * * 1",
-      timeZone: "Europe/Berlin"
-    }
-  });
-  expect(start.ok(), await start.text()).toBe(true);
-  const startId = idSchema.parse(await start.json()).id;
+  const privatePrompt = `Private reminder ${randomUUID().slice(0, 8)}`;
+  const startId = await schedule(workspaceId, prompt, "0 9 * * 1");
+  await schedule(ownWorkspaceId, privatePrompt, "0 7 * * *");
 
   await signIn(page, superadmin);
   const disabled = await requestWithOrigin(
@@ -87,22 +115,36 @@ test("an admin hands a deactivated person's scheduled prompt to a member, paused
   await page.getByLabel("Search users").fill("Scheduled Owner");
   await page.getByRole("button", { name: /E2E Zz Scheduled Owner/u }).click();
   const card = page.getByTestId("owner-scheduled-starts");
-  await expect(card).toBeVisible();
-  await expect(card.getByRole("listitem").filter({ hasText: prompt })).toContainText("Paused");
+  await expect(card.getByRole("listitem")).toHaveCount(2);
+  // The admin reads agent, schedule and workspace, never what the prompts say.
+  await expect(card).not.toContainText(prompt);
+  await expect(card).not.toContainText(privatePrompt);
+  const shared = card.getByRole("listitem").filter({ hasText: "Shared workspace" });
+  const personal = card.getByRole("listitem").filter({ hasText: "Personal workspace" });
+  await expect(shared).toContainText("Paused");
+  await expect(shared).toContainText("application_assistant");
+  // A start in the Personal Workspace can only be deleted.
+  await expect(personal.getByRole("button", { name: "Hand over" })).toHaveCount(0);
+  await expect(
+    personal.getByRole("button", { name: /^Delete the scheduled prompt for/u })
+  ).toBeVisible();
 
-  await card
-    .getByRole("listitem")
-    .filter({ hasText: prompt })
-    .getByRole("button", { name: "Hand over" })
-    .click();
+  await shared.getByRole("button", { name: "Hand over" }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog).toContainText(`Hand over “${prompt}”?`);
+  await expect(dialog).toContainText("Hand over this scheduled prompt?");
+  await expect(dialog).not.toContainText(prompt);
   const confirm = dialog.getByRole("button", { name: "Hand over" });
   await expect(confirm).toBeDisabled();
   await dialog.getByRole("combobox", { name: "New owner" }).selectOption(takerId);
   await confirm.click();
   await expect(dialog).toHaveCount(0);
   await expect(card).toContainText("Handed over to E2E Zz Scheduled Taker, paused.");
+  await expect(card.getByRole("listitem")).toHaveCount(1);
+
+  await personal.getByRole("button", { name: /^Delete the scheduled prompt for/u }).click();
+  await expect(dialog).not.toContainText(privatePrompt);
+  await dialog.getByRole("button", { name: "Delete" }).click();
+  await expect(dialog).toHaveCount(0);
   await expect(card).toContainText("This person owns no scheduled prompts.");
 
   // The member owns it now, paused until they resume it.
