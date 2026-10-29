@@ -19,6 +19,8 @@ interface NamedCommand {
   operation: Operation;
   usage: string;
   param?: string;
+  /** A second positional after `param`, such as the member of a workspace. */
+  secondParam?: string;
   optionalName?: boolean;
   listField?: "apps";
   from?: boolean;
@@ -29,6 +31,12 @@ interface NamedCommand {
   /** The flags that become the query of the call, each with the query field it fills. */
   queryFlags?: Readonly<Partial<Record<QueryFlag, string>>>;
   requiredFlags?: readonly QueryFlag[];
+  /**
+   * The flags that become fields of the request body, each with the field it fills. With
+   * `from`, a flag sets its field over what the file holds.
+   */
+  bodyFlags?: Readonly<Partial<Record<BodyFlag, string>>>;
+  requiredBodyFlags?: readonly BodyFlag[];
   /**
    * Prints the one page asked for with its `nextCursor`, where the feed is too long to read to
    * its end (audit events, jobs, Operation Runs). `--limit` sets its size, `--cursor` takes the
@@ -57,9 +65,28 @@ const QUERY_FLAG_OPTIONS = {
   agent: { type: "string" },
   app: { type: "string" },
   workflow: { type: "string" },
-  model: { type: "string" }
+  model: { type: "string" },
+  search: { type: "string" }
 } as const;
 type QueryFlag = keyof typeof QUERY_FLAG_OPTIONS;
+
+/** Every flag that fills a field of the body. A command takes only the ones it names. */
+const BODY_FLAG_OPTIONS = {
+  name: { type: "string" },
+  description: { type: "string" },
+  visibility: { type: "string" },
+  locale: { type: "string" },
+  email: { type: "string" },
+  role: { type: "string" },
+  "confirm-name": { type: "string" }
+} as const;
+type BodyFlag = keyof typeof BODY_FLAG_OPTIONS;
+
+function isBodyFlag(flag: string): flag is BodyFlag {
+  return Object.hasOwn(BODY_FLAG_OPTIONS, flag);
+}
+
+const BODY_FLAGS = Object.keys(BODY_FLAG_OPTIONS).filter(isBodyFlag);
 
 function isQueryFlag(flag: string): flag is QueryFlag {
   return Object.hasOwn(QUERY_FLAG_OPTIONS, flag);
@@ -69,6 +96,13 @@ const QUERY_FLAGS = Object.keys(QUERY_FLAG_OPTIONS).filter(isQueryFlag);
 
 /** The page flags of the feeds that print one page. */
 const PAGE_FLAGS = { limit: "limit", cursor: "cursor" } as const;
+
+/** The fields of a Shared Workspace that `workspace create` and `update` set by flag. */
+const WORKSPACE_FIELDS = {
+  name: "name",
+  description: "description",
+  visibility: "visibility"
+} as const;
 
 // Each face names an existing operation. Rights, policy and execution stay in the instance.
 const commands: Readonly<Record<string, NamedCommand>> = {
@@ -229,6 +263,133 @@ const commands: Readonly<Record<string, NamedCommand>> = {
     operation: apiOperations["instance.infrastructure.get"],
     usage: "infrastructure show"
   },
+  // The account and workspaces level of a key (CLI-PARITY-5): the person's own account, and
+  // the Shared Workspaces through the checks of the screen.
+  me: { operation: apiOperations["me.get"], usage: "me" },
+  "me update": {
+    operation: apiOperations["me.update"],
+    usage: "me update [--name <display name>] [--locale de|en] [--from <file|->]",
+    from: true,
+    fromShape:
+      'Profile input must be a JSON object: {"displayLabel": "<name>", "locale": "de|en", "followUpMode": "<mode>"}, at least one of them.',
+    bodyFlags: { name: "displayLabel", locale: "locale" }
+  },
+  "me model-preference": {
+    operation: apiOperations["me.model_preference.get"],
+    usage: "me model-preference"
+  },
+  "me set-model-preference": {
+    operation: apiOperations["me.model_preference.set"],
+    usage: "me set-model-preference --from <file|->",
+    from: true,
+    fromShape:
+      'Model preference input must be a JSON object: {"modelBindingId": "<binding>", "reasoningEfforts": {"<binding>": "low|medium|high"}}.'
+  },
+  "keys revoke": {
+    operation: apiOperations["me.api_keys.revoke"],
+    usage: "keys revoke <key-id>",
+    param: "keyId"
+  },
+  "workspace list": { operation: apiOperations["workspaces.list"], usage: "workspace list" },
+  "workspace directory": {
+    operation: apiOperations["workspaces.directory.list"],
+    usage: "workspace directory"
+  },
+  "workspace show": {
+    operation: apiOperations["workspaces.get"],
+    usage: "workspace show <workspace-id>",
+    param: "collaborationWorkspaceId"
+  },
+  "workspace create": {
+    operation: apiOperations["workspaces.create"],
+    usage:
+      "workspace create --name <name> [--description <text>] [--visibility discoverable|private] [--from <file|->]",
+    from: true,
+    fromShape:
+      'Workspace input must be a JSON object: {"name": "<name>", "description": "<text>", "visibility": "discoverable|private"}.',
+    bodyFlags: WORKSPACE_FIELDS
+  },
+  "workspace update": {
+    operation: apiOperations["workspaces.update"],
+    usage:
+      "workspace update <workspace-id> [--name <name>] [--description <text>] [--visibility discoverable|private] [--from <file|->]",
+    param: "collaborationWorkspaceId",
+    from: true,
+    fromShape:
+      'Workspace input must be a JSON object: {"name": "<name>", "description": "<text>", "visibility": "discoverable|private"}.',
+    bodyFlags: WORKSPACE_FIELDS
+  },
+  "workspace deletion-impact": {
+    operation: apiOperations["workspaces.deletion_impact.get"],
+    usage: "workspace deletion-impact <workspace-id>",
+    param: "collaborationWorkspaceId"
+  },
+  "workspace delete": {
+    operation: apiOperations["workspaces.delete"],
+    usage: "workspace delete <workspace-id> --confirm-name <name>",
+    param: "collaborationWorkspaceId",
+    bodyFlags: { "confirm-name": "confirmName" },
+    requiredBodyFlags: ["confirm-name"]
+  },
+  "workspace members": {
+    operation: apiOperations["workspaces.members.list"],
+    usage: "workspace members <workspace-id>",
+    param: "collaborationWorkspaceId"
+  },
+  "workspace members candidates": {
+    operation: apiOperations["workspaces.member_candidates.list"],
+    usage: "workspace members candidates <workspace-id> [--search <text>]",
+    param: "collaborationWorkspaceId",
+    queryFlags: { search: "q" }
+  },
+  "workspace members add": {
+    operation: apiOperations["workspaces.members.add"],
+    usage: "workspace members add <workspace-id> --email <address>",
+    param: "collaborationWorkspaceId",
+    bodyFlags: { email: "email" },
+    requiredBodyFlags: ["email"]
+  },
+  "workspace members role": {
+    operation: apiOperations["workspaces.members.update_role"],
+    usage: "workspace members role <workspace-id> <user-id> --role owner|admin|member",
+    param: "collaborationWorkspaceId",
+    secondParam: "userId",
+    bodyFlags: { role: "role" },
+    requiredBodyFlags: ["role"]
+  },
+  "workspace members remove": {
+    operation: apiOperations["workspaces.members.remove"],
+    usage: "workspace members remove <workspace-id> <user-id>",
+    param: "collaborationWorkspaceId",
+    secondParam: "userId"
+  },
+  "workspace members leave": {
+    operation: apiOperations["workspaces.members.leave"],
+    usage: "workspace members leave <workspace-id>",
+    param: "collaborationWorkspaceId"
+  },
+  "workspace requests": {
+    operation: apiOperations["workspaces.access_requests.list"],
+    usage: "workspace requests <workspace-id>",
+    param: "collaborationWorkspaceId"
+  },
+  "workspace requests ask": {
+    operation: apiOperations["workspaces.access_requests.create"],
+    usage: "workspace requests ask <workspace-id>",
+    param: "collaborationWorkspaceId"
+  },
+  "workspace requests approve": {
+    operation: apiOperations["workspaces.access_requests.approve"],
+    usage: "workspace requests approve <workspace-id> <user-id>",
+    param: "collaborationWorkspaceId",
+    secondParam: "userId"
+  },
+  "workspace requests decline": {
+    operation: apiOperations["workspaces.access_requests.decline"],
+    usage: "workspace requests decline <workspace-id> <user-id>",
+    param: "collaborationWorkspaceId",
+    secondParam: "userId"
+  },
   "limits show": { operation: apiOperations["usage.limits.get"], usage: "limits show" },
   "limits set": {
     operation: apiOperations["usage.limits.set"],
@@ -243,8 +404,24 @@ export function namedCommandNames(): string[] {
   return Object.keys(commands);
 }
 
+/**
+ * The command the words lead with, the longest that is one: `workspace members add` before
+ * `workspace members`, and `me` alone for `catalyst me`. The rest of argv follows it.
+ */
+function resolveCommand(
+  argv: readonly string[]
+): { command: NamedCommand; rest: readonly string[] } | undefined {
+  for (const words of [3, 2, 1]) {
+    if (argv.length < words) continue;
+    const key = argv.slice(0, words).join(" ");
+    const command = Object.hasOwn(commands, key) ? commands[key] : undefined;
+    if (command) return { command, rest: argv.slice(words) };
+  }
+  return undefined;
+}
+
 export function isNamedCommand(argv: readonly string[]): boolean {
-  return Object.hasOwn(commands, `${argv[0]} ${argv[1]}`);
+  return resolveCommand(argv) !== undefined;
 }
 
 /** `keys` and `instance`: the words that only lead named operations, for their help. */
@@ -262,12 +439,13 @@ export async function runNamedCommand(
   base: ConfigCommandOptions & { stdin?: CommandInput }
 ): Promise<number> {
   try {
-    const command = commands[`${argv[0]} ${argv[1]}`];
-    if (!command) throw new UsageError("Unknown command. See 'catalyst --help'.");
+    const resolved = resolveCommand(argv);
+    if (!resolved) throw new UsageError("Unknown command. See 'catalyst --help'.");
+    const { command } = resolved;
     let parsed;
     try {
       parsed = parseArgs({
-        args: argv.slice(2),
+        args: [...resolved.rest],
         options: {
           instance: { type: "string" },
           dir: { type: "string" },
@@ -275,7 +453,8 @@ export async function runNamedCommand(
           help: { type: "boolean", short: "h" },
           from: { type: "string" },
           sql: { type: "string" },
-          ...QUERY_FLAG_OPTIONS
+          ...QUERY_FLAG_OPTIONS,
+          ...BODY_FLAG_OPTIONS
         },
         allowPositionals: true,
         strict: true
@@ -288,22 +467,33 @@ export async function runNamedCommand(
       base.stdout?.(`Usage: catalyst ${command.usage}\n${command.operation.summary}\n`);
       return 0;
     }
-    const [name] = positionals;
-    const count = command.param ? 1 : 0;
+    const [name, second] = positionals;
+    const count = (command.param ? 1 : 0) + (command.secondParam ? 1 : 0);
     if (
       (command.optionalName ? positionals.length > 1 : positionals.length !== count) ||
       (name !== undefined && name === "") ||
+      (second !== undefined && second === "") ||
       (!command.from && values.from !== undefined) ||
       (!command.sql && values.sql !== undefined) ||
       (values.sql !== undefined && values.from !== undefined) ||
       QUERY_FLAGS.some(
         (flag) => values[flag] !== undefined && !Object.hasOwn(command.queryFlags ?? {}, flag)
       ) ||
-      (command.requiredFlags ?? []).some((flag) => !values[flag])
+      (command.requiredFlags ?? []).some((flag) => !values[flag]) ||
+      BODY_FLAGS.some(
+        (flag) => values[flag] !== undefined && !Object.hasOwn(command.bodyFlags ?? {}, flag)
+      ) ||
+      (command.requiredBodyFlags ?? []).some((flag) => !values[flag])
     ) {
       throw new UsageError(`Usage: catalyst ${command.usage}`);
     }
     let body: unknown;
+    const flagged = Object.fromEntries(
+      Object.entries(command.bodyFlags ?? {}).flatMap(([flag, field]) => {
+        const value = isBodyFlag(flag) ? values[flag] : undefined;
+        return value === undefined ? [] : [[field, value] as const];
+      })
+    );
     if (command.from) {
       const source = values.from;
       const text =
@@ -316,16 +506,32 @@ export async function runNamedCommand(
               : await readFile(resolve(base.cwd, source), "utf8");
       try {
         const input: unknown = JSON.parse(text);
-        // This is the operation's request body, not the generic call envelope.
-        body = command.operation.body?.parse(input);
+        // This is the operation's request body, not the generic call envelope. A flag sets its
+        // field over the file's.
+        body = command.operation.body?.parse(
+          Object.keys(flagged).length === 0
+            ? input
+            : { ...(isRecord(input) ? input : {}), ...flagged }
+        );
       } catch {
         throw new UsageError(command.fromShape ?? `Usage: catalyst ${command.usage}`);
       }
+    } else if (command.bodyFlags !== undefined) {
+      const checked = command.operation.body?.safeParse(flagged);
+      if (checked && !checked.success) throw new UsageError(`Usage: catalyst ${command.usage}`);
+      body = checked?.data;
     }
     const options = { ...base, instance: values.instance, dir: values.dir };
     const { api } = await openInstance(options);
     const params =
-      command.param !== undefined && name !== undefined ? { [command.param]: name } : undefined;
+      command.param !== undefined && name !== undefined
+        ? {
+            [command.param]: name,
+            ...(command.secondParam !== undefined && second !== undefined
+              ? { [command.secondParam]: second }
+              : {})
+          }
+        : undefined;
     const query: Record<string, string> = {
       ...(command.optionalName && name !== undefined ? { app: name } : {}),
       ...Object.fromEntries(
@@ -400,6 +606,14 @@ payload; operation runs show hashes of inputs, never inputs. The three feeds (au
 jobs list, operation runs) print one page, 50 entries unless --limit says otherwise (up to 200),
 with the nextCursor for --cursor. Reading another person's Operation Run by id (operation show)
 needs audit.view on the key.
+me shows you; me update, me set-model-preference and keys revoke change your own account and
+need the key's account and workspaces level: the key names account.manage. The workspace
+commands need collaboration_workspace.manage on the key, and the instance asks your role in the
+workspace exactly as the Members screen does: an Admin changes regular Members only, only an
+Owner deletes. A key that names collaboration_workspace.manage for one workspace reaches that
+workspace only and neither lists nor creates workspaces. The key catalyst setup creates carries
+neither; tick them when you issue a key in Settings > API keys. No key issues a key, changes a
+password or deletes an account.
 Lists read every page. instance workspaces shows Shared Workspaces for agent availability
 and needs config_assets:write and agent.write; it is not the membership list.
 Options: --instance <name-or-url>, --dir <working-copy-dir>, --json, --help

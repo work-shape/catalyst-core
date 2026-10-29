@@ -301,11 +301,11 @@ const cases: CommandCase[] = [
 ];
 
 describe("named CLI operation faces", () => {
-  it("reserves workspace list and lists the instance command in help", async () => {
+  it("keeps workspace list apart from the instance command in help", async () => {
     const result = await run(["--help"]);
     expect(result.code).toBe(0);
     expect(result.out).toContain("instance workspaces (instance.workspaces.list)");
-    expect(result.out).not.toContain("workspace list");
+    expect(result.out).toContain("workspace list (workspaces.list)");
   });
 
   it.each(cases)("$args calls $operation with readable output and --json", async (entry) => {
