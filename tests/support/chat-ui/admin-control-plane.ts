@@ -22,6 +22,7 @@ export {
   instanceUrl,
   isCompleteConnectCode,
   keysSharingAName,
+  personalKeyAccountOffer,
   personalKeyActionOffer,
   personalKeyDraftProblem,
   personalKeyExpiryOf,

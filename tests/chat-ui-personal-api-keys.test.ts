@@ -21,6 +21,7 @@ import {
   instanceUrl,
   isCompleteConnectCode,
   keysSharingAName,
+  personalKeyAccountOffer,
   personalKeyActionOffer,
   personalKeyDraftProblem,
   personalKeyExpiryOf,
@@ -58,6 +59,7 @@ const cliOffer = {
   actions: ["agent.read", "agent.write"],
   useActions: [],
   instanceActions: [],
+  accountActions: [],
   setupActions: [],
   workspaces: [],
   settled: true
@@ -190,6 +192,37 @@ describe("personal API key model", () => {
     expect(personalKeyRequest(draft, now)?.scopes).toEqual(["system.view"]);
     // Narrowed, a key of system.view alone has no scope left to send.
     expect(personalKeyDraftProblem({ ...draft, workspaceId: "ws-tax" })).toBe("scopes");
+    expect(personalKeyRequest({ ...draft, workspaceId: "ws-tax" }, now)).toBeUndefined();
+  });
+
+  it("offers the account and workspaces level to every person, and never in the key `catalyst setup` asks for", () => {
+    expect(personalKeyAccountOffer(undefined)).toEqual([]);
+    const context: PlatformContext = {
+      ...platformContext(),
+      authoringActions: ["agent.read"],
+      useActions: ["workflow.use"]
+    };
+    expect(personalKeyAccountOffer(context)).toEqual([
+      "account.manage",
+      "collaboration_workspace.manage"
+    ]);
+    expect(personalKeyActionOffer(context)).not.toContain("account.manage");
+    expect(setupKeyActions(context)).toEqual(["agent.read", "workflow.use"]);
+  });
+
+  it("sends account.manage only over the whole account and collaboration_workspace.manage at most narrowed to a workspace", () => {
+    const actions = ["agent.read", "account.manage", "collaboration_workspace.manage"];
+    expect(buildPersonalKeyScopes(actions, { workspaceId: "", assetName: "" })).toEqual(actions);
+    expect(buildPersonalKeyScopes(actions, { workspaceId: "ws-tax", assetName: "" })).toEqual([
+      "agent.read:ws-tax",
+      "collaboration_workspace.manage:ws-tax"
+    ]);
+    expect(
+      buildPersonalKeyScopes(actions, { workspaceId: "ws-tax", assetName: "vat-helper" })
+    ).toEqual(["agent.read:ws-tax/vat-helper"]);
+    const draft = { ...initialPersonalKeyDraft("laptop"), actions: ["account.manage"] };
+    expect(personalKeyRequest(draft, now)?.scopes).toEqual(["account.manage"]);
+    // Narrowed, a key of account.manage alone has no scope left to send.
     expect(personalKeyRequest({ ...draft, workspaceId: "ws-tax" }, now)).toBeUndefined();
   });
 
@@ -352,6 +385,38 @@ describe("You > API keys", () => {
     expect(renderConfirm("en").match(/aria-checked="true"/gu)).toBeNull();
   });
 
+  it("offers the account and workspaces level unticked, also for the key `catalyst setup` asks for", () => {
+    const render = (locale: "en" | "de") =>
+      renderToStaticMarkup(
+        createElement(
+          TranslationProvider,
+          { children: null, locale },
+          createElement(ConnectCodeConfirm, {
+            code: "BCDF-GHJK",
+            request: {
+              clientLabel: "catalyst CLI on fabian-mbp",
+              createdAt: "2026-10-13T11:58:00.000Z",
+              expiresAt: "2026-10-13T12:13:00.000Z"
+            },
+            offer: {
+              ...cliOffer,
+              accountActions: ["account.manage", "collaboration_workspace.manage"],
+              setupActions: ["agent.read", "agent.write"]
+            },
+            asksUseLevel: true,
+            pending: false,
+            onConfirm: async () => undefined
+          })
+        )
+      );
+    const english = render("en");
+    expect(english).toContain("Account and workspaces");
+    expect(english).toContain("Change your name and model preference, and revoke your keys");
+    expect(english.match(/aria-checked="true"/gu)?.length).toBe(2);
+    expect(english.match(/aria-checked="false"/gu)?.length).toBe(2);
+    expect(render("de")).toContain("Konto und Arbeitsbereiche");
+  });
+
   it("says beside connection.use alone that its results are copied to the computer that holds the key", () => {
     const english = renderConfirm("en", true);
     const copies = "The results of these calls are copied to the computer that holds the key.";
@@ -462,6 +527,17 @@ describe("You > API keys in plain words", () => {
     ]);
     expect(narrowed).toContain("Edit agents: vat-helper in Tax");
     expect(narrowed).toContain("View skills in ws-gone");
+    const account = keysTable("en", [
+      key({ scopes: ["account.manage", "collaboration_workspace.manage:ws-tax"] })
+    ]);
+    expect(account).toContain("Change your name and model preference, and revoke your keys");
+    expect(account).toContain(
+      "Create, change and delete workspaces, and manage their members and requests in Tax"
+    );
+    expect(account).not.toContain("account.manage");
+    expect(keysTable("de", [key({ scopes: ["collaboration_workspace.manage"] })])).toContain(
+      "Arbeitsbereiche anlegen, ändern und löschen"
+    );
   });
 
   // Badges of rights stacked and were cut at 390; one muted line breaks between words instead.

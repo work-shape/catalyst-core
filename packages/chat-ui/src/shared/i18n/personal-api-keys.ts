@@ -35,6 +35,12 @@ export const personalApiKeys = defineTranslations({
     "personalApiKeys.instanceLevel": "All workspaces",
     "personalApiKeys.instanceLevelHint":
       "Lets the key only read what is shared by all workspaces: usage, audit events, background jobs, Operation Runs, Modules and infrastructure, and run the read-only check of the configured providers, as catalyst models check does. It changes nothing. It works only while you hold the same right yourself, and not on a key limited to a workspace. The key that catalyst setup creates never has it.",
+    "personalApiKeys.accountLevel": "Account and workspaces",
+    "personalApiKeys.accountLevelHint":
+      "Lets the key change your own account and your workspaces, as you can on these screens. In a workspace your role there decides what it may do. It never issues a key, changes your password or deletes your account. The key that catalyst setup creates never has it.",
+    "personalApiKeys.accountManage": "Change your name and model preference, and revoke your keys",
+    "personalApiKeys.workspacesManage":
+      "Create, change and delete workspaces, and manage their members and requests",
     "personalApiKeys.workspace": "Limit to a workspace",
     "personalApiKeys.workspaceHint":
       "The key then reaches only what this workspace owns. Everywhere: wherever you hold the chosen rights.",
@@ -105,6 +111,13 @@ export const personalApiKeys = defineTranslations({
     "personalApiKeys.instanceLevel": "Alle Arbeitsbereiche",
     "personalApiKeys.instanceLevelHint":
       "Erlaubt dem Schlüssel nur, zu lesen, was alle Arbeitsbereiche gemeinsam haben: Nutzung, Audit-Ereignisse, Hintergrundaufträge, Operation Runs, Module und Infrastruktur, und die lesende Prüfung der eingerichteten Anbieter auszuführen, wie catalyst models check sie ausführt. Er ändert nichts. Das wirkt nur, solange du das gleiche Recht selbst hast, und nicht bei einem Schlüssel, der auf einen Arbeitsbereich begrenzt ist. Der Schlüssel, den catalyst setup anlegt, hat es nie.",
+    "personalApiKeys.accountLevel": "Konto und Arbeitsbereiche",
+    "personalApiKeys.accountLevelHint":
+      "Erlaubt dem Schlüssel, dein eigenes Konto und deine Arbeitsbereiche zu ändern, wie du es auf diesen Seiten kannst. In einem Arbeitsbereich entscheidet deine Rolle dort, was er darf. Er stellt nie einen Schlüssel aus, ändert nie dein Passwort und löscht nie dein Konto. Der Schlüssel, den catalyst setup anlegt, hat es nie.",
+    "personalApiKeys.accountManage":
+      "Deinen Namen und deine Modellwahl ändern und deine Schlüssel widerrufen",
+    "personalApiKeys.workspacesManage":
+      "Arbeitsbereiche anlegen, ändern und löschen, ihre Mitglieder und Anfragen verwalten",
     "personalApiKeys.workspace": "Auf einen Arbeitsbereich begrenzen",
     "personalApiKeys.workspaceHint":
       "Der Schlüssel erreicht dann nur, was diesem Arbeitsbereich gehört. Überall: überall, wo du die gewählten Berechtigungen hast.",
