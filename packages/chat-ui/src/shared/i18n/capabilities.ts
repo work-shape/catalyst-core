@@ -6,12 +6,12 @@ export const capabilities = defineTranslations({
   en: {
     "capabilities.title": "Capabilities",
     "capabilities.description":
-      "What the agents of this instance can be given, by package. You give a tool or skill to an agent on the agent's page.",
+      "What the agents can be given, by package. You give a tool or skill to an agent on the agent's page.",
     "capabilities.general": "General",
     "capabilities.generalText":
       "Skills and tools that come with every release and need no package.",
-    "capabilities.own": "This instance's tools",
-    "capabilities.ownText": "Tools that this instance adds for its own work.",
+    "capabilities.own": "Own tools",
+    "capabilities.ownText": "Tools that were added for your own work.",
     "capabilities.on": "On",
     "capabilities.off": "Not active on this instance, ask Workshape",
     "capabilities.tools": "Tools",
@@ -24,8 +24,8 @@ export const capabilities = defineTranslations({
     "capabilities.skillCountOne": "1 skill",
     "capabilities.agentCount": "{count} agents",
     "capabilities.agentCountOne": "1 agent",
-    "capabilities.empty": "The agents of this instance cannot be given anything yet.",
-    "capabilities.loadFailed": "The capabilities could not be loaded.",
+    "capabilities.empty": "The agents cannot be given anything yet.",
+    "capabilities.loadFailed": "What the agents can be given could not be loaded.",
     "capabilities.moduleApps":
       "Builds Apps in a conversation, shows them in the preview and saves them.",
     "capabilities.moduleAssetManagement":
@@ -39,12 +39,12 @@ export const capabilities = defineTranslations({
   de: {
     "capabilities.title": "Fähigkeiten",
     "capabilities.description":
-      "Was die Agenten dieser Instanz bekommen können, nach Paket. Ein Werkzeug oder einen Skill gibst du einem Agenten auf seiner Seite.",
+      "Was die Agenten bekommen können, nach Paket. Ein Werkzeug oder einen Skill gibst du einem Agenten auf seiner Seite.",
     "capabilities.general": "Allgemein",
     "capabilities.generalText":
       "Skills und Werkzeuge, die mit jedem Release kommen und kein Paket brauchen.",
-    "capabilities.own": "Werkzeuge dieser Instanz",
-    "capabilities.ownText": "Werkzeuge, die diese Instanz für ihre eigene Arbeit mitbringt.",
+    "capabilities.own": "Eigene Werkzeuge",
+    "capabilities.ownText": "Werkzeuge, die für eure eigene Arbeit hinzugefügt wurden.",
     "capabilities.on": "An",
     "capabilities.off": "Auf dieser Instanz nicht aktiv, Workshape fragen",
     "capabilities.tools": "Werkzeuge",
@@ -57,8 +57,8 @@ export const capabilities = defineTranslations({
     "capabilities.skillCountOne": "1 Skill",
     "capabilities.agentCount": "{count} Agenten",
     "capabilities.agentCountOne": "1 Agent",
-    "capabilities.empty": "Die Agenten dieser Instanz können noch nichts bekommen.",
-    "capabilities.loadFailed": "Die Fähigkeiten konnten nicht geladen werden.",
+    "capabilities.empty": "Die Agenten können noch nichts bekommen.",
+    "capabilities.loadFailed": "Was die Agenten bekommen können, konnte nicht geladen werden.",
     "capabilities.moduleApps": "Baut Apps im Chat, zeigt sie in der Vorschau und speichert sie.",
     "capabilities.moduleAssetManagement":
       "Speichert Agenten, Skills und andere Assets mit den Rechten der Person, für die er arbeitet.",
