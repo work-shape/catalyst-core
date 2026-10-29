@@ -11,6 +11,7 @@ it.each([
     "vitest.probes.config.ts",
     ["tests/probes/workflow-volume.probe.ts", "tests/workflow-worker-kill.test.ts"]
   ],
+  ["vitest.release-probes.config.ts", ["tests/release-probes/knowledge-import.probe.ts"]],
   ["vitest.records-live.config.ts", ["tests/data-store-chat.live.ts"]]
 ] as const)("%s discovers only its opt-in suite", (config, expected) => {
   const output = execFileSync(
