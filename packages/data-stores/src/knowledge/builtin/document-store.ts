@@ -273,21 +273,29 @@ export function createBuiltinDocumentStore(
           // Same lock order as fetch/removal: documents, content, then platform files. Never
           // hold a platform connection while waiting for the owned-store documents lock.
           await sql.script("lock table catalyst_kb.documents in share row exclusive mode");
-          const terminal = await sql.run(
-            "select sha256 from catalyst_kb.contents where sha256=$1::text and state <> 'pending' for update",
-            [input.contentSha256]
-          );
+          const terminal = z
+            .array(z.object({ sha256: z.string() }))
+            .parse(
+              await sql.run(
+                "select sha256 from catalyst_kb.contents where sha256=any($1::text[]) and state <> 'pending' order by sha256 for update",
+                [
+                  typeof input.contentSha256 === "string"
+                    ? [input.contentSha256]
+                    : [...input.contentSha256]
+                ]
+              )
+            );
           if (terminal.length === 0) return undefined;
           const rows = z.array(z.object({ managed_file_id: z.string() })).parse(
             await sql.run(
               // A Workflow-fed document keeps its copy: its source cannot be fetched (KBW-1).
-              `select managed_file_id from catalyst_kb.documents where content_sha256=$1::text
+              `select managed_file_id from catalyst_kb.documents where content_sha256=any($1::text[])
            and source_item_id is not null and managed_file_id > $2::text
            and not exists (select 1 from catalyst_kb.source_items i where i.id=source_item_id and i.source_id like 'workflow:%')
            and ($4::text[] is null or managed_file_id=any($4::text[]))
            order by managed_file_id limit $3::int4`,
               [
-                input.contentSha256,
+                terminal.map((row) => row.sha256),
                 input.afterFileId ?? "",
                 input.limit,
                 input.fileIds ? [...input.fileIds] : null
@@ -592,10 +600,12 @@ export function createBuiltinDocumentStore(
           );
           if (held.length === 0) return 0;
           // One writer per generation at a time keeps its count exact.
-          const live = await sql.run(
-            `select 1 as held from catalyst_kb.index_generations
+          const live = z.array(z.object({ state: z.string() })).parse(
+            await sql.run(
+              `select state from catalyst_kb.index_generations
            where generation = $1::pg_catalog.int4 and state in ('building', 'active') for update`,
-            [generation]
+              [generation]
+            )
           );
           // A generation retired meanwhile has no table any more.
           if (live.length === 0) return 0;
@@ -611,14 +621,25 @@ export function createBuiltinDocumentStore(
               { type: "text[]", value: input.vectors.map((each) => vectorText(each.vector)) }
             ]
           );
-          const [count] = z
-            .array(countRow)
-            .parse(await sql.run(`select count(*)::pg_catalog.int4 as count from ${table}`));
-          await sql.run(
-            `update catalyst_kb.index_generations set embedded_count = $2::pg_catalog.int4
+          // Only a generation being built shows its count, as the progress of a re-index, and
+          // the switch counts it again. Counting every row of the table at each write grows
+          // with the table: a write adds what it wrote to the count of a generation in use.
+          if (live[0]?.state === "building") {
+            const [count] = z
+              .array(countRow)
+              .parse(await sql.run(`select count(*)::pg_catalog.int4 as count from ${table}`));
+            await sql.run(
+              `update catalyst_kb.index_generations set embedded_count = $2::pg_catalog.int4
            where generation = $1::pg_catalog.int4`,
-            [generation, count?.count ?? 0]
-          );
+              [generation, count?.count ?? 0]
+            );
+          } else {
+            await sql.run(
+              `update catalyst_kb.index_generations set embedded_count = embedded_count + $2::pg_catalog.int4
+           where generation = $1::pg_catalog.int4`,
+              [generation, written.length]
+            );
+          }
           return written.length;
         }
       );

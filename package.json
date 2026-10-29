@@ -33,6 +33,7 @@
     "test:compatibility": "pnpm --filter '@work-shape/catalyst-postgres-store...' build && node scripts/migrations/compatibility.mjs",
     "test:tooling": "vitest run --config vitest.tooling.config.ts",
     "test:upgrade": "vitest run --config vitest.upgrade.config.ts",
+    "probe:knowledge-import": "vitest run --config vitest.release-probes.config.ts",
     "test:deployment-kit": "bash packages/deployment-kit/tests/test-deployment-kit.sh && node --test packages/deployment-kit/tests/*.test.mjs",
     "test:e2e": "node scripts/run-chat-e2e.mjs --all",
     "test:e2e:chat": "node scripts/run-chat-e2e.mjs --all",

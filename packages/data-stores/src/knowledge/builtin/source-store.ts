@@ -67,6 +67,8 @@ const itemSchema = z.object({
 });
 export type SourceItem = z.infer<typeof itemSchema>;
 const idSchema = z.object({ id: z.string() });
+const ITEM_COLUMNS =
+  "id,item_id,version,name,path,mime,size,state,attempts,document_id,origin_link,enqueued_run_id,fetch_job_id";
 
 export function sourceItemId(sourceId: string, itemId: string): string {
   return `kbitem_${createHash("sha256")
@@ -190,17 +192,42 @@ export function createSourceStore(
         const queued: string[] = [];
         let limited = false;
         let changed = false;
-        for (const raw of items) {
-          const item = documentSourceItemSchema.parse(raw);
-          const id = sourceItemId(payload.sourceId, item.id);
-          const [old] = z
+        // One read, one write per statement for the whole page: the lock above is held for
+        // the page, so every statement saved here shortens the wait of the fetches behind it.
+        // An item listed twice in a page keeps its last listing.
+        const listed = [
+          ...new Map(
+            items.map((raw) => {
+              const item = documentSourceItemSchema.parse(raw);
+              return [item.id, item] as const;
+            })
+          ).values()
+        ];
+        const olds = new Map(
+          z
             .array(itemSchema)
             .parse(
               await sql.run(
-                "select id, item_id, version, name, path, mime, size, state, attempts, document_id, origin_link, enqueued_run_id, fetch_job_id from catalyst_kb.source_items where id = $1::text",
-                [id]
+                `select ${ITEM_COLUMNS} from catalyst_kb.source_items where id = any($1::text[])`,
+                [listed.map((item) => sourceItemId(payload.sourceId, item.id))]
               )
-            );
+            )
+            .map((row) => [row.id, row])
+        );
+        const rows: {
+          id: string;
+          item: DocumentSourceItem;
+          failure: string | null;
+        }[] = [];
+        const renamed: { document: string; name: string; link: string }[] = [];
+        let discovered = 0;
+        let moved = 0;
+        let skipped = 0;
+        let changedCount = 0;
+        let failed = 0;
+        for (const item of listed) {
+          const id = sourceItemId(payload.sourceId, item.id);
+          const old = olds.get(id);
           if ((!old || old.state === "withdrawn") && held >= maxDocuments) {
             limited = true;
             break;
@@ -217,58 +244,72 @@ export function createSourceStore(
                   : null;
           const same = old?.version === item.version && old.state !== "withdrawn";
           changed ||= !same || old?.name !== item.name || old.path !== item.path;
-          await sql.run(
-            `insert into catalyst_kb.source_items
-            (id, source_id, item_id, version, path, name, mime, size, modified_at, origin_link, state, failure_code, parents, seen_run_id)
-            values ($1::text,$2::text,$3::text,$4::text,$5::text,$6::text,$7::text,$8::bigint,$9::timestamptz,$10::text,$11::text,$12::text,$14::jsonb,$15::text)
-            on conflict (source_id,item_id) do update set parents=excluded.parents, seen_run_id=excluded.seen_run_id,withdrawn_at=null,purged_at=null,version=excluded.version, path=excluded.path, name=excluded.name, mime=excluded.mime, size=excluded.size, modified_at=excluded.modified_at, origin_link=excluded.origin_link,
-            state=case when $13::boolean then source_items.state else excluded.state end,
-            failure_code=case when $13::boolean then source_items.failure_code else excluded.failure_code end,
-            attempts=case when $13::boolean then source_items.attempts else 0 end,
-            enqueued_run_id=case when $13::boolean then source_items.enqueued_run_id else null end,
-            fetch_job_id=case when $13::boolean and source_items.enqueued_run_id=$15::text then source_items.fetch_job_id else null end,
-            changed_at=case when source_items.version <> excluded.version or source_items.path <> excluded.path or source_items.name <> excluded.name then now() else source_items.changed_at end`,
-            [
-              id,
-              payload.sourceId,
-              item.id,
-              item.version,
-              item.path,
-              item.name,
-              item.mime,
-              // A source that lists no size keeps 0; the fetch's bytes decide (CS-16).
-              item.size ?? 0,
-              item.modifiedAt,
-              item.originLink ?? null,
-              failure ? "failed" : "discovered",
-              failure,
-              same,
-              JSON.stringify(item.parents),
-              payload.syncRunId
-            ]
-          );
+          rows.push({ id, item, failure });
           if (old?.document_id && same)
-            await sql.run(
-              "update catalyst_kb.documents set title=$2::text,file_name=$2::text,origin_link=$3::text where id=$1::text",
-              [old.document_id, item.name, item.originLink ?? null]
-            );
+            renamed.push({
+              document: old.document_id,
+              name: item.name,
+              link: item.originLink ?? ""
+            });
           if (
             (!same && !failure) ||
             (same && old.state === "discovered" && old.enqueued_run_id !== payload.syncRunId)
           )
             queued.push(id);
+          if (!old) discovered++;
+          if (old && !same) changedCount++;
+          if (same && old && (old.name !== item.name || old.path !== item.path)) moved++;
+          if (same) skipped++;
+          if (!same && failure) failed++;
+        }
+        if (rows.length) {
+          const column = <T>(pick: (row: (typeof rows)[number]) => T) => rows.map(pick);
+          // Whether the stored row holds this version is read from the row itself, so the
+          // statement needs no flag per item.
           await sql.run(
-            `update catalyst_kb.sync_runs set discovered=discovered+$2::int, changed=changed+$3::int, moved=moved+$4::int, skipped=skipped+$5::int, failed=failed+$6::int where id=$1::text`,
+            `insert into catalyst_kb.source_items
+            (id, source_id, item_id, version, path, name, mime, size, modified_at, origin_link, state, failure_code, parents, seen_run_id)
+            select v.id,$1::text,v.item,v.version,v.path,v.name,v.mime,v.size,v.modified::timestamptz,nullif(v.link,''),case when v.failure<>'' then 'failed' else 'discovered' end,nullif(v.failure,''),v.parents::jsonb,$2::text
+            from unnest($3::text[],$4::text[],$5::text[],$6::text[],$7::text[],$8::text[],$9::bigint[],$10::text[],$11::text[],$12::text[],$13::text[]) as v(id,item,version,path,name,mime,size,modified,link,failure,parents)
+            on conflict (source_id,item_id) do update set parents=excluded.parents, seen_run_id=excluded.seen_run_id,withdrawn_at=null,purged_at=null,version=excluded.version, path=excluded.path, name=excluded.name, mime=excluded.mime, size=excluded.size, modified_at=excluded.modified_at, origin_link=excluded.origin_link,
+            state=case when source_items.version=excluded.version and source_items.state<>'withdrawn' then source_items.state else excluded.state end,
+            failure_code=case when source_items.version=excluded.version and source_items.state<>'withdrawn' then source_items.failure_code else excluded.failure_code end,
+            attempts=case when source_items.version=excluded.version and source_items.state<>'withdrawn' then source_items.attempts else 0 end,
+            enqueued_run_id=case when source_items.version=excluded.version and source_items.state<>'withdrawn' then source_items.enqueued_run_id else null end,
+            fetch_job_id=case when source_items.version=excluded.version and source_items.state<>'withdrawn' and source_items.enqueued_run_id=excluded.seen_run_id then source_items.fetch_job_id else null end,
+            changed_at=case when source_items.version <> excluded.version or source_items.path <> excluded.path or source_items.name <> excluded.name then now() else source_items.changed_at end`,
             [
+              payload.sourceId,
               payload.syncRunId,
-              old ? 0 : 1,
-              old && !same ? 1 : 0,
-              same && old && (old.name !== item.name || old.path !== item.path) ? 1 : 0,
-              same ? 1 : 0,
-              !same && failure ? 1 : 0
+              column((row) => row.id),
+              column((row) => row.item.id),
+              column((row) => row.item.version),
+              column((row) => row.item.path),
+              column((row) => row.item.name),
+              column((row) => row.item.mime),
+              // A source that lists no size keeps 0; the fetch's bytes decide (CS-16).
+              column((row) => row.item.size ?? 0),
+              column((row) => row.item.modifiedAt),
+              column((row) => row.item.originLink ?? ""),
+              column((row) => row.failure ?? ""),
+              column((row) => JSON.stringify(row.item.parents))
             ]
           );
         }
+        if (renamed.length)
+          await sql.run(
+            `update catalyst_kb.documents d set title=v.name,file_name=v.name,origin_link=nullif(v.link,'')
+            from unnest($1::text[],$2::text[],$3::text[]) as v(id,name,link) where d.id=v.id`,
+            [
+              renamed.map((row) => row.document),
+              renamed.map((row) => row.name),
+              renamed.map((row) => row.link)
+            ]
+          );
+        await sql.run(
+          `update catalyst_kb.sync_runs set discovered=discovered+$2::int, changed=changed+$3::int, moved=moved+$4::int, skipped=skipped+$5::int, failed=failed+$6::int where id=$1::text`,
+          [payload.syncRunId, discovered, changedCount, moved, skipped, failed]
+        );
         const cursor = JSON.stringify({ ...progress, complete: progress.complete || limited });
         await sql.run("update catalyst_kb.sync_runs set cursor_after=$2::text where id=$1::text", [
           payload.syncRunId,
@@ -384,18 +425,38 @@ export function createSourceStore(
         );
       });
     },
-    async claim(id: string, sourceId: string, jobId: string) {
-      return change(
-        async (sql) =>
-          z.array(itemSchema).parse(
-            await sql.run(
-              `update catalyst_kb.source_items set fetch_job_id=$3::text
-         where id=$1::text and source_id=$2::text and state='discovered'
+    /**
+     * Takes a group of items for one fetch job in one statement, those still waiting to be
+     * fetched that no other job holds. Answered in the order of `ids`. No document lock: the
+     * claim writes only the items' own rows, and everything that decides on them re-reads
+     * them under its own lock (`fetchedMany`).
+     */
+    async claimMany(ids: readonly string[], sourceId: string, jobId: string) {
+      return change(async (sql) => {
+        const rows = z.array(itemSchema).parse(
+          await sql.run(
+            `update catalyst_kb.source_items set fetch_job_id=$3::text
+         where id=any($1::text[]) and source_id=$2::text and state='discovered'
            and (fetch_job_id is null or fetch_job_id=$3::text)
-         returning id,item_id,version,name,path,mime,size,state,attempts,document_id,origin_link,enqueued_run_id,fetch_job_id`,
-              [id, sourceId, jobId]
+         returning ${ITEM_COLUMNS}`,
+            [[...ids], sourceId, jobId]
+          )
+        );
+        const order = new Map(ids.map((id, index) => [id, index]));
+        return rows.sort((left, right) => (order.get(left.id) ?? 0) - (order.get(right.id) ?? 0));
+      });
+    },
+    /** The items of a group as they stand, for those a batch finds fetched already. */
+    async items(ids: readonly string[], sourceId: string) {
+      return change(async (sql) =>
+        z
+          .array(itemSchema)
+          .parse(
+            await sql.run(
+              `select ${ITEM_COLUMNS} from catalyst_kb.source_items where id=any($1::text[]) and source_id=$2::text`,
+              [[...ids], sourceId]
             )
-          )[0]
+          )
       );
     },
     async release(ids: string[], jobId: string) {
@@ -427,19 +488,6 @@ export function createSourceStore(
         );
         if (ended) await settleSourceSync(stores, runtime, payload, syncResult(ended), true);
       });
-    },
-    async item(id: string, sourceId: string) {
-      return change(
-        async (sql) =>
-          z
-            .array(itemSchema)
-            .parse(
-              await sql.run(
-                "select id,item_id,version,name,path,mime,size,state,attempts,document_id,origin_link,enqueued_run_id,fetch_job_id from catalyst_kb.source_items where id=$1::text and source_id=$2::text",
-                [id, sourceId]
-              )
-            )[0]
-      );
     },
     async failure(payload: KnowledgeSyncJobPayload, item: SourceItem, code: string | undefined) {
       return change(async (sql) => {
@@ -526,6 +574,141 @@ export function createSourceStore(
           [payload.syncRunId, held.document_id ? 0 : 1, byteSize]
         );
         return true;
+      });
+    },
+    /**
+     * Adopts a group of fetched copies in one transaction: each item whose version and claim
+     * are still the fetch job's gets its document and turns `fetched`, in the same statements
+     * for all. Answers the ids of the items it adopted; the others keep their state and the
+     * caller releases their copies. Same checks, in the same lock order, as one item alone:
+     * the documents, the contents of the new and of the former documents (by hash), the items.
+     */
+    async fetchedMany(
+      payload: KnowledgeSyncJobPayload,
+      entries: readonly {
+        item: SourceItem;
+        document: KnowledgeFetchedDocument;
+        byteSize: number;
+      }[],
+      jobId: string
+    ): Promise<Set<string>> {
+      if (!entries.length) return new Set();
+      return change(async (sql) => {
+        await sql.run("lock table catalyst_kb.documents in share row exclusive mode");
+        const itemIds = entries.map((entry) => entry.item.id);
+        // Content completion updates open-change projections on its items. Lock both
+        // hashes before the item, matching the indexer's content -> item order.
+        await sql.run(
+          "select sha256 from catalyst_kb.contents where sha256=any($1::text[]) or sha256 in (select d.content_sha256 from catalyst_kb.documents d where d.source_item_id=any($2::text[])) order by sha256 for share",
+          [[...new Set(entries.map((entry) => entry.document.contentSha256))], itemIds]
+        );
+        const held = new Map(
+          z
+            .array(itemSchema)
+            .parse(
+              await sql.run(
+                `select ${ITEM_COLUMNS} from catalyst_kb.source_items where id=any($1::text[]) order by id for update`,
+                [itemIds]
+              )
+            )
+            .map((row) => [row.id, row])
+        );
+        const adoptable = entries.filter((entry) => {
+          const row = held.get(entry.item.id);
+          return (
+            row !== undefined &&
+            row.version === entry.item.version &&
+            row.state === "discovered" &&
+            row.fetch_job_id === jobId
+          );
+        });
+        if (!adoptable.length) return new Set();
+        const active = await sql.run(
+          "select id from catalyst_kb.sync_runs where id=$1::text and state='running'",
+          [payload.syncRunId]
+        );
+        if (!active.length) return new Set();
+        // A cleanup that won before this transaction must never be given a new document.
+        const copies = new Map(
+          (
+            await stores.files.listOwnedManagedFilesById({
+              clientInstanceId: runtime.clientInstanceId,
+              owner: { kind: "knowledge_base", id: payload.knowledgeBaseId },
+              fileIds: adoptable.map((entry) => asManagedFileId(entry.document.fileId))
+            })
+          ).map((copy) => [copy.id as string, copy])
+        );
+        for (const entry of adoptable) {
+          const copy = copies.get(entry.document.fileId);
+          if (!copy || copy.status === "deleted")
+            throw new AppError("CONFLICT", "The source copy was released before its handoff");
+        }
+        const column = <T>(pick: (entry: (typeof adoptable)[number]) => T) => adoptable.map(pick);
+        await sql.run(
+          "insert into catalyst_kb.contents (sha256,format) select * from unnest($1::text[],$2::text[]) on conflict(sha256) do nothing",
+          [
+            column((entry) => entry.document.contentSha256),
+            column((entry) => entry.document.format)
+          ]
+        );
+        await sql.run(
+          "update catalyst_kb.contents set state='pending',failure_code=null,chunking_revision=null where sha256=any($1::text[]) and state='failed'",
+          [column((entry) => entry.document.contentSha256)]
+        );
+        await sql.run(
+          `insert into catalyst_kb.documents (id,managed_file_id,content_sha256,title,file_name,origin_link,source_item_id)
+          select v.id,v.file,v.sha,v.name,v.name,nullif(v.link,''),v.item
+          from unnest($1::text[],$2::text[],$3::text[],$4::text[],$5::text[],$6::text[]) as v(id,file,sha,name,link,item)
+          on conflict (source_item_id) where source_item_id is not null do update set managed_file_id=excluded.managed_file_id,content_sha256=excluded.content_sha256,title=excluded.title,file_name=excluded.file_name,origin_link=excluded.origin_link,withdrawn_at=null`,
+          [
+            column((entry) => entry.document.id),
+            column((entry) => entry.document.fileId),
+            column((entry) => entry.document.contentSha256),
+            column((entry) => held.get(entry.item.id)?.name ?? entry.item.name),
+            column((entry) => entry.document.originLink ?? ""),
+            column((entry) => entry.item.id)
+          ]
+        );
+        await sql.run(
+          `update catalyst_kb.source_items i set state='fetched',fetch_job_id=null,attempts=i.attempts+1,failure_code=null,document_id=v.document,fetched_at=now(),changed_at=now(),withdrawn_at=null,purged_at=null
+          from unnest($1::text[],$2::text[]) as v(id,document) where i.id=v.id`,
+          [column((entry) => entry.item.id), column((entry) => entry.document.id)]
+        );
+        await sql.run(
+          "update catalyst_kb.sync_runs set added=added+$2::int,bytes_fetched=bytes_fetched+$3::bigint where id=$1::text",
+          [
+            payload.syncRunId,
+            adoptable.filter((entry) => !held.get(entry.item.id)?.document_id).length,
+            adoptable.reduce((sum, entry) => sum + entry.byteSize, 0)
+          ]
+        );
+        return new Set(adoptable.map((entry) => entry.item.id));
+      });
+    },
+    /** What the index job needs of each item's document, by item id, in one query. */
+    async indexPayloads(ids: readonly string[]) {
+      return change(async (sql) => {
+        const rows = z
+          .array(
+            z.object({
+              source_item_id: z.string(),
+              content_sha256: z.string(),
+              managed_file_id: z.string(),
+              state: z.enum(KNOWLEDGE_CONTENT_STATES)
+            })
+          )
+          .parse(
+            await sql.run(
+              "select d.source_item_id,d.content_sha256,d.managed_file_id,c.state from catalyst_kb.documents d join catalyst_kb.contents c on c.sha256=d.content_sha256 where d.source_item_id=any($1::text[]) and d.withdrawn_at is null",
+              [[...ids]]
+            )
+          );
+        return new Map(
+          rows.map((row) => [
+            row.source_item_id,
+            { contentSha256: row.content_sha256, fileId: row.managed_file_id, state: row.state }
+          ])
+        );
       });
     },
     async indexPayload(id: string) {

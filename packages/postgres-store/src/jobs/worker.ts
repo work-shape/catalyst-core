@@ -318,6 +318,12 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
         clearInterval(heartbeat);
         active.delete(row.id);
         noteIdle();
+        // A slot is free: look for due work now, not at the next second. A kind with a backlog
+        // would otherwise start no more than its slots a second.
+        if (!stopping) {
+          passRequested = true;
+          wake?.();
+        }
       });
     active.set(row.id, {
       lease,

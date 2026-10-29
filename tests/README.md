@@ -14,6 +14,14 @@ suite starts its own.
   previous and the oldest supported release, run against this commit's schema.
 - `pnpm --filter @work-shape/catalyst-workflows probes` (`vitest.probes.config.ts`): the Workflow
   engine's probes in `tests/probes/` and the killed-worker test, one at a time.
+- `pnpm probe:knowledge-import` (`vitest.release-probes.config.ts`, `tests/release-probes/`): the
+  Knowledge Base import probe, on demand and in no check. It takes 10,000 fixture items from
+  publish to `indexed` with the knowledge worker as a process of its own and a stub embedding
+  provider, and holds it to 120 seconds; it records the machine's CPU count, the profile per
+  stage and the rows left after a worker is killed and started again. `KNOWLEDGE_PROBE_FLAT_ITEMS=100000`
+  also holds the rate per item at 100,000 items to at most 25 percent below the 10,000 run. Run
+  `pnpm build` first and name a disposable Postgres in `POSTGRES_STORE_TEST_DATABASE_URL`; the
+  options are listed at the top of the probe.
 - `pnpm exec vitest run --config vitest.records-live.config.ts`: `tests/data-store-chat.live.ts`,
   real-model journeys through the authenticated Opus CLI. Opt-in only.
 - `pnpm test:e2e` and `pnpm test:e2e:chat-state` (`playwright.config.ts`, started by

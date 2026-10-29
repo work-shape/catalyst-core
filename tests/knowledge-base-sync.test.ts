@@ -62,9 +62,9 @@ describe("initial and full source import (KB 72, 73)", () => {
     const ids = payloads.flatMap((payload) => payload.sourceItemIds);
     expect(new Set(ids).size).toBe(101);
     expect(listCalls).toBe(3);
-    // Park the normal queue, then start two identical batches together. Hold their
-    // streams until both handlers reach fetch: the claim must let them fetch different
-    // items, and removing the claim predicate must produce duplicate calls.
+    // Park the normal queue, then start two identical batches together. Hold the first
+    // stream until released: the claim must let the batches fetch each item once between
+    // them, and removing the claim predicate must produce duplicate calls.
     await world.platform`update platform_jobs set run_after=now()+interval '1 day' where kind='knowledge_base.fetch' and status='queued'`;
     const first = required(payloads.find((batch) => batch.sourceItemIds.length >= 4));
     const payload = { ...first, sourceItemIds: first.sourceItemIds.slice(0, 4) };
@@ -74,13 +74,14 @@ describe("initial and full source import (KB 72, 73)", () => {
     const racing = world.worker.runDue();
     try {
       await eventually(() =>
-        expect([...calls.values()].reduce((sum, n) => sum + n, 0)).toBeGreaterThanOrEqual(2)
+        expect([...calls.values()].reduce((sum, n) => sum + n, 0)).toBeGreaterThanOrEqual(1)
       );
-      expect(calls.size).toBe(2);
     } finally {
       unblock();
       await racing;
     }
+    expect(calls.size).toBe(4);
+    expect([...calls.values()].every((n) => n === 1)).toBe(true);
     await world.drain(run);
     expect(calls.size).toBe(101);
     expect([...calls.values()].every((n) => n === 1)).toBe(true);
@@ -123,7 +124,11 @@ describe("initial and full source import (KB 72, 73)", () => {
         failure_code: "knowledge_fetch_failed",
         attempts: knowledgeFetchJob.maxAttempts
       },
-      { state: "failed", failure_code: "knowledge_fetch_failed", attempts: 0 }
+      {
+        state: "failed",
+        failure_code: "knowledge_fetch_failed",
+        attempts: knowledgeFetchJob.maxAttempts
+      }
     ]);
     expect(
       await world.platform`select count(*)::int as n from managed_files where owner_id=${world.record.id}`

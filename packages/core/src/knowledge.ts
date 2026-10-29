@@ -21,7 +21,7 @@ import type { DataStoreRecordsStore, DataStoreRows, DataStoreStatement } from ".
 import { z } from "zod";
 import type { AuthenticatedIdentity } from "./identity";
 import type { AgentRunId, ClientInstanceId, ConversationId } from "./ids";
-import { defineJobKind, subjectDedupeKey, type JobsStore } from "./jobs";
+import { defineJobKind, subjectDedupeKey, type Job, type JobsStore } from "./jobs";
 import type { ObjectStorage } from "./object-storage";
 import type { ActorAccess } from "./permissions";
 import type { ISODateString } from "./time";
@@ -605,7 +605,7 @@ export const knowledgeIndexJob = defineJobKind({
   maxAttempts: 5,
   backoff: { baseMs: 10_000, maxMs: 10 * 60_000 },
   leaseMs: 2 * 60_000,
-  concurrency: { global: 4 }
+  concurrency: { global: 64 }
 });
 
 /** The extract job. Its worker's slots bound how many convert at once. */
@@ -623,13 +623,13 @@ export const knowledgeExtractJob = defineJobKind({
  * queued takes it instead; without, a second job is queued, which finds the work done or does
  * it again to the same result. A job that hands work back to the index job queues without
  * `dedupe`, because the index job that asked may not have ended yet; so does an index job that
- * waits, with `runAfter`.
+ * waits, with `runAfter`. Answers the job queued, or with `dedupe` the one that took it.
  */
 export function enqueueKnowledgeIndex(
   jobs: Pick<JobsStore, "enqueue">,
   payload: KnowledgeContentJobPayload,
   options: { clientInstanceId: ClientInstanceId; dedupe?: boolean; runAfter?: Date }
-): Promise<unknown> {
+): Promise<Job<KnowledgeContentJobPayload>> {
   return jobs.enqueue(knowledgeIndexJob, payload, {
     clientInstanceId: options.clientInstanceId,
     subject: payload.knowledgeBaseId,
@@ -931,7 +931,8 @@ export interface KnowledgeDocumentStore {
    * removal cannot change the decision mid-delete. Returns the last file id of a full page. */
   releaseOriginalPage(
     input: {
-      contentSha256: string;
+      /** One content, or several released in the same pass. */
+      contentSha256: string | readonly string[];
       fileIds?: readonly string[];
       afterFileId?: string;
       limit: number;

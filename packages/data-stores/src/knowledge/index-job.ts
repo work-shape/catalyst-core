@@ -41,7 +41,7 @@ import {
   type KnowledgeBaseDefinition
 } from "./definition";
 import type { KnowledgeRuntime } from "./runtime";
-import { releaseSyncedOriginals, enqueueOriginalRelease } from "./original-release";
+import { createOriginalReleaser, enqueueOriginalRelease } from "./original-release";
 
 // `knowledge_base.index`: one content of a Knowledge Base on the built-in backend, from its
 // bytes to its passages in the store the Knowledge Base owns. Spec: Embeddings and documents on
@@ -262,6 +262,7 @@ export function createKnowledgeIndexJobHandler(
   input: KnowledgeIndexJobInput
 ): RegisteredJobHandler {
   const { files, auditRecorder, embedding, embed } = input;
+  const releaseOriginals = createOriginalReleaser(runtime);
 
   async function audit(
     payload: KnowledgeContentJobPayload,
@@ -269,9 +270,12 @@ export function createKnowledgeIndexJobHandler(
     correlationId: string,
     outcome:
       | { chunks?: number; pages?: number; embedded?: number }
-      | { code: KnowledgeDocumentFailureCode }
+      | { code: KnowledgeDocumentFailureCode },
+    /** The job read the content as synced: no need to read it again to know. */
+    synced = false
   ): Promise<void> {
     // Synced content is audited by its sync run, never once per document/content.
+    if (synced) return;
     const found = await indexTargetOf(runtime, payload.knowledgeBaseId);
     if ((await found?.store.readContent(payload.contentSha256))?.synced) return;
     const failed = "code" in outcome;
@@ -440,7 +444,7 @@ export function createKnowledgeIndexJobHandler(
 
   return defineJobHandler({
     kind: knowledgeIndexJob,
-    slots: 2,
+    slots: 32,
     async run(job, control) {
       const { payload } = job;
       const { signal } = control;
@@ -526,7 +530,7 @@ export function createKnowledgeIndexJobHandler(
               },
               signal
             );
-            await audit(payload, target, job.correlationId, { code: pages.code });
+            await audit(payload, target, job.correlationId, { code: pages.code }, content.synced);
             return;
           }
           let output: KnowledgeProcessorOutput;
@@ -555,7 +559,7 @@ export function createKnowledgeIndexJobHandler(
                 ? "knowledge_file_too_many_pages"
                 : "knowledge_processor_output_invalid";
             await store.failContent({ contentSha256: payload.contentSha256, code }, signal);
-            await audit(payload, target, job.correlationId, { code });
+            await audit(payload, target, job.correlationId, { code }, content.synced);
             return;
           }
           const chunks = chunkKnowledgeText({
@@ -574,7 +578,13 @@ export function createKnowledgeIndexJobHandler(
               { contentSha256: payload.contentSha256, code: "knowledge_text_empty" },
               signal
             );
-            await audit(payload, target, job.correlationId, { code: "knowledge_text_empty" });
+            await audit(
+              payload,
+              target,
+              job.correlationId,
+              { code: "knowledge_text_empty" },
+              content.synced
+            );
             return;
           }
           await store.writeChunks(
@@ -593,7 +603,7 @@ export function createKnowledgeIndexJobHandler(
           );
           written = { chunks: chunks.length, pages: pages.pages.length };
           if (!semantic) {
-            await audit(payload, target, job.correlationId, written);
+            await audit(payload, target, job.correlationId, written, content.synced);
             return;
           }
         }
@@ -606,7 +616,13 @@ export function createKnowledgeIndexJobHandler(
             { contentSha256: payload.contentSha256, code: "knowledge_index_failed" },
             signal
           );
-          await audit(payload, target, job.correlationId, { code: "knowledge_index_failed" });
+          await audit(
+            payload,
+            target,
+            job.correlationId,
+            { code: "knowledge_index_failed" },
+            content.synced
+          );
           return;
         }
         await store.completeContent(
@@ -614,16 +630,22 @@ export function createKnowledgeIndexJobHandler(
           signal
         );
         if (written || (embedded?.vectors ?? 0) > 0 || content.state !== "extracted") {
-          await audit(payload, target, job.correlationId, {
-            ...written,
-            ...(embedded ? { embedded: embedded.vectors } : {})
-          });
+          await audit(
+            payload,
+            target,
+            job.correlationId,
+            {
+              ...written,
+              ...(embedded ? { embedded: embedded.vectors } : {})
+            },
+            content.synced
+          );
         }
       };
       await indexContent();
       // A successful extraction result and terminal state are already committed.
       // Release and its deletion job commit together before this index attempt settles.
-      await releaseSyncedOriginals(runtime, payload, store, signal);
+      await releaseOriginals(payload, store, signal);
     },
     async onExhausted(job, stores) {
       const { payload } = job;

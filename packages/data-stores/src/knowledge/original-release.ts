@@ -35,9 +35,12 @@ const deleteOriginalsJob = defineJobKind({
 /** Marking and queuing deletion commit together, after terminal content commits. Readers see
  * the source notice immediately. A killed worker leaves both bytes and the job that deletes
  * them. Released files are skipped here: only their durable deletion job ever repeats I/O. */
-export async function releaseSyncedOriginals(
+async function releaseSyncedOriginals(
   runtime: KnowledgeRuntime,
-  payload: KnowledgeContentJobPayload & { fileIds?: string[] },
+  payload: Pick<KnowledgeContentJobPayload, "knowledgeBaseId"> & {
+    contentSha256: string | readonly string[];
+    fileIds?: string[];
+  },
   store: KnowledgeDocumentStore,
   signal?: AbortSignal
 ): Promise<void> {
@@ -99,6 +102,83 @@ export async function releaseSyncedOriginals(
       signal
     );
   } while (afterFileId !== undefined);
+}
+
+/** Contents per pass of the releaser below. */
+const RELEASE_CONTENTS = 200;
+
+/**
+ * Releases the originals of the contents it is asked for, together. Index jobs that end close
+ * together would each take the documents lock and a platform transaction to release one
+ * content; with many sharing a pass they take one. A pass starts at once when none runs, so a
+ * single content waits no longer than it did; the contents asked for while a pass runs go in
+ * the next. A pass that fails fails every job waiting on it, which settles by its own retry.
+ */
+export function createOriginalReleaser(runtime: KnowledgeRuntime) {
+  interface Waiting {
+    store: KnowledgeDocumentStore;
+    waiters: Map<string, { resolve: () => void; reject: (error: unknown) => void }[]>;
+  }
+  const waiting = new Map<string, Waiting>();
+  let running = false;
+
+  async function pass(): Promise<void> {
+    try {
+      await drain();
+    } finally {
+      // No await between the last look at `waiting` and here: nothing asked slips past.
+      running = false;
+    }
+  }
+
+  async function drain(): Promise<void> {
+    // Contents asked for in the same turn go in the same pass.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    for (;;) {
+      const first = waiting.entries().next();
+      if (first.done) return;
+      const [knowledgeBaseId, group] = first.value;
+      const taken = [...group.waiters.entries()].slice(0, RELEASE_CONTENTS);
+      for (const [sha] of taken) group.waiters.delete(sha);
+      if (group.waiters.size === 0) waiting.delete(knowledgeBaseId);
+      try {
+        await releaseSyncedOriginals(
+          runtime,
+          { knowledgeBaseId, contentSha256: taken.map(([sha]) => sha) },
+          group.store
+        );
+        for (const [, each] of taken) for (const waiter of each) waiter.resolve();
+      } catch (error) {
+        for (const [, each] of taken) for (const waiter of each) waiter.reject(error);
+      }
+    }
+  }
+
+  return function release(
+    payload: Pick<KnowledgeContentJobPayload, "knowledgeBaseId" | "contentSha256">,
+    store: KnowledgeDocumentStore,
+    signal?: AbortSignal
+  ): Promise<void> {
+    signal?.throwIfAborted();
+    const outcome = new Promise<void>((resolve, reject) => {
+      const group = waiting.get(payload.knowledgeBaseId) ?? { store, waiters: new Map() };
+      waiting.set(payload.knowledgeBaseId, group);
+      group.waiters.set(payload.contentSha256, [
+        ...(group.waiters.get(payload.contentSha256) ?? []),
+        { resolve, reject }
+      ]);
+    });
+    if (!running) {
+      running = true;
+      pass().catch((error: unknown) =>
+        runtime.logger.warn(
+          { errorName: error instanceof Error ? error.name : "unknown" },
+          "Releasing originals together failed"
+        )
+      );
+    }
+    return outcome;
+  };
 }
 
 /** Exhausted index settlement already holds a platform connection. Queue a separate pass
