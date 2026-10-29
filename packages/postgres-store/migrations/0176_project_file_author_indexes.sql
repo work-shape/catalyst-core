@@ -1,0 +1,3 @@
+-- A person's deletion clears them as author of every project file version and file (PRJ-2). Without these indexes each deletion scans both tables whole. Built without blocking writes.
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "project_file_versions_by_user_idx" ON "project_file_versions" USING btree ("client_instance_id","by_user_id") WHERE "project_file_versions"."by_user_id" is not null;--> statement-breakpoint
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "project_files_updated_by_idx" ON "project_files" USING btree ("client_instance_id","updated_by_user_id") WHERE "project_files"."updated_by_user_id" is not null;
