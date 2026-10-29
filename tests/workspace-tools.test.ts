@@ -30,6 +30,13 @@ describe("workspace tools", () => {
     const execTool = harness.tools.find((tool) => tool.name === "workspace.exec");
 
     expect(execTool?.description).toContain("Bash command from /workspace");
+    expect(execTool?.description).toContain("no outbound network or DNS access");
+    expect(execTool?.description).toContain("public websites, APIs, or private services");
+    expect(execTool?.description).toContain("use an available web tool");
+    expect(execTool?.description).toContain("ask for an upload and use workspace.import_files");
+    expect(execTool?.description).toContain(
+      "retrying a network request here will not enable access"
+    );
     expect(execTool?.description).toContain("Each call starts in /workspace");
     expect(execTool?.description).toContain("Files created or changed under /workspace persist");
     expect(execTool?.description).toContain(
