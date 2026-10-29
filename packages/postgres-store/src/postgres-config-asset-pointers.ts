@@ -320,6 +320,24 @@ export async function unpublishConfigAsset(
   });
 }
 
+/**
+ * The name a person gave an asset, on its row. The lock of every write of the asset is taken
+ * first, so a write of a revision that read the row before sees it after.
+ */
+export async function setConfigAssetPersonTitle(
+  db: PostgresConnection,
+  input: Parameters<ConfigAssetStore["setConfigAssetPersonTitle"]>[0]
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await lockConfigAssetWrites(tx, input.clientInstanceId);
+    const asset = await lockAuthorizedAsset(tx, input);
+    await tx
+      .update(configAssets)
+      .set({ personTitle: input.title, updatedAt: new Date(input.updatedAt) })
+      .where(eq(configAssets.id, asset.id));
+  });
+}
+
 export async function removeConfigAsset(
   db: PostgresConnection,
   input: Parameters<ConfigAssetStore["removeConfigAsset"]>[0]

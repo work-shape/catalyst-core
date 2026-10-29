@@ -125,7 +125,7 @@ function draftGuardrailWarning(guardrail: GuardrailAnswer, event: OperationBefor
 
 /** What a save answers about its App, where the App's draft was not written. */
 export const draftNotWritten = (
-  app: { name: string; title: string },
+  app: { name: string; title: string; nameSetByPerson?: true },
   message: string
 ): AppSaved => ({
   kind: "app",

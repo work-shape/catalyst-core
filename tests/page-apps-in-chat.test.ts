@@ -988,6 +988,46 @@ describe("app.save in a conversation", () => {
     expect(await stored("quick-quote")).toMatchObject({ revision: 2 });
   });
 
+  // T34: the agent named the App, a person renamed it, and the agent's later save changed the
+  // name back. A name a person gave stands over every later save, and the save says so.
+  it("keeps the name a person gave over the agent's later saves, and tells the agent", async () => {
+    const conversationId = await conversationOf(t.admin, "private");
+    await t.storePage("first revision", {}, { conversationId });
+    const first = await calls.saveApp(await contextOf(t.admin, conversationId), {
+      page: "Offers",
+      name: "fee-check",
+      title: "Fee check"
+    });
+    expect(first).toMatchObject({ saved: true, created: true, title: "Fee check" });
+    expect(first).not.toHaveProperty("nameSetByPerson");
+
+    const renamed = await t.expectOk(t.admin.id, "apps.rename", {
+      params: { app: "fee-check" },
+      payload: { workspaceId: t.workspaceId, title: "  Brokerage fees  " }
+    });
+    expect(renamed.json()).toEqual({ name: "fee-check", title: "Brokerage fees" });
+
+    // The agent saves again under a name of its own, from a manifest that names another.
+    await t.storePage("second revision", { name: "Commission calculator" }, { conversationId });
+    const second = await calls.saveApp(await contextOf(t.admin, conversationId), {
+      page: "Offers",
+      name: "fee-check",
+      title: "Commission calculator"
+    });
+    expect(second).toMatchObject({
+      saved: true,
+      created: false,
+      revision: 2,
+      title: "Brokerage fees",
+      nameSetByPerson: true
+    });
+    expect(await stored("fee-check")).toMatchObject({
+      revision: 2,
+      personTitle: "Brokerage fees",
+      config: { title: "Brokerage fees" }
+    });
+  });
+
   /**
    * What a call of the former `page.save` left in the conversation: the folder it kept as the
    * Page `pageId` under the name the agent chose.

@@ -15,7 +15,7 @@ import type { ConfigAssetRecord, ConfigAssetStore } from "@work-shape/catalyst-c
 import { containsPattern, prefixPattern } from "./like-pattern";
 import { publishedColumns, publishedRevisions } from "./postgres-config-asset-revisions";
 import type { PostgresConnection } from "./postgres-database";
-import { mapAssetScope, mapConfigAsset } from "./rows";
+import { mapAssetScope, mapConfigAsset, withPersonTitle } from "./rows";
 import { configAssetRevisions, configAssets } from "./schema";
 
 /**
@@ -66,6 +66,7 @@ export async function listConfigAssetPage(
     conditions.push(
       or(
         ilike(configAssets.name, pattern),
+        ilike(configAssets.personTitle, pattern),
         holdsString(configAssetRevisions.config),
         holdsString(publishedRevisions.config)
       )
@@ -87,7 +88,8 @@ export async function listConfigAssetPage(
         publishedRevisionId: configAssets.publishedRevisionId,
         // Read only where a search asks for the title.
         config: text === undefined ? sql<null>`null` : configAssetRevisions.config,
-        publishedConfig: text === undefined ? sql<null>`null` : publishedRevisions.config
+        publishedConfig: text === undefined ? sql<null>`null` : publishedRevisions.config,
+        personTitle: configAssets.personTitle
       })
       .from(configAssets)
       .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
@@ -117,8 +119,10 @@ export async function listConfigAssetPage(
         holds(key.name) ||
         holds(
           text?.titleOf(asset, {
-            ...(key.config ? { active: key.config } : {}),
-            ...(key.publishedConfig ? { published: key.publishedConfig } : {})
+            ...(key.config ? { active: withPersonTitle(key.config, key.personTitle) } : {}),
+            ...(key.publishedConfig
+              ? { published: withPersonTitle(key.publishedConfig, key.personTitle) }
+              : {})
           }) ?? ""
         )
       ) {

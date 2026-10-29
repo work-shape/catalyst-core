@@ -167,6 +167,12 @@ export interface ConfigAssetRecord {
   publishedFileSetId?: FileSetId;
   /** The content of the published revision: what a holder of the use right alone is shown. */
   publishedConfig?: JsonObject;
+  /**
+   * The name a person gave the asset in the interface. The store reads it into the `title` of
+   * `config` and `publishedConfig`, over what each revision carries, so every reader of a title
+   * reads it; no write of a revision changes it. Absent where no person named the asset.
+   */
+  personTitle?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -731,6 +737,21 @@ export interface ConfigAssetStore {
     assetId: string;
     expectedRevision: number;
   }): Promise<{ revision: number }>;
+  /**
+   * Gives an active asset the name a person chose (`personTitle`), over the title of every
+   * revision. Changes no revision and no published pointer: what people read changes at once,
+   * draft and published alike. Answers the asset as it is after. Refuses with `NOT_FOUND`
+   * where none of the name is active, and with `CONFLICT` where it is no longer `assetId`.
+   */
+  setConfigAssetPersonTitle(input: {
+    clientInstanceId: ClientInstanceId;
+    kind: ConfigAssetKind;
+    name: string;
+    /** The asset whose right was checked, as in `publishConfigAssetRevision`. */
+    assetId: string;
+    title: string;
+    updatedAt: string;
+  }): Promise<ConfigAssetRecord | undefined>;
   /**
    * Removes one asset for good: its row, its revisions, the grant rows that name it and the
    * rows of its file sets, in one transaction. Answers the id whose stored objects the caller

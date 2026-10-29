@@ -27,6 +27,8 @@ export type AppSaved =
       kind: "app";
       name: string;
       title: string;
+      /** A person named the App: the save kept that name, whatever name it was given. */
+      nameSetByPerson?: true;
       saved: true;
       /** The save made the App: its draft is revision 1. */
       created: boolean;
@@ -34,7 +36,14 @@ export type AppSaved =
       /** What guardrails that warn said about the draft, for the person. */
       warnings?: string[];
     }
-  | { kind: "app"; name: string; title: string; saved: false; message: string };
+  | {
+      kind: "app";
+      name: string;
+      title: string;
+      nameSetByPerson?: true;
+      saved: false;
+      message: string;
+    };
 
 /** One save: the Page the conversation opened, and the App's id and title. */
 export interface AppSaveInput {
@@ -87,7 +96,9 @@ const inputSchema = z.object({
     .trim()
     .min(1)
     .max(APP_TITLE_MAX_CHARS)
-    .describe("The name people read for the App. Its id is made from it.")
+    .describe(
+      "The name people read for the App, for the save that makes it: its id is made from it. A later save keeps the App's name."
+    )
 });
 
 const outputSchema = z.union([
@@ -95,6 +106,7 @@ const outputSchema = z.union([
     kind: z.literal("app"),
     name: z.string(),
     title: z.string(),
+    nameSetByPerson: z.literal(true).optional(),
     saved: z.literal(true),
     created: z.boolean(),
     revision: z.number().int(),
@@ -104,6 +116,7 @@ const outputSchema = z.union([
     kind: z.literal("app"),
     name: z.string(),
     title: z.string(),
+    nameSetByPerson: z.literal(true).optional(),
     saved: z.literal(false),
     message: z.string()
   })
@@ -146,6 +159,7 @@ export function createAppSaveTool(calls: AppSaveCalls): AnyToolDefinition {
       "Saving asks and publishes nothing. The first save makes the App in this conversation's workspace, and the conversation is about it from then on; the person uses it at once from their Apps list, at its draft. Nobody but the workspace's builders sees it before the person publishes it; you never publish.",
       "To change an existing App in any conversation, load it with app.edit first. Change the returned folder, open it again and save with the same path: each save writes the next draft revision. If the draft moved, report who saved and when, reload with app.edit, redo your change and save again. A refusal for a missing right: tell the person who can grant it. A conversation shared with a workspace makes no App: ask for a conversation of their own.",
       "Answers the App's id, name and draft revision: tell the person its name and each of the 'warnings'.",
+      "A later save keeps the App's name, whatever name you pass; only a person renames an App, in its '…' menu. Where the answer says 'nameSetByPerson', the person chose that name: never rename the App or propose another name unasked. Only where your change made the App do something quite different may you ask the person whether they want to rename it.",
       "When to use a View, an App or a Workflow: references/apps/app-or-workflow.md in 'platform-docs'.",
       "Live data comes from named actions in the same folder. Tell the person that a changing action is carried out only once they publish the App; in the draft it answers what it would have done, unless they switch on 'Run live once' for it."
     ].join(" "),

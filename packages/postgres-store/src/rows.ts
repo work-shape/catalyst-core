@@ -16,6 +16,7 @@ import {
   type ConfigAssetRecord,
   type ConfigAssetRevisionRecord,
   type ConfigAssetState,
+  type JsonObject,
   type Conversation,
   type ConversationAttachment,
   type ExecutionWorkspace,
@@ -727,6 +728,18 @@ export function mapAssetScope(row: Pick<ConfigAssetRow, "scopeKind" | "scopeId">
   return { kind: "workspace", workspaceId: asCollaborationWorkspaceId(row.scopeId) };
 }
 
+/**
+ * A revision's config as people read it: the name a person gave the asset stands over the title
+ * the revision carries. A config without a title of its own takes none.
+ */
+export function withPersonTitle<T extends JsonObject | null | undefined>(
+  config: T,
+  personTitle: string | null
+): T {
+  if (personTitle === null || !config || typeof config.title !== "string") return config;
+  return { ...config, title: personTitle };
+}
+
 export function mapConfigAsset(
   row: ConfigAssetRow | undefined,
   revision: ConfigAssetRevisionRow | undefined,
@@ -750,7 +763,7 @@ export function mapConfigAsset(
     ...(appAvailability ? { appAvailability } : {}),
     activeRevisionId: row.activeRevisionId,
     revision: revision.revision,
-    config: revision.config,
+    config: withPersonTitle(revision.config, row.personTitle),
     ...(revision.fileSetId ? { fileSetId: revision.fileSetId } : {}),
     ...(revision.commit && revision.tree ? { commit: revision.commit, tree: revision.tree } : {}),
     ...(revision.origin ? { revisionOrigin: revision.origin } : {}),
@@ -759,9 +772,12 @@ export function mapConfigAsset(
       ? {
           publishedRevision: published.revision,
           ...(published.fileSetId ? { publishedFileSetId: published.fileSetId } : {}),
-          ...(published.config ? { publishedConfig: published.config } : {})
+          ...(published.config
+            ? { publishedConfig: withPersonTitle(published.config, row.personTitle) }
+            : {})
         }
       : {}),
+    ...(row.personTitle === null ? {} : { personTitle: row.personTitle }),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
   };

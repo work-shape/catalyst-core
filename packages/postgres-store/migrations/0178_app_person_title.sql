@@ -1,0 +1,1 @@
+ALTER TABLE "config_assets" ADD COLUMN "person_title" text;

@@ -154,7 +154,13 @@ describe("an App made from a Page", () => {
       name: "offers",
       revision: 1
     });
-    expect(asset).toMatchObject({ id: app.id, revision: 1, fileSetId: app.fileSetId });
+    // The person chose the name in Save as app: it is theirs, as a rename makes it.
+    expect(asset).toMatchObject({
+      id: app.id,
+      revision: 1,
+      fileSetId: app.fileSetId,
+      personTitle: "Offers 2026"
+    });
     expect(revision).toMatchObject({ revision: 1, operation: "create", fileSetId: app.fileSetId });
     expect(revision?.commit).toMatch(/^[0-9a-f]{40}$/u);
     expect(asset).toMatchObject({ commit: revision?.commit, tree: revision?.tree });

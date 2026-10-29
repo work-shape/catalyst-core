@@ -208,6 +208,7 @@ describe("what a reader may do with Apps", () => {
     expect(appRowActions(ALL, published, true)).toEqual([
       "open",
       "edit",
+      "rename",
       "details",
       "copy_link",
       "delete"
@@ -215,14 +216,21 @@ describe("what a reader may do with Apps", () => {
     expect(appRowActions(WRITER, published, true)).toEqual([
       "open",
       "edit",
+      "rename",
       "details",
       "copy_link"
     ]);
-    // A writer who was shown the published view alone has no draft to edit.
-    expect(appRowActions(WRITER, published, false)).toEqual(["open", "details", "copy_link"]);
+    // A writer who was shown the published view alone has no draft to edit, and still renames:
+    // the name is the App's, not its draft's.
+    expect(appRowActions(WRITER, published, false)).toEqual([
+      "open",
+      "rename",
+      "details",
+      "copy_link"
+    ]);
     expect(appRowActions(NO_APP_RIGHTS, published, false)).toEqual(["open", "copy_link"]);
     // Nothing is served yet: there is nothing to open and no address to hand on.
-    expect(appRowActions(ALL, draftOnly, true)).toEqual(["edit", "details", "delete"]);
+    expect(appRowActions(ALL, draftOnly, true)).toEqual(["edit", "rename", "details", "delete"]);
   });
 
   it("leads a row to the App, or to the draft for a writer while nothing is published", () => {

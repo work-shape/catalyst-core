@@ -81,6 +81,20 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
     execute: (input, context) => workflow.updateFromPage(context, input, context.beforeEvents)
   });
 
+  // A person names an App. Renaming is editing: the write right on the App.
+  route.operation(apiOperations["apps.rename"], {
+    authorize: (input, { access }) => workflow.authorizeRename(access, input),
+    resource: (input) => ({
+      kind: APP_ASSET_KIND,
+      id: input.app,
+      name: input.app,
+      workspaceId: asCollaborationWorkspaceId(input.workspaceId)
+    }),
+    changeClass: "reversible",
+    module: APPS_MODULE,
+    execute: (input, context) => workflow.rename(context, input)
+  });
+
   // An agent tries an action of an App's draft as the person's click would, without a frame
   // (DP-2). The call of the action is its own run, decided as the click's; a test needs no
   // confirmation unless an administrator made its policy stricter, like `workflows.test`.

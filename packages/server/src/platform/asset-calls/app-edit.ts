@@ -237,6 +237,7 @@ export async function checkoutApp(
       row.config ?? {},
       context.locale
     ),
+    ...(row.personTitle === undefined ? {} : { nameSetByPerson: true as const }),
     path,
     revision: row.revision,
     pageId: page.id,

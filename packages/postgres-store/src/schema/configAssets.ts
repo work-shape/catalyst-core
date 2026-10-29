@@ -49,6 +49,10 @@ export const configAssets = pgTable(
     // The pointer the users of a `draft_published` kind are served from. Empty before the
     // first publish, and on every `active` kind.
     publishedRevisionId: text("published_revision_id"),
+    // The name a person gave the asset in the interface. It stands over the title every revision
+    // carries, draft and published alike, and no write of a revision changes it. Empty where no
+    // person named the asset: its revisions' titles are read then.
+    personTitle: text("person_title"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
   },
