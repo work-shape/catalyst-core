@@ -81,20 +81,14 @@ const ProjectUploadsContext = createContext<ProjectUploads | undefined>(undefine
 
 export const ProjectUploadsProvider = ProjectUploadsContext.Provider;
 
-function useProjectUploadsContext(): ProjectUploads {
-  const uploads = useContext(ProjectUploadsContext);
-  if (!uploads) throw new Error("A project's files stand inside its page's uploads");
-  return uploads;
-}
-
 /**
  * The uploads into one project: files, folders and .zip archives, two at a time. An upload over
  * a taken path asks first and then replaces the version it saw.
  */
-export function useProjectUploads(project: Pick<ProjectView, "id">): ProjectUploads {
+export function useProjectUploads(project: Pick<ProjectView, "id"> | undefined): ProjectUploads {
   const { t, locale } = useTranslation();
-  const files = useProjectFilesQuery(project.id);
-  const writes = useProjectFileWrites(project.id, t("projectFiles.held"));
+  const files = useProjectFilesQuery(project?.id);
+  const writes = useProjectFileWrites(project?.id ?? "", t("projectFiles.held"));
   const [reading, setReading] = useState(false);
   const [refusal, setRefusal] = useState<string>();
   const [rows, setRows] = useState<UploadRow[]>([]);
@@ -102,6 +96,14 @@ export function useProjectUploads(project: Pick<ProjectView, "id">): ProjectUplo
     uploads: ProjectUpload[];
     taken: Map<string, number>;
   }>();
+  // Another project's page starts without the last one's uploads.
+  const [shownFor, setShownFor] = useState(project?.id);
+  if (shownFor !== project?.id) {
+    setShownFor(project?.id);
+    setRows([]);
+    setRefusal(undefined);
+    setReplace(undefined);
+  }
 
   const refusalText = (refused: ProjectUploadRefusal): string =>
     projectUploadRefusalText(refused, t, locale);
@@ -231,11 +233,30 @@ export function ProjectFilesSection({
   project: Pick<ProjectView, "id">;
   onOpenConversation?(conversationId: string): void;
 }) {
+  // Beside a page that is leaving, the panel shows nothing for the moment it still stands.
+  const uploads = useContext(ProjectUploadsContext);
+  return uploads ? (
+    <ProjectFilesBody
+      project={project}
+      uploads={uploads}
+      {...(onOpenConversation ? { onOpenConversation } : {})}
+    />
+  ) : null;
+}
+
+function ProjectFilesBody({
+  project,
+  uploads,
+  onOpenConversation
+}: {
+  project: Pick<ProjectView, "id">;
+  uploads: ProjectUploads;
+  onOpenConversation?(conversationId: string): void;
+}) {
   const { t, locale } = useTranslation();
   const { client } = useWorkspaceApiClient();
   const files = useProjectFilesQuery(project.id);
   const writes = useProjectFileWrites(project.id, t("projectFiles.held"));
-  const uploads = useProjectUploadsContext();
   const { take, refusal, setRefusal, reading, busy } = uploads;
   const [openPath, setOpenPath] = useState<string>();
   const [movingFolder, setMovingFolder] = useState<string>();

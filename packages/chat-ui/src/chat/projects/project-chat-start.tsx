@@ -53,7 +53,7 @@ import { ProjectSetupDrawer, projectSetupUnavailable } from "./project-setup";
 import { ProjectAudienceBadge } from "./project-audience-badge";
 import { useProjectStart } from "./project-start";
 
-// A project's page is the start page of a chat in it (Felix, 2026-10-29): the start page's own
+// A project's page is the start page of a chat in it (PRJ-1): the start page's own
 // composer in its own place, the project's name above it, and under it a row of small controls
 // and the project's chats. Its instructions and its files open in the surface beside the page.
 
@@ -83,9 +83,10 @@ function shareWorkspacesOf(workspaces: readonly ProjectStartWorkspace[]): BuildW
 }
 
 /**
- * The start page of a chat in the project of the address, around the chat column it is given:
- * its parts of the start page, the drop of files anywhere on it into the project, and what its
- * controls open. A project the person cannot read says so in place of the column.
+ * The chat column of the workspace with, on a project's address, the project's parts of the start
+ * page around it, the drop of files anywhere on it into the project, and what its controls open.
+ * Its tree stays the same from a project's page to the chat started there, so the composer settles
+ * as it does on the home start page. A project the person cannot read says so instead.
  */
 export function ProjectChatStart({
   projectName,
@@ -95,8 +96,9 @@ export function ProjectChatStart({
   onOpenConversation,
   children
 }: {
-  projectName: string;
-  workspace: ProjectStartWorkspace;
+  /** The project of the address; none off a project's page. */
+  projectName: string | undefined;
+  workspace: ProjectStartWorkspace | undefined;
   workspaces: readonly ProjectStartWorkspace[];
   onOpenRoute(route: WorkspaceRoute): void;
   onOpenConversation(collaborationWorkspaceId: string, conversationId: string): void;
@@ -104,174 +106,135 @@ export function ProjectChatStart({
 }) {
   const { t } = useTranslation();
   const query = useProjectQuery(projectName);
-  const { project, agentNames } = useProjectStart(projectName);
-
-  if (query.isError && apiErrorStatus(query.error) === 404) {
-    return (
-      <NotFound
-        icon={<Folder aria-hidden="true" />}
-        data-testid="project-not-found"
-        action={
-          <Button
-            variant="outline"
-            onClick={() =>
-              onOpenRoute({ kind: "projects", collaborationWorkspaceId: workspace.id })
-            }
-          >
-            {t("projects.backToProjects")}
-          </Button>
-        }
-      >
-        {t("projects.notFound")}
-      </NotFound>
-    );
-  }
-
-  if (!project) {
-    return (
-      <ChatStartProvider
-        value={{
-          heading: query.isError ? (
-            <InlineError>{t("projects.loadFailed")}</InlineError>
-          ) : (
-            <Skeleton className="h-8 w-48" />
-          ),
-          below: null
-        }}
-      >
-        {children}
-      </ChatStartProvider>
-    );
-  }
-
-  return (
-    <ProjectStartPage
-      key={project.id}
-      project={project}
-      agentNames={agentNames}
-      workspace={workspace}
-      workspaces={workspaces}
-      onOpenRoute={onOpenRoute}
-      onOpenConversation={onOpenConversation}
-    >
-      {children}
-    </ProjectStartPage>
-  );
-}
-
-function ProjectStartPage({
-  project,
-  agentNames,
-  workspace,
-  workspaces,
-  onOpenRoute,
-  onOpenConversation,
-  children
-}: {
-  project: ProjectView;
-  agentNames: ReadonlySet<string> | undefined;
-  workspace: ProjectStartWorkspace;
-  workspaces: readonly ProjectStartWorkspace[];
-  onOpenRoute(route: WorkspaceRoute): void;
-  onOpenConversation(collaborationWorkspaceId: string, conversationId: string): void;
-  children: ReactNode;
-}) {
-  const { t } = useTranslation();
+  const start = useProjectStart(projectName);
+  const project = projectName && workspace ? start.project : undefined;
   const uploads = useProjectUploads(project);
   const panel = useToolDisplayPanel();
-  const [setting, setSetting] = useState<ProjectSetting>();
-  const [drawer, setDrawer] = useState<ProjectDrawer>();
+  // What the menu opened, for the project it was opened on.
+  const [setting, setSetting] = useState<{ projectId: string; open: ProjectSetting }>();
+  const [drawer, setDrawer] = useState<{ projectId: string; open: ProjectDrawer }>();
   const [dragging, setDragging] = useState(false);
   const shareWorkspaces = useMemo(() => shareWorkspacesOf(workspaces), [workspaces]);
-  const openConversation = (conversationId: string) =>
-    onOpenConversation(project.collaborationWorkspaceId, conversationId);
+  const notFound =
+    projectName !== undefined && query.isError && apiErrorStatus(query.error) === 404;
   const shownPanel =
-    panel.open && panel.entry?.kind === "project_panel"
+    project && panel.open && panel.entry?.kind === "project_panel"
       ? (["instructions", "files"] as const).find(
           (entry) => panel.entry?.key === panelKey(entry, project.id)
         )
       : undefined;
 
-  function showPanel(which: ProjectPanel) {
+  // What a project's page opened beside it closes with the page: a chat started there opens
+  // alone, and another project's page opens with nothing beside it.
+  const panelRef = useRef(panel);
+  panelRef.current = panel;
+  const projectId = project?.id;
+  useEffect(() => {
+    if (projectId === undefined) return;
+    return () => {
+      if (panelRef.current.entry?.kind === "project_panel") panelRef.current.close();
+    };
+  }, [projectId]);
+
+  function showPanel(shown: ProjectView, which: ProjectPanel) {
     panel.show(
       which === "instructions"
         ? {
             kind: "project_panel",
-            key: panelKey(which, project.id),
+            key: panelKey(which, shown.id),
             title: t("projectInstructions.title"),
             subtitle: PROJECT_INSTRUCTIONS_PATH,
             titleIcon: <ScrollText aria-hidden="true" />,
-            node: <ProjectInstructionsPanel project={project} />
+            node: <ProjectInstructionsPanel project={shown} />
           }
         : {
             kind: "project_panel",
-            key: panelKey(which, project.id),
+            key: panelKey(which, shown.id),
             title: t("projectFiles.title"),
-            subtitle: project.title,
+            subtitle: shown.title,
             titleIcon: <Folder aria-hidden="true" />,
-            node: <ProjectFilesSection project={project} onOpenConversation={openConversation} />
+            node: (
+              <ProjectFilesSection
+                project={shown}
+                onOpenConversation={(conversationId) =>
+                  onOpenConversation(shown.collaborationWorkspaceId, conversationId)
+                }
+              />
+            )
           }
     );
   }
 
-  // What the page opened beside it closes with the page: a chat started here opens alone.
-  const panelRef = useRef(panel);
-  panelRef.current = panel;
-  useEffect(
-    () => () => {
-      if (panelRef.current.entry?.kind === "project_panel") panelRef.current.close();
-    },
-    []
-  );
+  function takesDrop(event: DragEvent<HTMLElement>): boolean {
+    // A drop zone inside the page, such as the one beside the file tree, takes its own drop.
+    return (
+      project !== undefined && !event.defaultPrevented && hasDraggedFiles(event) && !uploads.busy
+    );
+  }
 
   function dragOver(event: DragEvent<HTMLElement>) {
-    // A drop zone inside the page, such as the one beside the file tree, takes its own drop.
-    if (event.defaultPrevented || !hasDraggedFiles(event) || uploads.busy) return;
+    if (!takesDrop(event)) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
     setDragging(true);
   }
 
-  const start: ChatStart = {
-    heading: <ProjectStartHeading project={project} workspace={workspace} />,
-    composerLabel: t("projects.composerLabel", { title: project.title }),
-    composerChip: (
-      <span className="inline-flex min-w-0 max-w-full" data-testid="project-composer-chip">
-        <Chip size="sm" leading={<Folder aria-hidden="true" className="text-muted-foreground" />}>
-          {project.title}
-        </Chip>
-      </span>
-    ),
-    below: (
-      <ProjectStartBelow
-        project={project}
-        shownPanel={shownPanel}
-        menu={
-          <ProjectStartMenu
-            project={project}
-            workspace={workspace}
-            workspaces={workspaces}
-            onSetting={setSetting}
-            onDrawer={setDrawer}
-          />
-        }
-        onTogglePanel={(which) => {
-          if (shownPanel === which) panel.close({ restoreFocus: true });
-          else showPanel(which);
-        }}
-        onDrawer={setDrawer}
-        onOpenConversation={openConversation}
-      />
-    ),
-    ...(agentNames ? { agentNames } : {})
-  };
+  const chatStart: ChatStart | undefined =
+    projectName === undefined
+      ? undefined
+      : !project || !workspace
+        ? {
+            heading: query.isError ? (
+              <InlineError>{t("projects.loadFailed")}</InlineError>
+            ) : (
+              <Skeleton className="h-8 w-48" />
+            ),
+            below: null
+          }
+        : {
+            heading: <ProjectStartHeading project={project} workspace={workspace} />,
+            composerLabel: t("projects.composerLabel", { title: project.title }),
+            composerChip: (
+              <span className="inline-flex max-w-full min-w-0" data-testid="project-composer-chip">
+                <Chip
+                  size="sm"
+                  leading={<Folder aria-hidden="true" className="text-muted-foreground" />}
+                >
+                  {project.title}
+                </Chip>
+              </span>
+            ),
+            below: (
+              <ProjectStartBelow
+                project={project}
+                shownPanel={shownPanel}
+                menu={
+                  <ProjectStartMenu
+                    project={project}
+                    workspace={workspace}
+                    workspaces={workspaces}
+                    onSetting={(open) => setSetting({ projectId: project.id, open })}
+                    onDrawer={(open) => setDrawer({ projectId: project.id, open })}
+                  />
+                }
+                onTogglePanel={(which) => {
+                  if (shownPanel === which) panel.close({ restoreFocus: true });
+                  else showPanel(project, which);
+                }}
+                onDrawer={(open) => setDrawer({ projectId: project.id, open })}
+                onOpenConversation={(conversationId) =>
+                  onOpenConversation(project.collaborationWorkspaceId, conversationId)
+                }
+              />
+            ),
+            ...(start.agentNames ? { agentNames: start.agentNames } : {})
+          };
 
   return (
-    <ProjectUploadsProvider value={uploads}>
-      <ChatStartProvider value={start}>
+    <ProjectUploadsProvider value={project ? uploads : undefined}>
+      <ChatStartProvider value={chatStart}>
         <div
           className="relative h-full min-h-0 min-w-0"
-          data-testid="project-start"
           onDragEnter={dragOver}
           onDragOver={dragOver}
           onDragLeave={(event) => {
@@ -281,55 +244,80 @@ function ProjectStartPage({
           }}
           onDrop={(event) => {
             setDragging(false);
-            if (event.defaultPrevented || !hasDraggedFiles(event) || uploads.busy) return;
+            if (!project || !takesDrop(event)) return;
             event.preventDefault();
             uploads.take(droppedUploads(event.dataTransfer)).catch(() => undefined);
             // The uploads show where the project's files are.
-            if (shownPanel !== "files") showPanel("files");
+            if (shownPanel !== "files") showPanel(project, "files");
           }}
         >
-          {children}
-          {dragging ? (
+          {notFound ? (
+            <NotFound
+              icon={<Folder aria-hidden="true" />}
+              data-testid="project-not-found"
+              action={
+                workspace ? (
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      onOpenRoute({ kind: "projects", collaborationWorkspaceId: workspace.id })
+                    }
+                  >
+                    {t("projects.backToProjects")}
+                  </Button>
+                ) : undefined
+              }
+            >
+              {t("projects.notFound")}
+            </NotFound>
+          ) : (
+            children
+          )}
+          {dragging && project ? (
             <ChatDropOverlay
               title={t("projects.dropTitle")}
               description={t("projects.dropDescription", { title: project.title })}
             />
           ) : null}
         </div>
-        {uploads.dialogs}
-        <ProjectSettingsDialogs
-          open={setting}
-          project={project}
-          workspace={workspace}
-          workspaces={workspaces}
-          onClose={() => setSetting(undefined)}
-          onMoved={(moved) => {
-            setSetting(undefined);
-            onOpenRoute({
-              kind: "project",
-              collaborationWorkspaceId: moved.collaborationWorkspaceId,
-              project: moved.name
-            });
-          }}
-          onDeleted={() => {
-            setSetting(undefined);
-            onOpenRoute({ kind: "projects", collaborationWorkspaceId: workspace.id });
-          }}
-        />
-        <ProjectSetupDrawer
-          project={project}
-          workspace={workspace}
-          workspaces={shareWorkspaces}
-          open={drawer === "setup"}
-          onClose={() => setDrawer(undefined)}
-        />
-        <ProjectKnowledgeDrawer
-          project={project}
-          workspace={workspace}
-          workspaces={shareWorkspaces}
-          open={drawer === "knowledge"}
-          onClose={() => setDrawer(undefined)}
-        />
+        {project && workspace ? (
+          <>
+            {uploads.dialogs}
+            <ProjectSettingsDialogs
+              open={setting?.projectId === project.id ? setting.open : undefined}
+              project={project}
+              workspace={workspace}
+              workspaces={workspaces}
+              onClose={() => setSetting(undefined)}
+              onMoved={(moved) => {
+                setSetting(undefined);
+                onOpenRoute({
+                  kind: "project",
+                  collaborationWorkspaceId: moved.collaborationWorkspaceId,
+                  project: moved.name
+                });
+              }}
+              onDeleted={() => {
+                setSetting(undefined);
+                onOpenRoute({ kind: "projects", collaborationWorkspaceId: workspace.id });
+              }}
+            />
+            <ProjectSetupDrawer
+              project={project}
+              workspace={workspace}
+              workspaces={shareWorkspaces}
+              open={drawer?.projectId === project.id && drawer.open === "setup"}
+              onClose={() => setDrawer(undefined)}
+            />
+            <ProjectKnowledgeDrawer
+              project={project}
+              workspace={workspace}
+              workspaces={shareWorkspaces}
+              open={drawer?.projectId === project.id && drawer.open === "knowledge"}
+              onClose={() => setDrawer(undefined)}
+            />
+          </>
+        ) : null}
       </ChatStartProvider>
     </ProjectUploadsProvider>
   );

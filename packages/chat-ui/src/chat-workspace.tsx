@@ -537,27 +537,28 @@ function ChatWorkspaceContent({
     model.route.showRoute({ kind: "conversation", collaborationWorkspaceId, conversationId });
   // On a project's page a drop of files goes into the project, not into the composer.
   const chatDrop = projectStartRoute ? undefined : chat.fileDropzone;
-  // The project's page around the chat's start: its name, its controls and its chats.
-  const wrapProjectStart = (children: ReactNode) =>
-    projectStartRoute && activeWorkspace && activeWorkspaceName ? (
-      <ProjectChatStart
-        key={projectStartRoute.project}
-        projectName={projectStartRoute.project}
-        workspace={{
-          id: activeWorkspace.id,
-          name: activeWorkspaceName,
-          kind: activeWorkspace.kind,
-          emoji: activeWorkspace.emoji
-        }}
-        workspaces={projectWorkspaces}
-        onOpenRoute={model.route.showRoute}
-        onOpenConversation={openProjectConversation}
-      >
-        {children}
-      </ProjectChatStart>
-    ) : (
-      children
-    );
+  // The project's page around the chat's start: its name, its controls and its chats. It
+  // stands around the chat on every route, so starting a chat there keeps the chat's tree.
+  const wrapProjectStart = (children: ReactNode) => (
+    <ProjectChatStart
+      projectName={projectStartRoute?.project}
+      workspace={
+        activeWorkspace && activeWorkspaceName
+          ? {
+              id: activeWorkspace.id,
+              name: activeWorkspaceName,
+              kind: activeWorkspace.kind,
+              emoji: activeWorkspace.emoji
+            }
+          : undefined
+      }
+      workspaces={projectWorkspaces}
+      onOpenRoute={model.route.showRoute}
+      onOpenConversation={openProjectConversation}
+    >
+      {children}
+    </ProjectChatStart>
+  );
   const closeDrawer = model.chrome.closeSidebarDrawer;
   const startNewChat = () => {
     closeDrawer();
