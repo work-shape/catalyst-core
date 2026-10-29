@@ -3,9 +3,10 @@ import { z } from "zod";
 import { DATA_STORE_ASSET_KIND, WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
 import { expectStatus } from "./support/app-instance";
-import { required } from "./support/assertions";
+import { eventually, required } from "./support/assertions";
 import { init, type StoreFile } from "./support/data-store-world";
 import { setupFindingsApp, type FindingsWorld } from "./support/findings-app";
+import { getTestJobs } from "./support/test-instance";
 import { instanceWorkflowAssetKind } from "./support/workflow-instance";
 
 // LIVE-2: one Publish of a Workflow makes it live with the Data Store drafts its steps call.
@@ -37,6 +38,10 @@ const pointersSchema = z.object({
     .array(z.object({ kind: z.string(), name: z.string(), publishedRevision: z.number() }))
     .optional()
 });
+const heldSchema = z.object({
+  status: z.literal("pending_approval"),
+  approvalRequestId: z.string()
+});
 const readSchema = z.object({
   publishQuestion: z.array(z.string()).optional(),
   publishDataStores: z
@@ -54,11 +59,12 @@ const readSchema = z.object({
 });
 
 /** A Workflow without `runAs` that adds rows to `store`, as its own account (LIVE-1). */
-const workflowConfig = (name: string, store: string, title = "Import findings") => ({
+const workflowConfig = (name: string, store: string, more: Record<string, unknown> = {}) => ({
   name,
   manifest: {
     id: name,
-    name: title,
+    name: "Import findings",
+    ...more,
     inputs: { type: "object" },
     outputs: { type: "object" },
     steps: [
@@ -100,12 +106,17 @@ describe("LIVE-2: one Publish of a Workflow makes it live with its Data Stores",
         id: required(await asset(DATA_STORE_ASSET_KIND, name)).id
       })
     );
-  const putWorkflow = async (name: string, store: string, expectedRevision: number | null) =>
+  const putWorkflow = async (
+    name: string,
+    store: string,
+    expectedRevision: number | null,
+    more?: Record<string, unknown>
+  ) =>
     z.object({ revision: z.number() }).parse(
       (
         await t.expectOk(t.root.id, "assets.put", {
           params: { kind: WORKFLOW_ASSET_KIND, name },
-          payload: { config: workflowConfig(name, store), expectedRevision }
+          payload: { config: workflowConfig(name, store, more), expectedRevision }
         })
       ).json()
     ).revision;
@@ -130,6 +141,13 @@ describe("LIVE-2: one Publish of a Workflow makes it live with its Data Stores",
       clientInstanceId,
       owner: { kind: "workflow", assetId: required(await asset(WORKFLOW_ASSET_KIND, name)).id }
     });
+
+  /** Runs `work` while kai holds each right on its asset. */
+  const holding = async (rights: [string, string][], work: () => Promise<void>): Promise<void> => {
+    const [first, ...rest] = rights;
+    if (!first) return work();
+    return t.withRight(t.kai.id, first[0], { assetId: first[1] }, () => holding(rest, work));
+  };
 
   /**
    * A store of the instance live at level 1 with `second` in its draft, and a Workflow that
@@ -276,15 +294,6 @@ describe("LIVE-2: one Publish of a Workflow makes it live with its Data Stores",
     const store = await liveWorkflowWithPendingStore("live2-rights", "live2-rights-flow");
     const workflowId = required(await asset(WORKFLOW_ASSET_KIND, "live2-rights-flow")).id;
     const storeId = required(await asset(DATA_STORE_ASSET_KIND, "live2-rights")).id;
-    const holding = async (
-      rights: [string, string][],
-      work: () => Promise<void>
-    ): Promise<void> => {
-      const [first, ...rest] = rights;
-      if (!first) return work();
-      return t.withRight(t.kai.id, first[0], { assetId: first[1] }, () => holding(rest, work));
-    };
-
     await holding(
       [
         ["workflow.read", workflowId],
@@ -324,5 +333,139 @@ describe("LIVE-2: one Publish of a Workflow makes it live with its Data Stores",
       }),
       200
     );
+  });
+
+  // LIVE-2 review: a revision the Workflow's own publish refuses moves no store. Fails when only
+  // the publish right and the revision are asked before the stores move: the store went to
+  // revision 2 and level 2, and the Workflow was then refused.
+  it("refuses a revision its own checks refuse before any store moves", async () => {
+    const store = await liveWorkflowWithPendingStore("live2-limits", "live2-limits-flow");
+    const above = await putWorkflow("live2-limits-flow", "live2-limits", 2, {
+      limits: { stepRuns: 1_000_000_000 }
+    });
+
+    const refused = await publishWorkflow(t.root.id, "live2-limits-flow", above, [
+      { name: "live2-limits", revision: store }
+    ]);
+
+    expectStatus(refused, 422);
+    expect(JSON.stringify(t.refusal(refused))).toContain("limits.stepRuns");
+    expect((await asset(DATA_STORE_ASSET_KIND, "live2-limits"))?.publishedRevision).toBe(1);
+    expect(await record("live2-limits")).toMatchObject({ level: 1 });
+    expect((await asset(WORKFLOW_ASSET_KIND, "live2-limits-flow"))?.publishedRevision).toBe(1);
+  });
+
+  // LIVE-2 review: a Workflow's Publish waits only for the stores it names. Fails when it also
+  // waits for a store it calls whose own Publish left a migration behind: the Workflow was
+  // refused with that store's failure, which nothing on its page can mend.
+  it("publishes a Workflow that names no store whatever another publish left a store it calls at", async () => {
+    const store = await liveWorkflowWithPendingStore("live2-stuck", "live2-stuck-flow");
+    // The store's own publish moved its pointer and its migration failed.
+    const storeAsset = required(await asset(DATA_STORE_ASSET_KIND, "live2-stuck"));
+    const stored = required(
+      await t.stores.configAssets.getConfigAssetRevision({
+        clientInstanceId,
+        kind: DATA_STORE_ASSET_KIND,
+        name: "live2-stuck",
+        revision: store
+      })
+    );
+    await t.stores.configAssets.publishConfigAssetRevision({
+      clientInstanceId,
+      kind: DATA_STORE_ASSET_KIND,
+      name: "live2-stuck",
+      assetId: storeAsset.id,
+      revision: store,
+      revisionId: stored.id
+    });
+    await t.stores.dataStores.putDataStore({
+      ...(await record("live2-stuck")),
+      failure: { code: "migration_failed", message: "The database said no." }
+    });
+
+    const published = await publishWorkflow(t.root.id, "live2-stuck-flow", 2);
+
+    expectStatus(published, 200);
+    expect((await asset(WORKFLOW_ASSET_KIND, "live2-stuck-flow"))?.publishedRevision).toBe(2);
+    expect(await record("live2-stuck")).toMatchObject({ level: 1 });
+  });
+
+  // A held Workflow publish holds its stores with it: one Inbox item names the store with the
+  // version it makes live, and its approval publishes the store, migrates it and makes the
+  // Workflow live.
+  it("holds the Workflow and its store as one approval, and runs all of it on approval", async () => {
+    const store = await liveWorkflowWithPendingStore("live2-held", "live2-held-flow");
+    const workflowId = required(await asset(WORKFLOW_ASSET_KIND, "live2-held-flow")).id;
+    const storeId = required(await asset(DATA_STORE_ASSET_KIND, "live2-held")).id;
+    // A setting holds every publish of a Data Store, so the Workflow's publish is held too.
+    t.state.centralSettings = [
+      { operation: "assets.publish", value: "approval", assetKind: DATA_STORE_ASSET_KIND }
+    ];
+    try {
+      // The held call runs as kai once approved, so kai holds the rights until it has run.
+      await holding(
+        [
+          ["workflow.read", workflowId],
+          ["workflow.write", workflowId],
+          ["workflow.publish", workflowId],
+          ["data_store.read", storeId],
+          ["data_store.insert", storeId],
+          ["data_store.publish", storeId]
+        ],
+        async () => {
+          const held = await publishWorkflow(t.kai.id, "live2-held-flow", 2, [
+            { name: "live2-held", revision: store }
+          ]);
+          expectStatus(held, 202);
+          const { approvalRequestId } = heldSchema.parse(held.json());
+          expect((await asset(DATA_STORE_ASSET_KIND, "live2-held"))?.publishedRevision).toBe(1);
+          expect((await asset(WORKFLOW_ASSET_KIND, "live2-held-flow"))?.publishedRevision).toBe(1);
+
+          // The item the approver reads names the store with the Workflow.
+          const filed = (
+            await t.expectOk(t.root.id, "approval_requests.get", {
+              params: { requestId: approvalRequestId }
+            })
+          ).json();
+          expect(filed).toMatchObject({
+            kind: "workflow_publish",
+            canDecide: true,
+            payload: {
+              subject: {
+                name: "live2-held-flow",
+                revision: 2,
+                publishedWith: [
+                  {
+                    kind: DATA_STORE_ASSET_KIND,
+                    name: "live2-held",
+                    title: "Store live2-held",
+                    revision: store,
+                    liveRevision: 1
+                  }
+                ]
+              }
+            }
+          });
+
+          expectStatus(
+            await t.call(t.root.id, "approval_requests.decide", {
+              params: { requestId: approvalRequestId },
+              payload: { decision: "approve" }
+            }),
+            200
+          );
+          await getTestJobs(t.instance).runDue();
+          await eventually(async () => {
+            expect((await asset(WORKFLOW_ASSET_KIND, "live2-held-flow"))?.publishedRevision).toBe(
+              2
+            );
+          }, 30_000);
+        }
+      );
+    } finally {
+      t.state.centralSettings = [];
+    }
+    expect(await record("live2-held")).toMatchObject({ status: "ready", level: 2 });
+    expect((await asset(DATA_STORE_ASSET_KIND, "live2-held"))?.publishedRevision).toBe(store);
   });
 });

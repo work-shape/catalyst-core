@@ -43,6 +43,7 @@ import {
   enqueueKnowledgeWorkflowSourceEnd,
   parseConnectionOperationName,
   type AccessResource,
+  type ActorAccess,
   type ClientInstanceId,
   type ConfigAssetRecord,
   type ConfigAssetStore,
@@ -256,6 +257,81 @@ export function createWorkflowAssetKind(
     await stores.workflowRunDatasets.claimWorkflow({ clientInstanceId, workflow });
     await enqueueDatasetCleanup(stores, clientInstanceId, now().toISOString());
   }
+  /** What a publish asks of the definition alone: its kind, mail steps, limits and packages. */
+  async function definitionChecks(
+    stores: PlatformStores,
+    name: string,
+    manifest: WorkflowManifest,
+    actor: AuthenticatedIdentity
+  ): Promise<void> {
+    const kindIssues = workflowKindIssues(manifest);
+    if (kindIssues.length > 0) throw workflowDefinitionRefusal(name, kindIssues);
+    await assertMailSteps(manifest, stores, actor);
+    // A limit above the operator's ceiling is refused here, by name, and never clamped.
+    const above = workflowLimitIssues(manifest, limits);
+    if (above.length > 0) throw workflowDefinitionRefusal(name, above);
+    assertWorkflowPackages(manifest, options.runnerPackages ?? runnerPackageManifest.packages);
+  }
+  /** What a publish asks of what the Workflow reaches, and of the live Workflows that start it. */
+  async function reachChecks(
+    stores: PlatformStores,
+    manifest: WorkflowManifest,
+    actor: AuthenticatedIdentity,
+    access: ActorAccess
+  ): Promise<void> {
+    // What it reaches is named to the publisher only where they may read it.
+    const reader: Parameters<typeof workflowCallerReachRefusal>[2] = {
+      clientInstanceId,
+      configAssets: stores.configAssets,
+      definitions: createWorkflowAssetDefinitions({
+        clientInstanceId,
+        configAssets: stores.configAssets
+      }),
+      // A child can name assets and operations its parent's publisher may not see.
+      async readable(kind, name) {
+        const asset = await stores.configAssets.getConfigAsset({
+          clientInstanceId,
+          kind,
+          name
+        });
+        if (asset?.status !== "active") return false;
+        const resource: AccessResource = {
+          kind: asset.kind,
+          name: asset.name,
+          assetId: asset.id,
+          ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
+        };
+        if (access.authorize(`${kind}.read`, resource).allowed) return true;
+        if (
+          kind === "workflow" &&
+          [WORKFLOW_ACTIONS.write, WORKFLOW_ACTIONS.publish].some(
+            (right) => access.authorize(right, resource).allowed
+          )
+        )
+          return true;
+        // Knowledge Base use opens search, not its definition. Workflow use opens only
+        // the published revision, never an unpublished child's draft.
+        return (
+          (kind === CONNECTION_ASSET_KIND ||
+            (kind === "workflow" && asset.publishedRevision !== undefined)) &&
+          access.authorize(`${kind}.use`, resource).allowed
+        );
+      }
+    };
+    // Started from outside, it may read only what is exposed to outside (named here; asked
+    // again at every start, since a Connection or a child changes after this publish).
+    const outside = await workflowOutsideIssues(manifest, reader);
+    if (outside.length > 0) throw workflowDefinitionRefusal(manifest.id, outside);
+    // A credential publishes only what reaches data open to outside clients, whatever the
+    // switch: otherwise a key fills a Data Store from a Connection kept from outside clients
+    // for an outside Workflow to read (WF-OUT). The scan is the start's.
+    const reach = await workflowReachRefusal(manifest, actor, reader);
+    if (reach) throw reach;
+    // Nor what a live Workflow with a closed reach starts, directly or through others: that
+    // parent can hand it a closed Connection's data as input, for it to copy into a Data Store.
+    const callers = await workflowCallerReachRefusal(manifest, actor, reader);
+    if (callers) throw callers;
+  }
   async function reschedule(
     stores: PlatformStores,
     previous: JsonObject | undefined,
@@ -431,6 +507,25 @@ export function createWorkflowAssetKind(
     missingUpsertRight: () => undefined,
     assertInteractiveUpsertAllowed: () => undefined,
     assertInteractiveDeleteAllowed: () => undefined,
+    // What onPublish asks that no Data Store's migration changes: a Workflow's Publish that
+    // publishes its stores first asks it before any of them moves (LIVE-2). Its account, the
+    // operations it calls and their dataset contracts read the stores, and onPublish asks them
+    // once the stores are live.
+    async checkBeforePublish({ stores, config, actor, access }) {
+      const parsed = workflowConfigSchema.parse(config);
+      const result = parseStoredManifest(parsed.manifest);
+      if (!result.ok) throw workflowDefinitionRefusal(parsed.name, result.issues);
+      const switched = workflowOutsideSwitchRefusal(result.manifest, actor);
+      if (switched) throw switched;
+      await definitionChecks(stores, parsed.name, result.manifest, actor);
+      const definitions = createWorkflowAssetDefinitions({
+        clientInstanceId,
+        configAssets: stores.configAssets
+      });
+      await checkChildCycles(result.manifest, definitions);
+      await checkWorkflowPersonContexts({ clientInstanceId, stores }, result.manifest, definitions);
+      await reachChecks(stores, result.manifest, actor, access);
+    },
     async onPublish({ stores, replaced, config, actor, revisionId, assetId, access }) {
       const publisher = isAuthenticatedServicePrincipal(actor)
         ? undefined
@@ -464,16 +559,7 @@ export function createWorkflowAssetKind(
       const continuation = await workflowContinuationIssues(result.manifest, options.registry?.());
       if (continuation.length > 0)
         throw workflowDefinitionRefusal(result.manifest.id, continuation);
-      const kindIssues = workflowKindIssues(result.manifest);
-      if (kindIssues.length > 0) throw workflowDefinitionRefusal(parsed.name, kindIssues);
-      await assertMailSteps(result.manifest, stores, actor);
-      // A limit above the operator's ceiling is refused here, by name, and never clamped.
-      const above = workflowLimitIssues(result.manifest, limits);
-      if (above.length > 0) throw workflowDefinitionRefusal(parsed.name, above);
-      assertWorkflowPackages(
-        result.manifest,
-        options.runnerPackages ?? runnerPackageManifest.packages
-      );
+      await definitionChecks(stores, parsed.name, result.manifest, actor);
       // The pointer has moved in this transaction, but is not visible outside it yet.
       // Serializing graph reads here prevents two individually safe publishes forming a cycle.
       await stores.workflowRuns.lockDefinitionGraph({ clientInstanceId });
@@ -491,58 +577,7 @@ export function createWorkflowAssetKind(
         result.manifest,
         createWorkflowAssetDefinitions({ clientInstanceId, configAssets: stores.configAssets })
       );
-      // What it reaches is named to the publisher only where they may read it.
-      const reader: Parameters<typeof workflowCallerReachRefusal>[2] = {
-        clientInstanceId,
-        configAssets: stores.configAssets,
-        definitions: createWorkflowAssetDefinitions({
-          clientInstanceId,
-          configAssets: stores.configAssets
-        }),
-        // A child can name assets and operations its parent's publisher may not see.
-        async readable(kind, name) {
-          const asset = await stores.configAssets.getConfigAsset({
-            clientInstanceId,
-            kind,
-            name
-          });
-          if (asset?.status !== "active") return false;
-          const resource: AccessResource = {
-            kind: asset.kind,
-            name: asset.name,
-            assetId: asset.id,
-            ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
-          };
-          if (access.authorize(`${kind}.read`, resource).allowed) return true;
-          if (
-            kind === "workflow" &&
-            [WORKFLOW_ACTIONS.write, WORKFLOW_ACTIONS.publish].some(
-              (right) => access.authorize(right, resource).allowed
-            )
-          )
-            return true;
-          // Knowledge Base use opens search, not its definition. Workflow use opens only
-          // the published revision, never an unpublished child's draft.
-          return (
-            (kind === CONNECTION_ASSET_KIND ||
-              (kind === "workflow" && asset.publishedRevision !== undefined)) &&
-            access.authorize(`${kind}.use`, resource).allowed
-          );
-        }
-      };
-      // Started from outside, it may read only what is exposed to outside (named here; asked
-      // again at every start, since a Connection or a child changes after this publish).
-      const outside = await workflowOutsideIssues(result.manifest, reader);
-      if (outside.length > 0) throw workflowDefinitionRefusal(result.manifest.id, outside);
-      // A credential publishes only what reaches data open to outside clients, whatever the
-      // switch: otherwise a key fills a Data Store from a Connection kept from outside clients
-      // for an outside Workflow to read (WF-OUT). The scan is the start's.
-      const reach = await workflowReachRefusal(result.manifest, actor, reader);
-      if (reach) throw reach;
-      // Nor what a live Workflow with a closed reach starts, directly or through others: that
-      // parent can hand it a closed Connection's data as input, for it to copy into a Data Store.
-      const callers = await workflowCallerReachRefusal(result.manifest, actor, reader);
-      if (callers) throw callers;
+      await reachChecks(stores, result.manifest, actor, access);
       await reschedule(stores, replaced, config);
     },
     // Account revocation is part of the delete, never a best-effort after-write task.

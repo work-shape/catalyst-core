@@ -77,6 +77,19 @@ export interface CapabilityAssetKindChecks {
     stores: PlatformStores;
   }): Promise<void>;
   /**
+   * The checks of `onPublish` that read nothing a Data Store's migration changes, asked before
+   * a Publish moves anything another asset depends on: a Workflow's Publish that publishes its
+   * Data Stores first (LIVE-2) asks them before any store moves, so a revision `onPublish`
+   * would refuse moves none. `onPublish` asks them again, within its transaction.
+   */
+  checkBeforePublish?(input: {
+    actor: AuthenticatedIdentity;
+    clientInstanceId: ClientInstanceId;
+    access: ActorAccess;
+    config: JsonObject;
+    stores: PlatformStores;
+  }): Promise<void>;
+  /**
    * The config a revision holds, made from the manifest its build validated. A kind whose
    * revisions hold files brings it: only the kind knows what its config is beside the manifest.
    */

@@ -336,7 +336,7 @@ export function DraftChangeDialog({
       )}
       {lines.length > 0 ? (
         <ul
-          aria-label={t("workflows.draft.publishRaises")}
+          aria-label={t("workflows.draft.publishChanges")}
           className="mt-3 grid gap-1 text-body text-foreground"
           data-testid="workflow-publish-question"
         >

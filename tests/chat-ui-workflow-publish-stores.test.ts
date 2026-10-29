@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ApiError } from "@work-shape/catalyst-api-client";
 import { DraftChangeDialog, createInstanceSource } from "@work-shape/catalyst-chat-ui/workflows";
 import { createTranslationContext, instanceSentence } from "./support/chat-ui";
+import { renderItem } from "./chat-ui-inbox-harness";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { recordedApiClient } from "./support/recorded-api-client";
 
@@ -171,5 +172,50 @@ describe("LIVE-2: the publish question of a Workflow names the stores it publish
     );
     // An App's Publish keeps its own sentence.
     expect(instanceSentence(refusal(), t)).toContain("The app is not published");
+  });
+});
+
+describe("LIVE-2: the Inbox item of a held Workflow publish names the store it publishes first", () => {
+  const review = (kind: string, name: string, title: string, revision: number, live: number) => ({
+    kind,
+    name,
+    title,
+    revision,
+    liveRevision: live,
+    files: [],
+    hostsAdded: [],
+    connections: [],
+    dataStores: []
+  });
+  const item = (locale: "en" | "de") =>
+    renderItem(
+      {
+        kind: "workflow_publish",
+        summary: "assets.publish",
+        preview: {
+          runId: "opr_1",
+          operation: "assets.publish",
+          effect: "changing",
+          actor: { kind: "user", id: "usr_kai", label: "Kai Member" },
+          origin: { kind: "user" },
+          inputs: [{ key: "revision", value: "2" }],
+          review: {
+            ...review("workflow", "import-findings", "Import findings", 2, 1),
+            publishedWith: [review("data_store", "findings", "Findings", 3, 2)]
+          }
+        },
+        canDecide: true
+      },
+      { locale }
+    );
+
+  it("lists the store with the version it makes live", () => {
+    const markup = item("en");
+    const list = markup.indexOf('data-testid="publish-review-published-with"');
+    expect(list).toBeGreaterThan(-1);
+    const storeAt = markup.indexOf("Data store “Findings”", list);
+    expect(storeAt).toBeGreaterThan(list);
+    expect(markup.indexOf("Version 3, in place of version 2", storeAt)).toBeGreaterThan(storeAt);
+    expect(item("de")).toContain("Datenspeicher „Findings“");
   });
 });

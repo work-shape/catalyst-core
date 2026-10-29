@@ -204,11 +204,22 @@ export class AppPublishTogether {
     // come first, including its read-only onPublish checks against the proposed revisions.
     // A refusal publishes no store and waits for none. Its Workflows' checks cannot: a
     // Workflow asks that its children are live, which they are only further down. A Workflow's
-    // own Publish asks what its publish asks before it moves anything: the right, the revision,
-    // the rights its account would get (LIVE-1) and that its children are live.
+    // own Publish (LIVE-2) asks first what its publish asks before it moves anything (the
+    // right, the revision, the rights its account would get and that its children are live),
+    // then every check of its onPublish that reads no store's tables: its limits, mail steps,
+    // outside-start switch, packages, cycles, person contexts and reach. What reads the
+    // stores (its account, the operations it calls, their dataset contracts) is asked by its
+    // onPublish once they are live.
     const carries = members.stores.length > 0 || migrating.length > 0;
     if (carries && input.kind === WORKFLOW_ASSET_KIND) {
-      await this.assets.drafts.checkPublish(call, input);
+      const { target, revision } = await this.assets.drafts.checkPublish(call, input);
+      await target.kind.checkBeforePublish?.({
+        actor: call.actor,
+        clientInstanceId: this.options.clientInstanceId,
+        access: call.access,
+        config: revision.config,
+        stores: this.options.stores
+      });
     } else if (carries) {
       const { asset, revision } = await this.assets.drafts.checkPublish(call, input);
       const workflowConfigs = new Map<string, JsonObject>();

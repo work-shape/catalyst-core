@@ -285,11 +285,12 @@ export interface StoreStillMigrating {
 
 /**
  * The Data Stores the revision binds that are live and not yet at the level it needs, where
- * their live revision reaches it (GOLIVE-1, LIVE-2): an earlier Publish published them and its
- * wait ran out. An App needs the level its manifest asks; a Workflow the level of the store's
- * live revision. A Publish waits for them as for a store it publishes, so publishing again
- * carries on. A store named in `skip` is published by the Publish itself; one that is not there
- * for an App or whose live revision stays below is refused by the App's own publish.
+ * their live revision reaches it (GOLIVE-1): an earlier Publish published them and its wait ran
+ * out. Only an App asks a level, in its manifest; a Workflow asks none, so its Publish waits only
+ * for the stores it names (LIVE-2) and never for another publish's migration. A Publish waits for
+ * them as for a store it publishes, so publishing again carries on. A store named in `skip` is
+ * published by the Publish itself; one that is not there or whose live revision stays below is
+ * refused by the App's own publish.
  */
 export async function storesStillMigrating(
   options: Pick<AssetWorkflowOptions, "clientInstanceId" | "configAssets" | "stores">,
@@ -298,9 +299,8 @@ export async function storesStillMigrating(
 ): Promise<StoreStillMigrating[]> {
   const { clientInstanceId } = options;
   const migrating: StoreStillMigrating[] = [];
-  const asksLevel = app.kind !== WORKFLOW_ASSET_KIND;
   for (const { name, minSchema } of storesBoundBy(options, app)) {
-    if ((asksLevel && minSchema === undefined) || skip.has(name)) continue;
+    if (minSchema === undefined || skip.has(name)) continue;
     const asset = await options.configAssets.store.getConfigAsset({
       clientInstanceId,
       kind: DATA_STORE_ASSET_KIND,
@@ -315,9 +315,8 @@ export async function storesStillMigrating(
     }
     const record = await options.stores.dataStores.getDataStore({ clientInstanceId, id: asset.id });
     const { level, migrations } = storeMigrationsOf(asset.publishedConfig);
-    const needed = minSchema ?? level;
-    if (!record || record.status === "retired" || record.level >= needed) continue;
-    if (level < needed) continue;
+    if (!record || record.status === "retired" || record.level >= minSchema) continue;
+    if (level < minSchema) continue;
     migrating.push({
       name,
       title: assetTitle(asset.publishedConfig, name),
