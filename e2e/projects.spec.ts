@@ -75,7 +75,7 @@ async function createProject(
   await dialog.getByLabel("Name").fill(title);
   await dialog.getByRole("radio", { name: audience }).check();
   await dialog.getByRole("button", { name: "Projekt anlegen" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: title })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/p/[^/]+$`, "u"));
   return new URL(page.url()).pathname;
 }

@@ -69,7 +69,11 @@ export function useChatFileDropzone(input: ChatFileDropzoneInput): ChatFileDropz
   };
 }
 
-export function ChatDropOverlay() {
+/** The mark over an area while files are dragged over it; by default it names the chat. */
+export function ChatDropOverlay({
+  title,
+  description
+}: { title?: string; description?: string } = {}) {
   const { t } = useTranslation();
   return (
     <div className="pointer-events-none absolute inset-0 z-40 p-3">
@@ -77,8 +81,12 @@ export function ChatDropOverlay() {
         <div className="inline-flex items-center gap-3 rounded-full border border-primary/30 bg-card px-5 py-2.5 text-card-foreground shadow-lg">
           <Upload size={18} className="text-primary" aria-hidden="true" />
           <div className="grid gap-0.5 text-left">
-            <strong className="text-sm font-semibold leading-none">{t("fileDropTitle")}</strong>
-            <span className="text-xs text-muted-foreground">{t("fileDropDescription")}</span>
+            <strong className="text-sm font-semibold leading-none">
+              {title ?? t("fileDropTitle")}
+            </strong>
+            <span className="text-xs text-muted-foreground">
+              {description ?? t("fileDropDescription")}
+            </span>
           </div>
         </div>
       </div>
@@ -86,6 +94,6 @@ export function ChatDropOverlay() {
   );
 }
 
-function hasDraggedFiles(event: DragEvent<HTMLElement>): boolean {
+export function hasDraggedFiles(event: DragEvent<HTMLElement>): boolean {
   return [...event.dataTransfer.types].includes("Files");
 }

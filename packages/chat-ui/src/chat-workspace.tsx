@@ -1,4 +1,13 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode
+} from "react";
 import { cn, SkipLink, Spinner, UiRoot, useExit } from "@work-shape/catalyst-ui";
 import { DocsAddressProvider } from "@work-shape/catalyst-ui";
 import { DEFAULT_THEME_INPUTS } from "@work-shape/catalyst-ui/theme";
@@ -48,6 +57,7 @@ import { useRailApps } from "./studio/apps/rail-apps";
 import { InboxArea } from "./chat/inbox";
 import { ScheduledPage } from "./chat/scheduled/scheduled-page";
 import { NewProjectDialog, ProjectsArea } from "./chat/projects/projects-area";
+import { ProjectChatStart } from "./chat/projects/project-chat-start";
 import { AddFromProjectProvider } from "./chat/projects/add-from-project";
 import { useProjectsQuery } from "./shared/api/projects";
 import { useRailProjectChats } from "./chat/projects/rail-project-chats";
@@ -189,7 +199,11 @@ function ChatWorkspaceContent({
     manageDocumentTitle,
     collaborationWorkspacesAvailable
   });
-  const onChatRoute = model.route.view === "chat";
+  // A project's page is the start of a chat in it: the chat's own route, with the project's
+  // parts around its composer (PRJ-1).
+  const projectStartRoute =
+    model.projects.enabled && model.route.route.kind === "project" ? model.route.route : undefined;
+  const onChatRoute = model.route.view === "chat" || projectStartRoute !== undefined;
   const onStartPage = onChatRoute && !model.route.selectedConversationId;
   const dock = model.route.dock;
   // What the surface beside the conversation reports of itself; the Inbox's reading side
@@ -250,10 +264,7 @@ function ChatWorkspaceContent({
   const scheduledRoute = model.route.route.kind === "scheduled" ? model.route.route : undefined;
   // With the module off the model leads a Projects address to the chat; nothing shows meanwhile.
   const projectsRoute =
-    model.projects.enabled &&
-    (model.route.route.kind === "projects" || model.route.route.kind === "project")
-      ? model.route.route
-      : undefined;
+    model.projects.enabled && model.route.route.kind === "projects" ? model.route.route : undefined;
   // The published Apps of the open workspace, under the Apps row of the rail.
   const railAppsWorkspaceId = model.collaborationWorkspace.activeCollaborationWorkspaceId;
   const railApps = useRailApps({
@@ -267,7 +278,7 @@ function ChatWorkspaceContent({
   // The project whose page or chat is open unfolds to its newest chats in the rail.
   const railActiveProject = useRailProjectChats({
     projects: model.conversationRail.projects ? railProjects.data : undefined,
-    openProjectName: projectsRoute?.kind === "project" ? projectsRoute.project : undefined,
+    openProjectName: projectStartRoute?.project,
     openConversation: onChatRoute ? model.conversationRail.openConversation : undefined,
     loaded: model.conversationRail.conversations
   });
@@ -522,6 +533,31 @@ function ChatWorkspaceContent({
     kind: workspace.kind,
     emoji: workspace.emoji
   }));
+  const openProjectConversation = (collaborationWorkspaceId: string, conversationId: string) =>
+    model.route.showRoute({ kind: "conversation", collaborationWorkspaceId, conversationId });
+  // On a project's page a drop of files goes into the project, not into the composer.
+  const chatDrop = projectStartRoute ? undefined : chat.fileDropzone;
+  // The project's page around the chat's start: its name, its controls and its chats.
+  const wrapProjectStart = (children: ReactNode) =>
+    projectStartRoute && activeWorkspace && activeWorkspaceName ? (
+      <ProjectChatStart
+        key={projectStartRoute.project}
+        projectName={projectStartRoute.project}
+        workspace={{
+          id: activeWorkspace.id,
+          name: activeWorkspaceName,
+          kind: activeWorkspace.kind,
+          emoji: activeWorkspace.emoji
+        }}
+        workspaces={projectWorkspaces}
+        onOpenRoute={model.route.showRoute}
+        onOpenConversation={openProjectConversation}
+      >
+        {children}
+      </ProjectChatStart>
+    ) : (
+      children
+    );
   const closeDrawer = model.chrome.closeSidebarDrawer;
   const startNewChat = () => {
     closeDrawer();
@@ -738,7 +774,7 @@ function ChatWorkspaceContent({
                 : undefined
             }
             recentProjects={rail.projects ? railProjects.data : undefined}
-            openProjectName={projectsRoute?.kind === "project" ? projectsRoute.project : undefined}
+            openProjectName={projectStartRoute?.project}
             activeProject={
               railActiveProject
                 ? { id: railActiveProject.project.id, chats: railActiveProject.chats }
@@ -911,53 +947,57 @@ function ChatWorkspaceContent({
                                           conversationId={chat.selectedConversationId}
                                           {...pageHost}
                                         >
-                                          <div
-                                            ref={setSplitAreaElement}
-                                            className="flex h-full min-h-0 min-w-0"
-                                          >
+                                          {wrapProjectStart(
                                             <div
-                                              className={cn(
-                                                "relative h-full min-h-0 min-w-0 flex-1",
-                                                // The card's width of 22rem and its gap of 1.5rem to the edge,
-                                                // so the thread centres with equal gaps to the sidebar and to
-                                                // the card. It is less than the split minimum: a card that has
-                                                // room beside the conversation leaves it its minimum too.
-                                                resourcesInset && "[--resources-inset:23.5rem]"
-                                              )}
-                                              // Under a surface that covers it the chat leaves the tab order.
-                                              inert={chatCovered}
-                                              onDragEnter={chat.fileDropzone.onChatDragEnter}
-                                              onDragOver={chat.fileDropzone.onChatDragOver}
-                                              onDragLeave={chat.fileDropzone.onChatDragLeave}
-                                              onDrop={chat.fileDropzone.onChatDrop}
+                                              ref={setSplitAreaElement}
+                                              className="flex h-full min-h-0 min-w-0"
                                             >
-                                              <DockConversationPane
-                                                chat={chat}
-                                                agentTry={agentTry.pane}
-                                              />
-                                              {chat.fileDropzone.draggingFiles ? (
-                                                <ChatDropOverlay />
-                                              ) : null}
-                                              {resourcesAvailable &&
-                                              resourcesConversationId &&
-                                              resourcesPanel.hasResources &&
-                                              !resourcesShown ? (
-                                                <ResourcesPanelToggle
-                                                  onOpen={() => {
-                                                    displayPanel.close();
-                                                    resourcesPanel.openExplicitly();
-                                                  }}
+                                              <div
+                                                className={cn(
+                                                  "relative h-full min-h-0 min-w-0 flex-1",
+                                                  // The card's width of 22rem and its gap of 1.5rem to the edge,
+                                                  // so the thread centres with equal gaps to the sidebar and to
+                                                  // the card. It is less than the split minimum: a card that has
+                                                  // room beside the conversation leaves it its minimum too.
+                                                  resourcesInset && "[--resources-inset:23.5rem]"
+                                                )}
+                                                // Under a surface that covers it the chat leaves the tab order.
+                                                inert={chatCovered}
+                                                onDragEnter={chatDrop?.onChatDragEnter}
+                                                onDragOver={chatDrop?.onChatDragOver}
+                                                onDragLeave={chatDrop?.onChatDragLeave}
+                                                onDrop={chatDrop?.onChatDrop}
+                                              >
+                                                <DockConversationPane
+                                                  chat={chat}
+                                                  agentTry={agentTry.pane}
+                                                />
+                                                {chatDrop?.draggingFiles ? (
+                                                  <ChatDropOverlay />
+                                                ) : null}
+                                                {resourcesAvailable &&
+                                                resourcesConversationId &&
+                                                resourcesPanel.hasResources &&
+                                                !resourcesShown ? (
+                                                  <ResourcesPanelToggle
+                                                    onOpen={() => {
+                                                      displayPanel.close();
+                                                      resourcesPanel.openExplicitly();
+                                                    }}
+                                                  />
+                                                ) : null}
+                                              </div>
+                                              {/* Beside a page the dock's surfaces cover the page instead. */}
+                                              {onChatRoute ? (
+                                                <SurfaceSlot
+                                                  onBesideWidthChange={
+                                                    chatSurface.reportBesideWidth
+                                                  }
+                                                  onCoveringChange={chatSurface.reportCovering}
                                                 />
                                               ) : null}
                                             </div>
-                                            {/* Beside a page the dock's surfaces cover the page instead. */}
-                                            {onChatRoute ? (
-                                              <SurfaceSlot
-                                                onBesideWidthChange={chatSurface.reportBesideWidth}
-                                                onCoveringChange={chatSurface.reportCovering}
-                                              />
-                                            ) : null}
-                                          </div>
+                                          )}
                                           {/* Placed in the main area, not in the conversation: it keeps its
                                 place when a surface takes room from the conversation. */}
                                           {resourcesExit.held ? (
@@ -1077,17 +1117,6 @@ function ChatWorkspaceContent({
                                                 }}
                                                 workspaces={projectWorkspaces}
                                                 onOpenRoute={model.route.showRoute}
-                                                onOpenConversation={(
-                                                  collaborationWorkspaceId,
-                                                  conversationId
-                                                ) =>
-                                                  model.route.showRoute({
-                                                    kind: "conversation",
-                                                    collaborationWorkspaceId,
-                                                    conversationId
-                                                  })
-                                                }
-                                                onStartChat={model.projects.startChat}
                                               />
                                             ) : undefined
                                           }

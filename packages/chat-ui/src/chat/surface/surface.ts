@@ -22,6 +22,8 @@ interface RenderedSurfaceSource {
 interface SurfaceSources {
   tool_display: RenderedSurfaceSource;
   file_preview: RenderedSurfaceSource;
+  /** A part of the project a new chat starts in, such as its instructions or its files. */
+  project_panel: RenderedSurfaceSource;
   /**
    * One revision of a Page of a conversation. The renderer loads the revision's files itself.
    * `buildErrors` are what the newest save of the Page was refused for, shown under the

@@ -49,6 +49,7 @@ import { useEmbeddedSession } from "../../shared/embedded-session";
 import { startGreeting, startStarters, type ConversationStart } from "../dock/subject-starters";
 import { creationTargetLine } from "../dock/creation-target";
 import { ProjectInstructionsNotice } from "../projects/project-instructions";
+import { useChatStart } from "./chat-start";
 
 /** How long the composer takes to settle at the bottom after the first message. */
 const COMPOSER_SETTLE_MS = 220;
@@ -193,6 +194,14 @@ export function AssistantThread({
   onSubmitMessage?: (text: string) => boolean;
 }) {
   const { t } = useTranslation();
+  // A place that starts chats, such as a project, gives the start page its own head and foot.
+  const chatStart = useChatStart();
+  const startAgentNames = chatStart?.agentNames;
+  const offeredAgents = useMemo(
+    () =>
+      startAgentNames ? agents.filter((candidate) => startAgentNames.has(candidate.name)) : agents,
+    [agents, startAgentNames]
+  );
   const platformReport = platformReportSetup(config, conversationId, useEmbeddedSession());
   const agent = getSelectedAgent(config, selectedAgentName);
   const initialPrompts = agent?.initialPrompts ?? [];
@@ -266,11 +275,12 @@ export function AssistantThread({
               <ThreadWelcomeHeading
                 agent={agent}
                 agentDisplay={agentChipDisplayFor(config?.ui)}
-                agents={agents}
+                agents={offeredAgents}
                 // An opened conversation that is still empty has the agent in the header.
                 showAgent={!messagesEnabled}
                 fallbackWelcomeMessage={config?.ui.welcomeMessage ?? t("genericWelcome")}
                 start={start}
+                heading={chatStart?.heading}
                 onSelectAgent={onSelectAgent}
               />
             ) : null}
@@ -427,12 +437,18 @@ export function AssistantThread({
                     onRemoveAttachment={onRemoveDraftAttachment}
                     onRetryAttachment={onRetryDraftAttachment}
                     onSubmitMessage={onSubmitMessage}
+                    chip={startPage ? chatStart?.composerChip : undefined}
+                    inputLabel={startPage ? chatStart?.composerLabel : undefined}
                   />
                 </div>
               </div>
             </ThreadPrimitive.ViewportFooter>
 
-            {startPage ? (
+            {startPage && chatStart?.below !== undefined ? (
+              <div className="grid flex-[3] basis-0 content-start gap-5 pb-8 pt-2">
+                {chatStart.below}
+              </div>
+            ) : startPage ? (
               <ThreadStartBlock
                 initialPrompts={initialPrompts}
                 starters={agent?.starters ?? []}
@@ -552,6 +568,7 @@ export function ThreadWelcomeHeading({
   showAgent,
   fallbackWelcomeMessage,
   start,
+  heading,
   onSelectAgent
 }: {
   agent: SafeConfig["agents"][number] | undefined;
@@ -561,6 +578,8 @@ export function ThreadWelcomeHeading({
   fallbackWelcomeMessage: string | undefined;
   /** An empty conversation about an asset, or about a new one, is greeted for that. */
   start?: ConversationStart;
+  /** Stands in place of the welcome message, as a project's name does on its page. */
+  heading?: ReactNode;
   onSelectAgent: (agentName: string) => void;
 }) {
   const { t } = useTranslation();
@@ -583,23 +602,27 @@ export function ThreadWelcomeHeading({
           />
         </div>
       ) : null}
-      <div className="grid gap-1">
-        <h2 className="text-title-lg">
-          {greeting === undefined
-            ? (agent?.welcomeMessage ?? fallbackWelcomeMessage ?? t("genericWelcome"))
-            : t(greeting.key, greeting.values)}
-        </h2>
-        {targetLine === undefined ? null : (
-          <p className="text-sm leading-6 text-muted-foreground" data-dock-creation-target="">
-            {targetLine}
-          </p>
-        )}
-        {greeting === undefined && agent?.welcomeSubtitle ? (
-          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-            {agent.welcomeSubtitle}
-          </p>
-        ) : null}
-      </div>
+      {heading !== undefined ? (
+        heading
+      ) : (
+        <div className="grid gap-1">
+          <h2 className="text-title-lg">
+            {greeting === undefined
+              ? (agent?.welcomeMessage ?? fallbackWelcomeMessage ?? t("genericWelcome"))
+              : t(greeting.key, greeting.values)}
+          </h2>
+          {targetLine === undefined ? null : (
+            <p className="text-sm leading-6 text-muted-foreground" data-dock-creation-target="">
+              {targetLine}
+            </p>
+          )}
+          {greeting === undefined && agent?.welcomeSubtitle ? (
+            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+              {agent.welcomeSubtitle}
+            </p>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }

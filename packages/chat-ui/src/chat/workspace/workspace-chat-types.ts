@@ -67,12 +67,6 @@ interface ProjectsModel {
   enabled: boolean;
   /** The project of the open conversation, while the module is on. */
   selectedProjectId?: string;
-  /** Starts a conversation in the project with its first message and opens it. */
-  startChat(input: {
-    text: string;
-    collaborationWorkspaceId: string;
-    projectId: string;
-  }): Promise<void>;
 }
 
 /** The one way into the dock from every page: the page head's "Chat" and the dock's "New chat". */
@@ -382,6 +376,8 @@ export interface SelectedChatModel {
   continuePrivately?(prompt: string): Promise<void>;
   /** The first message on the start page makes a private conversation: "Continue privately". */
   startsPrivate?: boolean;
+  /** The project the start page's first message starts its chat in, on the project's page. */
+  startProjectId?: string;
 }
 
 export interface ToolDisplayModel {

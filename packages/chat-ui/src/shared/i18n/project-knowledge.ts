@@ -7,9 +7,7 @@ import { defineTranslations } from "./translation-area";
 export const projectKnowledge = defineTranslations({
   en: {
     "projectKnowledge.title": "Knowledge Bases",
-    "projectKnowledge.tileEmpty": "None. Chats search their agent's Knowledge Bases only.",
     "projectKnowledge.tileUnavailable": "Something here no longer applies",
-    "projectKnowledge.open": "Open Knowledge Bases",
     "projectKnowledge.panelLead":
       "Every chat in {project} searches these Knowledge Bases besides its agent's own. Attaching gives nobody a right: each search checks that the person may use the Knowledge Base.",
     "projectKnowledge.field": "Attached Knowledge Bases",
@@ -29,9 +27,7 @@ export const projectKnowledge = defineTranslations({
   },
   de: {
     "projectKnowledge.title": "Wissensbasen",
-    "projectKnowledge.tileEmpty": "Keine. Chats durchsuchen nur die Wissensbasen ihres Agenten.",
     "projectKnowledge.tileUnavailable": "Etwas davon gilt nicht mehr",
-    "projectKnowledge.open": "Wissensbasen öffnen",
     "projectKnowledge.panelLead":
       "Jeder Chat in {project} durchsucht diese Wissensbasen zusätzlich zu denen seines Agenten. Anhängen gibt niemandem ein Recht: Jede Suche prüft, ob die Person die Wissensbasis nutzen darf.",
     "projectKnowledge.field": "Angehängte Wissensbasen",

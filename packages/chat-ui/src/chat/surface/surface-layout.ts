@@ -19,6 +19,8 @@ const surfaceDefaultWidths: Partial<Record<SurfaceKind, SurfaceDefaultWidth>> = 
   file_preview: { share: 0.45, max: 720 },
   // An item is read like a document: wide enough for a proposal's lines beside the list.
   inbox_item: { max: 520 },
+  // A project's instructions or its files, beside the start of a chat in it.
+  project_panel: { share: 0.45, max: 560 },
   // A Page is laid out like a small application: it gets more room than a document.
   page: { max: 640 },
   // The place a Page's preview takes once it is built.

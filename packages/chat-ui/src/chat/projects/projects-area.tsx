@@ -1,29 +1,24 @@
-import { ArrowUp, Folder, Lock, MessageSquare, Plus, Users } from "lucide-react";
+import { Folder, Plus } from "lucide-react";
 import { useId, useState, type FormEvent } from "react";
 import type {
   CollaborationWorkspaceWithRole,
-  ConversationListItem,
   ProjectAudienceView,
   ProjectListItemView,
   ProjectView
 } from "@work-shape/catalyst-api-client";
 import {
-  Badge,
-  Breadcrumb,
   Button,
   Card,
   CardFooter,
   CardHeader,
   CardTarget,
   CardTitle,
-  ComposerFrame,
   Dialog,
   EmptyState,
   Field,
   FormNotice,
   InlineError,
   Input,
-  NotFound,
   Page,
   PageHeader,
   RadioGroup,
@@ -37,30 +32,14 @@ import {
 import {
   useCreateProjectMutation,
   useMyProjectsQuery,
-  useProjectConversationsQuery,
-  useProjectQuery,
   useProjectsQuery
 } from "../../shared/api/projects";
-import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
-import { useWorkspaceMeQuery } from "../../shared/api/workspace-queries";
 import { AreaFrame, useAreaTitleFocus } from "../../shared/area-frame";
-import { conversationTitle } from "../../shared/conversation-title";
 import { useTranslation } from "../../shared/i18n";
 import { formatDateTime } from "../../shared/locale-format";
-import { workspaceRoutePath } from "../../shared/routes";
-import { apiErrorStatus } from "../../shared/workspace-utils";
 import type { WorkspaceRoute } from "../../shared/workspace-route";
 import { RouteLink } from "../../studio/route-link";
-import { ProjectFilesSection } from "./project-files-section";
-import { ProjectInstructionsTile } from "./project-instructions";
-import { ProjectComposerAgent, ProjectSetupTile } from "./project-setup";
-import { ProjectKnowledgeTile } from "./project-knowledge";
-import type { BuildWorkspace } from "../../shared/build-rights";
-import {
-  ProjectSettingsDialogs,
-  ProjectSettingsMenu,
-  type ProjectSetting
-} from "./project-settings-dialogs";
+import { ProjectAudienceBadge } from "./project-audience-badge";
 
 /** The workspace the projects belong to, as the pages name it. */
 interface ProjectsWorkspace {
@@ -85,63 +64,19 @@ interface ProjectsWorkspaceChoice {
 }
 
 interface ProjectsAreaProps {
-  route: Extract<WorkspaceRoute, { kind: "projects" } | { kind: "project" }>;
+  route: Extract<WorkspaceRoute, { kind: "projects" }>;
   workspace: ProjectsWorkspace;
   /** Every workspace of the person, in the selector's order. */
   workspaces: readonly ProjectsWorkspaceChoice[];
   onOpenRoute(route: WorkspaceRoute): void;
-  onOpenConversation(collaborationWorkspaceId: string, conversationId: string): void;
-  onStartChat(input: {
-    text: string;
-    collaborationWorkspaceId: string;
-    projectId: string;
-    /** The agent the person chose; without one the project's default, else the workspace's. */
-    agentName?: string;
-  }): Promise<void>;
-}
-
-/** The person's workspaces as the share of a greyed agent or skill names them (PRJ-7). */
-function shareWorkspacesOf(workspaces: ProjectsAreaProps["workspaces"]): BuildWorkspace[] {
-  return workspaces.map((entry) => ({
-    id: entry.id,
-    name: entry.name,
-    member: true,
-    ...(entry.kind === "personal" ? { personal: true as const } : {})
-  }));
 }
 
 /**
  * The Projects area (PRJ-1): the projects of the open workspace or of all the person's
- * workspaces (PRJ-5), and one project's page.
+ * workspaces (PRJ-5). A project's own page is the start of a chat in it (`ProjectChatStart`).
  */
 export function ProjectsArea(props: ProjectsAreaProps) {
-  return props.route.kind === "projects" ? (
-    <ProjectsPage key={props.workspace.id} {...props} />
-  ) : (
-    <ProjectPage key={props.route.project} {...props} projectName={props.route.project} />
-  );
-}
-
-/** The audience of a project as a badge: shared with the workspace, or the lock of "Only me". */
-function AudienceBadge({ project, workspace }: { project: ProjectView; workspace: string }) {
-  const { t } = useTranslation();
-  return project.audience === "private" ? (
-    <Badge size="sm" data-testid="project-audience-private">
-      <Lock aria-hidden="true" className="size-3" />
-      {t("projects.audiencePrivate")}
-    </Badge>
-  ) : (
-    <Badge
-      size="sm"
-      appearance="outline"
-      className="max-w-full"
-      title={t("projects.audienceShared", { workspace })}
-      data-testid="project-audience-shared"
-    >
-      <Users aria-hidden="true" className="size-3 shrink-0" />
-      <span className="truncate">{t("projects.audienceShared", { workspace })}</span>
-    </Badge>
-  );
+  return <ProjectsPage key={props.workspace.id} {...props} />;
 }
 
 /** Which projects the Projects page lists: the open workspace's, or those of all of them. */
@@ -334,7 +269,7 @@ function ProjectCards({
                   <CardTitle clamp className="min-w-0">
                     {project.title}
                   </CardTitle>
-                  <AudienceBadge project={project} workspace={workspace.name} />
+                  <ProjectAudienceBadge project={project} workspace={workspace.name} />
                 </div>
                 {project.description ? (
                   <p className="line-clamp-2 text-body text-muted-foreground">
@@ -496,331 +431,5 @@ export function NewProjectDialog({
         {create.isError ? <FormNotice tone="error">{t("projects.createFailed")}</FormNotice> : null}
       </form>
     </Dialog>
-  );
-}
-
-/** One project: its head, its conversations as cards and a composer that starts one in it. */
-function ProjectPage({
-  workspace,
-  workspaces,
-  projectName,
-  onOpenRoute,
-  onOpenConversation,
-  onStartChat
-}: ProjectsAreaProps & { projectName: string }) {
-  const { t } = useTranslation();
-  const areaRef = useAreaTitleFocus(true);
-  const query = useProjectQuery(projectName);
-  const project = query.data;
-  const me = useWorkspaceMeQuery(useWorkspaceApiClient());
-  const [setting, setSetting] = useState<ProjectSetting>();
-  const projectsRoute: WorkspaceRoute = {
-    kind: "projects",
-    collaborationWorkspaceId: workspace.id
-  };
-
-  if (query.isError && apiErrorStatus(query.error) === 404) {
-    return (
-      <AreaFrame ref={areaRef} label={t("projects.title")}>
-        <NotFound
-          icon={<Folder aria-hidden="true" />}
-          data-testid="project-not-found"
-          action={
-            <Button variant="outline" onClick={() => onOpenRoute(projectsRoute)}>
-              {t("projects.backToProjects")}
-            </Button>
-          }
-        >
-          {t("projects.notFound")}
-        </NotFound>
-      </AreaFrame>
-    );
-  }
-
-  return (
-    <AreaFrame ref={areaRef} label={project?.title ?? t("projects.title")}>
-      <Page>
-        {query.isPending ? (
-          <SkeletonList rows={3} />
-        ) : query.isError || !project ? (
-          <InlineError className="flex flex-wrap items-center justify-between gap-2">
-            <span>{t("projects.loadFailed")}</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                query.refetch().catch(() => undefined);
-              }}
-            >
-              {t("tryAgain")}
-            </Button>
-          </InlineError>
-        ) : (
-          <>
-            <PageHeader
-              back={
-                <Breadcrumb
-                  label={t("projects.way")}
-                  items={[
-                    {
-                      id: "projects",
-                      label: workspace.name,
-                      href: workspaceRoutePath(projectsRoute),
-                      onSelect: () => onOpenRoute(projectsRoute)
-                    },
-                    { id: project.id, label: project.title }
-                  ]}
-                />
-              }
-              title={project.title}
-              state={<AudienceBadge project={project} workspace={workspace.name} />}
-              description={project.description}
-              menu={
-                <ProjectSettingsMenu
-                  project={project}
-                  workspace={workspace}
-                  workspaces={workspaces}
-                  currentUserId={me.data?.id}
-                  onOpen={setSetting}
-                />
-              }
-            />
-            <ProjectSettingsDialogs
-              open={setting}
-              project={project}
-              workspace={workspace}
-              workspaces={workspaces}
-              onClose={() => setSetting(undefined)}
-              onMoved={(moved) => {
-                setSetting(undefined);
-                onOpenRoute({
-                  kind: "project",
-                  collaborationWorkspaceId: moved.collaborationWorkspaceId,
-                  project: moved.name
-                });
-              }}
-              onDeleted={() => {
-                setSetting(undefined);
-                onOpenRoute(projectsRoute);
-              }}
-            />
-            {/* The page's body measures its own width: the page frame is no container. */}
-            <div className="@container/project">
-              {/* The project's settings as tiles, side by side as far as the page has room. */}
-              <div className="mb-8 grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-4">
-                <ProjectInstructionsTile project={project} />
-                <ProjectSetupTile
-                  project={project}
-                  workspace={workspace}
-                  workspaces={shareWorkspacesOf(workspaces)}
-                />
-                <ProjectKnowledgeTile
-                  project={project}
-                  workspace={workspace}
-                  workspaces={shareWorkspacesOf(workspaces)}
-                />
-              </div>
-              {/* The files stand beside the chats where the page has room, and below them where not. */}
-              <div className="grid gap-8 @4xl/project:grid-cols-[minmax(0,1fr)_minmax(18rem,26rem)]">
-                <div className="@container min-w-0">
-                  <ProjectConversations project={project} onOpenConversation={onOpenConversation} />
-                  <ProjectComposer
-                    project={project}
-                    workspace={workspace}
-                    workspaces={workspaces}
-                    onStartChat={onStartChat}
-                  />
-                </div>
-                <div className="min-w-0">
-                  <ProjectFilesSection
-                    project={project}
-                    onOpenConversation={(conversationId) =>
-                      onOpenConversation(project.collaborationWorkspaceId, conversationId)
-                    }
-                  />
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-      </Page>
-    </AreaFrame>
-  );
-}
-
-function ProjectConversations({
-  project,
-  onOpenConversation
-}: {
-  project: ProjectView;
-  onOpenConversation: ProjectsAreaProps["onOpenConversation"];
-}) {
-  const { t, locale } = useTranslation();
-  const conversations = useProjectConversationsQuery(project);
-  return (
-    <Section
-      layout="stacked"
-      title={t("projects.conversations")}
-      count={conversations.data?.length}
-    >
-      {conversations.isPending ? (
-        <SkeletonList rows={2} />
-      ) : conversations.isError ? (
-        <InlineError className="flex flex-wrap items-center justify-between gap-2">
-          <span>{t("projects.conversationsFailed")}</span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              conversations.refetch().catch(() => undefined);
-            }}
-          >
-            {t("tryAgain")}
-          </Button>
-        </InlineError>
-      ) : conversations.data.length === 0 ? (
-        <EmptyState icon={<MessageSquare aria-hidden="true" />}>
-          {t("projects.conversationsEmpty")}
-        </EmptyState>
-      ) : (
-        <ul
-          aria-label={t("projects.conversations")}
-          className="grid grid-cols-1 gap-3 @xl:grid-cols-2 @4xl:grid-cols-3"
-        >
-          {conversations.data.map((conversation) => (
-            <li key={conversation.id} className="flex min-w-0" data-testid="project-conversation">
-              <ConversationCard
-                conversation={conversation}
-                updated={t("projects.updatedAt", {
-                  date: formatDateTime(conversation.updatedAt, locale)
-                })}
-                onOpen={() =>
-                  onOpenConversation(conversation.collaborationWorkspaceId, conversation.id)
-                }
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-    </Section>
-  );
-}
-
-function ConversationCard({
-  conversation,
-  updated,
-  onOpen
-}: {
-  conversation: ConversationListItem;
-  updated: string;
-  onOpen(): void;
-}) {
-  const { t } = useTranslation();
-  const title = conversationTitle(conversation.title, t);
-  return (
-    <Card padding="md" className="flex w-full min-w-0 flex-col">
-      <CardHeader>
-        <CardTitle clamp className="min-w-0">
-          {title}
-        </CardTitle>
-        <p className="text-caption text-muted-foreground">{updated}</p>
-      </CardHeader>
-      <CardFooter>
-        <CardTarget label={t("projects.openConversation", { title })} title={title}>
-          <Button variant="outline" size="sm" onClick={onOpen}>
-            {t("projects.openAction")}
-          </Button>
-        </CardTarget>
-      </CardFooter>
-    </Card>
-  );
-}
-
-/** Starts a new chat in the project with its first message; the chat opens once it runs. */
-function ProjectComposer({
-  project,
-  workspace,
-  workspaces,
-  onStartChat
-}: {
-  project: ProjectView;
-  workspace: ProjectsWorkspace;
-  workspaces: ProjectsAreaProps["workspaces"];
-  onStartChat: ProjectsAreaProps["onStartChat"];
-}) {
-  const { t } = useTranslation();
-  const [text, setText] = useState("");
-  // Chosen here; until then the server starts the chat with the project's default agent.
-  const [agentName, setAgentName] = useState<string>();
-  const [pending, setPending] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const label = t("projects.composerLabel", { title: project.title });
-
-  async function start(event?: FormEvent) {
-    event?.preventDefault();
-    const message = text.trim();
-    if (message === "" || pending) return;
-    setPending(true);
-    setFailed(false);
-    try {
-      await onStartChat({
-        text: message,
-        collaborationWorkspaceId: project.collaborationWorkspaceId,
-        projectId: project.id,
-        ...(agentName ? { agentName } : {})
-      });
-    } catch {
-      setFailed(true);
-      setPending(false);
-    }
-  }
-
-  return (
-    <form
-      className="grid gap-2 pt-6"
-      onSubmit={(event) => {
-        start(event).catch(() => undefined);
-      }}
-    >
-      <ComposerFrame className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-1">
-        <Textarea
-          variant="composer"
-          aria-label={label}
-          data-testid="project-composer"
-          rows={2}
-          value={text}
-          placeholder={t("projects.composerPlaceholder", { title: project.title })}
-          disabled={pending}
-          onChange={(event) => setText(event.currentTarget.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-              event.preventDefault();
-              start().catch(() => undefined);
-            }
-          }}
-        />
-        <div className="flex min-w-0 items-center gap-1">
-          <ProjectComposerAgent
-            project={project}
-            workspace={workspace}
-            workspaces={shareWorkspacesOf(workspaces)}
-            value={agentName}
-            onChange={setAgentName}
-          />
-          <Button
-            type="submit"
-            size="icon"
-            className="size-9 rounded-full"
-            aria-label={t("projects.send")}
-            title={t("projects.send")}
-            loading={pending}
-            disabled={text.trim() === ""}
-          >
-            <ArrowUp aria-hidden="true" />
-          </Button>
-        </div>
-      </ComposerFrame>
-      {failed ? <FormNotice tone="error">{t("projects.startFailed")}</FormNotice> : null}
-    </form>
   );
 }

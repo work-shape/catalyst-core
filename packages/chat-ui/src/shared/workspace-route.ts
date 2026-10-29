@@ -40,8 +40,12 @@ export function routeConversationId(route: WorkspaceRoute): string | undefined {
     : undefined;
 }
 
+/**
+ * The route shows the chat column itself, with no dock beside it: a conversation, the start page,
+ * and a project's page, which is the start page of a chat in the project.
+ */
 export function isChatWorkspaceRoute(route: WorkspaceRoute): boolean {
-  return workspaceRouteView(route) === "chat";
+  return route.kind === "project" || workspaceRouteView(route) === "chat";
 }
 
 /** The view a route shows: its area in the area route table. */

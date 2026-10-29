@@ -1,5 +1,4 @@
-import { ChevronDown, Sparkles } from "lucide-react";
-import { forwardRef, useEffect, useMemo, useState, type ComponentPropsWithoutRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   ProjectAgentChoiceView,
   ProjectSetupView,
@@ -11,11 +10,6 @@ import {
   Avatar,
   Banner,
   Button,
-  Card,
-  CardFooter,
-  CardHeader,
-  CardTarget,
-  CardTitle,
   Chip,
   Drawer,
   Field,
@@ -87,7 +81,7 @@ function attachedSkills(setup: ProjectSetupView) {
 }
 
 /** The agent a new chat in the project starts with: its default, else the workspace's. */
-function projectStartAgent(setup: ProjectSetupView | undefined) {
+export function projectStartAgent(setup: ProjectSetupView | undefined) {
   if (!setup) return undefined;
   return (
     usableDefault(setup) ??
@@ -186,75 +180,41 @@ function agentOptions(
   ];
 }
 
-// --- The tile and the panel on the project's page ----------------------------------------------
+// --- The drawer beside the project's page ------------------------------------------------------
 
-/** The "Skills & agent" tile beside the instructions: what is attached, and a warning where not. */
-export function ProjectSetupTile({
+/** The project's default agent or one of its skills no longer applies to its chats. */
+export function projectSetupUnavailable(setup: ProjectSetupView): boolean {
+  return (
+    (setup.defaultAgent !== undefined && usableDefault(setup) === undefined) ||
+    attachedSkills(setup).unavailable.length > 0
+  );
+}
+
+/** The default agent and the skills of the project, opened from its page's "…" menu. */
+export function ProjectSetupDrawer({
   project,
   workspace,
-  workspaces
+  workspaces,
+  open,
+  onClose
 }: {
   project: ProjectView;
   workspace: ProjectSetupWorkspace;
   workspaces: readonly BuildWorkspace[];
+  open: boolean;
+  onClose(): void;
 }) {
-  const { t } = useTranslation();
   const setup = useProjectSetupQuery(project.id);
-  const [open, setOpen] = useState(false);
-  const data = setup.data;
-  const agent = data ? usableDefault(data) : undefined;
-  const skills = data ? attachedSkills(data) : undefined;
-  const unavailable =
-    data !== undefined &&
-    ((data.defaultAgent !== undefined && agent === undefined) ||
-      (skills?.unavailable.length ?? 0) > 0);
-  const parts = [
-    ...(skills?.applied.map((skill) => skill.title || skill.name) ?? []),
-    ...(agent ? [agent.displayName] : [])
-  ];
-  const meta = setup.isPending
-    ? "…"
-    : setup.isError
-      ? t("projectSetup.loadFailed")
-      : parts.length === 0
-        ? t("projectSetup.tileEmpty")
-        : parts.join(" · ");
   return (
-    <>
-      <Card
-        padding="md"
-        className="min-w-0"
-        data-testid="project-setup-tile"
-        data-state={unavailable ? "unavailable" : parts.length === 0 ? "empty" : "set"}
-      >
-        <CardHeader className="grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3">
-          <Sparkles aria-hidden="true" className="row-span-2 mt-0.5 size-4 text-muted-foreground" />
-          <CardTitle>{t("projectSetup.title")}</CardTitle>
-          <p className="text-caption text-muted-foreground wrap-anywhere">{meta}</p>
-          {unavailable ? (
-            <Banner layout="line" tone="warning" className="col-start-2">
-              {t("projectSetup.tileUnavailable")}
-            </Banner>
-          ) : null}
-        </CardHeader>
-        <CardFooter>
-          <CardTarget label={t("projectSetup.open")} title={t("projectSetup.title")}>
-            <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-              {t("projectSetup.open")}
-            </Button>
-          </CardTarget>
-        </CardFooter>
-      </Card>
-      <ProjectSetupPanel
-        project={project}
-        workspace={workspace}
-        workspaces={workspaces}
-        open={open}
-        setup={data}
-        failed={setup.isError}
-        onClose={() => setOpen(false)}
-      />
-    </>
+    <ProjectSetupPanel
+      project={project}
+      workspace={workspace}
+      workspaces={workspaces}
+      open={open}
+      setup={setup.data}
+      failed={setup.isError}
+      onClose={onClose}
+    />
   );
 }
 
@@ -512,87 +472,3 @@ function ProjectSetupPanel({
     </Drawer>
   );
 }
-
-// --- The agent of a new chat, in the composer --------------------------------------------------
-
-/**
- * The agent a new chat in the project starts with, beside the composer's send button: the
- * project's default where it applies, else the workspace's. Nothing where there is no choice.
- */
-export function ProjectComposerAgent({
-  project,
-  workspace,
-  workspaces,
-  value,
-  onChange
-}: {
-  project: ProjectView;
-  workspace: ProjectSetupWorkspace;
-  workspaces: readonly BuildWorkspace[];
-  value: string | undefined;
-  onChange(agentName: string): void;
-}) {
-  const { t } = useTranslation();
-  const setup = useProjectSetupQuery(project.id);
-  const share = useProjectChoiceShare(project, workspace, workspaces);
-  const [open, setOpen] = useState(false);
-  const data = setup.data;
-  if (!data) return null;
-  const greyed = data.agents.some((agent) => !usable(agent));
-  const usableAgents = data.agents.filter(usable);
-  const chosen = usableAgents.find((agent) => agent.name === value) ?? projectStartAgent(data);
-  if (!chosen || (usableAgents.length < 2 && !greyed)) return null;
-  return (
-    <>
-      <Picker
-        wrapDescriptions
-        className={PICKER_WIDTH}
-        label={t("projectSetup.composerAgent")}
-        options={agentOptions(
-          data.agents,
-          t("projectSetup.ownInSharedProject"),
-          t("projectSetup.ownHint"),
-          (agent) => share.action("agent", agent, agent.displayName)
-        )}
-        value={chosen.name}
-        open={open}
-        onOpenChange={setOpen}
-        align="end"
-        side="top"
-        onValueChange={onChange}
-      >
-        <ComposerAgentButton label={chosen.displayName} open={open} />
-      </Picker>
-      {share.dialog}
-    </>
-  );
-}
-
-const ComposerAgentButton = forwardRef<
-  HTMLButtonElement,
-  ComponentPropsWithoutRef<"button"> & { label: string; open: boolean }
->(function ComposerAgentButton({ label, open, className, ...trigger }, ref) {
-  const { t } = useTranslation();
-  return (
-    <Button
-      ref={ref}
-      variant="ghost"
-      size="sm"
-      {...trigger}
-      data-testid="project-composer-agent"
-      className={cn("h-9 max-w-48 min-w-0 gap-1.5 px-2", className)}
-      aria-label={`${t("projectSetup.composerAgent")}: ${label}`}
-      title={label}
-    >
-      <Avatar kind="agent" name={label} size="sm" className="pointer-events-none" />
-      <span className="min-w-0 truncate text-label">{label}</span>
-      <ChevronDown
-        aria-hidden="true"
-        className={cn(
-          "size-4 shrink-0 text-muted-foreground transition-transform",
-          open && "rotate-180"
-        )}
-      />
-    </Button>
-  );
-});

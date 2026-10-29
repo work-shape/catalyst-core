@@ -160,7 +160,7 @@ test("all projects: the rail group, the scope filter with workspace chips, and a
   // Opening the other workspace's project switches to that workspace.
   await otherCard.getByRole("link", { name: `${otherTitle} öffnen` }).click();
   await expect(page).toHaveURL(new RegExp(`/w/${financeId}/p/${other.name}$`, "u"));
-  await expect(page.getByRole("heading", { level: 1, name: otherTitle })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: otherTitle })).toBeVisible();
   await expect(page.getByTestId("project-conversation")).toHaveCount(1);
   await expect(page.getByTestId("collaboration-workspace-selector-trigger")).toContainText(finance);
   const switchedRail = page.getByTestId("rail-projects").getByTestId("rail-project");

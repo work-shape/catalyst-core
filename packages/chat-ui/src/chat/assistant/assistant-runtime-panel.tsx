@@ -144,6 +144,7 @@ function AssistantRuntimePane({
     cancelSelectedRun: onCancelRun,
     continuePrivately,
     startsPrivate,
+    startProjectId,
     followUpSource
   } = chat;
   const { t } = useTranslation();
@@ -260,7 +261,12 @@ function AssistantRuntimePane({
             idempotencyKey: createRunIdempotencyKey(),
             locale,
             text: trimmedText,
-            ...(startsPrivate && !docked ? { visibility: "private" as const } : {})
+            // A chat started in a project takes the project's audience.
+            ...(startProjectId
+              ? { projectId: startProjectId }
+              : startsPrivate && !docked
+                ? { visibility: "private" as const }
+                : {})
           })
         )
         .then((response) => {
@@ -309,6 +315,7 @@ function AssistantRuntimePane({
       sendStagedFiles,
       setRootSubmitPendingIfActive,
       startComposerRef,
+      startProjectId,
       startsPrivate
     ]
   );

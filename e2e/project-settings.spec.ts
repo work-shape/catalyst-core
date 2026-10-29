@@ -55,7 +55,7 @@ async function workspace(page: Page, name: string): Promise<string> {
 }
 
 async function openSetting(page: Page, item: RegExp): Promise<void> {
-  await page.getByRole("button", { name: "Weitere Aktionen" }).click();
+  await page.getByRole("button", { name: "Mehr zum Projekt" }).click();
   await page.getByRole("menuitem", { name: item }).click();
 }
 
@@ -102,7 +102,7 @@ test("a person shares a project, makes it private again, moves it and deletes it
   await create.getByLabel("Name").fill(title);
   await create.getByRole("radio", { name: "Nur ich" }).check();
   await create.getByRole("button", { name: "Projekt anlegen" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: title })).toBeVisible();
   const projectPath = new URL(page.url()).pathname;
   await startChatInProject(page, title, "Welche Unterlagen fehlen noch?");
   await memberPage.goto(`/w/${team}/projects`);
@@ -118,7 +118,7 @@ test("a person shares a project, makes it private again, moves it and deletes it
   await expect(share).toBeHidden();
   await expect(page.getByTestId("project-audience-shared")).toBeVisible();
   await memberPage.goto(projectPath);
-  await expect(memberPage.getByRole("heading", { level: 1, name: title })).toBeVisible();
+  await expect(memberPage.getByRole("heading", { level: 2, name: title })).toBeVisible();
   await expect(memberPage.getByTestId("project-conversation")).toHaveCount(1);
   await startChatInProject(memberPage, title, "Ich ergänze die Grundrisse.");
 
@@ -147,7 +147,7 @@ test("a person shares a project, makes it private again, moves it and deletes it
   await shot(page, "project-move-dialog");
   await move.getByRole("button", { name: "Verschieben" }).click();
   await expect(page).toHaveURL(new RegExp(`/w/${second}/p/[^/]+$`, "u"));
-  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: title })).toBeVisible();
   await expect(page.getByTestId("project-conversation")).toHaveCount(1);
 
   // Deleted with its chat.
