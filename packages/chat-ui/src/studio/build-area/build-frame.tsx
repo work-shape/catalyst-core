@@ -68,6 +68,7 @@ import { AssetPlaceLine, AssetPlacesProvider, assetPlace } from "./asset-place";
 import { scrollPageToTop } from "./build-scroll";
 import { BUILT_WITH_AGENT, BuildListEmpty } from "./build-list-empty";
 import { BuildWithAgentDialog } from "../build-with-agent-dialog";
+import { CAPABILITIES_BUILD_PATH, CapabilitiesPage } from "./capabilities-page";
 
 /** The commands the CLI entry names, in the order a person runs them. */
 const CLI_COMMANDS = ["catalyst config pull", "catalyst config diff", "catalyst config push"];
@@ -106,7 +107,9 @@ function BuildFrameBody({
   const { locale, t } = useTranslation();
   const { location, open, href } = useBuildNavigation();
   const kinds = visibleBuildKinds(useBuildAssetKinds(), source.kinds);
-  const place = resolveBuildPlace(kinds, location);
+  // "Fähigkeiten" stands below the kinds and is no kind: its address names no place of one.
+  const onCapabilities = location.kindPath === CAPABILITIES_BUILD_PATH;
+  const place = onCapabilities ? undefined : resolveBuildPlace(kinds, location);
   const placePath = place?.kind.entry.path;
   const corrected = place?.corrected ?? false;
   // The chat builds where Studio is set: a conversation it starts here is made in that owner,
@@ -262,6 +265,46 @@ function BuildFrameBody({
     />
   ) : null;
 
+  // The kinds, and below them "Fähigkeiten", which shows what the kinds' agents can be given.
+  const rail = (value: string) =>
+    kinds.length === 0 ? undefined : (
+      <SubRail
+        title={t("nav.build")}
+        label={t("build.kinds")}
+        groups={[
+          {
+            id: "kinds",
+            items: kinds.map((kind) => ({
+              id: kind.entry.path,
+              label: t(kind.entry.label),
+              icon: <RegistryIcon name={kind.entry.icon} />
+            }))
+          },
+          {
+            id: "capabilities",
+            items: [
+              {
+                id: CAPABILITIES_BUILD_PATH,
+                label: t("capabilities.title"),
+                icon: <RegistryIcon name="tool" />
+              }
+            ]
+          }
+        ]}
+        value={value}
+        onValueChange={(kindPath) => open({ kindPath })}
+      />
+    );
+
+  if (onCapabilities) {
+    return (
+      <Page ref={pageRef} subRail={rail(CAPABILITIES_BUILD_PATH)}>
+        {loadError}
+        <CapabilitiesPage />
+      </Page>
+    );
+  }
+
   if (!place) {
     return (
       <Page ref={pageRef}>
@@ -411,29 +454,7 @@ function BuildFrameBody({
   const briefed =
     !isEditableKind(entry) && place.kind.state.canCreate ? BUILT_WITH_AGENT[entry.kind] : undefined;
   return (
-    <Page
-      ref={pageRef}
-      subRail={
-        kinds.length > 1 ? (
-          <SubRail
-            title={t("nav.build")}
-            label={t("build.kinds")}
-            groups={[
-              {
-                id: "kinds",
-                items: kinds.map((kind) => ({
-                  id: kind.entry.path,
-                  label: t(kind.entry.label),
-                  icon: <RegistryIcon name={kind.entry.icon} />
-                }))
-              }
-            ]}
-            value={entry.path}
-            onValueChange={(kindPath) => open({ kindPath })}
-          />
-        ) : undefined
-      }
-    >
+    <Page ref={pageRef} subRail={rail(entry.path)}>
       <BuildList
         key={entry.path}
         source={source}

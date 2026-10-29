@@ -97,6 +97,12 @@ const EXCEPTIONS: { keys: RegExp; words: readonly string[]; reason: string }[] =
     reason: "The header a REST API receives, in the words its provider's documentation uses."
   },
   {
+    keys: /^capabilities\.(?:title|off)$/u,
+    words: ["Fähigkeit", "instance"],
+    reason:
+      "Studio's Capabilities page and its mark on a module that is off, in the words section 4.3 of the navigation spec gives them (TOOLS-2)."
+  },
+  {
     keys: /^personalApiKeys\.createdDescription$/u,
     words: ["error code"],
     reason: "CATALYST_API_KEY is the variable the person sets for the CLI; it is no error code."

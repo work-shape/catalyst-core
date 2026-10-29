@@ -8927,6 +8927,65 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/context/capabilities": {
+      "get": {
+        "operationId": "platform.capabilities.get",
+        "summary": "Read what this instance's agents can be given, by package, and the agents using it",
+        "tags": [
+          "Platform"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Capabilities"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/context/docs": {
       "get": {
         "operationId": "platform.docs.get",
@@ -45794,6 +45853,94 @@
         },
         "required": [
           "run"
+        ]
+      },
+      "Capabilities": {
+        "type": "object",
+        "properties": {
+          "packages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CapabilityPackage"
+            }
+          }
+        },
+        "required": [
+          "packages"
+        ]
+      },
+      "CapabilityPackage": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "general",
+              "module",
+              "own"
+            ]
+          },
+          "module": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentToolReference"
+            }
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "icon": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "title"
+              ]
+            }
+          },
+          "agents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "enabled",
+          "tools",
+          "skills",
+          "agents"
         ]
       },
       "ChangeCurrentUserPasswordRequest": {

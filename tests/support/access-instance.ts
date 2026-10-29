@@ -1,7 +1,7 @@
 import { expect } from "vitest";
 import { z } from "zod";
 import type { AuthAdapter } from "@work-shape/catalyst-auth";
-import type { WorkflowAssetKind } from "@work-shape/catalyst-server";
+import type { ShippedSkillReference, WorkflowAssetKind } from "@work-shape/catalyst-server";
 import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   LEGACY_LIST_GRANTOR,
@@ -319,6 +319,8 @@ export interface AccessInstanceOptions {
   registeredToolNames?: string[];
   /** Live data tools the instance exposes to agents. */
   dataTools?: DataToolSource;
+  /** The skills the release ships, as Studio's "Fähigkeiten" page reads them. */
+  shippedSkills?: readonly ShippedSkillReference[];
   /** Fields of `administration.agentConfiguration` that differ from the open default. */
   editingLimits?: EditingLimits;
   /** Kinds registered beside agent and skill. */
@@ -392,6 +394,7 @@ export async function setupAccessInstance(
         store: stores.configAssets,
         validationRefs,
         ...(options.dataTools ? { dataTools: options.dataTools } : {}),
+        ...(options.shippedSkills ? { skills: () => options.shippedSkills ?? [] } : {}),
         ...(options.storedAssetSource
           ? {
               source: createStoredConfigAssetSource({

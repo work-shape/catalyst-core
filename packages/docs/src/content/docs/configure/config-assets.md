@@ -373,6 +373,7 @@ Every asset is read and written at one address, `/api/v1/assets/{kind}/{name}`, 
 | `agents.give_tools`       | `POST /api/v1/agents/{name}/give-tools`           | `agent.write` and `agent.publish` |
 | `platform.context.get`    | `GET /api/v1/context`                             | any signed-in caller |
 | `platform.references.get` | `GET /api/v1/context/references`                  | a right on any kind  |
+| `platform.capabilities.get` | `GET /api/v1/context/capabilities`            | a right on any kind  |
 
 The right is decided for the one asset: an instance right, a grant in the workspace that owns it, or a grant on the asset. `assets.list` answers only the assets the caller may read, as summaries without content, in the order of their names. It filters by `prefix` (the start of a name, such as `tax-`) and by `text` (a part of the name, in any case), and pages with `limit` and `cursor`. It is built for up to 10,000 assets of a kind.
 
@@ -413,6 +414,8 @@ A new agent starts in the workspace it is made in. `assets.put` takes `available
 `assets.set_default` (`POST /api/v1/assets/{kind}/default` with `{ "name": "…" }`) makes one asset the instance's default of its kind, and `assets.set_availability` (`PUT /api/v1/assets/{kind}/{name}/availability`) sets the workspaces one asset is offered in. Only the agent kind takes either today. Both are Operation Runs of the module `assetManagement`, and both need the right to write the kind on the whole instance: a grant in a workspace or on one asset does not answer it, and a deny on the named asset refuses. The default also needs `allowDefaultAgentChange`. A changed availability moves the version of the asset set, and the next run that starts reads it. Either call may name what it was decided against: `expectedAssetId`, the id of the asset as it was read, and for the availability `expectedAvailability`, the availability as it was read or `null` for none. Where the instance holds something else by then, the call answers `409` and writes nothing, which matters for a call that waited for an approval. Without the fields the call replaces what is stored.
 
 `platform.references.get` answers what a definition may refer to on this instance: the model providers and bindings, the reasoning efforts, the enabled tools, and the tools whose module is off. It answers a caller who holds at least one right on an asset kind, on the instance, in a workspace or on one asset, with a credential that carries `config_assets:read` and the scope of that right. It writes no Operation Run, so an editor may read it each time it opens a definition.
+
+`platform.capabilities.get` answers Studio's Capabilities page under the same right: what agents can be given, one package per module, with the general skills and tools first and the instance's own tools last. Each package names its tools, its skills and the agents that use them, among the agents the caller may read. A module that is off is listed only to a caller with `users.manage`.
 
 ### Apps: a draft and a published revision
 
