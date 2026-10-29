@@ -7,6 +7,7 @@ import {
 } from "@work-shape/catalyst-api-client";
 import { acceptStartedRun, listedOpenThread } from "../dock/dock-try";
 import type { DockCreationScope, DockPageChat } from "../../shared/dock-page-chat";
+import { isEmbeddedSession } from "../../shared/embedded-session";
 import { dockCreationTarget } from "../dock/creation-target";
 import { collaborationWorkspaceDisplayName } from "../../shared/collaboration-workspace/collaboration-workspace-name";
 import {
@@ -396,7 +397,9 @@ export function useWorkspaceChatModel({
     localePreference,
     enabled: isAuthenticated && collaborationWorkspacesAvailable
   });
-  // The person's own agents ("Nur ich") are chosen only in a chat nobody else reads.
+  // The person's own agents ("Nur ich") are chosen only in a chat nobody else reads, and not
+  // from an embedding host's session, which the server refuses them.
+  const embedded = isEmbeddedSession(meQuery.data);
   const ownChat = isOwnChat({
     userId: meQuery.data?.id,
     workspace: collaborationWorkspace.activeCollaborationWorkspace,
@@ -404,7 +407,8 @@ export function useWorkspaceChatModel({
       threadQuery.data?.conversation.id === selectedConversationId
         ? threadQuery.data?.conversation
         : undefined,
-    conversationOpen: selectedConversationId !== undefined
+    conversationOpen: selectedConversationId !== undefined,
+    embedded
   });
   const {
     config,
@@ -422,13 +426,15 @@ export function useWorkspaceChatModel({
           workspaceAgentsQuery.isError ||
           collaborationWorkspace.loadFailed ||
           collaborationWorkspace.activeCollaborationWorkspace?.kind === "personal",
-        ownChat
+        ownChat,
+        embedded
       }),
     [
       collaborationWorkspace.activeCollaborationWorkspace?.kind,
       collaborationWorkspace.loadFailed,
       collaborationWorkspacesAvailable,
       configQuery.data,
+      embedded,
       ownChat,
       view,
       workspaceAgentsQuery.data,

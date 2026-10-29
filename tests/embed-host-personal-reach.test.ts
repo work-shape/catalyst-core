@@ -169,6 +169,20 @@ describe("an embedding host's token without a delegated actor", () => {
     expect(identity.scopes).toEqual([...CHAT_SESSION_AUTH_SCOPES]);
   });
 
+  it("tells the interface it is embedded, which the person's own session is not", async () => {
+    const { t, embed, own } = await setup();
+    const read = async (headers: Record<string, string>) =>
+      z
+        .object({ id: z.string(), embedded: z.literal(true).optional() })
+        .parse((await t.expectOk(t.kai.id, "me.get", { headers })).json());
+
+    // The flag, and nothing of the host: the read names no more of it than it did before.
+    const embedded = await read(embed);
+    expect(embedded).toMatchObject({ id: t.kai.id, embedded: true });
+    expect(JSON.stringify(embedded)).not.toContain(HOST_USER);
+    expect(await read(own)).not.toHaveProperty("embedded");
+  });
+
   it("never chooses the person's own agent, which their own session still does", async () => {
     const { t, home, chat, embed, own } = await setup();
     const listed = z.object({ ownChatAgents: z.array(z.object({ name: z.string() })).optional() });

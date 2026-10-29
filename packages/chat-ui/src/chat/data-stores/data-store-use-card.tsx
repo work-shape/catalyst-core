@@ -2,6 +2,7 @@ import { Database } from "lucide-react";
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { DATA_STORE_USE_TOOL_NAME } from "@work-shape/catalyst-core";
 import { Button, Card, FormNotice, IconTile } from "@work-shape/catalyst-ui";
+import { useEmbeddedSession } from "../../shared/embedded-session";
 import { useTranslation } from "../../shared/i18n";
 import { toolAnswer } from "../conversation/subject-run";
 
@@ -110,6 +111,7 @@ export function DataStoreUseCardView({
   onConfirm?: () => void;
 }) {
   const { t } = useTranslation();
+  const embedded = useEmbeddedSession();
   const added = state === "added";
   return (
     <Card
@@ -136,7 +138,9 @@ export function DataStoreUseCardView({
               : t("dataStores.useTitle", { title: use.title })}
           </p>
           {added ? null : (
-            <p className="text-caption text-muted-foreground">{t("dataStores.useBody")}</p>
+            <p className="text-caption text-muted-foreground">
+              {embedded ? t("dataStores.useElsewhere") : t("dataStores.useBody")}
+            </p>
           )}
         </div>
         {added || onConfirm === undefined ? null : (

@@ -13,6 +13,7 @@ import {
   useDeleteCurrentUserMutation,
   useUpdateCurrentUserMutation
 } from "../../../shared/api/workspace-mutations";
+import { isEmbeddedSession } from "../../../shared/embedded-session";
 import { useTranslation } from "../../../shared/i18n";
 import { useSettingsPage } from "../../../shared/settings-page-context";
 
@@ -100,24 +101,27 @@ export function ProfilePage() {
           </div>
         </form>
       </Section>
-      <Section
-        layout="stacked"
-        title={t("deleteAccount")}
-        description={t("deleteAccountDescription")}
-      >
-        <div>
-          <Button
-            variant="outline"
-            disabled={deleteAccount.isPending}
-            onClick={() => {
-              setDeleteError(undefined);
-              setDeleteOpen(true);
-            }}
-          >
-            {t("deleteAccount")}
-          </Button>
-        </div>
-      </Section>
+      {/* The account is the person's own: an embedding host's session is refused its deletion. */}
+      {isEmbeddedSession(user) ? null : (
+        <Section
+          layout="stacked"
+          title={t("deleteAccount")}
+          description={t("deleteAccountDescription")}
+        >
+          <div>
+            <Button
+              variant="outline"
+              disabled={deleteAccount.isPending}
+              onClick={() => {
+                setDeleteError(undefined);
+                setDeleteOpen(true);
+              }}
+            >
+              {t("deleteAccount")}
+            </Button>
+          </div>
+        </Section>
+      )}
       <ConfirmDialog
         open={deleteOpen}
         title={t("deleteAccountDialogTitle")}

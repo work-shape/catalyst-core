@@ -12,9 +12,11 @@ export interface PlatformReportSetup {
 
 export function platformReportSetup(
   config: Pick<SafeConfig, "clientInstance" | "platformReport"> | undefined,
-  conversationId: string | undefined
+  conversationId: string | undefined,
+  /** An embedding host's session: the report is the person's own, and the server refuses it. */
+  embedded = false
 ): PlatformReportSetup | undefined {
-  if (!conversationId || config?.platformReport?.available !== true) return undefined;
+  if (embedded || !conversationId || config?.platformReport?.available !== true) return undefined;
   return { conversationId, instanceName: config.clientInstance.displayName };
 }
 

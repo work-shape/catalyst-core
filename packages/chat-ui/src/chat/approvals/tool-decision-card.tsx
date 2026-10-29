@@ -15,6 +15,7 @@ import {
   Spinner,
   Textarea
 } from "@work-shape/catalyst-ui";
+import { useEmbeddedSession } from "../../shared/embedded-session";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { ProjectInstructionsDecision } from "../projects/project-instructions";
 import { isProjectInstructionsCall } from "../projects/project-instructions-model";
@@ -282,6 +283,9 @@ export function ToolDecisionCardView({
   summary?: ReactNode;
 }) {
   const { locale, t } = useTranslation();
+  // "Always allow" sets the person's own confirmations: an embedding host's session is refused it.
+  const embedded = useEmbeddedSession();
+  const offersAlwaysAllow = decision.alwaysAllow === true && !embedded;
   const [reasonOpen, setReasonOpen] = useState(false);
   const [reason, setReason] = useState("");
   // The answer shows until the run records it, which takes the card away in every tab.
@@ -399,7 +403,7 @@ export function ToolDecisionCardView({
               {t("toolDecisionAllow")}
             </Button>
             {/* Offered only where it would let the next call run (OP-6). */}
-            {decision.alwaysAllow ? (
+            {offersAlwaysAllow ? (
               <Button
                 type="button"
                 size="sm"
@@ -439,7 +443,7 @@ export function ToolDecisionCardView({
               {t("toolDecisionExpires", { date: formatApprovalDate(decision.expiresAt, locale) })}
             </span>
           </div>
-          {decision.alwaysAllow ? (
+          {offersAlwaysAllow ? (
             <p className="text-caption text-muted-foreground">{t("confirm.alwaysAllowHint")}</p>
           ) : null}
           {answer.failure ? (

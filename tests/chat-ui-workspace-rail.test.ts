@@ -551,6 +551,11 @@ describe("workspace-scoped agents", () => {
     const read = scoped({ workspaceAgents, ownChat: false });
     expect(read.config?.agents.map((entry) => entry.name)).toEqual(["contracts"]);
     expect(read.ownAgentsElsewhere.map((entry) => entry.name)).toEqual(["kai-tax"]);
+
+    // An embedding host's session is refused them: neither offered nor listed greyed.
+    const embedded = scoped({ workspaceAgents, ownChat: false, embedded: true });
+    expect(embedded.config?.agents.map((entry) => entry.name)).toEqual(["contracts"]);
+    expect(embedded.ownAgentsElsewhere).toEqual([]);
   });
 
   it("calls a chat the person's own only where nobody else reads it", () => {
@@ -590,6 +595,9 @@ describe("workspace-scoped agents", () => {
     expect(own({ conversationOpen: false, workspace: privateTeam })).toBe(true);
     expect(own({ conversationOpen: false })).toBe(false);
     expect(own({ conversationOpen: false, userId: undefined, workspace: home })).toBe(false);
+    // An embedding host's session is never the person in their own chat.
+    expect(own({ conversation: chat(team, "private"), embedded: true })).toBe(false);
+    expect(own({ conversationOpen: false, workspace: home, embedded: true })).toBe(false);
   });
 
   it("falls back to the workspace default when the picked agent is not offered there", () => {

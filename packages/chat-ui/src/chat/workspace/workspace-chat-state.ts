@@ -25,6 +25,8 @@ export function workspaceScopedConfigFor(input: {
    * agents ("Nur ich") are offered in it. Elsewhere they are listed greyed.
    */
   ownChat: boolean;
+  /** An embedding host's session: the person's own agents are refused it, so none is listed. */
+  embedded?: boolean;
 }): {
   config: SafeConfig | undefined;
   agentsLoading: boolean;
@@ -37,7 +39,7 @@ export function workspaceScopedConfigFor(input: {
     return { config, agentsLoading: false, workspaceScoped: false, ownAgentsElsewhere: [] };
   }
   if (input.workspaceAgents) {
-    const own = input.workspaceAgents.ownChatAgents ?? [];
+    const own = input.embedded ? [] : (input.workspaceAgents.ownChatAgents ?? []);
     return {
       config: {
         ...config,
@@ -75,9 +77,11 @@ export function isOwnChat(input: {
     { collaborationWorkspaceId: string; createdByUserId: string; visibility: string } | undefined;
   /** A conversation is open, whether or not it has arrived. */
   conversationOpen: boolean;
+  /** An embedding host's session is never the person in their own chat. */
+  embedded?: boolean;
 }): boolean {
   const { userId, workspace, conversation } = input;
-  if (userId === undefined || workspace === undefined) return false;
+  if (input.embedded || userId === undefined || workspace === undefined) return false;
   if (!input.conversationOpen) {
     return workspace.kind === "personal" || workspace.defaultConversationVisibility === "private";
   }

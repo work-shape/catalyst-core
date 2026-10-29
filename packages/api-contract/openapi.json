@@ -41434,6 +41434,10 @@
           "delegatedActor": {
             "$ref": "#/components/schemas/DelegatedActor"
           },
+          "embedded": {
+            "type": "boolean",
+            "const": true
+          },
           "scopes": {
             "type": "array",
             "items": {

@@ -4,6 +4,7 @@ import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import {
   type ApprovalRevisionHost,
   ApprovalRevisionHostProvider,
+  EmbeddedSessionProvider,
   approvalActionFailure,
   formatInboxAge,
   InboxAreaView,
@@ -121,6 +122,8 @@ export function renderItem(
     queryClient?: QueryClient;
     /** The workspace the item is read in. Without it the item stands alone. */
     host?: ApprovalRevisionHost;
+    /** An embedding host's session, as the read of the signed-in person tells it. */
+    embedded?: boolean;
   } = {}
 ): string {
   const itemView = createElement(InboxItemView, {
@@ -142,5 +145,10 @@ export function renderItem(
         : view
     })
   );
-  return render(reads, options.locale);
+  return render(
+    options.embedded
+      ? createElement(EmbeddedSessionProvider, { user: { embedded: true }, children: null }, reads)
+      : reads,
+    options.locale
+  );
 }

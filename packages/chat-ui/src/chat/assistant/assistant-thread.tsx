@@ -45,6 +45,7 @@ import {
   platformReportSetup,
   type PlatformFailure
 } from "../platform-report/platform-report";
+import { useEmbeddedSession } from "../../shared/embedded-session";
 import { startGreeting, startStarters, type ConversationStart } from "../dock/subject-starters";
 import { creationTargetLine } from "../dock/creation-target";
 import { ProjectInstructionsNotice } from "../projects/project-instructions";
@@ -192,7 +193,7 @@ export function AssistantThread({
   onSubmitMessage?: (text: string) => boolean;
 }) {
   const { t } = useTranslation();
-  const platformReport = platformReportSetup(config, conversationId);
+  const platformReport = platformReportSetup(config, conversationId, useEmbeddedSession());
   const agent = getSelectedAgent(config, selectedAgentName);
   const initialPrompts = agent?.initialPrompts ?? [];
   // A conversation names what a tool call touched from the agents the person is offered,

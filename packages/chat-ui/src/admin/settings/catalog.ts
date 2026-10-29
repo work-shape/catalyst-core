@@ -1,6 +1,7 @@
 import type { CollaborationWorkspaceWithRole } from "@work-shape/catalyst-api-client";
 import { canManageCollaborationWorkspace } from "../../shared/collaboration-workspace/collaboration-workspace-selector";
 import { canChangePassword } from "../../shared/governance";
+import { isEmbeddedSession } from "../../shared/embedded-session";
 import type { TranslationKey } from "../../shared/i18n";
 import type { WorkspaceRoute } from "../../shared/routes";
 import type {
@@ -31,6 +32,12 @@ export const settingsGroups: readonly { id: SettingsGroupId; labelKey: Translati
 ];
 
 const everyone = () => true;
+
+/**
+ * The person's own session. What is theirs alone (their confirmations, Connections and keys) is
+ * refused to an embedding host's session, so the pages for it are left out there.
+ */
+const inOwnSession = (viewer: SettingsViewer) => !isEmbeddedSession(viewer.user);
 
 /** The shared workspaces the viewer may manage: the ones the Workspace pages can change. */
 export function managedWorkspaces(viewer: SettingsViewer): CollaborationWorkspaceWithRole[] {
@@ -74,7 +81,7 @@ const settingsPages: readonly SettingsPageDefinition[] = [
     group: "you",
     labelKey: "settings.confirmations",
     width: "narrow",
-    visible: everyone,
+    visible: inOwnSession,
     component: ConfirmationsPage
   },
   {
@@ -90,14 +97,14 @@ const settingsPages: readonly SettingsPageDefinition[] = [
     group: "you",
     labelKey: "settings.personalConnections",
     width: "narrow",
-    visible: (viewer) => viewer.modules?.connections?.enabled === true,
+    visible: (viewer) => inOwnSession(viewer) && viewer.modules?.connections?.enabled === true,
     component: PersonalConnectionsPage
   },
   {
     id: "api-keys",
     group: "you",
     labelKey: "settings.apiKeys",
-    visible: (viewer) => viewer.modules?.personalApiKeys?.enabled === true,
+    visible: (viewer) => inOwnSession(viewer) && viewer.modules?.personalApiKeys?.enabled === true,
     component: ApiKeysPage
   },
   {
@@ -105,7 +112,7 @@ const settingsPages: readonly SettingsPageDefinition[] = [
     group: "you",
     labelKey: "settings.connectLocalAgent",
     width: "narrow",
-    visible: (viewer) => viewer.modules?.personalApiKeys?.enabled === true,
+    visible: (viewer) => inOwnSession(viewer) && viewer.modules?.personalApiKeys?.enabled === true,
     component: ConnectLocalAgentPage
   },
   {

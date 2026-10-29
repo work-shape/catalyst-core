@@ -76,6 +76,7 @@ import { uiLabelsFor } from "./shared/ui-labels";
 import { MarkdownLinkPolicyProvider } from "./chat/markdown/markdown-text";
 import { ViewPolicyProvider } from "./chat/views/view-policy";
 import { agentChipDisplayFor, OwnAgentsElsewhereContext } from "./chat/workspace/agent-selector";
+import { EmbeddedSessionProvider, isEmbeddedSession } from "./shared/embedded-session";
 import { ClientBrandingHeader, mailBrandFrom } from "./chat/workspace/client-branding";
 import { ConversationPalette } from "./chat/workspace/conversation-palette";
 import { RouteNotFound } from "./chat/workspace/route-not-found";
@@ -639,8 +640,10 @@ function ChatWorkspaceContent({
 
   // A Data Store the agent asked to read stands in the conversation on screen: the person's
   // click adds it, and their word lets the agent go on (STORE-USE-1).
+  // The add is the person's own click: an embedding host's session is refused it, so its card
+  // has no host and offers none.
   const dataStoreUseHost: DataStoreUseHost | undefined =
-    cardConversation === undefined
+    cardConversation === undefined || isEmbeddedSession(model.auth.user)
       ? undefined
       : {
           add: async (store, toolCallId) => {
@@ -1200,7 +1203,7 @@ function ChatWorkspaceContent({
       >
         <DocsAddressProvider address={model.config.config.ui.docsUrl}>
           <OwnAgentsElsewhereContext value={model.config.ownAgentsElsewhere}>
-            {workspace}
+            <EmbeddedSessionProvider user={model.auth.user}>{workspace}</EmbeddedSessionProvider>
           </OwnAgentsElsewhereContext>
         </DocsAddressProvider>
       </MarkdownLinkPolicyProvider>
