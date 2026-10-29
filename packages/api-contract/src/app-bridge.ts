@@ -267,7 +267,7 @@ export type AppWorkflowRun = z.infer<typeof appWorkflowRunSchema>;
 
 /** Why a call or a read of a frame was refused or failed, as the frame is told. */
 const callFailure = z.strictObject({
-  /** `action_unknown`, `draft_safe_mode`, `forbidden`, `input_invalid` and so on. */
+  /** `action_unknown`, `draft_safe_mode`, `forbidden`, `input_invalid`, `limit_reached` and so on. */
   code: z.string(),
   message: z.string(),
   /** The right a `forbidden` call lacks. */

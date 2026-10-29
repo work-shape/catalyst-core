@@ -33813,6 +33813,40 @@
                         },
                         "stepRunId": {
                           "type": "string"
+                        },
+                        "usageLimit": {
+                          "type": "object",
+                          "properties": {
+                            "period": {
+                              "type": "string",
+                              "enum": [
+                                "day",
+                                "month"
+                              ]
+                            },
+                            "metric": {
+                              "type": "string",
+                              "enum": [
+                                "modelCallCount",
+                                "tokens",
+                                "costMicros"
+                              ]
+                            },
+                            "scope": {
+                              "type": "string",
+                              "enum": [
+                                "instance",
+                                "user",
+                                "system",
+                                "workspace"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "period",
+                            "metric",
+                            "scope"
+                          ]
                         }
                       },
                       "required": [
@@ -34231,6 +34265,40 @@
                         },
                         "stepRunId": {
                           "type": "string"
+                        },
+                        "usageLimit": {
+                          "type": "object",
+                          "properties": {
+                            "period": {
+                              "type": "string",
+                              "enum": [
+                                "day",
+                                "month"
+                              ]
+                            },
+                            "metric": {
+                              "type": "string",
+                              "enum": [
+                                "modelCallCount",
+                                "tokens",
+                                "costMicros"
+                              ]
+                            },
+                            "scope": {
+                              "type": "string",
+                              "enum": [
+                                "instance",
+                                "user",
+                                "system",
+                                "workspace"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "period",
+                            "metric",
+                            "scope"
+                          ]
                         }
                       },
                       "required": [
@@ -34881,6 +34949,40 @@
                               },
                               "stepRunId": {
                                 "type": "string"
+                              },
+                              "usageLimit": {
+                                "type": "object",
+                                "properties": {
+                                  "period": {
+                                    "type": "string",
+                                    "enum": [
+                                      "day",
+                                      "month"
+                                    ]
+                                  },
+                                  "metric": {
+                                    "type": "string",
+                                    "enum": [
+                                      "modelCallCount",
+                                      "tokens",
+                                      "costMicros"
+                                    ]
+                                  },
+                                  "scope": {
+                                    "type": "string",
+                                    "enum": [
+                                      "instance",
+                                      "user",
+                                      "system",
+                                      "workspace"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "period",
+                                  "metric",
+                                  "scope"
+                                ]
                               }
                             },
                             "required": [
@@ -36008,6 +36110,40 @@
                               },
                               "stepRunId": {
                                 "type": "string"
+                              },
+                              "usageLimit": {
+                                "type": "object",
+                                "properties": {
+                                  "period": {
+                                    "type": "string",
+                                    "enum": [
+                                      "day",
+                                      "month"
+                                    ]
+                                  },
+                                  "metric": {
+                                    "type": "string",
+                                    "enum": [
+                                      "modelCallCount",
+                                      "tokens",
+                                      "costMicros"
+                                    ]
+                                  },
+                                  "scope": {
+                                    "type": "string",
+                                    "enum": [
+                                      "instance",
+                                      "user",
+                                      "system",
+                                      "workspace"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "period",
+                                  "metric",
+                                  "scope"
+                                ]
                               }
                             },
                             "required": [
@@ -36454,6 +36590,40 @@
                         },
                         "stepRunId": {
                           "type": "string"
+                        },
+                        "usageLimit": {
+                          "type": "object",
+                          "properties": {
+                            "period": {
+                              "type": "string",
+                              "enum": [
+                                "day",
+                                "month"
+                              ]
+                            },
+                            "metric": {
+                              "type": "string",
+                              "enum": [
+                                "modelCallCount",
+                                "tokens",
+                                "costMicros"
+                              ]
+                            },
+                            "scope": {
+                              "type": "string",
+                              "enum": [
+                                "instance",
+                                "user",
+                                "system",
+                                "workspace"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "period",
+                            "metric",
+                            "scope"
+                          ]
                         }
                       },
                       "required": [
@@ -36923,6 +37093,40 @@
                         },
                         "stepRunId": {
                           "type": "string"
+                        },
+                        "usageLimit": {
+                          "type": "object",
+                          "properties": {
+                            "period": {
+                              "type": "string",
+                              "enum": [
+                                "day",
+                                "month"
+                              ]
+                            },
+                            "metric": {
+                              "type": "string",
+                              "enum": [
+                                "modelCallCount",
+                                "tokens",
+                                "costMicros"
+                              ]
+                            },
+                            "scope": {
+                              "type": "string",
+                              "enum": [
+                                "instance",
+                                "user",
+                                "system",
+                                "workspace"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "period",
+                            "metric",
+                            "scope"
+                          ]
                         }
                       },
                       "required": [

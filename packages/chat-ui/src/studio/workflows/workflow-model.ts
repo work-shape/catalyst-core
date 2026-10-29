@@ -15,6 +15,7 @@ import {
 import { actionLabel, knownActionLabel } from "../../admin/access/right-words";
 import { canManageServicePrincipals } from "../../shared/governance";
 import type { TranslationKey } from "../../shared/i18n";
+import { usageLimitSentence } from "../../shared/i18n/usage-limit-words";
 import { startFormUsable } from "./start-form";
 import type {
   WorkflowFailure,
@@ -481,7 +482,14 @@ function failedConnection(
 export function failureHappened(
   failure: Pick<
     WorkflowFailure,
-    "reason" | "action" | "connection" | "connectionTitle" | "workflow" | "operation" | "exposure"
+    | "reason"
+    | "action"
+    | "connection"
+    | "connectionTitle"
+    | "workflow"
+    | "operation"
+    | "exposure"
+    | "usageLimit"
   > & {
     detail?: string;
   },
@@ -494,6 +502,10 @@ export function failureHappened(
   }
   if (failure.operation !== undefined && failure.reason === "confirmationUnattended") {
     return t("workflows.reason.confirmationUnattendedNamed", { operation: failure.operation });
+  }
+  // The limit is named the way a Page is told it, so one sentence is read everywhere.
+  if (failure.reason === "usageLimit" && failure.usageLimit !== undefined) {
+    return usageLimitSentence(failure.usageLimit, t);
   }
   if (failure.reason === "notExposed") return notExposedHappened(failure.exposure, connection, t);
   if (failure.action !== undefined && failure.reason === "missingRight") {

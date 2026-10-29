@@ -1,3 +1,4 @@
+import type { ModelUsageRefusal } from "@work-shape/catalyst-core";
 import { createElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { createTranslationContext } from "./support/chat-ui/shared";
@@ -220,6 +221,49 @@ describe("the next action on a run that has ended", () => {
     );
     expect(render(runPage(limited))).toContain(t("workflows.advice.durationLimit"));
     expect(render(runPage(limited), "de")).toContain(de("workflows.advice.durationLimit"));
+  });
+});
+
+describe("a run that a usage limit stopped", () => {
+  const limited = (usageLimit?: ModelUsageRefusal) =>
+    read(
+      run({
+        status: "limit_reached",
+        ...ended,
+        error: {
+          code: "MODEL_USAGE_LIMIT_REACHED",
+          message: "x",
+          ...(usageLimit ? { usageLimit } : {})
+        }
+      }),
+      [startStep]
+    );
+
+  // Fails without LU-5: the run said "took a different path" for a code the page did not know,
+  // and nothing of which limit it was or when it resets.
+  it("names the limit, when it resets and what to do, in both languages", () => {
+    const named = limited({ period: "month", metric: "costMicros", scope: "workspace" });
+    for (const [locale, translate] of [
+      ["en", t],
+      ["de", de]
+    ] as const) {
+      const markup = render(runPage(named), locale);
+      expect(markup).toContain(
+        translate("refusals.usageLimitNamed", {
+          period: translate("runUsageLimitPeriodMonth"),
+          metric: translate("runUsageLimitMetricCostMicros"),
+          scope: translate("runUsageLimitScopeWorkspace"),
+          reset: translate("runUsageLimitResetMonth")
+        })
+      );
+      expect(markup).toContain(translate("workflows.advice.usageLimit"));
+    }
+  });
+
+  it("still says a limit stopped it where the instance names none", () => {
+    const markup = render(runPage(limited()));
+    expect(markup).toContain(t("workflows.reason.usageLimit"));
+    expect(markup).toContain(t("workflows.advice.usageLimit"));
   });
 });
 

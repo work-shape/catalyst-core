@@ -1,4 +1,4 @@
-import type { WorkflowRunError } from "@work-shape/catalyst-core";
+import type { ModelUsageRefusal, WorkflowRunError } from "@work-shape/catalyst-core";
 
 /** What a step failure says beside its code and its sentence. */
 export interface WorkflowStepFailureOptions {
@@ -10,6 +10,8 @@ export interface WorkflowStepFailureOptions {
    * Every further item would be refused the same way, so no loop continues past it.
    */
   systemic?: boolean;
+  /** The usage limit that refused a model call of the step. */
+  usageLimit?: ModelUsageRefusal;
 }
 
 /**
@@ -22,6 +24,7 @@ export class WorkflowStepFailure extends Error {
   readonly code: string;
   readonly action: string | undefined;
   readonly systemic: boolean;
+  readonly usageLimit: ModelUsageRefusal | undefined;
 
   constructor(code: string, message: string, options: WorkflowStepFailureOptions = {}) {
     super(message);
@@ -29,13 +32,15 @@ export class WorkflowStepFailure extends Error {
     this.code = code;
     this.action = options.action;
     this.systemic = options.systemic === true;
+    this.usageLimit = options.usageLimit;
   }
 
   toRunError(): WorkflowRunError {
     return {
       code: this.code,
       message: this.message,
-      ...(this.action === undefined ? {} : { action: this.action })
+      ...(this.action === undefined ? {} : { action: this.action }),
+      ...(this.usageLimit === undefined ? {} : { usageLimit: this.usageLimit })
     };
   }
 }

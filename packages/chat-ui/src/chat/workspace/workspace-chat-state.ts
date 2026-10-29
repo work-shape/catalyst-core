@@ -3,7 +3,8 @@ import {
   type SafeConfig
 } from "@work-shape/catalyst-api-client";
 import { type ModelUsageRefusal } from "@work-shape/catalyst-core";
-import { type TranslationContextValue, type TranslationKey } from "../../shared/i18n";
+import { type TranslationContextValue } from "../../shared/i18n";
+import { usageLimitWords } from "../../shared/i18n/usage-limit-words";
 import { type ConversationControllerState } from "../conversation/conversation-controller-state";
 
 export const WORKSPACE_AUTH_SCOPE = "standalone";
@@ -189,27 +190,6 @@ const MODEL_USAGE_LIMIT_REACHED_CODE = "MODEL_USAGE_LIMIT_REACHED";
 // after the worker had waited about a minute (`@work-shape/catalyst-model-provider`).
 const MODEL_RATE_LIMITED_CODE = "RATE_LIMITED";
 
-// The words for each part of the limit that refused a run. Its windows are UTC days and months.
-const USAGE_LIMIT_PERIODS: Record<ModelUsageRefusal["period"], TranslationKey> = {
-  day: "runUsageLimitPeriodDay",
-  month: "runUsageLimitPeriodMonth"
-};
-const USAGE_LIMIT_RESETS: Record<ModelUsageRefusal["period"], TranslationKey> = {
-  day: "runUsageLimitResetDay",
-  month: "runUsageLimitResetMonth"
-};
-const USAGE_LIMIT_METRICS: Record<ModelUsageRefusal["metric"], TranslationKey> = {
-  modelCallCount: "runUsageLimitMetricModelCallCount",
-  tokens: "runUsageLimitMetricTokens",
-  costMicros: "runUsageLimitMetricCostMicros"
-};
-const USAGE_LIMIT_SCOPES: Record<ModelUsageRefusal["scope"], TranslationKey> = {
-  user: "runUsageLimitScopeUser",
-  system: "runUsageLimitScopeSystem",
-  instance: "runUsageLimitScopeInstance",
-  workspace: "runUsageLimitScopeWorkspace"
-};
-
 /**
  * The notice of a reached usage limit: which limit and when it resets, where the run names
  * it, and otherwise only that a limit was reached. Never the server's message.
@@ -221,13 +201,7 @@ function usageLimitNotice(
 ): string {
   const advice = t(seesRateCard ? "runUsageLimitAdviceOperator" : "runUsageLimitAdvice");
   if (!limit) return t("runUsageLimitReached", { advice });
-  return t("runUsageLimitNamed", {
-    period: t(USAGE_LIMIT_PERIODS[limit.period]),
-    metric: t(USAGE_LIMIT_METRICS[limit.metric]),
-    scope: t(USAGE_LIMIT_SCOPES[limit.scope]),
-    reset: t(USAGE_LIMIT_RESETS[limit.period]),
-    advice
-  });
+  return t("runUsageLimitNamed", { ...usageLimitWords(limit, t), advice });
 }
 
 /**

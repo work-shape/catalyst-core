@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import { ApiError } from "@work-shape/catalyst-api-client";
 import { WorkspaceApiClientProvider } from "@work-shape/catalyst-chat-ui/workspace-api-client";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
+import { createTranslationContext, tellRefusal } from "./support/chat-ui";
 import {
   callResultMessage,
   contextMessage,
@@ -550,6 +551,47 @@ describe("the calls of a frame", () => {
     expect(frameCallFailure(refusal(429, "RATE_LIMITED", "Too many calls"))).toEqual({
       code: "rate_limited",
       message: "Too many calls"
+    });
+  });
+
+  // Fails without LU-5: a usage limit reached a Page as a bare "forbidden" with the instance's
+  // English sentence, and the Page offered to try again.
+  it("tell a Page a usage limit stopped the action, in the person's language, and that trying again will not help", () => {
+    const limit = {
+      reason: "MODEL_USAGE_LIMIT_REACHED",
+      period: "month",
+      metric: "costMicros",
+      scope: "workspace"
+    };
+    const { t } = createTranslationContext("de");
+    const texts = {
+      connectionUseDenied: () => "",
+      refusal: (d: Record<string, unknown>) => tellRefusal(d, t)?.message
+    };
+    const failure = frameCallFailure(
+      refusal(403, "FORBIDDEN", "A usage limit refused the call", limit),
+      texts
+    );
+    expect(failure).toEqual({
+      code: "limit_reached",
+      message: t("refusals.usageLimitNamed", {
+        period: t("runUsageLimitPeriodMonth"),
+        metric: t("runUsageLimitMetricCostMicros"),
+        scope: t("runUsageLimitScopeWorkspace"),
+        reset: t("runUsageLimitResetMonth")
+      }),
+      retryable: false
+    });
+    // A refusal that names no known limit still reads as one.
+    expect(
+      frameCallFailure(
+        refusal(403, "FORBIDDEN", "x", { reason: "MODEL_USAGE_LIMIT_REACHED" }),
+        texts
+      )
+    ).toEqual({
+      code: "limit_reached",
+      message: t("refusals.usageLimitReached"),
+      retryable: false
     });
   });
 

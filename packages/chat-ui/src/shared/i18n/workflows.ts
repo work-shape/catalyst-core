@@ -84,6 +84,8 @@ export const workflows = defineTranslations({
       "Running it again ends the same way: whoever builds the workflow has to change the step.",
     "workflows.advice.durationLimit":
       "Run it again when there is less to do, or have the workflow split into smaller ones.",
+    "workflows.advice.usageLimit":
+      "Start it again once the limit has reset, or when an admin for all workspaces has raised it.",
     "workflows.advice.guardrail":
       "An administrator can say which rule it was and whether it should apply here.",
     "workflows.advice.interrupted":
@@ -368,6 +370,7 @@ export const workflows = defineTranslations({
     "workflows.reason.dataMismatch":
       "The step did not get the data it needs from the steps before it.",
     "workflows.reason.durationLimit": "The run took longer than a run may and was stopped.",
+    "workflows.reason.usageLimit": "A usage limit stopped the run.",
     "workflows.reason.guardrail": "A safety rule for all workspaces stopped this step.",
     "workflows.reason.interrupted":
       "The run was interrupted while this step was changing data. The change may or may not have happened, and the step was not repeated.",
@@ -822,6 +825,8 @@ export const workflows = defineTranslations({
       "Ein neuer Lauf endet genauso: Wer den Workflow baut, muss den Schritt ändern.",
     "workflows.advice.durationLimit":
       "Starte ihn erneut, wenn weniger zu tun ist, oder lass den Workflow in kleinere teilen.",
+    "workflows.advice.usageLimit":
+      "Starte ihn erneut, sobald die Grenze zurückgesetzt ist oder ein Admin für alle Arbeitsbereiche sie erhöht hat.",
     "workflows.advice.guardrail":
       "Ein Administrator kann sagen, welche Regel es war und ob sie hier gelten soll.",
     "workflows.advice.interrupted":
@@ -1115,6 +1120,7 @@ export const workflows = defineTranslations({
       "Der Schritt hat von den Schritten davor nicht die Daten bekommen, die er braucht.",
     "workflows.reason.durationLimit":
       "Der Lauf hat länger gedauert, als ein Lauf darf, und wurde gestoppt.",
+    "workflows.reason.usageLimit": "Eine Nutzungsgrenze hat den Lauf gestoppt.",
     "workflows.reason.guardrail":
       "Eine Schutzregel für alle Arbeitsbereiche hat diesen Schritt gestoppt.",
     "workflows.reason.interrupted":

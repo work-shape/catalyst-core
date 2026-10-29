@@ -14,6 +14,7 @@ import { createWorkflowRunFiles, type WorkflowRunFiles } from "./run-files";
 import { createDatasetLifetime } from "./dataset-lifetime";
 import {
   AppError,
+  MODEL_USAGE_LIMIT_REACHED_CODE,
   WORKFLOW_ACTIONS,
   appWorkflowRefusalError,
   asUserId,
@@ -397,7 +398,9 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       failed = loopRun;
     }
     await finishRun(tx, run, {
-      status: "failed",
+      // A usage limit is no fault of the Workflow: the run stops at it, and starting it again
+      // once the limit resets or is raised is the way on (limits spec 3.1).
+      status: error.code === MODEL_USAGE_LIMIT_REACHED_CODE ? "limit_reached" : "failed",
       error: { ...error, stepRunId: error.stepRunId ?? stepRun.id }
     });
   }

@@ -5,7 +5,9 @@ import {
   CONNECTION_TRANSIENT_CALL_REASONS,
   CONNECTION_ACTIONS,
   JobDeferredError,
+  MODEL_USAGE_LIMIT_REACHED_CODE,
   isAppError,
+  modelUsageRefusalOf,
   isAuthenticatedServicePrincipal,
   operationDenialError,
   parseConnectionOperationName,
@@ -420,6 +422,23 @@ export async function callStepOperation(input: {
       );
     }
     case "failed": {
+      // A usage limit refused a model call the operation makes, such as the embedding of a
+      // search. The next call of the run would meet the same limit: the run stops with it
+      // (limits spec 3.1) and can be started again once the limit resets or is raised.
+      const details = result.error.details;
+      const reasonOfLimit =
+        typeof details === "object" && details !== null && "reason" in details
+          ? details.reason === MODEL_USAGE_LIMIT_REACHED_CODE
+          : false;
+      if (reasonOfLimit) {
+        const limit = modelUsageRefusalOf(details);
+        throw new OperationStepFailure(
+          MODEL_USAGE_LIMIT_REACHED_CODE,
+          `A usage limit stopped the operation '${operation}'`,
+          trace,
+          { systemic: true, ...(limit ? { usageLimit: limit } : {}) }
+        );
+      }
       if (!changing) {
         const reason = failureReasonSchema.safeParse(result.error.details);
         const transient =

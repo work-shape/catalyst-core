@@ -1,5 +1,6 @@
 import {
   AppError,
+  MODEL_USAGE_LIMIT_REACHED_CODE,
   WORKFLOW_RUN_KEY_MAX_LENGTH,
   WORKFLOW_RUN_MAX_DEPTH,
   WORKFLOW_START_KEY_INPUT,
@@ -353,15 +354,19 @@ export async function childStepOutcome(
           id: step.linkedRunId
         }));
   if (!child || !isWorkflowRunEnded(child.status)) return undefined;
-  if (child.status !== "done")
+  if (child.status !== "done") {
+    // A child that stopped at a usage limit stops the parent too: its next step would meet it.
+    const limited = child.error?.code === MODEL_USAGE_LIMIT_REACHED_CODE;
     return {
       kind: "failed" as const,
-      systemic: false,
+      systemic: limited,
       error: {
         code: child.error?.code ?? `child_${child.status}`,
-        message: `The child Workflow ended as ${child.status}`
+        message: `The child Workflow ended as ${child.status}`,
+        ...(limited && child.error?.usageLimit ? { usageLimit: child.error.usageLimit } : {})
       }
     };
+  }
   const output = await stores.workflowRuns.readRunOutput({
     clientInstanceId: run.clientInstanceId,
     id: child.id

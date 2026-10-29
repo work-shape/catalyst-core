@@ -7,6 +7,7 @@ import {
   type AppBridgePageMessage,
   type AppWorkflowRun
 } from "@work-shape/catalyst-api-client";
+import { MODEL_USAGE_LIMIT_REACHED_CODE } from "@work-shape/catalyst-core";
 
 // The calls a frame asks the interface to make. The frame holds no credential and can reach
 // nothing but the interface, so each call is made here, with the session of the person who
@@ -95,9 +96,18 @@ export interface FrameCallTexts {
   refusal(details: Record<string, unknown>): string | undefined;
 }
 
+/**
+ * The code a frame reads for a call that needed a model while a usage limit held. The instance
+ * gives it the reason `MODEL_USAGE_LIMIT_REACHED`; the frame reads it as a state, like the
+ * `limit_reached` of a Workflow run, and the sentence says which limit and when it resets.
+ */
+const LIMIT_REACHED = "limit_reached";
+
 /** The refusals the same call again cannot change. A frame offers no retry for them. */
 const FINAL_REFUSALS: readonly string[] = [
   "forbidden",
+  // Until the limit resets or an admin raises it, the same call is refused the same way.
+  LIMIT_REACHED,
   "action_unknown",
   "draft_safe_mode",
   // A Page of a conversation reaches no Data Store; only an App does.
@@ -136,7 +146,10 @@ export function frameCallFailure(
     };
   }
   const reason = typeof details.reason === "string" ? details.reason : undefined;
-  const code = reason ?? error.code?.toLowerCase() ?? "failed";
+  const code =
+    reason === MODEL_USAGE_LIMIT_REACHED_CODE
+      ? LIMIT_REACHED
+      : (reason ?? error.code?.toLowerCase() ?? "failed");
   return {
     code,
     // The code stays the instance's; only the sentence is told in the viewer's language.

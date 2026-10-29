@@ -1,5 +1,6 @@
 import { compileJsonSchema } from "@work-shape/catalyst-connections";
 import {
+  MODEL_USAGE_LIMIT_REACHED_CODE,
   unknownToJsonValue,
   workflowAgentName,
   type AuthenticatedUser,
@@ -28,6 +29,18 @@ export async function agentStepOutcome(
     stepRunId: step.id
   });
   if (!child || !["completed", "failed", "cancelled"].includes(child.status)) return undefined;
+  // A usage limit refused the agent's model call. The next item or step would meet the same
+  // limit, so the whole run stops with it (limits spec 3.1).
+  if (child.status === "failed" && child.error?.code === MODEL_USAGE_LIMIT_REACHED_CODE)
+    return {
+      kind: "failed",
+      systemic: true,
+      error: {
+        code: MODEL_USAGE_LIMIT_REACHED_CODE,
+        message: "A usage limit stopped the agent step",
+        ...(child.error.usageLimit ? { usageLimit: child.error.usageLimit } : {})
+      }
+    };
   if (child.status !== "completed")
     return {
       kind: "failed",

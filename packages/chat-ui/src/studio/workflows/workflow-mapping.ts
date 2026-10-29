@@ -7,6 +7,7 @@ import {
   WORKFLOW_RESERVED_STEP_TYPES,
   WORKFLOW_TRIGGER_KINDS,
   parseConnectionOperationName,
+  type ModelUsageRefusal,
   type WorkflowBlockStepRunView,
   type WorkflowKind,
   type WorkflowLoopCounts,
@@ -76,7 +77,8 @@ const FAILURE_REASONS: Readonly<Record<string, WorkflowFailureReason>> = {
   step_crashed: "crashed",
   loop_step_failed: "loopEntry",
   step_limit: "stepLimit",
-  duration_limit: "durationLimit"
+  duration_limit: "durationLimit",
+  MODEL_USAGE_LIMIT_REACHED: "usageLimit"
 };
 
 /**
@@ -100,6 +102,8 @@ interface ErrorResource {
   connectionTitle?: string;
   /** On `confirmation_unattended`: the operation that needed a confirmation. */
   operation?: string;
+  /** On `MODEL_USAGE_LIMIT_REACHED`: which usage limit refused a model call. */
+  usageLimit?: ModelUsageRefusal | undefined;
 }
 
 interface TimesResource {
@@ -244,6 +248,7 @@ function toFailure(error: ErrorResource | undefined) {
       ...(error.connection === undefined ? {} : { connection: error.connection }),
       ...(error.connectionTitle === undefined ? {} : { connectionTitle: error.connectionTitle }),
       ...(error.operation === undefined ? {} : { operation: error.operation }),
+      ...(error.usageLimit === undefined ? {} : { usageLimit: error.usageLimit }),
       ...(workflow === undefined ? {} : { workflow })
     }
   };

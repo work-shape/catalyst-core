@@ -60,6 +60,22 @@ const appNameOf = (row: SQL): SQL => drizzleSql`coalesce(
     where ur.id = ${row}.agent_run_id and uo.origin_kind = 'app'),
   '')`;
 
+/**
+ * The Workflow an event counts to: the Workflow whose run the call names, or whose step called
+ * the operation that made it (the embedding of a search in an operation step), or whose agent
+ * step's conversation it belongs to (the embedding of a search an agent made there). The name
+ * is the Workflow's, the way the run records it.
+ */
+const workflowNameOf = (row: SQL): SQL => drizzleSql`coalesce(
+  (select wr.workflow from workflow_runs wr where wr.id = ${row}.workflow_run_id),
+  (select wr.workflow from operation_runs uo
+    join workflow_runs wr on wr.id = uo.origin->>'workflowRunId'
+    where uo.id = ${row}.operation_run_id and uo.origin_kind = 'workflow'),
+  (select wr.workflow from conversations uc
+    join workflow_runs wr on wr.id = uc.workflow_run_id
+    where uc.id = ${row}.conversation_id),
+  '')`;
+
 /** What one event adds to the sums of its day: the key of its row there, and its amounts. */
 export function rollupContribution(row: SQL): SQL {
   const settled = drizzleSql`(${row}.customer_billable_cost->>'status' = 'settled')`;
@@ -77,8 +93,7 @@ export function rollupContribution(row: SQL): SQL {
       then coalesce(${row}.agent_name, '') else '' end as agent_name,
     ${workspaceKeyOf(row)} as workspace_key,
     ${appNameOf(row)} as app_name,
-    coalesce((select wr.workflow from workflow_runs wr where wr.id = ${row}.workflow_run_id), '')
-      as workflow_name,
+    ${workflowNameOf(row)} as workflow_name,
     case when ${settled} then coalesce(${row}.customer_billable_cost->>'currency', '') else '' end as currency,
     1::bigint as model_call_count,
     ${row}.input_tokens::bigint as input_tokens,
