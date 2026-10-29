@@ -5579,7 +5579,7 @@
         "",
         "An index job writes a content's passages to the Knowledge Base's own store in transactions of at most 500 passages and 30 seconds each (`CHUNK_BATCH`, `KNOWLEDGE_CHUNK_WRITE_TIMEOUT_MS` in `packages/data-stores/src/knowledge/builtin/document-store.ts`). The new passages go in beside the ones search reads, and one short transaction switches the content to them; a search therefore never waits long behind an index write, and a re-index keeps answering with the old passages until the switch. A batch of vectors is bounded at 30 seconds too.",
         "",
-        "A Knowledge Base holds at most 2,000 fetched items, and at most 2 GiB by the sizes its source listed, whose content is not yet indexed (`KNOWLEDGE_FETCH_WINDOW_ITEMS`, `KNOWLEDGE_FETCH_WINDOW_BYTES` in `packages/core/src/knowledge-sources.ts`). These are constants, not settings. While indexing is paused or slower than fetching, a fetch batch that finds the window full waits 60 seconds and spends no attempt, so the object store and the fetch spool stay bounded.",
+        "A Knowledge Base holds at most 2,000 fetched items, and at most 2 GiB by the sizes its source listed, whose content is not yet indexed (`KNOWLEDGE_FETCH_WINDOW_ITEMS`, `KNOWLEDGE_FETCH_WINDOW_BYTES` in `packages/core/src/knowledge-sources.ts`). These are constants, not settings. While indexing is paused or slower than fetching, a fetch batch that finds the window full waits and spends no attempt: it goes on once an index job leaves at most half the window held, or after 60 seconds at the latest. The object store and the fetch spool stay bounded.",
         "",
         "## Knowledge Base processing review measurement",
         "",

@@ -67,7 +67,12 @@ export type KnowledgeSyncJobPayload = z.infer<typeof knowledgeSyncJobPayloadSche
 
 /** What a fetch job carries: the sync's ids and the rows in `source_items` of its batch. */
 export const knowledgeFetchJobPayloadSchema = knowledgeSyncJobPayloadSchema.extend({
-  sourceItemIds: z.array(jobIdSchema).min(1).max(KNOWLEDGE_FETCH_BATCH_MAX_ITEMS)
+  sourceItemIds: z.array(jobIdSchema).min(1).max(KNOWLEDGE_FETCH_BATCH_MAX_ITEMS),
+  /**
+   * The batch waits for room in the fetch window (KB-ISO-3b): due after
+   * `KNOWLEDGE_FETCH_WINDOW_WAIT_MS`, or earlier where indexing frees half the window.
+   */
+  waitsForWindow: z.literal(true).optional()
 });
 
 export type KnowledgeFetchJobPayload = z.infer<typeof knowledgeFetchJobPayloadSchema>;
@@ -159,8 +164,18 @@ export const KNOWLEDGE_FETCH_WINDOW_ITEMS = 2_000;
 /** The bytes of the fetch window, by the sizes the source listed: 2 GiB. */
 export const KNOWLEDGE_FETCH_WINDOW_BYTES = 2 * 1024 ** 3;
 
-/** How long the rest of a fetch batch that found the window full waits. */
+/**
+ * How long the rest of a fetch batch that found the window full waits at most. An index job
+ * that leaves at most half the window held makes it due at once.
+ */
 export const KNOWLEDGE_FETCH_WINDOW_WAIT_MS = 60_000;
+
+/** Whether `held` leaves at most half the fetch window taken: waiting batches go on. */
+export function knowledgeFetchWindowHasRoom(held: { items: number; bytes: number }): boolean {
+  return (
+    held.items <= KNOWLEDGE_FETCH_WINDOW_ITEMS / 2 && held.bytes <= KNOWLEDGE_FETCH_WINDOW_BYTES / 2
+  );
+}
 
 /** How often the fetch of one item is attempted before it fails with `knowledge_fetch_failed`. */
 export const KNOWLEDGE_FETCH_MAX_ATTEMPTS = 3;

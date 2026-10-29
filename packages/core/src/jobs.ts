@@ -282,6 +282,15 @@ export interface JobsStore {
     options: EnqueueJobOptions
   ): Promise<Job<Payload>>;
   /**
+   * Makes due now the queued jobs of `kind` for `subject` whose payload holds `payload` and
+   * that are due later: for jobs that wait for a condition their subject now meets, such as
+   * fetch batches waiting for room in a fetch window. Answers how many.
+   */
+  hasten(
+    kind: JobKind,
+    input: { clientInstanceId: ClientInstanceId; subject: string; payload: JsonObject }
+  ): Promise<number>;
+  /**
    * Removes the queued job of a dedupe key. For a caller that did the job's work itself and
    * calls this in the transaction that finishes it. A job that an attempt has claimed stays;
    * that attempt finds nothing left to do.

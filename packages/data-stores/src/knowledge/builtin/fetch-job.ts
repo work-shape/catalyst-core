@@ -69,13 +69,19 @@ async function queueAgain(
   control: JobControl,
   payload: KnowledgeFetchJobPayload,
   ids: string[],
-  waitMs: number
+  waitMs: number,
+  waitsForWindow = false
 ) {
   if (!ids.length) return;
+  const { waitsForWindow: _waited, ...ordinary } = payload;
   await control.transaction((stores) =>
     stores.jobs.enqueue(
       knowledgeFetchJob,
-      { ...payload, sourceItemIds: ids },
+      {
+        ...ordinary,
+        sourceItemIds: ids,
+        ...(waitsForWindow ? { waitsForWindow: true as const } : {})
+      },
       {
         clientInstanceId: runtime.data.clientInstanceId,
         subject: payload.knowledgeBaseId,
@@ -502,7 +508,14 @@ export function createKnowledgeFetchHandler(runtime: SourceJobRuntime): Register
               "The fetch window is full; the rest of the batch waits"
             );
             await queueAgain(runtime, control, payload, retry, retryMs);
-            await queueAgain(runtime, control, payload, later(), KNOWLEDGE_FETCH_WINDOW_WAIT_MS);
+            await queueAgain(
+              runtime,
+              control,
+              payload,
+              later(),
+              KNOWLEDGE_FETCH_WINDOW_WAIT_MS,
+              true
+            );
             return;
           }
         }

@@ -2,6 +2,7 @@ import { decodeKnowledgeDocumentCursor, listKnowledgeDocuments } from "./documen
 import { hasOutdatedProcessor, processingSummary } from "./processing-summary";
 import { createKnowledgeFieldStore } from "./field-store";
 import { documentOfFile } from "./document-of-file";
+import { heldInFetchWindow } from "./fetch-window";
 import { processingContents } from "./processing-store";
 import { visibleSourceHits } from "./source-visibility";
 import { z } from "zod";
@@ -264,16 +265,7 @@ export function createBuiltinDocumentStore(
         async (sql) => {
           // Locked as a rewrite did, so a writer of vectors holding the content finishes first.
           if (!(await lockContent(sql, contentSha256))) return undefined;
-          const rows = await sql.run(
-            `delete from catalyst_kb.chunks where id in (
-               select id from catalyst_kb.chunks
-               where content_sha256 = $1::pg_catalog.text
-                 and chunking_revision is distinct from $2::pg_catalog.int4
-               limit $3::pg_catalog.int4
-             ) returning 1 as gone`,
-            [contentSha256, keep, CHUNK_BATCH]
-          );
-          return rows.length;
+          return deleteChunkBatch(sql, contentSha256, keep);
         }
       );
       if (deleted === undefined) return false;
@@ -459,10 +451,45 @@ export function createBuiltinDocumentStore(
     },
 
     async writeChunks(input, signal) {
-      // The slot beside the chunks search reads. A set staged before is given up: these replace it.
+      const batches: (readonly KnowledgeChunkInput[])[] = [];
+      for (let start = 0; start < input.chunks.length; start += CHUNK_BATCH) {
+        batches.push(input.chunks.slice(start, start + CHUNK_BATCH));
+      }
+      /** Makes the written set the content's: switched where `complete`, else staged. */
+      const finish = async (sql: PostgresChangeStatements, slot: number) => {
+        await sql.run(
+          `update catalyst_kb.contents
+         set state = case when $8::pg_catalog.bool then 'extracted' else state end,
+           chunking_revision = case when $8::pg_catalog.bool then $2::pg_catalog.int4
+             else chunking_revision end,
+           staged_revision = case when $8::pg_catalog.bool then null else $2::pg_catalog.int4 end,
+           failure_code = null, extraction_revision = $3::pg_catalog.int4,
+           page_count = $4::pg_catalog.int4, updated_at = now(),
+           document_type=$5::text, processor_revision=$6::text, processing_key=$7::text,
+           requested_processing_key=null
+         where sha256 = $1::pg_catalog.text`,
+          [
+            input.contentSha256,
+            slot,
+            input.extractionRevision,
+            input.pageCount,
+            input.documentType ?? null,
+            input.processorRevision ?? null,
+            input.processingKey ?? null,
+            input.complete
+          ]
+        );
+        // The first batch of the old chunks goes with the switch; the rest after it.
+        return (
+          input.complete && (await deleteChunkBatch(sql, input.contentSha256, slot)) >= CHUNK_BATCH
+        );
+      };
+      // The slot beside the chunks search reads, what an attempt that ended before its switch
+      // left there, and the first batch. A set staged before is given up: these replace it.
+      // Most contents are one batch: written, staged or switched in this one transaction.
       const begun = await inStore(
         "Writing the passages",
-        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        KNOWLEDGE_CHUNK_WRITE_TIMEOUT_MS,
         signal,
         async (sql) => {
           const [row] = await liveRevisions(sql, input.contentSha256);
@@ -473,16 +500,28 @@ export function createBuiltinDocumentStore(
               [input.contentSha256]
             );
           }
-          return {
-            live: row.chunking_revision,
-            slot: slotBeside(row.chunking_revision, input.chunkingRevision)
-          };
+          const live = row.chunking_revision;
+          const slot = slotBeside(live, input.chunkingRevision);
+          if ((await deleteChunkBatch(sql, input.contentSha256, live)) >= CHUNK_BATCH) {
+            return { live, slot, written: 0 };
+          }
+          await insertChunks(sql, input.contentSha256, slot, batches[0] ?? []);
+          if (batches.length > 1) return { live, slot, written: 1 };
+          return { live, slot, written: 1, done: true, more: await finish(sql, slot) };
         }
       );
       if (!begun) return;
-      // What an attempt that ended before its switch left at the slot.
-      if (!(await dropChunksBeside(input.contentSha256, begun.live, signal))) return;
-      for (let start = 0; start < input.chunks.length; start += CHUNK_BATCH) {
+      if ("done" in begun) {
+        if (begun.more) await dropChunksBeside(input.contentSha256, begun.slot, signal);
+        return;
+      }
+      if (
+        begun.written === 0 &&
+        !(await dropChunksBeside(input.contentSha256, begun.live, signal))
+      ) {
+        return;
+      }
+      for (const batch of batches.slice(begun.written)) {
         const written = await inStore(
           "Writing the passages",
           KNOWLEDGE_CHUNK_WRITE_TIMEOUT_MS,
@@ -494,20 +533,15 @@ export function createBuiltinDocumentStore(
               [input.contentSha256]
             );
             if (held.length === 0) return false;
-            await insertChunks(
-              sql,
-              input.contentSha256,
-              begun.slot,
-              input.chunks.slice(start, start + CHUNK_BATCH)
-            );
+            await insertChunks(sql, input.contentSha256, begun.slot, batch);
             return true;
           }
         );
         if (!written) return;
       }
-      const switched = await inStore(
+      const more = await inStore(
         "Switching the passages",
-        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        KNOWLEDGE_CHUNK_WRITE_TIMEOUT_MS,
         signal,
         async (sql) => {
           const [row] = await liveRevisions(sql, input.contentSha256);
@@ -527,32 +561,10 @@ export function createBuiltinDocumentStore(
               "The passages of the content changed while they were written"
             );
           }
-          await sql.run(
-            `update catalyst_kb.contents
-           set state = case when $8::pg_catalog.bool then 'extracted' else state end,
-             chunking_revision = case when $8::pg_catalog.bool then $2::pg_catalog.int4
-               else chunking_revision end,
-             staged_revision = case when $8::pg_catalog.bool then null else $2::pg_catalog.int4 end,
-             failure_code = null, extraction_revision = $3::pg_catalog.int4,
-             page_count = $4::pg_catalog.int4, updated_at = now(),
-             document_type=$5::text, processor_revision=$6::text, processing_key=$7::text,
-             requested_processing_key=null
-           where sha256 = $1::pg_catalog.text`,
-            [
-              input.contentSha256,
-              begun.slot,
-              input.extractionRevision,
-              input.pageCount,
-              input.documentType ?? null,
-              input.processorRevision ?? null,
-              input.processingKey ?? null,
-              input.complete
-            ]
-          );
-          return input.complete;
+          return finish(sql, begun.slot);
         }
       );
-      if (switched) await dropChunksBeside(input.contentSha256, begun.slot, signal);
+      if (more) await dropChunksBeside(input.contentSha256, begun.slot, signal);
     },
 
     async failContent(input, signal) {
@@ -578,13 +590,14 @@ export function createBuiltinDocumentStore(
     },
 
     async completeContent(input, signal) {
-      const live = await inStore(
+      const switched = await inStore(
         "Marking the content indexed",
-        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        KNOWLEDGE_CHUNK_WRITE_TIMEOUT_MS,
         signal,
         async (sql) => {
           const [row] = await liveRevisions(sql, input.contentSha256);
           if (!row || row.state === "failed") return undefined;
+          let live = row.chunking_revision;
           if (row.staged_revision !== null) {
             if (revisionOf(row.staged_revision) !== input.chunkingRevision) return undefined;
             // The switch: search reads the staged chunks from here on.
@@ -595,22 +608,34 @@ export function createBuiltinDocumentStore(
              where sha256 = $1::pg_catalog.text`,
               [input.contentSha256]
             );
-            return row.staged_revision;
+            live = row.staged_revision;
+          } else {
+            if (revisionOf(live) !== input.chunkingRevision) return undefined;
+            if (row.state === "pending") {
+              await sql.run(
+                `update catalyst_kb.contents
+               set state = 'extracted', failure_code = null, updated_at = now()
+               where sha256 = $1::pg_catalog.text`,
+                [input.contentSha256]
+              );
+            }
           }
-          if (revisionOf(row.chunking_revision) !== input.chunkingRevision) return undefined;
-          if (row.state === "pending") {
-            await sql.run(
-              `update catalyst_kb.contents
-             set state = 'extracted', failure_code = null, updated_at = now()
-             where sha256 = $1::pg_catalog.text`,
-              [input.contentSha256]
-            );
-          }
-          return row.chunking_revision;
+          // The chunks an earlier set left, also where an attempt ended between its switch and
+          // their deletion: the first batch here, the rest after.
+          const deleted = await deleteChunkBatch(sql, input.contentSha256, live);
+          return deleted >= CHUNK_BATCH ? live : undefined;
         }
       );
-      // The chunks an earlier set left, also where an attempt ended between switch and cleanup.
-      if (live !== undefined) await dropChunksBeside(input.contentSha256, live, signal);
+      if (switched !== undefined) await dropChunksBeside(input.contentSha256, switched, signal);
+    },
+
+    heldInFetchWindow(signal) {
+      return inStore(
+        "Reading the fetch window",
+        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        signal,
+        heldInFetchWindow
+      );
     },
 
     waitContent(input, signal) {
@@ -1127,6 +1152,24 @@ async function liveRevisions(
       [contentSha256]
     )
   );
+}
+
+/** Deletes up to one batch of the content's chunks of every revision but `keep`: how many. */
+async function deleteChunkBatch(
+  sql: PostgresChangeStatements,
+  contentSha256: string,
+  keep: number | null
+): Promise<number> {
+  const rows = await sql.run(
+    `delete from catalyst_kb.chunks where id in (
+       select id from catalyst_kb.chunks
+       where content_sha256 = $1::pg_catalog.text
+         and chunking_revision is distinct from $2::pg_catalog.int4
+       limit $3::pg_catalog.int4
+     ) returning 1 as gone`,
+    [contentSha256, keep, CHUNK_BATCH]
+  );
+  return rows.length;
 }
 
 /** Locks the content's row for the transaction. False where the content is gone. */

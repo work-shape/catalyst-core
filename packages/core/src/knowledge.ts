@@ -996,6 +996,11 @@ export interface KnowledgeDocumentStore {
     input: { contentSha256: string; chunkingRevision: number },
     signal?: AbortSignal
   ): Promise<void>;
+  /**
+   * What the fetch window holds (KB-ISO-3b): the synced items whose content is still `pending`,
+   * and their listed bytes.
+   */
+  heldInFetchWindow(signal?: AbortSignal): Promise<{ items: number; bytes: number }>;
   /** Notes on a `pending` content why it waits, until it is completed, failed or retried. */
   waitContent(
     input: { contentSha256: string; code: KnowledgeDocumentWaitCode },

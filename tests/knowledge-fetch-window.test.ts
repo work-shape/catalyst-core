@@ -5,7 +5,8 @@ import { useKnowledgeSync } from "./support/knowledge-sync";
 
 // The fetch window (KB-ISO-3b): a Knowledge Base holds at most so many fetched items, and so
 // many bytes, whose content has not yet left `pending`. A fetch batch that finds it full queues
-// its rest after 60 seconds and spends no attempt. Spec: data-stores-and-knowledge-bases.md,
+// its rest after 60 seconds and spends no attempt, or sooner once indexing frees half the
+// window. Spec: data-stores-and-knowledge-bases.md,
 // Throughput, check 104. The window here is 4 items instead of 2,000.
 
 const WINDOW = 4;
@@ -90,6 +91,15 @@ describe("the fetch window of a Knowledge Base (KB-ISO-3b)", () => {
     world.embed.mockImplementation(async ({ texts }: { texts: readonly string[] }) => ({
       vectors: texts.map(() => Array.from({ length: 8 }, () => 0.25))
     }));
+    // A content that leaves `pending` with at most half the window held makes the waiting batch
+    // due at once: only the index jobs are brought forward here, and the rest is fetched.
+    expect((await waiting())[0]?.wait).toBeGreaterThan(50);
+    await eventually(async () => {
+      await world.platform`update platform_jobs set run_after = now()
+        where status = 'queued' and kind = 'knowledge_base.index'`;
+      await world.worker.runDue();
+      expect((await items()).filter((item) => item.state === "fetched")).toHaveLength(10);
+    }, 30_000);
     await eventually(async () => {
       await world.platform`update platform_jobs set run_after = now() where status = 'queued'
           and kind in ('knowledge_base.sync', 'knowledge_base.fetch', 'knowledge_base.index')`;

@@ -101,6 +101,24 @@ export function createPostgresJobsStore(db: PostgresConnection, enqueued: () => 
       enqueued();
       return job;
     },
+    async hasten(kind, input) {
+      const hastened = await db
+        .update(platformJobs)
+        .set({ runAfter: sql`now()` })
+        .where(
+          and(
+            eq(platformJobs.clientInstanceId, input.clientInstanceId),
+            eq(platformJobs.kind, kind.kind),
+            eq(platformJobs.status, "queued"),
+            sql`${platformJobs.runAfter} > now()`,
+            eq(platformJobs.subject, input.subject),
+            sql`${platformJobs.payload} @> ${JSON.stringify(input.payload)}::jsonb`
+          )
+        )
+        .returning({ id: platformJobs.id });
+      if (hastened.length > 0) enqueued();
+      return hastened.length;
+    },
     async withdraw(kind, options) {
       await db
         .delete(jobWakes)
