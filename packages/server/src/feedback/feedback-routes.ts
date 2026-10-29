@@ -70,18 +70,21 @@ export function registerFeedbackRoutes(route: Route, options: ResolvedChatServer
     }
   });
 
-  route.operation(apiOperations["feedback.list_own_on_result"], {
-    authorize: authorizeAuthor,
-    resource: inboxItem,
-    execute: ({ requestId }, context) => workflow.listOwnOnResult(context, requestId)
-  });
+  // A comment on a result is sent from its notice, which only an instance with an Inbox holds.
+  if (options.approvalRequests) {
+    route.operation(apiOperations["feedback.list_own_on_result"], {
+      authorize: authorizeAuthor,
+      resource: inboxItem,
+      execute: ({ requestId }, context) => workflow.listOwnOnResult(context, requestId)
+    });
 
-  route.operation(apiOperations["feedback.send_on_result"], {
-    changeClass: "reversible",
-    authorize: authorizeAuthor,
-    resource: inboxItem,
-    execute: ({ requestId, text }, context) => workflow.sendOnResult(context, requestId, text)
-  });
+    route.operation(apiOperations["feedback.send_on_result"], {
+      changeClass: "reversible",
+      authorize: authorizeAuthor,
+      resource: inboxItem,
+      execute: ({ requestId, text }, context) => workflow.sendOnResult(context, requestId, text)
+    });
+  }
 
   route.operation(apiOperations["feedback.list"], {
     authorize: authorizeReviewer,
