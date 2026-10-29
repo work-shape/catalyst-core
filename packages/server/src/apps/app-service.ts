@@ -152,17 +152,7 @@ export class AppWorkflow {
     checked?: readonly OperationBeforeEvent[]
   ) {
     const page = await this.requirePersonsPage(call.actor, input);
-    const created = await this.pageApps.create(call, page, input, checked);
-    // The person typed or confirmed the name: it is theirs, as a rename makes it.
-    await this.options.configAssets.store.setConfigAssetPersonTitle({
-      clientInstanceId: this.options.clientInstanceId,
-      kind: APP_ASSET_KIND,
-      name: created.name,
-      assetId: created.id,
-      title: input.title,
-      updatedAt: new Date().toISOString()
-    });
-    return created;
+    return this.pageApps.create(call, page, input, checked);
   }
 
   /** The write right on the App, as a write of its draft asks it: renaming is editing. */

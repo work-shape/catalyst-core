@@ -6,6 +6,7 @@ apps.get_from_page  GET /api/v1/conversations/:conversationId/pages/:pageId/app
 apps.preview  POST /api/v1/apps/:app/preview
 apps.preview_captures.pending  GET /api/v1/conversations/:conversationId/preview-captures
 apps.publish_review  GET /api/v1/apps/:app/publish-review
+apps.rename  POST /api/v1/apps/:app/rename
 apps.sessions.call_action  POST /api/v1/app-content-sessions/:pageSessionId/actions/:name
 apps.sessions.capture  POST /api/v1/app-content-sessions/:pageSessionId/captures/:captureId
 apps.sessions.context  POST /api/v1/app-content-sessions/:pageSessionId/context
