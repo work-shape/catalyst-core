@@ -73,7 +73,7 @@ const user: AuthenticatedUser = {
   authSource: "test"
 };
 
-const callContext: OperationExecutionContext = {
+export const callContext: OperationExecutionContext = {
   runId: createPlatformId<"OperationRunId">("opr"),
   actor: user,
   origin: { kind: "user" },
@@ -125,6 +125,8 @@ export function useDataStoreWorld(prefix: string, options: { scope?: "test" | "s
     >`select database_name, app_role, migration_role from data_stores
       where client_instance_id = any(${clientInstances})`;
     for (const record of records) {
+      // The store's test copy goes first: its roles are the store's.
+      await db.sql.unsafe(`drop database if exists "${record.database_name}_test" with (force)`);
       await db.sql.unsafe(`drop database if exists "${record.database_name}" with (force)`);
       await db.sql.unsafe(`drop role if exists "${record.app_role}"`);
       await db.sql.unsafe(`drop role if exists "${record.migration_role}"`);
@@ -288,6 +290,24 @@ export function useDataStoreWorld(prefix: string, options: { scope?: "test" | "s
     });
   }
 
+  /**
+   * Executes any operation of the instance's stores by its full name, as the call path does
+   * once it decided the call: `target` is the one `runOperation()` gave its run.
+   */
+  async function execute(
+    world: World,
+    name: string,
+    input: unknown,
+    extra: Partial<OperationExecutionContext> = {}
+  ) {
+    const operation = required(await world.dataStores.operationSource.resolve(name));
+    return operation.execute(operation.inputSchema.parse(input), {
+      ...callContext,
+      runId: createPlatformId<"OperationRunId">("opr"),
+      ...extra
+    });
+  }
+
   /** A connection of the test's own, as the platform's role or as a role it gave a password. */
   function connect(database: string, role?: { name: string; password: string }): postgres.Sql {
     const url = new URL(db.databaseUrl);
@@ -337,6 +357,7 @@ export function useDataStoreWorld(prefix: string, options: { scope?: "test" | "s
     settle,
     published,
     call,
+    execute,
     connect,
     takeOver,
     platformRole

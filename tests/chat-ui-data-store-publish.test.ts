@@ -57,17 +57,26 @@ const state: DataStoreState = {
   lastMigration: { outcome: "applied", migration: { number: 1, name: "init" } }
 };
 
-function storeSource(seesServerConditions: boolean): DataStoreSource {
+const noTestCopyCalls: DataStoreSource["testCopy"] = {
+  reset: () => Promise.resolve(undefined),
+  remove: () => Promise.resolve(undefined)
+};
+
+function storeSource(
+  seesServerConditions: boolean,
+  answers: { state?: DataStoreState; testCopy?: DataStoreSource["testCopy"] } = {}
+): DataStoreSource {
   return {
     seesServerConditions,
-    useStoreState: () => ({ status: "ready", data: state }),
+    useStoreState: () => ({ status: "ready", data: answers.state ?? state }),
     useSchema: () => ({ status: "loading" }),
     useListed: () => ({ status: "loading" }),
     useRowsPage: () => ({ status: "loading" }),
     useValue: () => ({ status: "loading" }),
     useUsedBy: () => ({ status: "loading" }),
     useUsingPage: () => () => undefined,
-    review: { useFlagged: () => ({ status: "loading" }), decide: () => Promise.resolve(undefined) }
+    review: { useFlagged: () => ({ status: "loading" }), decide: () => Promise.resolve(undefined) },
+    testCopy: answers.testCopy ?? noTestCopyCalls
   };
 }
 
@@ -87,6 +96,8 @@ async function mount(
     locale?: "en" | "de";
     /** Opens the list of stores instead of the store's page. */
     list?: true;
+    state?: DataStoreState;
+    testCopy?: DataStoreSource["testCopy"];
   } = {}
 ): Promise<HTMLElement> {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -122,7 +133,12 @@ async function mount(
       revisions: async () => ({ items: [] })
     }
   };
-  const planted = dataStoreKindOn(() => storeSource(input.seesServerConditions ?? false));
+  const planted = dataStoreKindOn(() =>
+    storeSource(input.seesServerConditions ?? false, {
+      ...(input.state ? { state: input.state } : {}),
+      ...(input.testCopy ? { testCopy: input.testCopy } : {})
+    })
+  );
   const kinds = buildAssetKinds.map((kind) => (kind.kind === "data_store" ? planted : kind));
   const container = document.createElement("div");
   document.body.append(container);
@@ -223,6 +239,55 @@ describe("What the database server leaves open around a store", () => {
     expect((await mount(published, { list: true })).textContent).not.toContain("on the server");
     const operator = await mount(published, { list: true, seesServerConditions: true });
     expect(operator.textContent).toContain("1 to do on the server");
+  });
+});
+
+describe("The test copy section (DT-2)", () => {
+  it("says when a copy is made while there is none, and offers nothing to reset", async () => {
+    const page = await mount(published);
+    const section = page.querySelector('[data-data-store-test-copy="absent"]');
+    expect(section?.textContent).toContain("A draft's first call that changes the store makes it");
+    expect(page.querySelector("[data-data-store-test-copy-reset]")).toBeNull();
+  });
+
+  it("shows the copy's level, seed files and size against its own limit, and resets and deletes it", async () => {
+    const calls: string[] = [];
+    const page = await mount(published, {
+      state: {
+        ...state,
+        testCopy: {
+          level: 2,
+          seedFiles: 3,
+          builtAt: "2026-10-28T09:00:00.000Z",
+          bytes: 8 * 1024 ** 2,
+          limitBytes: 100 * 1024 ** 2
+        }
+      },
+      testCopy: {
+        reset: (store) => {
+          calls.push(`reset ${store}`);
+          return Promise.resolve(undefined);
+        },
+        remove: (store) => {
+          calls.push(`delete ${store}`);
+          return Promise.resolve("The copy is being built. Try again in a moment.");
+        }
+      }
+    });
+    const section = page.querySelector('[data-data-store-test-copy="present"]');
+    expect(section?.textContent).toContain("Seed files3");
+    expect(section?.textContent).toMatch(/8 MB of 100 MB/u);
+    await act(async () =>
+      page.querySelector<HTMLButtonElement>("[data-data-store-test-copy-reset]")?.click()
+    );
+    expect(page.querySelector("[data-data-store-test-copy-failed]")).toBeNull();
+    await act(async () =>
+      page.querySelector<HTMLButtonElement>("[data-data-store-test-copy-delete]")?.click()
+    );
+    expect(calls).toEqual(["reset leads", "delete leads"]);
+    expect(page.querySelector("[data-data-store-test-copy-failed]")?.textContent).toBe(
+      "The copy is being built. Try again in a moment."
+    );
   });
 });
 

@@ -100,7 +100,7 @@ export class DataStoreMigrationRefusal extends Error {
  * every statement that would end or split the transaction, also one that is put together
  * while the file runs: nothing of a migration stays unless all of it does.
  */
-function heldInTransaction(sql: string): string {
+export function heldInTransaction(sql: string): string {
   // A mark of this run alone, which the text therefore cannot hold: with a fixed one, a
   // migration that wrote the mark would end the block where it stands.
   let mark: string;

@@ -11,7 +11,7 @@ import {
 import { appliedMigrationIssue, type DataStoreDefinition } from "./definition";
 import { checkRecordsCatalog } from "./records/publish";
 import type { DataStoreRuntime } from "./runtime";
-import { enqueueStoreJob } from "./store-job-kinds";
+import { enqueueStoreJob, enqueueTestCopyDrop } from "./store-job-kinds";
 
 /**
  * What publishing a revision of a store does beside moving the published pointer, in the same
@@ -127,6 +127,7 @@ export async function publishDataStore(
 /**
  * What deleting the asset of a store does to the store, in the same transaction: the record
  * is marked retired. The database, the roles and every row stay, and the record keeps the id.
+ * Its test copy, which only a draft of the asset reached, is dropped by a job queued here.
  */
 export async function retireDataStore(
   runtime: Pick<DataStoreRuntime, "clientInstanceId">,
@@ -147,4 +148,5 @@ export async function retireDataStore(
     retiredAt: now,
     updatedAt: now
   });
+  await enqueueTestCopyDrop(stores, record);
 }

@@ -215,14 +215,16 @@ export async function recordCall(
 
 /**
  * Makes sure the store has the table of the records: a store that was provisioned before the
- * table existed gets it at its first call with a key. Asked once per store and process.
+ * table existed gets it at its first call with a key. Asked once per database and process: a
+ * store's test copy is a database of its own under the store's id.
  */
 export function ensureCallRecords(
   runtime: DataStoreRuntime,
   record: Pick<DataStoreRecord, "id" | "location" | "roles">,
   signal: AbortSignal | undefined
 ): Promise<void> {
-  const known = runtime.callRecords.get(record.id);
+  const database = record.location.database;
+  const known = runtime.callRecords.get(database);
   if (known) return known;
   const made = runtime.server.executor
     .change(
@@ -240,10 +242,10 @@ export function ensureCallRecords(
       }
     )
     .catch((error: unknown) => {
-      runtime.callRecords.delete(record.id);
+      runtime.callRecords.delete(database);
       throw error;
     });
-  runtime.callRecords.set(record.id, made);
+  runtime.callRecords.set(database, made);
   return made;
 }
 

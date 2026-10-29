@@ -165,6 +165,10 @@ export interface FindingsWorld extends AppActionsInstance {
   addFindings(rows: JsonObject[]): Promise<void>;
   /** Every row of `findings`, as the platform's own role reads them. */
   findingRows(): Promise<JsonObject[]>;
+  /** Every row of `findings` in the store's test copy (DT-2). */
+  testCopyRows(): Promise<JsonObject[]>;
+  /** Drops the store's test copy and its record, so the next test starts without one. */
+  dropTestCopy(): Promise<void>;
   /** Sets the size limit the platform holds a store to, in bytes. */
   setSizeLimit(storeId: string, bytes: number): Promise<void>;
   /** Turns the module `dataStores` off or on for the calls of a frame. */
@@ -344,6 +348,22 @@ export async function setupFindingsApp(
     publishStore,
     addFindings,
     findingRows: () => rowsAs<JsonObject[]>`select * from findings order by id`,
+    async testCopyRows() {
+      const sql = connect({
+        ...store,
+        location: { ...store.location, database: `${store.location.database}_test` }
+      });
+      return sql<JsonObject[]>`select * from findings order by id`;
+    },
+    async dropTestCopy() {
+      const sql = postgres(databaseUrl, { max: 1, onnotice: () => undefined });
+      try {
+        await sql.unsafe(`drop database if exists "${store.location.database}_test" with (force)`);
+        await sql`delete from data_store_test_copies where store_id = ${store.id}`;
+      } finally {
+        await sql.end();
+      }
+    },
     // Simulates a missing legacy definition, outside the guarded asset-removal path.
     async removeStoreDefinition(name) {
       const asset = required(
@@ -384,6 +404,7 @@ export async function setupFindingsApp(
           { database_name: string; app_role: string; migration_role: string }[]
         >`select database_name, app_role, migration_role from data_stores`;
         for (const record of records) {
+          await sql.unsafe(`drop database if exists "${record.database_name}_test" with (force)`);
           await sql.unsafe(`drop database if exists "${record.database_name}" with (force)`);
           await sql.unsafe(`drop role if exists "${record.app_role}"`);
           await sql.unsafe(`drop role if exists "${record.migration_role}"`);

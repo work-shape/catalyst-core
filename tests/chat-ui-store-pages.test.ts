@@ -115,7 +115,8 @@ function storeSource(answers: { listed?: DataStoreListed; usedBy?: DataStoreUsed
     useValue: () => ({ status: "loading" }),
     useUsedBy: () => (answers.usedBy === undefined ? { status: "loading" } : ready(answers.usedBy)),
     useUsingPage: () => () => undefined,
-    review: { useFlagged: () => ({ status: "loading" }), decide: () => Promise.resolve(undefined) }
+    review: { useFlagged: () => ({ status: "loading" }), decide: () => Promise.resolve(undefined) },
+    testCopy: { reset: () => Promise.resolve(undefined), remove: () => Promise.resolve(undefined) }
   };
   return source;
 }

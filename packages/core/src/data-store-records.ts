@@ -90,3 +90,32 @@ export interface DataStoreRecord {
    */
   ownerKnowledgeBaseId?: string;
 }
+
+/**
+ * The test copy of a Data Store (ADR-0031, DT-2): a scratch database on the store's server,
+ * built from the migrations of the store's draft and its `seed/` files, never from a row of the
+ * live store. Every call of a draft to the store goes there once it exists. The platform makes
+ * it on a draft's first changing call to the store; a reset drops it and builds it again, a
+ * delete drops it until the next such call, and deleting the store drops it.
+ */
+export interface DataStoreTestCopy {
+  /** The id of the store's asset. One copy per store. */
+  storeId: string;
+  clientInstanceId: ClientInstanceId;
+  /** The database of the copy, beside the store's own on the same server. */
+  database: string;
+  /** The migrations applied to the copy, in order: those of the store's draft at its last use. */
+  migrations: DataStoreAppliedMigration[];
+  /** The SHA-256 over the `seed/` files it was loaded with, in their order. */
+  seedSha256: string;
+  /** How many `seed/` files it was loaded with. */
+  seedFiles: number;
+  /** What it held when it was last built or brought to its draft. Missing before then. */
+  sizeBytes?: number;
+  /** When it was last built from nothing: by a first call, a reset or a rebuild. */
+  builtAt: ISODateString;
+  /** Who built it last: the person whose draft called, or who reset it. */
+  builtBy: string;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+}

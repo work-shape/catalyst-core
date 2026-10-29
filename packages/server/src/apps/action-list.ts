@@ -26,6 +26,7 @@ import {
   type ConfigAssetRecord,
   type ConnectionExposure,
   type DataStoreReference,
+  type DraftTestTarget,
   type OperationAuthorization
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
@@ -327,11 +328,38 @@ export class AppActionList {
         set.revisionId === revision.revisionId && set.usedByRunId === undefined ? [set.part] : []
       )
     );
+    // The test copy of each store the `sql` actions name: a draft's call goes there once it
+    // exists, and a changing one makes it (ADR-0031, DT-2).
+    const copies = await this.testCopies(revision.actions);
     // A `workflow` action of a draft starts a test run, which no switch makes live (DP-1).
-    return (action) =>
-      action.kind === "workflow"
-        ? "test"
-        : draftCallTarget({ effect: action.effect, liveOnce: mine.has(action.name) });
+    return (action) => {
+      if (action.kind === "workflow") return "test";
+      const testTarget = action.kind === "sql" ? copies.get(action.dataStore) : undefined;
+      return draftCallTarget({
+        effect: action.effect,
+        liveOnce: mine.has(action.name),
+        ...(testTarget === undefined ? {} : { testTarget })
+      });
+    };
+  }
+
+  /** Whether each store the `sql` actions name has a test copy, by name. A store with no database has none. */
+  private async testCopies(
+    actions: readonly CompiledAppAction[]
+  ): Promise<Map<string, DraftTestTarget>> {
+    const names = [
+      ...new Set(actions.flatMap((action) => (action.kind === "sql" ? [action.dataStore] : [])))
+    ];
+    const { clientInstanceId, stores } = this.options;
+    const read = await Promise.all(
+      names.map(async (name) => {
+        const record = await stores.dataStores.findDataStoreByName({ clientInstanceId, name });
+        if (!record || record.status === "retired") return [];
+        const copy = await stores.dataStores.getTestCopy({ clientInstanceId, storeId: record.id });
+        return [[name, copy ? "present" : "made_on_change"] as const];
+      })
+    );
+    return new Map(read.flat());
   }
 
   private app(name: string): Promise<ConfigAssetRecord | undefined> {

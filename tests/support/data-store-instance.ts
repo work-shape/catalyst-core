@@ -191,6 +191,7 @@ export function useDataStoreInstance(
           join pg_database d on d.datname = ${record.database_name}
           where r.rolname like 'catalyst_kb_%'
             and has_database_privilege(r.oid, d.oid, 'CONNECT')`;
+        await sql.unsafe(`drop database if exists "${record.database_name}_test" with (force)`);
         await sql.unsafe(`drop database if exists "${record.database_name}" with (force)`);
         await sql.unsafe(`drop role if exists "${record.app_role}"`);
         await sql.unsafe(`drop role if exists "${record.migration_role}"`);

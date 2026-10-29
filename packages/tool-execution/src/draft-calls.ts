@@ -3,6 +3,7 @@ import {
   createActorAccess,
   asUserId,
   boundedActorAccess,
+  draftCallTarget,
   isAuthenticatedServicePrincipal,
   type ActingServicePrincipal,
   type ActorAccess,
@@ -55,16 +56,17 @@ export function draftCallOf(call: OperationCall, workflowAgent = false): Operati
 }
 
 /**
- * Where the call goes. A call of what is live goes live, and so does every reading call of a
- * draft, with the rights of the person testing. A changing call of a draft is simulated,
- * unless its caller switched "Run live once" on for its action or step of its revision. An App
- * call uses the switch up. A call of a Workflow test run binds the switch to its run, and every
- * call of that step in that run goes live, each item of a loop and each retry. Only a call that
- * may be made takes the switch: a caller the surface or the right refuses leaves it, so nobody
- * without the right uses up a builder's switch. An operation with a test target of its own
- * (`liveOnceTarget`) is sent there by the switch instead of live: `mail.send` mails the tester
- * alone. A test target of the called asset (a Data Store's test copy, a Connection's test
- * credential) will send every call of a draft there; DT-2 and DT-3 add it here.
+ * Where the call goes, by the rule of `draftCallTarget`. A call of what is live goes live. A
+ * reading call of a draft goes to the called asset's test target where one is present (a Data
+ * Store's test copy), and live otherwise, with the rights of the person testing. A changing call
+ * of a draft goes to the test target, also one it makes (a Data Store's first changing draft
+ * call makes its copy), and is simulated where the asset has none, unless its caller switched
+ * "Run live once" on for its action or step of its revision. An App call uses the switch up. A
+ * call of a Workflow test run binds the switch to its run, and every call of that step in that
+ * run goes live, each item of a loop and each retry. Only a call that may be made takes the
+ * switch: a caller the surface or the right refuses leaves it, so nobody without the right uses
+ * up a builder's switch. An operation with a test target of its own (`liveOnceTarget`) is sent
+ * there by the switch instead of live: `mail.send` mails the tester alone.
  */
 export async function decideTarget(input: {
   call: OperationCall;
@@ -75,10 +77,17 @@ export async function decideTarget(input: {
 }): Promise<OperationTarget> {
   const { call, definition, deps, admitted } = input;
   const { draft } = call;
-  if (!draft || definition.effect === "reading") return "live";
+  if (!draft) return "live";
+  const testTarget = await definition.testTarget?.state();
+  const unswitched = draftCallTarget({
+    effect: definition.effect,
+    liveOnce: false,
+    ...(testTarget === undefined ? {} : { testTarget })
+  });
+  if (definition.effect === "reading") return unswitched;
   if (definition.draftTarget) return definition.draftTarget;
-  if (draft.kind === "agent_preview") return "dry_run";
-  if (!deps.liveOnce || !(await admitted())) return "dry_run";
+  if (draft.kind === "agent_preview") return unswitched;
+  if (!deps.liveOnce || !(await admitted())) return unswitched;
   const forRun = call.origin.kind === "workflow" ? call.origin.workflowRunId : draft.workflowRunId;
   const now = deps.now ?? (() => new Date());
   const { taken, firstUse, cleared } = await deps.liveOnce.take({
@@ -93,7 +102,7 @@ export async function decideTarget(input: {
   for (const stale of cleared) {
     await emitSwitchEvent("live_once.cleared", stale, call, deps, { reason: "draft_changed" });
   }
-  if (!taken) return "dry_run";
+  if (!taken) return unswitched;
   // A switch is used once: by the call that took it, or by the test run it was bound to.
   if (firstUse) {
     await emitSwitchEvent("live_once.used", taken, call, deps, {

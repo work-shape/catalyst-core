@@ -85,6 +85,8 @@ export {
   knowledgeChunkPrefix
 } from "./knowledge/builtin/chunking";
 export { dataStoreStateOperationName } from "./state";
+export { splitSeedStatements } from "./seed-statements";
+export type { TestCopyPart } from "./test-copy";
 
 /**
  * The name of a read of a store's page that is no verb of the contract: `rows`, `value` and
@@ -118,7 +120,9 @@ export const dataStoresModule = defineModule({
     "data_stores.rows",
     "data_stores.value",
     "data_stores.used_by",
-    "data_stores.app_sources"
+    "data_stores.app_sources",
+    "data_stores.test_copy_reset",
+    "data_stores.test_copy_delete"
   ],
   jobKinds: Object.values(DATA_STORE_JOB_KINDS)
 });

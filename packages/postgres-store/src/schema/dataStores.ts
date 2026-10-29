@@ -61,3 +61,25 @@ export const dataStores = pgTable(
     check("data_stores_level_check", sql`${table.level} >= 0`)
   ]
 );
+
+/**
+ * The test copy of a Data Store (ADR-0031, DT-2): the scratch database its drafts reach,
+ * built from the migrations of the store's draft and its seed files, never from a live row. One
+ * row per store at most, while the copy's database exists; dropping the copy removes the row.
+ * It holds no row of the copy and no credential: the copy is reached as the store's own roles.
+ */
+export const dataStoreTestCopies = pgTable("data_store_test_copies", {
+  storeId: text("store_id")
+    .primaryKey()
+    .references(() => dataStores.id, { onDelete: "cascade" }),
+  clientInstanceId: text("client_instance_id").$type<ClientInstanceId>().notNull(),
+  databaseName: text("database_name").notNull(),
+  migrations: jsonb("migrations").$type<DataStoreAppliedMigration[]>().notNull(),
+  seedSha256: text("seed_sha256").notNull(),
+  seedFiles: integer("seed_files").notNull(),
+  sizeBytes: bigint("size_bytes", { mode: "number" }),
+  builtAt: timestamp("built_at", { withTimezone: true }).notNull(),
+  builtBy: text("built_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
+});

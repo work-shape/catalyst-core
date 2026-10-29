@@ -10,6 +10,8 @@ data_stores.query  POST /api/v1/data-stores/:store/query
 data_stores.records_decide  POST /api/v1/data-stores/:store/records/decide
 data_stores.records_flagged  GET /api/v1/data-stores/:store/records/flagged
 data_stores.rows  GET /api/v1/data-stores/:store/rows
+data_stores.test_copy_delete  DELETE /api/v1/data-stores/:store/test-copy
+data_stores.test_copy_reset  POST /api/v1/data-stores/:store/test-copy/reset
 data_stores.update  POST /api/v1/data-stores/:store/update
 data_stores.used_by  GET /api/v1/data-stores/:store/used-by
 data_stores.value  GET /api/v1/data-stores/:store/value
