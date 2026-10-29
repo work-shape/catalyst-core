@@ -16,16 +16,13 @@ import { guardrailDryRunBeforePublish } from "./guardrails";
 import type { Verb } from "./types";
 
 export const publishVerb: Verb = {
-  usage:
-    "publish <name> --revision <n> [--yes] [--confirm <blocked>] [--confirm-handover <confirmation>]",
+  usage: "publish <name> --revision <n> [--yes] [--confirm <blocked>]",
   summary:
-    "Make one revision the one its users are served (assets.publish). A guardrail shows its dry run first; an App, a Workflow or a workspace's agent asks you first",
+    "Make one revision the one its users are served (assets.publish). A guardrail shows its dry run first; an App, a Workflow or a workspace's agent asks you first. A publish that hands a source's data to people who may not use the source waits in the Inbox until a person who may change the source approves it",
   named: true,
   options: {
     revision: { type: "string" },
     confirm: { type: "string" },
-    // The hand-over a publish's question names (DS-13c), confirmed by a holder of connection.write.
-    "confirm-handover": { type: "string" },
     yes: { type: "boolean", default: false }
   },
   prepare: (values, name) => {
@@ -97,9 +94,6 @@ export const publishVerb: Verb = {
                 ...session.scope,
                 ...(session.kind.kind === "knowledge_base" && values.confirm
                   ? { confirmProcessing: values.confirm }
-                  : {}),
-                ...(typeof values["confirm-handover"] === "string"
-                  ? { confirmHandover: values["confirm-handover"] }
                   : {})
               },
               idempotencyKey,

@@ -43,7 +43,6 @@ interface RepositoryCommandValues {
   revision?: string;
   published: boolean;
   audience?: string;
-  "confirm-handover"?: string;
   yes: boolean;
   json: boolean;
 }
@@ -65,10 +64,9 @@ export const APP_VERBS = {
       "Send the folder as the App's next draft revision, or create the App; build errors name file:line (assets.put)"
   },
   publish: {
-    usage:
-      "publish <app> [--revision <n>] [--audience self|workspace|instance] [--yes] [--confirm-handover <confirmation>]",
+    usage: "publish <app> [--revision <n>] [--audience self|workspace|instance] [--yes]",
     summary:
-      "Choose who may use the App, show what the revision makes live, then ask before publishing it (assets.publish)"
+      "Choose who may use the App, show what the revision makes live, then ask before publishing it (assets.publish). A publish that hands a source's data to people who may not use the source waits in the Inbox until a person who may change the source approves it"
   },
   status: {
     usage: "status <app> [dir]",
@@ -479,10 +477,6 @@ async function publish(
           revision: number,
           workspaceId: target.workspaceId,
           audience,
-          // The hand-over the question named (DS-13c); the instance takes it from a person only.
-          ...(values["confirm-handover"] === undefined
-            ? {}
-            : { confirmHandover: values["confirm-handover"] }),
           ...(together.workflows.length > 0 ? { workflows: together.workflows } : {}),
           ...(together.dataStores.length > 0 ? { dataStores: together.dataStores } : {})
         },

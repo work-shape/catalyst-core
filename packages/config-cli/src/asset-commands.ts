@@ -67,7 +67,7 @@ function parseCommandLine(args: string[]) {
 const APP_FLAGS = {
   pull: ["revision", "published"],
   push: [],
-  publish: ["revision", "yes", "audience", "confirm-handover"],
+  publish: ["revision", "yes", "audience"],
   status: []
 } as const satisfies Record<keyof typeof APP_VERBS, readonly OptionName[]>;
 
