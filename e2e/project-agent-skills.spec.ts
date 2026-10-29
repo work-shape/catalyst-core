@@ -7,7 +7,7 @@ import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
 // PRJ-7: a project's default agent and skills. On the page of a project the workspace reads, the
-// "Skills & Agent" tile opens the panel: the person's own agent and own skill are greyed there
+// "Skills & Agent" item of its "…" menu opens the panel: the person's own agent and own skill are greyed there
 // with the reason and "Mit <Team> teilen…". A workspace agent becomes the default and a team
 // skill is attached; the own skill is shared with the team from the chooser and then attached
 // too. The composer's agent chooser starts on the default, and the new chat runs with it. In
@@ -163,7 +163,7 @@ test("a project's default agent and skills take only what its audience may use, 
     await dialog.getByLabel("Name").fill(PROJECT);
     await dialog.getByRole("radio", { name: /^Geteilt mit/u }).check();
     await dialog.getByRole("button", { name: "Projekt anlegen" }).click();
-    await expect(page.getByRole("heading", { level: 1, name: PROJECT })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: PROJECT })).toBeVisible();
     const projectName = new URL(page.url()).pathname.split("/").at(-1) ?? "";
     const project = projectSchema.parse(
       await (await page.request.get(`${apiBaseUrl}/api/v1/projects/${projectName}`)).json()
@@ -177,14 +177,10 @@ test("a project's default agent and skills take only what its audience may use, 
     expect(agent, JSON.stringify(before.agents)).toBeDefined();
     if (!agent) return;
 
-    // The tile beside the instructions: nothing attached yet.
-    const tile = page.getByTestId("project-setup-tile");
-    await expect(tile).toHaveAttribute("data-state", "empty");
-    await expect(tile).toContainText("Keine Skills.");
-    await shot(page, "tiles-empty", () => expect(tile).toBeVisible());
-
-    // The panel: the own agent is greyed with the reason and the share into the team.
-    await tile.getByRole("button", { name: "Skills und Agent öffnen" }).click();
+    // The panel opens from the page's "…" menu: the own agent is greyed with the reason and the
+    // share into the team.
+    await page.getByTestId("project-menu").click();
+    await page.getByTestId("project-menu-setup").click();
     const panel = page.getByTestId("project-setup-panel");
     await expect(panel).toContainText(`Ein neuer Chat in ${PROJECT} startet mit diesem Agenten`);
     const agentTrigger = page.getByTestId("project-setup-agent");
@@ -231,13 +227,13 @@ test("a project's default agent and skills take only what its audience may use, 
       OWN_SKILL
     ]);
     await page.keyboard.press("Escape");
-    await expect(tile).toHaveAttribute("data-state", "set");
-    await expect(tile).toContainText(TEAM_SKILL_TITLE);
-    await expect(tile).toContainText(agent.displayName);
+    await expect(panel).toBeHidden();
 
-    // The composer starts on the default, and the new chat runs with it.
-    const composerAgent = page.getByTestId("project-composer-agent");
-    await expect(composerAgent).toHaveAccessibleName(`Agent des neuen Chats: ${agent.displayName}`);
+    // The start page's agent chooser starts on the default, and the new chat runs with it.
+    const composerAgent = page
+      .getByRole("main")
+      .getByRole("button", { name: `Agent auswählen: ${agent.displayName}` });
+    await expect(composerAgent).toBeVisible();
     await shot(page, "page", () => expect(composerAgent).toBeVisible());
     const run = page.waitForRequest(
       (request) =>
@@ -247,13 +243,13 @@ test("a project's default agent and skills take only what its audience may use, 
     const composer = page.getByRole("textbox", { name: `Neuer Chat in ${PROJECT}` });
     await composer.fill(`Objekt prüfen ${TAG}`);
     await composer.press("Enter");
-    // Left as preselected, the browser names no agent: the server starts with the project's.
+    // Left as preselected, the chat starts with the project's default.
     const body = z
       .object({ agentName: z.string().optional() })
       .passthrough()
       .parse((await run).postDataJSON());
     expect(body).toMatchObject({ conversation: { projectId: project.id } });
-    expect(body.agentName).toBeUndefined();
+    expect(body.agentName ?? agent.name).toBe(agent.name);
     await expect(page).toHaveURL(/\/c\/[^/]+$/u);
     await expect(
       page.locator("header").getByRole("button", { name: `Agent auswählen: ${agent.displayName}` })

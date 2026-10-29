@@ -86,6 +86,8 @@ interface WorkspaceConversationActionsInput {
   setNotice(notice: string | undefined): void;
   /** The next new conversation of the open workspace starts private. */
   startsPrivate: boolean;
+  /** On a project's page: the project the start page's first message starts its chat in. */
+  startProjectId: string | undefined;
   /** Names the workspace whose next new conversation starts private, or none. */
   setPrivateStartIn(collaborationWorkspaceId: string | undefined): void;
 }
@@ -110,6 +112,7 @@ export function createWorkspaceConversationActions({
   selectedConversationRunning,
   setNotice,
   startsPrivate,
+  startProjectId,
   setPrivateStartIn
 }: WorkspaceConversationActionsInput) {
   const { route } = routeState;
@@ -162,7 +165,12 @@ export function createWorkspaceConversationActions({
         ...(activeCollaborationWorkspaceId
           ? { collaborationWorkspaceId: activeCollaborationWorkspaceId }
           : {}),
-        ...(startsPrivate && !docked ? { visibility: "private" as const } : {})
+        // A chat started on a project's page belongs to the project and takes its audience.
+        ...(startProjectId
+          ? { projectId: startProjectId }
+          : startsPrivate && !docked
+            ? { visibility: "private" as const }
+            : {})
       }
     });
   }
@@ -385,35 +393,6 @@ export function createWorkspaceConversationActions({
     conversationListRefresh.runAccepted(response);
   }
 
-  /**
-   * Starts a new conversation in a project with its first message and opens it (PRJ-1). It
-   * belongs to the project's workspace and takes the project's audience.
-   */
-  async function startConversationInProject(input: {
-    text: string;
-    collaborationWorkspaceId: string;
-    projectId: string;
-    /** The agent chosen in the project's composer; without one the project's default (PRJ-7). */
-    agentName?: string;
-  }) {
-    const response = await startProductConversationRun({
-      ...(input.agentName ? { agentName: input.agentName } : {}),
-      client,
-      collaborationWorkspaceId: input.collaborationWorkspaceId,
-      projectId: input.projectId,
-      idempotencyKey: createRunIdempotencyKey(),
-      locale: activeLocale,
-      text: input.text
-    });
-    workspaceCache.cacheRunStarted(response);
-    routeState.showConversation(
-      response.conversation.collaborationWorkspaceId,
-      response.conversation.id
-    );
-    setNotice(undefined);
-    conversationListRefresh.runAccepted(response);
-  }
-
   /** The run did not start: open the composer with the message ready to send. */
   function leaveRevisionInComposer(
     conversationId: string | undefined,
@@ -451,7 +430,6 @@ export function createWorkspaceConversationActions({
     startDockedChat,
     selectConversation,
     startRevisionRun,
-    startConversationInProject,
     leaveRevisionInComposer
   };
 }

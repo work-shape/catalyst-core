@@ -49,6 +49,8 @@ import { resolveBuildRights } from "../../shared/build-rights";
 import { canViewUsageGovernance } from "../../shared/governance";
 import { createTranslationContext } from "../../shared/i18n";
 import { workspaceRoutePath } from "../../shared/routes";
+import { isChatWorkspaceRoute } from "../../shared/workspace-route";
+import { useProjectStart } from "../projects/project-start";
 import {
   apiErrorReason,
   apiErrorStatus,
@@ -156,8 +158,8 @@ export function useWorkspaceChatModel({
   const displayPanel = useToolDisplayPanel();
   const { route, selectedConversationId, view, dock } = routeState;
   // Off the chat route the conversation is the dock's: a conversation shown or dropped there
-  // stays in the dock of the page.
-  const docked = view !== "chat";
+  // stays in the dock of the page. A project's page is the start page of a chat in it.
+  const docked = !isChatWorkspaceRoute(route);
   const activeDraft = useWorkspaceDraft({
     authScope: WORKSPACE_AUTH_SCOPE,
     conversationId: selectedConversationId
@@ -238,6 +240,16 @@ export function useWorkspaceChatModel({
   // Projects are on in every workspace once the instance's module is (PRJ-1).
   const projectsEnabled =
     collaborationWorkspacesAvailable && instanceModules?.projects?.enabled === true;
+  // On a project's page the start page's first message starts a chat in the project, with the
+  // project's agent unless the person picks another there (PRJ-7).
+  const projectStart = useProjectStart(
+    projectsEnabled && route.kind === "project" ? route.project : undefined
+  );
+  const startProjectId = projectStart.project?.id;
+  const [projectAgentPick, setProjectAgentPick] = useState<{
+    projectId: string;
+    agentName: string;
+  }>();
   const platformContextQuery = usePlatformContextQuery({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
@@ -422,7 +434,7 @@ export function useWorkspaceChatModel({
         collaborationWorkspacesAvailable,
         workspaceAgents: workspaceAgentsQuery.data,
         instanceViewApplies:
-          view !== "chat" ||
+          docked ||
           workspaceAgentsQuery.isError ||
           collaborationWorkspace.loadFailed ||
           collaborationWorkspace.activeCollaborationWorkspace?.kind === "personal",
@@ -499,7 +511,6 @@ export function useWorkspaceChatModel({
     startDockedChat,
     selectConversation,
     startRevisionRun,
-    startConversationInProject,
     leaveRevisionInComposer
   } = createWorkspaceConversationActions({
     client,
@@ -526,6 +537,7 @@ export function useWorkspaceChatModel({
     selectedConversationRunning,
     setNotice,
     startsPrivate,
+    startProjectId,
     setPrivateStartIn
   });
 
@@ -535,7 +547,12 @@ export function useWorkspaceChatModel({
       conversationId: selectedConversationId,
       pickedIn: conversationAgentPicks,
       thread: threadQuery.data,
-      forNew: newConversationAgentName
+      forNew:
+        startProjectId === undefined
+          ? newConversationAgentName
+          : projectAgentPick?.projectId === startProjectId
+            ? projectAgentPick.agentName
+            : projectStart.startAgentName
     })
   );
 
@@ -569,6 +586,10 @@ export function useWorkspaceChatModel({
     useWorkspaceTheme(config?.ui);
   // A pick in an open conversation applies to it alone; elsewhere it is for the new one.
   const selectAgentName = (agentName: string | undefined) => {
+    if (selectedConversationId === undefined && startProjectId !== undefined && agentName) {
+      setProjectAgentPick({ projectId: startProjectId, agentName });
+      return;
+    }
     if (selectedConversationId === undefined || agentName === undefined) {
       setNewConversationAgentName(agentName);
       return;
@@ -1166,8 +1187,7 @@ export function useWorkspaceChatModel({
       enabled: projectsEnabled,
       selectedProjectId: projectsEnabled
         ? (selectedThread?.conversation.projectId ?? undefined)
-        : undefined,
-      startChat: startConversationInProject
+        : undefined
     },
     agents: {
       status: agentListStatus({
@@ -1228,6 +1248,8 @@ export function useWorkspaceChatModel({
       usageNote: usageLimitReason === undefined ? usageNote : undefined,
       newConversationPrivate:
         !selectedConversationId &&
+        // A chat started in a project takes the project's audience.
+        startProjectId === undefined &&
         collaborationWorkspace.activeCollaborationWorkspace?.kind === "shared" &&
         collaborationWorkspace.activeCollaborationWorkspace.defaultConversationVisibility ===
           "private",
@@ -1332,7 +1354,8 @@ export function useWorkspaceChatModel({
           setNotice(createTranslationContext(activeLocale).t("conversationPrivateStartFailed"));
         }
       },
-      startsPrivate
+      startsPrivate,
+      ...(startProjectId === undefined ? {} : { startProjectId })
     },
     controlPlane,
     toolDisplay: {

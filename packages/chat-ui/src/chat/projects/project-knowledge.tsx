@@ -9,11 +9,6 @@ import { PROJECT_KNOWLEDGE_BASES_MAX } from "@work-shape/catalyst-core";
 import {
   Banner,
   Button,
-  Card,
-  CardFooter,
-  CardHeader,
-  CardTarget,
-  CardTitle,
   Chip,
   Drawer,
   FormNotice,
@@ -54,71 +49,39 @@ function attachedKnowledge(setup: ProjectSetupView) {
   return { applied, unavailable };
 }
 
+/** A Knowledge Base attached to the project no longer applies to its chats. */
+export function projectKnowledgeUnavailable(setup: ProjectSetupView): boolean {
+  return attachedKnowledge(setup).unavailable.length > 0;
+}
+
 /**
- * The "Wissensbasen" tile beside the instructions and the skills: what is attached, and a warning
- * where something no longer applies. Nothing where the module `knowledge` is off.
+ * The Knowledge Bases of the project, opened from its page's "…" menu. The menu offers them only
+ * where the module `knowledge` is on: the server then lists the choices.
  */
-export function ProjectKnowledgeTile({
+export function ProjectKnowledgeDrawer({
   project,
   workspace,
-  workspaces
+  workspaces,
+  open,
+  onClose
 }: {
   project: ProjectView;
   workspace: ProjectSetupWorkspace;
   workspaces: readonly BuildWorkspace[];
+  open: boolean;
+  onClose(): void;
 }) {
-  const { t } = useTranslation();
   const setup = useProjectSetupQuery(project.id);
-  const [open, setOpen] = useState(false);
-  const data = setup.data;
-  // The module is off: the server lists no choices, and the project shows no Knowledge Bases.
-  if (setup.isPending || (data !== undefined && data.knowledgeBaseChoices === undefined)) {
-    return null;
-  }
-  const attached = data ? attachedKnowledge(data) : undefined;
-  const unavailable = (attached?.unavailable.length ?? 0) > 0;
-  const titles = attached?.applied.map((entry) => entry.title || entry.name) ?? [];
-  const meta = setup.isError
-    ? t("projectKnowledge.loadFailed")
-    : titles.length === 0
-      ? t("projectKnowledge.tileEmpty")
-      : titles.join(" · ");
   return (
-    <>
-      <Card
-        padding="md"
-        className="min-w-0"
-        data-testid="project-knowledge-tile"
-        data-state={unavailable ? "unavailable" : titles.length === 0 ? "empty" : "set"}
-      >
-        <CardHeader className="grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3">
-          <Library aria-hidden="true" className="row-span-2 mt-0.5 size-4 text-muted-foreground" />
-          <CardTitle>{t("projectKnowledge.title")}</CardTitle>
-          <p className="text-caption text-muted-foreground wrap-anywhere">{meta}</p>
-          {unavailable ? (
-            <Banner layout="line" tone="warning" className="col-start-2">
-              {t("projectKnowledge.tileUnavailable")}
-            </Banner>
-          ) : null}
-        </CardHeader>
-        <CardFooter>
-          <CardTarget label={t("projectKnowledge.open")} title={t("projectKnowledge.title")}>
-            <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-              {t("projectKnowledge.open")}
-            </Button>
-          </CardTarget>
-        </CardFooter>
-      </Card>
-      <ProjectKnowledgePanel
-        project={project}
-        workspace={workspace}
-        workspaces={workspaces}
-        open={open}
-        setup={data}
-        failed={setup.isError}
-        onClose={() => setOpen(false)}
-      />
-    </>
+    <ProjectKnowledgePanel
+      project={project}
+      workspace={workspace}
+      workspaces={workspaces}
+      open={open}
+      setup={setup.data}
+      failed={setup.isError}
+      onClose={onClose}
+    />
   );
 }
 

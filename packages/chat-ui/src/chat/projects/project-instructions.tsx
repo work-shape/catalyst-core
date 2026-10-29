@@ -4,13 +4,7 @@ import type { ProjectFilesView, ProjectView } from "@work-shape/catalyst-api-cli
 import {
   Banner,
   Button,
-  Card,
-  CardFooter,
-  CardHeader,
-  CardTarget,
-  CardTitle,
   Dialog,
-  Drawer,
   EmptyState,
   Field,
   FormNotice,
@@ -26,7 +20,6 @@ import {
   useProjectFileWrites
 } from "../../shared/api/project-files";
 import { useTranslation } from "../../shared/i18n";
-import { formatDateTime } from "../../shared/locale-format";
 import { StoredFileView } from "../../shared/stored-file-view";
 import { apiErrorCode } from "../../shared/workspace-utils";
 import { useOpenConversationProject } from "./add-from-project";
@@ -107,81 +100,28 @@ function InstructionsChangeView({ before, after }: { before: string; after: stri
   );
 }
 
-// --- The tile and the panel on the project's page ----------------------------------------------
+// --- The panel beside the project's page --------------------------------------------------------
 
-/**
- * The Instructions tile above the project's chats and files: who changed `AGENTS.md` last and
- * when, or an invitation to write it. It opens the panel.
- */
-export function ProjectInstructionsTile({ project }: { project: ProjectView }) {
-  const { t, locale } = useTranslation();
-  const files = useProjectFilesQuery(project.id);
-  const file = instructionsFile(files.data);
-  const [open, setOpen] = useState(false);
-  const meta = file
-    ? file.updatedBy
-      ? t("projectInstructions.tileMeta", {
-          person: file.updatedBy.label,
-          when: formatDateTime(file.updatedAt, locale)
-        })
-      : t("projectInstructions.tileMetaFormer", { when: formatDateTime(file.updatedAt, locale) })
-    : undefined;
-  const label = t(file ? "projectInstructions.open" : "projectInstructions.write");
-  return (
-    <>
-      <Card
-        padding="md"
-        className="min-w-0"
-        data-testid="project-instructions-tile"
-        data-state={file ? "written" : "empty"}
-      >
-        <CardHeader className="grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3">
-          <ScrollText
-            aria-hidden="true"
-            className="row-span-2 mt-0.5 size-4 text-muted-foreground"
-          />
-          <CardTitle>{t("projectInstructions.title")}</CardTitle>
-          <p className="text-caption text-muted-foreground wrap-anywhere">
-            {files.isPending ? "…" : (meta ?? t("projectInstructions.tileEmpty"))}
-          </p>
-        </CardHeader>
-        <CardFooter>
-          <CardTarget label={label} title={t("projectInstructions.title")}>
-            <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-              {label}
-            </Button>
-          </CardTarget>
-        </CardFooter>
-      </Card>
-      <ProjectInstructionsPanel
-        project={project}
-        open={open}
-        files={files.data}
-        onClose={() => setOpen(false)}
-      />
-    </>
-  );
+/** The project has no instructions yet, or only an empty `AGENTS.md`. */
+export function projectInstructionsEmpty(files: ProjectFilesView | undefined): boolean {
+  const file = instructionsFile(files);
+  return file === undefined || file.byteSize === 0;
 }
 
 /**
- * `AGENTS.md` in the drawer beside the page: its text, a note where a chat takes only its start,
- * an editor, and its versions. A save names the version it replaces, so a change made meanwhile
- * is never overwritten unseen.
+ * `AGENTS.md` in the surface beside the project's page: its text, a note where a chat takes only
+ * its start, an editor, and its versions. A save names the version it replaces, so a change made
+ * meanwhile is never overwritten unseen.
  */
-function ProjectInstructionsPanel({
-  project,
-  open,
-  files,
-  onClose
+export function ProjectInstructionsPanel({
+  project
 }: {
   project: Pick<ProjectView, "id" | "title">;
-  open: boolean;
-  files: ProjectFilesView | undefined;
-  onClose(): void;
 }) {
   const { t } = useTranslation();
   const formId = useId();
-  const file = instructionsFile(files);
+  const files = useProjectFilesQuery(project.id);
+  const file = instructionsFile(files.data);
   const text = useProjectFileTextQuery(project.id, PROJECT_INSTRUCTIONS_PATH, file?.version);
   const writes = useProjectFileWrites(project.id, t("projectFiles.held"));
   const [editing, setEditing] = useState(false);
@@ -189,13 +129,6 @@ function ProjectInstructionsPanel({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
   const current = file ? text.data : "";
-
-  useEffect(() => {
-    if (!open) {
-      setEditing(false);
-      setError(undefined);
-    }
-  }, [open]);
 
   function startEditing() {
     setDraft(current ?? "");
@@ -227,7 +160,7 @@ function ProjectInstructionsPanel({
     }
   }
 
-  const footer = editing ? (
+  const actions = editing ? (
     <div className="flex flex-wrap gap-2">
       <Button type="submit" form={formId} size="sm" loading={pending}>
         {t("projectInstructions.save")}
@@ -237,91 +170,92 @@ function ProjectInstructionsPanel({
       </Button>
     </div>
   ) : (
-    <Button
-      size="sm"
-      variant={file ? "outline" : "primary"}
-      disabled={file !== undefined && current === undefined}
-      data-testid="project-instructions-edit"
-      onClick={startEditing}
-    >
-      {t(file ? "projectInstructions.edit" : "projectInstructions.write")}
-    </Button>
+    <div className="flex flex-wrap gap-2">
+      <Button
+        size="sm"
+        variant={file ? "outline" : "primary"}
+        disabled={file !== undefined && current === undefined}
+        data-testid="project-instructions-edit"
+        onClick={startEditing}
+      >
+        {t(file ? "projectInstructions.edit" : "projectInstructions.write")}
+      </Button>
+    </div>
   );
 
   return (
-    <Drawer
-      open={open}
-      title={t("projectInstructions.title")}
-      description={PROJECT_INSTRUCTIONS_PATH}
-      onClose={onClose}
-      className="w-[min(40rem,100vw)]"
-      footer={footer}
-    >
-      <div className="grid gap-5" data-testid="project-instructions-panel">
-        <p className="text-body text-muted-foreground">
-          {t("projectInstructions.panelLead", { project: project.title })}
-        </p>
-        {error ? <FormNotice tone="error">{error}</FormNotice> : null}
-        {editing ? (
-          <form
-            id={formId}
-            onSubmit={(event) => {
-              save(event).catch(() => undefined);
-            }}
-          >
-            <Field label={t("projectInstructions.field")} hint={t("projectInstructions.fieldHint")}>
-              <Textarea
-                autoFocus
-                rows={14}
-                value={draft}
-                data-testid="project-instructions-field"
-                onChange={(event) => setDraft(event.currentTarget.value)}
-              />
-            </Field>
-            {instructionsTruncated(draft) ? (
-              <Banner layout="line" tone="warning" className="mt-2">
-                {t("projectInstructions.truncated", {
-                  max: PROJECT_INSTRUCTIONS_MAX_CHARS.toLocaleString()
-                })}
-              </Banner>
-            ) : null}
-          </form>
-        ) : !file ? (
+    <div className="grid gap-5" data-testid="project-instructions-panel">
+      <p className="text-body text-muted-foreground">
+        {t("projectInstructions.panelLead", { project: project.title })}
+      </p>
+      {error ? <FormNotice tone="error">{error}</FormNotice> : null}
+      {editing ? (
+        <form
+          id={formId}
+          className="grid gap-3"
+          onSubmit={(event) => {
+            save(event).catch(() => undefined);
+          }}
+        >
+          <Field label={t("projectInstructions.field")} hint={t("projectInstructions.fieldHint")}>
+            <Textarea
+              autoFocus
+              rows={14}
+              value={draft}
+              data-testid="project-instructions-field"
+              onChange={(event) => setDraft(event.currentTarget.value)}
+            />
+          </Field>
+          {instructionsTruncated(draft) ? (
+            <Banner layout="line" tone="warning">
+              {t("projectInstructions.truncated", {
+                max: PROJECT_INSTRUCTIONS_MAX_CHARS.toLocaleString()
+              })}
+            </Banner>
+          ) : null}
+          {actions}
+        </form>
+      ) : files.isPending ? (
+        <SkeletonList rows={3} />
+      ) : !file ? (
+        <>
           <EmptyState icon={<FileText aria-hidden="true" />}>
             {t("projectInstructions.tileEmpty")}
           </EmptyState>
-        ) : text.isError ? (
-          <InlineError>{t("projectInstructions.loadFailed")}</InlineError>
-        ) : current === undefined ? (
-          <SkeletonList rows={3} />
-        ) : (
-          <>
-            {instructionsTruncated(current) ? (
-              <Banner layout="line" tone="warning" data-testid="project-instructions-truncated">
-                {t("projectInstructions.truncated", {
-                  max: PROJECT_INSTRUCTIONS_MAX_CHARS.toLocaleString()
-                })}
-              </Banner>
-            ) : null}
-            <StoredFileView
-              path={PROJECT_INSTRUCTIONS_PATH}
-              text={current}
-              className="max-h-[50dvh]"
-            />
-          </>
-        )}
-        {file && !editing ? (
-          <section className="grid gap-2">
-            <h3 className="text-label font-medium">{t("projectInstructions.versions")}</h3>
-            <ProjectFileVersions
-              projectId={project.id}
-              path={PROJECT_INSTRUCTIONS_PATH}
-              onFailed={setError}
-            />
-          </section>
-        ) : null}
-      </div>
-    </Drawer>
+          {actions}
+        </>
+      ) : text.isError ? (
+        <InlineError>{t("projectInstructions.loadFailed")}</InlineError>
+      ) : current === undefined ? (
+        <SkeletonList rows={3} />
+      ) : (
+        <>
+          {instructionsTruncated(current) ? (
+            <Banner layout="line" tone="warning" data-testid="project-instructions-truncated">
+              {t("projectInstructions.truncated", {
+                max: PROJECT_INSTRUCTIONS_MAX_CHARS.toLocaleString()
+              })}
+            </Banner>
+          ) : null}
+          <StoredFileView
+            path={PROJECT_INSTRUCTIONS_PATH}
+            text={current}
+            className="max-h-[50dvh]"
+          />
+          {actions}
+        </>
+      )}
+      {file && !editing ? (
+        <section className="grid gap-2">
+          <h3 className="text-label font-medium">{t("projectInstructions.versions")}</h3>
+          <ProjectFileVersions
+            projectId={project.id}
+            path={PROJECT_INSTRUCTIONS_PATH}
+            onFailed={setError}
+          />
+        </section>
+      ) : null}
+    </div>
   );
 }
 

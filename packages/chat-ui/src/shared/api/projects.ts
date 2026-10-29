@@ -70,13 +70,13 @@ export function useMyProjectsQuery(enabled = true) {
 }
 
 /** One project by its name. A project outside the person's audience answers as not found. */
-export function useProjectQuery(name: string) {
+export function useProjectQuery(name: string | undefined) {
   const { apiBaseUrl, client } = useWorkspaceApiClient();
   return useQuery({
-    queryKey: projectQueryKeys.one(apiBaseUrl, name),
+    queryKey: projectQueryKeys.one(apiBaseUrl, name ?? ""),
     queryFn: ({ signal }) =>
-      requireClient(client).projects.get({ params: { projectName: name }, signal }),
-    enabled: client !== undefined,
+      requireClient(client).projects.get({ params: { projectName: name ?? "" }, signal }),
+    enabled: client !== undefined && name !== undefined,
     retry: false
   });
 }

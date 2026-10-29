@@ -5,7 +5,7 @@ import {
   useThreadRuntime
 } from "@assistant-ui/react";
 import { AlertCircle, FolderCheck, Paperclip, RotateCcw, X } from "lucide-react";
-import type { FormEvent, KeyboardEvent } from "react";
+import type { FormEvent, KeyboardEvent, ReactNode } from "react";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { DraftAttachment } from "@work-shape/catalyst-api-client";
 import { Button, ComposerFrame, cn, Spinner } from "@work-shape/catalyst-ui";
@@ -60,7 +60,9 @@ export function AssistantComposer({
   onRemoveAttachment,
   onRetryAttachment,
   onQueueSend,
-  onSubmitMessage
+  onSubmitMessage,
+  chip,
+  inputLabel
 }: {
   attachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
@@ -94,8 +96,18 @@ export function AssistantComposer({
   /** Remembers a send asked for during a loading block; it goes out once the block lifts. */
   onQueueSend: (text: string) => void;
   onSubmitMessage?: (text: string) => boolean;
+  /**
+   * A chip in the frame's first row that says where the message goes, such as the project a new
+   * chat starts in. The field and its controls move one row down.
+   */
+  chip?: ReactNode;
+  /** The field's accessible name where the chip says more than the placeholder. */
+  inputLabel?: string;
 }) {
   const { t } = useTranslation();
+  // With a chip the field stands in the second row, and its controls in the third once it grows.
+  const fieldRow = chip ? "row-start-2" : "row-start-1";
+  const grownRow = chip ? "row-start-3" : "row-start-2";
   const currentText = useComposer((state) => state.text);
   const composerShellRef = useRef<HTMLDivElement | null>(null);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -340,6 +352,11 @@ export function AssistantComposer({
           ref={composerShellRef}
           className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-1"
         >
+          {chip ? (
+            <div className="col-span-3 col-start-1 row-start-1 flex min-w-0 px-1 pt-0.5">
+              {chip}
+            </div>
+          ) : null}
           {attachmentsEnabled ? (
             <>
               <input
@@ -360,7 +377,7 @@ export function AssistantComposer({
                 ref={attachmentActionRef}
                 className={cn(
                   "col-start-1 flex shrink-0 items-center",
-                  composerExpanded ? "row-start-2" : "row-start-1"
+                  composerExpanded ? grownRow : fieldRow
                 )}
               >
                 <Button
@@ -388,13 +405,15 @@ export function AssistantComposer({
               // this margin), so text that scrolls is cut clear of the rounded corner. Margin
               // and padding together keep a single line where it was. The field grows to the
               // library's cap and scrolls from there.
-              "row-start-1 mt-0.5 max-h-(--layout-composer-max) min-h-8.5 min-w-0 resize-none bg-transparent px-2 pt-1 pb-1.5 text-sm leading-6 outline-none placeholder:text-muted-foreground",
+              "mt-0.5 max-h-(--layout-composer-max) min-h-8.5 min-w-0 resize-none bg-transparent px-2 pt-1 pb-1.5 text-sm leading-6 outline-none placeholder:text-muted-foreground",
+              fieldRow,
               attachmentsEnabled ? "col-start-2" : "col-span-2 col-start-1",
               composerExpanded && "col-span-3 col-start-1 min-h-11.5 w-full"
             )}
             style={inputFadeStyle}
             onScroll={inputFade.onScroll}
             placeholder={t("messagePlaceholder")}
+            aria-label={inputLabel}
             rows={1}
             submitMode={onSubmitMessage ? "none" : "enter"}
             onKeyDown={handleKeyDown}
@@ -412,7 +431,7 @@ export function AssistantComposer({
             ref={composerControlsRef}
             className={cn(
               "col-start-3 flex min-w-0 items-end gap-1",
-              composerExpanded ? "row-start-2" : "row-start-1"
+              composerExpanded ? grownRow : fieldRow
             )}
           >
             {showContextIndicator && contextSnapshot ? (

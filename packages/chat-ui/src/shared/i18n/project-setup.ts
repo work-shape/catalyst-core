@@ -7,11 +7,9 @@ import { defineTranslations } from "./translation-area";
 export const projectSetup = defineTranslations({
   en: {
     "projectSetup.title": "Skills & agent",
-    "projectSetup.tileEmpty": "No skills. New chats start with the workspace's agent.",
     "projectSetup.tileSkills": "{count} skills",
     "projectSetup.tileOneSkill": "1 skill",
     "projectSetup.tileUnavailable": "Something here no longer applies",
-    "projectSetup.open": "Open skills and agent",
     "projectSetup.panelLead":
       "A new chat in {project} starts with this agent; it can still be changed in the chat. Every chat in the project is offered these skills besides its agent's own.",
     "projectSetup.agentField": "Default agent",
@@ -38,16 +36,13 @@ export const projectSetup = defineTranslations({
     "projectSetup.refused": "A choice cannot be used in this project. Remove it and save again.",
     "projectSetup.changedMeanwhile":
       "Someone changed the project meanwhile. Close the panel and open it again.",
-    "projectSetup.loadFailed": "Could not read the project's skills and agent.",
-    "projectSetup.composerAgent": "Agent of the new chat"
+    "projectSetup.loadFailed": "Could not read the project's skills and agent."
   },
   de: {
     "projectSetup.title": "Skills & Agent",
-    "projectSetup.tileEmpty": "Keine Skills. Neue Chats starten mit dem Agenten des Workspace.",
     "projectSetup.tileSkills": "{count} Skills",
     "projectSetup.tileOneSkill": "1 Skill",
     "projectSetup.tileUnavailable": "Etwas davon gilt nicht mehr",
-    "projectSetup.open": "Skills und Agent öffnen",
     "projectSetup.panelLead":
       "Ein neuer Chat in {project} startet mit diesem Agenten; im Chat lässt er sich noch wechseln. Jedem Chat im Projekt stehen diese Skills zusätzlich zu denen seines Agenten zur Verfügung.",
     "projectSetup.agentField": "Standard-Agent",
@@ -76,7 +71,6 @@ export const projectSetup = defineTranslations({
       "Eine Auswahl ist in diesem Projekt nicht nutzbar. Entferne sie und speichere noch einmal.",
     "projectSetup.changedMeanwhile":
       "Jemand hat das Projekt inzwischen geändert. Schließe das Panel und öffne es erneut.",
-    "projectSetup.loadFailed": "Skills und Agent des Projekts ließen sich nicht lesen.",
-    "projectSetup.composerAgent": "Agent des neuen Chats"
+    "projectSetup.loadFailed": "Skills und Agent des Projekts ließen sich nicht lesen."
   }
 });

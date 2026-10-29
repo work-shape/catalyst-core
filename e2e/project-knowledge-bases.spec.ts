@@ -7,10 +7,10 @@ import { requestWithOrigin } from "./request-with-origin";
 import { expect, takeTurn, test } from "./test";
 
 // PRJ-8: a project's Knowledge Bases. On the page of a project the team reads, the
-// "Wissensbasen" tile opens the panel: the person's own Knowledge Base is greyed with the reason
-// and "Mit <Team> teilen…", one the team may not use with "Nicht alle in <Team> dürfen sie
-// nutzen.". The team's is attached and saved. Taken out of the team, it stays listed as not
-// applying. The project page sets its files beside its chats at 1280. In German. The suite's
+// "Wissensbasen" item of its "…" menu opens the panel: the person's own Knowledge Base is greyed
+// with the reason and "Mit <Team> teilen…", one the team may not use with "Nicht alle in <Team>
+// dürfen sie nutzen.". The team's is attached and saved. Taken out of the team, it stays listed
+// as not applying, and the page warns of it. In German. The suite's
 // instance runs without the module `knowledge`, so a second API runs it with the module on, on
 // the same database, as knowledge-upload.spec.ts does.
 
@@ -243,27 +243,26 @@ test.describe("a project's Knowledge Bases", () => {
       await dialog.getByLabel("Name").fill(PROJECT);
       await dialog.getByRole("radio", { name: /^Geteilt mit/u }).check();
       await dialog.getByRole("button", { name: "Projekt anlegen" }).click();
-      await expect(page.getByRole("heading", { level: 1, name: PROJECT })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 2, name: PROJECT })).toBeVisible();
       const projectName = new URL(page.url()).pathname.split("/").at(-1) ?? "";
       const project = projectSchema.parse(
         await (await page.request.get(`${knowledgeApiUrl}/api/v1/projects/${projectName}`)).json()
       );
       const setupPath = `${knowledgeApiUrl}/api/v1/project-settings/${project.id}/setup`;
 
-      // The tile beside the instructions and the skills: nothing attached yet.
-      const tile = page.getByTestId("project-knowledge-tile");
-      await expect(tile).toHaveAttribute("data-state", "empty");
-      await expect(tile).toContainText("Keine.");
-      // At 1280 the files stand beside the chats, at 390 below them.
-      const chats = page.getByRole("heading", { name: "Unterhaltungen" }).first();
-      const files = page.getByTestId("project-files");
-      await expect(files).toBeVisible();
-      const [chatsBox, filesBox] = [await chats.boundingBox(), await files.boundingBox()];
-      expect(chatsBox && filesBox && filesBox.x > chatsBox.x + 200).toBe(true);
-      await shot(page, "page", () => expect(tile).toBeVisible());
+      // The page's "…" menu offers the Knowledge Bases where the module is on.
+      const menu = page.getByTestId("project-menu");
+      const warning = page.getByTestId("project-start-knowledge-unavailable");
+      const openKnowledge = async () => {
+        await menu.click();
+        await page.getByTestId("project-menu-knowledge").click();
+      };
+      await expect(menu).toBeVisible();
+      await expect(warning).toHaveCount(0);
+      await shot(page, "page", () => expect(menu).toBeVisible());
 
       // The panel: the own one greyed with the share into the team, the instance's with the reason.
-      await tile.getByRole("button", { name: "Wissensbasen öffnen" }).click();
+      await openKnowledge();
       const panel = page.getByTestId("project-knowledge-panel");
       await expect(panel).toContainText(`Jeder Chat in ${PROJECT} durchsucht diese Wissensbasen`);
       const trigger = page.getByTestId("project-knowledge-add");
@@ -286,15 +285,14 @@ test.describe("a project's Knowledge Bases", () => {
         knowledgeBases: [TEAM_KB]
       });
       await page.keyboard.press("Escape");
-      await expect(tile).toHaveAttribute("data-state", "set");
-      await expect(tile).toContainText(TEAM_KB_TITLE);
+      await expect(panel).toBeHidden();
+      await expect(warning).toHaveCount(0);
 
-      // Taken out of the team, it stays attached and is listed as not applying.
+      // Taken out of the team, it stays attached and is listed as not applying; the page warns.
       await availableIn(page, TEAM_KB, []);
       await page.reload();
-      await expect(tile).toHaveAttribute("data-state", "unavailable");
-      await expect(tile).toContainText("Etwas davon gilt nicht mehr");
-      await tile.getByRole("button", { name: "Wissensbasen öffnen" }).click();
+      await expect(warning).toContainText("Etwas davon gilt nicht mehr");
+      await warning.getByRole("button", { name: "Öffnen" }).click();
       // Named by its title where the person may still search it, and by its name where not.
       const gone = new RegExp(`(${TEAM_KB_TITLE}|${TEAM_KB}) · gilt nicht`, "u");
       await expect(page.getByTestId("project-knowledge-list")).toContainText(gone);

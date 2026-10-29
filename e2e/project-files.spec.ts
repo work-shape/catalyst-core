@@ -65,6 +65,12 @@ async function startChatInProject(page: Page, title: string, text: string): Prom
   await expect(page.getByText(text).first()).toBeVisible();
 }
 
+/** Opens the project's files beside its page from the control under the composer. */
+async function openFiles(page: Page): Promise<void> {
+  await page.getByTestId("project-open-files").click();
+  await expect(page.getByTestId("project-files")).toBeVisible();
+}
+
 /** A folder on disk with two files, and a .zip with a folder of two more. */
 async function uploadsOnDisk(root: string): Promise<{ folder: string; zip: string }> {
   const folder = join(root, "unterlagen");
@@ -124,9 +130,11 @@ test("a project's folder takes uploads, and its chats write versions and a confl
   await dialog.getByLabel("Name").fill(title);
   await dialog.getByRole("radio", { name: /^Geteilt mit/u }).check();
   await dialog.getByRole("button", { name: "Projekt anlegen" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: title })).toBeVisible();
   const projectPath = new URL(page.url()).pathname;
   const files = page.getByTestId("project-files");
+  await expect(page.getByTestId("project-open-files")).toHaveText("Dateien · 0");
+  await openFiles(page);
   const { folder, zip } = await uploadsOnDisk(testInfo.outputPath("uploads"));
   await upload(page, "Ordner hochladen", folder);
   await expect(files.getByTestId("project-file-upload")).toHaveCount(2);
@@ -186,6 +194,8 @@ test("a project's folder takes uploads, and its chats write versions and a confl
 
   // On the project's page the file shows both versions, each with its person.
   await page.goto(projectPath);
+  await expect(page.getByTestId("project-open-files")).toHaveText("Dateien · 6");
+  await openFiles(page);
   await expect(files.getByTestId("project-file-row")).toHaveCount(2);
   await expect(files).toContainText("6 Dateien");
   await files.locator('[data-testid="project-file-row"][data-path="checkliste.md"]').click();
@@ -216,7 +226,7 @@ test("a .zip in the composer of a project's chat lands as a folder of the projec
   const dialog = page.getByRole("dialog", { name: "Neues Projekt" });
   await dialog.getByLabel("Name").fill(title);
   await dialog.getByRole("button", { name: "Projekt anlegen" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: title })).toBeVisible();
   const projectPath = new URL(page.url()).pathname;
   await startChatInProject(page, title, "Hier kommen die Unterlagen hinein.");
 
@@ -242,6 +252,7 @@ test("a .zip in the composer of a project's chat lands as a folder of the projec
   await shot(page, "composer-zip-refused", refusal);
 
   await page.goto(projectPath);
+  await openFiles(page);
   const files = page.getByTestId("project-files");
   await expect(files).toContainText("2 Dateien");
   await files.getByRole("button", { name: "angebote", exact: true }).click();
@@ -268,7 +279,8 @@ test("a folder of a project moves to the top level by drag and by the move menu"
   const dialog = page.getByRole("dialog", { name: "Neues Projekt" });
   await dialog.getByLabel("Name").fill(title);
   await dialog.getByRole("button", { name: "Projekt anlegen" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: title })).toBeVisible();
+  await openFiles(page);
   const files = page.getByTestId("project-files");
   const { folder } = await uploadsOnDisk(testInfo.outputPath("uploads"));
   await upload(page, "Ordner hochladen", folder);

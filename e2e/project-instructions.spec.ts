@@ -98,15 +98,15 @@ test("a project's instructions are written on its page, changed by the agent on 
   await dialog.getByLabel("Name").fill(title);
   await dialog.getByRole("radio", { name: /^Geteilt mit/u }).check();
   await dialog.getByRole("button", { name: "Projekt anlegen" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: title })).toBeVisible();
   const projectPath = new URL(page.url()).pathname;
 
-  // The tile invites to write the instructions; the panel takes them.
-  const tile = page.getByTestId("project-instructions-tile");
-  await expect(tile).toHaveAttribute("data-state", "empty");
-  await expect(tile).toContainText("Noch keine Anweisungen.");
-  await shot(page, "project-instructions-tile-empty", tile);
-  await tile.getByRole("button", { name: "Anweisungen schreiben" }).click();
+  // The control under the composer marks that there are none yet; the panel beside takes them.
+  const control = page.getByTestId("project-open-instructions");
+  await expect(control).toHaveAttribute("data-state", "empty");
+  await expect(control).toHaveAccessibleName(/Noch keine Anweisungen/u);
+  await shot(page, "project-instructions-control-empty", control);
+  await control.click();
   const panel = page.getByTestId("project-instructions-panel");
   await expect(panel).toContainText(`Jeder Chat in ${title} folgt diesen Anweisungen`);
   await page.getByTestId("project-instructions-edit").click();
@@ -120,10 +120,9 @@ test("a project's instructions are written on its page, changed by the agent on 
   await expect(panel).toContainText("Antworte knapp, in höchstens fünf Sätzen.");
   await expect(page.getByTestId("project-file-version")).toHaveCount(1);
   await shot(page, "project-instructions-panel", panel);
-  await page.keyboard.press("Escape");
-  await expect(tile).toHaveAttribute("data-state", "written");
-  await expect(tile).toContainText(`AGENTS.md · ${creator.label}`);
-  await shot(page, "project-instructions-tile", tile);
+  await control.click();
+  await expect(panel).toHaveCount(0);
+  await expect(control).toHaveAttribute("data-state", "written");
 
   // The member's chat in the project takes version 1 with its first answer.
   await memberPage.goto(projectPath);

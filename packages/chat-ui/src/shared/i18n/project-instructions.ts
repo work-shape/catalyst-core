@@ -8,11 +8,9 @@ import { defineTranslations } from "./translation-area";
 export const projectInstructions = defineTranslations({
   en: {
     "projectInstructions.title": "Instructions",
+    "projectInstructions.noneYet": "No instructions yet",
     "projectInstructions.tileEmpty":
       "No instructions yet. Write what the agent should know in every chat of this project.",
-    "projectInstructions.tileMeta": "AGENTS.md · {person} · {when}",
-    "projectInstructions.tileMetaFormer": "AGENTS.md · former member · {when}",
-    "projectInstructions.open": "Open the instructions",
     "projectInstructions.write": "Write instructions",
     "projectInstructions.panelLead":
       "Every chat in {project} follows these instructions, after the agent's own. They add facts and preferences; they grant no rights.",
@@ -50,11 +48,9 @@ export const projectInstructions = defineTranslations({
   },
   de: {
     "projectInstructions.title": "Anweisungen",
+    "projectInstructions.noneYet": "Noch keine Anweisungen",
     "projectInstructions.tileEmpty":
       "Noch keine Anweisungen. Schreib, was der Agent in jedem Chat dieses Projekts wissen soll.",
-    "projectInstructions.tileMeta": "AGENTS.md · {person} · {when}",
-    "projectInstructions.tileMetaFormer": "AGENTS.md · ehemaliges Mitglied · {when}",
-    "projectInstructions.open": "Anweisungen öffnen",
     "projectInstructions.write": "Anweisungen schreiben",
     "projectInstructions.panelLead":
       "Jeder Chat in {project} folgt diesen Anweisungen, nach denen des Agenten. Sie ergänzen Fakten und Vorlieben; Rechte geben sie keine.",

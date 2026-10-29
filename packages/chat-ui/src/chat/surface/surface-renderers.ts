@@ -23,7 +23,9 @@ export type SurfaceRenderers = {
   [Kind in SurfaceKind]?: (surface: SurfaceOf<Kind>) => SurfaceRendering;
 };
 
-function renderPrepared(surface: SurfaceOf<"tool_display" | "file_preview">): SurfaceRendering {
+function renderPrepared(
+  surface: SurfaceOf<"tool_display" | "file_preview" | "project_panel">
+): SurfaceRendering {
   return { actions: surface.headerActions, titleIcon: surface.titleIcon, content: surface.node };
 }
 
@@ -31,6 +33,7 @@ function renderPrepared(surface: SurfaceOf<"tool_display" | "file_preview">): Su
 export const surfaceRenderers: SurfaceRenderers = {
   tool_display: renderPrepared,
   file_preview: renderPrepared,
+  project_panel: renderPrepared,
   inbox_item: (surface) => ({ content: createElement(InboxItemPanel, { itemId: surface.itemId }) }),
   page: pageSurfaceRendering,
   page_building: pageBuildingSurfaceRendering,
