@@ -23,7 +23,7 @@ export const files = defineTranslations({
     attachmentStatusReady: "Ready",
     attachmentStatusUnsupported: "Unsupported file type",
     attachmentStatusUploading: "Uploading",
-    attachmentUploadFailed: "“{filename}” could not be uploaded. Please add the file again.",
+    attachmentUploadFailed: "“{filename}” could not be uploaded. Try again or remove it.",
     attachmentUploadUnreadable:
       "“{filename}” could not be read on your device. If it is in a cloud folder, download it first and add it again.",
     attachmentsCount: "{count} files",
@@ -107,7 +107,7 @@ export const files = defineTranslations({
     attachmentStatusUnsupported: "Dateityp nicht unterstützt",
     attachmentStatusUploading: "Wird hochgeladen",
     attachmentUploadFailed:
-      "„{filename}“ konnte nicht hochgeladen werden. Bitte füge die Datei erneut hinzu.",
+      "„{filename}“ konnte nicht hochgeladen werden. Versuche es erneut oder entferne die Datei.",
     attachmentUploadUnreadable:
       "„{filename}“ konnte auf deinem Gerät nicht gelesen werden. Liegt die Datei in einem Cloud-Ordner, lade sie zuerst herunter und füge sie erneut hinzu.",
     attachmentsCount: "{count} Dateien",

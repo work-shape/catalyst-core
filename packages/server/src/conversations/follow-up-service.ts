@@ -27,13 +27,19 @@ export class FollowUpWorkflow {
     this.conversations = new ConversationWorkflow(options);
   }
 
-  async withdraw(conversationId: ConversationId, followUpId: string, user: AuthenticatedUser) {
+  async withdraw(
+    conversationId: ConversationId,
+    followUpId: string,
+    user: AuthenticatedUser,
+    options: { keepAttachments?: boolean } = {}
+  ) {
     await this.conversations.requireConversationAccess(conversationId, user);
     return this.options.stores.followUps.cancel({
       clientInstanceId: this.options.clientInstanceId,
       conversationId,
       followUpId,
-      authorUserId: getSubjectUserId(user)
+      authorUserId: getSubjectUserId(user),
+      keepAttachments: options.keepAttachments === true
     });
   }
 

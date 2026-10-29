@@ -211,7 +211,7 @@ describe("files attached before the first message", () => {
     }
   });
 
-  it("stay in the composer when the upload is refused, and go with the next send", async () => {
+  it("stay in the composer as failed when the upload is refused, and go once retried", async () => {
     // An upload the API refuses leaves no draft attachment to retry in the conversation.
     // ACCEPT-2d: the conversation made for it took nothing and is discarded, so no row named
     // after the refused file is left; the next send makes a new one.
@@ -230,9 +230,18 @@ describe("files attached before the first message", () => {
         "Perso.pdf: File type is not allowed"
       );
       expect(page.shown).not.toHaveBeenCalled();
+      // The chip says why, and the message waits until the file is retried or removed.
+      expect(page.controller()?.visibleUploadingAttachments).toMatchObject([
+        { filename: "Perso.pdf", status: "failed", error: "File type is not allowed" }
+      ]);
+      expect(page.controller()?.sendBlockedReason).toBeDefined();
+      const failedId = page.controller()?.visibleUploadingAttachments[0]?.id ?? "";
+      await act(async () => page.controller()?.onRetryDraftAttachment(failedId));
       expect(page.controller()?.visibleUploadingAttachments).toMatchObject([
         { filename: "Perso.pdf", status: "staged" }
       ]);
+      expect(page.controller()?.visibleUploadingAttachments[0]).not.toHaveProperty("error");
+      expect(page.controller()?.sendBlockedReason).toBeUndefined();
 
       let conversationId: string | undefined;
       await act(async () => {
@@ -248,6 +257,29 @@ describe("files attached before the first message", () => {
         "list files of conv_files"
       ]);
       expect(page.controller()?.visibleUploadingAttachments).toEqual([]);
+    } finally {
+      await page.unmount();
+    }
+  });
+
+  it("keep a file whose upload failed in an open conversation, to be retried or removed", async () => {
+    const page = await startPage({ refusals: 1 });
+    try {
+      await page.openWorkspace("cw_personal", "conv_open");
+      await act(async () => page.controller()?.onFilesSelected([pdf()]));
+      await vi.waitFor(() =>
+        expect(page.controller()?.visibleUploadingAttachments).toMatchObject([
+          { filename: "Perso.pdf", status: "failed", error: "File type is not allowed" }
+        ])
+      );
+      expect(page.controller()?.visibleUploadingAttachments[0]).not.toHaveProperty("file");
+      expect(page.controller()?.sendBlockedReason).toBeDefined();
+
+      const failedId = page.controller()?.visibleUploadingAttachments[0]?.id ?? "";
+      await act(async () => page.controller()?.onRetryDraftAttachment(failedId));
+      await vi.waitFor(() => expect(page.controller()?.visibleUploadingAttachments).toEqual([]));
+      expect(page.calls.filter((call) => call === "upload files of conv_open")).toHaveLength(2);
+      expect(page.controller()?.sendBlockedReason).toBeUndefined();
     } finally {
       await page.unmount();
     }

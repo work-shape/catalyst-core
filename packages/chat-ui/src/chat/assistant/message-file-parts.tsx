@@ -53,8 +53,42 @@ export function ImageFilePart({
   filename?: string;
   mimeType: string;
 }) {
-  const attachmentContent = useAttachmentContentContext();
   const { t } = useTranslation();
+  const imageUrl = useManagedImageUrl(data);
+  const image = useImageFailed(imageUrl);
+
+  if (!imageUrl || image.failed) {
+    return (
+      <div className="chat-message-block my-2 inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
+        <FileTypeIcon type={resolveFileType({ filename, mimeType })} />
+        <span className="truncate">{filename ?? mimeType}</span>
+      </div>
+    );
+  }
+
+  return (
+    <figure className="chat-message-block my-2 grid gap-1 overflow-hidden rounded-md border bg-card p-1 shadow-xs">
+      <img
+        src={imageUrl}
+        alt={filename ?? t("attachmentImageFallbackAlt")}
+        className="max-h-96 w-auto max-w-full rounded object-contain"
+        onError={image.onError}
+      />
+      {filename ? (
+        <figcaption className="truncate px-1 pb-1 text-xs text-muted-foreground">
+          {filename}
+        </figcaption>
+      ) : null}
+    </figure>
+  );
+}
+
+/**
+ * A picture's address for an image element: a direct URL as it is, a managed file of the open
+ * conversation read through the API. Undefined until it is read, or where it cannot be.
+ */
+export function useManagedImageUrl(data: string): string | undefined {
+  const attachmentContent = useAttachmentContentContext();
   const attachmentClient = attachmentContent?.client;
   const selectedConversationId = attachmentContent?.selectedConversationId;
   const [imageUrl, setImageUrl] = useState<string | undefined>(() =>
@@ -97,32 +131,7 @@ export function ImageFilePart({
       }
     };
   }, [attachmentClient, data, selectedConversationId]);
-  const image = useImageFailed(imageUrl);
-
-  if (!imageUrl || image.failed) {
-    return (
-      <div className="chat-message-block my-2 inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
-        <FileTypeIcon type={resolveFileType({ filename, mimeType })} />
-        <span className="truncate">{filename ?? mimeType}</span>
-      </div>
-    );
-  }
-
-  return (
-    <figure className="chat-message-block my-2 grid gap-1 overflow-hidden rounded-md border bg-card p-1 shadow-xs">
-      <img
-        src={imageUrl}
-        alt={filename ?? t("attachmentImageFallbackAlt")}
-        className="max-h-96 w-auto max-w-full rounded object-contain"
-        onError={image.onError}
-      />
-      {filename ? (
-        <figcaption className="truncate px-1 pb-1 text-xs text-muted-foreground">
-          {filename}
-        </figcaption>
-      ) : null}
-    </figure>
-  );
+  return imageUrl;
 }
 
 function isDirectImageUrl(value: string | undefined): value is string {

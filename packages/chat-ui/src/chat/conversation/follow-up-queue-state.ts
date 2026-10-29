@@ -21,6 +21,14 @@ export interface FollowUpQueueItem {
   authorLabel: string | undefined;
   /** A steer the running turn reads after its current step (FU-2). */
   steering: boolean;
+  /** The files that go with it, so the reader sees them waiting too. */
+  attachments: readonly FollowUpQueueAttachment[];
+}
+
+export interface FollowUpQueueAttachment {
+  fileId: string;
+  filename: string;
+  mimeType: string | undefined;
 }
 
 /** The server's queued message as seen by this reader. */
@@ -36,7 +44,14 @@ export function followUpQueueItem(
     own: followUp.authorUserId === currentUserId,
     authorLabel: followUp.authorDisplayLabel,
     steering:
-      followUp.mode === "steer" && liveRunId !== undefined && followUp.dispatchedRunId === liveRunId
+      followUp.mode === "steer" &&
+      liveRunId !== undefined &&
+      followUp.dispatchedRunId === liveRunId,
+    attachments: (followUp.attachments ?? []).map((attachment) => ({
+      fileId: attachment.fileId,
+      filename: attachment.filename,
+      mimeType: attachment.mimeType
+    }))
   };
 }
 

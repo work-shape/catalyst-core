@@ -14,10 +14,17 @@ import {
 } from "@work-shape/catalyst-ui";
 import {
   composerTextAfterEdit,
+  type FollowUpQueueAttachment,
   type FollowUpQueueItem,
   type FollowUpQueuePhase
 } from "../conversation/follow-up-queue-state";
+import { managedFileUrl } from "../files/attachment-content";
+import { resolveFileType } from "../files/file-type";
+import { FileTypeIcon } from "../files/file-type-icon";
+import { useImageFailed } from "../files/image-failure";
+import { rasterImageType } from "../files/viewer-object-url";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
+import { useManagedImageUrl } from "./message-file-parts";
 
 /** The open conversation's queue of follow-up messages and what the reader may do with it. */
 export interface FollowUpQueueModel {
@@ -46,7 +53,10 @@ export interface FollowUpQueueModel {
    * current step. Where the server refuses, it stays queued and the error says why.
    */
   steer(id: string): void;
-  /** Takes the reader's own message out of the queue; `onWithdrawn` gets its text back. */
+  /**
+   * Takes the reader's own message out of the queue. With `onWithdrawn` (Edit) its text comes
+   * back through it and its files go back to the composer; without, both are gone.
+   */
   withdraw(id: string, onWithdrawn?: (text: string) => void): void;
   /** Takes all of the reader's messages out of the queue; `onDone` runs once each is answered. */
   discardOwn(onDone: () => void): void;
@@ -143,7 +153,13 @@ export function FollowUpQueue() {
                 <ListRow
                   key={item.id}
                   size="compact"
-                  title={item.text}
+                  leading={
+                    item.attachments[0] === undefined ? undefined : (
+                      <QueuedAttachmentPreview attachment={item.attachments[0]} />
+                    )
+                  }
+                  // A message of files alone is named by them.
+                  title={item.text.trim() === "" ? attachmentNames(item) : item.text}
                   description={itemDescription(item, t, {
                     // Where Send now is missing, the oldest row says why.
                     sendsNowOnlyByAuthor: paused && index === 0,
@@ -237,7 +253,55 @@ const QUEUE_HINTS = {
   paused: "followUpPausedHint"
 } as const;
 
+/** A queued message's first file: the picture itself where it is one, else its type's icon. */
+function QueuedAttachmentPreview({ attachment }: { attachment: FollowUpQueueAttachment }) {
+  const imageType = rasterImageType(attachment.mimeType);
+  if (imageType) {
+    return <QueuedImage attachment={attachment} />;
+  }
+  return (
+    <FileTypeIcon
+      type={resolveFileType({ filename: attachment.filename, mimeType: attachment.mimeType })}
+    />
+  );
+}
+
+function QueuedImage({ attachment }: { attachment: FollowUpQueueAttachment }) {
+  const imageUrl = useManagedImageUrl(managedFileUrl(attachment.fileId));
+  const image = useImageFailed(imageUrl);
+  if (!imageUrl || image.failed) {
+    return (
+      <FileTypeIcon
+        type={resolveFileType({ filename: attachment.filename, mimeType: attachment.mimeType })}
+      />
+    );
+  }
+  return (
+    <img
+      src={imageUrl}
+      alt={attachment.filename}
+      className="size-8 rounded border object-cover"
+      onError={image.onError}
+    />
+  );
+}
+
+function attachmentNames(item: FollowUpQueueItem): string {
+  return item.attachments.map((attachment) => attachment.filename).join(", ");
+}
+
 function itemDescription(
+  item: FollowUpQueueItem,
+  t: TranslationContextValue["t"],
+  { sendsNowOnlyByAuthor, mixed }: { sendsNowOnlyByAuthor: boolean; mixed: boolean }
+): string | undefined {
+  const status = itemStatus(item, t, { sendsNowOnlyByAuthor, mixed });
+  // Files beside a text are named under it.
+  const files = item.text.trim() === "" ? "" : attachmentNames(item);
+  return [files, status].filter(Boolean).join(" · ") || undefined;
+}
+
+function itemStatus(
   item: FollowUpQueueItem,
   t: TranslationContextValue["t"],
   { sendsNowOnlyByAuthor, mixed }: { sendsNowOnlyByAuthor: boolean; mixed: boolean }

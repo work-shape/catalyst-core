@@ -98,14 +98,16 @@ describe("follow-up queue above the composer", () => {
     text: "Also check the March numbers",
     own: true,
     authorLabel: undefined,
-    steering: false
+    steering: false,
+    attachments: []
   };
   const others: FollowUpQueueItem = {
     id: "fu_other",
     text: "And add a summary",
     own: false,
     authorLabel: "Anna Berg",
-    steering: false
+    steering: false,
+    attachments: []
   };
 
   function model(overrides: Partial<FollowUpQueueModel>): FollowUpQueueModel {
@@ -164,6 +166,28 @@ describe("follow-up queue above the composer", () => {
     createdAt: "2026-10-17T00:00:00.000Z",
     updatedAt: "2026-10-17T00:00:00.000Z"
   };
+
+  it("names the files of a queued message, and a message of files alone by them", () => {
+    const item = followUpQueueItem(
+      {
+        ...fromB,
+        authorUserId: "a",
+        attachments: [
+          { fileId: "file_1", filename: "screen.png", mimeType: "image/png", byteSize: 70 }
+        ]
+      },
+      "a",
+      undefined
+    );
+    expect(item.attachments).toEqual([
+      { fileId: "file_1", filename: "screen.png", mimeType: "image/png" }
+    ]);
+    const withText = render(model({ items: [item] }));
+    expect(withText).toContain("A follow-up from B");
+    expect(withText).toContain("screen.png");
+    const alone = render(model({ items: [{ ...item, text: "" }] }));
+    expect(alone).toContain('title="screen.png"');
+  });
 
   it.each(["en", "de"] as const)("shows B's server label in A's tab in %s", (locale) => {
     const item = followUpQueueItem(fromB, "a", undefined);

@@ -32,9 +32,11 @@ export interface LocalUploadingAttachment {
   /**
    * A file waits in the composer of a new conversation and uploads once the message is sent. An
    * unpacked .zip leaves a line (`note`) where its upload was, for a moment: nothing to send.
+   * A file whose upload failed stays, saying why (`error`), to be retried or removed.
    */
-  status: "uploading" | "staged" | "unpacked";
+  status: "uploading" | "staged" | "unpacked" | "failed";
   note?: string;
+  error?: string;
 }
 
 export function AssistantComposer({
@@ -481,6 +483,7 @@ interface AttachmentChipItem {
   id: string;
   filename: string;
   note?: string;
+  error?: string;
   mimeType?: string;
   byteSize: number;
   status: AttachmentChipStatus;
@@ -510,11 +513,12 @@ function DraftAttachmentList({
       id: attachment.id,
       filename: attachment.filename,
       ...(attachment.note === undefined ? {} : { note: attachment.note }),
+      ...(attachment.error === undefined ? {} : { error: attachment.error }),
       mimeType: attachment.mimeType,
       byteSize: attachment.byteSize,
       status: attachment.status,
-      removable: attachment.status === "staged",
-      retryable: false
+      removable: attachment.status === "staged" || attachment.status === "failed",
+      retryable: attachment.status === "failed"
     })),
     ...attachments.map((attachment) => ({
       id: attachment.id,
@@ -623,6 +627,7 @@ function DraftAttachmentList({
                 mimeType={item.mimeType}
                 byteSize={item.byteSize}
                 status={item.status}
+                error={item.error}
                 onRemove={item.removable ? () => onRemoveAttachment(item.id) : undefined}
                 onRetry={item.retryable ? () => onRetryAttachment(item.id) : undefined}
               />
@@ -659,6 +664,7 @@ function AttachmentChip({
   mimeType,
   byteSize,
   status,
+  error,
   onRemove,
   onRetry
 }: {
@@ -666,6 +672,8 @@ function AttachmentChip({
   mimeType?: string;
   byteSize: number;
   status: AttachmentChipStatus;
+  /** Why its upload failed, where the composer knows. */
+  error?: string;
   onRemove?: () => void;
   onRetry?: () => void;
 }) {
@@ -681,7 +689,7 @@ function AttachmentChip({
         "flex min-w-0 items-center gap-2.5 rounded-lg border bg-muted/45 py-1.5 pr-2 pl-2.5",
         failed ? "border-destructive/40" : "border-border"
       )}
-      title={filename}
+      title={error === undefined ? filename : `${filename}: ${error}`}
     >
       <FileTypeIcon type={fileType} className="size-7" />
       <span className="grid min-w-0 flex-1">
@@ -699,9 +707,11 @@ function AttachmentChip({
             <Spinner size="xs" className="shrink-0" />
           ) : null}
           <span className="truncate">
-            {failed || pending
-              ? attachmentStatusLabel(status, t)
-              : `${t(fileType.labelKey)} · ${formatFileSize(byteSize)}`}
+            {failed && error !== undefined
+              ? error
+              : failed || pending
+                ? attachmentStatusLabel(status, t)
+                : `${t(fileType.labelKey)} · ${formatFileSize(byteSize)}`}
           </span>
           {failed || pending ? null : (
             <span className="sr-only">{attachmentStatusLabel(status, t)}</span>

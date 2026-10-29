@@ -28,6 +28,11 @@ export function useAttachmentContentContext(): AttachmentContentContextValue | u
   return useContext(AttachmentContentContext);
 }
 
+/** The address a message part gives a managed file of the conversation. */
+export function managedFileUrl(fileId: string): string {
+  return `vivd-file://${encodeURIComponent(fileId)}`;
+}
+
 export function managedFileIdFromUrl(url: string | undefined): string | undefined {
   if (!url?.startsWith("vivd-file://")) {
     return undefined;
