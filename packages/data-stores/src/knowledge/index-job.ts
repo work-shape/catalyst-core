@@ -10,6 +10,8 @@ import {
   KNOWLEDGE_INDEX_CONCURRENCY_DEFAULTS,
   KNOWLEDGE_MAX_PAGES_PER_DOCUMENT,
   type KnowledgeProcessorOutput,
+  knowledgeFetchJob,
+  knowledgeFetchWindowHasRoom,
   knowledgeIndexJob,
   type AssetScope,
   type ConfigAssetRecord,
@@ -502,14 +504,30 @@ export function createKnowledgeIndexJobHandler(
         });
         if (pages.kind !== "pages") return;
       }
-      const indexContent = async () => {
+      const indexContent = async (): Promise<boolean> => {
         // A failure waits for Retry.
-        if (content.state === "failed" && !changed) return;
+        if (content.state === "failed" && !changed) return false;
         const semantic = target.methods.includes("semantic");
-        const chunked = content.chunkingRevision === KNOWLEDGE_CHUNKING_REVISION && !changed;
+        // Chunks written whole at this revision: those search reads, or a set staged beside them
+        // that waits for its vectors and its switch (KB-ISO-3b).
+        const chunked =
+          (content.stagedRevision ?? content.chunkingRevision) === KNOWLEDGE_CHUNKING_REVISION &&
+          !changed;
         // The skip rule. A Knowledge Base that searches by meaning looks for passages without a
-        // vector, which costs no call where there are none.
-        if (content.state === "extracted" && chunked && !semantic) return;
+        // vector, which costs no call where there are none. Completing again only deletes what
+        // an attempt ended between its switch and the deletion of the old chunks left.
+        if (
+          content.state === "extracted" &&
+          chunked &&
+          !semantic &&
+          content.stagedRevision === undefined
+        ) {
+          await store.completeContent(
+            { contentSha256: payload.contentSha256, chunkingRevision: KNOWLEDGE_CHUNKING_REVISION },
+            signal
+          );
+          return true;
+        }
         let written: { chunks: number; pages: number } | undefined;
         if (!chunked) {
           const pages = await pagesOf(
@@ -524,7 +542,7 @@ export function createKnowledgeIndexJobHandler(
             },
             processing
           );
-          if (pages.kind === "requested") return;
+          if (pages.kind === "requested") return false;
           if (pages.kind === "failed") {
             await store.failContent(
               {
@@ -535,7 +553,7 @@ export function createKnowledgeIndexJobHandler(
               signal
             );
             await audit(payload, target, job.correlationId, { code: pages.code }, content.synced);
-            return;
+            return true;
           }
           let output: KnowledgeProcessorOutput;
           try {
@@ -564,7 +582,7 @@ export function createKnowledgeIndexJobHandler(
                 : "knowledge_processor_output_invalid";
             await store.failContent({ contentSha256: payload.contentSha256, code }, signal);
             await audit(payload, target, job.correlationId, { code }, content.synced);
-            return;
+            return true;
           }
           const chunks = chunkKnowledgeText({
             format: content.format,
@@ -589,7 +607,7 @@ export function createKnowledgeIndexJobHandler(
               { code: "knowledge_text_empty" },
               content.synced
             );
-            return;
+            return true;
           }
           await store.writeChunks(
             {
@@ -608,13 +626,13 @@ export function createKnowledgeIndexJobHandler(
           written = { chunks: chunks.length, pages: pages.pages.length };
           if (!semantic) {
             await audit(payload, target, job.correlationId, written, content.synced);
-            return;
+            return true;
           }
         }
         // Chunks written while the Knowledge Base searched by meaning, and it no longer does:
         // nothing is embedded.
         const embedded = semantic ? await embedContent(job, control, found, document) : undefined;
-        if (embedded === "waits") return;
+        if (embedded === "waits") return false;
         if (embedded === "too_large") {
           await store.failContent(
             { contentSha256: payload.contentSha256, code: "knowledge_index_failed" },
@@ -627,7 +645,7 @@ export function createKnowledgeIndexJobHandler(
             { code: "knowledge_index_failed" },
             content.synced
           );
-          return;
+          return true;
         }
         await store.completeContent(
           { contentSha256: payload.contentSha256, chunkingRevision: KNOWLEDGE_CHUNKING_REVISION },
@@ -645,8 +663,23 @@ export function createKnowledgeIndexJobHandler(
             content.synced
           );
         }
+        return true;
       };
-      await indexContent();
+      const settled = await indexContent();
+      // A synced content that leaves `pending` frees the fetch window: where at most half of it
+      // is held, batches that found it full go on now, not after their wait (KB-ISO-3b).
+      if (settled && content.synced && content.state === "pending") {
+        const held = await store.heldInFetchWindow(signal);
+        if (knowledgeFetchWindowHasRoom(held)) {
+          await control.transaction((stores) =>
+            stores.jobs.hasten(knowledgeFetchJob, {
+              clientInstanceId: runtime.clientInstanceId,
+              subject: payload.knowledgeBaseId,
+              payload: { waitsForWindow: true }
+            })
+          );
+        }
+      }
       // A successful extraction result and terminal state are already committed.
       // Release and its deletion job commit together before this index attempt settles.
       await releaseOriginals(payload, store, signal);

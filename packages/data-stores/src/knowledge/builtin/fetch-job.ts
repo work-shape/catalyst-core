@@ -14,6 +14,9 @@ import {
   documentSourceErrorCodeOf,
   enqueueKnowledgeIndex,
   KNOWLEDGE_FETCH_MAX_ATTEMPTS,
+  KNOWLEDGE_FETCH_WINDOW_BYTES,
+  KNOWLEDGE_FETCH_WINDOW_ITEMS,
+  KNOWLEDGE_FETCH_WINDOW_WAIT_MS,
   KNOWLEDGE_FILE_MAX_BYTES,
   knowledgeFetchJob,
   knowledgeSourceKey,
@@ -42,18 +45,43 @@ const FETCH_BATCH_TIMEOUT_MS = 240_000;
 // Items fetched, then adopted together: one transaction and one document lock for the group.
 const FETCH_GROUP_ITEMS = 25;
 
+/**
+ * How many of `items`, in order, the fetch window still has room for (KB-ISO-3b), with `held`
+ * in it now.
+ */
+function roomFor(
+  items: readonly Pick<SourceItem, "size">[],
+  held: { items: number; bytes: number },
+  window: { items: number; bytes: number }
+): number {
+  let count = 0;
+  let bytes = held.bytes;
+  for (const item of items) {
+    if (held.items + count >= window.items || bytes + item.size > window.bytes) break;
+    bytes += item.size;
+    count++;
+  }
+  return count;
+}
+
 async function queueAgain(
   runtime: SourceJobRuntime,
   control: JobControl,
   payload: KnowledgeFetchJobPayload,
   ids: string[],
-  waitMs: number
+  waitMs: number,
+  waitsForWindow = false
 ) {
   if (!ids.length) return;
+  const { waitsForWindow: _waited, ...ordinary } = payload;
   await control.transaction((stores) =>
     stores.jobs.enqueue(
       knowledgeFetchJob,
-      { ...payload, sourceItemIds: ids },
+      {
+        ...ordinary,
+        sourceItemIds: ids,
+        ...(waitsForWindow ? { waitsForWindow: true as const } : {})
+      },
       {
         clientInstanceId: runtime.data.clientInstanceId,
         subject: payload.knowledgeBaseId,
@@ -274,6 +302,10 @@ export function createKnowledgeFetchHandler(runtime: SourceJobRuntime): Register
       );
       const retry: string[] = [];
       let retryMs = 0;
+      const window = runtime.input.fetchWindow ?? {
+        items: KNOWLEDGE_FETCH_WINDOW_ITEMS,
+        bytes: KNOWLEDGE_FETCH_WINDOW_BYTES
+      };
       // The contents of this batch whose copies no index job queued by it will release.
       const releases = new Map<
         string,
@@ -359,13 +391,26 @@ export function createKnowledgeFetchHandler(runtime: SourceJobRuntime): Register
           const groupIds = payload.sourceItemIds
             .slice(start, start + FETCH_GROUP_ITEMS)
             .filter((id) => id !== "" && !fetched.has(id));
-          const later = () => payload.sourceItemIds.slice(start + FETCH_GROUP_ITEMS);
+          // The items the fetch window has no room for (KB-ISO-3b): they wait with the rest.
+          let over: string[] = [];
+          const later = () => [...over, ...payload.sourceItemIds.slice(start + FETCH_GROUP_ITEMS)];
           control.signal.throwIfAborted();
           // The executor owns the job lease; the item owns its fetch. Even a duplicate job
           // without a concurrency key cannot create another Managed File for this version.
-          const items = groupIds.length
-            ? await store.claimMany(groupIds, payload.sourceId, job.id)
-            : [];
+          let items: SourceItem[] = [];
+          if (groupIds.length) {
+            const held = await store.fetchWindow();
+            if (held.items >= window.items || held.bytes >= window.bytes) over = groupIds;
+            else {
+              items = await store.claimMany(groupIds, payload.sourceId, job.id);
+              const room = roomFor(items, held, window);
+              if (room < items.length) {
+                over = items.slice(room).map((each) => each.id);
+                await store.release(over, job.id);
+                items = items.slice(0, room);
+              }
+            }
+          }
           const group: Fetched[] = [];
           /** Gives back the claims of the items not yet fetched; their ids go to a new job. */
           const leave = async (from: number) => {
@@ -455,6 +500,24 @@ export function createKnowledgeFetchHandler(runtime: SourceJobRuntime): Register
           }
           // The owned rows commit before the queue. A replay restores the index handoff.
           if (!(await adopt(group))) return;
+          if (over.length) {
+            // The window is full: the rest waits for indexing and spends no attempt. Earlier
+            // ordinary failures keep their own backoff.
+            control.logger.info(
+              { knowledgeBaseId: payload.knowledgeBaseId, waiting: later().length },
+              "The fetch window is full; the rest of the batch waits"
+            );
+            await queueAgain(runtime, control, payload, retry, retryMs);
+            await queueAgain(
+              runtime,
+              control,
+              payload,
+              later(),
+              KNOWLEDGE_FETCH_WINDOW_WAIT_MS,
+              true
+            );
+            return;
+          }
         }
         await queueAgain(runtime, control, payload, retry, retryMs);
         await sourceTransaction(runtime.data, payload, control, (store) => store.finish(payload));

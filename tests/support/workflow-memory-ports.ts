@@ -93,6 +93,7 @@ export const unusedWorkflowRunDatasetsStore: WorkflowRunDatasetsStore = {
 };
 export const unusedJobsStore: JobsStore = {
   runAgainAfter: unsupported,
+  hasten: unsupported,
   enqueue: unsupported,
   withdraw: unsupported,
   readWorkerReport: unsupported,

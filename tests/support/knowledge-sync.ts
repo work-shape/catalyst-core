@@ -71,11 +71,14 @@ export const knowledgePublisher: AuthenticatedUser = {
 export function useKnowledgeSync({
   withDataStoreJobs = false,
   firstPassStop,
+  fetchWindow,
   methods = ["keyword", "semantic"]
 }: {
   withDataStoreJobs?: boolean;
   /** Where a first pass stops for its confirmation, smaller than the constant (KB-ISO-1b). */
   firstPassStop?: number;
+  /** The fetch window, smaller than the constants (KB-ISO-3b). */
+  fetchWindow?: { items: number; bytes: number };
   /** How the Knowledge Base searches; by words and meaning unless a test says otherwise. */
   methods?: readonly string[];
 } = {}) {
@@ -165,7 +168,7 @@ export function useKnowledgeSync({
         name: `knowledge-base:${KB}`
       });
       expect(row?.status).toBe("ready");
-      expect(row?.level).toBe(16);
+      expect(row?.level).toBe(17);
       return required(row);
     });
     const url = new URL(await fileTestDatabaseUrl());
@@ -314,6 +317,7 @@ export function useKnowledgeSync({
       documentFormats: extractor ? KNOWLEDGE_DOCUMENT_FORMATS : KNOWLEDGE_TEXT_FORMATS,
       maxDocuments: 10000,
       ...(firstPassStop === undefined ? {} : { firstPassStop }),
+      ...(fetchWindow === undefined ? {} : { fetchWindow }),
       openSource
     });
     const worker = createJobWorker({

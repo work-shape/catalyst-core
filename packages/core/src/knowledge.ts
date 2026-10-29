@@ -716,8 +716,14 @@ export interface KnowledgeContentToIndex {
   synced?: boolean;
   format: KnowledgeDocumentFormat;
   state: KnowledgeContentState;
-  /** The chunking revision its chunks were written with, once they were. */
+  /** The chunking revision its chunks were written with, once they were: the ones search reads. */
   chunkingRevision?: number;
+  /**
+   * The chunking revision of a set of chunks written beside those search reads, complete and
+   * waiting for `completeContent` to switch to it once its passages have their vectors
+   * (KB-ISO-3b). Its processing is the content's processing already.
+   */
+  stagedRevision?: number;
   processingKey?: string;
   requestedProcessingKey?: string;
   processorRevision?: string;
@@ -958,9 +964,12 @@ export interface KnowledgeDocumentStore {
    */
   documentOfFile(fileId: string, signal?: AbortSignal): Promise<KnowledgeFileDocument | undefined>;
   /**
-   * Replaces the content's chunks with `chunks` at the revisions, in one transaction, and marks
-   * it `extracted` where `complete`; otherwise it stays `pending` until `completeContent`, as a
-   * content whose chunks are still to be embedded does. Nothing where the content is gone.
+   * Replaces the content's chunks with `chunks` at the revisions in short transactions
+   * (KB-ISO-3b): the new chunks go in beside those search reads, in batches of at most 500 with
+   * a 30-second bound each. Where `complete`, one short transaction then switches the content to
+   * them and marks it `extracted`, and the old chunks are deleted in batches after it. Otherwise
+   * they wait as its `stagedRevision` until `completeContent`, as chunks still to be embedded
+   * do, and search keeps reading the old ones meanwhile. Nothing where the content is gone.
    */
   writeChunks(
     input: {
@@ -978,13 +987,20 @@ export interface KnowledgeDocumentStore {
     signal?: AbortSignal
   ): Promise<void>;
   /**
-   * Marks a `pending` content whose chunks are written at `chunkingRevision` `extracted`: it is
-   * indexed. Nothing where it is gone, failed or chunked at another revision meanwhile.
+   * Switches the content to its staged chunks where it has them, or marks a `pending` content
+   * whose chunks are written at `chunkingRevision` `extracted`, in one short transaction: it is
+   * indexed. Chunks at any other revision are deleted in batches after it. Nothing where it is
+   * gone, failed or chunked at another revision meanwhile.
    */
   completeContent(
     input: { contentSha256: string; chunkingRevision: number },
     signal?: AbortSignal
   ): Promise<void>;
+  /**
+   * What the fetch window holds (KB-ISO-3b): the synced items whose content is still `pending`,
+   * and their listed bytes.
+   */
+  heldInFetchWindow(signal?: AbortSignal): Promise<{ items: number; bytes: number }>;
   /** Notes on a `pending` content why it waits, until it is completed, failed or retried. */
   waitContent(
     input: { contentSha256: string; code: KnowledgeDocumentWaitCode },
@@ -1047,8 +1063,8 @@ export interface KnowledgeDocumentStore {
   /** The generations being served or built, with their progress, by generation. */
   generationProgress(signal?: AbortSignal): Promise<KnowledgeEmbeddingGenerationProgress[]>;
   /**
-   * Up to `limit` passages of the content at the chunking revision that have no vector in the
-   * generation, in order.
+   * Up to `limit` passages of the content that have no vector in the generation, in order: of
+   * its staged chunks where it has them, else of those at the chunking revision.
    */
   passagesToEmbed(
     input: { contentSha256: string; chunkingRevision: number; generation: number; limit: number },
