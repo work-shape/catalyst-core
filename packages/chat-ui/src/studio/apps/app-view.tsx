@@ -1,4 +1,4 @@
-import { Pencil } from "lucide-react";
+import { Pencil, PencilLine } from "lucide-react";
 import { useCallback, useState, type ReactNode } from "react";
 import type { Asset, AppPreviewResponse } from "@work-shape/catalyst-api-client";
 import { Banner, Button, DropdownMenuItem } from "@work-shape/catalyst-ui";
@@ -27,6 +27,7 @@ import {
 } from "./app-model";
 import { AppPreview } from "./app-preview";
 import { useAppEditWithAgent } from "./app-edit-with-agent";
+import { focusAppName, useAppRename } from "./app-rename";
 import { useAppsHost, type AppsWorkspace } from "./apps-host";
 import { useAppShare } from "./app-share";
 
@@ -53,6 +54,7 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
   const showRoute = host?.showRoute;
   const workspaceId = workspace?.id;
   const share = useAppShare(app, record.app, appTitle(record.app, app));
+  const rename = useAppRename(workspaceId, "title", focusAppName);
 
   const onNavigate = useCallback(
     (path: string) => {
@@ -98,6 +100,8 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
         app={app}
         draftShown={draftShown}
         shareItem={share.item}
+        titleEditor={rename.field}
+        onRename={() => rename.start(app, name)}
       >
         <AppPreview
           app={app}
@@ -149,7 +153,9 @@ export function AppViewFrame({
   onDetails,
   dataSources,
   unassignedScopes,
-  shareItem
+  shareItem,
+  titleEditor,
+  onRename
 }: {
   name: string;
   /** What the App does, in one line after its name. */
@@ -175,6 +181,10 @@ export function AppViewFrame({
   unassignedScopes?: readonly string[] | undefined;
   /** "Teilen…", for whoever may move the App to a team. */
   shareItem?: ReactNode;
+  /** Stands in the name's place while the App is renamed. */
+  titleEditor?: ReactNode;
+  /** Renames the App in place, for whoever may edit it. */
+  onRename?(): void;
 }) {
   const { t } = useTranslation();
   // The head's "Chat" talks about the App where its draft is what the builder sees.
@@ -199,6 +209,7 @@ export function AppViewFrame({
       header={
         <AppHeader
           name={name}
+          titleEditor={titleEditor}
           description={description}
           editingLine={editWithAgent.editingLine}
           // The number of a revision is a builder's: whoever uses the App is shown the App.
@@ -217,9 +228,17 @@ export function AppViewFrame({
             editWithAgent.editInChat === undefined ? undefined : [editWithAgent.editInChat]
           }
           menu={
-            rights.read ? (
+            rights.read || rights.write ? (
               <>
-                <DropdownMenuItem onSelect={onDetails}>{t("apps.details")}</DropdownMenuItem>
+                {/* Renaming is editing: the name is the App's, live and draft alike. */}
+                {rights.write && onRename ? (
+                  <DropdownMenuItem icon={<PencilLine aria-hidden="true" />} onSelect={onRename}>
+                    {t("apps.rename")}
+                  </DropdownMenuItem>
+                ) : null}
+                {rights.read ? (
+                  <DropdownMenuItem onSelect={onDetails}>{t("apps.details")}</DropdownMenuItem>
+                ) : null}
                 <CopyAppLinkItem workspaceId={workspace.id} app={app} />
                 {/* The id is a builder's, as the number of a revision is. */}
                 {shareItem}

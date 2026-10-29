@@ -27,6 +27,7 @@ import {
 import type { WorkflowAssetKind } from "../asset-kinds/shared";
 import { requireAssetKindModuleOn } from "../assets/asset-write-rules";
 import { AssetWorkflow } from "../assets/asset-service";
+import { recordAssetEvent, requireActive, resolveAssetTarget } from "../assets/asset-target";
 import { ConversationWorkflow } from "../conversations/conversation-service";
 import type { ChatServerOptions } from "../types";
 import { APP_ACTIONS } from "./app-kind";
@@ -152,6 +153,45 @@ export class AppWorkflow {
   ) {
     const page = await this.requirePersonsPage(call.actor, input);
     return this.pageApps.create(call, page, input, checked);
+  }
+
+  /** The write right on the App, as a write of its draft asks it: renaming is editing. */
+  authorizeRename(
+    access: ActorAccess,
+    input: { app: string; workspaceId: string }
+  ): Promise<OperationAuthorization> {
+    return this.assets.authorizeWrite(access, appAddress(input.app, input.workspaceId));
+  }
+
+  /**
+   * A person gives an App the name people read. It stands over the title of every revision,
+   * draft and published alike, at once and without a publish, and no later write of a revision
+   * changes it, an agent's included. The id stays. The event names the App, not the name.
+   */
+  async rename(call: AssetCall, input: { app: string; workspaceId: string; title: string }) {
+    const target = await resolveAssetTarget(
+      this.options,
+      this.kind(),
+      appAddress(input.app, input.workspaceId)
+    );
+    const asset = requireActive(target);
+    call.access.require(APP_ACTIONS.write, target.resource);
+    const title = input.title.trim();
+    await this.options.configAssets.store.setConfigAssetPersonTitle({
+      clientInstanceId: this.options.clientInstanceId,
+      kind: APP_ASSET_KIND,
+      name: asset.name,
+      assetId: asset.id,
+      title,
+      updatedAt: new Date().toISOString()
+    });
+    await recordAssetEvent(call, "app.renamed", {
+      kind: APP_ASSET_KIND,
+      name: asset.name,
+      assetId: asset.id,
+      workspaceId: input.workspaceId
+    });
+    return { name: asset.name, title };
   }
 
   /**

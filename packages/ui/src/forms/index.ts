@@ -28,6 +28,7 @@ export {
   type RadioGroupVariant,
   type RadioOption
 } from "./radio-group";
+export { RenameField, type RenameFieldProps, type RenameFieldSize } from "./rename-field";
 export { SaveBar, type SaveBarMode, type SaveBarWhenClean, type SaveBarProps } from "./save-bar";
 export { Select, type SelectProps } from "./select";
 export { Switch, type SwitchProps } from "./switch";

@@ -11,6 +11,8 @@ export const appEvents = {
   },
   "app.created": { ...LEGACY_AUDIT, name: "app.created", subject: "config_asset" },
   "app.published": { ...LEGACY_AUDIT, name: "app.published", subject: "config_asset" },
+  // A person gave an App the name people read: the App, never the name.
+  "app.renamed": { ...LIVE_ONCE_AUDIT, name: "app.renamed" },
   // A person allowed an outside host for their own view of a draft (DRAFT-HOSTS-1): the host,
   // the App and the revision, or the Page and its conversation. No content of the draft.
   "app.draft_host_allowed": { ...LIVE_ONCE_AUDIT, name: "app.draft_host_allowed" },

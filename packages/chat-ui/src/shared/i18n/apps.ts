@@ -96,6 +96,9 @@ export const apps = defineTranslations({
     "apps.changed": "Changed {when}",
     "apps.copyLink": "Copy link",
     "apps.delete": "Delete",
+    "apps.rename": "Rename",
+    "apps.renameField": "App name",
+    "apps.renameFailed": "The app could not be renamed.",
     "apps.deleteBody":
       "The app disappears for everyone in this workspace, with its draft and its published version.",
     "apps.deleteFailed": "The app could not be deleted.",
@@ -369,6 +372,9 @@ export const apps = defineTranslations({
     "apps.changed": "Geändert {when}",
     "apps.copyLink": "Link kopieren",
     "apps.delete": "Löschen",
+    "apps.rename": "Umbenennen",
+    "apps.renameField": "Name der App",
+    "apps.renameFailed": "Die App konnte nicht umbenannt werden.",
     "apps.deleteBody":
       "Die App verschwindet für alle in diesem Arbeitsbereich, mit ihrem Entwurf und ihrer veröffentlichten Version.",
     "apps.deleteFailed": "Die App konnte nicht gelöscht werden.",

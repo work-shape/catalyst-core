@@ -86,9 +86,11 @@ export function appSaveCalls(
     ) {
       throw subjectUnavailable();
     }
+    // A name a person gave stands: the save keeps it, and says so to the agent.
     const app = {
       name: row.name,
-      title: titleOf(APP_ASSET_KIND, row.name, row.config ?? {}, context.locale)
+      title: titleOf(APP_ASSET_KIND, row.name, row.config ?? {}, context.locale),
+      ...(row.personTitle === undefined ? {} : { nameSetByPerson: true as const })
     };
     await requireOwnTranscript(options, conversation);
     try {

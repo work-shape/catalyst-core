@@ -16,6 +16,7 @@
 {"name":"app.draft_host_allowed","legacy":false,"audited":true,"phases":["after"]}
 {"name":"app.page_draft_host_allowed","legacy":false,"audited":true,"phases":["after"]}
 {"name":"app.published","legacy":true,"audited":true,"phases":["after"]}
+{"name":"app.renamed","legacy":false,"audited":true,"phases":["after"]}
 {"name":"approval_request.before_create","legacy":false,"audited":false,"phases":["before"]}
 {"name":"approval_request.created","legacy":true,"audited":true,"phases":["after"]}
 {"name":"approval_request.decided","legacy":true,"audited":true,"phases":["after"]}

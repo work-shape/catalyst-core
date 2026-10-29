@@ -592,6 +592,11 @@ export interface AppWrites {
     /** The Data Stores and Workflows made live with the App, each at the revision shown. */
     together?: AppPublishNamed
   ): Promise<unknown>;
+  /**
+   * Gives the App the name people read, at once for its draft and what is published. No later
+   * write changes it, an agent's included. Answers once the Apps read again.
+   */
+  rename(app: string, title: string): Promise<unknown>;
   /** Puts the draft back on the published revision. */
   discardDraft(app: string, expectedRevision: number): Promise<unknown>;
   remove(app: string, expectedRevision: number): Promise<unknown>;
@@ -656,6 +661,14 @@ export function useAppWrites(workspaceId: string | undefined): AppWrites {
             }
           })
         ).finally(changed),
+      rename: (app, title) => {
+        if (workspaceId === undefined) {
+          return Promise.reject(new Error("An App belongs to a workspace"));
+        }
+        return made(client.apps.rename({ params: { app }, body: { workspaceId, title } })).finally(
+          changed
+        );
+      },
       discardDraft: (app, expectedRevision) =>
         made(
           client.assets.discard_draft({

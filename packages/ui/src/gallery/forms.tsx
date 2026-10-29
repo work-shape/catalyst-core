@@ -11,6 +11,7 @@ import { Input, Textarea } from "../forms/input";
 import { NameWithAddress, addressOf, type NameAndAddress } from "../forms/name-with-address";
 import { ProposedValue } from "../forms/proposed-value";
 import { RadioGroup } from "../forms/radio-group";
+import { RenameField } from "../forms/rename-field";
 import { SaveBar } from "../forms/save-bar";
 import { Select } from "../forms/select";
 import { Switch } from "../forms/switch";
@@ -152,6 +153,37 @@ function slug(name: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/gu, "_")
     .replace(/^_+|_+$/gu, "");
+}
+
+/** A name renamed where it stands: the field replaces it until Enter, leaving or Escape. */
+function RenameFieldSample({ text }: { text: GalleryText }) {
+  const [name, setName] = useState(text.namePlaceholder);
+  const [renaming, setRenaming] = useState(false);
+  return (
+    <div className="flex w-full max-w-sm items-center gap-3" data-gallery-sample="rename-field">
+      {renaming ? (
+        <RenameField
+          className="flex-1"
+          size="title-sm"
+          value={name}
+          label={text.renameField}
+          maxLength={120}
+          onSave={(next) => {
+            setName(next);
+            setRenaming(false);
+          }}
+          onCancel={() => setRenaming(false)}
+        />
+      ) : (
+        <>
+          <span className="min-w-0 flex-1 text-title-sm">{name}</span>
+          <Button variant="outline" size="sm" onClick={() => setRenaming(true)}>
+            {text.rename}
+          </Button>
+        </>
+      )}
+    </div>
+  );
 }
 
 /** The bar is absent until a field differs from what was saved, then counts the changes. */
@@ -432,6 +464,11 @@ export const formsGallery: GalleryGroup = {
       name: "NameWithAddress",
       components: ["NameWithAddress"],
       render: (text) => <NameWithAddressSample text={text} />
+    },
+    {
+      name: "RenameField",
+      components: ["RenameField"],
+      render: (text) => <RenameFieldSample text={text} />
     },
     {
       name: "SaveBar",

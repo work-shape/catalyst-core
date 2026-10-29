@@ -24,6 +24,7 @@ export const appsModule = defineModule({
     "apps.create_from_page",
     "apps.actions.list",
     "apps.update_from_page",
+    "apps.rename",
     "apps.allow_draft_host",
     "apps.get_from_page",
     "apps.preview",

@@ -69,7 +69,8 @@ import {
   discardConfigAssetDraft as discardPostgresConfigAssetDraft,
   unpublishConfigAsset as unpublishPostgresConfigAsset,
   publishConfigAssetRevision as publishPostgresConfigAssetRevision,
-  removeConfigAsset as removePostgresConfigAsset
+  removeConfigAsset as removePostgresConfigAsset,
+  setConfigAssetPersonTitle as setPostgresConfigAssetPersonTitle
 } from "./postgres-config-asset-pointers";
 import { sweepAssetRepoSaves } from "./jobs/asset-repo-sweep";
 import { moveConfigAssets } from "./postgres-config-asset-move";
@@ -475,6 +476,8 @@ async function applyConfigAssetMutations(
         update ${configAssets} as asset
         set status = written.status,
             active_revision_id = written.active_revision_id,
+            -- A name a person gave ends with the asset: one made again under its id is new.
+            person_title = case when written.status = 'deleted' then null else asset.person_title end,
             updated_at = ${now.toISOString()}::timestamptz
         from (values ${sql.join(
           chunk.map((asset) => sql`(${asset.id}, ${asset.status}, ${asset.activeRevisionId})`),
@@ -820,6 +823,10 @@ export function createPostgresConfigAssetsStore(
     discardConfigAssetDraft: (input) => discardPostgresConfigAssetDraft(db, input),
     unpublishConfigAsset: (input) => unpublishPostgresConfigAsset(db, input),
     removeConfigAsset: (input) => removePostgresConfigAsset(db, input),
+    async setConfigAssetPersonTitle(input) {
+      await setPostgresConfigAssetPersonTitle(db, input);
+      return getConfigAsset(db, input);
+    },
     listAssetRepoBundles: (input) => listAssetRepoBundles(db, input),
     listAssetsWithoutCommits: (input) => listAssetsWithoutCommits(db, input),
     fillAssetRepoRevision: (input) => fillAssetRepoRevision(db, input),
