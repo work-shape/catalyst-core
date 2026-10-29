@@ -21,8 +21,9 @@ import type { KnowledgeBaseDefinition } from "./definition";
 // to an outside call (`sourceNamesRight`).
 //
 // A source Connection of a Knowledge Base is one its definition names as a synced source, and
-// one a published Workflow or App that adds rows to the Data Store it reads calls: the platform's
-// own provenance of a store's rows (`used_by`). A synced source is read through the
+// one a published Workflow, App or live agent that adds rows to the Data Store it reads calls:
+// the platform's own provenance of a store's rows (`used_by`). A writer set that is too large
+// to read, or an asset that cannot be read, counts as closed (manager, 2026-10-29). A synced source is read through the
 // `document_source` capability, which no operation exposes to `outside`.
 
 const connectionExposureSchema = z.object({
@@ -37,27 +38,37 @@ const publishedWorkflowSchema = z.object({
   })
 });
 
-/** How many published assets of one kind a single read looks through. */
+/** How many pages of one kind a read looks through; more is an unknown writer set. */
 const PAGE_SIZE = 500;
+const MAX_PAGES = 10;
+
+const AGENT_KIND = "agent";
+const agentToolsSchema = z.object({ toolNames: z.array(z.string()) });
+const appActionsSchema = z.object({ manifest: z.object({ actions: z.array(z.unknown()) }) });
 
 type Deps = {
   clientInstanceId: ClientInstanceId;
-  configAssets: Pick<ConfigAssetStore, "getConfigAsset" | "listPublishedConfigAssets">;
+  configAssets: Pick<
+    ConfigAssetStore,
+    "getConfigAsset" | "listPublishedConfigAssets" | "listActiveConfigAssets"
+  >;
 };
 
-/** Every published asset of the kind, page by page. */
-async function* publishedAssets(deps: Deps, kind: string): AsyncGenerator<ConfigAssetRecord> {
+/** More assets exist than a read looks through: who writes the store is not known. */
+class WriterSetUnknown extends Error {}
+
+/** Every asset of the kind, page by page; an agent's live config, the others' published one. */
+async function* assetsOf(deps: Deps, kind: string): AsyncGenerator<ConfigAssetRecord> {
   let afterName: string | undefined;
-  for (;;) {
-    const page = await deps.configAssets.listPublishedConfigAssets({
-      clientInstanceId: deps.clientInstanceId,
-      kind,
-      afterName,
-      limit: PAGE_SIZE
-    });
-    yield* page;
-    if (page.length < PAGE_SIZE) return;
-    afterName = page.at(-1)?.name;
+  for (let page = 0; ; page += 1) {
+    if (page >= MAX_PAGES) throw new WriterSetUnknown();
+    const input = { clientInstanceId: deps.clientInstanceId, kind, afterName, limit: PAGE_SIZE };
+    const found = await (kind === AGENT_KIND
+      ? deps.configAssets.listActiveConfigAssets(input)
+      : deps.configAssets.listPublishedConfigAssets(input));
+    yield* found;
+    if (found.length < PAGE_SIZE) return;
+    afterName = found.at(-1)?.name;
   }
 }
 
@@ -75,7 +86,16 @@ export async function knowledgeBaseReadsClosedConnection(
 ): Promise<boolean> {
   if (definition.sources?.length) return true;
   if (!("backend" in definition)) return false;
-  const store = definition.backend.dataStore;
+  try {
+    return await storeFilledFromClosedConnection(deps, definition.backend.dataStore);
+  } catch (error) {
+    // A writer set that is too large to read, or a definition that cannot be read, is unknown.
+    if (error instanceof WriterSetUnknown) return true;
+    throw error;
+  }
+}
+
+async function storeFilledFromClosedConnection(deps: Deps, store: string): Promise<boolean> {
   const exposures = new Map<string, Promise<Map<string, readonly string[]> | undefined>>();
   const exposuresOf = (connection: string) => {
     let pending = exposures.get(connection);
@@ -106,10 +126,11 @@ export async function knowledgeBaseReadsClosedConnection(
       : !exposure.get(operation)?.includes("outside");
   };
 
-  for await (const asset of publishedAssets(deps, WORKFLOW_ASSET_KIND)) {
+  for await (const asset of assetsOf(deps, WORKFLOW_ASSET_KIND)) {
     if (asset.status !== "active") continue;
     const config = publishedWorkflowSchema.safeParse(asset.publishedConfig);
-    if (!config.success) continue;
+    // A published Workflow that cannot be read may write the store: unknown counts as closed.
+    if (!config.success) return true;
     const { manifest } = config.data;
     const operations = [
       ...workflowStepsDeep(manifest.steps).flatMap((step) =>
@@ -124,12 +145,27 @@ export async function knowledgeBaseReadsClosedConnection(
       if (called && (await closed(called.connection, called.operation))) return true;
     }
   }
-  for await (const asset of publishedAssets(deps, "app")) {
+  for await (const asset of assetsOf(deps, "app")) {
     if (asset.status !== "active") continue;
+    if (!appActionsSchema.safeParse(asset.publishedConfig).success) return true;
     const use = appUse(asset, store);
     if (!use?.writes) continue;
     for (const connection of use.connections) {
       if (await closed(connection)) return true;
+    }
+  }
+  // An agent's tools are its live config. A tool of the store that adds rows, beside a Connection
+  // tool or a Knowledge Base tool of the same agent, fills the store from them (DS-13c).
+  for await (const asset of assetsOf(deps, AGENT_KIND)) {
+    if (asset.status !== "active") continue;
+    const tools = agentToolsSchema.safeParse(asset.config);
+    if (!tools.success) return true;
+    const { toolNames } = tools.data;
+    if (!useOfOperations(toolNames, store, asset.name)?.writes) continue;
+    for (const name of toolNames) {
+      if (name.startsWith(KNOWLEDGE_OPERATION_PREFIX)) return true;
+      const called = parseConnectionOperationName(name);
+      if (called && (await closed(called.connection, called.operation))) return true;
     }
   }
   return false;
