@@ -107,7 +107,7 @@ function ToolConfirmation({
   // A confirmation that waits in the person's Inbox names its item there (OP-4b). Until the
   // call's run says where it waits, the buttons are held.
   const run = useWaitingOperationRunQuery(decision.operationRunId);
-  const inboxItemId = run.data?.approvalRequestId;
+  const inboxItemId = run.approvalRequestId;
   if (inboxItemId) {
     return (
       <ToolInboxWaitView
@@ -118,7 +118,7 @@ function ToolConfirmation({
       />
     );
   }
-  const shown = run.isPending ? { ...answer, pending: true } : answer;
+  const shown = run.held ? { ...answer, pending: true } : answer;
   const props = { decision, title, toolName, answer: shown };
   // An agent's publish of an App asks "For whom?" first (SHARE-1); a Workflow's publish says
   // what goes live, and a Knowledge Base's add_files which files it adds (ACCEPT-FIX-11 C1).
@@ -504,7 +504,7 @@ function takenOutcome(decided: ToolDecisionInput | undefined): ToolDecisionOutco
 function ToolApprovalWait({ decision }: { decision: ToolDecision }) {
   const { t } = useTranslation();
   const run = useWaitingOperationRunQuery(decision.operationRunId);
-  const requestId = run.data?.approvalRequestId;
+  const requestId = run.approvalRequestId;
   return (
     <div className="grid min-w-0 gap-2" data-testid="tool-decision-card" data-mode="approval">
       <p className="text-caption text-muted-foreground">{t("toolDecisionAwaitingApproval")}</p>
