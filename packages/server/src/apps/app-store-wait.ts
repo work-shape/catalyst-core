@@ -1,8 +1,8 @@
 import { dataStoreRefusalError, type DataStoreRecord } from "@work-shape/catalyst-core";
 
-// The wait of one Publish of an App for the Data Stores it published with it (GOLIVE-1): each
-// store's own publish wrote its record and queued its migrate job, and the job writes each
-// applied level and a failure onto the record. The wait reads the record and nothing else, so
+// The wait of one Publish of an App or a Workflow for the Data Stores it published with it
+// (GOLIVE-1, LIVE-2): each store's own publish wrote its record and queued its migrate job, and
+// the job writes each applied level and a failure onto the record. The wait reads the record and nothing else, so
 // there is one way a store migrates. Spec: apps-and-pages.md, Going live without getting lost.
 
 /** How long one Publish of an App waits for the stores it publishes to reach their level. */
@@ -49,8 +49,11 @@ export const realStoreWaitClock: StoreWaitClock = {
 export async function awaitStoreLevels(
   read: (storeId: string) => Promise<DataStoreRecord | undefined>,
   stores: readonly StoreAwaited[],
-  clock: StoreWaitClock = realStoreWaitClock
+  clock: StoreWaitClock = realStoreWaitClock,
+  /** A Workflow's Publish waits (LIVE-2): its refusals say the Workflow did not go live. */
+  publishing?: "workflow"
 ): Promise<void> {
+  const of = publishing ? { publishing } : {};
   const deadline = clock.now() + clock.timeoutMs;
   let waiting = [...stores];
   for (;;) {
@@ -72,7 +75,8 @@ export async function awaitStoreLevels(
             title: store.title,
             migration: store.migrations.get(number) ?? String(number),
             level: record.level,
-            failure: record.failure.message
+            failure: record.failure.message,
+            ...of
           }
         );
       }
@@ -87,7 +91,8 @@ export async function awaitStoreLevels(
         title: first.title,
         level: record?.level ?? 0,
         minSchema: first.level,
-        retryable: true
+        retryable: true,
+        ...of
       });
     }
     await clock.sleep(clock.pollMs);

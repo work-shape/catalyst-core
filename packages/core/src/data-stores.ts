@@ -462,11 +462,11 @@ const DATA_STORE_REFUSALS = {
   data_store_not_reached: "VALIDATION_FAILED",
   /** The App needs a level of the store that the store's draft does not reach either. */
   data_store_draft_below_min_schema: "CONFLICT",
-  /** A migration of a store published with an App failed, so the App did not go live. */
+  /** A migration of a store published with an App or a Workflow failed, so it did not go live. */
   data_store_migration_failed: "CONFLICT",
   /** The store job gave up without a more specific failure. */
   data_store_job_exhausted: "CONFLICT",
-  /** A store published with an App was still migrating when the wait ran out. Retryable. */
+  /** A store published with an App or a Workflow was still migrating when the wait ran out. Retryable. */
   data_store_migrating: "CONFLICT"
 } as const satisfies Record<string, AppErrorCode>;
 
@@ -474,7 +474,7 @@ export type DataStoreRefusal = keyof typeof DATA_STORE_REFUSALS;
 
 /**
  * What a refusal names beside the store: the two levels, the action that reaches it, or, for
- * a publish with an App, the store's title, the migration that failed and why.
+ * a publish with an App or a Workflow, the store's title, the migration that failed and why.
  */
 interface DataStoreRefusalFacts {
   minSchema?: number;
@@ -484,6 +484,11 @@ interface DataStoreRefusalFacts {
   migration?: string;
   failure?: string;
   retryable?: boolean;
+  /**
+   * Of a store published with a Workflow (LIVE-2): the Workflow's Publish carried it, so the
+   * Workflow is what did not go live. Left out where an App's Publish carried it.
+   */
+  publishing?: "workflow";
 }
 
 const DATA_STORE_REFUSAL_SENTENCES: Record<
@@ -502,12 +507,18 @@ const DATA_STORE_REFUSAL_SENTENCES: Record<
     `The App's revision does not bind the Data Store '${store}' under 'dataStores', so it is not published with it. Name only the stores apps.publish_review lists.`,
   data_store_draft_below_min_schema: (store, { minSchema, level }) =>
     `The App needs the Data Store '${store}' at migration level ${minSchema} (minSchema) and the store's draft reaches only level ${level}. Add the migration to the store's draft, then publish the App with it.`,
-  data_store_migration_failed: (store, { migration, failure }) =>
-    `The migration '${migration}' of the Data Store '${store}' could not be applied, so neither the App nor its Workflows were published.${failure ? ` ${failure}` : ""} Fix the migration in the store's draft and publish the App with the store again.`,
-  data_store_job_exhausted: (store) =>
-    `Die Einrichtung oder Umstellung des Datenspeichers „${store}“ wurde abgebrochen und wird nicht mehr automatisch versucht. Die App wurde nicht veröffentlicht. Bitte einen Administrator, den Auftrag unter System > Jobs erneut zu starten. Veröffentliche danach die App erneut.`,
-  data_store_migrating: (store, { level, minSchema }) =>
-    `The Data Store '${store}' is still applying its migrations (at level ${level}, the App needs ${minSchema}), so nothing else was published. Publish the App again in a minute.`
+  data_store_migration_failed: (store, { migration, failure, publishing }) =>
+    publishing === "workflow"
+      ? `The migration '${migration}' of the Data Store '${store}' could not be applied, so the Workflow was not published.${failure ? ` ${failure}` : ""} Fix the migration in the store's draft and publish the Workflow with the store again.`
+      : `The migration '${migration}' of the Data Store '${store}' could not be applied, so neither the App nor its Workflows were published.${failure ? ` ${failure}` : ""} Fix the migration in the store's draft and publish the App with the store again.`,
+  data_store_job_exhausted: (store, { publishing }) =>
+    publishing === "workflow"
+      ? `Setting up or changing the Data Store '${store}' stopped and is not retried automatically, so the Workflow was not published. Ask an administrator to retry the job under System > Jobs, then publish the Workflow again.`
+      : `Die Einrichtung oder Umstellung des Datenspeichers „${store}“ wurde abgebrochen und wird nicht mehr automatisch versucht. Die App wurde nicht veröffentlicht. Bitte einen Administrator, den Auftrag unter System > Jobs erneut zu starten. Veröffentliche danach die App erneut.`,
+  data_store_migrating: (store, { level, minSchema, publishing }) =>
+    publishing === "workflow"
+      ? `The Data Store '${store}' is still applying its migrations (at level ${level}, the Workflow needs ${minSchema}), so the Workflow was not published. Publish the Workflow again in a minute.`
+      : `The Data Store '${store}' is still applying its migrations (at level ${level}, the App needs ${minSchema}), so nothing else was published. Publish the App again in a minute.`
 };
 
 /**

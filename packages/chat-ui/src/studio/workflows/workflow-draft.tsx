@@ -19,7 +19,7 @@ import {
   workflowRightsOn,
   type WorkflowDraftState
 } from "./workflow-model";
-import type { WorkflowStepView, WorkflowView } from "./workflow-views";
+import type { WorkflowPublishStoreView, WorkflowStepView, WorkflowView } from "./workflow-views";
 import { useWorkflowsHost } from "./workflows-host";
 import { WorkflowPublishRights } from "./workflow-publish-rights";
 import { workflowPublishRefusal } from "./workflow-publish-rights-model";
@@ -200,8 +200,14 @@ export function useWorkflowDraft(
     setError(undefined);
     setWaits(false);
     try {
+      // The stores the question named are published first, at the revisions it showed (LIVE-2).
       await (change === "publish"
-        ? writes?.publish(workflow, draft.revision, draft.handoverConfirmation)
+        ? writes?.publish(
+            workflow,
+            draft.revision,
+            draft.handoverConfirmation,
+            draft.publishDataStores?.map(({ name, revision }) => ({ name, revision }))
+          )
         : writes?.discard(workflow, draft.revision));
       setAsking(undefined);
     } catch (failure) {
@@ -241,6 +247,7 @@ export function useWorkflowDraft(
           publishedRevision={draft.publishedRevision}
           {...(starts === undefined ? {} : { starts })}
           {...(draft.publishQuestion ? { question: draft.publishQuestion } : {})}
+          {...(draft.publishDataStores ? { stores: draft.publishDataStores } : {})}
           rights={<WorkflowPublishRights workflow={workflow} />}
           narrative={narrative}
           loading={busy}
@@ -284,6 +291,7 @@ export function DraftChangeDialog({
   publishedRevision,
   starts,
   question = [],
+  stores = [],
   rights,
   narrative = NO_NARRATIVE,
   loading,
@@ -301,6 +309,8 @@ export function DraftChangeDialog({
   starts?: Pick<NonNullable<WorkflowStepView["starts"]>, "byHand" | "onSchedule">;
   /** The instance's sentences on what a publish raises, each limit above its default. */
   question?: readonly string[];
+  /** The Data Stores the publish publishes first, with the changes to their tables (LIVE-2). */
+  stores?: readonly WorkflowPublishStoreView[];
   /** What the technical accounts of the publish lack, and the step that gives it. */
   rights?: ReactNode;
   /** The instance's sentence on the publish, read for `revision`. */
@@ -312,9 +322,11 @@ export function DraftChangeDialog({
   onConfirm(): void;
   onClose(): void;
 }) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const publish = change === "publish";
   const body = t(publishBodyKey(starts), { number: revision });
+  // The stores lead the lines: they are published and migrated before anything else (LIVE-2).
+  const lines = [...stores.map((store) => storeLine(store, locale, t)), ...question];
   const details = (
     <>
       {narrative.status === "none" ? null : (
@@ -322,13 +334,13 @@ export function DraftChangeDialog({
           {body}
         </p>
       )}
-      {question.length > 0 ? (
+      {lines.length > 0 ? (
         <ul
-          aria-label={t("workflows.draft.publishRaises")}
+          aria-label={t("workflows.draft.publishChanges")}
           className="mt-3 grid gap-1 text-body text-foreground"
           data-testid="workflow-publish-question"
         >
-          {question.map((line) => (
+          {lines.map((line) => (
             <li key={line}>{line}</li>
           ))}
         </ul>
@@ -364,6 +376,28 @@ export function DraftChangeDialog({
         </Banner>
       ) : null}
     </ConfirmDialog>
+  );
+}
+
+/** One store the publish publishes first: its title and the changes to its tables, by name. */
+function storeLine(
+  store: WorkflowPublishStoreView,
+  locale: string,
+  t: ReturnType<typeof useTranslation>["t"]
+): string {
+  const count = store.pendingMigrations.length;
+  if (count === 0) return t("workflows.draft.publishStore", { title: store.title });
+  return t(
+    count === 1
+      ? "workflows.draft.publishStoreMigrationOne"
+      : "workflows.draft.publishStoreMigrations",
+    {
+      title: store.title,
+      count: new Intl.NumberFormat(locale).format(count),
+      migrations: new Intl.ListFormat(locale, { type: "conjunction" }).format(
+        store.pendingMigrations
+      )
+    }
   );
 }
 

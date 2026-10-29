@@ -296,6 +296,15 @@ export interface WorkflowDefinitionView {
   stepFacts?: WorkflowStepFacts;
 }
 
+/** A Data Store a Workflow's Publish publishes first, at the draft revision the reader was shown. */
+export interface WorkflowPublishStoreView {
+  name: string;
+  title: string;
+  revision: number;
+  /** The names of the changes to its tables the publish applies, in the order they apply. */
+  pendingMigrations: readonly string[];
+}
+
 /** The two pointers of a Workflow whose draft the reader is shown, as revision numbers. */
 interface WorkflowDraftView {
   revision: number;
@@ -308,6 +317,12 @@ interface WorkflowDraftView {
    * limit the draft raises above its default. Absent where it raises none.
    */
   publishQuestion?: readonly string[];
+  /**
+   * The Data Stores the draft's steps call whose draft is not published, which one Publish
+   * publishes first, with the changes to their tables it applies (LIVE-2). Absent where there
+   * are none or the reader may not publish them.
+   */
+  publishDataStores?: readonly WorkflowPublishStoreView[];
   /**
    * The hand-over its question names, offered to who may confirm it (DS-13c): Publish sends it
    * as `confirmHandover`. Absent where the publish hands nothing on, or the reader may not confirm.

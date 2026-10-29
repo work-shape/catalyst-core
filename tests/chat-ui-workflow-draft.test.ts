@@ -336,7 +336,7 @@ describe("the page of a Workflow with a draft", () => {
         })
       );
     expect(dialog("publish", [raise])).toContain(raise);
-    expect(dialog("publish", [raise])).toContain(t("workflows.draft.publishRaises"));
+    expect(dialog("publish", [raise])).toContain(t("workflows.draft.publishChanges"));
     expect(dialog("discard", [raise])).not.toContain(raise);
     expect(dialog("publish")).not.toContain("workflow-publish-question");
   });

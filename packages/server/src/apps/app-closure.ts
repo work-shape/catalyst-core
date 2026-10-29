@@ -1,15 +1,18 @@
 import { declaredDataStoresOf } from "@work-shape/catalyst-app-build";
 import {
   AppError,
+  DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
   WORKFLOW_ASSET_KIND,
   appReachesDataStore,
   dataStoreRefusalError,
+  type ActorAccess,
   type AssetScope,
   type ConfigAssetRecord,
   type JsonObject
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
+import { accessResource } from "../assets/asset-access";
 import type { AssetWorkflowOptions } from "../types";
 
 // The Workflows an App's revision reaches (DP-3): those its `workflow` actions name and,
@@ -164,19 +167,51 @@ export function storeMigrationsOf(config: unknown): {
   };
 }
 
+/** The revision of an App or a Workflow whose Publish carries the Data Stores it binds. */
+export interface StoreBinder {
+  /** `app` or `workflow`. */
+  kind: string;
+  scope: AssetScope;
+  config: JsonObject;
+}
+
 /**
- * The Data Stores a publish of an App names to publish with it, checked against the App's
- * revision: each once, bound by its manifest under `dataStores`, active where the App reaches
- * it, and named at a revision that reaches the level the App asks of it. So no store is
- * published for an App that could not use it.
+ * The Data Stores a revision binds, each once (LIVE-2): an App's those its manifest lists under
+ * `dataStores`, with the level it asks of each; a Workflow's those its steps and tools call,
+ * which ask no level beyond the store's live revision.
+ */
+function storesBoundBy(
+  options: Pick<ClosureOptions, "configAssets">,
+  binder: StoreBinder
+): { name: string; minSchema: number | undefined }[] {
+  if (binder.kind !== WORKFLOW_ASSET_KIND) {
+    return declaredDataStoresOf(binder.config.manifest).map(({ name, minSchema }) => ({
+      name,
+      minSchema
+    }));
+  }
+  const references = options.configAssets.kinds
+    .get(WORKFLOW_ASSET_KIND)
+    ?.references?.(binder.config);
+  const names = new Set(
+    (references ?? []).filter(({ kind }) => kind === DATA_STORE_ASSET_KIND).map(({ name }) => name)
+  );
+  return [...names].map((name) => ({ name, minSchema: undefined }));
+}
+
+/**
+ * The Data Stores a publish of an App or a Workflow names to publish with it, checked against
+ * its revision: each once, bound by it, active where it reaches it, and named at a revision
+ * that reaches the level an App asks of it. So no store is published for an App or a Workflow
+ * that could not use it.
  */
 export async function dataStoresPublishedWith(
   options: ClosureOptions,
-  app: { scope: AssetScope; config: JsonObject },
+  app: StoreBinder,
   named: readonly { name: string; revision: number }[]
 ): Promise<StorePublishedWith[]> {
   const bound = new Map(
-    declaredDataStoresOf(app.config.manifest).map(({ name, minSchema }) => [name, minSchema])
+    storesBoundBy(options, app).map(({ name, minSchema }) => [name, minSchema])
   );
   const seen = new Set<string>();
   const stores: StorePublishedWith[] = [];
@@ -249,21 +284,22 @@ export interface StoreStillMigrating {
 }
 
 /**
- * The Data Stores the App's revision binds that are live and not yet at the level the App
- * needs, where their live revision reaches it (GOLIVE-1): an earlier Publish of the App
- * published them and its wait ran out. A Publish of the App waits for them as for a store it
- * publishes, so publishing again carries on. A store named in `skip` is published by the
- * Publish itself; one that is not there for the App or whose live revision stays below is
+ * The Data Stores the revision binds that are live and not yet at the level it needs, where
+ * their live revision reaches it (GOLIVE-1): an earlier Publish published them and its wait ran
+ * out. Only an App asks a level, in its manifest; a Workflow asks none, so its Publish waits only
+ * for the stores it names (LIVE-2) and never for another publish's migration. A Publish waits for
+ * them as for a store it publishes, so publishing again carries on. A store named in `skip` is
+ * published by the Publish itself; one that is not there or whose live revision stays below is
  * refused by the App's own publish.
  */
 export async function storesStillMigrating(
   options: Pick<AssetWorkflowOptions, "clientInstanceId" | "configAssets" | "stores">,
-  app: { scope: AssetScope; config: JsonObject },
+  app: StoreBinder,
   skip: ReadonlySet<string> = new Set()
 ): Promise<StoreStillMigrating[]> {
   const { clientInstanceId } = options;
   const migrating: StoreStillMigrating[] = [];
-  for (const { name, minSchema } of declaredDataStoresOf(app.config.manifest)) {
+  for (const { name, minSchema } of storesBoundBy(options, app)) {
     if (minSchema === undefined || skip.has(name)) continue;
     const asset = await options.configAssets.store.getConfigAsset({
       clientInstanceId,
@@ -278,8 +314,8 @@ export async function storesStillMigrating(
       continue;
     }
     const record = await options.stores.dataStores.getDataStore({ clientInstanceId, id: asset.id });
-    if (!record || record.status === "retired" || record.level >= minSchema) continue;
     const { level, migrations } = storeMigrationsOf(asset.publishedConfig);
+    if (!record || record.status === "retired" || record.level >= minSchema) continue;
     if (level < minSchema) continue;
     migrating.push({
       name,
@@ -291,4 +327,67 @@ export async function storesStillMigrating(
     });
   }
   return migrating;
+}
+
+/** A Data Store a Workflow's Publish would publish with it, as its question names it (LIVE-2). */
+export interface StorePendingWith {
+  name: string;
+  title: string;
+  /** The store's draft revision, which the publish names. */
+  revision: number;
+  publishedRevision?: number;
+  /** The number of the last migration the store has applied. Zero before the first. */
+  liveLevel: number;
+  /** The names of the draft's migrations above the live level, in the order they apply. */
+  pendingMigrations: string[];
+}
+
+/**
+ * The Data Stores a Workflow's revision calls whose draft is not published and which `access`
+ * may publish (LIVE-2): one Publish of the Workflow names them and publishes each first. A
+ * store the reader may not publish is not named, as a store's level is told only to who may
+ * publish it; the Workflow's Publish then leaves it as it is, as before.
+ */
+export async function storesPendingWith(
+  options: Pick<AssetWorkflowOptions, "clientInstanceId" | "configAssets" | "stores">,
+  binder: StoreBinder,
+  access: Pick<ActorAccess, "authorize">
+): Promise<StorePendingWith[]> {
+  const { clientInstanceId } = options;
+  const pending: StorePendingWith[] = [];
+  for (const { name } of storesBoundBy(options, binder)) {
+    const asset = await options.configAssets.store.getConfigAsset({
+      clientInstanceId,
+      kind: DATA_STORE_ASSET_KIND,
+      name
+    });
+    if (
+      asset?.status !== "active" ||
+      !appReachesDataStore(binder.scope, asset.scope) ||
+      asset.publishedRevision === asset.revision ||
+      !access.authorize(
+        DATA_STORE_ACTIONS.publish,
+        accessResource(DATA_STORE_ASSET_KIND, name, asset.scope, asset.id)
+      ).allowed
+    ) {
+      continue;
+    }
+    const record = await options.stores.dataStores.getDataStore({ clientInstanceId, id: asset.id });
+    const liveLevel = record?.level ?? 0;
+    const draft = storeMigrationsOf(asset.config);
+    pending.push({
+      name,
+      title: assetTitle(asset.config, name),
+      revision: asset.revision,
+      ...(asset.publishedRevision === undefined
+        ? {}
+        : { publishedRevision: asset.publishedRevision }),
+      liveLevel,
+      pendingMigrations: [...draft.migrations]
+        .filter(([number]) => number > liveLevel)
+        .sort(([a], [b]) => a - b)
+        .map(([, migration]) => migration)
+    });
+  }
+  return pending;
 }
