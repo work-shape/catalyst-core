@@ -1,0 +1,12 @@
+# The person of the spec of the rail's order (Apps and Projects stand alphabetically, and opening
+# one never moves it), used by no other spec. An admin, so that they may publish Apps in a
+# workspace of their own. The label sorts after every other for the reason in e2e-app.yaml.
+- email: e2e-rail-order@example.test
+  displayLabel: E2E Zz Rail Order
+  passwordEnvName: E2E_RAIL_ORDER_PASSWORD
+  developmentPassword: e2e-rail-order-password
+  roles:
+    - user
+    - admin
+  permissionRefs:
+    - demo-tools
