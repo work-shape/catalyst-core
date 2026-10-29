@@ -201,14 +201,27 @@ export interface AppClient {
      */
     get(runId: string): Promise<AppWorkflowRun>;
   };
+  feedback: {
+    /**
+     * Sends the viewer's written comment on this App to the people who build it, with the
+     * viewer's name. The interface names the App and its revision; the Page sends only the
+     * text, at most 4,000 characters. Unless `getContext()` says `feedback: true` it rejects
+     * with an `AppCallError`. `AppFeedback` is the ready-made form.
+     */
+    send(text: string): Promise<void>;
+  };
 }
 
-type RequestMessage = Extract<PageMessage, { type: "action" | "workflow_run" }>;
+type RequestMessage = Extract<PageMessage, { type: "action" | "workflow_run" | "feedback" }>;
 /** A call or a read before the session and the id of its answer are known. */
 type NewRequest =
   | Omit<Extract<RequestMessage, { type: "action" }>, "session" | "requestId">
-  | Omit<Extract<RequestMessage, { type: "workflow_run" }>, "session" | "requestId">;
-type Answer = Extract<HostMessage, { type: "action_result" | "workflow_run_result" }>;
+  | Omit<Extract<RequestMessage, { type: "workflow_run" }>, "session" | "requestId">
+  | Omit<Extract<RequestMessage, { type: "feedback" }>, "session" | "requestId">;
+type Answer = Extract<
+  HostMessage,
+  { type: "action_result" | "workflow_run_result" | "feedback_result" }
+>;
 
 /** A client on a transport. A Page uses the one below; a test brings its own transport. */
 export function createAppClient(
@@ -249,7 +262,11 @@ export function createAppClient(
           }
           return;
         }
-        if (incoming.type === "action_result" || incoming.type === "workflow_run_result") {
+        if (
+          incoming.type === "action_result" ||
+          incoming.type === "workflow_run_result" ||
+          incoming.type === "feedback_result"
+        ) {
           const waiting = incoming.session === session ? calls.get(incoming.requestId) : undefined;
           if (!waiting) {
             return;
@@ -303,9 +320,7 @@ export function createAppClient(
     });
   }
 
-  async function call(
-    message: Exclude<NewRequest, { type: "workflow_run" }>
-  ): Promise<AppCallResult> {
+  async function call(message: Extract<NewRequest, { type: "action" }>): Promise<AppCallResult> {
     const answer = await request(message);
     if (answer.type === "action_result" && answer.ok) return answer.result;
     throw new AppCallError(answer.ok ? MISMATCHED_ANSWER : answer.error);
@@ -328,6 +343,13 @@ export function createAppClient(
       async get(runId) {
         const answer = await request({ type: "workflow_run", runId });
         if (answer.type === "workflow_run_result" && answer.ok) return answer.run;
+        throw new AppCallError(answer.ok ? MISMATCHED_ANSWER : answer.error);
+      }
+    },
+    feedback: {
+      async send(text) {
+        const answer = await request({ type: "feedback", text });
+        if (answer.type === "feedback_result" && answer.ok) return;
         throw new AppCallError(answer.ok ? MISMATCHED_ANSWER : answer.error);
       }
     },
@@ -367,4 +389,8 @@ export const actions: AppClient["actions"] = {
 /** The Workflow Runs the actions of the manifest started. `workflowRuns.get(run.id)`. */
 export const workflowRuns: AppClient["workflowRuns"] = {
   get: (runId) => client().workflowRuns.get(runId)
+};
+/** Written feedback on this App for the people who build it. `feedback.send(text)`. */
+export const feedback: AppClient["feedback"] = {
+  send: (text) => client().feedback.send(text)
 };

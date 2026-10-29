@@ -31,7 +31,7 @@ modules:
 | `dataStores`      | Data Stores: the asset kind `data_store`, one Postgres database per store, and the operations on its rows.                                               | A key under `secretStore.keys` and a platform database role with `CREATEDB` and `CREATEROLE`. See [Data Stores](/configure/release-config/#data-stores).       |
 | `knowledge`       | Reserved for Knowledge Bases. It is registered and adds nothing.                                                                                         | Nothing.                                                                                                                                                       |
 | `personalApiKeys` | Keys a person issues that act as them, and `catalyst login`. See [the CLI](/configure/cli/).                                                             | Nothing. Off, no personal key signs in; stored keys stay.                                                                                                      |
-| `feedback` | Written feedback under an agent's answers, and its review in the Inbox. See [Feedback](#feedback). | Nothing. A reviewer holds `feedback.review`. |
+| `feedback` | Written feedback under an agent's answers, in published Apps and on Workflow results, and its review in the Inbox. See [Feedback](#feedback). | Nothing. A reviewer holds `feedback.review`. |
 | `workshaper` | Workshaper, the agent that ships with the platform, stored at start and refreshed by each release. See [Workshaper](/start/workshaper/). | Nothing. It starts offered in no workspace. Off, the stored agent stays as it is. |
 
 The document processing capability is part of the paid capabilities and not in the open repository. The other modules ship with the open platform.
@@ -52,7 +52,13 @@ With the module on, every finished answer of an agent carries **Feedback** besid
 
 A comment reaches the Inbox of every holder of `feedback.review` for the agent, as an item that names the agent and its revision, the author, the date, the comment and the exchange where it was sent along. Instance administrators hold the right for the instance. Given for a workspace in **Settings > Instance > Access**, it covers the agents that workspace owns, and nothing else: in the Inbox, the API and the CLI. The Inbox filters its items by agent. A reviewer marks an item handled, with an optional note the author does not read, and opens the agent in Studio from it. Nothing of the comment opens the conversation: a reviewer who is not a member of its workspace cannot read it.
 
-The operations are `feedback.send`, `feedback.update`, `feedback.withdraw` and `feedback.list_own` for the author, and `feedback.list`, `feedback.get`, `feedback.mark_handled` and `feedback.annotate` for a reviewer. `feedback.annotate` stores a summary and a category beside the comment, which the Inbox labels as machine-written. The audit events `feedback.received` and `feedback.handled` carry ids only, never the comment, the exchange or the note.
+A published App offers feedback where it places the App Kit's `<AppFeedback />` (kit 1.9.0 and later): a field and a send button, shown only while the module is on. The interface names the App and its published revision; the App sends only the text, and a draft or a Page of a conversation sends none. A person may send more than one comment on an App.
+
+A notice in a person's Inbox that reports a Workflow run offers **Feedback on this result** (German: **Feedback zu diesem Ergebnis**) to its reader. A person leaves one comment per run, and the notice then says whether it was sent or handled. Nothing of the run is copied into the comment; the reviewer opens the run from the item where they may read it.
+
+A comment on an App or a Workflow reaches the holders of `feedback.review` for that App or Workflow, by the same reach as for an agent. Comments on Apps and Workflow results cannot be changed or withdrawn yet.
+
+The operations are `feedback.send`, `feedback.update`, `feedback.withdraw`, `feedback.list_own`, `feedback.send_from_app`, `feedback.send_on_result` and `feedback.list_own_on_result` for the author, and `feedback.list`, `feedback.get`, `feedback.mark_handled` and `feedback.annotate` for a reviewer. `feedback.annotate` stores a summary and a category beside the comment, which the Inbox labels as machine-written. The audit events `feedback.received` and `feedback.handled` carry ids only, never the comment, the exchange or the note.
 
 A comment is kept for `retention.feedbackDays` (365 days by default) after it was sent, also after its conversation is deleted, and then removed with its Inbox item. Deleting a person's account removes the comments they wrote.
 

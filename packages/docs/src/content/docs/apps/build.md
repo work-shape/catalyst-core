@@ -60,7 +60,7 @@ A React App imports only its own files, `react`, `react-dom`, `@tanstack/react-r
 | `id`                  | Lowercase letters, digits and `-`, at most 63 characters.                                                                                |
 | `name`                | The name people read.                                                                                                                    |
 | `description`, `icon` | Optional.                                                                                                                                |
-| `kit`                 | The exact kit version. Use `1.8.0` for a new App; actions on a Connection need `1.1.0` or later and `workflow` actions `1.3.0` or later. |
+| `kit`                 | The exact kit version. Use `1.9.0` for a new App; actions on a Connection need `1.1.0` or later and `workflow` actions `1.3.0` or later. |
 | `entry`               | `index.html` for a plain HTML App. A React App leaves it out.                                                                            |
 | `connections`         | The Connections the App's actions call, by name.                                                                                         |
 | `dataStores`          | The Data Store the App's `sql` actions use: `{ name, minSchema }`. One at most while the App has `sql` actions.                          |

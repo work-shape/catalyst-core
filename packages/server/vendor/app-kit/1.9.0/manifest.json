@@ -1,0 +1,182 @@
+{
+  "version": "1.9.0",
+  "files": [
+    {
+      "file": "charts.js",
+      "bytes": 572513,
+      "sha256": "f6201667924111a80748d12a56a595314501a0a54872cfc15a67b211b7a1d377"
+    },
+    {
+      "file": "fonts/bungee/bungee-latin-400-normal.woff2",
+      "bytes": 14344,
+      "sha256": "126eec706b7931682dbcf6c6efc274132c603f181fbf912678e6cfeb341e721b"
+    },
+    {
+      "file": "fonts/bungee/LICENSE",
+      "bytes": 4378,
+      "sha256": "1256e1025d54b27c033b5a1335a5b99a64ea5e6cdfd5805829128baaf0a47804"
+    },
+    {
+      "file": "fonts/fonts.css",
+      "bytes": 1589,
+      "sha256": "313609b3e725a0d259846e4458c91bb59cc3bf306106090313466e21637f97bb"
+    },
+    {
+      "file": "fonts/ibm-plex-mono/ibm-plex-mono-latin-400-normal.woff2",
+      "bytes": 14708,
+      "sha256": "08949f728dc52d528e69b1667d15c89a5686a4ee9a296ff90983985f99c380f7"
+    },
+    {
+      "file": "fonts/ibm-plex-mono/ibm-plex-mono-latin-600-normal.woff2",
+      "bytes": 15620,
+      "sha256": "0d1f0b8d0722224e32e9f28261bdc86c79115be73444ae5eceb73976a1bcdf83"
+    },
+    {
+      "file": "fonts/ibm-plex-mono/LICENSE",
+      "bytes": 5299,
+      "sha256": "23b0a9d0c6d3f140a0b77e483c5cfa6bba574325ef5cb189ed9f2fec4884533f"
+    },
+    {
+      "file": "fonts/inter/inter-latin-400-normal.woff2",
+      "bytes": 23664,
+      "sha256": "8909904ab6c872eb994093482a88a28eca2cd95912d7b6fecd72103b0dc07edc"
+    },
+    {
+      "file": "fonts/inter/inter-latin-600-normal.woff2",
+      "bytes": 24452,
+      "sha256": "f9a06e79cd3a2a20951c0f0e28f66dd0e6d3fda73911d640a2125c8fcb78f21a"
+    },
+    {
+      "file": "fonts/inter/inter-latin-700-normal.woff2",
+      "bytes": 24356,
+      "sha256": "6f56409fd3d64bb85f7d070bce20749db2d66b6d63cec586cc22d1c761be2491"
+    },
+    {
+      "file": "fonts/inter/LICENSE",
+      "bytes": 4477,
+      "sha256": "3b0a5fca3d17942cde889069889dedbbbd075e9b599968c82a95f4d944e9b345"
+    },
+    {
+      "file": "fonts/lora/LICENSE",
+      "bytes": 4563,
+      "sha256": "948aed765160f7b974105606c21994715a171f89fca48e57bf1e0a23aca0bef1"
+    },
+    {
+      "file": "fonts/lora/lora-latin-400-italic.woff2",
+      "bytes": 22756,
+      "sha256": "723cc14fe86bc9fadb2f5f34efb421d246edb240a18d2a7828d2edc041d79996"
+    },
+    {
+      "file": "fonts/lora/lora-latin-400-normal.woff2",
+      "bytes": 21148,
+      "sha256": "ac079950fd9885261c0f73d9e87233f31b5427333ce0eb20e26c119458493c40"
+    },
+    {
+      "file": "fonts/lora/lora-latin-700-normal.woff2",
+      "bytes": 21044,
+      "sha256": "c05fd5289492ed310ed882259b944ca5287e76e572a65d92d3941f9f44f0342a"
+    },
+    {
+      "file": "fonts/README.md",
+      "bytes": 2380,
+      "sha256": "4fe7c447262ab2f3c80fd50fa1a0c10f79e4a3ee7804a2d14474edd437060935"
+    },
+    {
+      "file": "kit.js",
+      "bytes": 11909,
+      "sha256": "b8697d8837a6509bb0932f935e44203498f118606472e5fd97895d8646fa2094"
+    },
+    {
+      "file": "page.css",
+      "bytes": 23094,
+      "sha256": "f1ca651cbd6f0c7333b6f957aef8cb9dc1ce294d2283a03dcda98d6b12bad3cf"
+    },
+    {
+      "file": "react.js",
+      "bytes": 196850,
+      "sha256": "9e10a86752f8052c6a1e28aa5cdfdc61c0f7f358e4d0eb099b8def7c954efd1b"
+    },
+    {
+      "file": "router.js",
+      "bytes": 110680,
+      "sha256": "cdd426251f96afb393dc6f9b41c8339911cbe114e8845f3a91f4b759d27f2b66"
+    },
+    {
+      "file": "theme.js",
+      "bytes": 11675,
+      "sha256": "13af4bba2229a7448c5e74b9e3d7776a3722fe8facdcf1c13828486caa920040"
+    },
+    {
+      "file": "ui.css",
+      "bytes": 100119,
+      "sha256": "ea4a43bf6ed2d3d78141d47c15cc4d23349497a43e8f3ce05afe32ae998b1f46"
+    },
+    {
+      "file": "ui.js",
+      "bytes": 662866,
+      "sha256": "dad68ca9fede76b79516eda49c14ac2bd413e7d537b906a603df35d05ce883e5"
+    }
+  ],
+  "libraries": [
+    {
+      "name": "react",
+      "version": "19.2.7",
+      "licence": "MIT"
+    },
+    {
+      "name": "react-dom",
+      "version": "19.2.7",
+      "licence": "MIT"
+    },
+    {
+      "name": "@tanstack/react-router",
+      "version": "1.170.16",
+      "licence": "MIT"
+    },
+    {
+      "name": "echarts",
+      "version": "6.1.0",
+      "licence": "Apache-2.0"
+    },
+    {
+      "name": "radix-ui",
+      "version": "1.6.2",
+      "licence": "MIT"
+    },
+    {
+      "name": "cmdk",
+      "version": "1.1.1",
+      "licence": "MIT"
+    },
+    {
+      "name": "lucide-react",
+      "version": "1.17.0",
+      "licence": "ISC"
+    },
+    {
+      "name": "class-variance-authority",
+      "version": "0.7.1",
+      "licence": "Apache-2.0"
+    },
+    {
+      "name": "clsx",
+      "version": "2.1.1",
+      "licence": "MIT"
+    },
+    {
+      "name": "tailwind-merge",
+      "version": "3.6.0",
+      "licence": "MIT"
+    },
+    {
+      "name": "tailwindcss",
+      "version": "4.3.0",
+      "licence": "MIT"
+    },
+    {
+      "name": "tw-animate-css",
+      "version": "1.4.0",
+      "licence": "MIT"
+    }
+  ]
+}
