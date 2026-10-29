@@ -60,7 +60,11 @@ export interface DraftAttachmentController {
   clearConversationUploads(conversationId: string): void;
 }
 
-type LocalUploadingConversationAttachment = LocalUploadingAttachment & { conversationId: string };
+/** `file` is held while its upload goes or failed, so a failed one can be sent again. */
+type LocalUploadingConversationAttachment = LocalUploadingAttachment & {
+  conversationId: string;
+  file?: File;
+};
 /** `uploadedAs` names the draft attachment a file became on a send that failed for another. */
 type StagedFile = LocalUploadingAttachment & { file: File; uploadedAs?: string };
 const MAX_CONCURRENT_UPLOADS = 2;
@@ -136,6 +140,9 @@ export function useDraftAttachmentController(
         (attachment) => attachment.conversationId === input.selectedConversationId
       )
     : stagedFiles.map(({ file: _file, uploadedAs: _uploadedAs, ...attachment }) => attachment);
+  const visibleLocalAttachments = visibleUploadingAttachments.map(
+    ({ file: _file, ...attachment }: LocalUploadingAttachment & { file?: File }) => attachment
+  );
 
   function onFilesSelected(files: File[]) {
     if (!input.enabled) {
@@ -268,13 +275,22 @@ export function useDraftAttachmentController(
       // A failed send's conversation takes the message, also once its files were all taken out.
       return stagedConversation.current?.id;
     }
-    const restage = (uploaded: ReadonlyMap<string, string> = new Map()) =>
+    // A refused file stays in the composer as failed, saying why where the API said.
+    const restage = (
+      uploaded: ReadonlyMap<string, string> = new Map(),
+      refused: ReadonlyMap<string, string | undefined> = new Map()
+    ) =>
       setStagedFiles((current) =>
-        current.map((file) => ({
-          ...file,
-          status: "staged",
-          uploadedAs: file.uploadedAs ?? uploaded.get(file.id)
-        }))
+        current.map(({ error: _error, ...file }) => {
+          const failed = refused.has(file.id);
+          const reason = refused.get(file.id);
+          return {
+            ...file,
+            status: failed ? "failed" : "staged",
+            ...(reason === undefined ? {} : { error: reason }),
+            uploadedAs: file.uploadedAs ?? uploaded.get(file.id)
+          };
+        })
       );
     setStagedFiles((current) => current.map((file) => ({ ...file, status: "uploading" })));
     const conversation =
@@ -314,6 +330,7 @@ export function useDraftAttachmentController(
       )
     );
     const uploaded = new Map<string, string>();
+    const refused = new Map<string, string | undefined>();
     let refusal: string | undefined;
     uploads.forEach((upload, index) => {
       const stagedFile = waiting[index];
@@ -322,6 +339,7 @@ export function useDraftAttachmentController(
         uploaded.set(stagedFile.id, upload.value.attachment.id);
       } else {
         refusal ??= uploadErrorMessage(upload.reason, stagedFile.filename, t);
+        refused.set(stagedFile.id, uploadFailureReason(upload.reason));
       }
     });
     if (refusal !== undefined) {
@@ -334,7 +352,7 @@ export function useDraftAttachmentController(
       ) {
         await discardEmptyConversation(conversation.id);
       }
-      restage(uploaded);
+      restage(uploaded, refused);
       throw new Error(refusal);
     }
     const attachments = await settledDraftAttachments(input.client, conversation.id, ended).catch(
@@ -373,17 +391,25 @@ export function useDraftAttachmentController(
       );
   }
 
-  async function startUpload(conversationId: string, file: File): Promise<void> {
-    const localId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}:${file.name}`;
+  async function startUpload(
+    conversationId: string,
+    file: File,
+    localId: string = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}:${file.name}`
+  ): Promise<void> {
     const localAttachment: LocalUploadingConversationAttachment = {
       id: localId,
       conversationId,
       filename: file.name,
       byteSize: file.size,
       mimeType: file.type || undefined,
-      status: "uploading"
+      status: "uploading",
+      file
     };
-    setLocalUploadingAttachments((currentAttachments) => [...currentAttachments, localAttachment]);
+    setLocalUploadingAttachments((currentAttachments) => [
+      ...currentAttachments.filter((attachment) => attachment.id !== localId),
+      localAttachment
+    ]);
+    let failure: { error: string | undefined } | undefined;
     await uploadLimiter
       .current(() =>
         uploadFileWithRetry(file, (readFile) =>
@@ -412,16 +438,39 @@ export function useDraftAttachmentController(
       })
       .catch((error) => {
         input.onError(uploadErrorMessage(error, file.name, t));
+        failure = { error: uploadFailureReason(error) };
       })
       .finally(() => {
+        // A failed file stays in the composer, to be retried or removed; the message waits.
         setLocalUploadingAttachments((currentAttachments) =>
-          currentAttachments.filter((attachment) => attachment.id !== localId)
+          failure === undefined
+            ? currentAttachments.filter((attachment) => attachment.id !== localId)
+            : currentAttachments.map((attachment) =>
+                attachment.id === localId
+                  ? {
+                      ...attachment,
+                      status: "failed" as const,
+                      ...(failure?.error === undefined ? {} : { error: failure.error })
+                    }
+                  : attachment
+              )
         );
       });
   }
 
   function onRemoveDraftAttachment(attachmentId: string) {
     const conversationId = input.selectedConversationId;
+    if (
+      conversationId &&
+      localUploadingAttachments.some(
+        (attachment) => attachment.id === attachmentId && attachment.status === "failed"
+      )
+    ) {
+      setLocalUploadingAttachments((current) =>
+        current.filter((attachment) => attachment.id !== attachmentId)
+      );
+      return;
+    }
     if (!conversationId) {
       const uploadedAs = stagedFiles.find((file) => file.id === attachmentId)?.uploadedAs;
       const madeFor = stagedConversation.current;
@@ -465,7 +514,24 @@ export function useDraftAttachmentController(
   }
 
   function onRetryDraftAttachment(attachmentId: string) {
+    const failedLocal = localUploadingAttachments.find(
+      (attachment) => attachment.id === attachmentId && attachment.status === "failed"
+    );
+    if (failedLocal?.file && input.selectedConversationId) {
+      startUpload(input.selectedConversationId, failedLocal.file, failedLocal.id).catch(
+        () => undefined
+      );
+      return;
+    }
     if (!input.selectedConversationId) {
+      // A refused file of a new conversation waits again, and goes with the next send.
+      setStagedFiles((current) =>
+        current.map((file) => {
+          if (file.id !== attachmentId || file.status !== "failed") return file;
+          const { error: _error, ...waiting } = file;
+          return { ...waiting, status: "staged" as const };
+        })
+      );
       return;
     }
     void input.client.conversations.draft_attachments
@@ -493,10 +559,12 @@ export function useDraftAttachmentController(
 
   return {
     draftAttachments,
-    visibleUploadingAttachments,
+    visibleUploadingAttachments: visibleLocalAttachments,
     sendBlockedReason: getSendBlockedReason(
       draftAttachments,
-      visibleUploadingAttachments.filter((attachment) => attachment.status === "uploading")
+      visibleLocalAttachments.filter(
+        (attachment) => attachment.status === "uploading" || attachment.status === "failed"
+      )
     ),
     onFilesSelected,
     sendStagedFiles,
@@ -589,6 +657,13 @@ export function uploadErrorMessage(
   return `${filename}: ${(error as ApiError).message}`;
 }
 
+/** What the chip of a failed file says: the API's refusal, or nothing beyond "failed". */
+function uploadFailureReason(error: unknown): string | undefined {
+  return error instanceof ApiError && !isTransientUploadError(error) && error.message
+    ? error.message
+    : undefined;
+}
+
 function createConcurrencyLimiter(maxConcurrency: number) {
   let activeCount = 0;
   const pending: Array<() => void> = [];
@@ -640,10 +715,13 @@ function getSendBlockedReason(
   draftAttachments: DraftAttachment[],
   localUploadingAttachments: LocalUploadingAttachment[]
 ): string | undefined {
-  if (localUploadingAttachments.length > 0) {
+  if (localUploadingAttachments.some((attachment) => attachment.status === "uploading")) {
     return "Wait for file upload to finish before sending.";
   }
-  if (draftAttachments.some((attachment) => attachment.status === "failed")) {
+  if (
+    draftAttachments.some((attachment) => attachment.status === "failed") ||
+    localUploadingAttachments.some((attachment) => attachment.status === "failed")
+  ) {
     return "Remove or retry failed file attachments before sending.";
   }
   if (draftAttachments.some((attachment) => attachment.status === "unsupported")) {

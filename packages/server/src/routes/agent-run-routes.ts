@@ -36,8 +36,10 @@ export function registerAgentRunRoutes(route: Route, options: ChatServerOptions)
   const conversations = new ConversationWorkflow(options);
   const startWorkflow = new RunStartWorkflow(options);
   const followUps = new FollowUpWorkflow(options);
-  route(apiOperations["conversations.follow_ups.withdraw"], async ({ user, params }) => ({
-    followUp: await followUps.withdraw(conversationIdParam(params), params.followUpId, user)
+  route(apiOperations["conversations.follow_ups.withdraw"], async ({ user, params, body }) => ({
+    followUp: await followUps.withdraw(conversationIdParam(params), params.followUpId, user, {
+      keepAttachments: body.keepAttachments === true
+    })
   }));
   route(apiOperations["conversations.follow_ups.steer"], async ({ user, params }) => ({
     followUp: await followUps.steer(conversationIdParam(params), params.followUpId, user)

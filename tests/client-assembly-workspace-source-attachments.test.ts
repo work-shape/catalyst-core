@@ -1,7 +1,10 @@
 import { required } from "./support/assertions";
 import { workspaceInfrastructure } from "./support/fixtures";
 
-import { uploadContent } from "./support/chat-server-attachment-harness";
+import {
+  createMultipartFilePayload as createBinaryMultipartPayload,
+  uploadContent
+} from "./support/chat-server-attachment-harness";
 import { type TestInstance, createTestInstance } from "./support/test-instance";
 
 import { createHash } from "node:crypto";
@@ -196,6 +199,49 @@ describe("execution workspace source attachments", () => {
           expect.objectContaining({ filename: "support.md", status: "ready" })
         ])
       );
+    } finally {
+      await app.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("takes a picture as an image the chat shows and the model sees, and refuses a fake one", async () => {
+    const root = await mkdtemp(join(tmpdir(), "catalyst-image-upload-"));
+    const app = await createTestInstance({
+      config: createWorkspaceAttachmentConfig({ root }),
+      capabilities: [],
+      tools: []
+    });
+    try {
+      const created = await app.call("conversations.create", { payload: { title: "Screenshot" } });
+      const conversationId: string = created.json().id;
+      const upload = (filename: string, contentType: string, content: Buffer) => {
+        const multipart = createBinaryMultipartPayload({
+          fieldName: "file",
+          filename,
+          contentType,
+          content
+        });
+        return app.call("conversations.draft_attachments.upload", {
+          params: { conversationId },
+          headers: { ...multipart.headers, "accept-language": "de" },
+          payload: multipart.payload
+        });
+      };
+      // A browser may name a pasted picture without a type: its bytes say what it is.
+      const uploaded = await upload("screen.png", "application/octet-stream", PNG_PIXEL);
+      expect(uploaded.statusCode).toBe(200);
+      const attachment = uploaded.json().attachment;
+      expect(attachment).toMatchObject({ mimeType: "image/png", format: "png", status: "ready" });
+      const content = await app.call("conversations.files.get_content", {
+        params: { conversationId, fileId: attachment.fileId }
+      });
+      expect(content.statusCode).toBe(200);
+      expect(content.headers["content-type"]).toContain("image/png");
+
+      const fake = await upload("fake.png", "image/png", Buffer.from("not a picture"));
+      expect(fake.statusCode).toBe(422);
+      expect(fake.json().error.message).toContain("kein lesbares Bild");
     } finally {
       await app.close();
       await rm(root, { recursive: true, force: true });
@@ -1297,6 +1343,12 @@ function formatForMimeType(mimeType: string | undefined): FileAttachmentFormat |
   }
   return undefined;
 }
+
+/** A 1×1 PNG. */
+const PNG_PIXEL = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64"
+);
 
 async function expectUpload(
   server: TestInstance,

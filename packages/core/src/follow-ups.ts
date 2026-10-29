@@ -12,6 +12,14 @@ export type FollowUpMode = (typeof FOLLOW_UP_MODES)[number];
 /** What Enter does during a person's own run until they choose otherwise. */
 export const DEFAULT_FOLLOW_UP_MODE: FollowUpMode = "steer";
 
+/** A file a queued message carries; it goes with the message when the message starts. */
+export interface ConversationFollowUpAttachment {
+  fileId: string;
+  filename: string;
+  mimeType?: string;
+  byteSize: number;
+}
+
 /** A message accepted behind an active run; it is not yet part of the transcript. */
 export interface ConversationFollowUp {
   id: string;
@@ -31,4 +39,6 @@ export interface ConversationFollowUp {
   createdAt: ISODateString;
   updatedAt: ISODateString;
   dispatchedRunId?: AgentRunId;
+  /** The files of a pending message, so the queue shows them (T23). */
+  attachments?: ConversationFollowUpAttachment[];
 }

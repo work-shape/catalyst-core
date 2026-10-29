@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   AgentRun,
@@ -29,6 +30,9 @@ import {
  * then it may hide Send now from the reader whose message became the oldest.
  */
 const PAUSED_QUEUE_REREAD_MS = 10_000;
+
+/** The composer's drafts of every conversation, read again after Edit returns files to them. */
+const DRAFT_ATTACHMENTS_KEY = ["draft-attachments"] as const;
 
 /** What the workspace knows of the open conversation's queue. */
 export interface FollowUpSource {
@@ -74,6 +78,7 @@ export function useFollowUpQueueModel(input: {
   const { runId, runOwnerUserId } = input;
   const { agentName, modelBindingId, reasoningEffort, locale } = input;
   const { refreshThread } = source;
+  const queryClient = useQueryClient();
   // A message the server took stands in the list at once. It stays until the thread changes,
   // which then names it itself, or names it no longer because it has started.
   const [echo, setEcho] = useState<{
@@ -203,9 +208,12 @@ export function useFollowUpQueueModel(input: {
     ]
   );
 
-  /** Its text once the server let it go; undefined where it did not, with the error shown. */
+  /**
+   * Its text once the server let it go; undefined where it did not, with the error shown. With
+   * `keepAttachments` its files go back to the composer instead of away.
+   */
   const withdrawOne = useCallback(
-    async (id: string): Promise<string | undefined> => {
+    async (id: string, keepAttachments = false): Promise<string | undefined> => {
       if (!conversationId) {
         return undefined;
       }
@@ -214,10 +222,13 @@ export function useFollowUpQueueModel(input: {
       try {
         const { followUp } = await client.conversations.follow_ups.withdraw({
           params: { conversationId, followUpId: id },
-          body: {}
+          body: keepAttachments ? { keepAttachments } : {}
         });
         setWithdrawnIds((current) => new Set(current).add(id));
         settle(conversationId);
+        if (keepAttachments) {
+          queryClient.invalidateQueries({ queryKey: DRAFT_ATTACHMENTS_KEY }).catch(() => undefined);
+        }
         return followUp.text;
       } catch (cause) {
         // A message the server already started cannot be taken back; the thread shows it.
@@ -232,7 +243,7 @@ export function useFollowUpQueueModel(input: {
         });
       }
     },
-    [client, conversationId, refreshThread, settle, t]
+    [client, conversationId, queryClient, refreshThread, settle, t]
   );
 
   const queue = useCallback(
@@ -277,7 +288,8 @@ export function useFollowUpQueueModel(input: {
 
   const withdraw = useCallback(
     (id: string, onWithdrawn?: (text: string) => void) => {
-      withdrawOne(id)
+      // Edit takes the whole message back into the composer, its files with it.
+      withdrawOne(id, onWithdrawn !== undefined)
         .then((text) => text !== undefined && onWithdrawn?.(text))
         .catch(() => undefined);
     },

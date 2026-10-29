@@ -411,6 +411,32 @@ describe("server follow-up queue on Postgres", () => {
     ).toMatchObject({ messageId: sent.id });
   });
 
+  it("FU-5 shows a queued message's files, and Edit returns them to the composer", async () => {
+    const f = await fixture();
+    const attached = await f.attachment();
+    const item = await f.queue("With attachment");
+    expect(item.attachments).toMatchObject([{ fileId: attached.fileId }]);
+    expect(await f.app.stores.followUps.listPending(f.scope)).toMatchObject([
+      { id: item.id, attachments: [{ fileId: attached.fileId, filename: attached.filename }] }
+    ]);
+    const edited = await f.app.call("conversations.follow_ups.withdraw", {
+      params: { conversationId: f.scope.conversationId, followUpId: item.id },
+      payload: { keepAttachments: true }
+    });
+    expect(edited.statusCode, edited.body).toBe(200);
+    expect(await f.app.stores.files.listDraftAttachments(f.scope)).toMatchObject([
+      { id: attached.id, status: attached.status }
+    ]);
+    // Remove takes them away with the message.
+    const removed = await f.queue("Removed with its file");
+    expect(removed.attachments).toMatchObject([{ fileId: attached.fileId }]);
+    await f.app.call("conversations.follow_ups.withdraw", {
+      params: { conversationId: f.scope.conversationId, followUpId: removed.id },
+      payload: {}
+    });
+    expect(await f.app.stores.files.listDraftAttachments(f.scope)).toEqual([]);
+  });
+
   it("FU-5 retains recognized attachment references in the dispatched message manifest", async () => {
     const f = await fixture(false, { attachments: true });
     const attachment = await f.attachment(true);

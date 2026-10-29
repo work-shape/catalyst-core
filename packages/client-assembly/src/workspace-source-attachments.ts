@@ -74,7 +74,12 @@ const WORKSPACE_SOURCE_EXTENSIONS = new Set([
   "rtf",
   "xls",
   "xlsm",
-  "xlsx"
+  "xlsx",
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp"
 ]);
 
 const WORKSPACE_SOURCE_MIME_TYPES = new Map<string, string>([
@@ -102,8 +107,32 @@ const WORKSPACE_SOURCE_MIME_TYPES = new Map<string, string>([
   ["application/vnd.oasis.opendocument.text", "odt"],
   ["application/vnd.openxmlformats-officedocument.presentationml.presentation", "pptx"],
   ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"],
-  ["text/csv", "csv"]
+  ["text/csv", "csv"],
+  ["image/png", "png"],
+  ["image/jpeg", "jpg"],
+  ["image/gif", "gif"],
+  ["image/webp", "webp"]
 ]);
+
+/**
+ * Pictures a model reads and a browser shows: they go to the model as images and show in the
+ * chat (T23). Recognized by their bytes, whatever their name says.
+ */
+// The same pictures a preview shows.
+const MODEL_IMAGE_MIME_TYPES = ARTIFACT_PREVIEW_IMAGE_MIME_TYPES;
+type ModelImageMimeType = (typeof MODEL_IMAGE_MIME_TYPES)[number];
+const MODEL_IMAGE_FORMATS = new Set(["png", "jpg", "gif", "webp"]);
+
+function isModelImageMimeType(mimeType: string | undefined): mimeType is ModelImageMimeType {
+  return MODEL_IMAGE_MIME_TYPES.some((imageType) => imageType === mimeType);
+}
+
+/** A picture is refused where its name or type says image and its bytes are not one. */
+function unreadableImageMessage(locale: LocaleCode | undefined): string {
+  return locale === "de"
+    ? "Diese Bilddatei ist kein lesbares Bild. Unterstützt werden PNG, JPG, GIF und WebP."
+    : "This image file is not a readable picture. Supported are PNG, JPG, GIF and WebP.";
+}
 
 /** Picker and upload detection are derived from the same formats. */
 export const WORKSPACE_SOURCE_ACCEPTED_FILE_TYPES = [
@@ -187,8 +216,8 @@ export function createExecutionWorkspaceSourceAttachmentHandler(
     createAttachmentManifest(attachments) {
       return createWorkspaceSourceAttachmentManifest(attachments);
     },
-    isInlineDisplayMimeType() {
-      return false;
+    isInlineDisplayMimeType(mimeType) {
+      return isModelImageMimeType(mimeType);
     }
   };
 }
@@ -225,8 +254,19 @@ export function createExecutionWorkspaceManagedObjectReader(input: {
         mimeType: artifact.mimeType
       };
     },
-    async readFile() {
-      throw new AppError("NOT_FOUND", "Execution workspace managed files are internal");
+    // Only an attached picture leaves the workspace's store, for the model to see (T23).
+    async readFile(readInput) {
+      const file = await input.files.getManagedFile({
+        clientInstanceId: input.clientInstanceId,
+        fileId: readInput.fileId
+      });
+      if (!file || !isSourceObjectKey(file.objectKey) || !isModelImageMimeType(file.mimeType)) {
+        throw new AppError("NOT_FOUND", "Execution workspace managed files are internal");
+      }
+      return {
+        bytes: await readObjectBytes(input.byteStore, file.objectKey),
+        mimeType: file.mimeType
+      };
     }
   };
 }
@@ -274,7 +314,9 @@ export function detectWorkspaceSourceFileFormat(
     extension && WORKSPACE_SOURCE_EXTENSIONS.has(extension)
       ? extension === "md"
         ? "markdown"
-        : extension
+        : extension === "jpeg"
+          ? "jpg"
+          : extension
       : undefined;
   const normalizedMimeType = mimeType?.split(";", 1)[0]?.trim().toLowerCase();
   const mimeFormat = normalizedMimeType
@@ -296,6 +338,33 @@ function createWorkspaceSourceAttachmentManifest(
     attachments: attachments.flatMap((attachment): AttachmentManifestEntry[] => {
       if (attachment.status !== "ready" || !isWorkspaceSourceAttachment(attachment)) {
         return [];
+      }
+      if (isModelImageAttachment(attachment)) {
+        return [
+          {
+            kind: "image",
+            fileId: attachment.fileId,
+            attachmentId: attachment.id,
+            filename: attachment.filename,
+            mimeType: attachment.mimeType,
+            byteSize: attachment.byteSize,
+            status: "ready",
+            readable: false,
+            modelVisibility: { type: "image", mimeType: attachment.mimeType },
+            modelContext: {
+              section: "Attached images",
+              text: `- ${attachment.filename} (fileId: ${attachment.fileId}, status: ready, mimeType: ${attachment.mimeType}, size: ${attachment.byteSize} bytes). The image is loaded directly into visual context when the model supports image inputs.`
+            },
+            metadata: {
+              fileId: attachment.fileId,
+              filename: attachment.filename,
+              mimeType: attachment.mimeType,
+              byteSize: attachment.byteSize,
+              format: attachment.format ?? null,
+              checksum: attachment.checksum
+            }
+          }
+        ];
       }
       return [
         {
@@ -382,10 +451,17 @@ class ExecutionWorkspaceSourceAttachmentService {
       );
     }
     const detectedType = detectWorkspaceSourceFileType(input.content.headerBytes);
-    const format = detectWorkspaceSourceFileFormat(input.filename, input.mimeType);
-    if (!input.workspaceToolsAvailable && !format) {
+    const declaredFormat = detectWorkspaceSourceFileFormat(input.filename, input.mimeType);
+    if (!input.workspaceToolsAvailable && !declaredFormat) {
       throw new AppError("VALIDATION_FAILED", unsupportedAttachmentMessage(input.locale));
     }
+    // A picture is stored as what its bytes are, so the model and the chat get a real image.
+    const image = isModelImageMimeType(detectedType.mimeType);
+    if (!image && declaredFormat !== undefined && MODEL_IMAGE_FORMATS.has(declaredFormat)) {
+      throw new AppError("VALIDATION_FAILED", unreadableImageMessage(input.locale));
+    }
+    const format = image ? detectedType.extension : declaredFormat;
+    const mimeType = image ? detectedType.mimeType : input.mimeType;
 
     if (!input.workspaceToolsAvailable && format === "docx") {
       const header = input.content.headerBytes;
@@ -405,7 +481,7 @@ class ExecutionWorkspaceSourceAttachmentService {
       filename: input.filename
     });
     await this.objectStore.put(objectKey, input.content.openStream(), {
-      contentType: input.mimeType,
+      contentType: mimeType,
       size: input.content.byteSize
     });
     const file = await this.files.createManagedFile({
@@ -415,7 +491,7 @@ class ExecutionWorkspaceSourceAttachmentService {
       byteSize: input.content.byteSize,
       checksum,
       objectKey,
-      ...(input.mimeType ? { mimeType: input.mimeType } : {})
+      ...(mimeType ? { mimeType } : {})
     });
     const attachment = await this.files.createConversationAttachment({
       clientInstanceId: this.clientInstanceId,
@@ -431,7 +507,7 @@ class ExecutionWorkspaceSourceAttachmentService {
         source: WORKSPACE_SOURCE_METADATA_SOURCE
       },
       warnings: [],
-      ...(input.mimeType ? { mimeType: input.mimeType } : {})
+      ...(mimeType ? { mimeType } : {})
     });
     return attachment as DraftAttachment;
   }
@@ -550,6 +626,16 @@ class ExecutionWorkspaceSourceAttachmentService {
     }
     return attachment;
   }
+}
+
+function isModelImageAttachment(
+  attachment: ConversationAttachment
+): attachment is ConversationAttachment & { mimeType: ModelImageMimeType } {
+  return (
+    isModelImageMimeType(attachment.mimeType) &&
+    attachment.format !== undefined &&
+    MODEL_IMAGE_FORMATS.has(attachment.format)
+  );
 }
 
 function isWorkspaceSourceAttachment(attachment: ConversationAttachment): boolean {

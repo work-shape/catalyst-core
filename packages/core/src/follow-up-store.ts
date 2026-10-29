@@ -30,8 +30,11 @@ export interface ConversationFollowUpStore {
   steer(
     input: FollowUpScope & { followUpId: string; authorUserId: string }
   ): Promise<ConversationFollowUp>;
-  /** Cancels under the conversation lock. With an author, refuses another person's item. */
+  /**
+   * Cancels under the conversation lock. With an author, refuses another person's item. Its
+   * files are deleted, or with `keepAttachments` go back to the composer as drafts.
+   */
   cancel(
-    input: FollowUpScope & { followUpId: string; authorUserId?: string }
+    input: FollowUpScope & { followUpId: string; authorUserId?: string; keepAttachments?: boolean }
   ): Promise<ConversationFollowUp>;
 }

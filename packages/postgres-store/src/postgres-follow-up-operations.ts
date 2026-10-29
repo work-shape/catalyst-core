@@ -20,6 +20,7 @@ import {
   createPlatformId,
   type ClientInstanceId,
   type ConversationFollowUp,
+  type ConversationFollowUpAttachment,
   type ConversationFollowUpStore,
   type FollowUpScope,
   type PrepareConversationRunStartInput,
@@ -145,6 +146,52 @@ export function mapFollowUp(
   };
 }
 
+/** The files each pending message carries, so the queue shows them with it (T23). */
+async function withFollowUpAttachments(
+  db: PostgresConnection,
+  followUps: ConversationFollowUp[]
+): Promise<ConversationFollowUp[]> {
+  const pending = followUps.filter((followUp) => followUp.status === "pending");
+  const first = pending[0];
+  if (!first) return followUps;
+  const rows = await db
+    .select({
+      followUpId: conversationAttachments.followUpId,
+      fileId: conversationAttachments.fileId,
+      filename: conversationAttachments.filename,
+      mimeType: conversationAttachments.mimeType,
+      byteSize: conversationAttachments.byteSize
+    })
+    .from(conversationAttachments)
+    .where(
+      and(
+        eq(conversationAttachments.clientInstanceId, first.clientInstanceId),
+        inArray(
+          conversationAttachments.followUpId,
+          pending.map((followUp) => followUp.id)
+        ),
+        ne(conversationAttachments.status, "deleted")
+      )
+    )
+    .orderBy(asc(conversationAttachments.createdAt), asc(conversationAttachments.id));
+  const byFollowUp = new Map<string, ConversationFollowUpAttachment[]>();
+  for (const row of rows) {
+    if (!row.followUpId) continue;
+    const list = byFollowUp.get(row.followUpId) ?? [];
+    list.push({
+      fileId: row.fileId,
+      filename: row.filename,
+      ...(row.mimeType ? { mimeType: row.mimeType } : {}),
+      byteSize: row.byteSize
+    });
+    byFollowUp.set(row.followUpId, list);
+  }
+  return followUps.map((followUp) => {
+    const attachments = byFollowUp.get(followUp.id);
+    return attachments ? { ...followUp, attachments } : followUp;
+  });
+}
+
 function scopeWhere(input: FollowUpScope) {
   return and(
     eq(conversationFollowUps.clientInstanceId, input.clientInstanceId),
@@ -171,12 +218,14 @@ export async function observeFollowUpChange(
     .limit(1);
   if (!run) return;
   const sequence = run.lastSequence + 1;
+  const [observed = followUp] =
+    followUp.attachments === undefined ? await withFollowUpAttachments(db, [followUp]) : [followUp];
   const event = {
     type: "follow_up_changed" as const,
     runId: asAgentRunId(run.id),
     sequence,
     createdAt: followUp.updatedAt,
-    followUp: { ...followUp, authorDisplayLabel: undefined }
+    followUp: { ...observed, authorDisplayLabel: undefined }
   };
   await db.insert(agentRunObservations).values({
     clientInstanceId: run.clientInstanceId,
@@ -281,7 +330,7 @@ export async function queueFollowUp(
     .where(and(scopeWhere(input), eq(conversationFollowUps.id, row.id)))
     .limit(1);
   if (!queued) throw new AppError("INTERNAL", "Follow-up is not available");
-  const followUp = mapFollowUp(queued);
+  const [followUp = mapFollowUp(queued)] = await withFollowUpAttachments(db, [mapFollowUp(queued)]);
   await observeFollowUpChange(db, followUp);
   return followUp;
 }
@@ -429,7 +478,7 @@ export function createPostgresFollowUpStore(
       .orderBy(asc(conversationFollowUps.position));
   return {
     async listPending(input) {
-      return (await pending(input)).map(mapFollowUp);
+      return withFollowUpAttachments(db, (await pending(input)).map(mapFollowUp));
     },
     async getOldestPending(input) {
       return db.transaction(async (tx) => {
@@ -517,9 +566,14 @@ export function createPostgresFollowUpStore(
           .set({ status: "cancelled", updatedAt: now })
           .where(eq(conversationFollowUps.id, item.id))
           .returning();
+        // Edit hands the message back to the composer with its files; Remove deletes them.
         await tx
           .update(conversationAttachments)
-          .set({ status: "deleted", deletedAt: now, updatedAt: now })
+          .set(
+            input.keepAttachments
+              ? { followUpId: null, updatedAt: now }
+              : { status: "deleted", deletedAt: now, updatedAt: now }
+          )
           .where(
             and(
               eq(conversationAttachments.clientInstanceId, input.clientInstanceId),

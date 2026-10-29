@@ -2,6 +2,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { AppError, createPlatformId } from "@work-shape/catalyst-core";
 import {
   isModelFunctionTool,
+  modelContentImages,
   modelContentText,
   type ModelCapabilities,
   type ModelCompletion,
@@ -77,11 +78,18 @@ export class DeterministicModelProvider {
       };
     }
 
+    // The pictures that reached the model, named, so a check can tell that they came along.
+    const images = modelContentImages(lastUserMessage?.content ?? "").map(
+      (image) =>
+        `Image received: ${image.source?.label ?? "image"} (${image.mimeType}, ${image.data.byteLength} bytes).`
+    );
     return {
-      text:
+      text: [
         content.length > 0
           ? `Local agent response: I received "${content}". Use /tool <tool.name> <json> to exercise a registered tool.`
           : "Local agent response: send a message or invoke a tool with /tool <tool.name> <json>.",
+        ...images
+      ].join("\n\n"),
       toolCalls: [],
       sources: [],
       citations: [],
