@@ -2,6 +2,7 @@ import { createAgentWithDependencies } from "../agent-creation";
 import { type AgentAvailability, AppError } from "@work-shape/catalyst-core";
 import type { AssetFileInput } from "../asset-files";
 import type { AssetCall } from "../asset-access";
+import { committingHandover } from "../handover-commit";
 import { requireMatchingConfigName } from "../asset-write-rules";
 import {
   assertStoredWritable,
@@ -99,7 +100,8 @@ export async function putAsset(
       expectedDraftRevision: input.expectedDraftRevision ?? null,
       ...(input.availableIn === undefined ? {} : { availableIn: input.availableIn })
     });
+  // A hand-over a new agent's tools confirmed is recorded with it (DS-13c).
   return input.makeDependenciesAvailable
     ? createAgentWithDependencies(scope.options, call, input, write)
-    : write(scope.options, call);
+    : committingHandover(scope.options, call, write);
 }

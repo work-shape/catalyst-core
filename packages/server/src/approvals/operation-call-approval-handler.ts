@@ -5,6 +5,7 @@ import {
   type ActorAccess,
   approvalExecutionOf,
   asUserId,
+  dataHandoverRights,
   isAppError,
   unknownToJsonValue,
   type ApprovalExecution,
@@ -57,6 +58,7 @@ import {
 import { connectionApproveRight, connectionApproveSubjects } from "./connection-approval";
 import { PUBLISH_APPROVAL_KINDS } from "./publish-approval";
 import { z } from "zod";
+import { heldHandoverLines } from "./held-handover-preview";
 
 /**
  * The approval kinds of a call that waits for another person: `operation_call`, and the kinds
@@ -153,7 +155,12 @@ export function createOperationCallApprovalHandler(
       const call = parsePayload(payload);
       const about = subjectKindOf(call);
       // A kind that asks further rights reads them from the subject; without one, it refuses.
-      return about?.furtherPermissions ? about.furtherPermissions(call.subject ?? {}) : [];
+      // A call that hands a source's data on asks `connection.write` on each source, whatever
+      // its kind (DS-13c).
+      return [
+        ...(about?.furtherPermissions ? about.furtherPermissions(call.subject ?? {}) : []),
+        ...dataHandoverRights(call.subject)
+      ];
     },
     ...onAsset(held),
     // A plain held call on one Connection is decided by `operations.approve`, or by
@@ -234,9 +241,21 @@ export function createOperationCallApprovalHandler(
           : undefined;
       const alwaysAllow =
         waitingRun?.status === "pending_confirmation" && waitingRun.offersAlwaysAllow === true;
+      // Who decides a hand-over reads what the caller was told of it (DS-13c).
+      const handover =
+        context.status === "pending"
+          ? await heldHandoverLines(
+              options.configAssets,
+              clientInstanceId,
+              call.subject,
+              context.viewer,
+              context.viewer?.locale ?? "en"
+            )
+          : undefined;
       return toJsonObject({
         ...previewOf(call),
         ...(alwaysAllow ? { alwaysAllow: true } : {}),
+        ...(handover ? { handover } : {}),
         ...(target.success ? { targetTitle: target.data.title } : {}),
         ...(asset ? { asset: outdated ? { ...asset, isStale: true } : asset } : {}),
         ...(review ? { review } : {})

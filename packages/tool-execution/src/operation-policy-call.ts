@@ -45,7 +45,7 @@ export interface OperationPolicyContext {
 /** What the policy is resolved from for this call, before a guardrail answered. */
 async function policyInputOf(context: OperationPolicyContext): Promise<PolicyInput> {
   const { definition, call, resource, deps, runtime } = context;
-  let callFloor = await definition.policyFloorOf?.(call.origin, call.input);
+  let callFloor = await definition.policyFloorOf?.(call.origin, call.input, call.actor);
   if (
     call.origin.kind === "agent" &&
     definition.effect === "changing" &&

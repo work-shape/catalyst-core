@@ -267,6 +267,16 @@ export function OperationCallBody({
           ) : null}
         </div>
       ) : null}
+      {pending && call.handover ? (
+        // What approving hands on, as the caller was told: who decides it confirms it.
+        <Banner tone="warning" role="note" data-testid="operation-call-handover">
+          {call.handover.map((line) => (
+            <span key={line} className="block">
+              {line}
+            </span>
+          ))}
+        </Banner>
+      ) : null}
       {outcome ? (
         <Banner
           tone={outcome.tone}

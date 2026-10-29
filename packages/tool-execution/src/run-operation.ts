@@ -587,7 +587,7 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     };
   }
   if (policy.next === "await_approval") {
-    const approval = await definition.approval?.(call.input);
+    const approval = await definition.approval?.(call.input, call.actor);
     if (approval && approvedByCaller(context.call, policy, approval, accessOf(rights))) {
       return {
         access: accessOf(rights),
@@ -738,7 +738,7 @@ async function holdInInbox(
   const heldInput = await heldInputOf(context);
   // What the call is about, where its operation names it, so the item shows it as the
   // approval it may file next does: the publish review of a publish.
-  const approval = await definition.approval?.(call.input);
+  const approval = await definition.approval?.(call.input, call.actor);
   const filed = await deps.approvals.request({
     run,
     call,

@@ -332,6 +332,26 @@ export const assetSchema = z.object({
    * warnings for the revision this read returns.
    */
   publishNarrative: publishNarrativeSchema.optional(),
+  /**
+   * Of an App (with the Workflows its Publish makes live), a Workflow, a Knowledge Base or an
+   * agent whose revision reaches a store with a source (a Data Store, or a Knowledge Base with
+   * synced sources), for whoever may publish it: the widening check (DS-13c). `holds` where
+   * everyone who would read the store may use each of its sources, and then one line that says
+   * so; otherwise one line per source the publish hands on, with how many people and who
+   * confirms. People are counted, never named. `confirmation` is offered only to a person in the
+   * interface who may confirm the hand-over, and the publish passes it as `confirmHandover`;
+   * a publish without it waits in the Inbox for such a person's approval.
+   */
+  publishHandover: z
+    .object({
+      holds: z.boolean(),
+      lines: z.array(z.string()),
+      confirmation: z
+        .string()
+        .regex(/^[a-f0-9]{64}$/u)
+        .optional()
+    })
+    .optional(),
   /** Other visible workspace members with an unsaved checkout of this App's current draft. */
   appEditors: z
     .array(
@@ -508,6 +528,18 @@ export const assetWriteResponseSchema = z.object({
   warnings: z.array(assetWarningSchema)
 });
 
+/**
+ * Confirmation of the hand-over a change names (`publishHandover.confirmation`, DS-13c): a
+ * person signed in to the interface who holds `connection.write` on each source agrees that
+ * its data reaches readers of the store who may not use it. Taken from nobody else: a key, a
+ * service principal or an agent is refused, and a change without one that hands data on waits
+ * in the Inbox for such a person's approval. A stale one is refused with the new confirmation.
+ */
+export const confirmHandoverSchema = z
+  .string()
+  .regex(/^[a-f0-9]{64}$/u)
+  .optional();
+
 export const publishAssetRequestSchema = z.object({
   makeDependenciesAvailable: z.boolean().optional(),
   expectedAvailability: agentAvailabilitySchema.nullable().optional(),
@@ -517,6 +549,7 @@ export const publishAssetRequestSchema = z.object({
     .string()
     .regex(/^[a-f0-9]{64}$/u)
     .optional(),
+  confirmHandover: confirmHandoverSchema,
   /**
    * The number of the revision that becomes the published one. It is required: a publish
    * never means "whatever the draft is now". Naming an earlier number is the way back.
@@ -684,7 +717,9 @@ export const setAssetAvailabilityRequestSchema = z.object({
    * refused with a conflict where the stored one differs by now, and nothing is written.
    * Left out, the call replaces whatever is stored.
    */
-  expectedAvailability: agentAvailabilitySchema.nullable().optional()
+  expectedAvailability: agentAvailabilitySchema.nullable().optional(),
+  /** See `confirmHandover` of a publish: a Knowledge Base offered to more readers (DS-13c). */
+  confirmHandover: confirmHandoverSchema
 });
 
 export const validateAssetRequestSchema = z.object({
@@ -839,7 +874,9 @@ export const moveAssetRequestSchema = z.object({
    * The caller read what the move breaks (`breaks` of the check) and moves it all the same.
    * A move that breaks something is refused with `move_breaks` without it.
    */
-  acceptBreaks: z.boolean().optional()
+  acceptBreaks: z.boolean().optional(),
+  /** See `confirmHandover` of a publish: an asset moved to more readers (DS-13c). */
+  confirmHandover: confirmHandoverSchema
 });
 
 /** The owner a moved asset has afterwards, with its rung and, for a workspace, its name. */

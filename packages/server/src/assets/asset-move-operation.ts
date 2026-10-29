@@ -2,12 +2,14 @@ import {
   AppError,
   isAuthenticatedServicePrincipal,
   type AssetMoveStatus,
+  type DataHandoverPublish,
   type JsonObject,
   type LocaleCode
 } from "@work-shape/catalyst-core";
 import { ApprovalRequestWorkflow } from "../approvals/approval-request-service";
 import type { ChatServerOptions } from "../types";
 import type { AssetCall } from "./asset-access";
+import type { HandoverChanges, HandoverConfirmed } from "./data-handover";
 import {
   assetMoveApprovalKind,
   assetMoveView,
@@ -50,6 +52,28 @@ function localeOf(options: AssetMoveOperationOptions, call: AssetCall): LocaleCo
   return call.runtime?.locale ?? options.config.localization.defaultLocale;
 }
 
+/**
+ * What a move changes, as the widening check reads it (DS-13c): each asset that moves, at the
+ * owner it goes to. Nothing where the move is refused anyway: the move says why.
+ */
+export function moveChanges(
+  options: AssetMoveOperationOptions
+): HandoverChanges<AssetMoveInput & HandoverConfirmed> {
+  return async (input) => {
+    const plan = await planAssetMove(
+      moveOptions(options),
+      input,
+      options.config.localization.defaultLocale
+    ).catch(() => undefined);
+    if (!plan) return undefined;
+    const scope: DataHandoverPublish["scope"] =
+      plan.to.kind === "workspace"
+        ? { kind: "workspace", workspaceId: plan.to.workspaceId }
+        : { kind: "instance" };
+    return plan.members.map(({ kind, record }) => ({ kind: kind.kind, name: record.name, scope }));
+  };
+}
+
 /** The dry run of a move: what moves, what breaks, who reads and edits it afterwards. */
 export async function checkAssetMove(
   options: AssetMoveOperationOptions,
@@ -83,7 +107,8 @@ export async function moveAsset(
     await executeAssetMove(options, plan, {
       actor: moveActor(call.actor),
       correlationId: call.correlationId,
-      ...(call.runId ? { runId: call.runId } : {})
+      ...(call.runId ? { runId: call.runId } : {}),
+      ...(call.handover?.length ? { handover: call.handover } : {})
     });
     return { status: "moved", ...assetMoveView(plan, call.access) };
   }
@@ -135,7 +160,13 @@ export async function moveAsset(
       kind,
       // The name of the operation. The Inbox words the item in the reader's language.
       summary: "assets.move",
-      payload: assetMoveRequestPayload(plan, actor.id, input.acceptBreaks === true, locale)
+      payload: assetMoveRequestPayload(
+        plan,
+        actor.id,
+        input.acceptBreaks === true,
+        locale,
+        call.handover
+      )
     }
   );
   return { status: "requested", requestId: request.id, ...assetMoveView(plan, call.access) };
@@ -144,12 +175,14 @@ export async function moveAsset(
 /**
  * What a request holds: the ids, kinds and names of what moves, from where to where, and who
  * asked. No content. `subject` is what lists and the reviewer's narrower right are matched on.
+ * The hand-overs the move confirmed are recorded once it is made, not as it is filed (DS-13c).
  */
 function assetMoveRequestPayload(
   plan: AssetMovePlan,
   requesterId: string,
   acceptBreaks: boolean,
-  locale: LocaleCode
+  locale: LocaleCode,
+  handover: readonly JsonObject[] | undefined
 ): JsonObject {
   return {
     subject: {
@@ -171,7 +204,8 @@ function assetMoveRequestPayload(
     // Built here, never from the caller's input: who is asked again when it is decided.
     requesterId,
     acceptBreaks,
-    locale
+    locale,
+    ...(handover?.length ? { handover: [...handover] } : {})
   };
 }
 

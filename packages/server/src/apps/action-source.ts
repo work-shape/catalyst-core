@@ -194,8 +194,8 @@ export async function appActionDefinition(
     ...(floor === undefined || floor === "allow" ? {} : { policyFloor: floor }),
     ...(target?.policyFloorOf
       ? {
-          policyFloorOf: (origin, input) =>
-            target.policyFloorOf?.(origin, binding.inputOf(parameters.parse(input)))
+          policyFloorOf: (origin, input, actor) =>
+            target.policyFloorOf?.(origin, binding.inputOf(parameters.parse(input)), actor)
         }
       : {}),
     action: null,

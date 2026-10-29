@@ -308,6 +308,11 @@ interface WorkflowDraftView {
    * limit the draft raises above its default. Absent where it raises none.
    */
   publishQuestion?: readonly string[];
+  /**
+   * The hand-over its question names, offered to who may confirm it (DS-13c): Publish sends it
+   * as `confirmHandover`. Absent where the publish hands nothing on, or the reader may not confirm.
+   */
+  handoverConfirmation?: string;
 }
 
 /** One "Run live once" switch of the reader's, by step, and the test run that used it. */

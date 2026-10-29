@@ -350,6 +350,20 @@ export interface AppPublishQuestionRead {
    * Absent until the first answer arrived.
    */
   readsStoredData?: boolean;
+  /**
+   * The widening check (DS-13c) for the audience shown: one line where it holds, one per source
+   * the publish hands on where it fails. Absent where the revision reaches no store with a
+   * source, and while the answer for the audience shown loads.
+   */
+  handover?: AppPublishHandover;
+}
+
+/** What the instance answers of the widening check of one publish (DS-13c). */
+export interface AppPublishHandover {
+  holds: boolean;
+  lines: readonly string[];
+  /** Offered only to who may confirm the hand-over: what Publish sends as `confirmHandover`. */
+  confirmation?: string;
 }
 
 /** The offer an answer holds, read whole or not at all. */
@@ -403,7 +417,8 @@ export function useAppPublishNarrative(
       return {
         narrative: parsePublishNarrative(asset.publishNarrative),
         audience: appAudienceOffer(asset.appAudience),
-        readsStoredData: appReadsStoredData(asset.config)
+        readsStoredData: appReadsStoredData(asset.config),
+        ...(asset.publishHandover ? { handover: asset.publishHandover } : {})
       };
     },
     placeholderData: keepPreviousData,
@@ -424,7 +439,8 @@ export function useAppPublishNarrative(
   return {
     narrative: narrative.status === "failed" ? { ...narrative, retry } : narrative,
     audience: offer,
-    ...reads
+    ...reads,
+    ...(query.data.handover ? { handover: query.data.handover } : {})
   };
 }
 
@@ -590,7 +606,9 @@ export interface AppWrites {
     revision: number,
     audience?: AppAudience,
     /** The Data Stores and Workflows made live with the App, each at the revision shown. */
-    together?: AppPublishNamed
+    together?: AppPublishNamed,
+    /** The hand-over the question named, confirmed by Publish (DS-13c). */
+    confirmHandover?: string
   ): Promise<unknown>;
   /**
    * Gives the App the name people read, at once for its draft and what is published. No later
@@ -648,7 +666,7 @@ export function useAppWrites(workspaceId: string | undefined): AppWrites {
           })
         ).finally(changed);
       },
-      publish: (app, revision, audience, together) =>
+      publish: (app, revision, audience, together, confirmHandover) =>
         made(
           client.assets.publish({
             params: params(app),
@@ -657,7 +675,8 @@ export function useAppWrites(workspaceId: string | undefined): AppWrites {
               workspaceId,
               ...(audience === undefined ? {} : { audience }),
               ...(together?.workflows.length ? { workflows: [...together.workflows] } : {}),
-              ...(together?.dataStores.length ? { dataStores: [...together.dataStores] } : {})
+              ...(together?.dataStores.length ? { dataStores: [...together.dataStores] } : {}),
+              ...(confirmHandover ? { confirmHandover } : {})
             }
           })
         ).finally(changed),

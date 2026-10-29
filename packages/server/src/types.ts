@@ -1,4 +1,4 @@
-import type { JobRetry, PlatformStores } from "@work-shape/catalyst-core";
+import type { DataHandover, JobRetry, PlatformStores } from "@work-shape/catalyst-core";
 import type {
   ApiKeyAccessTokenExchange,
   HmacSessionTokenIssuer,
@@ -77,6 +77,8 @@ export interface OperationCalls {
    * publish's review alike. Absent where the call path was built without it.
    */
   publishNarrator?: PublishNarrator;
+  /** The widening check of a publish (DS-13c). Absent where the stored-data module is off. */
+  dataHandover?: DataHandover;
 }
 
 /** One capability's deletion past the audit retention, with the transaction's stores. */

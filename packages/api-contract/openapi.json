@@ -44575,6 +44575,28 @@
           "publishNarrative": {
             "$ref": "#/components/schemas/PublishNarrative"
           },
+          "publishHandover": {
+            "type": "object",
+            "properties": {
+              "holds": {
+                "type": "boolean"
+              },
+              "lines": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "confirmation": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            },
+            "required": [
+              "holds",
+              "lines"
+            ]
+          },
           "appEditors": {
             "type": "array",
             "items": {
@@ -47429,6 +47451,10 @@
           "expiresAt"
         ]
       },
+      "ConfirmHandover": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      },
       "ConnectCode": {
         "type": "object",
         "properties": {
@@ -49323,6 +49349,9 @@
             "type": "integer",
             "exclusiveMinimum": 0,
             "maximum": 9007199254740991
+          },
+          "confirmHandover": {
+            "$ref": "#/components/schemas/ConfirmHandover"
           }
         },
         "required": [
@@ -50651,6 +50680,9 @@
           },
           "acceptBreaks": {
             "type": "boolean"
+          },
+          "confirmHandover": {
+            "$ref": "#/components/schemas/ConfirmHandover"
           }
         },
         "required": [
@@ -53669,6 +53701,9 @@
             "type": "string",
             "pattern": "^[a-f0-9]{64}$"
           },
+          "confirmHandover": {
+            "$ref": "#/components/schemas/ConfirmHandover"
+          },
           "revision": {
             "type": "integer",
             "exclusiveMinimum": 0,
@@ -55377,6 +55412,9 @@
                 "type": "null"
               }
             ]
+          },
+          "confirmHandover": {
+            "$ref": "#/components/schemas/ConfirmHandover"
           }
         },
         "required": [

@@ -21,7 +21,7 @@ import {
   type FileSet,
   type JsonObject
 } from "@work-shape/catalyst-core";
-import type { AssetCall } from "./asset-access";
+import { recordHandover, transactionalAssetCall, type AssetCall } from "./asset-access";
 import type { AssetWarning } from "./asset-placement";
 import {
   buildAssetFileSet,
@@ -665,25 +665,31 @@ export class AssetDraftWorkflow {
           : {})
       });
     const onPublish = kind.onPublish?.bind(kind);
-    const published = onPublish
-      ? await this.options.stores.transaction(async (stores) => {
-          const moved = await move(stores.configAssets);
-          await onPublish({
-            actor: call.actor,
-            revisionId: revision.id,
-            clientInstanceId: this.options.clientInstanceId,
-            access: call.access,
-            assetId: moved.assetId,
-            scope: asset.scope,
-            revision: moved.revision,
-            config,
-            ...(input.confirmProcessing ? { confirmProcessing: input.confirmProcessing } : {}),
-            ...(asset.publishedConfig === undefined ? {} : { replaced: asset.publishedConfig }),
-            stores
-          });
-          return moved;
-        })
-      : await move(this.options.configAssets.store);
+    // A hand-over the publish confirmed is recorded with it (DS-13c).
+    const published =
+      onPublish || call.handover?.length
+        ? await this.options.stores.transaction(async (stores) => {
+            const moved = await move(stores.configAssets);
+            await recordHandover(
+              transactionalAssetCall(call, this.options.clientInstanceId, stores.audit)
+            );
+            if (!onPublish) return moved;
+            await onPublish({
+              actor: call.actor,
+              revisionId: revision.id,
+              clientInstanceId: this.options.clientInstanceId,
+              access: call.access,
+              assetId: moved.assetId,
+              scope: asset.scope,
+              revision: moved.revision,
+              config,
+              ...(input.confirmProcessing ? { confirmProcessing: input.confirmProcessing } : {}),
+              ...(asset.publishedConfig === undefined ? {} : { replaced: asset.publishedConfig }),
+              stores
+            });
+            return moved;
+          })
+        : await move(this.options.configAssets.store);
     const metadata = {
       kind: kind.kind,
       name,

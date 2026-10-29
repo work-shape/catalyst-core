@@ -141,6 +141,8 @@ interface BuildWrites {
     revision: number;
     /** The confirmation the publish question named, where it named one. */
     confirmProcessing?: string;
+    /** The hand-over the publish question named, confirmed by Publish (DS-13c). */
+    confirmHandover?: string;
   }): Promise<{ draftRevision: number; publishedRevision: number }>;
   revert(input: {
     kind: string;
@@ -558,7 +560,8 @@ export function useBuildSource(): BuildSource {
       return {
         lines: asset.publishQuestion ?? [],
         ...(asset.publishConfirmation ? { confirmation: asset.publishConfirmation } : {}),
-        ...(asset.publishProcessing ? { processing: asset.publishProcessing } : {})
+        ...(asset.publishProcessing ? { processing: asset.publishProcessing } : {}),
+        ...(asset.publishHandover ? { handover: asset.publishHandover } : {})
       };
     },
     writes: {

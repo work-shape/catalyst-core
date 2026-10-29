@@ -164,7 +164,9 @@ export interface AppPublishSend {
     revision: number,
     audience: AppAudience | undefined,
     /** The Data Stores and Workflows the one Publish makes live with the App (DP-3, GOLIVE-1). */
-    together?: AppPublishNamed
+    together?: AppPublishNamed,
+    /** The hand-over the question named, which Publish confirms (DS-13c). */
+    confirmHandover?: string
   ): Promise<"published" | "waits" | "failed">;
 }
 
@@ -188,12 +190,12 @@ export function useAppPublishSend(
     error: error?.message,
     errorAction: error?.action,
     waits,
-    send: async (revision, audience, together) => {
+    send: async (revision, audience, together, confirmHandover) => {
       setBusy(true);
       setError(undefined);
       onRefusal?.(undefined);
       try {
-        await writes.publish(app, revision, audience, together);
+        await writes.publish(app, revision, audience, together, confirmHandover);
         return "published";
       } catch (caught) {
         if (caught instanceof PendingApprovalError) {

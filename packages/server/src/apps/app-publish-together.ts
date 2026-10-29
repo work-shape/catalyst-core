@@ -14,7 +14,12 @@ import {
   type OperationOrigin,
   type PolicyTarget
 } from "@work-shape/catalyst-core";
-import { accessResource, transactionalAssetCall, type AssetCall } from "../assets/asset-access";
+import {
+  accessResource,
+  transactionalAssetCall,
+  withoutHandover,
+  type AssetCall
+} from "../assets/asset-access";
 import { AssetWorkflow } from "../assets/asset-service";
 import type { AssetAddress } from "../assets/asset-target";
 import { publishEvents } from "../guardrails/asset-guardrail-events";
@@ -52,6 +57,8 @@ export type PublishTogetherInput = AssetAddress & {
   revision: number;
   audience?: AppAudience;
   confirmProcessing?: string;
+  /** The confirmation of the hand-over the publish question names (DS-13c). */
+  confirmHandover?: string;
   workflows?: readonly { name: string; revision: number }[] | undefined;
   dataStores?: readonly { name: string; revision: number }[] | undefined;
 };
@@ -223,7 +230,12 @@ export class AppPublishTogether {
         workflowConfigs
       });
     }
-    const storesPublished = await this.publishStores(call, members.stores, migrating);
+    // A hand-over the publish confirmed is recorded with the App's own publish (DS-13c).
+    const storesPublished = await this.publishStores(
+      withoutHandover(call),
+      members.stores,
+      migrating
+    );
     if (members.workflows.length === 0) {
       const published = await this.assets.drafts.publish(call, input);
       return storesPublished.length === 0
@@ -240,7 +252,7 @@ export class AppPublishTogether {
       const called = transactionalAssetCall(call, this.options.clientInstanceId, stores.audit);
       const publishedWith = [...storesPublished];
       for (const member of members.workflows) {
-        const published = await scoped.drafts.publish(called, addressOf(member));
+        const published = await scoped.drafts.publish(withoutHandover(called), addressOf(member));
         publishedWith.push(pointersOf(member, published));
       }
       return { ...(await scoped.drafts.publish(called, input)), publishedWith };

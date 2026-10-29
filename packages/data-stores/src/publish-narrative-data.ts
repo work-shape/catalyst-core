@@ -10,6 +10,7 @@ import {
   type PublishNarrativeStoredData
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
+import { createDataHandover } from "./data-handover";
 import type { DataStoreRuntime } from "./runtime";
 import { assetResource, createAudienceReader, type AudienceReader } from "./store-audience";
 import { appDataSources, appUse, knowledgeBaseUse } from "./used-by";
@@ -129,6 +130,7 @@ export function createPublishNarrativeData(runtime: DataStoreRuntime): PublishNa
         truncated: sources.truncated
       };
     },
-    storeReaders: (access, names) => storeReaders(runtime, access, names)
+    storeReaders: (access, names) => storeReaders(runtime, access, names),
+    handover: createDataHandover(runtime)
   };
 }

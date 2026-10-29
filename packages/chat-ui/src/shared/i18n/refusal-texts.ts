@@ -24,6 +24,14 @@ export const refusals = defineTranslations({
       "A change to the data store “{dataStore}” could not be applied. The app is not published.",
     "refusals.dataStoreMigrating":
       "The data store “{dataStore}” is still being updated. Try again in a minute.",
+    "refusals.dataHandoverNeedsOwner":
+      "{readers} people who would read “{dataStore}” may not use “{connection}”, and only a person who may change “{connection}” confirms the hand-over. Publish without confirming: the publish waits in the Inbox for their approval. Or narrow who reads “{dataStore}”.",
+    "refusals.dataHandoverNeedsOwnerHidden":
+      "{readers} people who would read “{dataStore}” may not use one of its sources, and only a person who may change that source confirms the hand-over. Publish without confirming: the publish waits in the Inbox for their approval. Or narrow who reads “{dataStore}”.",
+    "refusals.dataHandoverUnconfirmed":
+      "Who would read “{dataStore}” has changed since the question was shown. Open the dialog again, read who receives the data and publish again.",
+    "refusals.dataHandoverPersonOnly":
+      "Only a person signed in to the interface confirms a hand-over of source data. Publish in the dialog, or publish without confirming and the publish waits in the Inbox for an approval.",
     "refusals.dataStoreNotReady": "The data store is not ready yet. Try again in a moment.",
     "refusals.dataStoreKeyReused":
       "The app sent this change twice with different content. Reload the app and try again.",
@@ -131,6 +139,14 @@ export const refusals = defineTranslations({
       "Eine Änderung am Datenspeicher „{dataStore}“ ließ sich nicht anwenden. Die App ist nicht veröffentlicht.",
     "refusals.dataStoreMigrating":
       "Der Datenspeicher „{dataStore}“ wird noch umgestellt. Versuche es in einer Minute noch einmal.",
+    "refusals.dataHandoverNeedsOwner":
+      "{readers} Personen, die „{dataStore}“ danach lesen, dürfen „{connection}“ nicht nutzen, und die Weitergabe bestätigt nur eine Person, die „{connection}“ verwalten darf. Veröffentliche ohne Bestätigung: Dann wartet die Veröffentlichung im Eingang auf ihre Freigabe. Oder schränke ein, wer „{dataStore}“ liest.",
+    "refusals.dataHandoverNeedsOwnerHidden":
+      "{readers} Personen, die „{dataStore}“ danach lesen, dürfen eine für dich verborgene Quelle nicht nutzen, und die Weitergabe bestätigt nur eine Person, die diese Quelle verwalten darf. Veröffentliche ohne Bestätigung: Dann wartet die Veröffentlichung im Eingang auf ihre Freigabe. Oder schränke ein, wer „{dataStore}“ liest.",
+    "refusals.dataHandoverUnconfirmed":
+      "Wer „{dataStore}“ liest, hat sich seit der Frage geändert. Öffne den Dialog erneut, lies, wer die Daten erhält, und veröffentliche noch einmal.",
+    "refusals.dataHandoverPersonOnly":
+      "Eine Weitergabe von Quelldaten bestätigt nur eine Person, die in der Oberfläche angemeldet ist. Veröffentliche im Dialog, oder veröffentliche ohne Bestätigung: Dann wartet die Veröffentlichung im Eingang auf eine Freigabe.",
     "refusals.dataStoreNotReady":
       "Der Datenspeicher ist noch nicht bereit. Versuche es gleich noch einmal.",
     "refusals.dataStoreKeyReused":

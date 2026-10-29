@@ -790,11 +790,14 @@ function LoadedAssetPage({
     setPublishing(true);
     // The count and cost the dialog showed, which a Knowledge Base's publish confirms.
     const confirmation = question.status === "ready" ? question.confirmation : undefined;
+    // The hand-over the question named, which Publish confirms (DS-13c).
+    const handover = question.status === "ready" ? question.handover?.confirmation : undefined;
     try {
       const pointers = await source.writes.publish({
         ...address,
         revision: stored.revision,
-        ...(confirmation ? { confirmProcessing: confirmation } : {})
+        ...(confirmation ? { confirmProcessing: confirmation } : {}),
+        ...(handover ? { confirmHandover: handover } : {})
       });
       setStored({ ...stored, ...pointers });
       setFailure(undefined);

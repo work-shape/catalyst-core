@@ -266,7 +266,15 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
       policy: deps.policy
     })
   );
-  return { registry, deps, approvalRequestHandlers, publishNarrator };
+  return {
+    registry,
+    deps,
+    approvalRequestHandlers,
+    publishNarrator,
+    ...(options.publishStoredData?.handover
+      ? { dataHandover: options.publishStoredData.handover }
+      : {})
+  };
 }
 
 /**

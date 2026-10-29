@@ -13,9 +13,11 @@ import {
   type AppAudience,
   type AppAudienceOffer,
   type AppPublishDataRead,
+  type AppPublishHandover,
   type AppPublishTogetherRead
 } from "./app-data";
 import { AppPublishDataView } from "./app-publish-data";
+import { AppPublishHandoverView } from "./app-publish-handover";
 import { AppPublishTogetherView, appPublishTogetherReady } from "./app-publish-together";
 import { AppAudienceChange, AppAudienceQuestion } from "./app-publish-question";
 import { useAppsHost } from "./apps-host";
@@ -143,6 +145,7 @@ export function AppPublishConfirmationView({
   narrative,
   storedData,
   together,
+  handover,
   disabled,
   onChange
 }: {
@@ -155,6 +158,8 @@ export function AppPublishConfirmationView({
   storedData: AppPublishDataRead | undefined;
   /** The stores and Workflows the call makes live with the App, or that it waits for. */
   together?: AppPublishTogetherRead | undefined;
+  /** The widening check for the audience shown (DS-13c). */
+  handover?: AppPublishHandover | undefined;
   disabled: boolean;
   onChange(audience: AppAudience): void;
 }) {
@@ -175,6 +180,7 @@ export function AppPublishConfirmationView({
       )}
       <AppAudienceChange offer={offer} selected={selected} workspaceName={workspaceName} />
       <PublishNarrativeReadLead read={narrative} />
+      <AppPublishHandoverView handover={handover} agentCard />
       {together ? <AppPublishTogetherView read={together} /> : null}
       {storedData ? (
         <KeyValueList>
@@ -245,6 +251,7 @@ export function useAppPublishConfirmation(
         narrative={question.narrative}
         storedData={readsStoredData ? storedData : undefined}
         together={together}
+        handover={question.handover}
         disabled={disabled}
         onChange={setRead}
       />

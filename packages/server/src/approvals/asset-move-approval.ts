@@ -45,7 +45,9 @@ const payloadSchema = z.object({
     .min(1),
   requesterId: z.string().min(1),
   acceptBreaks: z.boolean(),
-  locale: z.enum(localeCodes)
+  locale: z.enum(localeCodes),
+  /** The hand-overs the move confirmed (DS-13c), recorded as it is made. */
+  handover: z.array(z.record(z.string(), z.json())).optional()
 });
 
 type AssetMovePayload = z.infer<typeof payloadSchema> & JsonObject;
@@ -195,7 +197,8 @@ function handlerFor(
       await writeAssetMove(stores, options.clientInstanceId, planned, {
         actor: auditActorFromUser(approver),
         correlationId: context.correlationId,
-        requestId: context.requestId
+        requestId: context.requestId,
+        ...(payload.handover?.length ? { handover: payload.handover } : {})
       });
       return {
         status: "moved",

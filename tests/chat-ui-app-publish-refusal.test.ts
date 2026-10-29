@@ -35,6 +35,7 @@ const PUBLISH_PATH_FILES = [
   "data-stores/src/scoped-tables.ts",
   "server/src/apps/app-closure.ts",
   "server/src/apps/app-publish-together.ts",
+  "core/src/data-handover.ts",
   "workflows/src/child-contracts.ts",
   "workflows/src/dataset-contracts.ts",
   "workflows/src/runner-packages.ts",
@@ -52,7 +53,8 @@ const NOT_PUBLISH_REFUSALS: Record<string, string> = {
   dataset_limit: "a run's dataset",
   dataset_expired: "a run's dataset",
   depth_limit: "a run's child below the deepest level",
-  rate_limited: "a call that found no room in its limits"
+  rate_limited: "a call that found no room in its limits",
+  handover_subject_unreadable: "an Inbox decision on a held call, after the publish waited"
 };
 
 /** Every reason the publish-path files and the Workflow checks raise, read from the source. */
@@ -84,6 +86,7 @@ const NAMED = {
   column: "tenant",
   step: "send",
   runAs: "buchhaltung",
+  readers: 3,
   issues: [{ path: ["steps"], message: "No steps" }]
 };
 
@@ -117,6 +120,21 @@ const DATA_STORE_REFUSALS: Record<DataStoreRefusal, Record<string, unknown>> = {
 
 const PUBLISH_REFUSALS: [reason: string, details: Record<string, unknown>][] = [
   ...Object.entries(DATA_STORE_REFUSALS),
+  // The widening check of an App's, a Workflow's or a Knowledge Base's Publish (DS-13c).
+  [
+    "data_handover_needs_owner",
+    {
+      dataStore: "belege",
+      title: "Belege",
+      readers: 3,
+      connection: "exampledata",
+      connectionTitle: "Exampledata"
+    }
+  ],
+  ["data_handover_needs_owner", { dataStore: "belege", title: "Belege", readers: 3 }],
+  ["data_handover_unconfirmed", { dataStore: "belege", title: "Belege", readers: 3 }],
+  ["data_handover_person_only", { dataStore: "belege", title: "Belege", readers: 3 }],
+  ["data_handover_needs_owner", { knowledgeBase: "handbuch", title: "Handbuch", readers: 3 }],
   // The App's Publish.
   ["workflow_unavailable", { workflow: "monatsabschluss" }],
   [
@@ -295,6 +313,49 @@ describe("the refusals of the publish paths, in the reader's language", () => {
     expect(say({ reason: "app_instance_needs_shared_workspace" })).toBe(
       "Diese App ist „Nur ich“ und kann darum nicht für Alle sein. Baue sie in einem Team, oder bitte einen Admin darum."
     );
+  });
+
+  it("tells a hand-over of a source's data by how many people, and who confirms it", () => {
+    const say = (details: Record<string, unknown>, t = de) => tellRefusal(details, t)?.message;
+    const facts = { dataStore: "belege", title: "Belege", readers: 3 };
+    expect(
+      say({
+        reason: "data_handover_needs_owner",
+        ...facts,
+        connection: "exampledata",
+        connectionTitle: "Exampledata"
+      })
+    ).toBe(
+      "3 Personen, die „Belege“ danach lesen, dürfen „Exampledata“ nicht nutzen, und die Weitergabe bestätigt nur eine Person, die „Exampledata“ verwalten darf. Veröffentliche ohne Bestätigung: Dann wartet die Veröffentlichung im Eingang auf ihre Freigabe. Oder schränke ein, wer „Belege“ liest."
+    );
+    // A source the reader may not see is not named.
+    expect(say({ reason: "data_handover_needs_owner", ...facts })).toBe(
+      "3 Personen, die „Belege“ danach lesen, dürfen eine für dich verborgene Quelle nicht nutzen, und die Weitergabe bestätigt nur eine Person, die diese Quelle verwalten darf. Veröffentliche ohne Bestätigung: Dann wartet die Veröffentlichung im Eingang auf ihre Freigabe. Oder schränke ein, wer „Belege“ liest."
+    );
+    expect(say({ reason: "data_handover_unconfirmed", ...facts })).toBe(
+      "Wer „Belege“ liest, hat sich seit der Frage geändert. Öffne den Dialog erneut, lies, wer die Daten erhält, und veröffentliche noch einmal."
+    );
+    // A key or an agent never confirms: only a person in the interface does.
+    expect(say({ reason: "data_handover_person_only", ...facts })).toBe(
+      "Eine Weitergabe von Quelldaten bestätigt nur eine Person, die in der Oberfläche angemeldet ist. Veröffentliche im Dialog, oder veröffentliche ohne Bestätigung: Dann wartet die Veröffentlichung im Eingang auf eine Freigabe."
+    );
+    expect(
+      tellRefusal({ reason: "data_handover_needs_owner", ...facts }, de, opensAll)?.action
+    ).toEqual({
+      label: "Datenspeicher öffnen",
+      route: { kind: "build-asset", assetKind: "data-stores", name: "belege" }
+    });
+    // A Knowledge Base with a synced source is told by its title, never linked as a store.
+    const base = {
+      reason: "data_handover_needs_owner",
+      knowledgeBase: "handbuch",
+      title: "Handbuch",
+      readers: 2
+    };
+    expect(say(base)).toBe(
+      "2 Personen, die „Handbuch“ danach lesen, dürfen eine für dich verborgene Quelle nicht nutzen, und die Weitergabe bestätigt nur eine Person, die diese Quelle verwalten darf. Veröffentliche ohne Bestätigung: Dann wartet die Veröffentlichung im Eingang auf ihre Freigabe. Oder schränke ein, wer „Handbuch“ liest."
+    );
+    expect(tellRefusal(base, de, opensAll)?.action).toBeUndefined();
   });
 
   it("words the store refusals of an App as written", () => {

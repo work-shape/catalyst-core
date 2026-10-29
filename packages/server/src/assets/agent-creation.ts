@@ -5,7 +5,12 @@ import {
 } from "@work-shape/catalyst-core";
 import { configValuesEqual } from "../asset-kinds/shared";
 import type { AssetWorkflowOptions } from "../types";
-import { transactionalAssetCall, type AssetCall } from "./asset-access";
+import {
+  recordHandover,
+  transactionalAssetCall,
+  withoutHandover,
+  type AssetCall
+} from "./asset-access";
 import { makeAgentDependenciesAvailable } from "./agent-dependency-availability";
 
 /** Create and explicitly extend dependencies in one transaction, so either both happen or neither. */
@@ -57,7 +62,8 @@ export async function createAgentWithDependencies<T>(
       )
     });
     // Widen first inside this transaction so the create's warnings reflect the consent.
-    const result = await create(within, called);
+    const result = await create(within, withoutHandover(called));
+    await recordHandover(called);
     const availability = await stores.configAssets.listAgentAvailability({
       clientInstanceId: options.clientInstanceId,
       agentName: input.name

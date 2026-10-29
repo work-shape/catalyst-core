@@ -36,6 +36,7 @@ import {
   type OperationScope,
   type OperationUpload,
   type PolicyTarget,
+  type PolicyValue,
   type StorePage,
   type RuntimeCallContext
 } from "@work-shape/catalyst-core";
@@ -140,6 +141,7 @@ type OperationBindingOf<Op extends Operation, Sent> = Omit<
   | "policyTargets"
   | "beforeEvents"
   | "approval"
+  | "policyFloorOf"
   | "execute"
   | "authorize"
   | "inputWithoutSecrets"
@@ -156,8 +158,14 @@ type OperationBindingOf<Op extends Operation, Sent> = Omit<
       input: OperationInput<Op>
     ): readonly PolicyTarget[] | Promise<readonly PolicyTarget[]>;
     approval?(
-      input: OperationInput<Op>
+      input: OperationInput<Op>,
+      actor?: AuthenticatedIdentity
     ): OperationApproval | undefined | Promise<OperationApproval | undefined>;
+    policyFloorOf?(
+      origin: OperationOrigin,
+      input: OperationInput<Op>,
+      actor?: AuthenticatedIdentity
+    ): PolicyValue | undefined | Promise<PolicyValue | undefined>;
     execute(
       input: OperationInput<Op>,
       context: OperationBindingContext

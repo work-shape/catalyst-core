@@ -171,7 +171,7 @@ export interface WorkflowPublishRightsSource {
  */
 interface WorkflowDraftsSource {
   /** Makes the revision with this number the published one: the one a run starts on. */
-  publish(workflow: string, revision: number): Promise<void>;
+  publish(workflow: string, revision: number, confirmHandover?: string): Promise<void>;
   /** Puts the draft back on the published revision. `expectedRevision` is the draft read. */
   discard(workflow: string, expectedRevision: number): Promise<void>;
   /** Starts a test run of the draft as the reader, with the input its form gave. */

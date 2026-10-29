@@ -8,6 +8,7 @@ import {
   type AgentDraftAuthor,
   type AgentAvailability,
   type AgentProposal,
+  type JsonObject,
   type OperationAuthorization
 } from "@work-shape/catalyst-core";
 import type { AssetWorkflowOptions } from "../types";
@@ -146,6 +147,21 @@ export class AgentDraftWorkflow {
       );
     }
     return decision;
+  }
+
+  /**
+   * The config a publish of the agent at `revision` makes live: its draft of that revision, or
+   * the agent as it is stored where it has no draft (its first version). Nothing otherwise,
+   * where the publish refuses.
+   */
+  async publishedConfig(
+    input: AssetAddress & { revision: number }
+  ): Promise<JsonObject | undefined> {
+    const target = await this.host.target(input);
+    if (target.asset?.status !== "active") return undefined;
+    const draft = await this.pending(target.asset.id);
+    if (!draft) return target.asset.config ?? undefined;
+    return draft.revision === input.revision ? draft.config : undefined;
   }
 
   async publish(

@@ -18,7 +18,7 @@ import type { Verb } from "./types";
 export const publishVerb: Verb = {
   usage: "publish <name> --revision <n> [--yes] [--confirm <blocked>]",
   summary:
-    "Make one revision the one its users are served (assets.publish). A guardrail shows its dry run first; an App, a Workflow or a workspace's agent asks you first",
+    "Make one revision the one its users are served (assets.publish). A guardrail shows its dry run first; an App, a Workflow or a workspace's agent asks you first. A publish that hands a source's data to people who may not use the source waits in the Inbox until a person who may change the source approves it",
   named: true,
   options: {
     revision: { type: "string" },

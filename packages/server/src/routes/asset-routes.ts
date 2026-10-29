@@ -24,8 +24,18 @@ import {
 import { publishPolicyFloor } from "../approvals/publish-approval";
 import { AssetWorkflow } from "../assets/asset-service";
 import { adoptAssetRepositories } from "../assets/asset-repo-adoption";
-import { checkAssetMove, moveAsset } from "../assets/asset-move-operation";
+import { checkAssetMove, moveAsset, moveChanges } from "../assets/asset-move-operation";
 import { AppPublishTogether } from "../apps/app-publish-together";
+import {
+  DataHandoverGate,
+  availabilityChanges,
+  createChanges,
+  giveToolsChanges,
+  publishHandoverGate,
+  syncChanges,
+  syncedAgentNames
+} from "../assets/data-handover";
+import { committingHandover } from "../assets/handover-commit";
 
 import { ConfigAssetWorkflow } from "../config-assets/config-asset-service";
 import { TryConversations } from "../conversations/try-conversations";
@@ -53,6 +63,9 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     execute: (input, context) => workflow.reads.list(context, input, context.paging)
   });
 
+  // An agent a batch makes is live at once with its tools (DS-13c): one that hands a source's
+  // data on waits in the Inbox for a person who may change the source. A key never confirms.
+  const syncHandover = new DataHandoverGate(options, syncChanges(options));
   route.operation(apiOperations["assets.sync"], {
     // The right is decided per item, each as its own write or delete, before the policy.
     authorize: (input, { actor, access }) => workflow.authorizeSync(actor, access, input),
@@ -62,7 +75,19 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     // the interface is off. The workflow asks the switch of everyone but the release holder.
     bodyLimitBytes: ASSET_SYNC_BODY_MAX_BYTES,
     beforeEvents: syncWriteEvents,
-    execute: (input, context) => workflow.sync(context, input)
+    approval: (input, actor) => syncHandover.approval(input, actor, undefined),
+    policyFloorOf: (_origin, input, actor) => syncHandover.policyFloor(input, actor, undefined),
+    execute: async (input, context) => {
+      const handover = await syncHandover.execute(context, input);
+      return workflow.sync(
+        syncHandover.confirming(
+          context,
+          { kind: "agent", name: syncedAgentNames(input), change: "create" },
+          handover
+        ),
+        input
+      );
+    }
   });
 
   route.operation(apiOperations["assets.sync_check"], {
@@ -114,6 +139,7 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
       workflow.reads.get(context, { ...input, files: files === "true" })
   });
 
+  const createHandover = new DataHandoverGate(options, createChanges(options));
   route.operation(apiOperations["assets.put"], {
     authorize: (input, { access }) => workflow.authorizeRevisionWrite(access, input, "write"),
     resource: assetResource,
@@ -124,43 +150,75 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     beforeEvents: ({ kind, name, config, files }) => [
       assetWriteEvent({ kind, name, config, files })
     ],
-    execute: (input, context) => workflow.put(context, input)
+    // An agent made with its tools is live at once (DS-13c), so it is checked as a publish is.
+    approval: (input, actor) => createHandover.approval(input, actor, undefined),
+    policyFloorOf: (_origin, input, actor) => createHandover.policyFloor(input, actor, undefined),
+    execute: async (input, context) => {
+      const handover = await createHandover.execute(context, input);
+      return workflow.put(
+        createHandover.confirming(
+          context,
+          { kind: input.kind, name: input.name, change: "create" },
+          handover
+        ),
+        input
+      );
+    }
   });
 
   // An App's publish may name the Workflow drafts it makes live with it (DP-3): they are asked,
   // held and published together with the App.
+  // The widening check (DS-13c) of a publish: one that hands a source's data on waits for a
+  // person who may change the source, unless that person publishes it themselves.
+  const publishHandover = publishHandoverGate(options, (input) =>
+    workflow.agentDrafts.publishedConfig(input)
+  );
   route.operation(apiOperations["assets.publish"], {
-    authorize: (input, { actor, access, origin }) =>
-      together.authorize({ actor, access, origin }, input),
+    authorize: async (input, { actor, access, origin }) => {
+      const right = await together.authorize({ actor, access, origin }, input);
+      if (right.allowed) await publishHandover.authorize({ actor, access, origin }, input);
+      return right;
+    },
     resource: assetResource,
     policyTargets: (input) => together.policyTargets(input),
     changeClass: "reversible",
     beforeEvents: (input, _origin, actor) => together.events(input, actor),
     // A held agent publish keeps whether it was approved as the first version or a draft.
     heldInputKeys: [AGENT_PUBLISH_HELD_KEY],
-    // A publish a guardrail holds waits for the holders of the kind's `approve` right.
-    approval: (input) => together.approval(input),
+    // A publish a guardrail holds waits for the holders of the kind's `approve` right, and one
+    // that hands a source's data on for a holder of `connection.write` on the source as well.
+    approval: async (input, actor) =>
+      publishHandover.approval(input, actor, await together.approval(input)),
     // An instance-owned agent's publish is made live without a terminal; a workspace's agent
     // keeps the question, so `--yes` waits as the person's confirmation (WS-PUB-1b). A skill's
     // draft is published without a question, as `config push --publish` does (SKILL-DRAFT-1).
-    policyFloorOf: (origin, input) =>
-      typeof input === "object" &&
-      input !== null &&
-      "kind" in input &&
-      (input.kind === "skill" ||
-        (input.kind === "agent" &&
-          !("workspaceId" in input && typeof input.workspaceId === "string")))
-        ? undefined
-        : publishPolicyFloor(origin),
+    // A publish that hands a source's data on unconfirmed waits for an approval, whatever kind.
+    policyFloorOf: (origin, input, actor) =>
+      publishHandover.policyFloor(
+        input,
+        actor,
+        input.kind === "skill" || (input.kind === "agent" && input.workspaceId === undefined)
+          ? undefined
+          : publishPolicyFloor(origin)
+      ),
     execute: async (input, context) => {
       if (input.kind === "skill") return workflow.skillDrafts.publish(context, input);
-      if (input.kind !== "agent") return together.publish(context, input);
-      const result = await workflow.agentDrafts.publish(
+      // Asked again as the publish is made: who reads what may have changed since it was held.
+      // A hand-over it confirmed is recorded in the transaction that makes it live.
+      const called = publishHandover.confirming(
         context,
-        input,
-        agentPublishChecked(context.beforeEvents, input)
+        { kind: input.kind, name: input.name, change: "publish" },
+        await publishHandover.execute(context, input)
       );
-      await tries.settled(context, input, "published");
+      const result =
+        input.kind === "agent"
+          ? await workflow.agentDrafts.publish(
+              called,
+              input,
+              agentPublishChecked(context.beforeEvents, input)
+            )
+          : await together.publish(called, input);
+      if (input.kind === "agent") await tries.settled(context, input, "published");
       return result;
     }
   });
@@ -210,13 +268,31 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     execute: (input, context) => workflow.delete(context, input)
   });
 
+  // A Knowledge Base offered in more workspaces reaches more readers (DS-13c).
+  const availabilityHandover = new DataHandoverGate(options, availabilityChanges(options));
   route.operation(apiOperations["assets.set_availability"], {
-    authorize: (input, { access }) => authorizeAssetPlacement(options, access, input),
+    authorize: async (input, caller) => {
+      const right = await authorizeAssetPlacement(options, caller.access, input);
+      if (right.allowed) await availabilityHandover.authorize(caller, input);
+      return right;
+    },
     resource: assetResource,
     policyTargets: (input) => workflow.policyTargets(input),
     changeClass: "reversible",
     module: ASSET_WRITE_MODULE,
-    execute: (input, context) => setAssetAvailability(options, context, input)
+    approval: (input, actor) => availabilityHandover.approval(input, actor, undefined),
+    policyFloorOf: (_origin, input, actor) =>
+      availabilityHandover.policyFloor(input, actor, undefined),
+    execute: async (input, context) => {
+      const called = availabilityHandover.confirming(
+        context,
+        { kind: input.kind, name: input.name, change: "availability" },
+        await availabilityHandover.execute(context, input)
+      );
+      return committingHandover(options, called, (within, inside) =>
+        setAssetAvailability(within, inside, input)
+      );
+    }
   });
 
   // "Teilen mit…" (SHARE-1): up the ladder Nur ich → Team → Alle, with what the asset uses.
@@ -229,14 +305,31 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     execute: (input, context) => checkAssetMove(options, context, input)
   });
 
+  // An asset moved to a wider owner reaches the readers there (DS-13c).
+  const moveHandover = new DataHandoverGate(options, moveChanges(options));
   route.operation(apiOperations["assets.move"], {
-    authorize: (input, { access }) => workflow.authorizeWrite(access, input),
+    authorize: async (input, caller) => {
+      const right = await workflow.authorizeWrite(caller.access, input);
+      if (right.allowed) await moveHandover.authorize(caller, input);
+      return right;
+    },
     resource: assetResource,
     policyTargets: (input) => workflow.policyTargets(input),
     // Nothing moves back down: who reads and edits it afterwards is the target's.
     changeClass: "irreversible",
     module: ASSET_WRITE_MODULE,
-    execute: (input, context) => moveAsset(options, context, input)
+    approval: (input, actor) => moveHandover.approval(input, actor, undefined),
+    policyFloorOf: (_origin, input, actor) => moveHandover.policyFloor(input, actor, undefined),
+    execute: async (input, context) => {
+      // A move filed as a request is decided by an admin with the right at the target; the
+      // hand-over is confirmed already, and recorded once the move is made.
+      const called = moveHandover.confirming(
+        context,
+        { kind: input.kind, name: input.name, change: "move" },
+        await moveHandover.execute(context, input)
+      );
+      return moveAsset(options, called, input);
+    }
   });
 
   route.operation(apiOperations["agents.use.set"], {
@@ -315,16 +408,29 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   });
   // Tools for the instance's own agent, live at once (T8 ruling, 2026-10-24): the rights of a
   // change and of a publish, the guardrails of both on what goes live, and the policy's wait.
+  // Tools that add a source to a store wait as a publish does (DS-13c).
+  const giveHandover = new DataHandoverGate(options, giveToolsChanges(options));
   route.operation(apiOperations["agents.give_tools"], {
-    authorize: (input, { actor, access }) =>
-      workflow.agentDrafts.authorizeGiveTools({ actor, access }, input),
+    authorize: async (input, caller) => {
+      const right = await workflow.agentDrafts.authorizeGiveTools(caller, input);
+      if (right.allowed) await giveHandover.authorize(caller, input);
+      return right;
+    },
     resource: draftResource,
     policyTargets: (input) => workflow.policyTargets({ name: input.name, kind: "agent" }),
     changeClass: "reversible",
     module: ASSET_WRITE_MODULE,
     beforeEvents: (input) => giveToolsEvents(options, input),
-    execute: (input, context) =>
-      workflow.agentDrafts.giveTools(context, input, agentGiveChecked(context.beforeEvents))
+    approval: (input, actor) => giveHandover.approval(input, actor, undefined),
+    policyFloorOf: (_origin, input, actor) => giveHandover.policyFloor(input, actor, undefined),
+    execute: async (input, context) => {
+      const called = giveHandover.confirming(
+        context,
+        { kind: "agent", name: input.name, change: "give_tools" },
+        await giveHandover.execute(context, input)
+      );
+      return workflow.agentDrafts.giveTools(called, input, agentGiveChecked(context.beforeEvents));
+    }
   });
   route.operation(apiOperations["agents.try.open"], {
     authorize: (input, { actor, access }) => tries.authorize(actor, access, input),
