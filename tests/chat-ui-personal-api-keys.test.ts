@@ -1040,7 +1040,7 @@ describe("You > API keys, for a person and an admin alike", () => {
       });
     try {
       expect(mounted.container.textContent).toContain(
-        "Lets the key only read the instance: usage, audit events"
+        "Lets the key only read what is shared by all workspaces: usage, audit events"
       );
       expect(
         scopeBox(mounted.container, "View the System pages").getAttribute("aria-checked")
