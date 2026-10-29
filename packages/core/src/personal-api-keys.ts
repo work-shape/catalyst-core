@@ -213,8 +213,35 @@ export function personalApiKeyRowUseNeeds(
 }
 
 /**
+ * Keys issued before this moment keep the reach they had: a `system.view` key of before reads
+ * the infrastructure check only, and gains the instance reads once it is reissued (CLI-PARITY-6a).
+ */
+export const PERSONAL_API_KEY_INSPECT_ISSUED_FROM = "2026-10-29T00:00:00.000Z";
+
+/**
+ * The instance level of a personal key (CLI-PARITY-6a): the rights to read the instance
+ * itself, which no workspace or asset narrows. `usage.view` reads the model usage and the
+ * budget, `audit.view` the audit events and every Operation Run, `system.view` the background
+ * jobs, the Operation Runs list, the Modules and the infrastructure. They are read-only: no
+ * decision, no retry, no change and no right is given through them. The key `catalyst setup`
+ * creates never carries them; a person ticks them for one key.
+ */
+export const PERSONAL_API_KEY_INSPECT_ACTIONS = [
+  "usage.view",
+  "audit.view",
+  "system.view"
+] as const satisfies readonly PlatformAction[];
+
+/** Whether an action is of the whole instance, which a key's scope never limits to a workspace. */
+export function isPersonalApiKeyInspectAction(
+  action: string
+): action is (typeof PERSONAL_API_KEY_INSPECT_ACTIONS)[number] {
+  return PERSONAL_API_KEY_INSPECT_ACTIONS.some((inspect) => inspect === action);
+}
+
+/**
  * The actions a personal key can name: reading, writing, deleting and publishing what the
- * owner builds, the use level, and the read-only infrastructure check under `system.view`.
+ * owner builds, the use level, and the read-only instance level (`PERSONAL_API_KEY_INSPECT_ACTIONS`).
  * Approving and administering stay with a signed-in person. A project's rights are carried by
  * membership alone and held by nobody as a right a key could narrow (PRJ-1).
  */
@@ -222,7 +249,7 @@ export const PERSONAL_API_KEY_ACTIONS: readonly PlatformAction[] = ACTIONS.filte
   (action) =>
     !PROJECT_ACTIONS.some((project) => project === action) &&
     (/\.(read|write|delete|publish)$/u.test(action) ||
-      action === "system.view" ||
+      isPersonalApiKeyInspectAction(action) ||
       PERSONAL_API_KEY_USE_ACTIONS.some((use) => use === action))
 );
 
@@ -259,8 +286,8 @@ export function parsePersonalApiKeyScope(scope: string): PersonalApiKeyScope | u
   const known = PERSONAL_API_KEY_ACTIONS.find((candidate) => candidate === action);
   if (known === undefined) return undefined;
   if (separator === -1) return { action: known };
-  // This scope reaches one instance check, so a workspace or asset cannot narrow it.
-  if (known === "system.view") return undefined;
+  // These scopes read the instance itself, so a workspace or asset cannot narrow them.
+  if (isPersonalApiKeyInspectAction(known)) return undefined;
   const resource = scope.slice(separator + 1);
   const slash = resource.indexOf("/");
   const workspaceId = slash === -1 ? resource : resource.slice(0, slash);
@@ -351,18 +378,27 @@ export function personalApiKeyNamesAction(scopes: readonly string[], action: str
 /**
  * The operation scopes a personal key's calls carry: reading the owner's own account, and the
  * asset operations of what its scopes read, write or publish. A key reaches no conversation,
- * no administration and none of the account's changes. `system.view` adds only the read-only
- * infrastructure check, still subject to the owner's current right. The use level adds none
+ * no administration and none of the account's changes. `system.view` adds the read-only
+ * infrastructure check, still subject to the owner's current right. The instance level
+ * (`usage.view`, `audit.view`, `system.view`) adds `instance:inspect` for the read-only
+ * operations that name it; each of them asks the right of its own, of the key and of its
+ * owner (CLI-PARITY-6a), but only for a key issued from `PERSONAL_API_KEY_INSPECT_ISSUED_FROM`:
+ * a `system.view` key issued before keeps its old reach until it is reissued. The use level adds none
  * for a Workflow's publish, which lends the rights of its account. It adds `workflow_runs:use`
  * for a Workflow's start, and `data_store_rows:use` for the four row operations of
  * CLI-PARITY-4. Every other operation under `data_store_rows:*` stays out of a key's reach.
  */
-export function operationScopesOfPersonalApiKey(scopes: readonly string[]): OperationScope[] {
+export function operationScopesOfPersonalApiKey(
+  scopes: readonly string[],
+  issuedAt: string
+): OperationScope[] {
+  const reachesInstance = Date.parse(issuedAt) >= Date.parse(PERSONAL_API_KEY_INSPECT_ISSUED_FROM);
   const granted = new Set<OperationScope>(["me:read"]);
   for (const scope of scopes) {
     const action = parsePersonalApiKeyScope(scope)?.action;
     if (action === undefined) continue;
     if (action === "system.view") granted.add("infrastructure:check");
+    if (reachesInstance && isPersonalApiKeyInspectAction(action)) granted.add("instance:inspect");
     if (action.endsWith(".read")) granted.add("config_assets:read");
     if (action.endsWith(".write") || action.endsWith(".delete")) {
       granted.add("config_assets:write");

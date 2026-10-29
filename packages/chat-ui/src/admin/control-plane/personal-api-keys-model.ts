@@ -1,5 +1,5 @@
 import type { PersonalApiKey, PlatformContext } from "@work-shape/catalyst-api-client";
-import { CONNECTION_ACTIONS } from "@work-shape/catalyst-core";
+import { CONNECTION_ACTIONS, PERSONAL_API_KEY_INSPECT_ACTIONS } from "@work-shape/catalyst-core";
 
 /** How long a new key lives, in days. The instance takes at most a year. */
 export const PERSONAL_KEY_EXPIRY_DAYS = [30, 90, 365] as const;
@@ -64,11 +64,13 @@ export function personalKeyUseOffer(context: PlatformContext | undefined): strin
 }
 
 /**
- * The instance level a new key may carry: `system.view`, for the read-only check of the
- * instance's providers that `catalyst models check` runs. It is offered only to a person who
- * holds the right now; the instance checks it again at issuance and at every call.
+ * The instance level a new key may carry (CLI-PARITY-6a): `usage.view`, `audit.view` and
+ * `system.view`, which read the instance (usage, audit events, jobs, Operation Runs, Modules,
+ * infrastructure and the check of the providers that `catalyst models check` runs) and change
+ * nothing. Each is offered only to a person who holds the right now, and never ticked in
+ * advance; the instance checks it again at issuance and at every call.
  */
-const PERSONAL_KEY_INSTANCE_ACTIONS = ["system.view"] as const;
+const PERSONAL_KEY_INSTANCE_ACTIONS = PERSONAL_API_KEY_INSPECT_ACTIONS;
 
 export function personalKeyInstanceOffer(context: PlatformContext | undefined): string[] {
   return PERSONAL_KEY_INSTANCE_ACTIONS.filter((action) =>

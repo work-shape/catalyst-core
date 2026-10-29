@@ -126,11 +126,14 @@ describe("platform.context.get", () => {
       "skill.publish"
     ]);
     // The role administers service principals (RIGHTS-1a) and the spend limits (LU-2), and
-    // sees usage by named person (LU-3).
+    // sees usage by named person (LU-3). It reads usage and audit events, which a key may name
+    // at the instance level (CLI-PARITY-6a).
     expect(admin.instanceActions).toEqual([
       "service_principals.manage",
       "limits.manage",
-      "usage.view_users"
+      "usage.view_users",
+      "usage.view",
+      "audit.view"
     ]);
     // Agents and skills are used through no right of their own: no use level is offered.
     expect(admin.useActions).toEqual([]);

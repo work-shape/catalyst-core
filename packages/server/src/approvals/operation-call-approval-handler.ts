@@ -769,7 +769,12 @@ async function currentActor(
     ...(principal ? { principal: { ...principal, clientInstanceId } } : {}),
     ...(run.actor.delegatedActor ? { delegatedActor: run.actor.delegatedActor } : {}),
     ...(payload.actor.scopes ? { scopes: payload.actor.scopes } : {}),
-    ...(key ? { keyScopes: key.scopes, scopes: operationScopesOfPersonalApiKey(key.scopes) } : {})
+    ...(key
+      ? {
+          keyScopes: key.scopes,
+          scopes: operationScopesOfPersonalApiKey(key.scopes, key.createdAt)
+        }
+      : {})
   };
 }
 

@@ -12,11 +12,17 @@ import {
   legacyPermissionFor
 } from "@work-shape/catalyst-core";
 
+const NOW = new Date().toISOString();
+
 describe("permissions", () => {
   it("grants agent publishing at workspace or asset scope and carries it in a personal key (Access 45)", () => {
     expect(GRANTABLE_ACTION_SCOPES["agent.publish"]).toEqual(["workspace", "asset"]);
-    expect(operationScopesOfPersonalApiKey(["agent.publish"])).toContain("config_assets:publish");
-    expect(operationScopesOfPersonalApiKey(["agent.write"])).not.toContain("config_assets:publish");
+    expect(operationScopesOfPersonalApiKey(["agent.publish"], NOW)).toContain(
+      "config_assets:publish"
+    );
+    expect(operationScopesOfPersonalApiKey(["agent.write"], NOW)).not.toContain(
+      "config_assets:publish"
+    );
   });
   it("maps each action a legacy key names to exactly one of the nine legacy keys", () => {
     expect(ACTIONS).toEqual([

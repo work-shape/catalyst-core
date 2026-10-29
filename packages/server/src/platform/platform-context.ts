@@ -14,6 +14,7 @@ import {
   GRANT_SCOPE_KINDS,
   INSTANCE_ACTIONS,
   INSTANCE_ASSET_SCOPE,
+  PERSONAL_API_KEY_INSPECT_ACTIONS,
   PERSONAL_API_KEY_USE_ACTIONS,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
@@ -284,7 +285,9 @@ export async function readPlatformContext(
     })),
     actions: usableActions(options, caller),
     assetActions: readActionsOnSingleAssets(options, caller),
-    instanceActions: INSTANCE_ACTIONS.filter(
+    instanceActions: [
+      ...new Set<string>([...INSTANCE_ACTIONS, ...PERSONAL_API_KEY_INSPECT_ACTIONS])
+    ].filter(
       (action) =>
         caller.access.authorize(action).allowed &&
         Object.values<Operation>(apiOperations).some((operation) => {

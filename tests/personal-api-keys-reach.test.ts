@@ -30,7 +30,9 @@ const KEY_OPERATION_SCOPES = new Set([
   "infrastructure:check",
   // The use level of rows (CLI-PARITY-4), asked by four operations only, and of a start.
   "data_store_rows:use",
-  "workflow_runs:use"
+  "workflow_runs:use",
+  // The read-only instance level (CLI-PARITY-6a): usage, audit, jobs, runs, Modules, infrastructure.
+  "instance:inspect"
 ]);
 
 function isTestOperation(name: string): name is TestOperationName {
@@ -39,14 +41,17 @@ function isTestOperation(name: string): name is TestOperationName {
 
 const namesSchema = z.object({ items: z.array(z.object({ name: z.string() })) });
 
+const NOW = new Date().toISOString();
+
 describe("what a personal key reaches", () => {
   it("adds only the infrastructure check for system.view, never administration or the rows scopes beyond the use level", () => {
     expect(requirePersonalApiKeyScopes(["system.view"])).toEqual([{ action: "system.view" }]);
-    expect(operationScopesOfPersonalApiKey(["system.view"])).toEqual([
+    expect(operationScopesOfPersonalApiKey(["system.view"], NOW)).toEqual([
       "me:read",
-      "infrastructure:check"
+      "infrastructure:check",
+      "instance:inspect"
     ]);
-    expect(new Set(operationScopesOfPersonalApiKey(PERSONAL_API_KEY_ACTIONS))).toEqual(
+    expect(new Set(operationScopesOfPersonalApiKey(PERSONAL_API_KEY_ACTIONS, NOW))).toEqual(
       KEY_OPERATION_SCOPES
     );
     expect(
@@ -64,7 +69,7 @@ describe("what a personal key reaches", () => {
     ).toBe(false);
     for (const scope of ["system.view:some-workspace", "system.view:some-workspace/store"]) {
       expect(() => requirePersonalApiKeyScopes([scope])).toThrow("no scope");
-      expect(operationScopesOfPersonalApiKey([scope])).toEqual(["me:read"]);
+      expect(operationScopesOfPersonalApiKey([scope], NOW)).toEqual(["me:read"]);
     }
   });
 
@@ -120,10 +125,17 @@ describe("what a personal key reaches", () => {
     expect(refused.statusCode).toBe(403);
     const headers = await t.tokenFor((await t.issue(["system.view"], t.root.id)).secret);
     await t.expectOk(t.root.id, "instance.infrastructure.check", { headers });
-    // The adjacent GET and modules routes do not inherit the exception.
+    // The infrastructure and Modules reads are the instance level's (CLI-PARITY-6a); the
+    // routes beside them that retry or administer stay out of reach.
     for (const operation of ["instance.infrastructure.get", "instance.modules.list"] as const) {
-      expect((await t.call(t.root.id, operation, { headers })).statusCode).toBe(403);
+      expect((await t.call(t.root.id, operation, { headers })).statusCode).toBe(200);
+      expect((await t.call(t.root.id, operation, { headers: narrow })).statusCode).toBe(403);
     }
+    const retry = await t.call(t.root.id, "instance.jobs.retry", {
+      params: { jobId: "x" },
+      headers
+    });
+    expect(retry.statusCode).toBe(403);
     const service = await t.call(t.root.id, "instance.infrastructure.check", {
       headers: { [SERVICE_HEADER]: "model-checker" }
     });

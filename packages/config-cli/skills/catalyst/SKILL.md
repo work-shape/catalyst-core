@@ -114,6 +114,19 @@ catalyst knowledge-base query accounts --sql "select name from accounts"
 
 These need the key's use level. A refusal names the right the key lacks; treat it as final and tell the person, who ticks it in Settings > API keys. Start a Workflow, read rows or insert rows only when asked: `workflow start` runs the published Workflow for real, and `data-store insert` adds rows that stay. `--from <file|->` reads the JSON request body shown above; `knowledge-base query` also takes `{"query": "<named query>", "parameters": {...}}`. `data-store rows` prints one page: pass the `next` it printed as `--after` for the following one.
 
+## Read the instance
+
+```sh
+catalyst usage show
+catalyst audit events --limit 50
+catalyst jobs list --status failed,dead
+catalyst operation runs --since 2026-10-28T00:00:00Z
+catalyst modules list
+catalyst infrastructure show
+```
+
+These read usage, audit events, background jobs, Operation Runs, Modules and infrastructure, and need the key's instance level. The key `catalyst setup` creates does not have it. A refusal names the right the key lacks (`usage.view`, `audit.view` or `system.view`); treat it as final and tell the person, who ticks it for a key of their choice in Settings > API keys. Read them only when asked. Audit events and Operation Runs hold no payload: report them as they are and do not try to recover content from them. `audit events`, `jobs list` and `operation runs` print one page; `--cursor` takes the `nextCursor` it printed.
+
 ## Follow a held call
 
 A change that exits 3 prints its Operation Run id. Follow it with `catalyst operation show <run-id>` and list your requests with `catalyst requests`. Add `--json` for the full record or list. A held run still exits 3; a failed, denied or expired run exits 1. Withdraw your own request with `catalyst requests --withdraw <id>` only when the person asks; the key needs an asset write or delete scope. Do not send the held change again.

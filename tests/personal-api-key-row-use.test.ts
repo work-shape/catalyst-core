@@ -30,6 +30,8 @@ const rowsSchema = z.object({ rows: z.array(z.unknown()) });
 const querySchema = z.object({ rows: z.array(z.record(z.string(), z.unknown())) });
 const insertedSchema = z.object({ inserted: z.number() });
 
+const NOW = new Date().toISOString();
+
 describe("the use level of a personal key on rows", () => {
   const { start, publishStore } = useDataStoreInstance();
 
@@ -82,7 +84,7 @@ describe("the use level of a personal key on rows", () => {
 
   it("maps the scope to the use rights of rows and to no other right", () => {
     for (const action of PERSONAL_API_KEY_ACTIONS) {
-      const scopes = operationScopesOfPersonalApiKey([action]);
+      const scopes = operationScopesOfPersonalApiKey([action], NOW);
       expect(scopes.includes("data_store_rows:use"), action).toBe(
         [INSERT, EXECUTE, "knowledge_base.use"].includes(action)
       );

@@ -47,6 +47,38 @@ Each right is the key's own and is limited by its scope (`data_store.execute:<wo
 
 `workflow start` starts the published Workflow, which acts as its own technical account, and answers the run; follow it with `workflow run` and `workflow steps`. Its `--from` file is `{"input": {...}, "key": "<run key>"}`; both fields are optional. The Workflow must be turned on for outside clients. `data-store rows` prints one page; pass the `next` it printed to `--after` for the following page. `data-store query` and `knowledge-base query` take one read-only statement, with `$1`-style placeholders and `parameters` in a `--from` file (`{"sql": "...", "parameters": [1]}`); `knowledge-base query` also takes a named query, `{"query": "<name>", "parameters": {...}}`. `data-store insert` takes `{"table": "...", "rows": [{...}], "onConflict": "fail"}`, at most 1,000 rows. These calls are recorded like the same calls in the app, without the values.
 
+## Instance commands
+
+These read the instance and change nothing. A key reaches them only with the **instance level** of Settings > API keys (German: **Alle Arbeitsbereiche**), which you tick by hand for a key over the whole instance. The key `catalyst setup` creates never carries it, and a key limited to a workspace cannot. Every call acts as you, with the rights you hold at that moment, and the key never adds one: a right you lose is gone from the key, and you cannot issue a key with a right you do not hold.
+
+```sh
+catalyst usage show
+catalyst usage breakdown --start 2026-10-01 --end 2026-11-01 --group-by model
+catalyst audit events --limit 100
+catalyst audit activities
+catalyst jobs summary
+catalyst jobs list --status failed,dead
+catalyst operation runs --effect changing --since 2026-10-28T00:00:00Z
+catalyst operation show <run-id>
+catalyst modules list
+catalyst infrastructure show
+```
+
+| Command | Calls | Needs on the key and on you |
+| --- | --- | --- |
+| `usage show` | `usage.get_summary` | `usage.view` |
+| `usage breakdown --start <day> --end <day> --group-by <dimension>` | `usage.breakdown.get` | `usage.view` |
+| `audit events`, `audit activities` | `audit_events.list`, `audit_activities.list` | `audit.view` |
+| `jobs summary`, `jobs list` | `instance.jobs.summary`, `instance.jobs.list` | `system.view` |
+| `operation runs` | `operations.list_runs` | `system.view`; `audit.view` as well to list another person's runs |
+| `operation show <run-id>` | `operations.get_run` | none for your own call; `audit.view` for another person's |
+| `modules list` | `instance.modules.list` | `system.view` |
+| `infrastructure show` | `instance.infrastructure.get` | `system.view` |
+
+A key that names none of the three rights, or not the one a command needs, is refused with exit code 1, and the refusal names the right. The level opens no decision, no retry of a job, no change and no right: it does not reach users, rights, technical accounts, credentials, spend limits, usage by named person or the Inbox. `catalyst models check` runs on `system.view` as before.
+
+`audit events` shows the instance's audit events, which record who did what to which subject and never the content of a request, a reply, a file or a secret. `operation runs` and `operation show` name an input by its hash and hold neither the input nor the result. `jobs list` leaves out a job's payload. Reading the audit events is itself an audit event, attributed to you and to the key. `audit events`, `jobs list` and `operation runs` print one page of 50 entries, or `--limit` up to 200, with the `nextCursor` to pass to `--cursor` for the next; the other commands print the whole answer. `jobs list --status` takes one status or several separated by commas: `queued`, `running`, `succeeded`, `failed`, `dead` or `cancelled`. Without `audit.view` on the key, `operation runs` lists only your own runs, and `--actor` with another person finds none. It also takes `--operation`, `--effect reading|changing`, `--status`, `--actor`, `--origin` and `--workspace`.
+
 ## Other commands
 
 `app actions` without a name lists actions of the published Apps you may read; with a name it reads that App's draft if you may write it, otherwise its published revision. `keys list` lists your own key metadata, never secrets. `instance workspaces` uses `instance.workspaces.list`: the Shared Workspaces that agents, Knowledge Bases and Connections can be made available in, requiring `config_assets:write` and, on the whole instance, `agent.write`, `knowledge_base.write` or `connection.write`. It is not the list of your workspace memberships.

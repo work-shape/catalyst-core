@@ -145,7 +145,7 @@ export async function testRunCall(
         ? {
             delegatedActor: key.actor,
             keyScopes: key.scopes,
-            scopes: operationScopesOfPersonalApiKey(key.scopes)
+            scopes: operationScopesOfPersonalApiKey(key.scopes, key.createdAt)
           }
         : {})
     },
@@ -186,7 +186,12 @@ async function startingKey(
   start: OperationRun | undefined,
   testerId: string
 ): Promise<
-  { actor: Extract<DelegatedActor, { kind: "api_key" }>; scopes: readonly string[] } | undefined
+  | {
+      actor: Extract<DelegatedActor, { kind: "api_key" }>;
+      scopes: readonly string[];
+      createdAt: string;
+    }
+  | undefined
 > {
   const actor = [start?.actor, root?.startedBy, run.startedBy]
     .map((candidate) => candidate?.delegatedActor)
@@ -204,5 +209,5 @@ async function startingKey(
       { systemic: true }
     );
   }
-  return { actor, scopes: key.scopes };
+  return { actor, scopes: key.scopes, createdAt: key.createdAt };
 }
