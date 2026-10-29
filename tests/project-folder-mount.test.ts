@@ -32,6 +32,7 @@ import {
 } from "./support/access-instance";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
 import { inlineCommandResults } from "./support/workspace-command-jobs";
+import { withTestSql } from "./support/test-sql";
 
 // PRJ-4: real shell writes over the same ProjectFileService and version store as the file tools.
 const ON = { projects: { enabled: true } };
@@ -366,7 +367,14 @@ for (const docker of [false, true]) {
       const noMount = docker
         ? "! grep -q ' /workspace/project ' /proc/self/mountinfo"
         : "test ! -e project";
-      for (const c of [await chat(), await chat(id, t.lena)]) {
+      // The store keeps another person's chat out of a private project; the run must still
+      // provide no folder if one got there, so the row is placed directly.
+      const other = await chat(undefined, t.lena);
+      await withTestSql(
+        (sql) => sql`update conversations set project_id = ${id}, visibility = 'private'
+          where id = ${other.conversation.id}`
+      );
+      for (const c of [await chat(), other]) {
         const denied = await h.exec(c, noMount);
         expect(denied.output?.exitCode, JSON.stringify(denied.error)).toBe(0);
         expect(denied.output?.projectFileChanges).toBeUndefined();

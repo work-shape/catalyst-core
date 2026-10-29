@@ -3,6 +3,7 @@ conversations.project_files.save  POST /api/v1/conversations/:conversationId/pro
 conversations.project_instructions.get  GET /api/v1/conversations/:conversationId/project-instructions
 conversations.set_project  PUT /api/v1/conversations/:conversationId/project
 projects.create  POST /api/v1/projects
+projects.delete  POST /api/v1/project-settings/:projectId/delete
 projects.files.delete  POST /api/v1/project-files/:projectId/delete
 projects.files.get_content  GET /api/v1/project-files/:projectId/content
 projects.files.list  GET /api/v1/project-files/:projectId
@@ -12,7 +13,10 @@ projects.files.restore  POST /api/v1/project-files/:projectId/restore
 projects.files.upload  POST /api/v1/project-files/:projectId
 projects.files.versions  GET /api/v1/project-files/:projectId/versions
 projects.get  GET /api/v1/projects/:projectName
+projects.impact  GET /api/v1/project-settings/:projectId/impact
 projects.list  GET /api/v1/workspaces/:collaborationWorkspaceId/projects
 projects.list_mine  GET /api/v1/projects
+projects.move  POST /api/v1/project-settings/:projectId/move
+projects.set_audience  PUT /api/v1/project-settings/:projectId/audience
 projects.setup.get  GET /api/v1/project-settings/:projectId/setup
 projects.setup.set  PUT /api/v1/project-settings/:projectId/setup

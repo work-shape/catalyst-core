@@ -135,9 +135,16 @@
 {"name":"outside_form.requested","legacy":false,"audited":true,"phases":["after"]}
 {"name":"permission.granted","legacy":true,"audited":true,"phases":["after"]}
 {"name":"permission.revoked","legacy":true,"audited":true,"phases":["after"]}
+{"name":"project.audience_changed","legacy":false,"audited":true,"phases":["after"]}
+{"name":"project.cleanup_completed","legacy":false,"audited":true,"phases":["after"]}
+{"name":"project.cleanup_failed","legacy":false,"audited":true,"phases":["after"]}
 {"name":"project.created","legacy":false,"audited":true,"phases":["after"]}
+{"name":"project.deleted","legacy":false,"audited":true,"phases":["after"]}
 {"name":"project.file_purged","legacy":false,"audited":true,"phases":["after"]}
+{"name":"project.idle_noticed","legacy":false,"audited":true,"phases":["after"]}
 {"name":"project.instructions_read","legacy":false,"audited":true,"phases":["after"]}
+{"name":"project.moved","legacy":false,"audited":true,"phases":["after"]}
+{"name":"project.retention_deleted","legacy":false,"audited":true,"phases":["after"]}
 {"name":"project.setup_changed","legacy":false,"audited":true,"phases":["after"]}
 {"name":"role.created","legacy":true,"audited":true,"phases":["after"]}
 {"name":"role.deleted","legacy":true,"audited":true,"phases":["after"]}
