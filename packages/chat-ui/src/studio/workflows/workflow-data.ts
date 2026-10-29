@@ -483,7 +483,12 @@ export function useLiveOnceSwitches(
 
 /** What a person does to the draft of a Workflow from its page and from a test run. */
 export interface WorkflowDraftWrites {
-  publish(workflow: string, revision: number, confirmHandover?: string): Promise<void>;
+  publish(
+    workflow: string,
+    revision: number,
+    confirmHandover?: string,
+    dataStores?: readonly { name: string; revision: number }[]
+  ): Promise<void>;
   discard(workflow: string, expectedRevision: number): Promise<void>;
   test(workflow: string, input: Readonly<Record<string, unknown>>): Promise<WorkflowRunView>;
   runLiveOnce(workflow: string, step: string, expectedRevision: number): Promise<void>;
@@ -508,8 +513,8 @@ export function useWorkflowDraftWrites(): WorkflowDraftWrites | undefined {
         queryClient.invalidateQueries({ queryKey: keys.liveOnce })
       ]);
     return {
-      publish: async (workflow, revision, confirmHandover) =>
-        drafts.publish(workflow, revision, confirmHandover).finally(changed),
+      publish: async (workflow, revision, confirmHandover, dataStores) =>
+        drafts.publish(workflow, revision, confirmHandover, dataStores).finally(changed),
       discard: async (workflow, expectedRevision) =>
         drafts.discard(workflow, expectedRevision).finally(changed),
       test: async (workflow, input) => drafts.test(workflow, input).finally(ran),

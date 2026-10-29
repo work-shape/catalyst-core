@@ -4,7 +4,7 @@ import { workflowCallers } from "../workflows/workflow-callers";
 import { agentDependencyAvailability } from "./agent-dependency-availability";
 import { appAudienceReview } from "../apps/app-audience";
 import { publishHandoverGate } from "./data-handover";
-import { appWorkflowClosure, workflowPending } from "../apps/app-closure";
+import { appWorkflowClosure, storesPendingWith, workflowPending } from "../apps/app-closure";
 import { APP_ASSET_KIND } from "../apps/app-kind";
 import type { AppAudience, AuditActor } from "@work-shape/catalyst-core";
 import {
@@ -433,6 +433,15 @@ export class AssetReadWorkflow {
             () => undefined
           )
         : undefined;
+    // The Data Store drafts one Publish of the Workflow publishes with it, for who may (LIVE-2).
+    const publishDataStores =
+      target.kind.kind === "workflow" && !publishedOnly && allowed.includes("publish")
+        ? await storesPendingWith(
+            this.options,
+            { kind: target.kind.kind, scope: asset.scope, config: content.config },
+            call.access
+          )
+        : undefined;
     const saveApproval = await this.saveApproval(call, target);
     // The version the draft's head names: the newest publication, while something is live.
     const liveVersion =
@@ -486,6 +495,7 @@ export class AssetReadWorkflow {
         ? { publishQuestion: [...(publishQuestion ?? []), ...(publishHandover?.lines ?? [])] }
         : {}),
       ...(publishHandover ? { publishHandover } : {}),
+      ...(publishDataStores?.length ? { publishDataStores } : {}),
       ...(publishConfirmation ? { publishConfirmation } : {}),
       ...(publishProcessing ? { publishProcessing } : {}),
       ...(publishNarrative ? { publishNarrative } : {}),

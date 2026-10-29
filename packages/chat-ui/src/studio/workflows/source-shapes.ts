@@ -170,8 +170,17 @@ export interface WorkflowPublishRightsSource {
  * `workflows.test` and `assets.run_live_once`.
  */
 interface WorkflowDraftsSource {
-  /** Makes the revision with this number the published one: the one a run starts on. */
-  publish(workflow: string, revision: number, confirmHandover?: string): Promise<void>;
+  /**
+   * Makes the revision with this number the published one: the one a run starts on. With
+   * `dataStores`, the Data Store drafts the question named are published first, each at the
+   * revision shown, and their migrations applied (LIVE-2).
+   */
+  publish(
+    workflow: string,
+    revision: number,
+    confirmHandover?: string,
+    dataStores?: readonly { name: string; revision: number }[]
+  ): Promise<void>;
   /** Puts the draft back on the published revision. `expectedRevision` is the draft read. */
   discard(workflow: string, expectedRevision: number): Promise<void>;
   /** Starts a test run of the draft as the reader, with the input its form gave. */

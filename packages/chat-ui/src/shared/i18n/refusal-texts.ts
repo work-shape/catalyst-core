@@ -22,6 +22,12 @@ export const refusals = defineTranslations({
       "The change “{migration}” to the data store “{dataStore}” could not be applied. The app is not published.",
     "refusals.dataStoreMigrationFailedUnnamed":
       "A change to the data store “{dataStore}” could not be applied. The app is not published.",
+    "refusals.dataStoreMigrationFailedWorkflow":
+      "The change “{migration}” to the data store “{dataStore}” could not be applied. The workflow is not published.",
+    "refusals.dataStoreMigrationFailedUnnamedWorkflow":
+      "A change to the data store “{dataStore}” could not be applied. The workflow is not published.",
+    "refusals.dataStoreJobExhaustedWorkflow":
+      "Creating or updating the data store “{dataStore}” stopped and will not be retried automatically. Ask an administrator to retry the job under System > Jobs, then publish the workflow again.",
     "refusals.dataStoreMigrating":
       "The data store “{dataStore}” is still being updated. Try again in a minute.",
     "refusals.dataHandoverNeedsOwner":
@@ -137,6 +143,12 @@ export const refusals = defineTranslations({
       "Die Änderung „{migration}“ am Datenspeicher „{dataStore}“ ließ sich nicht anwenden. Die App ist nicht veröffentlicht.",
     "refusals.dataStoreMigrationFailedUnnamed":
       "Eine Änderung am Datenspeicher „{dataStore}“ ließ sich nicht anwenden. Die App ist nicht veröffentlicht.",
+    "refusals.dataStoreMigrationFailedWorkflow":
+      "Die Änderung „{migration}“ am Datenspeicher „{dataStore}“ ließ sich nicht anwenden. Der Workflow ist nicht veröffentlicht.",
+    "refusals.dataStoreMigrationFailedUnnamedWorkflow":
+      "Eine Änderung am Datenspeicher „{dataStore}“ ließ sich nicht anwenden. Der Workflow ist nicht veröffentlicht.",
+    "refusals.dataStoreJobExhaustedWorkflow":
+      "Die Einrichtung oder Umstellung des Datenspeichers „{dataStore}“ wurde abgebrochen und wird nicht mehr automatisch versucht. Bitte einen Administrator, den Auftrag unter System > Jobs erneut zu starten. Veröffentliche danach den Workflow erneut.",
     "refusals.dataStoreMigrating":
       "Der Datenspeicher „{dataStore}“ wird noch umgestellt. Versuche es in einer Minute noch einmal.",
     "refusals.dataHandoverNeedsOwner":

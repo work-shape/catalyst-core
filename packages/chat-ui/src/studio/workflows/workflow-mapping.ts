@@ -853,6 +853,7 @@ export function toWorkflow(
       | "publishedRevision"
       | "publishQuestion"
       | "publishHandover"
+      | "publishDataStores"
       | "allowed"
       | "scope"
       | "stepFacts"
@@ -884,6 +885,18 @@ export function toWorkflow(
             testForm: startFormOf(definition.inputs),
             ...(pointers.publishQuestion?.length
               ? { publishQuestion: pointers.publishQuestion }
+              : {}),
+            ...(pointers.publishDataStores?.length
+              ? {
+                  publishDataStores: pointers.publishDataStores.map(
+                    ({ name, title, revision, pendingMigrations }) => ({
+                      name,
+                      title,
+                      revision,
+                      pendingMigrations
+                    })
+                  )
+                }
               : {}),
             ...(pointers.publishHandover?.confirmation
               ? { handoverConfirmation: pointers.publishHandover.confirmation }

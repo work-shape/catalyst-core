@@ -4,7 +4,6 @@ import {
   DATA_STORE_ASSET_KIND,
   WORKFLOW_ASSET_KIND,
   type ActorAccess,
-  type AssetScope,
   type AuthenticatedIdentity,
   type ConfigAssetRecord,
   type JsonObject,
@@ -29,6 +28,7 @@ import { APP_ASSET_KIND, requireAppPublish } from "./app-kind";
 import {
   assetTitle,
   dataStoresPublishedWith,
+  type StoreBinder,
   requireStoreLevels,
   storesStillMigrating,
   workflowsPublishedWith,
@@ -44,15 +44,20 @@ import {
 import { publishMemberRights } from "../approvals/publish-approval";
 
 // One Publish of an App makes the Data Store and Workflow drafts it names live with it (DP-3,
-// GOLIVE-1): the call names each with the revision the person reviewed, and the App's own
-// publish and theirs are checked up front, asked of the guardrails together and held as one
-// approval. A refusal of any up front publishes none. Then each store is published as its own
-// publish does it, in its own transaction, and the publish waits until each store's migrations
-// reached its level; a failed migration or a wait that runs out publishes neither the App nor
-// its Workflows. Last, the Workflows, children first, and the App go live in one transaction.
+// GOLIVE-1), and one Publish of a Workflow the Data Store drafts its steps call (LIVE-2): the
+// call names each with the revision the person reviewed, and the asset's own publish and
+// theirs are checked up front, asked of the guardrails together and held as one approval. A
+// refusal of any up front publishes none. Then each store is published as its own publish does
+// it, in its own transaction, and the publish waits until each store's migrations reached its
+// level; a failed migration or a wait that runs out publishes neither the App nor its Workflows,
+// nor the Workflow. Last, the Workflows, children first, and the App go live in one transaction;
+// a Workflow's own Publish makes it live with its account and grants (LIVE-1).
 // Spec: events-workflows-and-guardrails.md, LIVE-2; apps-and-pages.md, Going live.
 
-/** A publish of an asset, and of an App the Data Stores and Workflows it makes live with it. */
+/**
+ * A publish of an asset, of an App the Data Stores and Workflows it makes live with it, and of
+ * a Workflow the Data Stores it makes live with it.
+ */
 export type PublishTogetherInput = AssetAddress & {
   revision: number;
   audience?: AppAudience;
@@ -198,8 +203,13 @@ export class AppPublishTogether {
     // A store published stays published, and a wait takes up to a minute: the App's own checks
     // come first, including its read-only onPublish checks against the proposed revisions.
     // A refusal publishes no store and waits for none. Its Workflows' checks cannot: a
-    // Workflow asks that its children are live, which they are only further down.
-    if (members.stores.length > 0 || migrating.length > 0) {
+    // Workflow asks that its children are live, which they are only further down. A Workflow's
+    // own Publish asks what its publish asks before it moves anything: the right, the revision,
+    // the rights its account would get (LIVE-1) and that its children are live.
+    const carries = members.stores.length > 0 || migrating.length > 0;
+    if (carries && input.kind === WORKFLOW_ASSET_KIND) {
+      await this.assets.drafts.checkPublish(call, input);
+    } else if (carries) {
       const { asset, revision } = await this.assets.drafts.checkPublish(call, input);
       const workflowConfigs = new Map<string, JsonObject>();
       for (const member of members.workflows) {
@@ -234,7 +244,8 @@ export class AppPublishTogether {
     const storesPublished = await this.publishStores(
       withoutHandover(call),
       members.stores,
-      migrating
+      migrating,
+      input.kind === WORKFLOW_ASSET_KIND ? "workflow" : undefined
     );
     if (members.workflows.length === 0) {
       const published = await this.assets.drafts.publish(call, input);
@@ -262,15 +273,16 @@ export class AppPublishTogether {
   /**
    * Publishes each store as its own Publish does, in its own transaction: the pointer, the
    * record and the migrate job. Then waits until each is ready at the level of the revision
-   * published, and so is each live store the App binds whose migrations an earlier Publish
-   * left below the level the App needs. A store published here stays published whatever
-   * follows: its migrations only go forward, and publishing the App again carries on from
+   * published, and so is each live store the App or the Workflow binds whose migrations an
+   * earlier Publish left below the level it needs. A store published here stays published
+   * whatever follows: its migrations only go forward, and publishing again carries on from
    * there.
    */
   private async publishStores(
     call: AssetCall,
     named: readonly StorePublishedWith[],
-    migrating: readonly StoreStillMigrating[]
+    migrating: readonly StoreStillMigrating[],
+    publishing: "workflow" | undefined
   ) {
     const { clientInstanceId } = this.options;
     const read = (id: string) =>
@@ -283,22 +295,22 @@ export class AppPublishTogether {
       awaited.push(awaitedOf(store));
     }
     awaited.push(...migrating.map(awaitedOf));
-    if (awaited.length > 0) await awaitStoreLevels(read, awaited, this.clock);
+    if (awaited.length > 0) await awaitStoreLevels(read, awaited, this.clock, publishing);
     return published;
   }
 
   /**
-   * The live stores the App binds that an earlier Publish left below the level it needs, which
-   * this one waits for. Only those the caller may publish: the wait's refusal names the store's
-   * title, its level and its failure, and a store's level is told only to one who may publish
-   * it. Any other is refused by the App's own publish, as before.
+   * The live stores the App or the Workflow binds that an earlier Publish left below the level
+   * it needs, which this one waits for. Only those the caller may publish: the wait's refusal
+   * names the store's title, its level and its failure, and a store's level is told only to
+   * one who may publish it. Any other is refused by the App's own publish, as before.
    */
   private async storesToAwait(
     call: AssetCall,
     input: PublishTogetherInput,
     named: readonly StorePublishedWith[]
   ): Promise<StoreStillMigrating[]> {
-    const app = input.kind === APP_ASSET_KIND ? await this.appRevision(input) : undefined;
+    const app = await this.binderOf(input);
     if (!app) return [];
     const skip = new Set(named.map(({ name }) => name));
     const migrating = await storesStillMigrating(this.options, app, skip);
@@ -311,45 +323,54 @@ export class AppPublishTogether {
     );
   }
 
-  /** The App's revision the call names, or nothing where its own publish refuses it. */
-  private async appRevision(
-    input: PublishTogetherInput
-  ): Promise<{ scope: AssetScope; config: JsonObject } | undefined> {
+  /**
+   * The revision of the App or the Workflow the call names, which binds the stores its Publish
+   * carries; nothing for another kind, or where its own publish refuses the revision.
+   */
+  private async binderOf(input: PublishTogetherInput): Promise<StoreBinder | undefined> {
+    const { kind } = input;
+    if (kind !== APP_ASSET_KIND && kind !== WORKFLOW_ASSET_KIND) return undefined;
     const { clientInstanceId, configAssets } = this.options;
-    const app = await configAssets.store.getConfigAsset({
+    const asset = await configAssets.store.getConfigAsset({
       clientInstanceId,
-      kind: APP_ASSET_KIND,
+      kind,
       name: input.name
     });
-    const revision = app
+    const revision = asset
       ? await configAssets.store.getConfigAssetRevision({
           clientInstanceId,
-          kind: APP_ASSET_KIND,
+          kind,
           name: input.name,
           revision: input.revision
         })
       : undefined;
-    return app && revision?.config && revision.assetId === app.id
-      ? { scope: app.scope, config: revision.config }
+    return asset && revision?.config && revision.assetId === asset.id
+      ? { kind, scope: asset.scope, config: revision.config }
       : undefined;
   }
 
-  /** The stores and Workflows the call names to publish with an App, checked and ordered. */
+  /**
+   * The stores and Workflows the call names to publish with an App, or the stores it names to
+   * publish with a Workflow (LIVE-2), checked and ordered.
+   */
   private async members(
     input: PublishTogetherInput,
     check: { levels: boolean } = { levels: true }
   ): Promise<Members> {
     if (!input.workflows?.length && !input.dataStores?.length) return NONE;
-    if (input.kind !== APP_ASSET_KIND) {
+    const withWorkflow = input.kind === WORKFLOW_ASSET_KIND && !input.workflows?.length;
+    if (input.kind !== APP_ASSET_KIND && !withWorkflow) {
       throw new AppError(
         "VALIDATION_FAILED",
-        "Only the publish of an App makes Workflows and Data Stores live with it",
+        input.workflows?.length
+          ? "Only the publish of an App makes Workflows live with it"
+          : "Only the publish of an App or a Workflow makes Data Stores live with it",
         { reason: input.workflows?.length ? "workflows_without_app" : "data_stores_without_app" },
         { exposeMessage: true }
       );
     }
-    // Nothing of the App to make live: its own publish refuses that.
-    const of = await this.appRevision(input);
+    // Nothing of the App or the Workflow to make live: its own publish refuses that.
+    const of = await this.binderOf(input);
     if (!of) return NONE;
     const workflows = input.workflows?.length
       ? await workflowsPublishedWith(this.options, of, input.workflows)

@@ -172,15 +172,32 @@ const DATA_STORE_ROWS = {
     action: toDataStore
   },
   data_store_migration_failed: {
-    // A migration without a name of its own is named by its level: then it is not named.
-    sentence: (details, t) =>
-      /^\d*$/u.test(text(details, "migration"))
-        ? namingStore("refusals.dataStoreMigrationFailedUnnamed")(details, t)
-        : namingStore("refusals.dataStoreMigrationFailed", "migration")(details, t),
+    // A migration without a name of its own is named by its level: then it is not named. A
+    // Workflow's Publish that carried the store says the Workflow did not go live (LIVE-2).
+    sentence: (details, t) => {
+      const workflow = text(details, "publishing") === "workflow";
+      return /^\d*$/u.test(text(details, "migration"))
+        ? namingStore(
+            workflow
+              ? "refusals.dataStoreMigrationFailedUnnamedWorkflow"
+              : "refusals.dataStoreMigrationFailedUnnamed"
+          )(details, t)
+        : namingStore(
+            workflow
+              ? "refusals.dataStoreMigrationFailedWorkflow"
+              : "refusals.dataStoreMigrationFailed",
+            "migration"
+          )(details, t);
+    },
     action: toDataStore
   },
   data_store_job_exhausted: {
-    sentence: namingStore("refusals.dataStoreJobExhausted"),
+    sentence: (details, t) =>
+      namingStore(
+        text(details, "publishing") === "workflow"
+          ? "refusals.dataStoreJobExhaustedWorkflow"
+          : "refusals.dataStoreJobExhausted"
+      )(details, t),
     action: toDataStore
   },
   data_store_migrating: {

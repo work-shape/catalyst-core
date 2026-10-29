@@ -23,6 +23,11 @@ export const workflowDraft = defineTranslations({
       "Version {number} becomes the one that runs on its schedule.",
     "workflows.draft.publishFailed": "The draft could not be published.",
     "workflows.draft.publishRaises": "Limits this version raises",
+    "workflows.draft.publishStore": "Publishes the data store “{title}” first.",
+    "workflows.draft.publishStoreMigrationOne":
+      "Publishes the data store “{title}” first and applies 1 change to its tables: {migrations}.",
+    "workflows.draft.publishStoreMigrations":
+      "Publishes the data store “{title}” first and applies {count} changes to its tables: {migrations}.",
     "workflows.draft.publishTitle": "Publish “{name}”?",
     "workflows.draft.unpublished": "Draft · not published",
     "workflows.draft.unpublishedBody":
@@ -49,6 +54,11 @@ export const workflowDraft = defineTranslations({
       "Version {number} wird die, die nach ihrem Zeitplan läuft.",
     "workflows.draft.publishFailed": "Der Entwurf konnte nicht veröffentlicht werden.",
     "workflows.draft.publishRaises": "Grenzen, die diese Version anhebt",
+    "workflows.draft.publishStore": "Veröffentlicht zuerst den Datenspeicher „{title}“.",
+    "workflows.draft.publishStoreMigrationOne":
+      "Veröffentlicht zuerst den Datenspeicher „{title}“ und wendet 1 Änderung an seinen Tabellen an: {migrations}.",
+    "workflows.draft.publishStoreMigrations":
+      "Veröffentlicht zuerst den Datenspeicher „{title}“ und wendet {count} Änderungen an seinen Tabellen an: {migrations}.",
     "workflows.draft.publishTitle": "„{name}“ veröffentlichen?",
     "workflows.draft.unpublished": "Entwurf · nicht veröffentlicht",
     "workflows.draft.unpublishedBody":
