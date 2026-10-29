@@ -133,7 +133,12 @@ test("all projects: the rail group, the scope filter with workspace chips, and a
       .getByTestId("rail-project-private")
   ).toBeVisible();
   await expect(railGroup.getByText(otherTitle)).toHaveCount(0);
-  await expect(railGroup.getByTestId("rail-projects-all")).toHaveText("Alle Projekte");
+  // The label leads to the page; no "Alle Projekte" row stands under the projects.
+  await expect(railGroup.getByText("Alle Projekte")).toHaveCount(0);
+  await expect(railGroup.getByRole("link", { name: "Projekte", exact: true })).toHaveAttribute(
+    "href",
+    `/w/${salesId}/projects`
+  );
   await expect(page.getByTestId("project-card")).toHaveCount(2);
 
   // The plus of the group makes a project in the open workspace.

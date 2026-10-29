@@ -12,7 +12,6 @@ export const projects = defineTranslations({
     "projects.emptyAll": "No projects in your workspaces yet.",
     "projects.chatCount": "{count} chats",
     "projects.chatCountOne": "1 chat",
-    "projects.railAll": "All projects",
     "projects.railAllChats": "All chats",
     "projects.railChatsOf": "Chats in {project}",
     // Its own name: the page's "New project" button stands beside it on the Projects page.
@@ -72,7 +71,6 @@ export const projects = defineTranslations({
     "projects.emptyAll": "Noch keine Projekte in deinen Arbeitsbereichen.",
     "projects.chatCount": "{count} Chats",
     "projects.chatCountOne": "1 Chat",
-    "projects.railAll": "Alle Projekte",
     "projects.railAllChats": "Alle Chats",
     "projects.railChatsOf": "Chats in {project}",
     "projects.railNew": "Projekt hinzufügen",

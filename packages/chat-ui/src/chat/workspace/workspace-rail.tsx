@@ -111,6 +111,8 @@ interface WorkspaceRailProps {
    */
   activeProject?: { id: string; chats: readonly ConversationListItem[] };
   onOpenProject?: (project: string) => void;
+  /** The address of the Projects page of the open workspace: the group's label links to it. */
+  projectsHref?: string;
   /** The plus on the Projects group's label makes a project in the open workspace. */
   onCreateProject?: () => void;
   /**
@@ -354,8 +356,8 @@ function RailBranding({ config }: { config: SafeConfig }) {
 }
 
 /**
- * The projects of the open workspace used last, above "Recent", and a row to all of them
- * (PRJ-5). A private project carries the lock a private conversation carries. The active project
+ * The projects of the open workspace used last, above "Recent", under a label that links to the
+ * Projects page with all of them (PRJ-5, Felix 2026-10-29: no "All projects" row). A private project carries the lock a private conversation carries. The active project
  * stands among them even when it was used earlier, and unfolds to its newest chats with a row to
  * its page. Without a project the group shows its label with the plus alone, so a person finds
  * where projects are made. Nothing shows while projects are off, or in the collapsed strip.
@@ -368,7 +370,8 @@ function RecentProjects(props: WorkspaceRailProps) {
     activeProject,
     onOpenProject,
     onCreateProject,
-    onViewChange
+    onViewChange,
+    projectsHref
   } = props;
   const { t } = useTranslation();
   if (useSidebarCollapsed() || !projects) {
@@ -383,6 +386,26 @@ function RecentProjects(props: WorkspaceRailProps) {
     <NavGroup
       label={t("projects.title")}
       data-testid="rail-projects"
+      labelLink={
+        projectsHref
+          ? {
+              href: projectsHref,
+              onClick: (event) => {
+                // A plain click routes in place; a modified one opens the page as the browser does.
+                if (
+                  event.button === 0 &&
+                  !event.metaKey &&
+                  !event.ctrlKey &&
+                  !event.shiftKey &&
+                  !event.altKey
+                ) {
+                  event.preventDefault();
+                  onViewChange("projects");
+                }
+              }
+            }
+          : undefined
+      }
       labelAction={
         onCreateProject ? (
           <IconButton size="sm" label={t("projects.railNew")} onClick={onCreateProject}>
@@ -430,18 +453,6 @@ function RecentProjects(props: WorkspaceRailProps) {
           </Fragment>
         );
       })}
-      {rows.length > 0 ? (
-        <NavItem
-          // The words start where the names of the projects start.
-          className="pl-8 text-muted-foreground"
-          data-testid="rail-projects-all"
-          // The current row on the Projects page, as the project's row is on its page.
-          selected={props.view === "projects" && !rows.some(({ name }) => name === openProjectName)}
-          onClick={() => onViewChange("projects")}
-        >
-          {t("projects.railAll")}
-        </NavItem>
-      ) : null}
     </NavGroup>
   );
 }
