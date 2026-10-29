@@ -75,8 +75,10 @@ export function NavItem({
     "transition-colors hover:bg-state-hover",
     selected && "bg-state-selected font-medium hover:bg-state-selected"
   );
+  // The focus line lies inside the row: in a scrolling sidebar the edge of the scroll area cuts
+  // off whatever stands outside a row at its top or bottom.
   const classes = cn(
-    "relative flex h-8 w-full min-w-0 shrink-0 items-center gap-2 rounded-md px-2 text-left text-body text-foreground focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
+    "relative flex h-8 w-full min-w-0 shrink-0 items-center gap-2 rounded-md px-2 text-left text-body text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
     collapsed && "w-8 justify-center px-0",
     withTrailing ? "w-auto flex-1" : cn(fill, className)
   );
