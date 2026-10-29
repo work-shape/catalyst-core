@@ -594,13 +594,16 @@ test("a Connection says who may use it: the roles first, then each person with t
     await expect(person).toContainText("View, Use");
     await expect(person).not.toContainText("Edit");
 
-    // The person reads the page and manages no users: the roles, and a count of the rest.
+    // The person reads the page and manages no users: the built-in roles, and no one counted.
     await reader.goto(`/build/connections/${connection.name}`);
     const readerSection = reader.locator('[id="access"]');
     await expect(readerSection.getByText("Who may use it", { exact: true })).toBeVisible();
     await expect(readerSection.locator('[data-holder-kind="role"]').first()).toBeVisible();
     await expect(readerSection.locator('[data-holder-kind="person"]')).toHaveCount(0);
-    await expect(readerSection.getByText("1 more you are not shown")).toBeVisible();
+    await expect(readerSection.locator("[data-holders-not-shown]")).toHaveText(
+      "People, groups and custom roles with a right are shown to those who manage users."
+    );
+    await expect(readerSection).not.toContainText("more you are not shown");
   } finally {
     await readerContext.close();
     await removeGrantsOn(connection.id);

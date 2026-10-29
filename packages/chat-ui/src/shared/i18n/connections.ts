@@ -124,8 +124,8 @@ export const connections = defineTranslations({
     "connections.accessGroup": "Group",
     "connections.accessServicePrincipal": "Service principal",
     "connections.accessPrincipalDisabled": "Disabled",
-    "connections.accessHiddenOne": "1 more you are not shown",
-    "connections.accessHiddenMany": "{count} more you are not shown",
+    "connections.accessHoldersNotShown":
+      "People, groups and custom roles with a right are shown to those who manage users.",
     "connections.agentsTitle": "Used by",
     "connections.agentsDescription": "The agents that carry a tool of this connection.",
     "connections.agentsEmpty": "No agent carries a tool of this connection.",
@@ -397,8 +397,8 @@ export const connections = defineTranslations({
     "connections.accessGroup": "Gruppe",
     "connections.accessServicePrincipal": "Technisches Konto",
     "connections.accessPrincipalDisabled": "Deaktiviert",
-    "connections.accessHiddenOne": "1 weitere, die du nicht sehen darfst",
-    "connections.accessHiddenMany": "{count} weitere, die du nicht sehen darfst",
+    "connections.accessHoldersNotShown":
+      "Personen, Gruppen und eigene Rollen mit einem Recht sieht nur, wer Benutzer verwaltet.",
     "connections.agentsTitle": "Verwendet von",
     "connections.agentsDescription": "Die Agenten, die ein Tool dieser Verbindung führen.",
     "connections.agentsEmpty": "Kein Agent führt ein Tool dieser Verbindung.",

@@ -6566,16 +6566,14 @@
                         ]
                       }
                     },
-                    "hidden": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
+                    "holdersShown": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "roles",
                     "holders",
-                    "hidden"
+                    "holdersShown"
                   ]
                 }
               }

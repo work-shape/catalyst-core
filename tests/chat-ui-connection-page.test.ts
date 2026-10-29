@@ -842,7 +842,7 @@ describe("Connection page", () => {
             verbs: ["use"]
           }
         ],
-        hidden: 2
+        holdersShown: true
       }
     };
     const markup = renderPage({ holders });
@@ -863,18 +863,40 @@ describe("Connection page", () => {
     expect(service).toContain(">Service principal<");
     expect(service).toContain(">Disabled<");
     expect(service).toContain('href="/settings/instance/api-access?principal=spn_1"');
-    expect(markup).toContain("2 more you are not shown");
+    expect(markup).not.toContain("data-holders-not-shown");
 
     const german = renderPage({ holders, locale: "de" });
     expect(german).toContain(">Wer sie verwenden darf<");
     expect(german).toContain("Ansehen, Verwenden");
-    expect(german).toContain("2 weitere, die du nicht sehen darfst");
     expect(german).toContain("über „Verfügbar in“");
+  });
+
+  // A reader who manages no users is told the built-in roles, and that the rest is not shown.
+  it("names only the built-in roles to a reader who manages no users, and counts nobody", () => {
+    const holders: ConnectionHoldersRead = {
+      status: "ready",
+      access: {
+        roles: [{ id: "admin", name: "admin", builtIn: true, verbs: ["read", "use"] }],
+        holders: [],
+        holdersShown: false
+      }
+    };
+    const markup = renderPage({ holders });
+    const kinds = [...markup.matchAll(/data-holder-kind="([a-z_]+)"/gu)].map((match) => match[1]);
+    expect(kinds).toEqual(["role"]);
+    expect(markup).toContain("data-holders-not-shown");
+    expect(markup).toContain(
+      "People, groups and custom roles with a right are shown to those who manage users."
+    );
+    expect(markup).not.toContain("No role and nobody has a right on this Connection.");
+    expect(renderPage({ holders, locale: "de" })).toContain(
+      "Personen, Gruppen und eigene Rollen mit einem Recht sieht nur, wer Benutzer verwaltet."
+    );
   });
 
   it("says when no role and nobody has a right on it", () => {
     const markup = renderPage({
-      holders: { status: "ready", access: { roles: [], holders: [], hidden: 0 } }
+      holders: { status: "ready", access: { roles: [], holders: [], holdersShown: true } }
     });
     expect(markup).toContain("No role and nobody has a right on this Connection.");
     expect(markup).toContain("Workspace members use it through Available in");

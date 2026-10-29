@@ -408,12 +408,14 @@ const connectionAccessVerbsSchema = z.array(z.enum(CONNECTION_ACCESS_VERBS));
 /**
  * Who may use one Connection (CONN-WHO-1): the roles that hold a right on it, then each person,
  * group and service principal that holds one by a row of its own, each with what it may do. A
- * role's people hold their rights through the role and are not listed again. A custom role, a
- * person and a group are named only to a caller who manages users, a service principal only to
- * one who also sees service principals; every other holder is counted in `hidden`.
+ * role's people hold their rights through the role and are not listed again. Every caller who
+ * reads the Connection gets the built-in roles. Custom roles, people and groups come only to a
+ * caller who manages users (`users.manage` with the `user_admin:read` scope), and service
+ * principals only to one who also sees service principals. Whom the caller may not see is
+ * neither named nor counted.
  */
 export const connectionAccessSchema = z.object({
-  /** The built-in roles first, from `superadmin` down, then custom roles by name. */
+  /** The built-in roles first, from `superadmin` down, then, where shown, custom roles by name. */
   roles: z.array(
     z.object({
       id: z.string(),
@@ -434,8 +436,12 @@ export const connectionAccessSchema = z.object({
       verbs: connectionAccessVerbsSchema
     })
   ),
-  /** How many more roles and holders hold a right on it whom the caller may not be shown. */
-  hidden: z.number().int()
+  /**
+   * Whether the caller is shown custom roles, people and groups. False for a caller who manages
+   * no users: `roles` then holds the built-in roles only and `holders` is empty, whoever holds a
+   * right.
+   */
+  holdersShown: z.boolean()
 });
 
 export type ConnectionAccess = z.infer<typeof connectionAccessSchema>;

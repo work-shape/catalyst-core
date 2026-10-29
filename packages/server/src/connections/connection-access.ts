@@ -3,6 +3,7 @@ import {
   BUILT_IN_ROLES,
   CONNECTION_ACTIONS,
   asUserId,
+  hasAuthScope,
   isSuperadmin,
   type ActorAccess,
   type AuthenticatedUser,
@@ -13,14 +14,19 @@ import { seesPrincipals } from "../access/grant-holder-rules";
 import { unstoredBuiltInRole } from "../access/role-rights";
 import type { ChatServerOptions } from "../types";
 
-// Who may use one Connection (CONN-WHO-1), read under the Connection's own read right. The
-// roles that hold a right on it come first, then every person, group and service principal
-// that holds one by a row of its own. Each says what it may do: a right is held where an allow
-// covers this Connection and no deny of the same holder does, at instance scope or on this
-// Connection alone. The people of a role are not listed again.
+// Who may use one Connection (CONN-WHO-1), read under the Connection's own read right. Every
+// reader gets the built-in roles that hold a right on it. A reader who manages users also gets
+// the custom roles, then every person, group and service principal that holds one by a row of
+// its own; a service principal only where the reader may see service principals. Nothing the
+// reader may not see is named or counted. Each says what it may do: a right is held where an
+// allow covers this Connection and no deny of the same holder does, at instance scope or on
+// this Connection alone. The people of a role are not listed again.
 
 /** The right that names who holds a right: the one that administers users and their grants. */
 const NAMES_HOLDERS = "users.manage";
+
+/** What a credential carries to read the administration of users. */
+const USER_ADMIN_READ_SCOPE = "user_admin:read";
 
 /** How many grant rows one read looks through per right. */
 const MAX_GRANT_ROWS = 1_000;
@@ -46,12 +52,12 @@ export async function readConnectionAccess(
   assetId: string
 ): Promise<ConnectionAccess> {
   const { clientInstanceId, stores } = options;
-  const names = caller.access.authorize(NAMES_HOLDERS).allowed;
-  const namesPrincipals = names && seesPrincipals(caller.actor, caller.access);
-  let hidden = 0;
+  const names =
+    hasAuthScope(caller.actor, USER_ADMIN_READ_SCOPE) &&
+    caller.access.authorize(NAMES_HOLDERS).allowed;
 
-  // The roles: the built-in ones as they are now, from `superadmin` down, then the custom ones
-  // by name. `superadmin` is the floor and never stored.
+  // The roles: the built-in ones as they are now, from `superadmin` down, then, for a reader
+  // who manages users, the custom ones by name. `superadmin` is the floor and never stored.
   const stored = await stores.roles.listRoles({ clientInstanceId });
   const roles: { id: string; name: string; builtIn: boolean; grants: RoleGrant[] }[] = [
     ...[...BUILT_IN_ROLES]
@@ -59,28 +65,31 @@ export async function readConnectionAccess(
       .map(
         (id) => stored.find((role) => role.id === id) ?? unstoredBuiltInRole(clientInstanceId, id)
       ),
-    ...stored
-      .filter((role) => !role.builtIn)
-      .sort((left, right) => left.name.localeCompare(right.name))
+    ...(names
+      ? stored
+          .filter((role) => !role.builtIn)
+          .sort((left, right) => left.name.localeCompare(right.name))
+      : [])
   ];
-  const roleViews: ConnectionAccess["roles"] = [];
-  for (const role of roles) {
+  const roleViews: ConnectionAccess["roles"] = roles.flatMap((role) => {
     const verbs = verbsOnConnection(role.grants, assetId);
-    if (verbs.length === 0) continue;
-    if (!role.builtIn && !names) {
-      hidden += 1;
-      continue;
-    }
-    roleViews.push({ id: role.id, name: role.name, builtIn: role.builtIn, verbs });
+    return verbs.length === 0
+      ? []
+      : [{ id: role.id, name: role.name, builtIn: role.builtIn, verbs }];
+  });
+  if (!names) {
+    return { roles: roleViews, holders: [], holdersShown: false };
   }
 
   // The rows of people, groups and principals: on this Connection, and on every Connection.
+  const namesPrincipals = seesPrincipals(caller.actor, caller.access);
   const read = (filter: { action?: string; scopeKind: "instance" | "asset"; scopeId?: string }) =>
     stores.access.listGrants({
       clientInstanceId,
       ...filter,
       // The user list hides superadmins from everyone else, and so do the rows they hold.
       excludeSuperadminHolders: !isSuperadmin(caller.actor),
+      excludeServicePrincipalHolders: !namesPrincipals,
       excludeOwnedPrincipalHolders: true,
       page: { limit: MAX_GRANT_ROWS }
     });
@@ -92,8 +101,9 @@ export async function readConnectionAccess(
   ).flat();
   const byHolder = new Map<string, { kind: Holder["kind"]; id: string; rows: Row[] }>();
   for (const row of rows) {
-    // A role's rows are the role's, read above.
+    // A role's rows are the role's, read above. A principal's only where the reader sees them.
     if (row.holderKind === "role") continue;
+    if (row.holderKind === "service_principal" && !namesPrincipals) continue;
     const key = `${row.holderKind}\u0000${row.holderId}`;
     const entry = byHolder.get(key) ?? { kind: row.holderKind, id: row.holderId, rows: [] };
     entry.rows.push(row);
@@ -112,10 +122,6 @@ export async function readConnectionAccess(
   for (const entry of byHolder.values()) {
     const verbs = verbsOnConnection(entry.rows, assetId);
     if (verbs.length === 0) continue;
-    if (!(entry.kind === "service_principal" ? namesPrincipals : names)) {
-      hidden += 1;
-      continue;
-    }
     if (entry.kind === "user") {
       const user = await stores.users.getUser({ clientInstanceId, userId: asUserId(entry.id) });
       holders.push({ kind: "user", id: entry.id, title: user?.displayLabel ?? entry.id, verbs });
@@ -137,5 +143,5 @@ export async function readConnectionAccess(
   holders.sort(
     (left, right) => rank[left.kind] - rank[right.kind] || left.title.localeCompare(right.title)
   );
-  return { roles: roleViews, holders, hidden };
+  return { roles: roleViews, holders, holdersShown: true };
 }
