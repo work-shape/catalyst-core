@@ -113,6 +113,7 @@ export const projectSettings = defineTranslations({
       "Nur wer in beiden Arbeitsbereichen Mitglied ist, verschiebt ein Projekt.",
     "projectSettings.changed":
       "Wer das Projekt sieht, hat sich inzwischen geändert. Schließ den Dialog und sieh noch einmal nach.",
-    "projectSettings.deleteChatsOff": "Chats löschen ist hier ausgeschaltet. Behalte sie stattdessen."
+    "projectSettings.deleteChatsOff":
+      "Chats löschen ist hier ausgeschaltet. Behalte sie stattdessen."
   }
 });
