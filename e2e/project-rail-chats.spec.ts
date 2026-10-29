@@ -98,8 +98,9 @@ test("a project's chats in the rail: the open project unfolds, Zuletzt leaves it
   pageErrors
 }) => {
   test.setTimeout(90_000);
-  // Its own per run: runs side by side share the two people.
-  const suffix = randomUUID().slice(0, 6);
+  // Its own per run: runs side by side share the two people. Digits, which the title of a chat
+  // keeps as they are.
+  const suffix = String(Date.now()).slice(-7);
   const workspace = `Objekte ${suffix}`;
   const sharedTitle = `Hoheluft ${suffix}`;
   const privateTitle = `Notizen ${suffix}`;
