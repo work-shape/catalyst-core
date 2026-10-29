@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
-import { InboxList, item, now, render, renderItem } from "./chat-ui-inbox-harness";
+import { QueryClient } from "@tanstack/react-query";
+import {
+  INBOX_API_BASE_URL,
+  InboxList,
+  item,
+  now,
+  render,
+  renderItem
+} from "./chat-ui-inbox-harness";
 
 // NOTIFY-a: a notice in its reader's Inbox reads as its title and paragraph, leads to the run
 // or the App it names, and asks for nothing but "mark handled".
@@ -49,6 +57,71 @@ describe("inbox item of a notice", () => {
     expect(markup).toMatch(
       /href="\/w\/cws_team\/workflows\/wf_1\/runs\/wfr_1"[^>]*>Open the run<\/a>/u
     );
+  });
+
+  // LU-6: the reader of a run's notice may tell the Workflow's builders about the result, once.
+  describe("feedback on the result", () => {
+    const runNotice = {
+      ...notice({
+        ...appNotice,
+        link: { kind: "workflow_run", workspaceId: "cws_team", workflowId: "wf_1", runId: "wfr_1" }
+      }),
+      id: "apr_notice"
+    };
+    const host = (resultFeedback: boolean) => ({
+      currentUserId: "user-ada",
+      personalWorkspaceAgentName: () => undefined,
+      startRevision: () => undefined,
+      agentDisplayName: () => undefined,
+      openConversation: () => undefined,
+      resultFeedback
+    });
+    /** The reader's own comment on the run, as the notice read it. */
+    const read = (own: Record<string, unknown> | null) => {
+      const queryClient = new QueryClient();
+      queryClient.setQueryData(["feedback", "result", INBOX_API_BASE_URL, "apr_notice"], own);
+      return queryClient;
+    };
+
+    it("is offered once the reader's comment is known to be none, and only with the module on", () => {
+      const offered = renderItem(runNotice, {
+        locale: "en",
+        host: host(true),
+        queryClient: read(null)
+      });
+      expect(offered).toMatch(
+        /data-testid="result-feedback-action"[^>]*>.*Feedback on this result/u
+      );
+      // Until the comment is read nothing is offered, and nothing with the module off.
+      expect(renderItem(runNotice, { locale: "en", host: host(true) })).not.toContain(
+        "result-feedback"
+      );
+      expect(
+        renderItem(runNotice, { locale: "en", host: host(false), queryClient: read(null) })
+      ).not.toContain("result-feedback");
+      // A notice that leads to an App has no run to comment on.
+      expect(
+        renderItem(
+          { ...notice(appNotice), id: "apr_notice" },
+          { locale: "en", host: host(true), queryClient: read(null) }
+        )
+      ).not.toContain("result-feedback");
+    });
+
+    it("says the state of the comment once sent, in German", () => {
+      const own = {
+        id: "fb_1",
+        state: "handled",
+        text: "Der Kontoauszug war doch da.",
+        includesExchange: false,
+        createdAt: "2026-10-29T10:00:00.000Z"
+      };
+      const markup = renderItem(runNotice, { host: host(true), queryClient: read(own) });
+      expect(markup).toMatch(/data-feedback-state="handled"[^>]*>.*Feedback erledigt/u);
+      expect(markup).not.toContain("result-feedback-action");
+      // The comment is the reader's own; the notice does not show it back.
+      expect(markup).not.toContain("Der Kontoauszug war doch da.");
+    });
   });
 
   it("offers no answer once handled, and no link where it names none", () => {

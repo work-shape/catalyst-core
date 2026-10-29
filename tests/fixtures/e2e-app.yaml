@@ -111,6 +111,10 @@ modules:
   # Projects are on: the projects spec makes a shared and a private one.
   projects:
     enabled: true
+  # Feedback is on: the feedback spec sends a comment from a published App and on a Workflow's
+  # result, and a reviewer reads both in the Inbox.
+  feedback:
+    enabled: true
 # The addresses a Connection of the suite may reach. Nothing listens on the first and the `test`
 # connector type contacts nothing: the entry is what lets a test of a Connection answer ready.
 # The second is replaced by the runner with free loopback ports for the sample MCP servers

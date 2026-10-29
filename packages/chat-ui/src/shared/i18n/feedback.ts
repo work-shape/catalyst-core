@@ -1,6 +1,6 @@
 import { defineTranslations } from "./translation-area";
 
-/** Feedback on agent answers: the action under a message and the reviewer's Inbox item. */
+/** Feedback on agent answers, Apps and Workflow results: the action that sends it and the reviewer's Inbox item. */
 export const feedback = defineTranslations({
   en: {
     "feedback.action": "Feedback",
@@ -33,6 +33,12 @@ export const feedback = defineTranslations({
     "feedback.noExchange": "The author did not include the question and the answer.",
     "feedback.gone": "The author withdrew this feedback, or it was removed.",
     "feedback.openAgent": "Open the agent",
+    "feedback.openApp": "Open the App",
+    "feedback.openRun": "Open the run",
+    "feedback.reviewHeadingApp": "Feedback on the App {agent}",
+    "feedback.reviewHeadingWorkflow": "Feedback on a result of {agent}",
+    "feedback.resultAction": "Feedback on this result",
+    "feedback.resultHint": "The people who build this Workflow read it, with your name.",
     "feedback.markHandled": "Mark handled"
   },
   de: {
@@ -69,6 +75,12 @@ export const feedback = defineTranslations({
     "feedback.noExchange": "Die Person hat ihre Frage und die Antwort nicht mitgeschickt.",
     "feedback.gone": "Die Person hat dieses Feedback zurückgezogen, oder es wurde entfernt.",
     "feedback.openAgent": "Agent öffnen",
+    "feedback.openApp": "App öffnen",
+    "feedback.openRun": "Lauf öffnen",
+    "feedback.reviewHeadingApp": "Feedback zur App {agent}",
+    "feedback.reviewHeadingWorkflow": "Feedback zu einem Ergebnis von {agent}",
+    "feedback.resultAction": "Feedback zu diesem Ergebnis",
+    "feedback.resultHint": "Die Personen, die diesen Workflow bauen, lesen es mit deinem Namen.",
     "feedback.markHandled": "Als erledigt markieren"
   }
 });

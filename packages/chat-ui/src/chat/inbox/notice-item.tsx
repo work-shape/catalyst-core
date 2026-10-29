@@ -4,6 +4,7 @@ import { RouteLink } from "../../studio/route-link";
 import { useTranslation } from "../../shared/i18n";
 import type { WorkspaceRoute } from "../../shared/workspace-route";
 import { useApprovalRevisionHost } from "../approvals/approval-revision-host";
+import { ResultFeedback } from "../feedback/result-feedback";
 import type { InboxItemActions } from "./inbox-item-actions";
 
 // A notice in its reader's Inbox: a title, one paragraph and where it leads, such as the run
@@ -81,6 +82,10 @@ export function NoticeBody({ item }: { item: ApprovalRequestView }) {
             {t(notice.link.kind === "app" ? "inbox.noticeOpenApp" : "inbox.noticeOpenRun")}
           </RouteLink>
         </div>
+      ) : null}
+      {/* The reader of a run's notice may tell its builders about the result (LU-6). */}
+      {notice.link?.kind === "workflow_run" && host?.resultFeedback === true ? (
+        <ResultFeedback item={item} />
       ) : null}
     </div>
   );

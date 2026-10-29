@@ -31,6 +31,8 @@ export interface ApprovalRevisionHost {
   openInboxItem?(itemId: string): void;
   /** Opens a place of the workspace, such as the run or the App a notice links to. */
   openRoute?(route: WorkspaceRoute): void;
+  /** The instance has the feedback module on: a notice of a Workflow run offers feedback (LU-6). */
+  resultFeedback?: boolean;
   /** Where the Inbox's items come from and lead to, as far as this reader may know. */
   places?: InboxPlaces;
 }

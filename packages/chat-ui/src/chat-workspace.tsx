@@ -588,7 +588,8 @@ function ChatWorkspaceContent({
         ? { id: activeWorkspace.id, name: activeWorkspaceName }
         : null,
     theme: model.config.theme ?? DEFAULT_THEME_INPUTS[themeMode],
-    mode: themeMode
+    mode: themeMode,
+    feedbackModule: model.config.config.modules.feedback?.enabled === true
   };
   // The conversation on screen and its agent: what a card in it tells, as the person.
   const cardConversation =
