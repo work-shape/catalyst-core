@@ -32,6 +32,7 @@ import { useApprovalRevisionHost } from "../approvals/approval-revision-host";
 import { ApprovalRefreshButton, ApprovalStatusBadge } from "../approvals/approval-status-badge";
 import { isInboxConfirmation } from "../approvals/operation-call-preview";
 import { useAttachmentContentContext } from "../files/attachment-content";
+import { useEmbeddedSession } from "../../shared/embedded-session";
 import { useTranslation } from "../../shared/i18n";
 import { RouteLink } from "../../studio/route-link";
 import { INBOX_REFETCH_MS } from "./inbox-api";
@@ -373,7 +374,7 @@ function InboxItemFoot({
  * for changes without one would tell the agent nothing, so it asks for one.
  */
 function InboxDecisionForm({
-  decisions,
+  decisions: entries,
   actions,
   comment,
   onCommentChange,
@@ -387,6 +388,11 @@ function InboxDecisionForm({
   approveHeld?: boolean;
 }) {
   const { t } = useTranslation();
+  // "Always allow" sets the person's own confirmations: an embedding host's session is refused it.
+  const embedded = useEmbeddedSession();
+  const decisions: InboxDecisionEntries = embedded
+    ? entries.filter((entry) => !entry.alwaysAllow)
+    : entries;
   const commentRef = useRef<HTMLTextAreaElement>(null);
   const [commentMissing, setCommentMissing] = useState(false);
 

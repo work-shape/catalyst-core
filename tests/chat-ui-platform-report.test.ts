@@ -220,6 +220,17 @@ describe("reporting a platform problem", () => {
     expect(platformReportSetup(config(true), undefined)).toBeUndefined();
   });
 
+  it("is not offered in an embedding host's session, which the server refuses the report", () => {
+    const config: Pick<SafeConfig, "clientInstance" | "platformReport"> = {
+      clientInstance: { id: "client_test", displayName: "Test instance", environment: "test" },
+      platformReport: { available: true }
+    };
+    expect(platformReportSetup(config, "conv_1", true)).toBeUndefined();
+    expect(platformReportSetup(config, "conv_1", false)).toMatchObject({
+      conversationId: "conv_1"
+    });
+  });
+
   it("takes a run's platform code and no other failure", () => {
     expect(
       platformFailureOfRunError({ class: "run_failed", code: AGENT_RUN_COMMAND_NOT_TAKEN_CODE })

@@ -8,6 +8,7 @@ export {
   assetPlace,
   refusalPlaceOf
 } from "../../../packages/chat-ui/src/studio/build-area/asset-place";
+export { SkillMyChats } from "../../../packages/chat-ui/src/studio/build-area/skill-my-chats";
 export { AgentSkills } from "../../../packages/chat-ui/src/studio/build-area/agent-skills";
 export { AgentKnowledge } from "../../../packages/chat-ui/src/studio/build-area/agent-knowledge";
 export {

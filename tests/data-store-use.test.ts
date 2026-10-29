@@ -42,6 +42,7 @@ import { clientInstanceId, useDataStoreInstance } from "./support/data-store-ins
 import type { DataStoreInstance } from "./support/data-store-instance";
 import { seed, store } from "./support/reference-owners";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
+import { EmbeddedSessionProvider } from "./support/chat-ui";
 
 // STORE-USE-1: the agent's `data_store.use` adds a Data Store to the conversation for reading,
 // beside its subject. The person's own store is added at once; any other waits for their click
@@ -807,5 +808,20 @@ describe("the Data Store card", () => {
     expect(added).toContain('data-state="added"');
     expect(added).toContain("„Team figures“ wird in diesem Chat gelesen.");
     expect(added).not.toContain("Erlauben");
+  });
+
+  it("offers no add in an embedding host's session and says where it is done", () => {
+    const use = required(readDataStoreUse(answer));
+    const embedded = render(
+      createElement(
+        EmbeddedSessionProvider,
+        { user: { embedded: true }, children: null },
+        createElement(DataStoreUseCardView, { use, state: "open" })
+      )
+    );
+    expect(embedded).toContain("„Team figures“ in diesem Chat lesen?");
+    expect(embedded).toContain("Das kannst nur du erlauben, in der eigenen App des Chats.");
+    expect(embedded).not.toContain("Erlauben</button>");
+    expect(embedded).not.toContain("<button");
   });
 });

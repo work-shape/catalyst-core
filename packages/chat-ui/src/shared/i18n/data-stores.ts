@@ -5,6 +5,8 @@ export const dataStores = defineTranslations({
     "dataStores.useTitle": "Read “{title}” in this chat?",
     "dataStores.useBody":
       "The agent answers from its records here. Your right to read them is checked on every answer.",
+    "dataStores.useElsewhere":
+      "Only you can allow this, in the chat's own app. This page cannot add it.",
     "dataStores.useAllow": "Allow",
     "dataStores.useAdded": "“{title}” is read in this chat.",
     "dataStores.useFailed": "The Data Store could not be added. Try again.",
@@ -297,6 +299,8 @@ export const dataStores = defineTranslations({
     "dataStores.useTitle": "„{title}“ in diesem Chat lesen?",
     "dataStores.useBody":
       "Der Agent antwortet hier aus seinen Einträgen. Dein Leserecht wird bei jeder Antwort geprüft.",
+    "dataStores.useElsewhere":
+      "Das kannst nur du erlauben, in der eigenen App des Chats. Diese Seite kann es nicht hinzufügen.",
     "dataStores.useAllow": "Erlauben",
     "dataStores.useAdded": "„{title}“ wird in diesem Chat gelesen.",
     "dataStores.useFailed":

@@ -4,6 +4,7 @@ import {
   useOwnChatSkillsQuery,
   useSetOwnChatSkillMutation
 } from "../../shared/api/personal-chat-skills";
+import { isEmbeddedSession } from "../../shared/embedded-session";
 import { useTranslation } from "../../shared/i18n";
 import {
   useOptionalSettingsPage,
@@ -18,7 +19,10 @@ export interface SkillMyChatsParts {
   badge?: ReactNode;
 }
 
-type SkillFrame = Pick<BuildAssetEditorProps, "asset" | "owner">;
+type SkillFrame = {
+  asset: Pick<NonNullable<BuildAssetEditorProps["asset"]>, "name"> | undefined;
+  owner?: BuildAssetEditorProps["owner"];
+};
 
 /**
  * "In meinen Chats verwenden" on a skill of the reader's own Personal Workspace
@@ -34,8 +38,12 @@ export function SkillMyChats({
 }) {
   const settings = useOptionalSettingsPage();
   const name = frame.asset?.name;
-  // Only a workspace's skill can be the reader's own: no other asks the instance.
-  return settings && name !== undefined && frame.owner !== undefined ? (
+  // Only a workspace's skill can be the reader's own: no other asks the instance. An embedding
+  // host's session is refused the person's own skills, so it is not asked.
+  return settings &&
+    !isEmbeddedSession(settings.user) &&
+    name !== undefined &&
+    frame.owner !== undefined ? (
     <OwnSkillMyChats settings={settings} name={name}>
       {children}
     </OwnSkillMyChats>

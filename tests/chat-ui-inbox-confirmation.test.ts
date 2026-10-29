@@ -555,6 +555,17 @@ describe("deciding a confirmation in the Inbox", () => {
     expect(server.decisions).toEqual([{ decision: "approve", alwaysAllow: true }]);
   });
 
+  it("leaves Always allow out in an embedding host's session, which the server refuses it", () => {
+    const call = confirmation({ preview: { ...agentCall, alwaysAllow: true } });
+    expect(decisionButtons(renderItem(call))).toContainEqual(["approve", "Immer erlauben"]);
+    const embedded = renderItem(call, { embedded: true });
+    expect(decisionButtons(embedded)).toEqual([
+      ["reject", "Verweigern"],
+      ["approve", "Erlauben"]
+    ]);
+    expect(embedded).not.toContain("Immer erlauben");
+  });
+
   it("denies with one click and no reason, and passes a reason that was given", async () => {
     const server = instance(confirmation());
     const container = await mountItem(server.fetchImpl);

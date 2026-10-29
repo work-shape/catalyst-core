@@ -21,7 +21,7 @@ import {
   type ToolDecision
 } from "@work-shape/catalyst-chat-ui/tool-decision-model";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
-import { workspaceQueryKeys } from "./support/chat-ui";
+import { EmbeddedSessionProvider, workspaceQueryKeys } from "./support/chat-ui";
 
 // EW-2b: an agent's call under `confirm` pauses its run, and the conversation shows the host's
 // own card on that call: what it is, its input as it will run, when it expires, Allow and Deny
@@ -354,6 +354,28 @@ describe("Always allow on the confirmation card (OP-6)", () => {
     expect(shown).toContain("Allow Always allow Deny");
     expect(shown).toContain("Always allow also lets your scheduled runs do this without asking.");
     expect(text(renderView(offered, {}, "de"))).toContain("Erlauben Immer erlauben Ablehnen");
+  });
+
+  it("is left out in an embedding host's session, which the server refuses it", () => {
+    for (const locale of ["en", "de"] as const) {
+      const shown = text(
+        inLocale(
+          locale,
+          createElement(
+            EmbeddedSessionProvider,
+            { user: { embedded: true }, children: null },
+            createElement(ToolDecisionCardView, {
+              decision: offered,
+              title: "Create an offer",
+              toolName: TOOL,
+              answer: idle
+            })
+          )
+        )
+      );
+      expect(shown).toContain(locale === "en" ? "Allow Deny" : "Erlauben Ablehnen");
+      expect(shown).not.toMatch(/always allow|immer erlauben/iu);
+    }
   });
 
   it("sends Always allow with the confirmation, and says that it no longer asks", () => {

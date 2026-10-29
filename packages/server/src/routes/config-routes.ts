@@ -35,6 +35,9 @@ export function registerConfigRoutes(route: Route, options: ChatServerOptions): 
     return {
       ...withTwoFactorState(options, user),
       ...(record?.locale ? { locale: record.locale } : {}),
+      // An embedding host's token acts for the person but is not their own session: the
+      // interface leaves out what the server refuses it, without being told who the host is.
+      ...(user.delegatedActor === undefined ? {} : { embedded: true as const }),
       // Without a record nothing can steer, so the message waits.
       followUpMode: record ? (record.followUpMode ?? DEFAULT_FOLLOW_UP_MODE) : "queue",
       permissions: allowedLegacyPermissions(access),

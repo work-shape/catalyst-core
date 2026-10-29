@@ -1,3 +1,4 @@
+export { EmbeddedSessionProvider } from "../../../packages/chat-ui/src/shared/embedded-session";
 export {
   defineToolDisplayWidget,
   readToolDisplayPayloadFromToolResult,
