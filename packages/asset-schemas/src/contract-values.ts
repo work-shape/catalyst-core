@@ -63,7 +63,11 @@ export const FIRST_PARTY_AUTH_SCOPES = [
   // store's rows, an insert and a query of a Knowledge Base, and nothing else under
   // `data_store_rows:*`. Only a personal key's call is asked for it, through the operation's
   // `personalKeyScope`; every other credential keeps the scopes above.
-  "data_store_rows:use"
+  "data_store_rows:use",
+  // What the use level of a personal key reaches of Workflows: starting a run by hand, with
+  // `workflow.use` alone (CLI-PARITY-4 review). Only a personal key's call is asked for it, through
+  // the operation's `personalKeyScope`.
+  "workflow_runs:use"
 ] as const;
 
 export type ChatSessionAuthScope = (typeof CHAT_SESSION_AUTH_SCOPES)[number];

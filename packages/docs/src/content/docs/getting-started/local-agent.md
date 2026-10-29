@@ -38,7 +38,7 @@ The **Use** level puts your rights to use Connections, Data Stores, Knowledge Ba
 
 What a key cannot reach, whatever you tick:
 
-- The rows of a Data Store, unless the key carries the **Use** level. With it, and with `data_store.read` or `data_store.insert` on the store, the tool reads a page of rows, runs a read-only query and adds rows, and queries a Knowledge Base you may use. It does not change or remove rows, and it sees no other record of a store. Tick `data_store.insert`, `data_store.execute` or `knowledge_base.use` only for a tool you would trust with that data.
+- The rows of a Data Store, unless the key carries the **Use** level. With it, the tool reads a page of rows and runs a read-only query on the stores where the key names `data_store.read` and `data_store.execute`, adds rows where it names `data_store.insert`, and queries a Knowledge Base where it names `knowledge_base.use`, each only on the workspace and asset the scope is limited to. A Knowledge Base that reads data from a Connection kept from outside clients is not queried. It does not change or remove rows, and it sees no other record of a store. Tick `data_store.insert`, `data_store.execute` or `knowledge_base.use` only for a tool you would trust with that data.
 - A Connection's operations, unless an administrator has marked that operation **Outside clients** on the Connection's page. No operation is marked so until someone does.
 - Conversations, yours or anyone else's, and the runs and results of other people.
 

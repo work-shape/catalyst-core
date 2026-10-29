@@ -715,18 +715,18 @@ describe("named CLI operation faces", () => {
   it.each([
     [
       ["workflow", "start", "month-end"],
-      "The API key of this call does not cover 'workflow.use' here. Its owner holds the right; issue a key whose scopes name it",
+      "The API key of this call does not carry the use level, which 'workflows.start' needs: its scopes must name 'workflow.use'. Use a key with the use level (Verwenden)",
       "workflow.use"
     ],
     [
       ["data-store", "rows", "reporting", "--table", "bookings"],
-      "The API key of this call does not carry the use level, which 'data_stores.rows' needs: its scopes must name 'data_store.read' and one of 'data_store.insert', 'data_store.execute', 'knowledge_base.use'. Use a key with the use level (Verwenden)",
-      "data_store.read"
+      "The API key of this call does not carry the use level, which 'data_stores.rows' needs: its scopes must name 'data_store.execute'. Use a key with the use level (Verwenden)",
+      "data_store.execute"
     ],
     [
       ["data-store", "query", "reporting", "--sql", "select 1"],
-      "The API key of this call does not carry the use level, which 'data_stores.query' needs: its scopes must name 'data_store.read' and one of 'data_store.insert', 'data_store.execute', 'knowledge_base.use'. Use a key with the use level (Verwenden)",
-      "data_store.read"
+      "The API key of this call does not carry the use level, which 'data_stores.query' needs: its scopes must name 'data_store.execute'. Use a key with the use level (Verwenden)",
+      "data_store.execute"
     ],
     [
       ["data-store", "insert", "reporting", "--from", "-"],

@@ -38,12 +38,12 @@ catalyst limits set --from limit.json  # {"level":"user","target":"<user id>","l
 | Command | Calls | Needs on the key |
 | --- | --- | --- |
 | `workflow start <name> [--from <file\|->]` | `workflows.start` | `workflow.use` |
-| `data-store rows <name> --table <t> [--limit <n>] [--after <cursor>]` | `data_stores.rows` | `data_store.read` and a use right of rows |
-| `data-store query <name> --sql <statement>` or `--from <file\|->` | `data_stores.query` | `data_store.read` and a use right of rows |
+| `data-store rows <name> --table <t> [--limit <n>] [--after <cursor>]` | `data_stores.rows` | `data_store.read` and `data_store.execute` |
+| `data-store query <name> --sql <statement>` or `--from <file\|->` | `data_stores.query` | `data_store.read` and `data_store.execute` |
 | `data-store insert <name> --from <file\|->` | `data_stores.insert` | `data_store.insert` |
 | `knowledge-base query <name> --sql <statement>` or `--from <file\|->` | `knowledge_bases.query` | `knowledge_base.use` |
 
-A use right of rows is `data_store.insert`, `data_store.execute` or `knowledge_base.use`. A key without the level is refused with exit code 1, and the refusal names the right the key lacks. Beyond these five the level opens no row operation: a key changes or removes no row, reads no preview, value or flagged record, and starts no re-index.
+Each right is the key's own and is limited by its scope (`data_store.execute:<workspace>/<store>`): a key limited to one store or Workflow reaches no other. A key without the level is refused with exit code 1, and the refusal names the right the key lacks. `knowledge-base query` is refused to a key while the Knowledge Base reads data from a Connection that is not open to outside clients. Beyond these five the level opens no row operation: a key changes or removes no row, reads no preview, value or flagged record, and starts no re-index.
 
 `workflow start` starts the published Workflow, which acts as its own technical account, and answers the run; follow it with `workflow run` and `workflow steps`. Its `--from` file is `{"input": {...}, "key": "<run key>"}`; both fields are optional. The Workflow must be turned on for outside clients. `data-store rows` prints one page; pass the `next` it printed to `--after` for the following page. `data-store query` and `knowledge-base query` take one read-only statement, with `$1`-style placeholders and `parameters` in a `--from` file (`{"sql": "...", "parameters": [1]}`); `knowledge-base query` also takes a named query, `{"query": "<name>", "parameters": {...}}`. `data-store insert` takes `{"table": "...", "rows": [{...}], "onConflict": "fail"}`, at most 1,000 rows. These calls are recorded like the same calls in the app, without the values.
 

@@ -36623,6 +36623,11 @@
             "accessToken": [
               "config_assets:write"
             ]
+          },
+          {
+            "accessToken": [
+              "workflow_runs:use"
+            ]
           }
         ],
         "parameters": [
@@ -45831,7 +45836,8 @@
           "config_assets:release",
           "data_store_rows:read",
           "data_store_rows:write",
-          "data_store_rows:use"
+          "data_store_rows:use",
+          "workflow_runs:use"
         ]
       },
       "CancelRunRequest": {
@@ -49841,7 +49847,8 @@
                 "config_assets:release",
                 "data_store_rows:read",
                 "data_store_rows:write",
-                "data_store_rows:use"
+                "data_store_rows:use",
+                "workflow_runs:use"
               ]
             }
           },

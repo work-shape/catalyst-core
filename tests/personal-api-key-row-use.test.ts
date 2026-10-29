@@ -7,7 +7,10 @@ import {
   operationScopesOfPersonalApiKey
 } from "@work-shape/catalyst-core";
 import { errorSchema } from "./support/access-instance";
+import { getTestJobs } from "./support/test-instance";
+import { eventually } from "./support/assertions";
 import {
+  clientInstanceId,
   finding,
   useDataStoreInstance,
   type DataStoreInstance
@@ -21,6 +24,7 @@ import {
 const STORE = "findings";
 const READ = "data_store.read";
 const INSERT = "data_store.insert";
+const EXECUTE = "data_store.execute";
 
 const rowsSchema = z.object({ rows: z.array(z.unknown()) });
 const querySchema = z.object({ rows: z.array(z.record(z.string(), z.unknown())) });
@@ -80,7 +84,7 @@ describe("the use level of a personal key on rows", () => {
     for (const action of PERSONAL_API_KEY_ACTIONS) {
       const scopes = operationScopesOfPersonalApiKey([action]);
       expect(scopes.includes("data_store_rows:use"), action).toBe(
-        [INSERT, "data_store.execute", "knowledge_base.use"].includes(action)
+        [INSERT, EXECUTE, "knowledge_base.use"].includes(action)
       );
       // Never the scopes of rows that the other operations ask.
       expect(scopes).not.toContain("data_store_rows:read");
@@ -100,8 +104,8 @@ describe("the use level of a personal key on rows", () => {
     // The read level and the rights of authoring, and no use right.
     const headers = await keyHeaders(world, [READ, "data_store.write", "knowledge_base.read"]);
     const refused = [
-      [await rows(world, headers), "data_store.read"],
-      [await query(world, headers), "data_store.read"],
+      [await rows(world, headers), "data_store.execute"],
+      [await query(world, headers), "data_store.execute"],
       [await insert(world, headers), "data_store.insert"],
       [
         await world.api.call("knowledge_bases.query", {
@@ -124,8 +128,8 @@ describe("the use level of a personal key on rows", () => {
     }
     // The words the CLI prints, as the CLI tests of the refusals hold them.
     expect(messages).toEqual([
-      "The API key of this call does not carry the use level, which 'data_stores.rows' needs: its scopes must name 'data_store.read' and one of 'data_store.insert', 'data_store.execute', 'knowledge_base.use'. Use a key with the use level (Verwenden)",
-      "The API key of this call does not carry the use level, which 'data_stores.query' needs: its scopes must name 'data_store.read' and one of 'data_store.insert', 'data_store.execute', 'knowledge_base.use'. Use a key with the use level (Verwenden)",
+      "The API key of this call does not carry the use level, which 'data_stores.rows' needs: its scopes must name 'data_store.execute'. Use a key with the use level (Verwenden)",
+      "The API key of this call does not carry the use level, which 'data_stores.query' needs: its scopes must name 'data_store.execute'. Use a key with the use level (Verwenden)",
       "The API key of this call does not carry the use level, which 'data_stores.insert' needs: its scopes must name 'data_store.insert'. Use a key with the use level (Verwenden)",
       "The API key of this call does not carry the use level, which 'knowledge_bases.query' needs: its scopes must name 'knowledge_base.use'. Use a key with the use level (Verwenden)"
     ]);
@@ -133,7 +137,7 @@ describe("the use level of a personal key on rows", () => {
 
   it("answers a key with the use level: rows, a query and an insert, each with its own right", async () => {
     const world = await setup();
-    const headers = await keyHeaders(world, [READ, INSERT]);
+    const headers = await keyHeaders(world, [READ, INSERT, EXECUTE]);
     const page = await rows(world, headers);
     expect(page.statusCode, page.body).toBe(200);
     expect(rowsSchema.parse(page.json()).rows).toHaveLength(1);
@@ -155,12 +159,25 @@ describe("the use level of a personal key on rows", () => {
 
   it("still asks each right of the key: the level alone does not read, and reading does not insert", async () => {
     const world = await setup();
-    const withoutRead = await keyHeaders(world, [INSERT]);
+    const withoutRead = await keyHeaders(world, [EXECUTE]);
     for (const response of [await rows(world, withoutRead), await query(world, withoutRead)]) {
       expect(response.statusCode, response.body).toBe(403);
       expect(errorSchema.parse(response.json()).error.message).toContain(READ);
     }
-    const withoutInsert = await keyHeaders(world, [READ, "knowledge_base.use"]);
+    // A key that reads and inserts has the level, but the rows of a read and a query ask its
+    // own `data_store.execute`: the instance-wide scope opens nothing by itself.
+    const withoutExecute = await keyHeaders(world, [READ, INSERT]);
+    for (const response of [
+      await rows(world, withoutExecute),
+      await query(world, withoutExecute)
+    ]) {
+      expect(response.statusCode, response.body).toBe(403);
+      const { error } = errorSchema.parse(response.json());
+      expect(error.details).toEqual({ action: EXECUTE, reason: "outside_key_scope" });
+      expect(response.body).not.toContain("vat-rate");
+    }
+    expect((await insert(world, withoutExecute)).statusCode).toBe(200);
+    const withoutInsert = await keyHeaders(world, [READ, EXECUTE]);
     expect((await rows(world, withoutInsert)).statusCode).toBe(200);
     const refused = await insert(world, withoutInsert);
     expect(refused.statusCode, refused.body).toBe(403);
@@ -213,5 +230,106 @@ describe("the use level of a personal key on rows", () => {
         })
         .then((response) => querySchema.parse(response.json()).rows)
     ).toEqual([{ severity: "warning" }]);
+  });
+
+  /** A store of two columns in a workspace, with one row. */
+  async function workspaceStore(world: DataStoreInstance, name: string, workspaceId: string) {
+    const put = await world.api.call("assets.put", {
+      params: { kind: "data_store", name },
+      payload: {
+        expectedRevision: null,
+        workspaceId,
+        files: [
+          { path: "store.yaml", text: `id: ${name}\nname: ${name}\n` },
+          {
+            path: "migrations/0001_init.sql",
+            text: "create table notes (id integer primary key, body text);"
+          }
+        ]
+      }
+    });
+    expect(put.statusCode, put.body).toBe(200);
+    const published = await world.api.call("assets.publish", {
+      params: { kind: "data_store", name },
+      payload: { revision: 1, workspaceId }
+    });
+    expect(published.statusCode, published.body).toBe(200);
+  }
+
+  it("narrows the key's own action to the workspace and asset it names: a store of another workspace gives no rows", async () => {
+    const world = await setup();
+    const createWorkspace = async (name: string) => {
+      const created = await world.api.call("workspaces.create", { payload: { name } });
+      expect(created.statusCode, created.body).toBe(200);
+      return created.json<{ id: string }>().id;
+    };
+    const wsA = await createWorkspace("Team A");
+    const wsB = await createWorkspace("Team B");
+    await workspaceStore(world, "faq", wsA);
+    await workspaceStore(world, "faq-b", wsB);
+    const jobs = getTestJobs(world.api);
+    await eventually(async () => {
+      await jobs.runDue();
+      for (const name of ["faq", "faq-b"]) {
+        expect(
+          await world.stores.dataStores.findDataStoreByName({ clientInstanceId, name })
+        ).toMatchObject({ status: "ready", level: 1 });
+      }
+    });
+    for (const [store, body] of [
+      ["faq", "a"],
+      ["faq-b", "b"]
+    ] as const) {
+      const seeded = await world.api.call("data_stores.insert", {
+        params: { store },
+        payload: { table: "notes", rows: [{ id: 1, body }] }
+      });
+      expect(seeded.statusCode, seeded.body).toBe(200);
+    }
+    // Reads everywhere, but uses rows only of `faq` in the first workspace.
+    const headers = await keyHeaders(world, [
+      READ,
+      `${EXECUTE}:${wsA}/faq`,
+      `${INSERT}:${wsA}/faq`,
+      `knowledge_base.use:${wsA}/faq`
+    ]);
+    const readIn = (store: string) =>
+      world.api.call("data_stores.rows", { params: { store }, query: { table: "notes" }, headers });
+    const queryIn = (store: string) =>
+      world.api.call("data_stores.query", {
+        params: { store },
+        payload: { sql: "select body from notes" },
+        headers
+      });
+    const insertIn = (store: string) =>
+      world.api.call("data_stores.insert", {
+        params: { store },
+        payload: { table: "notes", rows: [{ id: 2, body: "c" }] },
+        headers
+      });
+    expect((await readIn("faq")).statusCode).toBe(200);
+    expect(querySchema.parse((await queryIn("faq")).json()).rows).toEqual([{ body: "a" }]);
+    expect((await insertIn("faq")).statusCode).toBe(200);
+    for (const [response, action] of [
+      [await readIn("faq-b"), EXECUTE],
+      [await queryIn("faq-b"), EXECUTE],
+      [await insertIn("faq-b"), INSERT]
+    ] as const) {
+      expect(response.statusCode, response.body).toBe(403);
+      const { error } = errorSchema.parse(response.json());
+      expect(error.details).toEqual({ action, reason: "outside_key_scope" });
+      expect(response.body).not.toContain('"b"');
+    }
+    // A Knowledge Base query narrowed the same way is refused before any lookup.
+    const knowledge = await world.api.call("knowledge_bases.query", {
+      params: { knowledgeBase: "other-kb" },
+      payload: { sql: "select 1" },
+      headers
+    });
+    expect(knowledge.statusCode, knowledge.body).toBe(403);
+    expect(errorSchema.parse(knowledge.json()).error.details).toEqual({
+      action: "knowledge_base.use",
+      reason: "outside_key_scope"
+    });
   });
 });

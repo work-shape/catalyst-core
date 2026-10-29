@@ -9,6 +9,7 @@ import { AppError } from "./errors";
 import type { ApiCredentialId, ClientInstanceId, UserId } from "./ids";
 import { createPlatformId } from "./ids";
 import type { StorePage } from "./paging";
+import { isAuthenticatedServicePrincipal, type AuthenticatedIdentity } from "./identity";
 import type { ISODateString } from "./time";
 
 /**
@@ -183,27 +184,32 @@ export const PERSONAL_API_KEY_ROW_USE_ACTIONS = [
 ] as const satisfies readonly (typeof PERSONAL_API_KEY_USE_ACTIONS)[number][];
 
 /**
+ * The right of the use level that starts a Workflow's run by hand for a key: `workflow.use`
+ * on the Workflow, narrowed by the key's scopes, carries the operation scope
+ * `workflow_runs:use` that `workflows.start` asks of a key's call. Writing is no part of it.
+ */
+export const PERSONAL_API_KEY_WORKFLOW_USE_ACTION =
+  "workflow.use" as const satisfies PlatformAction;
+
+/**
  * The operations a key reaches through `data_store_rows:use` (CLI-PARITY-4), each with the
- * right it asks of the key and its owner. A refusal for the missing scope names it.
+ * action the key itself must name, narrowed by its `<action>[:<workspace>[/<asset>]]` grammar
+ * on the resource it calls: the scope is instance-wide, this action is not. The operation asks
+ * its own right of the key and its owner besides (`data_store.read`, `data_store.insert`,
+ * `knowledge_base.use`). A refusal for the missing scope names the action.
  */
 export const PERSONAL_API_KEY_ROW_USE_OPERATIONS = {
-  "data_stores.rows": "data_store.read",
-  "data_stores.query": "data_store.read",
+  "data_stores.rows": "data_store.execute",
+  "data_stores.query": "data_store.execute",
   "data_stores.insert": "data_store.insert",
   "knowledge_bases.query": "knowledge_base.use"
 } as const satisfies Record<string, PlatformAction>;
 
-/**
- * What a key must name to call one of those operations: its right, and where that right is no
- * right of the use level, one of the use level's. A refusal names exactly these.
- */
+/** What a key must name, on the resource it calls, to reach one of those operations. */
 export function personalApiKeyRowUseNeeds(
   operation: keyof typeof PERSONAL_API_KEY_ROW_USE_OPERATIONS
 ): PlatformAction[] {
-  const right: PlatformAction = PERSONAL_API_KEY_ROW_USE_OPERATIONS[operation];
-  return PERSONAL_API_KEY_ROW_USE_ACTIONS.some((use) => use === right)
-    ? [right]
-    : [right, ...PERSONAL_API_KEY_ROW_USE_ACTIONS];
+  return [PERSONAL_API_KEY_ROW_USE_OPERATIONS[operation]];
 }
 
 /**
@@ -323,6 +329,20 @@ export function personalApiKeyCovers(
   return parsed.some((scope) => scopeCovers(scope, action, resource));
 }
 
+/**
+ * Whether a call made for a personal key lacks the key's own scope for an action on a resource:
+ * the key must name it, narrowed by its `<action>[:<workspace>[/<asset>]]` grammar, whatever the
+ * operation's own right says (CLI-PARITY-4 review). Never so for a call that carries no key.
+ */
+export function personalApiKeyLacksAction(
+  actor: AuthenticatedIdentity,
+  action: string,
+  resource: ScopedResource | undefined
+): boolean {
+  if (isAuthenticatedServicePrincipal(actor) || actor.keyScopes === undefined) return false;
+  return !personalApiKeyCovers(actor.keyScopes, action, resource, undefined);
+}
+
 /** Whether a scope of the key names the action, anywhere it may be limited to. */
 export function personalApiKeyNamesAction(scopes: readonly string[], action: string): boolean {
   return scopes.some((scope) => parsePersonalApiKeyScope(scope)?.action === action);
@@ -333,8 +353,8 @@ export function personalApiKeyNamesAction(scopes: readonly string[], action: str
  * asset operations of what its scopes read, write or publish. A key reaches no conversation,
  * no administration and none of the account's changes. `system.view` adds only the read-only
  * infrastructure check, still subject to the owner's current right. The use level adds none
- * for a Workflow's publish, which lends the rights of its account, nor for its start: the
- * other scopes reach both. It adds `data_store_rows:use` for the four row operations of
+ * for a Workflow's publish, which lends the rights of its account. It adds `workflow_runs:use`
+ * for a Workflow's start, and `data_store_rows:use` for the four row operations of
  * CLI-PARITY-4. Every other operation under `data_store_rows:*` stays out of a key's reach.
  */
 export function operationScopesOfPersonalApiKey(scopes: readonly string[]): OperationScope[] {
@@ -351,6 +371,7 @@ export function operationScopesOfPersonalApiKey(scopes: readonly string[]): Oper
     if (PERSONAL_API_KEY_ROW_USE_ACTIONS.some((use) => use === action)) {
       granted.add("data_store_rows:use");
     }
+    if (action === PERSONAL_API_KEY_WORKFLOW_USE_ACTION) granted.add("workflow_runs:use");
   }
   return [...granted];
 }
