@@ -27,7 +27,9 @@ const KEY_OPERATION_SCOPES = new Set([
   "config_assets:read",
   "config_assets:write",
   "config_assets:publish",
-  "infrastructure:check"
+  "infrastructure:check",
+  // The use level of rows (CLI-PARITY-4), asked by four operations only.
+  "data_store_rows:use"
 ]);
 
 function isTestOperation(name: string): name is TestOperationName {
@@ -37,7 +39,7 @@ function isTestOperation(name: string): name is TestOperationName {
 const namesSchema = z.object({ items: z.array(z.object({ name: z.string() })) });
 
 describe("what a personal key reaches", () => {
-  it("adds only the infrastructure check for system.view, never administration or Data Store rows", () => {
+  it("adds only the infrastructure check for system.view, never administration or the rows scopes beyond the use level", () => {
     expect(requirePersonalApiKeyScopes(["system.view"])).toEqual([{ action: "system.view" }]);
     expect(operationScopesOfPersonalApiKey(["system.view"])).toEqual([
       "me:read",

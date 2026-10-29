@@ -170,6 +170,43 @@ export const PERSONAL_API_KEY_USE_ACTIONS = [
 ] as const satisfies readonly PlatformAction[];
 
 /**
+ * The rights of the use level that open a few row operations to a key (CLI-PARITY-4): a
+ * key that names one of them carries the operation scope `data_store_rows:use`, which the
+ * read of a Data Store's rows and its query, the insert of rows and the query of a Knowledge
+ * Base ask of a key's call. Each still asks the right of its own: `data_store.read`,
+ * `data_store.insert` or `knowledge_base.use`, intersected with the person's.
+ */
+export const PERSONAL_API_KEY_ROW_USE_ACTIONS = [
+  "data_store.insert",
+  "data_store.execute",
+  "knowledge_base.use"
+] as const satisfies readonly (typeof PERSONAL_API_KEY_USE_ACTIONS)[number][];
+
+/**
+ * The operations a key reaches through `data_store_rows:use` (CLI-PARITY-4), each with the
+ * right it asks of the key and its owner. A refusal for the missing scope names it.
+ */
+export const PERSONAL_API_KEY_ROW_USE_OPERATIONS = {
+  "data_stores.rows": "data_store.read",
+  "data_stores.query": "data_store.read",
+  "data_stores.insert": "data_store.insert",
+  "knowledge_bases.query": "knowledge_base.use"
+} as const satisfies Record<string, PlatformAction>;
+
+/**
+ * What a key must name to call one of those operations: its right, and where that right is no
+ * right of the use level, one of the use level's. A refusal names exactly these.
+ */
+export function personalApiKeyRowUseNeeds(
+  operation: keyof typeof PERSONAL_API_KEY_ROW_USE_OPERATIONS
+): PlatformAction[] {
+  const right: PlatformAction = PERSONAL_API_KEY_ROW_USE_OPERATIONS[operation];
+  return PERSONAL_API_KEY_ROW_USE_ACTIONS.some((use) => use === right)
+    ? [right]
+    : [right, ...PERSONAL_API_KEY_ROW_USE_ACTIONS];
+}
+
+/**
  * The actions a personal key can name: reading, writing, deleting and publishing what the
  * owner builds, the use level, and the read-only infrastructure check under `system.view`.
  * Approving and administering stay with a signed-in person. A project's rights are carried by
@@ -295,10 +332,10 @@ export function personalApiKeyNamesAction(scopes: readonly string[], action: str
  * The operation scopes a personal key's calls carry: reading the owner's own account, and the
  * asset operations of what its scopes read, write or publish. A key reaches no conversation,
  * no administration and none of the account's changes. `system.view` adds only the read-only
- * infrastructure check, still subject to the owner's current right. The use level adds none:
- * it counts on the operations the other scopes reach, such as a Workflow's publish, which
- * lends the rights of its account, and its start. The rows of a Data Store stay out of reach
- * until CLI-PARITY-4.
+ * infrastructure check, still subject to the owner's current right. The use level adds none
+ * for a Workflow's publish, which lends the rights of its account, nor for its start: the
+ * other scopes reach both. It adds `data_store_rows:use` for the four row operations of
+ * CLI-PARITY-4. Every other operation under `data_store_rows:*` stays out of a key's reach.
  */
 export function operationScopesOfPersonalApiKey(scopes: readonly string[]): OperationScope[] {
   const granted = new Set<OperationScope>(["me:read"]);
@@ -311,6 +348,9 @@ export function operationScopesOfPersonalApiKey(scopes: readonly string[]): Oper
       granted.add("config_assets:write");
     }
     if (action.endsWith(".publish")) granted.add("config_assets:publish");
+    if (PERSONAL_API_KEY_ROW_USE_ACTIONS.some((use) => use === action)) {
+      granted.add("data_store_rows:use");
+    }
   }
   return [...granted];
 }

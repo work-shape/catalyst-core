@@ -13,10 +13,15 @@ catalyst workflow runs month-end
 catalyst workflow run <run-id>
 catalyst workflow steps <run-id>
 catalyst workflow cancel <run-id>
+catalyst workflow start month-end --from input.json  # {"input":{"month":"2026-10"}}
 catalyst guardrail hits no-iban
 catalyst knowledge-base check accounts
 catalyst data-store describe reporting
 catalyst data-store used-by reporting
+catalyst data-store rows reporting --table bookings --limit 20
+catalyst data-store query reporting --sql "select id from bookings where id = 1"
+catalyst data-store insert reporting --from rows.json  # {"table":"bookings","rows":[{"id":1}]}
+catalyst knowledge-base query accounts --sql "select name from accounts"
 catalyst app actions offers
 catalyst keys list
 catalyst instance workspaces
@@ -24,7 +29,25 @@ catalyst limits show
 catalyst limits set --from limit.json  # {"level":"user","target":"<user id>","limits":{"monthly":50}}
 ```
 
-`workflow test` tests the saved draft and simulates changing steps. Its optional `--from <file|->` reads the JSON request body (`{"input": {...}}`); without it, the body is `{}`. It starts a run and returns its current state; use `run` and `steps` to read progress. `cancel` cancels the run you name. These commands do not start a live Workflow.
+`workflow test` tests the saved draft and simulates changing steps. Its optional `--from <file|->` reads the JSON request body (`{"input": {...}}`); without it, the body is `{}`. It starts a run and returns its current state; use `run` and `steps` to read progress. `cancel` cancels the run you name.
+
+## Use commands
+
+`workflow start`, `data-store rows`, `data-store query`, `data-store insert` and `knowledge-base query` use what a Workflow, Data Store or Knowledge Base holds, so a key reaches them only with the **Use** level (German: **Verwenden**) of Settings > API keys. The key `catalyst setup` creates has it ticked. Every call acts as you, with the rights you hold at that moment, and the key never adds one: a right you lose is gone from the key.
+
+| Command | Calls | Needs on the key |
+| --- | --- | --- |
+| `workflow start <name> [--from <file\|->]` | `workflows.start` | `workflow.use` |
+| `data-store rows <name> --table <t> [--limit <n>] [--after <cursor>]` | `data_stores.rows` | `data_store.read` and a use right of rows |
+| `data-store query <name> --sql <statement>` or `--from <file\|->` | `data_stores.query` | `data_store.read` and a use right of rows |
+| `data-store insert <name> --from <file\|->` | `data_stores.insert` | `data_store.insert` |
+| `knowledge-base query <name> --sql <statement>` or `--from <file\|->` | `knowledge_bases.query` | `knowledge_base.use` |
+
+A use right of rows is `data_store.insert`, `data_store.execute` or `knowledge_base.use`. A key without the level is refused with exit code 1, and the refusal names the right the key lacks. Beyond these five the level opens no row operation: a key changes or removes no row, reads no preview, value or flagged record, and starts no re-index.
+
+`workflow start` starts the published Workflow, which acts as its own technical account, and answers the run; follow it with `workflow run` and `workflow steps`. Its `--from` file is `{"input": {...}, "key": "<run key>"}`; both fields are optional. The Workflow must be turned on for outside clients. `data-store rows` prints one page; pass the `next` it printed to `--after` for the following page. `data-store query` and `knowledge-base query` take one read-only statement, with `$1`-style placeholders and `parameters` in a `--from` file (`{"sql": "...", "parameters": [1]}`); `knowledge-base query` also takes a named query, `{"query": "<name>", "parameters": {...}}`. `data-store insert` takes `{"table": "...", "rows": [{...}], "onConflict": "fail"}`, at most 1,000 rows. These calls are recorded like the same calls in the app, without the values.
+
+## Other commands
 
 `app actions` without a name lists actions of the published Apps you may read; with a name it reads that App's draft if you may write it, otherwise its published revision. `keys list` lists your own key metadata, never secrets. `instance workspaces` uses `instance.workspaces.list`: the Shared Workspaces that agents, Knowledge Bases and Connections can be made available in, requiring `config_assets:write` and, on the whole instance, `agent.write`, `knowledge_base.write` or `connection.write`. It is not the list of your workspace memberships.
 
