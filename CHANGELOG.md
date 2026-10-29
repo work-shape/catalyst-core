@@ -7,6 +7,23 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.21 — 2026-10-29
+
+### Added
+
+- **Apps:** A person renames an App in place from the "…" menu of its card in the Apps list and of its page (`apps.rename`). Renaming needs `app.write`, the right that edits the App. Only the name people read changes, at once for the draft and what is published and without a new revision; the id stays. The audit event `app.renamed` names the App, not the name (T34).
+- **Apps:** A name a person gave by renaming stands over every later write of the App: a save from a Page, `assets.put` with a manifest that names another, and the agent's `app.save`. `app.save` and `app.edit` answer `nameSetByPerson`, and the agent is told never to rename such an App and at most to ask when its change made the App do something quite different (T34).
+- **UI library:** `RenameField` edits a name where it is read, and `PageHeader` takes `titleEditor` to stand in the name's place.
+
+### Fixed
+
+- **Execution workspaces:** `workspace.exec` tells agents before a command runs that the sandbox has no outbound network or DNS access. It directs documentation fetches to available web tools, or uploaded files when no web tool is available, and explains that retrying cannot enable network access.
+- **Workshaper:** Can be saved and given Connection tools when Apps tools are automatically offered by the assembly. Validation uses the same tool inventory as conversations, and built-in App tools remain subject to module checks. Save draft and Give to an agent show unavailable-tool diagnostics in the selected language, including the instruction line, a next step and confirmation that nothing was saved. `release:check` now checks shipped agent and skill tool references.
+
+### Database
+
+- Migration `0178_app_person_title` adds the nullable column `config_assets.person_title`, the name a person gave an asset. No default, so no row is rewritten.
+
 ## 0.8.0-rc.20 — 2026-10-29
 
 ### Added
