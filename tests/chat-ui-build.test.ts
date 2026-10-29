@@ -341,11 +341,12 @@ describe("Studio frame", () => {
     const markup = render({ kindPath: "agents" }, { locale: "de" });
 
     expect(markup).toContain(">Agenten<");
-    expect(markup).toContain("Skills");
-    expect(markup).not.toContain("Fähigkeiten");
+    // Skills keep their name; "Fähigkeiten" is the page below the kinds (TOOLS-2).
+    expect(markup).toContain('<option value="skills">Skills</option>');
+    expect(markup).toContain('<option value="capabilities">Fähigkeiten</option>');
   });
 
-  it("shows the kinds as a rail without counts, and none while a single kind is visible", () => {
+  it("shows the kinds as a rail without counts, and below them Capabilities, also beside a single kind", () => {
     const both = render({ kindPath: "skills" });
     const one = render(
       { kindPath: "agents" },
@@ -360,7 +361,10 @@ describe("Studio frame", () => {
     expect(both).toContain('aria-label="Kinds in Studio"');
     expect(both).toContain('<option value="agents">Agents</option>');
     expect(both).toContain('<option value="skills" selected="">Skills</option>');
-    expect(one).not.toContain('aria-label="Kinds in Studio"');
+    expect(both).toContain('<option value="capabilities">Capabilities</option>');
+    expect(one).toContain('<option value="agents" selected="">Agents</option>');
+    expect(one).not.toContain('<option value="skills"');
+    expect(one).toContain('<option value="capabilities">Capabilities</option>');
   });
 
   it("shows a planted kind as a third rail item, with its list and its asset page", () => {

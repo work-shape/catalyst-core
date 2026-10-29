@@ -1,8 +1,9 @@
-import { seedShippedSkills } from "@work-shape/catalyst-server";
+import { seedShippedSkills, type ShippedSkillReference } from "@work-shape/catalyst-server";
 import {
   WORKFLOW_ASSET_KIND,
   type ClientInstanceId,
   type Logger,
+  type ModuleName,
   type ModuleSnapshot,
   type PlatformStores,
   type ShippedSkill
@@ -83,6 +84,47 @@ export function shippedSkillsOf(input: {
       (skill.tools ?? []).every((toolName) => input.hasTool(toolName))
     )
   ];
+}
+
+/**
+ * The skills of Studio's "Fähigkeiten" page, each with the module whose switch decides it: the
+ * module of its kind, or the one that owns a tool it calls; none for a general skill. It names
+ * what ships to the instance, and the skills of its modules that are off, which the page shows
+ * an instance admin alone. A skill held back for a tool the instance lacks otherwise is left out.
+ */
+export function shippedSkillReferences(input: {
+  modules: ModuleSnapshot;
+  capabilities: readonly ClientInstanceCapability[];
+  /** What ships to the instance, from `shippedSkillsOf`. */
+  shipped: readonly ShippedSkill[];
+}): ShippedSkillReference[] {
+  const { modules } = input;
+  const shipped = new Set(input.shipped.map((skill) => skill.name));
+  const moduleOfTools = (tools: readonly string[] | undefined) =>
+    modules.modules.find((state) =>
+      state.definition?.tools?.some((tool) => tools?.includes(tool) ?? false)
+    )?.name;
+  const candidates: { skill: ShippedSkill; module: ModuleName | undefined }[] = [
+    { skill: platformDocsSkill, module: undefined },
+    { skill: workflowAuthoringSkill, module: workflowsModule.name },
+    ...capabilitySkillsOf(input.capabilities).map((skill) => ({
+      skill,
+      module: moduleOfTools(skill.tools)
+    }))
+  ];
+  return candidates.flatMap(({ skill, module }) =>
+    shipped.has(skill.name) || (module !== undefined && !modules.isEnabled(module))
+      ? [
+          {
+            name: skill.name,
+            title: skill.title,
+            ...(skill.summary === undefined ? {} : { summary: skill.summary }),
+            icon: skill.icon,
+            ...(module === undefined ? {} : { module })
+          }
+        ]
+      : []
+  );
 }
 
 /** Makes the stored shipped skills what this build ships, and logs what it changed. */

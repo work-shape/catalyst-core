@@ -19,15 +19,14 @@ import {
   type OperationExecutionContext,
   type OperationResource
 } from "@work-shape/catalyst-core";
-import { accessResource, decide } from "../assets/asset-access";
+import { decide } from "../assets/asset-access";
+import { readableAgents } from "../assets/readable-agents";
 import { readConnectionAccess } from "../connections/connection-access";
 import { requestConnectionDiscovery } from "../connections/connection-jobs";
 import type { ConnectionManagementPort } from "../connections/connection-management-port";
 import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
 
-/** The kind of the assets that carry a Connection's tools. */
-const AGENT_ASSET_KIND = "agent";
 /** The module these operations belong to. */
 const CONNECTIONS_MODULE = "connections";
 /** Bounds the published-consumer scan; the page offers retry after a timed-out read. */
@@ -69,31 +68,6 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
       throw new AppError("NOT_FOUND", "This instance has no Connections");
     }
     return connections;
-  }
-
-  /** The agents the caller may read, with the tools each lists. One read of the agents. */
-  async function readableAgents(access: ActorAccess) {
-    const kind = options.configAssets.kinds.get(AGENT_ASSET_KIND);
-    if (!kind) return [];
-    const agents = await options.configAssets.store.listActiveConfigAssets({
-      clientInstanceId: options.clientInstanceId,
-      kind: AGENT_ASSET_KIND
-    });
-    return agents.flatMap((agent) => {
-      const resource = accessResource(agent.kind, agent.name, agent.scope, agent.id);
-      if (!access.authorize(kind.actions.read, resource).allowed) return [];
-      const toolNames = agent.config?.toolNames;
-      const listed = Array.isArray(toolNames)
-        ? toolNames.filter((toolName): toolName is string => typeof toolName === "string")
-        : [];
-      let title = agent.name;
-      try {
-        title = kind.summarize(agent.config).title;
-      } catch {
-        // A stored agent this build does not read keeps its name as its title.
-      }
-      return [{ name: agent.name, title, toolNames: listed }];
-    });
   }
 
   async function authorizeSignIn(access: ActorAccess, name: string) {
@@ -156,7 +130,7 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
     resource: connectionResource,
     module: CONNECTIONS_MODULE,
     execute: async (input, context) =>
-      required().get(input.name, await readableAgents(context.access), (resource) => {
+      required().get(input.name, await readableAgents(options, context.access), (resource) => {
         const kind = options.configAssets.kinds.get(resource.kind ?? "");
         return (
           kind !== undefined &&

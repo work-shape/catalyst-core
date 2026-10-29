@@ -38,6 +38,7 @@ import type {
   AgentToolReference,
   ConfigAssetValidationRefs,
   PlatformInstructions,
+  ShippedSkillReference,
   WorkflowAssetKind
 } from "./asset-kinds/shared";
 import type { ChatAttachmentService } from "./conversations/attachments";
@@ -122,6 +123,11 @@ export interface ChatServerOptions {
      * page. Asked on each read, because the assembly registers its tools after this is built.
      */
     tools?: () => readonly AgentToolReference[];
+    /**
+     * The skills the release ships to this instance, and those of its modules that are off,
+     * for Studio's "Fähigkeiten" page. Asked on each read, like `tools`.
+     */
+    skills?: () => readonly ShippedSkillReference[];
     /**
      * What the platform tells its agents before their own instructions, shown read-only on an
      * agent's page: the rules every agent gets, and the orientation an agent gets whose

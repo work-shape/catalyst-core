@@ -1,0 +1,10 @@
+# The builder the capabilities spec gives the right to read agents, without the admin role: the
+# Fähigkeiten page shows this person no module that is off. No other spec uses this person.
+- email: e2e-capabilities-builder@example.test
+  displayLabel: E2E Zz Capabilities Builder
+  passwordEnvName: E2E_CAPABILITIES_BUILDER_PASSWORD
+  developmentPassword: e2e-capabilities-builder-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

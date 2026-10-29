@@ -46,6 +46,18 @@ export interface AgentToolReference extends ToolPresentation {
   effect?: OperationEffect;
 }
 
+/**
+ * One skill the release ships, as Studio's "Fähigkeiten" page names it, with the module whose
+ * switch decides it. A skill no module decides belongs to the general ones.
+ */
+export interface ShippedSkillReference {
+  name: string;
+  title: string;
+  summary?: string;
+  icon?: string;
+  module?: string;
+}
+
 /** What the platform tells its agents before their own instructions. */
 export interface PlatformInstructions {
   /** The rules at the head of every agent's system prompt. */

@@ -23,7 +23,11 @@ import {
   ProjectSetupService,
   workflowAssetKindOf
 } from "@work-shape/catalyst-server";
-import type { ChatAttachmentService, ChatServerOptions } from "@work-shape/catalyst-server";
+import type {
+  ChatAttachmentService,
+  ChatServerOptions,
+  ShippedSkillReference
+} from "@work-shape/catalyst-server";
 import { createManagedObjectAccess } from "@work-shape/catalyst-capability-sdk";
 import type {
   CapabilityProcess,
@@ -86,7 +90,12 @@ import { createClientInstanceAuth } from "./auth";
 import { createInstanceConnections, withConnections } from "./connections";
 import { createInstanceAssetKinds } from "./instance-asset-kinds";
 import { seedInstance } from "./instance-seed";
-import { offeredSkillNames, shippedSkillNamesOf, shippedSkillsOf } from "./shipped-skills";
+import {
+  offeredSkillNames,
+  shippedSkillNamesOf,
+  shippedSkillReferences,
+  shippedSkillsOf
+} from "./shipped-skills";
 import { SHIPPED_AGENT_NAMES, shippedAgentsOf } from "./shipped-agents";
 import { workshaperAgent } from "./workshaper";
 import {
@@ -575,6 +584,8 @@ export async function createClientInstanceExecutionAssembly(
       modelGateway.capabilities(binding)
     )
   ];
+  // The shipped skills are known once the tools are registered, below.
+  let skillReferences: readonly ShippedSkillReference[] = [];
   const configAssets: Parameters<typeof createChatServer>[0]["configAssets"] = {
     store: store.configAssets,
     source: assetSource,
@@ -590,6 +601,7 @@ export async function createClientInstanceExecutionAssembly(
     }),
     validationRefs,
     tools: references.tools,
+    skills: () => skillReferences,
     platformInstructions: PLATFORM_INSTRUCTIONS
   };
   const approvalRequestHandlers = new Map(input.approvalRequestHandlers ?? []);
@@ -743,6 +755,7 @@ export async function createClientInstanceExecutionAssembly(
     capabilities,
     hasTool: (toolName) => toolRegistry.has(toolName)
   });
+  skillReferences = shippedSkillReferences({ modules, capabilities, shipped: shippedSkills });
   // Asked of an agent with no model of its own, as a shipped agent is until the instance gives
   // it one: a tool its default model cannot run does not ship.
   const shippedAgentProbe: AgentConfig = workshaperAgent({ toolNames: [], skillNames: [] });

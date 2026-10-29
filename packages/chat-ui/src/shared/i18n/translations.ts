@@ -26,6 +26,7 @@ import { apps } from "./apps";
 import { assistant } from "./assistant";
 import { audit } from "./audit";
 import { build } from "./build";
+import { capabilities } from "./capabilities";
 import { collaborationWorkspace } from "./collaboration-workspace";
 import { common } from "./common";
 import { configAssets } from "./config-assets";
@@ -112,6 +113,7 @@ export const translations = combineTranslations(common)
   .and(assistant)
   .and(audit)
   .and(build)
+  .and(capabilities)
   .and(collaborationWorkspace)
   .and(configAssets)
   .and(confirmations)

@@ -409,6 +409,7 @@ export type {
   ConfigAssetValidationRefs,
   PlatformInstructions,
   PublishReach,
+  ShippedSkillReference,
   WorkflowAssetKind
 } from "./asset-kinds/shared";
 
