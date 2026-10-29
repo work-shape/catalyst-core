@@ -218,6 +218,8 @@ export const apps = defineTranslations({
       "Sent for approval. An admin for all workspaces decides in the Inbox; until then the live version stays as it is.",
     "apps.publishTogether": "Published with it",
     "apps.publishHandover": "Hand-over of source data",
+    "apps.publishHandoverInDialog":
+      "This publish hands source data to people who may not use the source. Only a person confirms that, in the Publish dialog of the App: open it there. Allowed here, the publish waits in the Inbox for a person who may change the source.",
     "apps.publishTogetherWorkflow": "Workflow “{title}”",
     "apps.publishTogetherNew": "New",
     "apps.publishTogetherChanged": "Changed",
@@ -497,6 +499,8 @@ export const apps = defineTranslations({
       "Zur Freigabe gesendet. Ein Admin für alle Arbeitsbereiche entscheidet im Eingang; bis dahin bleibt die live Version, wie sie ist.",
     "apps.publishTogether": "Wird zusammen veröffentlicht",
     "apps.publishHandover": "Weitergabe von Quelldaten",
+    "apps.publishHandoverInDialog":
+      "Diese Veröffentlichung gibt Quelldaten an Personen weiter, die die Quelle nicht nutzen dürfen. Das bestätigt nur eine Person, im Veröffentlichen-Dialog der App: öffne ihn dort. Erlaubst du es hier, wartet die Veröffentlichung im Eingang auf eine Person, die die Quelle verwalten darf.",
     "apps.publishTogetherWorkflow": "Workflow „{title}“",
     "apps.publishTogetherNew": "Neu",
     "apps.publishTogetherChanged": "Geändert",

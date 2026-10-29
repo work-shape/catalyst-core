@@ -10,11 +10,12 @@ import { apiOrigin, uiOrigin } from "./view-fixtures";
 // the publish; the App's publish dialog only shows its answer. Where it holds, one line says
 // so. Where the publish hands a source's data to readers who may not use the source, the dialog
 // says how many, never who: a holder of the source confirms by publishing, and the publish
-// carries the confirmation; anyone else cannot send it, and the instance's refusal reads as the
-// interface's German sentence. The instance's answers are stood in for here; the server half
+// carries the confirmation; anyone else publishes without it and the publish waits in the
+// Inbox. The instance's refusal reads as the interface's German sentence. The instance's answers are stood in for here; the server half
 // is tests/data-store-handover-publish.test.ts.
 
-const REFUSED_TITLE = "a publish nobody may confirm is refused in German, naming no one";
+const REFUSED_TITLE =
+  "a publish its publisher may not confirm waits in the Inbox, and a refusal names no one";
 
 test.use({
   allowedPageErrors: {
@@ -161,24 +162,50 @@ test(REFUSED_TITLE, async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const appName = appNameOf("Übersicht abgelehnt", testInfo);
   await appDraft(page, appName);
-  // The question tells who confirms and offers no confirmation: Publish cannot be sent.
+  // The question tells who approves and offers no confirmation: Publish sends none, and the
+  // instance holds the publish in the Inbox for that person.
   await answerHandover(page, {
     holds: false,
     lines: [
-      "3 Personen, die „Findings“ danach lesen, dürfen eine für dich verborgene Quelle nicht nutzen. Die Weitergabe bestätigt eine Person, die die Quelle verwalten darf, indem sie veröffentlicht."
+      "3 Personen, die „Findings“ danach lesen, dürfen eine für dich verborgene Quelle nicht nutzen. Die Veröffentlichung wartet im Eingang, bis eine Person, die die Quelle verwalten darf, die Weitergabe freigibt."
     ]
+  });
+  const sent: unknown[] = [];
+  await page.route("**/api/v1/assets/app/*/publish", async (route) => {
+    sent.push(route.request().postDataJSON());
+    await route.fulfill({
+      status: 202,
+      // The run the instance answers a held call with, as `operationRunSchema` reads it.
+      json: {
+        id: "oprun_e2e_handover",
+        operation: "assets.publish",
+        effect: "changing",
+        status: "pending_approval",
+        actor: { kind: "user", id: "usr_e2e", label: "E2E" },
+        origin: { kind: "user" },
+        target: "live",
+        approvalRequestId: "apr_e2e_handover",
+        inputHash: "0".repeat(64),
+        attempt: 1,
+        correlationId: "corr_e2e_handover",
+        createdAt: new Date().toISOString(),
+        href: "/api/v1/operation-runs/oprun_e2e_handover"
+      }
+    });
   });
   const dialog = await openDialog(page, appName);
   await expect(dialog.getByTestId("app-publish-handover")).toContainText(
-    "Die Weitergabe bestätigt eine Person, die die Quelle verwalten darf"
+    "Die Veröffentlichung wartet im Eingang, bis eine Person, die die Quelle verwalten darf, die Weitergabe freigibt."
   );
-  const send = dialog.getByRole("button", { name: "Veröffentlichen", exact: true });
-  await expect(send).toBeDisabled();
+  await dialog.getByRole("button", { name: "Veröffentlichen", exact: true }).click();
+  await expect.poll(() => sent.length).toBe(1);
+  expect(publishBodySchema.parse(sent[0]).confirmHandover).toBeUndefined();
+  await expect(dialog.getByTestId("app-publish-waits")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
 
-  // Sent anyway, as an agent or the CLI could, the instance refuses it; the interface words
-  // the refusal in German and names how many, never who, and no source the reader cannot see.
+  // Where the instance refuses a confirmation its sender may not give, the interface words the
+  // refusal in German and names how many, never who, and no source the reader cannot see.
   await page.unrouteAll({ behavior: "wait" });
   await page.route("**/api/v1/assets/app/*/publish", (route) =>
     route.fulfill({
@@ -202,7 +229,7 @@ test(REFUSED_TITLE, async ({ page }, testInfo) => {
   await again.getByRole("button", { name: "Veröffentlichen", exact: true }).click();
   const refusal = again.getByTestId("refusal-notice");
   await expect(refusal).toContainText(
-    "3 Personen, die den Datenspeicher „Findings“ danach lesen, dürfen eine seiner Quellen nicht nutzen. Bitte eine Person, die diese Quelle verwalten darf, diese Version zu veröffentlichen und die Weitergabe zu bestätigen, oder schränke ein, wer den Datenspeicher liest."
+    "3 Personen, die „Findings“ danach lesen, dürfen eine für dich verborgene Quelle nicht nutzen, und die Weitergabe bestätigt nur eine Person, die diese Quelle verwalten darf. Veröffentliche ohne Bestätigung: Dann wartet die Veröffentlichung im Eingang auf ihre Freigabe. Oder schränke ein, wer „Findings“ liest."
   );
   await expect(refusal).not.toContainText(/connection\.write|people/u);
   await expect(

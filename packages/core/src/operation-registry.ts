@@ -345,11 +345,13 @@ interface OperationDefinitionBase<Input, Output> {
    * alone: a tool an agent is given for the subject of its conversation stands for an operation
    * on that asset. Asked with the policy, and again before a call that waited is executed. The
    * stricter of it and `policyFloor` holds. It is told the call's input, which can name the
-   * asset the call writes.
+   * asset the call writes, and who makes it where a caller is known: a publish that hands a
+   * source's data on reads who publishes it (DS-13c).
    */
   policyFloorOf?(
     origin: OperationOrigin,
-    input: unknown
+    input: unknown,
+    actor?: AuthenticatedIdentity
   ): PolicyValue | undefined | Promise<PolicyValue | undefined>;
   /**
    * Who decides a call of the operation that waits for an approval, where it is not every
@@ -357,8 +359,12 @@ interface OperationDefinitionBase<Input, Output> {
    * Inbox lists, and the instance-level right that decides it. A caller who holds that right
    * answers a guardrail's `require_approval` with their own click in the interface: the run
    * records them as caller and as approver, and no request is filed. CLI calls never do this.
+   * `actor` is who made the call, where it is known.
    */
-  approval?(input: unknown): OperationApproval | undefined | Promise<OperationApproval | undefined>;
+  approval?(
+    input: unknown,
+    actor?: AuthenticatedIdentity
+  ): OperationApproval | undefined | Promise<OperationApproval | undefined>;
   /**
    * The answer holds a secret that is shown once, such as a new key. The run keeps no output,
    * so a repeated call with the same key answers OUTPUT_NOT_RETAINED and never the secret

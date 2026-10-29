@@ -53,7 +53,8 @@ const NOT_PUBLISH_REFUSALS: Record<string, string> = {
   dataset_limit: "a run's dataset",
   dataset_expired: "a run's dataset",
   depth_limit: "a run's child below the deepest level",
-  rate_limited: "a call that found no room in its limits"
+  rate_limited: "a call that found no room in its limits",
+  handover_subject_unreadable: "an Inbox decision on a held call, after the publish waited"
 };
 
 /** Every reason the publish-path files and the Workflow checks raise, read from the source. */
@@ -132,6 +133,8 @@ const PUBLISH_REFUSALS: [reason: string, details: Record<string, unknown>][] = [
   ],
   ["data_handover_needs_owner", { dataStore: "belege", title: "Belege", readers: 3 }],
   ["data_handover_unconfirmed", { dataStore: "belege", title: "Belege", readers: 3 }],
+  ["data_handover_person_only", { dataStore: "belege", title: "Belege", readers: 3 }],
+  ["data_handover_needs_owner", { knowledgeBase: "handbuch", title: "Handbuch", readers: 3 }],
   // The App's Publish.
   ["workflow_unavailable", { workflow: "monatsabschluss" }],
   [
@@ -323,14 +326,18 @@ describe("the refusals of the publish paths, in the reader's language", () => {
         connectionTitle: "Exampledata"
       })
     ).toBe(
-      "3 Personen, die den Datenspeicher „Belege“ danach lesen, dürfen „Exampledata“ nicht nutzen. Bitte eine Person, die „Exampledata“ verwalten darf, diese Version zu veröffentlichen und die Weitergabe zu bestätigen, oder schränke ein, wer den Datenspeicher liest."
+      "3 Personen, die „Belege“ danach lesen, dürfen „Exampledata“ nicht nutzen, und die Weitergabe bestätigt nur eine Person, die „Exampledata“ verwalten darf. Veröffentliche ohne Bestätigung: Dann wartet die Veröffentlichung im Eingang auf ihre Freigabe. Oder schränke ein, wer „Belege“ liest."
     );
     // A source the reader may not see is not named.
     expect(say({ reason: "data_handover_needs_owner", ...facts })).toBe(
-      "3 Personen, die den Datenspeicher „Belege“ danach lesen, dürfen eine seiner Quellen nicht nutzen. Bitte eine Person, die diese Quelle verwalten darf, diese Version zu veröffentlichen und die Weitergabe zu bestätigen, oder schränke ein, wer den Datenspeicher liest."
+      "3 Personen, die „Belege“ danach lesen, dürfen eine für dich verborgene Quelle nicht nutzen, und die Weitergabe bestätigt nur eine Person, die diese Quelle verwalten darf. Veröffentliche ohne Bestätigung: Dann wartet die Veröffentlichung im Eingang auf ihre Freigabe. Oder schränke ein, wer „Belege“ liest."
     );
     expect(say({ reason: "data_handover_unconfirmed", ...facts })).toBe(
-      "Wer den Datenspeicher „Belege“ liest, hat sich seit der Frage geändert. Öffne den Dialog erneut, lies, wer die Daten erhält, und veröffentliche noch einmal."
+      "Wer „Belege“ liest, hat sich seit der Frage geändert. Öffne den Dialog erneut, lies, wer die Daten erhält, und veröffentliche noch einmal."
+    );
+    // A key or an agent never confirms: only a person in the interface does.
+    expect(say({ reason: "data_handover_person_only", ...facts })).toBe(
+      "Eine Weitergabe von Quelldaten bestätigt nur eine Person, die in der Oberfläche angemeldet ist. Veröffentliche im Dialog, oder veröffentliche ohne Bestätigung: Dann wartet die Veröffentlichung im Eingang auf eine Freigabe."
     );
     expect(
       tellRefusal({ reason: "data_handover_needs_owner", ...facts }, de, opensAll)?.action
@@ -338,6 +345,17 @@ describe("the refusals of the publish paths, in the reader's language", () => {
       label: "Datenspeicher öffnen",
       route: { kind: "build-asset", assetKind: "data-stores", name: "belege" }
     });
+    // A Knowledge Base with a synced source is told by its title, never linked as a store.
+    const base = {
+      reason: "data_handover_needs_owner",
+      knowledgeBase: "handbuch",
+      title: "Handbuch",
+      readers: 2
+    };
+    expect(say(base)).toBe(
+      "2 Personen, die „Handbuch“ danach lesen, dürfen eine für dich verborgene Quelle nicht nutzen, und die Weitergabe bestätigt nur eine Person, die diese Quelle verwalten darf. Veröffentliche ohne Bestätigung: Dann wartet die Veröffentlichung im Eingang auf ihre Freigabe. Oder schränke ein, wer „Handbuch“ liest."
+    );
+    expect(tellRefusal(base, de, opensAll)?.action).toBeUndefined();
   });
 
   it("words the store refusals of an App as written", () => {

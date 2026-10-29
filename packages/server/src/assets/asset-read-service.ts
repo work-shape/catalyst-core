@@ -3,7 +3,9 @@ import { appCallersByWorkflow } from "../workflows/app-callers";
 import { workflowCallers } from "../workflows/workflow-callers";
 import { agentDependencyAvailability } from "./agent-dependency-availability";
 import { appAudienceReview } from "../apps/app-audience";
-import { publishHandoverQuestion } from "./data-handover";
+import { publishHandoverGate } from "./data-handover";
+import { appWorkflowClosure, workflowPending } from "../apps/app-closure";
+import { APP_ASSET_KIND } from "../apps/app-kind";
 import type { AppAudience, AuditActor } from "@work-shape/catalyst-core";
 import {
   agentConfigSchema,
@@ -424,18 +426,11 @@ export class AssetReadWorkflow {
     // action the instance refuses and hides none it allows (AD-4).
     const allowed = allowedOn(target.kind, call, target.resource);
     // The widening check (DS-13c), for who may publish the revision: the publish asks it again.
+    // A failed check never breaks the read: the publish asks it again and refuses or holds.
     const publishHandover =
       locale && allowed.includes("publish")
-        ? await publishHandoverQuestion(
-            this.options,
-            call,
-            {
-              kind: target.kind.kind,
-              name: asset.name,
-              revision: content.contentRevision ?? asset.revision,
-              ...(address.audience ? { audience: address.audience } : {})
-            },
-            locale
+        ? await this.publishHandover(call, target.kind.kind, asset, content, address, locale).catch(
+            () => undefined
           )
         : undefined;
     const saveApproval = await this.saveApproval(call, target);
@@ -543,6 +538,48 @@ export class AssetReadWorkflow {
       scope.workspaceId
     );
     return workspace?.kind !== "shared";
+  }
+
+  /**
+   * The widening check (DS-13c) of publishing the revision read, as its publish asks it: an
+   * App's draft with each Workflow its one Publish makes live with it, as `apps.publish_review`
+   * names them and the dialog sends them.
+   */
+  private async publishHandover(
+    call: AssetCall,
+    kind: string,
+    asset: ConfigAssetRecord,
+    content: { config: JsonObject; contentRevision?: number },
+    address: { audience?: AppAudience },
+    locale: LocaleCode
+  ) {
+    const revision = content.contentRevision ?? asset.revision;
+    const workflows =
+      kind === APP_ASSET_KIND && revision === asset.revision
+        ? (
+            await appWorkflowClosure(
+              this.options,
+              { scope: asset.scope, config: content.config },
+              (it) => (workflowPending(it) ? (it.config ?? undefined) : it.publishedConfig)
+            )
+          ).flatMap(({ asset: workflow }) =>
+            workflow && workflowPending(workflow)
+              ? [{ name: workflow.name, revision: workflow.revision }]
+              : []
+          )
+        : [];
+    const gate = publishHandoverGate(this.options, () => Promise.resolve(content.config));
+    return gate.question(
+      call,
+      {
+        kind,
+        name: asset.name,
+        revision,
+        ...(address.audience ? { audience: address.audience } : {}),
+        ...(workflows.length > 0 ? { workflows } : {})
+      },
+      locale
+    );
   }
 
   private async agentStatus(config: unknown) {

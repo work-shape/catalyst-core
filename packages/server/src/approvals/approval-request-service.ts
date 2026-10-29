@@ -4,7 +4,9 @@ import {
   AppError,
   GRANT_SCOPE_KINDS,
   auditActorFromUser,
+  confirmsAsPerson,
   createPersonLabelLookup,
+  dataHandoverSubjectConfirmation,
   getSubjectUserId,
   hasAuthScope,
   isJsonObject,
@@ -304,6 +306,19 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       requireDecidingRight(handler, request, access);
       for (const { permission, resource } of furtherPermissionsOf(handler, request))
         access.require(permission, resource);
+      // Approving a hand-over of a source's data confirms it (DS-13c): only a person signed in
+      // to the interface does, never a key.
+      if (
+        command.decision === "approve" &&
+        dataHandoverSubjectConfirmation(request.payload.subject) !== undefined &&
+        !confirmsAsPerson(user, { kind: "user" })
+      )
+        throw new AppError(
+          "FORBIDDEN",
+          "Approving a hand-over of a source's data confirms it, which only a person signed in to the interface does. Approve it in the Inbox.",
+          { reason: "data_handover_person_only" },
+          { exposeMessage: true }
+        );
     } else if (command.decision === "request_changes") {
       throw new AppError("VALIDATION_FAILED", "A confirmation is allowed or denied");
     }

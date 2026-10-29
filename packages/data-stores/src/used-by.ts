@@ -221,7 +221,12 @@ export function agentUse(
     typeof displayName === "string"
       ? displayName
       : (displayName?.[locale] ?? displayName?.en ?? displayName?.de ?? asset.name);
-  return useOfOperations(rowTools, store, title);
+  // Its other tools stay beside them: a Connection the agent calls is a source of the rows it adds.
+  return useOfOperations(
+    [...rowTools, ...toolNames.filter((name) => !name.startsWith(prefix))],
+    store,
+    title
+  );
 }
 
 const knowledgeBaseConfigSchema = z.object({

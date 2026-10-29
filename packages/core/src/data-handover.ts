@@ -1,45 +1,61 @@
 import type { AppAvailability } from "./app-audience";
+import type { ApprovalFurtherRight } from "./approval-requests";
+import type { AgentAvailability } from "./config-assets";
 import { AppError } from "./errors";
-import type { JsonObject } from "./json";
+import { isAuthenticatedServicePrincipal, type AuthenticatedIdentity } from "./identity";
+import { isJsonObject, type JsonObject, type JsonValue } from "./json";
 import type { LocaleCode } from "./localization";
+import type { OperationOrigin } from "./operations";
 import type { ActorAccess } from "./permissions";
 
 // The widening check (DS-13c): a stored copy never inherits its source's rights, so the moment a
-// copy reaches more people is guarded. At a Workflow publish, an App publish or availability
-// change and a Knowledge Base publish, everyone who can read a store's rows must be allowed to
-// use each of its sources (`connection.use`). Where the publish would hand a source's data to
-// people who may not use the source, a holder of `connection.write` on it confirms the hand-over
-// ("Weitergabe"), and the confirmation is audited. Readers are counted and never named.
-// Spec: data-stores-and-knowledge-bases.md, Sources, readers and data scope.
+// copy reaches more people, or gains a source, is guarded. At every change that widens who reads
+// a store's rows or adds a source to it (a publish of a Workflow, an App, a Knowledge Base or an
+// agent, a Knowledge Base's availability, a move of an asset to a wider owner), everyone who
+// can read the rows must be allowed to use each of its sources (`connection.use`). A Knowledge
+// Base with synced sources is a store of its own: its readers are who may use it. Where the
+// change would hand a source's data to people who may not use the source, it waits in the Inbox
+// for a person who holds `connection.write` on the source; that person's approval is the
+// confirmation ("Weitergabe"). Such a person who makes the change themselves confirms it with
+// it. No policy turns the wait off, and the confirmation is audited. Readers are counted and
+// never named. Spec: data-stores-and-knowledge-bases.md, Sources, readers and data scope.
 
-/** One asset a publish makes live, with the revision's config it makes live. */
+/** One asset as a change would leave it: its new config, owner or availability. */
 export interface DataHandoverPublish {
   kind: string;
   name: string;
-  /** The config of the revision that goes live. */
-  config: JsonObject | null;
+  /** The config of the revision that goes live. Absent keeps the live config. */
+  config?: JsonObject | null;
   /** Of an App: who may use it once published. Absent keeps the live availability. */
   appAvailability?: AppAvailability;
+  /** Who owns the asset afterwards. Absent keeps its owner. */
+  scope?: { kind: "instance" } | { kind: "workspace"; workspaceId: string };
+  /** Of a Knowledge Base: the workspaces it is offered in afterwards. */
+  availability?: AgentAvailability;
 }
 
-/** One source of one store the publish reaches, and who the publish newly hands its data to. */
+/** One source of one store the change reaches, and who the change newly hands its data to. */
 export interface DataHandoverPair {
   store: {
+    /** `data_store`, or `knowledge_base` for a Knowledge Base with synced sources. */
+    kind: string;
     name: string;
     /** The title people read, where the caller may see the store; its name otherwise. */
     title: string;
   };
   connection: {
     name: string;
+    assetId: string;
+    workspaceId?: string;
     /** The Connection's name people read; absent where the caller may not see it. */
     title?: string;
   };
-  /** The people who read the store's rows once the publish is live. */
+  /** The people who read the store's rows once the change is made. */
   readers: number;
-  /** Of them, how many may not use the source after the publish. */
+  /** Of them, how many may not use the source after the change. */
   lacking: number;
   /**
-   * Of those, how many this publish hands the data to: they read the store only through it, or
+   * Of those, how many this change hands the data to: they read the store only through it, or
    * the source is new to the store. The confirmation is about them.
    */
   newlyLacking: number;
@@ -47,70 +63,118 @@ export interface DataHandoverPair {
   mayConfirm: boolean;
 }
 
-/** What the widening check answers for one publish. */
+/** What the widening check answers for one change. */
 export interface DataHandoverAnswer {
-  /** Each source of each store the publish reaches that has one. Empty: nothing to say. */
+  /** Each source of each store the change reaches that has one. Empty: nothing to say. */
   pairs: readonly DataHandoverPair[];
   /**
-   * Where the publish hands data to somebody who may not use its source: what the publish
-   * passes as `confirmHandover`. It changes when who that is changes.
+   * Where the change needs a confirmation: what a confirming call passes as `confirmHandover`.
+   * It changes when who receives which data changes.
    */
   confirmation?: string;
-  /** More published assets exist than one bounded read looks through. */
+  /**
+   * More published assets exist than one bounded read looks through. The check cannot tell
+   * then who receives what, so every source it found needs the confirmation, and a store
+   * without a known source waits for an approver of operations.
+   */
   truncated: boolean;
 }
 
 /** The widening check, as the stored-data module answers it. Absent where the module is off. */
 export interface DataHandover {
+  /** `access` is who the answer is for; without it nothing is shown and nobody may confirm. */
   check(
-    access: ActorAccess,
-    publishing: readonly DataHandoverPublish[]
+    access: ActorAccess | undefined,
+    changes: readonly DataHandoverPublish[]
   ): Promise<DataHandoverAnswer>;
 }
 
-/** The refusals of a publish that hands data on without the confirmation it needs. */
+/** The refusals of a change that hands data on without the confirmation it needs. */
 const DATA_HANDOVER_REFUSALS = {
   /** The caller may not confirm the hand-over: they hold no `connection.write` on the source. */
   data_handover_needs_owner: "FORBIDDEN",
-  /** The caller may confirm and did not, or confirmed another hand-over than this one. */
-  data_handover_unconfirmed: "CONFLICT"
+  /** The caller confirmed another hand-over than this one, or none where it was executed. */
+  data_handover_unconfirmed: "CONFLICT",
+  /** A key, a service principal, an agent or an embedding host confirmed: only a person does. */
+  data_handover_person_only: "FORBIDDEN"
 } as const;
 
 export type DataHandoverRefusal = keyof typeof DATA_HANDOVER_REFUSALS;
 
-/** The pairs whose hand-over the publish needs confirmed. */
+/** The pairs whose hand-over the change needs confirmed: every pair where the read was cut. */
 export function dataHandoverGaps(answer: DataHandoverAnswer): DataHandoverPair[] {
-  return answer.pairs.filter((pair) => pair.newlyLacking > 0);
+  return answer.truncated
+    ? [...answer.pairs]
+    : answer.pairs.filter((pair) => pair.newlyLacking > 0);
+}
+
+/** Whether the caller may confirm every hand-over of the answer. */
+export function dataHandoverMayConfirm(answer: DataHandoverAnswer): boolean {
+  const gaps = dataHandoverGaps(answer);
+  return gaps.length > 0 && gaps.every((gap) => gap.mayConfirm);
 }
 
 /**
- * Refuses a publish that hands data on unconfirmed: where the caller may not confirm, it names
- * who may; where they may, it names the confirmation to pass. Nothing where the check holds or
- * the caller confirmed exactly this hand-over. Never names a person, and names a Connection
- * only where the caller may see it.
+ * Whether a call is a person's own click in the interface, the only call that confirms a
+ * hand-over: no key, no service principal, no embedding host's token, no agent.
+ */
+export function confirmsAsPerson(
+  actor: AuthenticatedIdentity,
+  origin: Pick<OperationOrigin, "kind">
+): boolean {
+  return (
+    origin.kind === "user" &&
+    !isAuthenticatedServicePrincipal(actor) &&
+    actor.delegatedActor === undefined &&
+    actor.keyScopes === undefined
+  );
+}
+
+/**
+ * Refuses a confirmation the caller may not give, or one of another hand-over: where they may
+ * not confirm, it names who may; a key or an agent never does. Nothing where the check needs no
+ * confirmation or the caller confirmed exactly this hand-over. Never names a person, and names
+ * a Connection only where the caller may see it.
  */
 export function requireDataHandover(
   answer: DataHandoverAnswer,
-  confirmHandover: string | undefined
+  confirmHandover: string | undefined,
+  caller: { person: boolean }
 ): void {
+  if (answer.confirmation === undefined) return;
   const gaps = dataHandoverGaps(answer);
   const first = gaps[0];
-  if (first === undefined) return;
-  const source = first.connection.title ? `'${first.connection.title}'` : "one of its sources";
-  const facts = {
-    dataStore: first.store.name,
-    title: first.store.title,
-    readers: first.newlyLacking,
-    ...(first.connection.title
-      ? { connection: first.connection.name, connectionTitle: first.connection.title }
-      : {})
-  };
-  const said = `${first.newlyLacking} ${first.newlyLacking === 1 ? "person" : "people"} who would read the Data Store '${first.store.title}' after this publish may not use ${first.connection.title ? `the Connection ${source}` : source}.`;
-  const owner = gaps.find((gap) => !gap.mayConfirm);
-  if (owner) {
+  const facts = first
+    ? {
+        // A Knowledge Base is named apart, so the refusal never links it as a Data Store.
+        ...(first.store.kind === "data_store"
+          ? { dataStore: first.store.name }
+          : { knowledgeBase: first.store.name }),
+        title: first.store.title,
+        readers: first.newlyLacking,
+        ...(first.connection.title
+          ? { connection: first.connection.name, connectionTitle: first.connection.title }
+          : {})
+      }
+    : { truncated: true };
+  const source = first?.connection.title
+    ? `the Connection '${first.connection.title}'`
+    : "one of its sources";
+  const said = first
+    ? `${first.newlyLacking} ${first.newlyLacking === 1 ? "person" : "people"} who would read '${first.store.title}' after this change may not use ${source}.`
+    : "Not every published asset could be read, so who receives which data cannot be told.";
+  if (!caller.person) {
+    throw new AppError(
+      DATA_HANDOVER_REFUSALS.data_handover_person_only,
+      `${said} Only a person signed in to the interface confirms the hand-over: confirm it in the dialog, or make the change without a confirmation and it waits in the Inbox for a person who may change the source.`,
+      { reason: "data_handover_person_only", ...facts },
+      { exposeMessage: true }
+    );
+  }
+  if (!dataHandoverMayConfirm(answer)) {
     throw new AppError(
       DATA_HANDOVER_REFUSALS.data_handover_needs_owner,
-      `${said} Only a person who holds connection.write on that Connection may confirm the hand-over: ask them to publish this revision, or narrow who reads the store.`,
+      `${said} Only a person who holds connection.write on that Connection may confirm the hand-over: make the change without a confirmation and it waits in the Inbox for them, or narrow who reads the store.`,
       { reason: "data_handover_needs_owner", ...facts },
       { exposeMessage: true }
     );
@@ -118,16 +182,88 @@ export function requireDataHandover(
   if (confirmHandover !== answer.confirmation) {
     throw new AppError(
       DATA_HANDOVER_REFUSALS.data_handover_unconfirmed,
-      `${said} Confirm the hand-over with assets.publish confirmHandover: '${answer.confirmation ?? ""}' (CLI: --confirm-handover ${answer.confirmation ?? ""}).`,
-      {
-        reason: "data_handover_unconfirmed",
-        ...facts,
-        ...(answer.confirmation ? { confirmation: answer.confirmation } : {})
-      },
+      `${said} Confirm the hand-over with confirmHandover: '${answer.confirmation}'.`,
+      { reason: "data_handover_unconfirmed", ...facts, confirmation: answer.confirmation },
       { exposeMessage: true }
     );
   }
 }
+
+/** The key of a held call's subject that names the hand-over its approval confirms. */
+const HANDOVER_SUBJECT_KEY = "handover";
+
+/**
+ * What a held call's subject keeps of the hand-over its approval confirms: the confirmation,
+ * and each source by id, whose `connection.write` who decides it must hold. No person, and no
+ * name beyond what the right is asked on.
+ */
+export function dataHandoverSubject(answer: DataHandoverAnswer): JsonObject | undefined {
+  if (answer.confirmation === undefined) return undefined;
+  const connections = new Map(
+    dataHandoverGaps(answer).map(({ connection }) => [
+      connection.assetId,
+      {
+        name: connection.name,
+        assetId: connection.assetId,
+        workspaceId: connection.workspaceId ?? null
+      }
+    ])
+  );
+  return {
+    [HANDOVER_SUBJECT_KEY]: {
+      confirmation: answer.confirmation,
+      connections: [...connections.values()]
+    }
+  };
+}
+
+/** The confirmation a held call's subject was filed with, or nothing. */
+export function dataHandoverSubjectConfirmation(
+  subject: JsonValue | undefined
+): string | undefined {
+  const handover = isJsonObject(subject) ? subject[HANDOVER_SUBJECT_KEY] : undefined;
+  return isJsonObject(handover) && typeof handover.confirmation === "string"
+    ? handover.confirmation
+    : undefined;
+}
+
+/**
+ * The rights a held call's hand-over asks of who decides it: `connection.write` on each source.
+ * A subject without one asks nothing; one that cannot be read throws, and nobody decides it.
+ */
+export function dataHandoverRights(subject: JsonValue | undefined): ApprovalFurtherRight[] {
+  const handover = isJsonObject(subject) ? subject[HANDOVER_SUBJECT_KEY] : undefined;
+  if (handover === undefined) return [];
+  const connections = isJsonObject(handover) ? handover.connections : undefined;
+  if (!Array.isArray(connections)) throw undecidableHandover();
+  return connections.map((connection) => {
+    if (
+      !isJsonObject(connection) ||
+      typeof connection.name !== "string" ||
+      typeof connection.assetId !== "string"
+    )
+      throw undecidableHandover();
+    return {
+      permission: "connection.write",
+      resource: {
+        kind: "connection",
+        name: connection.name,
+        assetId: connection.assetId,
+        ...(typeof connection.workspaceId === "string"
+          ? { workspaceId: connection.workspaceId }
+          : {})
+      }
+    };
+  });
+}
+
+const undecidableHandover = () =>
+  new AppError(
+    "CONFLICT",
+    "This request does not say which sources it hands on, so nobody can decide it",
+    { reason: "handover_subject_unreadable" },
+    { exposeMessage: true }
+  );
 
 /** A list of names in the reader's language: "A, B and C". */
 function listed(names: readonly string[], locale: LocaleCode): string {
@@ -153,7 +289,26 @@ export function dataHandoverLines(
         ? "eine für dich verborgene Quelle"
         : "a source hidden from you"
       : quote(pair.connection.title);
-  if (answer.pairs.length === 0) return { holds: true, lines: [] };
+  const cut = answer.truncated
+    ? [
+        de
+          ? "Nicht alle veröffentlichten Assets konnten gelesen werden, deshalb braucht diese Veröffentlichung eine bestätigte Weitergabe."
+          : "Not every published asset could be read, so this publish needs a confirmed hand-over."
+      ]
+    : [];
+  if (answer.pairs.length === 0) {
+    return answer.confirmation === undefined
+      ? { holds: true, lines: [] }
+      : {
+          holds: false,
+          lines: [
+            ...cut,
+            de
+              ? "Die Veröffentlichung wartet im Eingang auf eine Freigabe."
+              : "The publish waits in the Inbox for an approval."
+          ]
+        };
+  }
   const gaps = dataHandoverGaps(answer);
   if (gaps.length === 0) {
     const stores = listed(
@@ -175,25 +330,34 @@ export function dataHandoverLines(
       ]
     };
   }
+  const mayConfirm = dataHandoverMayConfirm(answer);
   return {
     holds: false,
-    lines: gaps.map((gap) => {
-      const one = gap.newlyLacking === 1;
-      const store = quote(gap.store.title);
-      const source = sourceName(gap);
-      const owned =
-        gap.connection.title === undefined ? (de ? "die Quelle" : "the source") : source;
-      const said = de
-        ? `${gap.newlyLacking} ${one ? "Person, die" : "Personen, die"} ${store} danach ${one ? "liest, darf" : "lesen, dürfen"} ${source} nicht nutzen.`
-        : `${gap.newlyLacking} ${one ? "person who reads" : "people who read"} ${store} after this publish may not use ${source}.`;
-      const next = gap.mayConfirm
-        ? de
-          ? "Mit Veröffentlichen bestätigst du die Weitergabe."
-          : "Publishing confirms the hand-over."
-        : de
-          ? `Die Weitergabe bestätigt eine Person, die ${owned} verwalten darf, indem sie veröffentlicht.`
-          : `A person who may change ${owned} confirms the hand-over by publishing.`;
-      return `${said} ${next}`;
-    })
+    lines: [
+      ...cut,
+      ...gaps.map((gap) => {
+        const one = gap.newlyLacking === 1;
+        const store = quote(gap.store.title);
+        const source = sourceName(gap);
+        const owned =
+          gap.connection.title === undefined ? (de ? "die Quelle" : "the source") : source;
+        const said =
+          gap.newlyLacking === 0
+            ? de
+              ? `Wer ${store} danach liest, darf ${source} vielleicht nicht nutzen.`
+              : `Who reads ${store} after this publish may not be allowed to use ${source}.`
+            : de
+              ? `${gap.newlyLacking} ${one ? "Person, die" : "Personen, die"} ${store} danach ${one ? "liest, darf" : "lesen, dürfen"} ${source} nicht nutzen.`
+              : `${gap.newlyLacking} ${one ? "person who reads" : "people who read"} ${store} after this publish may not use ${source}.`;
+        const next = mayConfirm
+          ? de
+            ? "Mit Veröffentlichen bestätigst du die Weitergabe."
+            : "Publishing confirms the hand-over."
+          : de
+            ? `Die Veröffentlichung wartet im Eingang, bis eine Person, die ${owned} verwalten darf, die Weitergabe freigibt.`
+            : `The publish waits in the Inbox until a person who may change ${owned} approves the hand-over.`;
+        return `${said} ${next}`;
+      })
+    ]
   };
 }

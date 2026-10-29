@@ -2,12 +2,14 @@ import {
   AppError,
   isAuthenticatedServicePrincipal,
   type AssetMoveStatus,
+  type DataHandoverPublish,
   type JsonObject,
   type LocaleCode
 } from "@work-shape/catalyst-core";
 import { ApprovalRequestWorkflow } from "../approvals/approval-request-service";
 import type { ChatServerOptions } from "../types";
 import type { AssetCall } from "./asset-access";
+import type { HandoverChanges, HandoverConfirmed } from "./data-handover";
 import {
   assetMoveApprovalKind,
   assetMoveView,
@@ -48,6 +50,28 @@ function moveOptions(options: AssetMoveOperationOptions): AssetMoveOptions {
 
 function localeOf(options: AssetMoveOperationOptions, call: AssetCall): LocaleCode {
   return call.runtime?.locale ?? options.config.localization.defaultLocale;
+}
+
+/**
+ * What a move changes, as the widening check reads it (DS-13c): each asset that moves, at the
+ * owner it goes to. Nothing where the move is refused anyway: the move says why.
+ */
+export function moveChanges(
+  options: AssetMoveOperationOptions
+): HandoverChanges<AssetMoveInput & HandoverConfirmed> {
+  return async (input) => {
+    const plan = await planAssetMove(
+      moveOptions(options),
+      input,
+      options.config.localization.defaultLocale
+    ).catch(() => undefined);
+    if (!plan) return undefined;
+    const scope: DataHandoverPublish["scope"] =
+      plan.to.kind === "workspace"
+        ? { kind: "workspace", workspaceId: plan.to.workspaceId }
+        : { kind: "instance" };
+    return plan.members.map(({ kind, record }) => ({ kind: kind.kind, name: record.name, scope }));
+  };
 }
 
 /** The dry run of a move: what moves, what breaks, who reads and edits it afterwards. */

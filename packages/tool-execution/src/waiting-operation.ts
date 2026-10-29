@@ -137,7 +137,7 @@ export async function executeConfirmedOperation(
   ) {
     // The person's confirmation is their own click: it approves only where their click on
     // Publish would, with every right the held item asks of who decides it (DP-3).
-    const approval = await context.definition.approval?.(context.call.input);
+    const approval = await context.definition.approval?.(context.call.input, context.call.actor);
     const access = await deps.authorizer.forActor(context.call.actor);
     const clicked = { ...context.call, origin: { kind: "user" as const } };
     if (!approval || !approvedByCaller(clicked, policy, approval, access))
@@ -197,7 +197,7 @@ export async function executeInboxConfirmedOperation(
   if (policy.next !== "await_approval") {
     return executeWaitingCall(context, decision, options.signal);
   }
-  const approval = await context.definition.approval?.(context.call.input);
+  const approval = await context.definition.approval?.(context.call.input, context.call.actor);
   const access = await deps.authorizer.forActor(context.call.actor);
   if (approval && approvedByCaller(context.call, policy, approval, access)) {
     // An approver's own click is the approval, as when they click Publish themselves.

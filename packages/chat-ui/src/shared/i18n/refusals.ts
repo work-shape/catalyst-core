@@ -220,6 +220,10 @@ const DATA_HANDOVER_ROWS = {
   data_handover_unconfirmed: {
     sentence: handoverSentence("refusals.dataHandoverUnconfirmed"),
     action: toDataStore
+  },
+  data_handover_person_only: {
+    sentence: () => ({ key: "refusals.dataHandoverPersonOnly" }),
+    action: toDataStore
   }
 } satisfies Record<DataHandoverRefusal, RefusalRow>;
 

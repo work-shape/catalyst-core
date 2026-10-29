@@ -24,8 +24,13 @@ import {
 import { publishPolicyFloor } from "../approvals/publish-approval";
 import { AssetWorkflow } from "../assets/asset-service";
 import { adoptAssetRepositories } from "../assets/asset-repo-adoption";
-import { checkAssetMove, moveAsset } from "../assets/asset-move-operation";
+import { checkAssetMove, moveAsset, moveChanges } from "../assets/asset-move-operation";
 import { AppPublishTogether } from "../apps/app-publish-together";
+import {
+  DataHandoverGate,
+  availabilityChanges,
+  publishHandoverGate
+} from "../assets/data-handover";
 
 import { ConfigAssetWorkflow } from "../config-assets/config-asset-service";
 import { TryConversations } from "../conversations/try-conversations";
@@ -129,38 +134,57 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
 
   // An App's publish may name the Workflow drafts it makes live with it (DP-3): they are asked,
   // held and published together with the App.
+  // The widening check (DS-13c) of a publish: one that hands a source's data on waits for a
+  // person who may change the source, unless that person publishes it themselves.
+  const publishHandover = publishHandoverGate(options, (input) =>
+    workflow.agentDrafts.publishedConfig(input)
+  );
   route.operation(apiOperations["assets.publish"], {
-    authorize: (input, { actor, access, origin }) =>
-      together.authorize({ actor, access, origin }, input),
+    authorize: async (input, { actor, access, origin }) => {
+      const right = await together.authorize({ actor, access, origin }, input);
+      if (right.allowed) await publishHandover.authorize({ actor, access, origin }, input);
+      return right;
+    },
     resource: assetResource,
     policyTargets: (input) => together.policyTargets(input),
     changeClass: "reversible",
     beforeEvents: (input, _origin, actor) => together.events(input, actor),
     // A held agent publish keeps whether it was approved as the first version or a draft.
     heldInputKeys: [AGENT_PUBLISH_HELD_KEY],
-    // A publish a guardrail holds waits for the holders of the kind's `approve` right.
-    approval: (input) => together.approval(input),
+    // A publish a guardrail holds waits for the holders of the kind's `approve` right, and one
+    // that hands a source's data on for a holder of `connection.write` on the source as well.
+    approval: async (input, actor) =>
+      publishHandover.approval(input, actor, await together.approval(input)),
     // An instance-owned agent's publish is made live without a terminal; a workspace's agent
     // keeps the question, so `--yes` waits as the person's confirmation (WS-PUB-1b). A skill's
     // draft is published without a question, as `config push --publish` does (SKILL-DRAFT-1).
-    policyFloorOf: (origin, input) =>
-      typeof input === "object" &&
-      input !== null &&
-      "kind" in input &&
-      (input.kind === "skill" ||
-        (input.kind === "agent" &&
-          !("workspaceId" in input && typeof input.workspaceId === "string")))
-        ? undefined
-        : publishPolicyFloor(origin),
+    // A publish that hands a source's data on unconfirmed waits for an approval, whatever kind.
+    policyFloorOf: (origin, input, actor) =>
+      publishHandover.policyFloor(
+        input,
+        actor,
+        input.kind === "skill" || (input.kind === "agent" && input.workspaceId === undefined)
+          ? undefined
+          : publishPolicyFloor(origin)
+      ),
     execute: async (input, context) => {
       if (input.kind === "skill") return workflow.skillDrafts.publish(context, input);
-      if (input.kind !== "agent") return together.publish(context, input);
-      const result = await workflow.agentDrafts.publish(
+      // Asked again as the publish is made: who reads what may have changed since it was held.
+      const handover = await publishHandover.execute(context, input);
+      const result =
+        input.kind === "agent"
+          ? await workflow.agentDrafts.publish(
+              context,
+              input,
+              agentPublishChecked(context.beforeEvents, input)
+            )
+          : await together.publish(context, input);
+      await publishHandover.record(
         context,
-        input,
-        agentPublishChecked(context.beforeEvents, input)
+        { kind: input.kind, name: input.name, change: "publish" },
+        handover
       );
-      await tries.settled(context, input, "published");
+      if (input.kind === "agent") await tries.settled(context, input, "published");
       return result;
     }
   });
@@ -210,13 +234,31 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     execute: (input, context) => workflow.delete(context, input)
   });
 
+  // A Knowledge Base offered in more workspaces reaches more readers (DS-13c).
+  const availabilityHandover = new DataHandoverGate(options, availabilityChanges());
   route.operation(apiOperations["assets.set_availability"], {
-    authorize: (input, { access }) => authorizeAssetPlacement(options, access, input),
+    authorize: async (input, caller) => {
+      const right = await authorizeAssetPlacement(options, caller.access, input);
+      if (right.allowed) await availabilityHandover.authorize(caller, input);
+      return right;
+    },
     resource: assetResource,
     policyTargets: (input) => workflow.policyTargets(input),
     changeClass: "reversible",
     module: ASSET_WRITE_MODULE,
-    execute: (input, context) => setAssetAvailability(options, context, input)
+    approval: (input, actor) => availabilityHandover.approval(input, actor, undefined),
+    policyFloorOf: (_origin, input, actor) =>
+      availabilityHandover.policyFloor(input, actor, undefined),
+    execute: async (input, context) => {
+      const handover = await availabilityHandover.execute(context, input);
+      const result = await setAssetAvailability(options, context, input);
+      await availabilityHandover.record(
+        context,
+        { kind: input.kind, name: input.name, change: "availability" },
+        handover
+      );
+      return result;
+    }
   });
 
   // "Teilen mit…" (SHARE-1): up the ladder Nur ich → Team → Alle, with what the asset uses.
@@ -229,14 +271,33 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     execute: (input, context) => checkAssetMove(options, context, input)
   });
 
+  // An asset moved to a wider owner reaches the readers there (DS-13c).
+  const moveHandover = new DataHandoverGate(options, moveChanges(options));
   route.operation(apiOperations["assets.move"], {
-    authorize: (input, { access }) => workflow.authorizeWrite(access, input),
+    authorize: async (input, caller) => {
+      const right = await workflow.authorizeWrite(caller.access, input);
+      if (right.allowed) await moveHandover.authorize(caller, input);
+      return right;
+    },
     resource: assetResource,
     policyTargets: (input) => workflow.policyTargets(input),
     // Nothing moves back down: who reads and edits it afterwards is the target's.
     changeClass: "irreversible",
     module: ASSET_WRITE_MODULE,
-    execute: (input, context) => moveAsset(options, context, input)
+    approval: (input, actor) => moveHandover.approval(input, actor, undefined),
+    policyFloorOf: (_origin, input, actor) => moveHandover.policyFloor(input, actor, undefined),
+    execute: async (input, context) => {
+      const handover = await moveHandover.execute(context, input);
+      // A move filed as a request is decided by an admin with the right at the target; the
+      // hand-over is confirmed already, as the request was filed.
+      const result = await moveAsset(options, context, input);
+      await moveHandover.record(
+        context,
+        { kind: input.kind, name: input.name, change: "move" },
+        handover
+      );
+      return result;
+    }
   });
 
   route.operation(apiOperations["agents.use.set"], {

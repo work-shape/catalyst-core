@@ -20,7 +20,7 @@ import {
 import { NameList } from "./app-header";
 import { appManifestSummary, appReadsStoredData, type AppManifestSummary } from "./app-model";
 import { AppPublishDataView } from "./app-publish-data";
-import { AppPublishHandoverView, appPublishHandoverAllows } from "./app-publish-handover";
+import { AppPublishHandoverView } from "./app-publish-handover";
 import {
   AppPublishTogetherView,
   appPublishTogetherNamed,
@@ -279,11 +279,7 @@ export function PublishDialog({
             <Button variant="outline" disabled={loading} onClick={onClose}>
               {t("cancel")}
             </Button>
-            <Button
-              loading={loading}
-              disabled={waitsForData || !changes || !appPublishHandoverAllows(handover)}
-              onClick={onConfirm}
-            >
+            <Button loading={loading} disabled={waitsForData || !changes} onClick={onConfirm}>
               {t("apps.publish")}
             </Button>
           </>

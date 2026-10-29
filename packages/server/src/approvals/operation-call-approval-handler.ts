@@ -5,6 +5,7 @@ import {
   type ActorAccess,
   approvalExecutionOf,
   asUserId,
+  dataHandoverRights,
   isAppError,
   unknownToJsonValue,
   type ApprovalExecution,
@@ -153,7 +154,12 @@ export function createOperationCallApprovalHandler(
       const call = parsePayload(payload);
       const about = subjectKindOf(call);
       // A kind that asks further rights reads them from the subject; without one, it refuses.
-      return about?.furtherPermissions ? about.furtherPermissions(call.subject ?? {}) : [];
+      // A call that hands a source's data on asks `connection.write` on each source, whatever
+      // its kind (DS-13c).
+      return [
+        ...(about?.furtherPermissions ? about.furtherPermissions(call.subject ?? {}) : []),
+        ...dataHandoverRights(call.subject)
+      ];
     },
     ...onAsset(held),
     // A plain held call on one Connection is decided by `operations.approve`, or by

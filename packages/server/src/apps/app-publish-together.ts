@@ -37,7 +37,6 @@ import {
   type StoreWaitClock
 } from "./app-store-wait";
 import { publishMemberRights } from "../approvals/publish-approval";
-import { recordPublishHandover, requirePublishHandover } from "../assets/data-handover";
 
 // One Publish of an App makes the Data Store and Workflow drafts it names live with it (DP-3,
 // GOLIVE-1): the call names each with the revision the person reviewed, and the App's own
@@ -122,9 +121,6 @@ export class AppPublishTogether {
       if (!own.allowed) return own;
     }
     requireStoreLevels(members.stores);
-    // The widening check (DS-13c), before a publish is held or made: one that hands a source's
-    // data on unconfirmed is refused here, so no request waits that nobody could approve.
-    await requirePublishHandover(this.options, caller, input);
     return right;
   }
 
@@ -192,14 +188,6 @@ export class AppPublishTogether {
    * revisions and the stores' new levels.
    */
   async publish(call: AssetCall, input: PublishTogetherInput) {
-    // Asked again as the publish is made: who reads what may have changed since it was held.
-    const handover = await requirePublishHandover(this.options, call, input);
-    const published = await this.publishWithMembers(call, input);
-    await recordPublishHandover(call, input, handover);
-    return published;
-  }
-
-  private async publishWithMembers(call: AssetCall, input: PublishTogetherInput) {
     const members = await this.members(input);
     const migrating = await this.storesToAwait(call, input, members.stores);
     // A store published stays published, and a wait takes up to a minute: the App's own checks

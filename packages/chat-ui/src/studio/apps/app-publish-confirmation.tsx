@@ -180,7 +180,7 @@ export function AppPublishConfirmationView({
       )}
       <AppAudienceChange offer={offer} selected={selected} workspaceName={workspaceName} />
       <PublishNarrativeReadLead read={narrative} />
-      <AppPublishHandoverView handover={handover} />
+      <AppPublishHandoverView handover={handover} agentCard />
       {together ? <AppPublishTogetherView read={together} /> : null}
       {storedData ? (
         <KeyValueList>
