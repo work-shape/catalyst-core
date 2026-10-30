@@ -25,26 +25,26 @@ const DEPLOYMENT_KIT = "deployment-kit";
 const MAX_TARBALL_BYTES = 300_000;
 const MAX_TARBALL_BYTES_BY_DIR = {
   // The schemas and declarations of every API operation, and the OpenAPI document the docs build
-  // reads; each grows with the operations (assets.move, projects, data_store.use and more in 0.8.0-rc.18).
-  "api-contract": 400_000,
+  // reads; each grows with the operations (policies, test credentials and member grants took it to 405,040).
+  "api-contract": 480_000,
   // Standalone helper bundles, shipped skills and the Python file tools; the file helpers took it to 8.2 MB.
   "artifact-helpers": 9_000_000,
   // Compiled components, stylesheet and Vite helpers.
   "chat-ui": 960_000,
   // Bundled server assembly: routes, workers and built-in capabilities.
-  "client-assembly": 360_000,
+  "client-assembly": 440_000,
   // The command line client: config push, validate and the skill draft commands.
   "config-cli": 360_000,
   // Domain types and logic every other package builds on.
-  core: 360_000,
+  core: 440_000,
   // Built documentation site.
   docs: 2_400_000,
   // Two built web pages: the public form page and its preview beside the chat.
   "outside-forms": 450_000,
   // Migrations and their snapshot history.
   "postgres-store": 850_000,
-  // Pinned view runtime and released App Kit versions.
-  server: 2_700_000,
+  // Pinned view runtime and released App Kit versions; each new App Kit version adds its bundle.
+  server: 3_500_000,
   // Source and compiled components for Tailwind scanning; the chat, project and file views grew it to 540,000.
   ui: 600_000
 };
