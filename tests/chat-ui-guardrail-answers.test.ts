@@ -98,7 +98,7 @@ describe("a guardrail's answer", () => {
       }),
       "en"
     );
-    expect(text(words)).toContain("Set by the operator. Nobody in the instance can change it.");
+    expect(text(words)).toContain("Set by the operator. Nobody here can change it.");
     expect(words).not.toContain("Mara");
     expect(words).not.toContain('data-testid="guardrail-answer-ask"');
   });

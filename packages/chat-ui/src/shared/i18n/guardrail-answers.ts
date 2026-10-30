@@ -9,8 +9,7 @@ export const guardrailAnswers = defineTranslations({
     "rulesInForce.description":
       "The guardrails that apply to you: those the operator sets, those the platform ships and those published for all workspaces or for your workspaces. A guardrail checks an action before it happens and warns, holds it for approval or blocks it.",
     "rulesInForce.floor": "Set by the operator",
-    "rulesInForce.floorDescription":
-      "Part of the system setup. Nobody in the instance can change them.",
+    "rulesInForce.floorDescription": "Part of the system setup. Nobody here can change them.",
     "rulesInForce.instance": "All workspaces",
     "rulesInForce.workspace": "Workspace {name}",
     "rulesInForce.someWorkspace": "A workspace",
@@ -26,7 +25,7 @@ export const guardrailAnswers = defineTranslations({
     "guardrailAnswer.scopeWorkspace": "Workspace {name}",
     "guardrailAnswer.scopeSomeWorkspace": "One workspace",
     "guardrailAnswer.revision": "Version {revision}",
-    "guardrailAnswer.setByOperator": "Set by the operator. Nobody in the instance can change it.",
+    "guardrailAnswer.setByOperator": "Set by the operator. Nobody here can change it.",
     "guardrailAnswer.publishedBy": "Version {revision} published by {name}, {when}.",
     "guardrailAnswer.publishedByHidden": "Version {revision} published {when}.",
     "guardrailAnswer.switchedBy": "Last switched by {name}, {when}.",
@@ -56,8 +55,7 @@ export const guardrailAnswers = defineTranslations({
     "rulesInForce.description":
       "Die Leitplanken, die für dich gelten: vom Betreiber festgelegte, von der Plattform mitgelieferte und für alle Arbeitsbereiche oder deine Arbeitsbereiche veröffentlichte. Eine Leitplanke prüft eine Aktion, bevor sie passiert, und warnt, hält sie zur Freigabe an oder blockiert sie.",
     "rulesInForce.floor": "Vom Betreiber festgelegt",
-    "rulesInForce.floorDescription":
-      "Teil der Systemeinrichtung. Niemand in der Instanz kann sie ändern.",
+    "rulesInForce.floorDescription": "Teil der Systemeinrichtung. Hier kann sie niemand ändern.",
     "rulesInForce.instance": "Alle Arbeitsbereiche",
     "rulesInForce.workspace": "Arbeitsbereich {name}",
     "rulesInForce.someWorkspace": "Ein Arbeitsbereich",
@@ -73,8 +71,7 @@ export const guardrailAnswers = defineTranslations({
     "guardrailAnswer.scopeWorkspace": "Arbeitsbereich {name}",
     "guardrailAnswer.scopeSomeWorkspace": "Ein Arbeitsbereich",
     "guardrailAnswer.revision": "Version {revision}",
-    "guardrailAnswer.setByOperator":
-      "Vom Betreiber festgelegt. Niemand in der Instanz kann sie ändern.",
+    "guardrailAnswer.setByOperator": "Vom Betreiber festgelegt. Hier kann sie niemand ändern.",
     "guardrailAnswer.publishedBy": "Version {revision} veröffentlicht von {name}, {when}.",
     "guardrailAnswer.publishedByHidden": "Version {revision} veröffentlicht {when}.",
     "guardrailAnswer.switchedBy": "Zuletzt umgeschaltet von {name}, {when}.",

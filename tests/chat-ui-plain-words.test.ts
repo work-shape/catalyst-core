@@ -103,6 +103,12 @@ const EXCEPTIONS: { keys: RegExp; words: readonly string[]; reason: string }[] =
       "Studio's Capabilities page and its mark on a module that is off, in the words section 4.3 of the navigation spec gives them (TOOLS-2)."
   },
   {
+    keys: /^(?:rulesInForce\.(?:description|floor)|guardrailAnswer\.setByOperator)$/u,
+    words: ["operator"],
+    reason:
+      "The release floor is shown as set by the operator, whom nobody in the product can ask to change it (GR-3)."
+  },
+  {
     keys: /^personalApiKeys\.createdDescription$/u,
     words: ["error code"],
     reason: "CATALYST_API_KEY is the variable the person sets for the CLI; it is no error code."
