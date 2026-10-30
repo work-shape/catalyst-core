@@ -8,6 +8,7 @@ import {
   type JsonObject,
   type JsonValue
 } from "@work-shape/catalyst-core";
+import { guardrailAnswerRefSchema } from "@work-shape/catalyst-api-contract";
 import { z } from "zod";
 
 /**
@@ -80,6 +81,11 @@ export const payloadSchema = z.object({
   heldBy: z
     .enum(["instance_default", "declared_default", "policy_floor", "central_setting", "guardrail"])
     .optional(),
+  /**
+   * The guardrails a person who decides is shown beside the call (GR-3): the one that asked for
+   * the approval and those that warned. Their names and reasons, never the checked content.
+   */
+  guardrails: z.array(guardrailAnswerRefSchema).optional(),
   expiresAt: z.string()
 });
 
@@ -125,6 +131,7 @@ export function previewOf(payload: OperationCallPayload) {
     origin: payload.origin,
     ...(payload.workspaceId ? { workspaceId: payload.workspaceId } : {}),
     ...(payload.heldBy ? { heldBy: payload.heldBy } : {}),
+    ...(payload.guardrails?.length ? { guardrails: payload.guardrails } : {}),
     inputs: fields.slice(0, HELD_OPERATION_PREVIEW_MAX_FIELDS).map(([key, value]) => {
       const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
       return text.length > HELD_OPERATION_PREVIEW_VALUE_MAX_CHARS

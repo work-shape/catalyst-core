@@ -42,6 +42,7 @@ import { PublishReviewBody } from "./publish-review";
 import { SkillChangeBody, type SkillChangeLabels } from "./skill-change-body";
 import { parseSkillChangePreview } from "./skill-change-preview";
 import { personName } from "../../shared/person-name";
+import { GuardrailAnswers } from "../guardrails/guardrail-answer";
 
 type OutcomeTone = "info" | "success" | "danger" | "warning";
 
@@ -267,6 +268,8 @@ export function OperationCallBody({
           ) : null}
         </div>
       ) : null}
+      {/* The guardrails that held or warned about the call: why, and who can change them. */}
+      {call.guardrails ? <GuardrailAnswers answers={call.guardrails} /> : null}
       {pending && call.handover ? (
         // What approving hands on, as the caller was told: who decides it confirms it.
         <Banner tone="warning" role="note" data-testid="operation-call-handover">

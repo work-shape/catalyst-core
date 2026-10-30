@@ -1,4 +1,6 @@
+guardrails.ask  POST /api/v1/guardrails/:name/ask
 guardrails.dry_run  POST /api/v1/guardrails/:name/dry-run
+guardrails.in_force  GET /api/v1/guardrails/in-force
 guardrails.list_hits  GET /api/v1/guardrails/:name/hits
 guardrails.list_shipped  GET /api/v1/guardrails/shipped
 guardrails.switch_shipped  POST /api/v1/guardrails/shipped/:name/switch

@@ -1,0 +1,10 @@
+# The member of the guardrail answers spec (GR-3), whose calls the spec's guardrails stop, warn
+# about or hold, and who reads Rules in force. No other spec uses this person.
+- email: e2e-guardrail-answers@example.test
+  displayLabel: E2E Zz Guardrail Answers
+  passwordEnvName: E2E_GUARDRAIL_ANSWERS_PASSWORD
+  developmentPassword: e2e-guardrail-answers-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

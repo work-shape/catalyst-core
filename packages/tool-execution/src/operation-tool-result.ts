@@ -2,6 +2,7 @@ import {
   CONNECTION_SIGN_IN_NEEDS,
   INTERNAL_ERROR_MESSAGE,
   type ConnectionSignInNeed,
+  type OperationDenial,
   INTERRUPTED_RUN_ERROR,
   type ToolExecutionResult,
   type ToolHandlerFailureResult
@@ -64,7 +65,10 @@ export function toolResultFromOperationResult(
         ? failed("confirmation_required", denialText(result.reason, names), {
             operation: result.reason.operation
           })
-        : failed("not_allowed", denialText(result.reason, names));
+        : withGuardrailAnswer(
+            failed("not_allowed", denialText(result.reason, names)),
+            result.reason
+          );
     case "failed":
       // The error envelope replaces an unexposed message with this fixed text. An exposed
       // timeout message is the handler's answer and must reach the agent unchanged.
@@ -93,6 +97,23 @@ export function toolResultFromOperationResult(
     case "dry_run":
       return previewToolResult(result, names.locale);
   }
+}
+
+/**
+ * The refusal of a call a guardrail stopped, with the guardrail's answer for the card (GR-3).
+ * The answer is the host's: the model reads only the error's message.
+ */
+function withGuardrailAnswer(
+  result: ToolHandlerFailureResult,
+  denial: OperationDenial
+): ToolHandlerFailureResult {
+  const answer =
+    denial.kind === "guardrail"
+      ? denial.answer
+      : denial.kind === "policy"
+        ? denial.guardrail?.answer
+        : undefined;
+  return answer ? { ...result, guardrail: answer } : result;
 }
 
 /** Only this fixed recovery reaches the host; arbitrary server reasons stay private. */

@@ -20,6 +20,7 @@ import {
   type Authorizer,
   type FirstPartyAuthScope,
   type OperationCall,
+  type GuardrailAnswerRef,
   type OperationDenial,
   type ISODateString,
   type ManagedArtifactRef,
@@ -328,7 +329,7 @@ describe("operation contracts", () => {
             | "workflow_deleted"
             | "confirmation_required"
             | "confirmation_unattended";
-          guardrail?: { id: string; label: string; reason?: string };
+          guardrail?: { id: string; label: string; reason?: string; answer?: GuardrailAnswerRef };
         }
       | {
           kind: "guardrail";
@@ -337,6 +338,7 @@ describe("operation contracts", () => {
           guardrailTitle?: string;
           guardrailReason?: string;
           reason?: "check_unavailable";
+          answer?: GuardrailAnswerRef;
         }
       | { kind: "declined"; by: string; comment?: string; reason?: "steered" }
     >();
@@ -359,6 +361,7 @@ describe("operation contracts", () => {
           inputHash: string;
           approvalRequestId?: string;
           alwaysAllow?: true;
+          guardrails?: GuardrailAnswerRef[];
         }
       | {
           status: "pending_approval";
@@ -366,6 +369,7 @@ describe("operation contracts", () => {
           runId: OperationRunId;
           approvalRequestId: string;
           expiresAt: ISODateString;
+          guardrails?: GuardrailAnswerRef[];
         }
       | { status: "denied"; runId: OperationRunId; reason: OperationDenial }
       | {

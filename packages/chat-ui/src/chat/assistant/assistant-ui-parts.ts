@@ -282,15 +282,20 @@ function toToolCallUiPart(
         }
       : toolCall.state === "output_error" && toolCall.connect
         ? connectRefusalPart({ status: "failed", connect: toolCall.connect })
-        : toolCall.state === "output_error"
-          ? {
-              state: "output-error",
-              errorText: toolCall.errorText ?? "Tool call failed",
-              ...(toolCall.output !== undefined ? { output: toolCall.output } : {})
-            }
-          : toolCall.state === "output_available"
-            ? { output: toolCall.output }
-            : {})
+        : toolCall.state === "output_error" && toolCall.guardrail
+          ? guardrailRefusalPart(
+              { status: "failed", guardrail: toolCall.guardrail },
+              toolCall.errorText
+            )
+          : toolCall.state === "output_error"
+            ? {
+                state: "output-error",
+                errorText: toolCall.errorText ?? "Tool call failed",
+                ...(toolCall.output !== undefined ? { output: toolCall.output } : {})
+              }
+            : toolCall.state === "output_available"
+              ? { output: toolCall.output }
+              : {})
   } as UIMessage["parts"][number];
 }
 
@@ -317,6 +322,26 @@ function terminalToolErrorForActiveRun(
  */
 function connectRefusalPart(output: Record<string, unknown>) {
   return { state: "output-available", output } as const;
+}
+
+/**
+ * A call a guardrail refused (GR-3). Its part carries the refusal as its output, as a Connect
+ * refusal does, so the card reads the guardrail's answer and the sentence beside it.
+ */
+function guardrailRefusalPart(output: Record<string, unknown>, errorText: string | undefined) {
+  return {
+    state: "output-available",
+    output: { ...output, ...(errorText ? { message: errorText } : {}) }
+  } as const;
+}
+
+function isGuardrailRefusalOutput(output: unknown): output is Record<string, unknown> {
+  return (
+    typeof output === "object" &&
+    output !== null &&
+    "guardrail" in output &&
+    output.guardrail != null
+  );
 }
 
 function isConnectRefusalOutput(output: unknown): output is Record<string, unknown> {
@@ -368,6 +393,10 @@ export function toUiMessageParts(
       toolResult?.status === "failed" && isConnectRefusalOutput(toolResult.output)
         ? toolResult.output
         : undefined;
+    const guardrailOutput =
+      toolResult?.status === "failed" && isGuardrailRefusalOutput(toolResult.output)
+        ? toolResult.output
+        : undefined;
     parts.push({
       type: "dynamic-tool",
       toolName: toolCall.toolName,
@@ -381,14 +410,19 @@ export function toUiMessageParts(
       input: toolCall.input,
       ...(connectOutput
         ? connectRefusalPart(connectOutput)
-        : projectedErrorText
-          ? {
-              errorText: projectedErrorText,
-              ...(toolResult?.output !== undefined ? { output: toolResult.output } : {})
-            }
-          : toolResult
-            ? { output: toolResult.output }
-            : {})
+        : guardrailOutput
+          ? guardrailRefusalPart(
+              guardrailOutput,
+              toolResult?.status === "failed" ? toolResult.errorText : undefined
+            )
+          : projectedErrorText
+            ? {
+                errorText: projectedErrorText,
+                ...(toolResult?.output !== undefined ? { output: toolResult.output } : {})
+              }
+            : toolResult
+              ? { output: toolResult.output }
+              : {})
     } as UIMessage["parts"][number]);
   }
 

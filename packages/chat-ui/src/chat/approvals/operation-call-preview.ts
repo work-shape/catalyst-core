@@ -7,6 +7,10 @@ import {
 } from "@work-shape/catalyst-core";
 import { appAudienceSchema, type Asset } from "@work-shape/catalyst-api-client";
 import {
+  readGuardrailAnswers,
+  type GuardrailAnswerRef
+} from "../guardrails/guardrail-answer-model";
+import {
   narrativeReadOf,
   parsePublishNarrative,
   type PublishNarrativeRead
@@ -276,6 +280,8 @@ export interface OperationCallPreview {
    * worded by the server with only the titles the reader may see.
    */
   handover?: string[];
+  /** The guardrails that warned about the call or held it for approval (GR-3). */
+  guardrails?: GuardrailAnswerRef[];
 }
 
 /**
@@ -305,6 +311,7 @@ export function parseOperationCallPreview(preview: unknown): OperationCallPrevie
     : [];
   const asset = parseAsset(preview.asset);
   const review = parseReview(preview.review);
+  const guardrails = readGuardrailAnswers(preview.guardrails);
   const inputs = Array.isArray(preview.inputs)
     ? preview.inputs.flatMap((input) => parseInput(input) ?? [])
     : [];
@@ -328,6 +335,7 @@ export function parseOperationCallPreview(preview: unknown): OperationCallPrevie
       : {}),
     ...(targetTitle ? { targetTitle } : {}),
     ...(handover.length > 0 ? { handover } : {}),
+    ...(guardrails.length > 0 ? { guardrails } : {}),
     ...(asset ? { asset } : {}),
     ...(review ? { review } : {}),
     ...(workspaceId ? { workspaceId } : {}),

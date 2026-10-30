@@ -12,6 +12,7 @@ import {
   type OperationRun,
   resolvePolicy,
   strictestOutcome,
+  type GuardrailAnswerRef,
   type OperationDenial,
   type PolicyInput,
   type PolicyPerson,
@@ -20,6 +21,7 @@ import {
 } from "@work-shape/catalyst-core";
 import {
   approvalAskedBy,
+  shownGuardrailAnswers,
   askBeforeEvents,
   guardrailDenial,
   type GuardrailNamed
@@ -141,10 +143,14 @@ function stricterPolicy(left: PolicyValue, right: PolicyValue | undefined): Poli
  * when a call is made, and again, as the caller is then, before a call that waited for an
  * approval is executed.
  */
-export async function resolveGuardedPolicy(
-  context: OperationPolicyContext
-): Promise<
-  | { policy: PolicyResolution; approvalAskedBy?: GuardrailNamed; offersAlwaysAllow?: true }
+export async function resolveGuardedPolicy(context: OperationPolicyContext): Promise<
+  | {
+      policy: PolicyResolution;
+      approvalAskedBy?: GuardrailNamed;
+      offersAlwaysAllow?: true;
+      /** The answers the person is shown where the call waits (GR-3). */
+      shown?: GuardrailAnswerRef[];
+    }
   | { denial: OperationDenial; policy: PolicyResolution }
 > {
   const { definition } = context;
@@ -155,7 +161,9 @@ export async function resolveGuardedPolicy(
   const answers = await askBeforeEvents(context);
   const guardrailOutcome = strictestOutcome(answers.map((answer) => answer.outcome));
   const policy = resolvePolicy({ ...policyInput, guardrailOutcome });
-  if (confirmsFirst(context, before, policy)) return { policy: before };
+  const shown = shownGuardrailAnswers(answers);
+  const withShown = shown.length > 0 ? { shown } : {};
+  if (confirmsFirst(context, before, policy)) return { policy: before, ...withShown };
   if (policy.next !== "refuse") {
     const asking = policy.source === "guardrail" ? approvalAskedBy(answers) : undefined;
     // The card offers "Always allow" only where it would let this call run: the admin
@@ -164,7 +172,8 @@ export async function resolveGuardedPolicy(
     return {
       policy,
       ...(asking ? { approvalAskedBy: asking } : {}),
-      ...(offers ? { offersAlwaysAllow: true as const } : {})
+      ...(offers ? { offersAlwaysAllow: true as const } : {}),
+      ...withShown
     };
   }
   return {

@@ -12,6 +12,7 @@ import type {
   OperationRunId,
   ToolCallId
 } from "./ids";
+import type { GuardrailAnswerRef } from "./guardrail-answer-ref";
 import type { OperationDenial } from "./operation-denial";
 import type { StructuredResultPublication } from "./structured-result";
 import type { ISODateString } from "./time";
@@ -218,6 +219,8 @@ export type OperationResult<TOutput = unknown> =
       approvalRequestId?: string;
       /** Its person may answer "Always allow" (OP-6): see `offersAlwaysAllow` of the run. */
       alwaysAllow?: true;
+      /** The guardrails that warned on the call, or will ask for an approval after it (GR-3). */
+      guardrails?: GuardrailAnswerRef[];
     }
   | {
       status: "pending_approval";
@@ -225,6 +228,8 @@ export type OperationResult<TOutput = unknown> =
       runId: OperationRunId;
       approvalRequestId: string;
       expiresAt: ISODateString;
+      /** The guardrail that asked for the approval, and any that warned (GR-3). */
+      guardrails?: GuardrailAnswerRef[];
     }
   | { status: "denied"; runId: OperationRunId; reason: OperationDenial }
   | {

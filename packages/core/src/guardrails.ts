@@ -1,10 +1,12 @@
 import {
+  GUARDRAIL_CHECK_KINDS,
   GUARDRAIL_NAME_MAX_LENGTH,
   GUARDRAIL_NAME_PATTERN,
   GUARDRAIL_OUTCOMES,
   OPERATION_ORIGIN_KINDS
 } from "@work-shape/catalyst-asset-schemas";
 import type { AssetScope } from "./asset-kinds";
+import type { GuardrailAnswerRef, GuardrailOrigin } from "./guardrail-answer-ref";
 import type { GuardrailEvent } from "./guardrail-events";
 import type { ClientInstanceId } from "./ids";
 import type { OperationOrigin } from "./operations";
@@ -30,13 +32,11 @@ export const GUARDRAIL_ACTIONS = {
   delete: "guardrail.delete"
 } as const;
 
-/**
- * Where a guardrail comes from. `release`: the operator's floor, from release config, written
- * by the release seed and read-only in the product. `asset`: written as an asset and made live
- * by a publish; it adds checks to the floor and never removes one.
- */
-export const GUARDRAIL_ORIGINS = ["release", "asset"] as const;
-export type GuardrailOrigin = (typeof GUARDRAIL_ORIGINS)[number];
+export {
+  GUARDRAIL_ORIGINS,
+  type GuardrailAnswerRef,
+  type GuardrailOrigin
+} from "./guardrail-answer-ref";
 
 export * from "./guardrail-events";
 export { GUARDRAIL_NAME_MAX_LENGTH, GUARDRAIL_NAME_PATTERN };
@@ -111,7 +111,7 @@ export const GUARDRAIL_APPROVAL_EVENTS = [
  * length. `model_judge`: a model reads the content against the instruction. Patterns run first
  * and a block among them skips the judges.
  */
-export const GUARDRAIL_CHECK_KINDS = ["pattern", "model_judge"] as const;
+export { GUARDRAIL_CHECK_KINDS } from "@work-shape/catalyst-asset-schemas";
 export type GuardrailCheckKind = (typeof GUARDRAIL_CHECK_KINDS)[number];
 
 export interface ModelJudgeCheck {
@@ -174,6 +174,21 @@ export interface GuardrailAnswer {
    * (`refusingWhenUnavailable`). A refusal names the reason `check_unavailable`.
    */
   unavailable?: true;
+}
+
+/** The answer as a person is shown it. A check that could not answer names no guardrail. */
+export function guardrailAnswerRef(answer: GuardrailAnswer): GuardrailAnswerRef | undefined {
+  if (answer.unavailable || answer.outcome === "allow") return undefined;
+  return {
+    name: answer.guardrailName,
+    title: answer.displayName,
+    outcome: answer.outcome,
+    ...(answer.reason === "" ? {} : { reason: answer.reason }),
+    origin: answer.origin,
+    ...(answer.scope ? { scope: answer.scope } : {}),
+    ...(answer.revision === undefined ? {} : { revision: answer.revision }),
+    ...(answer.approvalCannotWait ? { approvalCannotWait: true as const } : {})
+  };
 }
 
 /** One Guardrail as the asset store keeps it. */

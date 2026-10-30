@@ -46,6 +46,7 @@ import { dock } from "./dock";
 import { feedback } from "./feedback";
 import { platformReport } from "./platform-report";
 import { files } from "./files";
+import { guardrailAnswers } from "./guardrail-answers";
 import { guardrails } from "./guardrails";
 import { inbox } from "./inbox";
 import { knowledge } from "./knowledge";
@@ -134,6 +135,7 @@ export const translations = combineTranslations(common)
   .and(platformReport)
   .and(files)
   .and(guardrails)
+  .and(guardrailAnswers)
   .and(inbox)
   .and(knowledge)
   .and(localAgent)

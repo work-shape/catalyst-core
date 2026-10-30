@@ -10,11 +10,13 @@ import {
   GUARDRAIL_ASSET_KIND,
   SHIPPED_GUARDRAILS,
   auditActorFromIdentity,
+  isAuthenticatedServicePrincipal,
   shippedGuardrail,
   type ActorAccess,
   type OperationAuthorization,
   type OperationExecutionContext,
   type OperationResource,
+  type AuthenticatedUser,
   type ShippedGuardrail,
   type ShippedGuardrailSwitch
 } from "@work-shape/catalyst-core";
@@ -22,6 +24,7 @@ import { accessResource, decide } from "../assets/asset-access";
 import { assetTitle } from "../assets/asset-reference-labels";
 import { AssetWorkflow } from "../assets/asset-service";
 import { GuardrailRunner } from "../guardrails/guardrail-runner";
+import { askAboutRule, rulesInForce } from "../guardrails/rules-in-force";
 import { dryRunGuardrail, guardrailUnderTrial, testGuardrail } from "../guardrails/guardrail-trial";
 import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
@@ -100,6 +103,28 @@ export function registerGuardrailRoutes(route: Route, options: ChatServerOptions
         asset.publishedRevisionId !== undefined,
         options.operations?.now?.() ?? new Date()
       );
+    }
+  });
+
+  // Rules in force: every signed-in person reads the rules that apply to their own workspaces
+  // (GR-3). The list itself decides what the caller is shown, so no right is asked.
+  route.operation(apiOperations["guardrails.in_force"], {
+    authorize: () => ({ allowed: true }),
+    async execute(_input, context) {
+      return rulesInForce(options, personOf(context.actor), context.access);
+    }
+  });
+
+  route.operation(apiOperations["guardrails.ask"], {
+    authorize: () => ({ allowed: true }),
+    resource: guardrailResource,
+    async execute(input, context) {
+      return askAboutRule(options, personOf(context.actor), context.actor, {
+        name: input.name,
+        text: input.text,
+        locale: context.runtime.locale ?? options.config.localization.defaultLocale,
+        correlationId: context.correlationId
+      });
     }
   });
 
@@ -290,6 +315,14 @@ export function registerGuardrailRoutes(route: Route, options: ChatServerOptions
       };
     }
   });
+}
+
+/** The person a call of `auth: "user"` is made by. */
+function personOf(actor: OperationExecutionContext["actor"]): AuthenticatedUser {
+  if (isAuthenticatedServicePrincipal(actor)) {
+    throw new AppError("FORBIDDEN", "Rules in force are read by a person");
+  }
+  return actor;
 }
 
 /** The guardrails of the instance, as a right on all of them is asked. */

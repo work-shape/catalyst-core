@@ -1,6 +1,7 @@
 import { TOOL_GROUPS, type ConnectionSignInNeed } from "@work-shape/catalyst-asset-schemas";
 import type { AuditSafeSummary, ManagedArtifactRef, ToolDisplayOutput } from "./files";
 import type { OperationBeforeEvent } from "./guardrail-events";
+import type { GuardrailAnswerRef } from "./guardrail-answer-ref";
 import type { RuntimeCallContext } from "./identity";
 import type {
   AgentRunId,
@@ -145,6 +146,8 @@ export interface ToolHandlerFailureResult {
   recovery?: "private_conversation";
   /** Host-only: the person's own sign-in the call needs, for the chat's Connect card. */
   connect?: ToolConnectionSignInRequest;
+  /** Host-only: the guardrail that refused the call, for the answer on the tool card (GR-3). */
+  guardrail?: GuardrailAnswerRef;
   status: "failed" | "cancelled" | "timed_out";
   error: ToolExecutionError;
   auditSummary?: AuditSafeSummary;

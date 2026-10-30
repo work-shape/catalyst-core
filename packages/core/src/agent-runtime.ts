@@ -7,6 +7,7 @@ import {
 } from "@work-shape/catalyst-asset-schemas";
 import type { AuditActor } from "./audit-actor";
 import type { ModelUsageRefusal } from "./errors";
+import type { GuardrailAnswerRef } from "./guardrail-answer-ref";
 import type { ConversationFollowUp, FollowUpMode } from "./follow-ups";
 import type { ReasoningEffortConfig } from "./config";
 import type { AppendAssistantMessageInput, ChatMessage, CreateMessageInput } from "./conversation";
@@ -201,6 +202,8 @@ export type AgentRunProjectionPart =
       errorReason?: "subject_conversation_shared";
       /** The person's own sign-in the failed call needs (CHAT-CONN-2b). */
       connect?: ToolConnectionSignInRequest;
+      /** The guardrail that refused the call, for its answer on the card (GR-3). */
+      guardrail?: GuardrailAnswerRef;
       /** While the state is `waiting_for_decision`: what the person is asked to decide. */
       decision?: Omit<ToolDecisionRequested, "toolCallId" | "toolName">;
       /** On a `run_agent` call that started its subagent: the subagent, for its card. */
@@ -236,6 +239,7 @@ export interface AgentRunProjection {
     /** The fixed recovery the host offers for an asset in a shared transcript. */
     errorReason?: "subject_conversation_shared";
     connect?: ToolConnectionSignInRequest;
+    guardrail?: GuardrailAnswerRef;
     decision?: Omit<ToolDecisionRequested, "toolCallId" | "toolName">;
     subagent?: SubagentRef;
   }>;

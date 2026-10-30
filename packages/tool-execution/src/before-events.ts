@@ -2,7 +2,9 @@ import { PLATFORM_ASSET_TOOLS } from "./platform-asset-tools";
 import {
   CHECK_UNAVAILABLE_REASON,
   GUARDRAIL_ASSET_KIND,
+  guardrailAnswerRef,
   type GuardrailAnswer,
+  type GuardrailAnswerRef,
   type LocaleCode,
   type GuardrailSubject,
   type OperationBeforeEvent,
@@ -185,6 +187,22 @@ export interface GuardrailNamed {
   label: string;
   /** Its reason in plain language, where it gave one. */
   reason?: string;
+  /** What the person is shown of it where they act (GR-3). */
+  answer?: GuardrailAnswerRef;
+}
+
+/**
+ * The answers a person is shown beside a call that goes on or waits (GR-3): the guardrails that
+ * warned and the one that asked for an approval. Never a check that could not answer.
+ */
+export function shownGuardrailAnswers(answers: readonly SubjectAnswer[]): GuardrailAnswerRef[] {
+  const shown = new Map<string, GuardrailAnswerRef>();
+  for (const answer of answers.flatMap((entry) => entry.guardrails)) {
+    if (answer.outcome !== "warn" && answer.outcome !== "require_approval") continue;
+    const ref = guardrailAnswerRef(answer);
+    if (ref && !shown.has(`${ref.origin}:${ref.name}`)) shown.set(`${ref.origin}:${ref.name}`, ref);
+  }
+  return [...shown.values()];
 }
 
 /** The guardrail whose `require_approval` asked for an approval, where one did. */
@@ -193,10 +211,12 @@ export function approvalAskedBy(answers: readonly SubjectAnswer[]): GuardrailNam
     .flatMap((answer) => answer.guardrails)
     .find((answer) => answer.outcome === "require_approval");
   if (!asking) return undefined;
+  const answer = guardrailAnswerRef(asking);
   return {
     id: asking.guardrailName,
     label: asking.displayName,
-    ...(asking.reason === "" ? {} : { reason: asking.reason })
+    ...(asking.reason === "" ? {} : { reason: asking.reason }),
+    ...(answer ? { answer } : {})
   };
 }
 
@@ -226,13 +246,15 @@ export function guardrailDenial(
           : "A check of this action could not answer, so the action was refused. Try again later."
     };
   }
+  const answer = refusing ? guardrailAnswerRef(refusing) : undefined;
   return refusing
     ? {
         kind: "guardrail",
         guardrailId: refusing.guardrailName,
         guardrailTitle: refusing.displayName,
         ...(refusing.reason ? { guardrailReason: refusing.reason } : {}),
-        message: guardrailRefusalMessage(refusing, answers, locale)
+        message: guardrailRefusalMessage(refusing, answers, locale),
+        ...(answer ? { answer } : {})
       }
     : { kind: "guardrail", guardrailId: event };
 }

@@ -28,6 +28,7 @@ import {
 } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { reasoningEffortSchema } from "./configuration";
+import { guardrailAnswerRefSchema } from "./guardrail-answers";
 import { projectFileChangeSchema } from "./projects";
 import { localeCodeSchema, timestampSchema } from "./shared";
 
@@ -611,6 +612,8 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     inputPreview: z.unknown(),
     simulation: z.unknown().optional(),
     alwaysAllow: z.literal(true).optional(),
+    /** The guardrails that warned on the call, or will ask for an approval after it (GR-3). */
+    guardrails: z.array(guardrailAnswerRefSchema).optional(),
     expiresAt: timestampSchema
   }),
   z.object({
@@ -744,6 +747,8 @@ const toolCallDecisionSchema = z.object({
   simulation: z.unknown().optional(),
   /** The person may answer "Always allow": the admin permits it and nothing else holds the call. */
   alwaysAllow: z.literal(true).optional(),
+  /** The guardrails that warned on the call, or will ask for an approval after it (GR-3). */
+  guardrails: z.array(guardrailAnswerRefSchema).optional(),
   expiresAt: timestampSchema
 });
 
@@ -777,6 +782,8 @@ export const agentRunProjectionPartSchema = z.discriminatedUnion("type", [
     errorText: z.string().optional(),
     errorReason: z.literal("subject_conversation_shared").optional(),
     connect: toolConnectionSignInRequestSchema.optional(),
+    /** The guardrail that refused the call, for its answer on the card (GR-3). */
+    guardrail: guardrailAnswerRefSchema.optional(),
     decision: toolCallDecisionSchema.optional(),
     subagent: toolCallSubagentSchema.optional()
   })
@@ -814,6 +821,7 @@ export const agentRunProjectionSchema = z.object({
       errorText: z.string().optional(),
       errorReason: z.literal("subject_conversation_shared").optional(),
       connect: toolConnectionSignInRequestSchema.optional(),
+      guardrail: guardrailAnswerRefSchema.optional(),
       decision: toolCallDecisionSchema.optional(),
       subagent: toolCallSubagentSchema.optional()
     })

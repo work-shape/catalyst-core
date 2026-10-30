@@ -1,4 +1,5 @@
 import { useWaitsForDecision } from "../approvals/tool-decision-context";
+import { readGuardrailRefusal } from "../guardrails/guardrail-answer-model";
 import {
   ActionBarPrimitive,
   AttachmentPrimitive,
@@ -244,6 +245,7 @@ function AssistantMessage({
               summary
               durationMs={runDurationMs}
               autoCollapse={autoCollapseCompletedWorkSummary}
+              stopped={stoppedByGuardrail(messageParts, completedWorkIndices)}
             >
               <AssistantWorkTimeline
                 items={completedWorkTimelineItems}
@@ -379,6 +381,7 @@ function renderAssistantGroupedPart({
           only={onlyToolCall(messageParts, renderableIndices)}
           last={lastToolCall(messageParts, renderableIndices)}
           toolCallIds={toolCallIdsOf(messageParts, renderableIndices)}
+          stopped={stoppedByGuardrail(messageParts, renderableIndices)}
           summary={false}
         >
           {renderableIndices.map((index) => (
@@ -437,6 +440,7 @@ function AssistantWorkTimeline({
               only={onlyToolCall(messageParts, renderableIndices)}
               last={lastToolCall(messageParts, renderableIndices)}
               toolCallIds={toolCallIdsOf(messageParts, renderableIndices)}
+              stopped={stoppedByGuardrail(messageParts, renderableIndices)}
               nested
               summary={false}
             >
@@ -511,6 +515,17 @@ function toolCallIdsOf(parts: readonly PartState[], indices: readonly number[]):
   });
 }
 
+/**
+ * Whether a guardrail refused a call of a group: its card holds the guardrail's answer, which
+ * the person reads where they act, so the group opens on it (GR-3).
+ */
+function stoppedByGuardrail(parts: readonly PartState[], indices: readonly number[]): boolean {
+  return indices.some((index) => {
+    const part = parts[index];
+    return part?.type === "tool-call" && readGuardrailRefusal(part.result) !== undefined;
+  });
+}
+
 function AssistantWorkGroup({
   count,
   only,
@@ -520,7 +535,8 @@ function AssistantWorkGroup({
   nested = false,
   summary,
   durationMs,
-  autoCollapse = false
+  autoCollapse = false,
+  stopped = false
 }: {
   count: number;
   /** The group's one tool call, where it holds a single call. */
@@ -534,9 +550,11 @@ function AssistantWorkGroup({
   summary: boolean;
   durationMs?: number;
   autoCollapse?: boolean;
+  /** A guardrail refused a call of the group: it starts open and does not fold itself. */
+  stopped?: boolean;
 }) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(autoCollapse);
+  const [open, setOpen] = useState(autoCollapse || stopped);
   const [suppressOpenAnimation, setSuppressOpenAnimation] = useState(autoCollapse);
   // A call that waits for a decision shows its card, so the person sees what to answer.
   const waitsForDecision = useWaitsForDecision(toolCallIds);
@@ -544,7 +562,7 @@ function AssistantWorkGroup({
   // The whole timer lives in this effect, so a second run of it, as StrictMode makes one,
   // starts the timer its cleanup has just cleared.
   useEffect(() => {
-    if (!summary || !autoCollapse) {
+    if (!summary || !autoCollapse || stopped) {
       return;
     }
     const timeout = globalThis.setTimeout(() => {
@@ -552,7 +570,7 @@ function AssistantWorkGroup({
       setOpen(false);
     }, WORK_SUMMARY_AUTO_COLLAPSE_DELAY_MS);
     return () => globalThis.clearTimeout(timeout);
-  }, [autoCollapse, summary]);
+  }, [autoCollapse, stopped, summary]);
 
   const countLabel = summary ? (
     formatWorkHistoryLabel(t("workHistory"), durationMs)

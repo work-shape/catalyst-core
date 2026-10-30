@@ -1,5 +1,6 @@
 import { OPERATION_DENIAL_REASONS } from "@work-shape/catalyst-asset-schemas";
 import { AppError } from "./errors";
+import type { GuardrailAnswerRef } from "./guardrail-answer-ref";
 
 export type OperationDenial =
   | {
@@ -51,7 +52,7 @@ export type OperationDenial =
        * The guardrail whose `require_approval` asked for the approval, where one did, with
        * its reason where it gave one.
        */
-      guardrail?: { id: string; label: string; reason?: string };
+      guardrail?: { id: string; label: string; reason?: string; answer?: GuardrailAnswerRef };
     }
   | {
       kind: "guardrail";
@@ -61,6 +62,8 @@ export type OperationDenial =
       guardrailReason?: string;
       /** `check_unavailable`: a check could not answer, so the call was refused. */
       reason?: "check_unavailable";
+      /** What the refused person is shown of the guardrail (GR-3). */
+      answer?: GuardrailAnswerRef;
     }
   | {
       kind: "declined";
@@ -111,7 +114,10 @@ export function operationDenialError(denial: OperationDenial): AppError {
             {
               operation: denial.operation,
               reason: denial.reason,
-              ...(denial.guardrail ? { guardrailId: denial.guardrail.id } : {})
+              ...(denial.guardrail ? { guardrailId: denial.guardrail.id } : {}),
+              ...(denial.guardrail?.answer
+                ? { guardrail: answerDetails(denial.guardrail.answer) }
+                : {})
             }
           )
         : new AppError(
@@ -126,7 +132,8 @@ export function operationDenialError(denial: OperationDenial): AppError {
         ...(denial.guardrailReason === undefined
           ? {}
           : { guardrailReason: denial.guardrailReason }),
-        ...(denial.reason === undefined ? {} : { reason: denial.reason })
+        ...(denial.reason === undefined ? {} : { reason: denial.reason }),
+        ...(denial.answer ? { guardrail: answerDetails(denial.answer) } : {})
       });
     case "declined":
       if (denial.reason === "steered") {
@@ -154,6 +161,23 @@ export function confirmationRequiredMessage(operation: string): string {
 /** Why a call that waited for an approval can no longer be approved. */
 function approvalStaleMessage(operation: string): string {
   return `The call of '${operation}' waited for an approval, and what it is about changed since or a newer call replaced it. Make the call again.`;
+}
+
+/**
+ * The guardrail's answer in an error's details, for the interface that shows it where the
+ * person acted (GR-3): an App's action result reads it from there. JSON only.
+ */
+function answerDetails(answer: GuardrailAnswerRef): Record<string, unknown> {
+  return {
+    name: answer.name,
+    title: answer.title,
+    outcome: answer.outcome,
+    origin: answer.origin,
+    ...(answer.reason === undefined ? {} : { reason: answer.reason }),
+    ...(answer.scope ? { scope: { ...answer.scope } } : {}),
+    ...(answer.revision === undefined ? {} : { revision: answer.revision }),
+    ...(answer.approvalCannotWait ? { approvalCannotWait: true } : {})
+  };
 }
 
 /** A reason as the end of a sentence: with its own full stop, or one added. */

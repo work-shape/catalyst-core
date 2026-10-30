@@ -27,6 +27,8 @@ import { createPageBridge, type PageBridge } from "./bridge-host";
 import { useFrameCallTexts } from "./frame-call-texts";
 import { FrameApprovalWait, type FrameWait } from "./frame-approval-wait";
 import { FrameTestRun, type FrameTestRunShown } from "./frame-test-run";
+import { GuardrailAnswer } from "../../chat/guardrails/guardrail-answer";
+import type { GuardrailAnswerRef } from "../../chat/guardrails/guardrail-answer-model";
 import { createFrameCalls, frameSessionProof, type FrameAddress } from "./frame-calls";
 import { bytesToBase64, registerPreviewCaptureTarget } from "./preview-capture";
 import { createPreviewReporter, type PreviewReporter } from "./preview-report";
@@ -489,12 +491,24 @@ export function LivePagePreview({
   const { client } = useWorkspaceApiClient();
   const host = usePageHost();
   const texts = useFrameCallTexts();
+  // The answer of a guardrail that refused a call of this frame session (GR-3), shown over the
+  // frame until the person closes it or the frame shows another document.
+  const [guardrail, setGuardrail] = useState<{ session: string; answer: GuardrailAnswerRef }>();
+  const shownGuardrail = guardrail?.session === session ? guardrail.answer : undefined;
+  const closeGuardrail = useCallback(() => setGuardrail(undefined), []);
+  const onGuardrailAnswer = useCallback(
+    (answer: GuardrailAnswerRef) => setGuardrail({ session, answer }),
+    [session]
+  );
   const calls = useMemo(
     () =>
       address && makesCalls
-        ? createFrameCalls(client, address, texts, onPreviewIsNoApp ? { onPreviewIsNoApp } : {})
+        ? createFrameCalls(client, address, texts, {
+            ...(onPreviewIsNoApp ? { onPreviewIsNoApp } : {}),
+            onGuardrailAnswer
+          })
         : undefined,
-    [client, address, makesCalls, texts, onPreviewIsNoApp]
+    [client, address, makesCalls, texts, onPreviewIsNoApp, onGuardrailAnswer]
   );
   const callsRef = useRef(calls);
   const frameRef = useRef<HTMLIFrameElement>(null);
@@ -648,6 +662,11 @@ export function LivePagePreview({
     <div className="relative flex size-full flex-col">
       {shownTestRun === undefined ? null : (
         <FrameTestRun run={shownTestRun} onClose={closeTestRun} />
+      )}
+      {shownGuardrail === undefined ? null : (
+        <div className="max-h-[50%] overflow-auto p-2" data-testid="frame-guardrail-answer">
+          <GuardrailAnswer answer={shownGuardrail} onDismiss={closeGuardrail} />
+        </div>
       )}
       {/* While a call waits, the frame stays loaded but takes no keys and no pointer. */}
       <div className="min-h-0 w-full flex-1" inert={waitingRun !== undefined}>

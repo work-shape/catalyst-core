@@ -10,6 +10,7 @@ import {
   operationDenialError,
   recordsAllowedCalls,
   type ActorAccess,
+  type GuardrailAnswerRef,
   type JsonObject,
   type NewOperationRun,
   type OperationAuthorization,
@@ -543,6 +544,8 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
   }
   const { policy, approvalAskedBy } = guarded;
   const offers = "offersAlwaysAllow" in guarded && guarded.offersAlwaysAllow === true;
+  // What the person is shown of the guardrails where the call waits (GR-3).
+  const shown = guarded.shown ?? [];
   // A call of a test run resolves `confirm` as its tester's own call when their start was the
   // confirmation. A run of the published revision runs a `confirm` too, as its publish was the
   // confirmation, except where the operation's floor asks for one: there it asks for an approval.
@@ -596,8 +599,8 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     return {
       ending:
         policy.deliver === "inbox"
-          ? await holdInInbox(context, policy, offers)
-          : await holdForConfirmation(context, offers)
+          ? await holdInInbox(context, policy, offers, shown)
+          : await holdForConfirmation(context, offers, shown)
     };
   }
   if (policy.next === "await_approval") {
@@ -648,7 +651,8 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
       runtime: context.runtime,
       expiresAt,
       policySource: policy.source,
-      ...(approval ? { approval } : {})
+      ...(approval ? { approval } : {}),
+      ...(shown.length > 0 ? { guardrails: shown } : {})
     });
     if (!filed) {
       return { ending: await denyRun(context, unavailable) };
@@ -663,7 +667,13 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     });
     return {
       ending: {
-        result: { status: "pending_approval", runId: run.id, approvalRequestId, expiresAt },
+        result: {
+          status: "pending_approval",
+          runId: run.id,
+          approvalRequestId,
+          expiresAt,
+          ...(shown.length > 0 ? { guardrails: shown } : {})
+        },
         waitingInput: call.input,
         run: pending
       }
@@ -686,7 +696,9 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
 async function holdForConfirmation(
   context: RunContext,
   /** Its person may answer "Always allow" (OP-6). */
-  offersAlwaysAllow: boolean
+  offersAlwaysAllow: boolean,
+  /** The guardrails the card shows beside the call (GR-3). */
+  guardrails: readonly GuardrailAnswerRef[]
 ): Promise<OperationEnding> {
   const { run, definition, call, now } = context;
   // A read that records only its refusals has no run that could wait.
@@ -719,7 +731,8 @@ async function holdForConfirmation(
       preview: call.input,
       ...(simulation === undefined ? {} : { simulation }),
       inputHash: run.inputHash,
-      ...(offersAlwaysAllow ? { alwaysAllow: true as const } : {})
+      ...(offersAlwaysAllow ? { alwaysAllow: true as const } : {}),
+      ...(guardrails.length > 0 ? { guardrails: [...guardrails] } : {})
     },
     run: pending
   };
@@ -735,7 +748,9 @@ async function holdInInbox(
   context: RunContext,
   policy: PolicyResolution,
   /** Its person may answer "Always allow" (OP-6). */
-  offersAlwaysAllow: boolean
+  offersAlwaysAllow: boolean,
+  /** The guardrails the item shows beside the call (GR-3). */
+  guardrails: readonly GuardrailAnswerRef[]
 ): Promise<OperationEnding> {
   const { run, definition, call, deps, now } = context;
   const refused: OperationDenial = { kind: "policy", operation: definition.name };
@@ -762,7 +777,8 @@ async function holdInInbox(
     expiresAt,
     policySource: policy.source,
     ...(approval ? { approval } : {}),
-    confirmation: true
+    confirmation: true,
+    ...(guardrails.length > 0 ? { guardrails } : {})
   });
   if (!filed) {
     return denyRun(context, refused);
@@ -785,7 +801,8 @@ async function holdInInbox(
       preview: call.input,
       inputHash: run.inputHash,
       approvalRequestId,
-      ...(offersAlwaysAllow ? { alwaysAllow: true as const } : {})
+      ...(offersAlwaysAllow ? { alwaysAllow: true as const } : {}),
+      ...(guardrails.length > 0 ? { guardrails: [...guardrails] } : {})
     },
     waitingInput: call.input,
     run: pending
