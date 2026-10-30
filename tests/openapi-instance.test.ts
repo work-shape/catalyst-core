@@ -72,7 +72,9 @@ describe("the reference an instance serves", () => {
       `${API_VERSION_PREFIX}/app-data-sources`,
       `${API_VERSION_PREFIX}/knowledge-bases`,
       // What deleting a Workflow ends in Knowledge Bases is the knowledge module's.
-      `${API_VERSION_PREFIX}/workflows/{workflow}/knowledge-sources`
+      `${API_VERSION_PREFIX}/workflows/{workflow}/knowledge-sources`,
+      // What a Workflow can do is read from the workflows module's assembly.
+      `${API_VERSION_PREFIX}/workflow-capabilities`
     ];
     expect(paths).toEqual(
       Object.keys(released.paths).filter(
