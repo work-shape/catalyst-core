@@ -4,7 +4,6 @@ import {
   auditActorFromUser,
   authenticatedUserFromRecord,
   createAuthorizer,
-  isSuperadmin,
   type ActorAccess,
   type ApprovalRequest,
   type AuthenticatedUser,
@@ -18,7 +17,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { ApprovalRequestWorkflow } from "../approvals/approval-request-service";
 import { AccessWorkflow, grantAuditMetadata } from "../access/access-service";
-import { requireManageableHolder } from "../access/grant-holder-rules";
+import { mayManageHolder, requireManageableHolder } from "../access/grant-holder-rules";
 import { withRightsHeld } from "../access/rights-held";
 import { bundleRows, type GrantRequestSubject } from "./member-bundle-rows";
 import type { ChatServerOptions } from "../types";
@@ -92,7 +91,7 @@ function mayGrantBundle(
     access.authorize(GRANT_DECIDING_RIGHT).allowed &&
     access.authorize(bundle, { workspaceId }).allowed &&
     member.id !== caller.id &&
-    (!isSuperadmin(member) || isSuperadmin(caller))
+    mayManageHolder(caller, member)
   );
 }
 
@@ -134,7 +133,7 @@ async function describeBundle(
     const rows = await bundleRows(options.stores.access, options.clientInstanceId, subject);
     // A bundle held through a role, a group or the whole instance is changed where it is given.
     if (rows.length === 0) return { state: "inherited" };
-    return mayRevokeHolder(caller.user, member)
+    return mayManageHolder(caller.user, member)
       ? { state: "held", change: "revoke" }
       : { state: "held" };
   }
@@ -154,10 +153,6 @@ async function describeBundle(
       ? "grant"
       : "request"
   };
-}
-
-function mayRevokeHolder(caller: AuthenticatedUser, member: UserRecord): boolean {
-  return !isSuperadmin(member) || isSuperadmin(caller);
 }
 
 /** Builder and Publisher of every member, for the workspace's Owner or Admin. */
