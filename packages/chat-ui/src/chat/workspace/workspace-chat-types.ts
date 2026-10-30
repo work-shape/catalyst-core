@@ -272,6 +272,8 @@ export interface SelectedChatModel {
   newConversationPrivate: boolean;
   /** The quiet note at 80 percent of the person's own spend limit, until they dismiss it. */
   usageNote?: { text: string; dismiss(): void };
+  /** The sentence of a spend limit that stops the person here, shown above the composer. */
+  usageLimit?: string;
   selectedConversationId: string | undefined;
   /** The open conversation's retention date, once its thread has loaded. */
   selectedConversationRetainedUntil: string | undefined;

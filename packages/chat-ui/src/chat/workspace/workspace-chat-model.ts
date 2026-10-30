@@ -1256,6 +1256,7 @@ export function useWorkspaceChatModel({
       agentsWorkspaceScoped,
       collaborationWorkspaceId: activeCollaborationWorkspaceId,
       usageNote: usageLimitReason === undefined ? usageNote : undefined,
+      ...(usageLimitReason === undefined ? {} : { usageLimit: usageLimitReason }),
       newConversationPrivate:
         !selectedConversationId &&
         // A chat started in a project takes the project's audience.

@@ -1,0 +1,10 @@
+# The member of the limits spec, used by no other spec: a member of the one workspace whose
+# spend limit the spec sets. The label sorts after every other for the reason in e2e-app.yaml.
+- email: e2e-limits@example.test
+  displayLabel: E2E Zz Limits Member
+  passwordEnvName: E2E_LIMITS_PASSWORD
+  developmentPassword: e2e-limits-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
