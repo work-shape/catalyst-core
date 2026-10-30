@@ -178,6 +178,11 @@ export const CONNECTION_CALL_REASONS = {
   output_rejected: "CONFLICT",
   upstream_unauthorized: "CONFLICT",
   upstream_rate_limited: "RATE_LIMITED",
+  /**
+   * The operation's own `limits` on the Connection are full for the whole instance: as many
+   * calls are running, or as many started within the period, as they allow. Nothing was sent.
+   */
+  rate_limited: "RATE_LIMITED",
   upstream_timeout: "TIMEOUT",
   /** The outside system reported a failure. Its text is not passed on. */
   upstream_error: "CONFLICT",
@@ -220,7 +225,8 @@ export const CONNECTION_TRANSIENT_CALL_REASONS: ReadonlySet<ConnectionCallReason
   "connection_busy",
   "upstream_error",
   "upstream_timeout",
-  "upstream_rate_limited"
+  "upstream_rate_limited",
+  "rate_limited"
 ]);
 
 /** What each reason says where the caller adds nothing. No sentence holds a value of a call. */
@@ -246,6 +252,7 @@ const CONNECTION_CALL_MESSAGES: Record<ConnectionCallReason, string> = {
   output_rejected: "the result holds the Connection's credential and was discarded",
   upstream_unauthorized: "the outside system refused the Connection's credential",
   upstream_rate_limited: "the outside system limits the rate of calls",
+  rate_limited: "the operation's limits on the Connection allow no further call now",
   upstream_timeout: "the outside system did not answer in time",
   upstream_error: "the outside system reported a failure",
   upstream_conflict: "the outside system answered 409 Conflict",
@@ -358,6 +365,8 @@ const CONNECTION_CALL_SENTENCES: Record<
     `The outside system refused the credential of ${c}. Trying again will not help. An administrator can see what to do under ${WHERE}.`,
   upstream_rate_limited: (c) =>
     `The outside system behind ${c} accepts no more calls for the moment. Wait a little before trying again.`,
+  rate_limited: (c) =>
+    `This action of ${c} has reached the number of calls this instance allows toward the outside system for now. Wait a little before trying again.`,
   // Only a call known to read is safe to repeat. Any other may have changed something.
   upstream_timeout: (c, effect) =>
     effect === "reading"

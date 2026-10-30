@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { bindingAuditSubject, credentialSubject } from "./personal-bindings";
 import { resolveConnectionPersonContext } from "./person-context";
 import { retryAfterSecondsOf } from "./retry-after";
@@ -21,6 +22,7 @@ import {
   type ConnectorOperationDescriptor,
   type ConnectorTypeDefinition,
   type JsonValue,
+  type OperationLimits,
   requirePersonalConnectionContext,
   type OperationExecutionContext
 } from "@work-shape/catalyst-core";
@@ -863,12 +865,23 @@ async function call(
   const { release } = await slots.acquire(first.connection.assetId, limits, context.runtime.signal);
   const deadline = callSignal(limits.callTimeoutMs, context.runtime.signal);
   const aborted = untilAborted(deadline.signal);
+  let sourceLease: Promise<() => Promise<void>> | undefined;
   try {
     // The Connection is read again now that the call has its slot, so it runs on the revision
     // and the state of that moment whether it waited or not. The read is inside the deadline
     // of the call: a store that does not answer costs the slot that long and no longer.
     const found = await current(read(), aborted.promise, deadline.signal);
     const { connection, type } = found;
+    const sourceLimits = connection.config.operations.find(
+      (candidate) => candidate.name === target.operationName
+    )?.limits;
+    if (sourceLimits) {
+      sourceLease = admitSourceCall(deps, connection.assetId, target.operationName, {
+        limits: sourceLimits,
+        leaseMs: limits.callTimeoutMs
+      });
+      await current(sourceLease, aborted.promise, deadline.signal);
+    }
     const key = idempotencyKeyOf(found, target, context.idempotencyKey);
     named.keyed = key.idempotencyKey !== undefined;
     let result: JsonValue;
@@ -992,7 +1005,57 @@ async function call(
     aborted.stop();
     deadline.stop();
     release();
+    // An admission that ends after the call stopped waiting for it is released all the same;
+    // a lease nobody releases ends with its call's timeout.
+    sourceLease
+      ?.then(
+        (releaseSource) => releaseSource(),
+        () => undefined
+      )
+      .catch(() => {
+        deps.logger.warn(
+          { connection: target.connectionName, operation: target.operationName },
+          "A source call admission could not be released"
+        );
+      });
   }
+}
+
+/**
+ * Takes room under an accepted operation's `limits` for the whole instance: across processes,
+ * runs and every page of a paged step. A call that finds none is answered `rate_limited` with
+ * the seconds until there is room, and nothing is sent; a Workflow step is queued again for
+ * then without spending an attempt. Answers the release of the room.
+ */
+async function admitSourceCall(
+  deps: ConnectionOperationSourceDeps,
+  connectionAssetId: string,
+  operationName: string,
+  admission: { limits: OperationLimits; leaseMs: number }
+): Promise<() => Promise<void>> {
+  const leaseId = randomUUID();
+  const admitted = await deps.stores.transaction((stores) =>
+    stores.connections.admitSourceCall({
+      clientInstanceId: deps.clientInstanceId,
+      connectionAssetId,
+      operationName,
+      leaseId,
+      ...admission
+    })
+  );
+  if (!admitted.admitted)
+    throw connectionCallError(
+      "rate_limited",
+      undefined,
+      Math.max(1, Math.ceil(admitted.retryAfterMs / 1000))
+    );
+  return () =>
+    deps.stores.connections.releaseSourceCall({
+      clientInstanceId: deps.clientInstanceId,
+      connectionAssetId,
+      operationName,
+      leaseId
+    });
 }
 
 function errorDetails(error: unknown): unknown {

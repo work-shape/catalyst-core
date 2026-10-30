@@ -1,6 +1,10 @@
 import { afterEach, expect, it } from "vitest";
 import { z } from "zod";
-import { connectionCallError, type OperationPaging } from "@work-shape/catalyst-core";
+import {
+  connectionCallError,
+  type OperationLimits,
+  type OperationPaging
+} from "@work-shape/catalyst-core";
 import { workflowsConfigSchema } from "@work-shape/catalyst-config-schema";
 import { workflowLimitCeilingsOf } from "@work-shape/catalyst-client-assembly";
 import {
@@ -70,12 +74,14 @@ async function setup(
     bytes?: number;
     pagedStepMinutes?: number;
     workflowMinutes?: number;
+    limits?: OperationLimits;
   } = {}
 ) {
   const definitions = publishedDefinitions();
   const {
     pagedStepMinutes,
     workflowMinutes,
+    limits,
     now,
     objects = new MemoryObjectStorage(),
     ...datasetLimits
@@ -104,7 +110,13 @@ async function setup(
     ]
   });
   await t.seed("crm", {
-    operations: [operationOf("echo", { exposure: ["workflow"], paging: { ...paging } })]
+    operations: [
+      operationOf("echo", {
+        exposure: ["workflow"],
+        paging: { ...paging },
+        ...(limits ? { limits: { ...limits } } : {})
+      })
+    ]
   });
   t.state.limits = { ...t.state.limits, resultMaxBytes: 2 * 1024 ** 2 };
   await t.allow({ kind: "service_principal", id: t.principal.id }, "connection.use");
@@ -176,6 +188,30 @@ it("defers a 429 after a complete page and resumes its one run without replaying
   expect((await f.finish(id)).status).toBe("done");
   expect(positions).toEqual([1, 2, 2]);
   expect((await f.runs()).filter((run) => run.operation === "connection.crm.echo")).toHaveLength(1);
+  expect((await stepRunsOf(f, id)).find((step) => step.stepId === "rows")?.attempt).toBe(1);
+});
+
+it("queues a page the operation's source limits have no room for, sends it once and spends no attempt", async () => {
+  const { fixture: f, id } = await setup(
+    { by: "page", param: "page", sizeParam: "size", size: 2 },
+    { limits: { perPeriod: { calls: 2, seconds: 1 } } }
+  );
+  const positions: number[] = [];
+  const sentAt: number[] = [];
+  f.setBehaviour(async (_op, input) => {
+    const { page } = z.object({ page: z.number() }).parse(input);
+    positions.push(page);
+    sentAt.push(Date.now());
+    return { rows: page < 3 ? [{ id: page * 2 }, { id: page * 2 + 1 }] : [{ id: 9 }] };
+  });
+  expect(await finishDeferred(f, id)).toMatchObject({ status: "done" });
+  // The third page found no room and was queued, not sent: every page reached the source once,
+  // and the third only after the first left the period.
+  expect(positions).toEqual([1, 2, 3]);
+  expect(required(sentAt[2]) - required(sentAt[0])).toBeGreaterThanOrEqual(900);
+  const calls = (await f.runs()).filter((run) => run.operation === "connection.crm.echo");
+  expect(calls).toHaveLength(1);
+  expect(calls[0]?.output?.value).toMatchObject({ pages: 3, rows: 5 });
   expect((await stepRunsOf(f, id)).find((step) => step.stepId === "rows")?.attempt).toBe(1);
 });
 
