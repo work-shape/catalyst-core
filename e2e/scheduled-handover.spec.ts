@@ -22,9 +22,6 @@ const taker = {
 };
 
 const idSchema = z.object({ id: z.string() });
-const workspaceListSchema = z.object({
-  items: z.array(z.object({ id: z.string(), kind: z.string() }))
-});
 const startsSchema = z.object({
   items: z.array(z.object({ id: z.string(), ownerUserId: z.string(), state: z.string() }))
 });
@@ -40,21 +37,42 @@ async function signIn(page: Page, user: { email: string; password: string }): Pr
   return idSchema.parse(await me.json()).id;
 }
 
-/** The person's Personal Workspace, which the first visit of the interface sets up. */
+/**
+ * The signed-in person's Personal Workspace, set up through the API as the interface's first
+ * visit does. No page loads it: a page still loading it as this person would go on asking for
+ * it after the next sign-in, as another person, who is told it does not exist (404).
+ */
 async function personalWorkspace(page: Page): Promise<string> {
-  let id = "";
-  await expect
-    .poll(async () => {
-      const response = await page.request.get(`${apiBaseUrl}/api/v1/workspaces?limit=100`);
-      if (!response.ok()) return "";
-      id =
-        workspaceListSchema
-          .parse(await response.json())
-          .items.find((workspace) => workspace.kind === "personal")?.id ?? "";
-      return id;
-    })
-    .not.toBe("");
-  return id;
+  const response = await requestWithOrigin(
+    page,
+    "post",
+    `${apiBaseUrl}/api/v1/workspaces/personal`
+  );
+  expect(response.ok(), await response.text()).toBe(true);
+  return idSchema.parse(await response.json()).id;
+}
+
+/**
+ * Puts the owner back as a retry finds them: their remaining scheduled prompts deleted, then
+ * active again. A disabled owner could not sign in on the retry.
+ */
+async function restoreOwner(page: Page, ownerId: string): Promise<void> {
+  await signIn(page, superadmin);
+  const owned = await page.request.get(
+    `${apiBaseUrl}/api/v1/scheduled-starts?ownerUserId=${ownerId}&limit=50`
+  );
+  if (owned.ok()) {
+    for (const start of z.object({ items: z.array(idSchema) }).parse(await owned.json()).items) {
+      await requestWithOrigin(page, "delete", `${apiBaseUrl}/api/v1/scheduled-starts/${start.id}`);
+    }
+  }
+  const enabled = await requestWithOrigin(
+    page,
+    "patch",
+    `${apiBaseUrl}/api/v1/instance/users/${ownerId}`,
+    { data: { status: "active" } }
+  );
+  expect(enabled.ok(), await enabled.text()).toBe(true);
 }
 
 test("an admin hands a deactivated person's scheduled prompt to a member, paused, without reading it", async ({
@@ -81,79 +99,85 @@ test("an admin hands a deactivated person's scheduled prompt to a member, paused
     expect(member.ok(), await member.text()).toBe(true);
   }
 
-  await signIn(page, owner);
-  await page.goto("/");
-  const ownWorkspaceId = await personalWorkspace(page);
-  const schedule = async (collaborationWorkspaceId: string, prompt: string, cron: string) => {
-    const start = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/scheduled-starts`, {
-      data: {
-        collaborationWorkspaceId,
-        agentName: "application_assistant",
-        prompt,
-        cron,
-        timeZone: "Europe/Berlin"
-      }
-    });
-    expect(start.ok(), await start.text()).toBe(true);
-    return idSchema.parse(await start.json()).id;
-  };
-  const prompt = `Weekly digest ${randomUUID().slice(0, 8)}`;
-  const privatePrompt = `Private reminder ${randomUUID().slice(0, 8)}`;
-  const startId = await schedule(workspaceId, prompt, "0 9 * * 1");
-  await schedule(ownWorkspaceId, privatePrompt, "0 7 * * *");
+  try {
+    await signIn(page, owner);
+    const ownWorkspaceId = await personalWorkspace(page);
+    const schedule = async (collaborationWorkspaceId: string, prompt: string, cron: string) => {
+      const start = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/scheduled-starts`, {
+        data: {
+          collaborationWorkspaceId,
+          agentName: "application_assistant",
+          prompt,
+          cron,
+          timeZone: "Europe/Berlin"
+        }
+      });
+      expect(start.ok(), await start.text()).toBe(true);
+      return idSchema.parse(await start.json()).id;
+    };
+    const prompt = `Weekly digest ${randomUUID().slice(0, 8)}`;
+    const privatePrompt = `Private reminder ${randomUUID().slice(0, 8)}`;
+    const startId = await schedule(workspaceId, prompt, "0 9 * * 1");
+    await schedule(ownWorkspaceId, privatePrompt, "0 7 * * *");
 
-  await signIn(page, superadmin);
-  const disabled = await requestWithOrigin(
-    page,
-    "patch",
-    `${apiBaseUrl}/api/v1/instance/users/${ownerId}`,
-    { data: { status: "disabled" } }
-  );
-  expect(disabled.ok(), await disabled.text()).toBe(true);
+    await signIn(page, superadmin);
+    const disabled = await requestWithOrigin(
+      page,
+      "patch",
+      `${apiBaseUrl}/api/v1/instance/users/${ownerId}`,
+      { data: { status: "disabled" } }
+    );
+    expect(disabled.ok(), await disabled.text()).toBe(true);
 
-  await page.goto("/settings/instance/users");
-  await page.getByLabel("Search users").fill("Scheduled Owner");
-  await page.getByRole("button", { name: /E2E Zz Scheduled Owner/u }).click();
-  const card = page.getByTestId("owner-scheduled-starts");
-  await expect(card.getByRole("listitem")).toHaveCount(2);
-  // The admin reads agent, schedule and workspace, never what the prompts say.
-  await expect(card).not.toContainText(prompt);
-  await expect(card).not.toContainText(privatePrompt);
-  const shared = card.getByRole("listitem").filter({ hasText: "Shared workspace" });
-  const personal = card.getByRole("listitem").filter({ hasText: "Personal workspace" });
-  await expect(shared).toContainText("Paused");
-  await expect(shared).toContainText("application_assistant");
-  // A start in the Personal Workspace can only be deleted.
-  await expect(personal.getByRole("button", { name: "Hand over" })).toHaveCount(0);
-  await expect(
-    personal.getByRole("button", { name: /^Delete the scheduled prompt for/u })
-  ).toBeVisible();
+    await page.goto("/settings/instance/users");
+    await page.getByLabel("Search users").fill("Scheduled Owner");
+    await page.getByRole("button", { name: /E2E Zz Scheduled Owner/u }).click();
+    const card = page.getByTestId("owner-scheduled-starts");
+    await expect(card.getByRole("listitem")).toHaveCount(2);
+    // The admin reads agent, schedule and workspace, never what the prompts say.
+    await expect(card).not.toContainText(prompt);
+    await expect(card).not.toContainText(privatePrompt);
+    const shared = card.getByRole("listitem").filter({ hasText: "Shared workspace" });
+    const personal = card.getByRole("listitem").filter({ hasText: "Personal workspace" });
+    await expect(shared).toContainText("Paused");
+    await expect(shared).toContainText("application_assistant");
+    // A start in the Personal Workspace can only be deleted.
+    await expect(personal.getByRole("button", { name: "Hand over" })).toHaveCount(0);
+    await expect(
+      personal.getByRole("button", { name: /^Delete the scheduled prompt for/u })
+    ).toBeVisible();
 
-  await shared.getByRole("button", { name: "Hand over" }).click();
-  const dialog = page.getByRole("dialog");
-  await expect(dialog).toContainText("Hand over this scheduled prompt?");
-  await expect(dialog).not.toContainText(prompt);
-  const confirm = dialog.getByRole("button", { name: "Hand over" });
-  await expect(confirm).toBeDisabled();
-  await dialog.getByRole("combobox", { name: "New owner" }).selectOption(takerId);
-  await confirm.click();
-  await expect(dialog).toHaveCount(0);
-  await expect(card).toContainText("Handed over to E2E Zz Scheduled Taker, paused.");
-  await expect(card.getByRole("listitem")).toHaveCount(1);
+    await shared.getByRole("button", { name: "Hand over" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toContainText("Hand over this scheduled prompt?");
+    await expect(dialog).not.toContainText(prompt);
+    const confirm = dialog.getByRole("button", { name: "Hand over" });
+    await expect(confirm).toBeDisabled();
+    await dialog.getByRole("combobox", { name: "New owner" }).selectOption(takerId);
+    await confirm.click();
+    await expect(dialog).toHaveCount(0);
+    await expect(card).toContainText("Handed over to E2E Zz Scheduled Taker, paused.");
+    await expect(card.getByRole("listitem")).toHaveCount(1);
 
-  await personal.getByRole("button", { name: /^Delete the scheduled prompt for/u }).click();
-  await expect(dialog).not.toContainText(privatePrompt);
-  await dialog.getByRole("button", { name: "Delete" }).click();
-  await expect(dialog).toHaveCount(0);
-  await expect(card).toContainText("This person owns no scheduled prompts.");
+    await personal.getByRole("button", { name: /^Delete the scheduled prompt for/u }).click();
+    await expect(dialog).not.toContainText(privatePrompt);
+    await dialog.getByRole("button", { name: "Delete" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(card).toContainText("This person owns no scheduled prompts.");
 
-  // The member owns it now, paused until they resume it.
-  await signIn(page, taker);
-  const listed = await page.request.get(
-    `${apiBaseUrl}/api/v1/scheduled-starts?collaborationWorkspaceId=${workspaceId}`
-  );
-  expect(listed.ok()).toBe(true);
-  expect(startsSchema.parse(await listed.json()).items).toEqual([
-    expect.objectContaining({ id: startId, ownerUserId: takerId, state: "paused" })
-  ]);
+    // The member owns it now, paused until they resume it. The admin's page is left first, so
+    // it asks nothing more as the member.
+    await page.goto("about:blank");
+    await signIn(page, taker);
+    const listed = await page.request.get(
+      `${apiBaseUrl}/api/v1/scheduled-starts?collaborationWorkspaceId=${workspaceId}`
+    );
+    expect(listed.ok()).toBe(true);
+    expect(startsSchema.parse(await listed.json()).items).toEqual([
+      expect.objectContaining({ id: startId, ownerUserId: takerId, state: "paused" })
+    ]);
+  } finally {
+    await page.goto("about:blank");
+    await restoreOwner(page, ownerId);
+  }
 });

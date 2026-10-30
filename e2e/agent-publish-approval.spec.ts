@@ -10,8 +10,8 @@ import { expect, test } from "./test";
 // is no member of it and holds no agent.approve makes the workspace's agent, which starts offered
 // nowhere. Its first publish, without a draft, waits in an instance admin's Inbox as "Agent to
 // publish" with version 1 alone and the workspace it will be offered in; approved, it is
-// offered there. A later draft's publish waits too, reviewed against the live version, and its
-// approval makes the draft live.
+// offered there. A later draft that gives the agent a tool widens its reach, so its publish waits
+// too (GR-PUB-2), reviewed against the live version, and its approval makes the draft live.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
@@ -160,11 +160,12 @@ test("a workspace agent's publish waits in the Inbox and goes live once an admin
 
     // The publisher makes the agent in the workspace. Without agent.approve there it starts
     // offered nowhere, so nobody of the workspace is offered it (access check 11).
-    const config = (instructions: string) => ({
+    const config = (instructions: string, toolNames: string[] = []) => ({
       name,
       displayName,
       description: "Checks offers before they go out.",
-      instructions
+      instructions,
+      toolNames
     });
     const made = await requestWithOrigin(publisherPage, "put", agentUrl, {
       data: { workspaceId, expectedRevision: null, config: config("Check every offer.") }
@@ -193,13 +194,15 @@ test("a workspace agent's publish waits in the Inbox and goes live once an admin
     await expect.poll(offered, { timeout: 30_000 }).toContain(name);
     expect(await live()).toMatchObject({ revision: 1 });
 
-    // A push writes a draft over it; its publish waits too, reviewed against the live version.
+    // A push writes a draft over it that gives the agent a tool the live version lacks. That
+    // widens its reach, so its publish waits too, reviewed against the live version. New
+    // instructions alone would widen nothing and go live on the publisher's click (GR-PUB-2).
     const pushed = await requestWithOrigin(publisherPage, "put", agentUrl, {
       data: {
         workspaceId,
         expectedRevision: 1,
         expectedDraftRevision: null,
-        config: config("Check every offer and name the missing price.")
+        config: config("Check every offer and name the missing price.", ["read_skill"])
       }
     });
     expect(pushed.ok(), await pushed.text()).toBe(true);
@@ -213,6 +216,7 @@ test("a workspace agent's publish waits in the Inbox and goes live once an admin
     await expect(update.getByTestId("publish-review-offers")).toHaveText(
       "Where the agent is offered stays as it is."
     );
+    await expect(update.locator('[data-field="tools-added"]')).toContainText("read_skill");
     await expect(update.locator('[data-agent-field="instructions"]')).toContainText("Changed");
     await expect(update.getByTestId("publish-review-instructions")).toContainText(
       "name the missing price"

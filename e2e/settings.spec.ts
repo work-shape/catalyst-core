@@ -24,7 +24,16 @@ test("an instance admin opens every group of the Settings rail", async ({ page }
   }
   await expect(
     rail.getByRole("group", { name: "All workspaces", exact: true }).getByRole("button")
-  ).toHaveText(["Users", "Access", "API access", "Usage", "Limits", "Audit", "Workspaces"]);
+  ).toHaveText([
+    "Users",
+    "Access",
+    "API access",
+    "Usage",
+    "Limits",
+    "Policies",
+    "Audit",
+    "Workspaces"
+  ]);
   // How the instance runs folds away at the end of Instance, under System (RIGHTS-1e).
   const system = rail.getByRole("group", { name: "System", exact: true });
   await expect(system.getByRole("button")).toHaveText(["System"]);
@@ -132,7 +141,16 @@ test("a plain user finds only their own pages in the Settings rail", async ({
   await expect(rail.getByRole("button", { name: "Language and appearance" })).toBeVisible();
   await expect(rail.getByRole("button", { name: "Security", exact: true })).toBeVisible();
   // Usage stands among their own pages, by person; the Instance group stays closed below.
-  for (const closed of ["Users", "Access", "API access", "Limits", "Audit", "Jobs", "System"]) {
+  for (const closed of [
+    "Users",
+    "Access",
+    "API access",
+    "Limits",
+    "Policies",
+    "Audit",
+    "Jobs",
+    "System"
+  ]) {
     await expect(rail.getByRole("button", { name: closed, exact: true })).toHaveCount(0);
   }
   await expect(rail.getByRole("group", { name: "All workspaces" })).toHaveCount(0);
