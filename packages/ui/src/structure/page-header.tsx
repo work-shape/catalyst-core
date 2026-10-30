@@ -79,6 +79,16 @@ export interface PageHeaderProps extends Omit<HTMLAttributes<HTMLElement>, "titl
   /** The state, such as a draft badge. */
   state?: ReactNode;
   /**
+   * The one state of the object right after its name, such as a `StatusPill`: unlike `state` it
+   * never gives way, the name is cut first.
+   */
+  status?: ReactNode;
+  /**
+   * One muted line under the name: where the object comes from, where it is used and by whom.
+   * It is cut with an ellipsis where it does not fit.
+   */
+  meta?: ReactNode;
+  /**
    * One line about the page. A `list` head shows it under the name. A `detail` head shows it
    * after the name and the state on their row, in the muted style: it is cut with an ellipsis
    * where it does not fit, reads in full in a tooltip, and is not shown where a few words have
@@ -214,9 +224,11 @@ function useBackTextGone(): [RefObject<HTMLDivElement | null>, boolean] {
       // The chips and the description give the room after the name before the text asks for it.
       // A description holds all of that room; the gap before it is no room the text could take.
       const room = node.querySelector<HTMLElement>("[data-slot=page-header-description-room]");
+      // The state after the name stands in the room after it, and keeps its place.
+      const end = node.querySelector<HTMLElement>("[data-slot=page-header-status]") ?? name;
       const free = room
         ? room.getBoundingClientRect().width
-        : node.getBoundingClientRect().right - name.getBoundingClientRect().right;
+        : node.getBoundingClientRect().right - end.getBoundingClientRect().right;
       const next = was.current
         ? cut || free < width.current + 1
         : cut || slot.getBoundingClientRect().width < width.current - 0.5;
@@ -320,7 +332,15 @@ function nameReserve(
     headNode.getBoundingClientRect().left -
     pixels(style.paddingInlineStart) -
     (backText?.getBoundingClientRect().width ?? 0);
-  return Math.max(0, before) + Math.min(measure.scrollWidth, NAME_LEAST) + pixels(style.columnGap);
+  // The state after the name never gives way: the name keeps its least width beside it.
+  const status = headNode.querySelector<HTMLElement>("[data-slot=page-header-status]");
+  const statusWidth = status ? status.getBoundingClientRect().width + pixels(style.columnGap) : 0;
+  return (
+    Math.max(0, before) +
+    Math.min(measure.scrollWidth, NAME_LEAST) +
+    statusWidth +
+    pixels(style.columnGap)
+  );
 }
 
 /** A length in pixels of a computed style, `0` where the style gives none. */
@@ -411,6 +431,8 @@ export function PageHeader({
   headingLevel = 1,
   scope,
   state,
+  status,
+  meta,
   description,
   descriptionTooltip,
   secondaryActions = [],
@@ -420,6 +442,8 @@ export function PageHeader({
 }: PageHeaderProps) {
   const Heading = headingLevel === 1 ? "h1" : "h2";
   const detail = variant === "detail";
+  const hasMeta = meta !== undefined && meta !== null && meta !== "";
+  const hasStatus = status !== undefined && status !== null;
   const [row, backTextGone] = useBackTextGone();
   const shellAction = useContext(PageHeaderShellActionContext);
   const ownShellAction = headingLevel === 1 ? shellAction : null;
@@ -506,18 +530,44 @@ export function PageHeader({
               {back}
             </div>
           )}
-          <div className={cn("min-w-0", titleEditor === undefined ? undefined : "flex-1")}>
-            {titleEditor ?? (
-              <Heading
-                // An area puts the focus here when it opens; a title is no control and shows no
-                // ring. Two lines of the name fit the head's height; a longer one is cut after
-                // the second.
-                className={cn("line-clamp-2 wrap-anywhere outline-none", "text-title")}
-                title={typeof title === "string" ? title : undefined}
+          <div
+            className={cn("min-w-0", titleEditor === undefined && !hasMeta ? undefined : "flex-1")}
+          >
+            <div
+              className={cn(
+                "flex min-w-0 items-center gap-2",
+                titleEditor === undefined ? undefined : "w-full"
+              )}
+            >
+              {titleEditor ?? (
+                <Heading
+                  // An area puts the focus here when it opens; a title is no control and shows no
+                  // ring. Two lines of the name fit the head's height; a longer one is cut after
+                  // the second, or after the first where a line of facts stands under it.
+                  className={cn(
+                    "min-w-0 wrap-anywhere outline-none",
+                    hasMeta ? "line-clamp-1" : "line-clamp-2",
+                    "text-title"
+                  )}
+                  title={typeof title === "string" ? title : undefined}
+                >
+                  {title}
+                </Heading>
+              )}
+              {hasStatus && titleEditor === undefined ? (
+                <div data-slot="page-header-status" className="flex shrink-0 items-center">
+                  {status}
+                </div>
+              ) : null}
+            </div>
+            {hasMeta ? (
+              <p
+                data-slot="page-header-meta"
+                className="w-0 min-w-full truncate text-caption text-muted-foreground"
               >
-                {title}
-              </Heading>
-            )}
+                {meta}
+              </p>
+            ) : null}
             {typeof title === "string" && titleEditor === undefined ? (
               // The name on one line, unseen and without height: the row's least width stays the
               // whole name, so the actions wrap before the name does.
@@ -585,9 +635,15 @@ export function PageHeader({
                 {title}
               </Heading>
             )}
+            {hasStatus ? status : null}
             {scope}
             {state}
           </div>
+          {hasMeta ? (
+            <p data-slot="page-header-meta" className="min-w-0 text-caption text-muted-foreground">
+              {meta}
+            </p>
+          ) : null}
           {description === undefined ? null : (
             <div className="min-w-0 text-body text-muted-foreground">{description}</div>
           )}

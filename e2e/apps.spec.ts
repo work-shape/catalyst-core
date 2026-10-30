@@ -190,7 +190,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await saveDialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${draftPathOf(appPath)}$`, "u"));
   const edit = page.getByTestId("app-edit");
-  await expect(edit).toContainText("Draft · not published");
+  await expect(edit).toContainText("Draft · not live");
   await expect(
     appIn(page, "app-edit").getByRole("heading", { name: PUBLISHED_HEADING })
   ).toBeVisible();
@@ -218,8 +218,9 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await publishDialog.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(publishDialog).toBeHidden();
   // The head says what was published, not that a draft is open (ACCEPT-FIX-2 C5).
-  await expect(edit).toContainText("Live: version 1 · since");
-  await expect(edit).not.toContainText("Draft: changed since");
+  await expect(edit.locator('[data-asset-status="live"]')).toHaveText("Live");
+  await expect(edit.locator("[data-draft-live]")).toContainText("Live: version 1, published");
+  await expect(edit.locator('[data-asset-status="draft"]')).toHaveCount(0);
   if (shotsDir) {
     await page.screenshot({
       path: join(shotsDir, "app-published-head-light-en-1440.png"),
@@ -389,7 +390,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
     }
     await memberCard.getByRole("link", { name: "Edit", exact: true }).click();
     const memberEdit = memberPage.getByTestId("app-edit");
-    await expect(memberEdit).toContainText("Draft: changed since version 1");
+    await expect(memberEdit.locator('[data-asset-status="draft"]')).toHaveText("Draft · not live");
     // The conversation subject keeps the server's separate read requirement. The editor
     // above needs write alone; grant read on this App too before starting its conversation.
     const readable = await requestWithOrigin(
@@ -410,7 +411,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
     expect(readable.ok(), await readable.text()).toBe(true);
     grants.push(idSchema.parse(await readable.json()).id);
     await memberPage.reload();
-    await expect(memberEdit).toContainText("Draft: changed since version 1");
+    await expect(memberEdit.locator('[data-asset-status="draft"]')).toHaveText("Draft · not live");
     await memberPage.getByTestId("dock-page-action").click();
     await expect(memberPage).toHaveURL(
       (url) => url.pathname === draftPathOf(appPath) && url.searchParams.has("chat")
@@ -429,8 +430,8 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await memberContext.close();
   await page.reload();
   const draftReady = async () => {
-    await expect(edit).toContainText(
-      /(?:Draft: changed since version|Entwurf: geändert seit Version) 1/u
+    await expect(edit.locator('[data-asset-status="draft"]')).toHaveText(
+      /^(?:Draft · not live|Entwurf · nicht live)$/u
     );
     await expect(
       appIn(page, "app-edit").getByRole("heading", { name: DRAFT_HEADING })
@@ -441,8 +442,10 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await draftReady();
   await expect(edit).toContainText(`This draft cannot call ${HELD_HOST} until it is published.`);
   await expect(publish).toBeEnabled();
-  const discard = edit.getByRole("button", { name: "Discard", exact: true });
-  await expect(discard).toBeVisible();
+  // Discard stands in the head's "…" menu; Publish is the one button beside it.
+  const more = edit.getByRole("button", { name: "More actions", exact: true });
+  const discard = page.getByRole("menuitem", { name: "Discard", exact: true });
+  await expect(edit.getByRole("button", { name: "Discard", exact: true })).toHaveCount(0);
   await shoot(page, "app-draft", MAIN, draftReady);
   // Files and Actions fold under Technical details: folded on the first visit, open after a
   // click, and still open after a reload, as this browser remembers.
@@ -544,7 +547,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   );
   await builderPage.goto(draftPathOf(appPath));
   const builderEdit = builderPage.getByTestId("app-edit");
-  await expect(builderEdit).toContainText("Draft: changed since version 1");
+  await expect(builderEdit.locator('[data-asset-status="draft"]')).toHaveText("Draft · not live");
   await expect(builderEdit.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
   await expect(builderEdit).toContainText("You need the right “app.publish” to publish.");
   await shoot(builderPage, "app-draft-no-publish", [["light", "en", 1440]], async () => {
@@ -593,6 +596,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   // Discard asks once, and the draft shows what is published again.
   await page.goto(draftPathOf(appPath));
   await draftReady();
+  await more.click();
   await discard.click();
   const discardDialog = page.getByRole("dialog", { name: `Discard the draft of “${appName}”?` });
   await expect(discardDialog).toContainText("The draft goes back to what is live.");
@@ -601,7 +605,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await expect(
     appIn(page, "app-edit").getByRole("heading", { name: PUBLISHED_HEADING })
   ).toBeVisible();
-  await expect(discard).toBeHidden();
+  await expect(edit.locator('[data-asset-status="draft"]')).toHaveCount(0);
   await expect(edit).not.toContainText(HELD_HOST);
   // T34: a builder renames the App where its name stands, on its page and on its card. Only the
   // name people read changes, at once for what is published: the address stays, and no draft
@@ -638,8 +642,9 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   // The draft has the same name, and nothing waits to be published.
   await page.goto(draftPathOf(appPath));
   await expect(edit.getByRole("heading", { name: newName })).toBeVisible();
-  await expect(edit).toContainText("Live: version 1 · since");
-  await expect(edit).not.toContainText("Draft: changed since");
+  await expect(edit.locator('[data-asset-status="live"]')).toHaveText("Live");
+  await expect(edit.locator("[data-draft-live]")).toContainText("Live: version 1, published");
+  await expect(edit.locator('[data-asset-status="draft"]')).toHaveCount(0);
   // On its card: the menu's Rename puts the field in the name's place, Enter saves it, and the
   // focus goes back to the card's menu.
   await page.goto(appsPath);

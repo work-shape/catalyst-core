@@ -214,13 +214,12 @@ describe("Connection page", () => {
     expect(markup).toContain('data-connection-head-health="never_tested"');
     expect(markup).toContain('aria-label="Back to Connections"');
     // Nothing on the page writes: no field, no save. Its history is read, its menu offers
-    // "Copy ID", and a reader who may create one starts a copy of it.
+    // "Copy ID" and, for a reader who may create one, "Copy to edit".
     for (const control of ["<input", "<textarea", "Save", ">Edit<", ">Accept<"]) {
       expect(markup, control).not.toContain(control);
     }
     expect(markup).toContain(">History<");
     expect(markup).toContain('aria-label="More actions"');
-    expect(markup).toContain(">Copy to edit<");
     expect(renderPage({ locale: "de" })).toContain(
       "Diese Verbindung gehört zur Einrichtung des Systems. Das technische Team ändert sie dort; hier lässt sie sich nicht ändern."
     );

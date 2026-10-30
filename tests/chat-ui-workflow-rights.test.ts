@@ -248,6 +248,33 @@ async function mount(
   return container;
 }
 
+/** The items of the page head's "…" menu, opened from the keyboard; none without the menu. */
+async function menuItems(container: HTMLElement): Promise<string[]> {
+  const trigger = container.querySelector<HTMLButtonElement>(
+    `button[aria-label="${uiLabelsEn.moreActions}"]`
+  );
+  if (trigger === null) return [];
+  await act(async () => {
+    trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+  let items: string[] = [];
+  await vi.waitFor(
+    () => {
+      // The menu stands outside the container, under the id its button names.
+      const menu = document.getElementById(trigger.getAttribute("aria-controls") ?? "");
+      items = [...(menu?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])].map(
+        (item) => item.textContent?.trim() ?? ""
+      );
+      expect(items.length).toBeGreaterThan(0);
+    },
+    { timeout: CONDITION_WAIT_MS }
+  );
+  await act(async () => {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  });
+  return items;
+}
+
 async function waitForText(container: HTMLElement, text: string): Promise<void> {
   await vi.waitFor(
     async () => {
@@ -398,16 +425,18 @@ describe("the page of a Workflow, by what the reader may do to it", () => {
     });
     const source = createInstanceSource(client, "k");
     const granted = await mount(createElement(WorkflowPage, { workflow: "granted" }), source);
-    await waitForText(granted, t("workflows.draft.discard"));
+    // The head's state says the draft; Discard stands in its "…" menu.
+    await waitForText(granted, t("build.headDraft"));
     expect(offersChat(granted)).toBe(true);
     expect(buttonTexts(granted)).not.toContain(t("workflows.draft.publish"));
+    expect(await menuItems(granted)).toContain(t("workflows.draft.discard"));
     // Writing it reads none of its runs.
     expect(runsLinks(granted)).toEqual([]);
 
     const sibling = await mount(createElement(WorkflowPage, { workflow: "sibling" }), source);
     await waitForText(sibling, "Sibling");
     expect(offersChat(sibling)).toBe(false);
-    expect(buttonTexts(sibling)).not.toContain(t("workflows.draft.discard"));
+    expect(await menuItems(sibling)).not.toContain(t("workflows.draft.discard"));
     expect(runsLinks(sibling)).toEqual([runsPath("sibling")]);
   });
 
@@ -428,14 +457,13 @@ describe("the page of a Workflow, by what the reader may do to it", () => {
     const kept = await mount(createElement(WorkflowPage, { workflow: "kept" }), source, everything);
     await waitForText(kept, t("workflows.draft.publish"));
     expect(offersChat(kept)).toBe(false);
-    expect(buttonTexts(kept)).not.toContain(t("workflows.draft.discard"));
+    expect(await menuItems(kept)).not.toContain(t("workflows.draft.discard"));
 
     const open = await mount(createElement(WorkflowPage, { workflow: "open" }), source, everything);
-    await waitForText(open, t("workflows.draft.discard"));
+    await waitForText(open, t("workflows.draft.publish"));
     expect(offersChat(open)).toBe(true);
-    expect(buttonTexts(open)).toEqual(
-      expect.arrayContaining([t("workflows.draft.publish"), t("workflows.draft.discard")])
-    );
+    expect(buttonTexts(open)).toContain(t("workflows.draft.publish"));
+    expect(await menuItems(open)).toContain(t("workflows.draft.discard"));
     // A Workflow's pages hold no Delete, for a reader denied it or granted it.
     for (const page of [kept, open]) {
       expect(buttonTexts(page).filter((text) => /delete/i.test(text))).toEqual([]);

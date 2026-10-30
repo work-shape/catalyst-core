@@ -51,7 +51,6 @@ export const build = defineTranslations({
     "build.fallbackGerman": "Empty in this language. People read the German text.",
     "build.history": "History",
     "build.draftAhead": "Draft",
-    "build.neverPublished": "Not published",
     "build.publish": "Publish",
     "build.savesDraft": "Saves a draft. It answers nobody until it is published.",
     "build.publishTitle": "Publish {name}?",
@@ -195,7 +194,23 @@ export const build = defineTranslations({
       "No skills yet. A skill holds instructions that an agent reads when a task calls for them.",
     "build.skillsEmptyReadOnly": "No skills yet.",
     "build.skillsNote": "A skill is instructions the agent follows. It adds no tools.",
-    "build.skillsSearch": "Search skills"
+    "build.skillsSearch": "Search skills",
+    "build.headDraft": "Draft · not live",
+    "build.headLive": "Live",
+    "build.headDraftBy": "Draft version {revision} by {author}, {time}. Live is version {live}.",
+    "build.headDraftByNever":
+      "Draft version {revision} by {author}, {time}. Nothing is published yet.",
+    "build.headDraftOf": "Draft version {revision}. Live is version {live}.",
+    "build.headDraftOfNever": "Draft version {revision}. Nothing is published yet.",
+    "build.headDraftAhead": "The draft differs from live. Live is version {live}.",
+    "build.headDraftNever": "Nothing is published yet.",
+    "build.headDraftAheadPlain": "The draft differs from live.",
+    "build.headShowChanges": "View changes",
+    "build.headByRelease": "the technical team",
+    "build.headDefaultEverywhere": "Default in all workspaces",
+    "build.headForAll": "for everyone",
+    "build.headForMe": "only for you",
+    "build.headForWorkspace": "for {workspace}"
   },
   de: {
     "build.instructionsLine": "Anweisungen, Zeile {line}",
@@ -248,7 +263,6 @@ export const build = defineTranslations({
     "build.fallbackGerman": "In dieser Sprache leer. Es wird der deutsche Text gezeigt.",
     "build.history": "Verlauf",
     "build.draftAhead": "Entwurf",
-    "build.neverPublished": "Nicht veröffentlicht",
     "build.publish": "Veröffentlichen",
     "build.savesDraft":
       "Speichert einen Entwurf. Er antwortet niemandem, bis er veröffentlicht ist.",
@@ -396,6 +410,23 @@ export const build = defineTranslations({
     "build.skillsEmptyReadOnly": "Noch keine Skills.",
     "build.skillsNote":
       "Ein Skill ist eine Anleitung, der der Agent folgt. Er bringt keine Werkzeuge mit.",
-    "build.skillsSearch": "Skills durchsuchen"
+    "build.skillsSearch": "Skills durchsuchen",
+    "build.headDraft": "Entwurf · nicht live",
+    "build.headLive": "Live",
+    "build.headDraftBy":
+      "Entwurfsversion {revision} von {author}, {time}. Live ist Version {live}.",
+    "build.headDraftByNever":
+      "Entwurfsversion {revision} von {author}, {time}. Noch nichts ist veröffentlicht.",
+    "build.headDraftOf": "Entwurfsversion {revision}. Live ist Version {live}.",
+    "build.headDraftOfNever": "Entwurfsversion {revision}. Noch nichts ist veröffentlicht.",
+    "build.headDraftAhead": "Der Entwurf weicht von Live ab. Live ist Version {live}.",
+    "build.headDraftNever": "Noch nichts ist veröffentlicht.",
+    "build.headDraftAheadPlain": "Der Entwurf weicht von Live ab.",
+    "build.headShowChanges": "Unterschiede ansehen",
+    "build.headByRelease": "dem technischen Team",
+    "build.headDefaultEverywhere": "Standard in allen Arbeitsbereichen",
+    "build.headForAll": "für alle",
+    "build.headForMe": "nur für dich",
+    "build.headForWorkspace": "für {workspace}"
   }
 });

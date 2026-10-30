@@ -1,5 +1,5 @@
 import { FolderInput, Send, Undo2 } from "lucide-react";
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState } from "react";
 import { SKILL_SUMMARY_MAX_LENGTH, assetAddressFromName } from "@work-shape/catalyst-core";
 import {
   Button,
@@ -12,7 +12,7 @@ import {
 import { actionLabel } from "../../admin/access/right-words";
 import type { AssetFileEntry } from "../../shared/api/asset-writes";
 import { useTranslation } from "../../shared/i18n";
-import { AgentDraftBadge, AgentDraftNotice } from "./agent-draft";
+import { AgentDraftNotice, AgentDraftStatus } from "./agent-draft";
 import { useDraftFollow, type AgentDraftSource, type SharedDraft } from "./agent-draft-source";
 import { AssetEditorShell, useAssetForm, type AssetSection } from "./asset-editor-shell";
 import { FieldRefusals } from "./asset-form-fields";
@@ -55,15 +55,15 @@ export function SkillEditor({
   frame,
   initialForm,
   editable: instanceEditable,
-  badges,
+  facts,
   draft
 }: {
   frame: BuildAssetEditorProps;
   initialForm: SkillFormState;
   /** The instance lets people change skills here. */
   editable: boolean;
-  /** What the page head says of the skill beside its title, such as who ships it. */
-  badges?: ReactNode;
+  /** What the line under the name says of the skill first, such as who ships it. */
+  facts?: readonly (string | undefined | false)[];
   /**
    * The one shared draft of a skill a team or the instance owns (SKILL-DRAFT-1), for a reader
    * who may change it: the form starts from the draft, and saves write it. Absent for a new
@@ -362,14 +362,12 @@ export function SkillEditor({
         saveBlocked: frame.saveBlocked === true || behind !== undefined
       }}
       title={form.title.trim() || form.name || t("configNewSkill")}
-      description={form.summary.trim()}
-      badges={
-        <>
-          {held === null ? null : <AgentDraftBadge draft={held} />}
-          {badges}
-          {myChats.badge}
-        </>
+      status={
+        draft === undefined || frame.asset === undefined ? undefined : (
+          <AgentDraftStatus draft={held} publishRight={publishRight} />
+        )
       }
+      facts={[...(facts ?? []), myChats.fact]}
       primaryAction={
         draft !== undefined && held !== null && !stale ? (
           <Button

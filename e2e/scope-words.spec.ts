@@ -157,12 +157,13 @@ test("Studio says where an asset sits, greys what an agent cannot use, and says 
   await expect(page.getByRole("heading", { level: 1, name: "Daten" })).toBeVisible();
   await shoot(page, "data-list");
 
-  // A skill of the reader's own, on its page: the first line says it is the reader's alone, on
-  // a phone too, where the head's chips give way to the name.
+  // A skill of the reader's own, on its page: the line under its name says it is the reader's
+  // alone, on a phone too.
   const placeLine = page.locator("[data-asset-place]");
   await page.goto(`/build/skills/${mine}`);
   await expect(page.getByRole("heading", { name: `Meine Steuerprüfung ${tag}` })).toBeVisible();
-  await expect(placeLine.getByText("Nur ich", { exact: true })).toBeVisible();
+  await expect(placeLine).toBeVisible();
+  await expect(placeLine).toContainText("nur für dich");
   await shoot(page, "skill-page-mine");
   await page.setViewportSize(DESKTOP);
   await shoot(page, "skill-page-mine-1280");
@@ -173,7 +174,7 @@ test("Studio says where an asset sits, greys what an agent cannot use, and says 
   await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:build-scope", "instance"));
   await page.goto(`/build/agents/${agent}`);
   await expect(page.getByRole("heading", { name: `Workshaper ${tag}` })).toBeVisible();
-  await expect(placeLine.getByText("Alle", { exact: true })).toBeVisible();
+  await expect(placeLine).toContainText("für alle");
   await shoot(page, "agent-page");
   await page.setViewportSize(DESKTOP);
   await shoot(page, "agent-page-1280");

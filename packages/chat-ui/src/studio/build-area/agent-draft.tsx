@@ -1,17 +1,12 @@
 import type { ReactNode } from "react";
 import type { AgentDraft } from "@work-shape/catalyst-api-client";
-import { Badge, Banner, Button, FoldedText, ProposedValue } from "@work-shape/catalyst-ui";
+import { Banner, Button, ProposedValue } from "@work-shape/catalyst-ui";
+import { AssetStatus } from "../asset-head";
 import type { SharedDraftKind } from "../../shared/build-rights";
 import { useTranslation } from "../../shared/i18n";
 import { formatMomentShort } from "../../shared/locale-format";
 import { reasoningEffortLabel } from "../../shared/reasoning-effort-label";
-import {
-  changedLanguages,
-  draftAgentFields,
-  draftAuthorLabel,
-  draftSections,
-  type DraftAgentField
-} from "./agent-draft-model";
+import { draftAgentFields, draftAuthorLabel, type DraftAgentField } from "./agent-draft-model";
 import type { AgentDraftAnswer } from "./agent-draft-source";
 import type { AgentFormState, LocalizedPair } from "./asset-form-model";
 
@@ -24,15 +19,45 @@ export interface DraftTitles {
 }
 
 /**
- * The draft badge of the page head: "Draft revision n". It is short so it fits beside the
- * head's actions; the banner under the head names the author and the time.
+ * The one state after the agent's name: "Draft · not live" while it has a draft, whose popover
+ * names its revision, who saved it when and the live version, or a quiet "Live".
  */
-export function AgentDraftBadge({ draft }: { draft: AgentDraft }) {
-  const { t } = useTranslation();
+export function AgentDraftStatus({
+  draft,
+  publishRight,
+  onShowChanges
+}: {
+  /** The draft the page shows, or none. */
+  draft: AgentDraft | null;
+  /** The right Publish needs, as people read it, where the reader does not hold it. */
+  publishRight?: string | undefined;
+  onShowChanges?: (() => void) | undefined;
+}) {
+  const { locale, t } = useTranslation();
   return (
-    <Badge tone="warning" truncate data-agent-draft-badge={draft.revision}>
-      {t("agentDraft.badge", { revision: draft.revision })}
-    </Badge>
+    <AssetStatus
+      published
+      draft={
+        draft === null
+          ? undefined
+          : {
+              revision: draft.revision,
+              author: draft.author.release
+                ? t("build.headByRelease")
+                : draftAuthorLabel(draft.author, t),
+              time: formatMomentShort(draft.updatedAt, locale),
+              live: draft.liveRevision
+            }
+      }
+      more={
+        publishRight === undefined ? undefined : (
+          <p className="text-muted-foreground">
+            {t("agentDraft.publishNeedsRight", { right: publishRight })}
+          </p>
+        )
+      }
+      onShowChanges={onShowChanges}
+    />
   );
 }
 
@@ -108,28 +133,11 @@ export function AgentDraftNotice({
         <Banner key="draft" tone="warning" data-agent-draft="stale">
           {t("agentDraft.stale", { name })}
         </Banner>
-      ) : (
-        <Banner key="draft" tone="info" data-agent-draft="pending">
-          <div className="grid gap-1">
-            {answer?.kind === "changed" ? <p>{t("agentDraft.changed")}</p> : null}
-            {/* The head's badge gives way to the name where the row is full: the banner names
-                the author and the time too. */}
-            <p>
-              {t(draft.author.release ? "agentDraft.pendingRelease" : "agentDraft.pending", {
-                revision: draft.revision,
-                name,
-                author: draftAuthorLabel(draft.author, t),
-                time: formatMomentShort(draft.updatedAt, locale)
-              })}
-            </p>
-            {publishRight === undefined ? null : (
-              <p id={publishReasonId}>
-                {t("agentDraft.publishNeedsRight", { right: publishRight })}
-              </p>
-            )}
-          </div>
+      ) : answer?.kind === "changed" ? (
+        <Banner key="draft" tone="info" data-agent-draft="changed">
+          {t("agentDraft.changed")}
         </Banner>
-      )
+      ) : null
     );
   }
   if (answer !== undefined && answer.kind !== "stale" && answer.kind !== "changed") {
@@ -143,12 +151,39 @@ export function AgentDraftNotice({
       </Banner>
     );
   }
-  return notices.length === 0 ? null : <div className="mb-3 grid gap-2">{notices}</div>;
+  const shown = notices.filter((notice) => notice !== null);
+  // The head's state names the draft, its author and the time; the disabled Publish points
+  // here for the right it needs, which the state's popover says as well.
+  const reason =
+    draft !== null && publishRight !== undefined ? (
+      <p id={publishReasonId} className="sr-only">
+        {t("agentDraft.publishNeedsRight", { right: publishRight })}
+      </p>
+    ) : null;
+  return (
+    <>
+      {reason}
+      {shown.length === 0 ? null : <div className="mb-3 grid gap-2">{shown}</div>}
+    </>
+  );
 }
 
 /**
- * What the draft changes on the page: its fields against the live agent, the sections that
- * hold them, and the published value to show under each.
+ * The fields whose live version stands in the field's own box, behind its "Draft | Live |
+ * Changes" switch: texts. Any other field shows its live value in a box under it.
+ */
+const IN_PLACE_FIELDS: ReadonlySet<DraftAgentField> = new Set([
+  "displayName",
+  "description",
+  "welcomeMessage",
+  "welcomeSubtitle",
+  "instructions",
+  "additionalInstructions"
+]);
+
+/**
+ * What the draft changes on the page: its fields against the live agent, and the live value to
+ * show under each field that does not show it in place.
  */
 export function draftFieldsView(
   live: AgentFormState,
@@ -156,26 +191,27 @@ export function draftFieldsView(
   titles: DraftTitles
 ): {
   fields: DraftAgentField[];
-  sections: Set<string>;
+  /** Whether the draft changes the field. */
+  changes(field: DraftAgentField): boolean;
   value(field: DraftAgentField): ReactNode;
-  /** The field with its published value close under it, or the field alone. */
+  /** The field with its live value close under it, or the field alone. */
   around(field: DraftAgentField, input: ReactNode): ReactNode;
 } {
   const fields = draft === undefined ? [] : draftAgentFields(live, draft);
   const value = (field: DraftAgentField) =>
-    draft === undefined || !fields.includes(field) ? null : (
+    draft === undefined || !fields.includes(field) || IN_PLACE_FIELDS.has(field) ? null : (
       <PublishedAgentValue field={field} live={live} draft={draft} titles={titles} />
     );
   return {
     fields,
-    sections: draftSections(fields),
+    changes: (field) => fields.includes(field),
     value,
-    // The published value belongs to its field: it sits closer to it than to the next field.
+    // The live value belongs to its field: it sits closer to it than to the next field. A
+    // field the draft changes is where "View changes" leads.
     around: (field, input) => {
+      if (!fields.includes(field)) return input;
       const shown = value(field);
-      return shown === null ? (
-        input
-      ) : (
+      return (
         <div className="grid gap-2" data-draft-group={field}>
           {input}
           {shown}
@@ -183,16 +219,6 @@ export function draftFieldsView(
       );
     }
   };
-}
-
-/** The mark after the heading of a section that holds a change of the draft. */
-export function DraftSectionMark() {
-  const { t } = useTranslation();
-  return (
-    <Badge tone="accent" appearance="outline" data-draft-section="">
-      {t("agentDraft.sectionMark")}
-    </Badge>
-  );
 }
 
 /** The published value of one field, under the field that shows the draft. */
@@ -228,15 +254,14 @@ function PublishedContent({
 }): ReactNode {
   const { locale, t } = useTranslation();
   switch (field) {
+    // A text shows its live version in its own box.
     case "displayName":
     case "description":
     case "welcomeMessage":
     case "welcomeSubtitle":
-      return <LanguageLines live={live[field]} draft={draft[field]} />;
     case "instructions":
-      return <FoldedText>{live.instructions || t("agentDraft.empty")}</FoldedText>;
     case "additionalInstructions":
-      return <FoldedText>{live.additionalInstructions || t("agentDraft.empty")}</FoldedText>;
+      return null;
     case "maxSteps":
       return live.maxSteps || t("configInstanceDefault");
     case "model":
@@ -268,23 +293,6 @@ function pairText(pair: LocalizedPair, locale: string): string {
 function Names({ names }: { names: readonly string[] }) {
   const { t } = useTranslation();
   return <p>{names.length === 0 ? t("agentDraft.none") : names.join(", ")}</p>;
-}
-
-/** The languages whose text the draft changes, each with its published text. */
-function LanguageLines({ live, draft }: { live: LocalizedPair; draft: LocalizedPair }) {
-  const { t } = useTranslation();
-  return (
-    <dl className="grid gap-1">
-      {changedLanguages(live, draft).map(({ language, text }) => (
-        <div key={language} className="flex min-w-0 flex-wrap gap-x-2">
-          <dt className="text-muted-foreground">
-            {t(language === "en" ? "configEnglishLanguage" : "configGermanLanguage")}
-          </dt>
-          <dd className="min-w-0">{text || t("agentDraft.empty")}</dd>
-        </div>
-      ))}
-    </dl>
-  );
 }
 
 /** The published model settings the draft changes, one line each. */

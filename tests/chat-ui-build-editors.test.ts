@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import { createElement, createRef, type ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 import type { ConfigAssetReferences, LocaleCode } from "@work-shape/catalyst-api-client";
@@ -17,6 +19,7 @@ import {
   type BuildWriteOutcome
 } from "@work-shape/catalyst-chat-ui/build-area";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
+import { headMenuItems } from "./support/head-menu";
 
 const noop = () => undefined;
 const saved = async (): Promise<BuildWriteOutcome> => ({ ok: true });
@@ -96,25 +99,26 @@ interface AgentInput {
 }
 
 function agentPage(input: AgentInput = {}): string {
+  return render(agentElement(input), input.locale);
+}
+
+function agentElement(input: AgentInput = {}): ReactElement {
   const config = { ...agentBase, ...input.config };
-  return render(
-    createElement(AgentEditor, {
-      frame: frame({
-        ...(input.started
-          ? { start: { name: input.started.name, title: "" } }
-          : { asset: { ...storedAsset("agent", config), ...input.status } }),
-        ...input.frame
-      }),
-      initialForm: input.started ?? agentConfigToForm(config),
-      isDefault: true,
-      references: references(input.references),
-      editableAgentFields: input.editableAgentFields ?? [],
-      canManageAgentModels: input.canManageAgentModels ?? false,
-      skillChoice: { options: [{ name: "tax-review", title: "Tax review" }], onSearch: noop },
-      onMakeDefault: input.onMakeDefault
+  return createElement(AgentEditor, {
+    frame: frame({
+      ...(input.started
+        ? { start: { name: input.started.name, title: "" } }
+        : { asset: { ...storedAsset("agent", config), ...input.status } }),
+      ...input.frame
     }),
-    input.locale
-  );
+    initialForm: input.started ?? agentConfigToForm(config),
+    isDefault: true,
+    references: references(input.references),
+    editableAgentFields: input.editableAgentFields ?? [],
+    canManageAgentModels: input.canManageAgentModels ?? false,
+    skillChoice: { options: [{ name: "tax-review", title: "Tax review" }], onSearch: noop },
+    onMakeDefault: input.onMakeDefault
+  });
 }
 
 /** One section of an asset page, by its anchor. */
@@ -531,10 +535,13 @@ describe("agent page", () => {
     expect(skills).toMatch(/<span aria-hidden="true" data-skill-icon="generic"/u);
   });
 
-  it("offers to make the agent the default only where the frame hands the way", () => {
-    expect(agentPage({ onMakeDefault: async () => undefined })).toContain("Make default");
-    expect(agentPage()).not.toContain("Make default");
-    expect(agentPage()).toContain(">Default agent<");
+  it("offers to make the agent the default only where the frame hands the way", async () => {
+    // "Make default" stands in the head's "…" menu; the line under the name says the default.
+    expect(await headMenuItems(agentElement({ onMakeDefault: async () => undefined }))).toContain(
+      "Make default"
+    );
+    expect(await headMenuItems(agentElement())).not.toContain("Make default");
+    expect(agentPage()).toMatch(/data-asset-place="">[^<]*Default agent/u);
   });
 });
 
@@ -664,10 +671,9 @@ describe("save bar", () => {
     expect(existing).not.toContain('type="submit"');
     expect(existing).toContain('aria-label="Add a file to references/"');
     expect(started).toMatch(/<button[^>]*type="submit"[^>]*>Create skill<\/button>/u);
-    // The head is one row: a long name takes two lines, is then cut and says itself whole on
-    // hover.
-    expect(started).toContain(
-      '<h1 class="line-clamp-2 wrap-anywhere outline-none text-title" title="Tax review">Tax review'
+    // The head is one row: a long name is cut and says itself whole on hover.
+    expect(started).toMatch(
+      /<h1 class="[^"]*\bline-clamp-[12]\b[^"]*" title="Tax review">Tax review/u
     );
     expect(started).toMatch(/<header data-variant="detail"[^>]* class="[^"]*\bmd:flex-nowrap\b/u);
   });
@@ -905,7 +911,9 @@ function headOf(markup: string): string {
 }
 
 describe("the head of an asset page", () => {
-  it("names the asset and says what it does, and never shows its id", () => {
+  // The head names the asset and says its state and facts; what it does stands in its fields,
+  // never cut short in the head.
+  it("names the asset, without its description and never with its id", () => {
     const agent = agentPage({
       config: {
         name: "quarter-close-7f3a",
@@ -934,7 +942,8 @@ describe("the head of an asset page", () => {
     ] as const) {
       const head = headOf(markup);
       expect(head).toContain(`>${name}</h1>`);
-      expect(head).toMatch(new RegExp(`data-slot="page-header-description"[^>]*>${line}<`, "u"));
+      expect(head).not.toContain("page-header-description");
+      expect(head).not.toContain(line);
       expect(markup).not.toContain(id);
     }
   });

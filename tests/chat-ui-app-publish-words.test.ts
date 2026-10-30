@@ -119,25 +119,29 @@ describe("the head of an App's draft", () => {
       locale
     );
 
+  // The head says the state once, after the name: a quiet "Live", or "Draft · not live". The
+  // draft's bar under it names the live version and since when.
   it("says which version is live and since when once its draft is what is published", () => {
     const german = head({ draftRevision: 7, publishedRevision: 7 }, "de");
-    expect(german).toContain("Live: Version 4 · seit 26. Okt.");
-    expect(german).not.toContain("Entwurf: geändert");
+    expect(german).toContain('data-asset-status="live"');
+    expect(german).not.toContain("Entwurf · nicht live");
     const english = head({ draftRevision: 7, publishedRevision: 7 });
-    expect(english).toContain("Live: version 4 · since Oct 26");
+    expect(english).toMatch(/data-draft-live="">Live: version 4, published on Oct 26/u);
     expect(english).not.toMatch(/version 7|Version 7/u);
   });
 
-  it("says the draft changed since the live version, and when nothing is published", () => {
+  it("says the draft differs from the live version, and when nothing is published", () => {
     const ahead = head({ draftRevision: 9, publishedRevision: 7 });
-    expect(ahead).toContain("Live: version 4 · since Oct 26");
-    expect(ahead).toContain("Draft: changed since version 4");
+    expect(ahead).toContain('data-asset-status="draft"');
+    expect(ahead).toContain("Draft · not live");
+    expect(ahead).toMatch(/data-draft-live="">Live: version 4, published on Oct 26/u);
     expect(ahead).not.toMatch(/version [79]\b/u);
     expect(head({ draftRevision: 9, publishedRevision: 7 }, "de")).toContain(
-      "Entwurf: geändert seit Version 4"
+      "Entwurf · nicht live"
     );
-    expect(head({ draftRevision: 1 }, "de")).toContain("Entwurf · noch nicht veröffentlicht");
-    expect(head({ draftRevision: 1 })).toContain("Draft · not published");
+    const never = head({ draftRevision: 1 }, "de");
+    expect(never).toContain("Entwurf · nicht live");
+    expect(never).not.toContain("data-draft-live");
   });
 
   it("says what publishing does to stored data only while the draft is not yet published", () => {
@@ -164,7 +168,7 @@ describe("the head of an App's draft", () => {
     );
     // Published: the line about "once published" is gone.
     const published = withFact({ draftRevision: 1, publishedRevision: 1 });
-    expect(published).toContain("Live: Version 4");
+    expect(published).toContain('data-asset-status="live"');
     expect(published).not.toContain('data-testid="app-stored-data-fact"');
   });
 });

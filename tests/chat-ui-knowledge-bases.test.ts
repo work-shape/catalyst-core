@@ -240,15 +240,16 @@ describe("Knowledge Bases in Build", () => {
   it("says that a saved draft is ahead of what is published and offers to publish it", () => {
     const page = render(knowledgeBase({ revision: 3, publishedRevision: 2 }));
 
-    expect(page).toContain("data-build-draft-state");
-    expect(page).toContain(">Draft<");
+    expect(page).toMatch(/data-asset-status="draft"[^>]*data-draft-revision="3"/u);
+    expect(page).toContain("Draft · not live");
     expect(page).toContain("data-build-publish");
   });
 
   it("says nothing of a draft when the saved revision is the published one", () => {
     const page = render(knowledgeBase({ revision: 2, publishedRevision: 2 }));
 
-    expect(page).not.toContain("data-build-draft-state");
+    expect(page).not.toContain('data-asset-status="draft"');
+    expect(page).toContain('data-asset-status="live"');
     expect(page).not.toContain("data-build-publish");
   });
 
@@ -270,7 +271,8 @@ describe("Knowledge Bases in Build", () => {
 
   // AVAIL-1: agents can use a Knowledge Base in the workspaces it is available in.
   it("says beside its place who uses a Knowledge Base of everyone (SCOPE-WORDS)", () => {
-    const line = (markup: string) => /<div data-asset-place="".*?<\/div>/su.exec(markup)?.[0] ?? "";
+    const line = (markup: string) =>
+      /<span data-asset-place="">.*?<\/span>/su.exec(markup)?.[0] ?? "";
     const offered = render(
       {
         ...knowledgeBase({ revision: 1, publishedRevision: 1 }),
@@ -278,9 +280,9 @@ describe("Knowledge Bases in Build", () => {
       },
       { locale: "de" }
     );
-    expect(line(offered)).toContain(">Agenten nutzen sie in: Persönliche Arbeitsbereiche<");
+    expect(line(offered)).toContain("Agenten nutzen sie in: Persönliche Arbeitsbereiche");
     expect(line(render(knowledgeBase({ revision: 1, publishedRevision: 1 })))).toContain(
-      ">No agent can use it yet<"
+      "No agent can use it yet"
     );
   });
 
@@ -307,7 +309,7 @@ describe("Knowledge Bases in Build", () => {
   it("asks for a publish before it shows a check or a test query", () => {
     const page = render(knowledgeBase({ revision: 1 }));
 
-    expect(page).toContain(">Not published<");
+    expect(page).toContain('data-asset-status="draft"');
     expect(page).not.toContain("data-knowledge-state");
     // One notice under the head, not a Status and a Test query section that each say "publish".
     expect(page).toContain("data-knowledge-not-published");

@@ -8,7 +8,10 @@ import {
   Field,
   FormNotice,
   IconButton,
-  Input
+  Input,
+  TextVersionSwitch,
+  VersionedText,
+  type TextVersion
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import type { AgentFormState, LocalizedPair } from "./asset-form-model";
@@ -20,15 +23,25 @@ const AssetLanguageContext = createContext<AssetLanguage>("en");
 /** Sets the language every localized field of the page shows. The page has one switch for it. */
 export const AssetLanguageProvider = AssetLanguageContext.Provider;
 
+/** The live version of a field the draft changes, and which version the field shows. */
+export interface FieldVersions<Value> {
+  live: Value;
+  view: TextVersion;
+  onViewChange(view: TextVersion): void;
+}
+
 /**
  * One text that is written per language. It shows the language the page is switched to. Left
- * empty there, people read the text of the other language, and the field says so.
+ * empty there, people read the text of the other language, and the field says so. Where the
+ * draft changes it, "Draft | Live" beside the label shows the live text in the same box.
  */
 export function LocalizedField({
   label,
   required,
   readOnly,
   value,
+  versions,
+  note,
   onChange
 }: {
   label: string;
@@ -36,28 +49,60 @@ export function LocalizedField({
   /** The text is shown to be read: the field keeps its full strength and asks for nothing. */
   readOnly?: boolean;
   value: LocalizedPair;
+  /** The live version, where the draft changes the field. */
+  versions?: FieldVersions<LocalizedPair> | undefined;
+  /** The field's one line about its versions, such as how it differs from live. */
+  note?: string | undefined;
   onChange(value: LocalizedPair): void;
 }) {
   const { t } = useTranslation();
   const language = useContext(AssetLanguageContext);
   const other = language === "en" ? "de" : "en";
   const fallback = value[language].trim() ? "" : value[other].trim();
-
+  const input = (
+    <Input
+      lang={language}
+      value={value[language]}
+      placeholder={fallback}
+      readOnly={readOnly}
+      onChange={(event) => onChange({ ...value, [language]: event.target.value })}
+    />
+  );
+  const hint = [
+    fallback ? t(other === "en" ? "build.fallbackEnglish" : "build.fallbackGerman") : undefined,
+    note
+  ]
+    .filter((part) => part !== undefined && part !== "")
+    .join(" · ");
   return (
     <Field
       label={label}
       required={required && !fallback && !readOnly}
-      hint={
-        fallback ? t(other === "en" ? "build.fallbackEnglish" : "build.fallbackGerman") : undefined
+      hint={hint || undefined}
+      labelEnd={
+        versions === undefined ? undefined : (
+          <TextVersionSwitch
+            label={label}
+            value={versions.view}
+            changes={false}
+            onValueChange={versions.onViewChange}
+          />
+        )
       }
     >
-      <Input
-        lang={language}
-        value={value[language]}
-        placeholder={fallback}
-        readOnly={readOnly}
-        onChange={(event) => onChange({ ...value, [language]: event.target.value })}
-      />
+      {versions === undefined ? (
+        input
+      ) : (
+        <VersionedText
+          label={label}
+          view={versions.view}
+          live={versions.live[language]}
+          draft={value[language]}
+          singleLine
+        >
+          {input}
+        </VersionedText>
+      )}
     </Field>
   );
 }

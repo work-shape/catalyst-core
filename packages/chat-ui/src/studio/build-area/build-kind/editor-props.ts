@@ -54,6 +54,8 @@ export interface BuildAssetEditorProps {
   createApproval?: { approverNames: string[] };
   /** Why the reader may not change the asset, for the notice of a read-only page. */
   readOnlyReason?: string;
+  /** The way past the read-only notice, beside its words, such as copying the asset to edit. */
+  readOnlyAction?: ReactNode;
   /** Saving waits for the reader's answer to a notice, such as a conflict. */
   saveBlocked?: boolean;
   /** The reader may change what belongs to the instance: its default and where an agent shows. */
@@ -64,10 +66,10 @@ export interface BuildAssetEditorProps {
    */
   owner?: string;
   /**
-   * Where the asset sits and, where it differs, who uses it, for the page head. Absent while a
-   * new asset is written.
+   * Where the asset sits and, where it differs, who uses it: facts of the muted line under the
+   * name. Absent while a new asset is written.
    */
-  place?: ReactNode;
+  place?: AssetPlaceFacts;
   /** The way back to the kind's list, for the start of the page head. */
   back: ReactNode;
   /** The page's own actions, for the end of the page head: History and the menu with Delete. */
@@ -117,16 +119,29 @@ export interface BuildAssetEditorProps {
   };
 }
 
+/** Where an asset sits and who uses it, as facts of the line under its name. */
+interface AssetPlaceFacts {
+  /** Who uses it, where its record says so: "Can be chosen in: …". */
+  audience?: string | undefined;
+  /**
+   * Where nobody can use it, the anchor of the section that changes that, for a reader who may:
+   * the audience then leads there.
+   */
+  audienceTo?: string | undefined;
+  /** Where it sits: "for everyone", "only for you", "for <workspace>". */
+  owner: string;
+}
+
 /**
  * What the frame offers the page of an asset whose kind has a draft and a published revision.
  * A further capability of drafts is one more member here, not a prop of every page.
  */
 interface BuildDraftFrame {
   /**
-   * What the frame says beside the name: that the saved draft is ahead of what is published,
-   * or that nothing is.
+   * The one state after the name: the saved draft that is ahead of what is published, or
+   * "Live". A kind that knows more of its draft, such as who wrote it, says its own.
    */
-  state?: ReactNode;
+  status?: ReactNode;
   /** The reader may publish the asset: for an agent, its draft. */
   canPublish?: boolean;
   /**

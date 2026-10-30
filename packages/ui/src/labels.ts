@@ -103,6 +103,12 @@ export interface UiLabels {
   diffUnchangedMany: string;
   /** A `TextDiff` of two texts that hold the same lines. */
   diffSame: string;
+  /** Names a `TextVersionSwitch`, where `{label}` stands for the field's label. */
+  versionOf: string;
+  /** The versions of a field's text a `TextVersionSwitch` offers and a `VersionedText` shows. */
+  versionDraft: string;
+  versionLive: string;
+  versionChanges: string;
   /** The controls of a `FlowCanvas`. */
   flowZoomIn: string;
   flowZoomOut: string;
@@ -245,6 +251,10 @@ export const uiLabelsEn: UiLabels = {
   diffUnchangedOne: "1 unchanged line",
   diffUnchangedMany: "{count} unchanged lines",
   diffSame: "No differences.",
+  versionOf: "{label}: version shown",
+  versionDraft: "Draft",
+  versionLive: "Live",
+  versionChanges: "Changes",
   flowZoomIn: "Zoom in",
   flowZoomOut: "Zoom out",
   flowFit: "Show everything",
@@ -367,6 +377,10 @@ export const uiLabelsDe: UiLabels = {
   diffUnchangedOne: "1 unveränderte Zeile",
   diffUnchangedMany: "{count} unveränderte Zeilen",
   diffSame: "Keine Unterschiede.",
+  versionOf: "{label}: gezeigte Fassung",
+  versionDraft: "Entwurf",
+  versionLive: "Live",
+  versionChanges: "Unterschiede",
   flowZoomIn: "Vergrößern",
   flowZoomOut: "Verkleinern",
   flowFit: "Alles zeigen",

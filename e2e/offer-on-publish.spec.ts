@@ -106,8 +106,8 @@ test("publishing an agent no chat can choose offers it where the dialog says", a
   await expect(dialog).toBeHidden();
 
   // The head says where a chat can choose the agent now, and the draft is live.
-  await expect(place.getByText("Wählbar in: Alle Arbeitsbereiche", { exact: true })).toBeVisible();
+  await expect(place).toContainText("Wählbar in: Alle Arbeitsbereiche");
   await expect(place.getByText("In keinem Chat wählbar", { exact: true })).toHaveCount(0);
-  await expect(page.locator("[data-agent-draft-badge]")).toHaveCount(0);
+  await expect(page.locator('[data-asset-status="draft"]')).toHaveCount(0);
   await shoot(page, "head-after-390");
 });

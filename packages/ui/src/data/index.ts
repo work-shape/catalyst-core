@@ -44,7 +44,7 @@ export {
 } from "./steps";
 export { LevelMeter, type LevelMeterProps, type LevelMeterScale } from "./level-meter";
 export { QrCode, type QrCodeProps } from "./qr-code";
-export { diffLines, TextDiff, type DiffLine, type TextDiffProps } from "./text-diff";
+export { changedPlaces, diffLines, TextDiff, type DiffLine, type TextDiffProps } from "./text-diff";
 export { Timeline, type TimelineProps, type TimelineRow } from "./timeline";
 export { ListMarker, TimeMarker, type ListMarkerProps, type TimeMarkerProps } from "./time-marker";
 export {

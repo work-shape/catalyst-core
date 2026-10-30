@@ -236,7 +236,10 @@ function button(text: string): HTMLButtonElement {
   return found;
 }
 
-const badge = () => host.querySelector("[data-agent-draft-badge]")?.textContent ?? "";
+const badge = () => {
+  const status = host.querySelector('[data-asset-status="draft"]');
+  return status === null ? "" : `Draft version ${status.getAttribute("data-draft-revision") ?? ""}`;
+};
 const publish = () => host.querySelector<HTMLButtonElement>("[data-skill-publish]");
 
 describe("the page of a skill a team or the instance owns", () => {
@@ -245,16 +248,20 @@ describe("the page of a skill a team or the instance owns", () => {
     mount(world);
     await settle();
     expect(seen.shared).toBe(true);
-    expect(host.querySelector("[data-agent-draft-badge]")).toBeNull();
+    expect(host.querySelector('[data-asset-status="draft"]')).toBeNull();
 
     typeSummary("Fills a customer form.");
     await act(async () => button("Save draft").click());
     await settle();
     expect(world.puts).toEqual([{ expectedRevision: LIVE_REVISION, expectedDraftRevision: null }]);
     expect(badge()).toBe("Draft version 1");
-    expect(host.querySelector('[data-agent-draft="pending"]')?.textContent).toContain(
-      "Me saved draft version 1 on "
+    // The head state's popover names the draft, who saved it and when.
+    const status = host.querySelector<HTMLButtonElement>('button[data-asset-status="draft"]');
+    await act(async () => status?.click());
+    expect(document.querySelector("[data-asset-status-sentence]")?.textContent).toContain(
+      "Draft version 1 by Me, "
     );
+    await act(async () => status?.click());
 
     typeSummary("Fills a customer form from a case.");
     await act(async () => button("Save draft").click());
@@ -291,6 +298,6 @@ describe("the page of a skill of the reader's Personal Workspace", () => {
       { expectedRevision: LIVE_REVISION, expectedDraftRevision: undefined }
     ]);
     expect(publish()).toBeNull();
-    expect(host.querySelector("[data-agent-draft-badge]")).toBeNull();
+    expect(host.querySelector('[data-asset-status="draft"]')).toBeNull();
   });
 });

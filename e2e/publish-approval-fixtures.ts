@@ -123,7 +123,7 @@ async function writeAppInWorkspace(
 async function publishAndWait(page: Page, workspaceId: string, app: PublishedApp): Promise<void> {
   await page.goto(`/w/${workspaceId}/app-drafts/${app.id}`);
   const edit = page.getByTestId("app-edit");
-  await expect(edit).toContainText("Draft · not published");
+  await expect(edit).toContainText("Draft · not live");
   const dialog = page.getByRole("dialog");
   const publish = async () => {
     await edit.getByRole("button", { name: /^(Publish|Veröffentlichen)$/u }).click();
@@ -142,7 +142,7 @@ async function publishAndWait(page: Page, workspaceId: string, app: PublishedApp
     .filter({ hasText: "Close" })
     .click();
   await expect(dialog).toBeHidden();
-  await expect(edit).toContainText("Draft · not published");
+  await expect(edit).toContainText("Draft · not live");
   await shoot(page, "gr-pub-1-publish-waits", async () => {
     await expect(edit).toBeVisible();
     await publish();

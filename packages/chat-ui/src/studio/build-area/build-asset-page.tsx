@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Copy, History, Lock, SearchX, Send, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  Badge,
   Banner,
   Button,
   ConfirmDialog,
@@ -51,11 +50,12 @@ import {
 } from "./build-publish-question";
 import { readBuildRefusal, readRefusalDetails, type BuildWriteOutcome } from "./build-refusals";
 import { AGENT_ASSET_KIND, type BuildRights } from "../../shared/build-rights";
+import { AssetStatus } from "../asset-head";
 import {
-  AssetPlaceLine,
-  AVAILABILITY_SECTION_ID,
   assetAudience,
+  AVAILABILITY_SECTION_ID,
   assetPlace,
+  ownerFact,
   refusalPlaceOf,
   useKnownWorkspaces
 } from "./asset-place";
@@ -633,20 +633,18 @@ function LoadedAssetPage({
       : place.rung === "all"
         ? t("build.readOnlyInstance")
         : t("build.readOnly");
-  // Where the asset sits and who uses it: for an agent where a chat can choose it, for a
-  // Knowledge Base where agents may use it. Where nobody can, the chip leads a reader who may
-  // change that to the "Available in" section.
+  // Where the asset sits and who uses it, facts of the line under the name: for an agent where
+  // a chat can choose it, for a Knowledge Base where agents may use it.
   const audience = assetAudience(entry.kind, stored, workspaces, t, locale);
+  // Where nobody can use it, the audience leads a reader who may change that to its section.
   const maySetAvailability = stored.canSetAvailability ?? source.rights.instanceWrite;
-  const placeLine = (
-    <AssetPlaceLine
-      owner={stored.scope}
-      audience={audience?.text}
-      {...(audience?.nowhere && maySetAvailability && !shipped
-        ? { audienceTo: AVAILABILITY_SECTION_ID }
-        : {})}
-    />
-  );
+  const placeFacts = {
+    audience: audience?.text,
+    ...(audience?.nowhere && maySetAvailability && !shipped
+      ? { audienceTo: AVAILABILITY_SECTION_ID }
+      : {}),
+    owner: ownerFact(stored.scope, workspaces, t)
+  };
   const refusalPlace = refusalPlaceOf(workspaces);
   // "Teilen…" (SHARE-1): up the ladder, for a reader who may change the asset. After a move the
   // page shows the new place at once, and Studio follows the asset there.
@@ -842,6 +840,20 @@ function LoadedAssetPage({
         start={undefined}
         canWrite={canWrite}
         readOnlyReason={canWrite ? undefined : readOnlyReason}
+        // The notice of a shipped asset says to copy it: the copy stands beside its words.
+        readOnlyAction={
+          !canWrite && shipped && state.canCreate ? (
+            <Button
+              variant="outline"
+              size="sm"
+              data-copy-to-edit=""
+              onClick={() => onCopy({ title: shippedTitle, config: stored.config })}
+            >
+              <Copy aria-hidden="true" />
+              {t("build.copyToEdit")}
+            </Button>
+          ) : undefined
+        }
         saveBlocked={conflict !== undefined}
         instanceWrite={source.rights.instanceWrite}
         draft={{
@@ -850,16 +862,22 @@ function LoadedAssetPage({
           onRead: (revision) => {
             agentDraftRead.current = revision;
           },
-          state: draftAhead ? (
-            <Badge tone="warning" data-build-draft-state="">
-              {t(
-                stored.publishedRevision === undefined ? "build.neverPublished" : "build.draftAhead"
-              )}
-            </Badge>
+          // A kind with drafts says its one state after the name: the draft that is ahead of
+          // what is published, whose changes the History shows, or "Live".
+          status: hasDraft ? (
+            <AssetStatus
+              draft={
+                draftAhead
+                  ? { revision: stored.revision, live: stored.publishedRevision ?? null }
+                  : undefined
+              }
+              published={stored.publishedRevision !== undefined}
+              onShowChanges={() => setHistoryOpen(true)}
+            />
           ) : undefined
         }}
         {...(owner === undefined ? {} : { owner })}
-        place={placeLine}
+        place={placeFacts}
         onUnsavedChange={heardUnsaved}
         actions={{
           primaryAction: canPublish ? (
@@ -877,27 +895,26 @@ function LoadedAssetPage({
                 {t("build.publish")}
               </Button>
             </span>
-          ) : shipped && state.canCreate ? (
-            // A shipped asset is changed in a copy, the step its notice names: it stays in the
-            // head where the other actions fold.
-            <Button
-              variant="outline"
-              onClick={() => onCopy({ title: shippedTitle, config: stored.config })}
-            >
-              <Copy aria-hidden="true" />
-              {t("build.copyToEdit")}
-            </Button>
           ) : undefined,
-          secondaryActions: [
-            {
-              label: t("build.history"),
-              icon: <History aria-hidden="true" />,
-              onSelect: () => setHistoryOpen(true)
-            }
-          ],
+          // Publish is the head's one button beside "Chat": the History, the copy of a shipped
+          // asset and the rest stand in the "…" menu.
           menu:
             conflict === "deleted" ? undefined : (
               <>
+                <DropdownMenuItem
+                  icon={<History aria-hidden="true" />}
+                  onSelect={() => setHistoryOpen(true)}
+                >
+                  {t("build.history")}
+                </DropdownMenuItem>
+                {shipped && state.canCreate ? (
+                  <DropdownMenuItem
+                    icon={<Copy aria-hidden="true" />}
+                    onSelect={() => onCopy({ title: shippedTitle, config: stored.config })}
+                  >
+                    {t("build.copyToEdit")}
+                  </DropdownMenuItem>
+                ) : null}
                 {share.item}
                 <CopyIdItem id={stored.name} />
                 {canDelete ? (

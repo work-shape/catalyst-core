@@ -174,7 +174,10 @@ test("a skill is imported from a .zip, and its files are replaced from a folder"
     expect((await replaced).ok()).toBe(true);
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.locator('[data-skill-file="references/r.md"]')).toHaveCount(0);
-    await expect(page.locator("[data-agent-draft-badge]")).toHaveText("Draft version 1");
+    await expect(page.locator('[data-asset-status="draft"]')).toHaveAttribute(
+      "data-draft-revision",
+      "1"
+    );
     // The live skill keeps the imported files until the draft is published.
     expect(
       folderSchema.parse(await (await page.request.get(`${skillPath}?files=true`)).json()).revision
@@ -186,7 +189,7 @@ test("a skill is imported from a .zip, and its files are replaced from a folder"
     );
     await page.getByRole("dialog").getByRole("button", { name: "Publish", exact: true }).click();
     expect((await published).ok()).toBe(true);
-    await expect(page.locator("[data-agent-draft-badge]")).toHaveCount(0);
+    await expect(page.locator('[data-asset-status="draft"]')).toHaveCount(0);
 
     const second = folderSchema.parse(
       await (await page.request.get(`${skillPath}?files=true`)).json()

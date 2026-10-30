@@ -385,17 +385,19 @@ describe("the draft of an App (layout 3)", () => {
   const publishButton = (markup: string) =>
     /<button[^>]*>(?:(?!<\/button>).)*Publish<\/button>/u.exec(markup)?.[0] ?? "";
 
-  it("heads the draft with the live version, Discard, Publish and the overflow", () => {
+  // The head says the draft once, after the name; Publish is its one primary button and
+  // Discard stands in the "…" menu. The bar under the head names the live version.
+  it("heads the draft with its state, Publish and the overflow, then the live version", () => {
     const markup = frame(ALL);
     const order = [
       ">Angebotsrechner</h1>",
-      "Live: version 1 · since Oct 26",
-      "Draft: changed since version 1",
-      ">Discard</button>",
+      "Draft · not live",
       "Publish</button>",
       'aria-label="More actions"',
+      "Live: version 1, published on Oct 26",
       "the draft"
     ].map((part) => markup.indexOf(part));
+    expect(markup).not.toContain(">Discard</button>");
 
     expect(order).not.toContain(-1);
     expect(order).toEqual([...order].sort((left, right) => left - right));
@@ -464,7 +466,7 @@ describe("the draft of an App (layout 3)", () => {
       liveVersion: { number: 4, publishedAt: "2026-10-12T14:05:00.000Z", by: "Anna Beispiel" }
     };
 
-    expect(headed(live)).toContain("Live: version 4 · since Oct 12");
+    expect(headed(live)).toContain("Draft · not live");
     expect(draftLine(headed(live))).toBe(
       "Draft · reads live data · changes are simulated Live: version 4, published by Anna Beispiel on Oct 12"
     );
@@ -474,11 +476,10 @@ describe("the draft of an App (layout 3)", () => {
     );
     const undated = headed({ liveVersion: { number: 1 } });
     expect(undated).toContain("Live: version 1");
-    expect(undated).not.toContain("· since");
-    expect(headed({ liveVersion: { number: 1 } }, "de")).not.toContain("· seit");
-    // A draft never published says so in the head's badge; the line says what a draft does.
+    expect(undated).not.toContain("published on");
+    // A draft never published says so in the head's state; the line says what a draft does.
     const never = headed({ publishedRevision: undefined }, "de");
-    expect(never).toContain("Entwurf · noch nicht veröffentlicht");
+    expect(never).toContain("Entwurf · nicht live");
     expect(draftLine(never)).toBe("Draft · reads live data · changes are simulated");
     expect(headed({ rights: NO_APP_RIGHTS, ...live })).not.toContain("app-draft-line");
   });

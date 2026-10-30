@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   Banner,
+  DropdownMenuItem,
   FormNotice,
   Page,
   PageBar,
@@ -25,7 +26,7 @@ import {
   type BuildWriteOutcome
 } from "./build-refusals";
 import { scrollToSection } from "./build-scroll";
-import { AssetPlaceRow } from "./asset-place";
+import { headFacts } from "../asset-head";
 
 type AssetLanguage = keyof LocalizedPair;
 
@@ -108,15 +109,17 @@ export function usePageShown(page: BuildPageSlot, what: string): void {
 }
 
 /**
- * The page of one asset, the same for every kind: the head with the way back, the name and
- * what the asset does, the outline of the sections, the one language switch, what a refused
- * save says, and the save bar that shows with the first change. A kind hands it its sections.
+ * The page of one asset, the same for every kind: the head with the way back, the name, its one
+ * state and a muted line of facts under it, the outline of the sections, the one language
+ * switch, what a refused save says, and the save bar that shows with the first change. A kind
+ * hands it its sections.
  */
 export function AssetEditorShell({
   frame,
   title,
-  description,
-  badges,
+  status,
+  facts,
+  audience,
   headActions,
   primaryAction,
   menu,
@@ -132,9 +135,15 @@ export function AssetEditorShell({
   /** What the frame handed the kind's page. */
   frame: BuildAssetEditorProps;
   title: string;
-  /** What the asset does, in one line after its name. Never its id. */
-  description?: string;
-  badges?: ReactNode;
+  /**
+   * The one state after the name, where the kind says it itself, such as an agent's draft with
+   * its author. Without it the head shows the frame's.
+   */
+  status?: ReactNode;
+  /** The kind's own facts for the line under the name, before who uses the asset. */
+  facts?: readonly (string | undefined | false)[];
+  /** Who uses the asset, where the kind says it in its own words, in place of the frame's. */
+  audience?: string | undefined;
   /** Actions of the kind before the frame's own, such as making an agent the default. */
   headActions?: readonly PageHeaderAction[];
   /** The kind's own primary action of the head, such as an agent's Publish, over the frame's. */
@@ -207,6 +216,46 @@ export function AssetEditorShell({
           })
         : t("build.saveWaits");
   const general = waiting === undefined ? refusalsOf(outcome, undefined) : [];
+  // Every action of the page but Publish stands in the "…" menu, which is absent while it is empty.
+  const menuActions = [...(headActions ?? []), ...(actions.secondaryActions ?? [])];
+  // One muted line under the name: where the asset comes from, then who uses it and whose it is.
+  // Where nobody can use the asset, its audience leads to the section that changes that.
+  const audienceTo = audience === undefined ? frame.place?.audienceTo : undefined;
+  const shownAudience = audience ?? frame.place?.audience;
+  const metaLine = headFacts([
+    ...(facts ?? []),
+    audienceTo === undefined ? shownAudience : undefined,
+    frame.place?.owner
+  ]);
+  const audienceLink =
+    audienceTo === undefined || shownAudience === undefined ? undefined : (
+      <a
+        href={`#${audienceTo}`}
+        className="underline-offset-2 hover:underline"
+        onClick={(event) => {
+          event.preventDefault();
+          document
+            .getElementById(audienceTo)
+            ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }}
+      >
+        {shownAudience}
+      </a>
+    );
+  const factsBefore = headFacts(facts ?? []);
+  const owner = frame.place?.owner;
+  const meta =
+    audienceLink === undefined ? (
+      metaLine === "" ? undefined : (
+        <span data-asset-place="">{metaLine}</span>
+      )
+    ) : (
+      <span data-asset-place="">
+        {factsBefore === "" ? null : `${factsBefore} · `}
+        {audienceLink}
+        {owner === undefined || owner === "" ? null : ` · ${owner}`}
+      </span>
+    );
 
   return (
     <Page
@@ -217,24 +266,24 @@ export function AssetEditorShell({
           variant="detail"
           back={back}
           title={title}
-          description={description || undefined}
-          state={
-            frame.draft?.state ? (
-              <>
-                {frame.draft?.state}
-                {badges}
-              </>
-            ) : (
-              badges
-            )
-          }
+          status={status ?? frame.draft?.status}
+          meta={meta}
+          // Publish is the one button beside "Chat": every other action of the page stands in
+          // the "…" menu, the kind's first.
           primaryAction={primaryAction ?? actions.primaryAction}
-          secondaryActions={[...(headActions ?? []), ...(actions.secondaryActions ?? [])]}
           menu={
-            menu === undefined || menu === null ? (
-              actions.menu
-            ) : (
+            menuActions.length === 0 && !menu && !actions.menu ? undefined : (
               <>
+                {menuActions.map((action) => (
+                  <DropdownMenuItem
+                    key={action.label}
+                    icon={action.icon}
+                    disabled={action.disabled === true || action.loading === true}
+                    onSelect={action.onSelect}
+                  >
+                    {action.label}
+                  </DropdownMenuItem>
+                ))}
                 {menu}
                 {actions.menu}
               </>
@@ -267,9 +316,13 @@ export function AssetEditorShell({
         noValidate={!canWrite}
         onSubmit={submit}
       >
-        {frame.place === undefined ? null : <AssetPlaceRow>{frame.place}</AssetPlaceRow>}
         {canWrite ? null : (
-          <Banner tone="info" className="mb-3" data-build-read-only="">
+          <Banner
+            tone="info"
+            className="mb-3"
+            data-build-read-only=""
+            {...(frame.readOnlyAction === undefined ? {} : { action: frame.readOnlyAction })}
+          >
             {readOnlyReason ?? t("build.readOnly")} <DocsReference to="buildReadOnly" />
           </Banner>
         )}

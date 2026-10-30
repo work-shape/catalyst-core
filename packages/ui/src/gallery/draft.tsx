@@ -1,11 +1,17 @@
+import { useState } from "react";
 import { Button } from "../actions/button";
 import { RunLiveOnce } from "../actions/run-live-once";
 import { ChangeList } from "../data/change-list";
 import { TextDiff } from "../data/text-diff";
 import { DraftHeader } from "../feedback/draft-header";
+import { Field } from "../forms/field";
+import { Textarea } from "../forms/input";
+import { TextVersionSwitch, VersionedText, type TextVersion } from "../forms/versioned-text";
+import { StatusPill } from "../status/status-pill";
 import { ChangeTag, type ChangeKind } from "../status/change-tag";
 import { TargetBadge } from "../status/target-badge";
 import { Samples, type GalleryEntry } from "./entry";
+import type { GalleryText } from "./text";
 
 const changeKinds: readonly ChangeKind[] = ["new", "changed", "removed", "unsaved"];
 
@@ -116,4 +122,67 @@ export const changeTagEntry: GalleryEntry = {
       </Samples>
     </div>
   )
+};
+
+/** The one state beside a name: a draft that is not live, with what it is one press away, or Live. */
+export const statusPillEntry: GalleryEntry = {
+  name: "StatusPill",
+  components: ["StatusPill"],
+  render: (text) => (
+    <Samples>
+      <StatusPill
+        tone="draft"
+        label={text.pillDraft}
+        details={
+          <>
+            <p>{text.pillDetails}</p>
+            <div>
+              <Button variant="outline" size="sm">
+                {text.pillChanges}
+              </Button>
+            </div>
+          </>
+        }
+      />
+      <StatusPill tone="draft" label={text.pillDraft} />
+      <StatusPill tone="live" label={text.pillLive} />
+    </Samples>
+  )
+};
+
+function VersionedTextSample({ text }: { text: GalleryText }) {
+  const [view, setView] = useState<TextVersion>("changes");
+  const [draft, setDraft] = useState(text.versionedDraft);
+  return (
+    <Field
+      className="max-w-lg"
+      label={text.versionedLabel}
+      hint={text.versionedLine}
+      labelEnd={
+        <TextVersionSwitch label={text.versionedLabel} value={view} onValueChange={setView} />
+      }
+    >
+      <VersionedText
+        label={text.versionedLabel}
+        view={view}
+        live={text.versionedLive}
+        draft={draft}
+        mono
+      >
+        <Textarea
+          variant="code"
+          className="min-h-32"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+        />
+      </VersionedText>
+    </Field>
+  );
+}
+
+/** A field with a live version: the draft, the live text or the changed lines, in one box. */
+export const versionedTextEntry: GalleryEntry = {
+  name: "VersionedText",
+  components: ["VersionedText", "TextVersionSwitch"],
+  render: (text) => <VersionedTextSample text={text} />
 };

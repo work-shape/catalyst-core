@@ -127,7 +127,7 @@ test("one Publish of a Workflow names and applies its store's migration with its
     await expect(bar).toHaveAttribute("data-workflow-draft", "ahead");
 
     // One question names the store's migration and the Workflow's own account.
-    await bar.getByRole("button", { name: "Publish", exact: true }).click();
+    await workflowPage.locator("[data-workflow-publish]").click();
     const dialog = page.getByRole("dialog", { name: `Publish “${NAME}”?` });
     const question = dialog.getByTestId("workflow-publish-question");
     await expect(question).toContainText(

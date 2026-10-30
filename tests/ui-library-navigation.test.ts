@@ -546,7 +546,7 @@ describe("navigation, page structure and data components", () => {
     // The name gives way last: it takes a second line, is then cut and says itself whole on
     // hover. Unseen beside it, the name on one line keeps the row's least width.
     expect(head).toMatch(
-      /<h1[^>]*class="[^"]*line-clamp-2[^"]*"[^>]*title="NAME"[^>]*>NAME<\/h1><span aria-hidden="true" data-name="NAME"/u
+      /<h1[^>]*class="[^"]*line-clamp-2[^"]*"[^>]*title="NAME"[^>]*>NAME<\/h1><\/div><span aria-hidden="true" data-name="NAME"/u
     );
     expect(head).toMatch(/data-slot="page-header-description"[^>]*>ABOUT</u);
     expect(head).toMatch(/shrink-\[1000000000000\][^>]*><div[^>]*data-slot="page-header-chips"/u);

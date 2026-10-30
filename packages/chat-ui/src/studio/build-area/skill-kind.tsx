@@ -82,11 +82,7 @@ function SkillAssetEditor(frame: BuildAssetEditorProps) {
       {...(draft === undefined ? {} : { draft })}
       initialForm={initialForm}
       editable={config.features.configAssets.allowSkillEditing}
-      badges={
-        asset && shippedSkillTitle(asset) !== undefined ? (
-          <Badge data-skill-origin="release">{t("build.platform")}</Badge>
-        ) : null
-      }
+      facts={[asset !== undefined && shippedSkillTitle(asset) !== undefined && t("build.platform")]}
     />
   );
 }

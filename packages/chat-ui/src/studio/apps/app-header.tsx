@@ -143,6 +143,7 @@ export function AppHeader({
   titleEditor,
   description,
   editingLine,
+  status,
   state,
   keepState = false,
   secondaryActions,
@@ -159,6 +160,8 @@ export function AppHeader({
   description?: string;
   /** Other people currently editing this draft; remains readable at phone width. */
   editingLine?: string;
+  /** The one state right after the name, which never gives way, as on every asset's page. */
+  status?: ReactNode;
   /** The badge after the name: the published or the draft revision. */
   state?: ReactNode;
   /**
@@ -199,6 +202,7 @@ export function AppHeader({
         title={name}
         titleEditor={titleEditor}
         description={description}
+        status={status}
         state={stateUnderHead ? undefined : state}
         secondaryActions={secondaryActions}
         primaryAction={primaryAction}

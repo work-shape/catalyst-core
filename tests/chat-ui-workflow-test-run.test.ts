@@ -98,11 +98,12 @@ describe("Test run in the draft bar", () => {
       locale
     );
 
-  it("stands before Publish for a reader who may write the Workflow, in both languages", () => {
+  it("stands in the draft bar for a reader who may write the Workflow, in both languages", () => {
     const markup = page({ onTest: noop });
     expect(markup).toContain(`>${t("workflows.test.button")}</`);
-    expect(markup.indexOf(t("workflows.test.button"))).toBeLessThan(
-      markup.indexOf(`>${t("workflows.draft.publish")}</`)
+    // Publish is the head's one primary button, above the bar.
+    expect(markup.indexOf(`>${t("workflows.draft.publish")}</`)).toBeLessThan(
+      markup.indexOf(t("workflows.test.button"))
     );
     expect(page({ onTest: noop }, "de")).toContain(`>${de("workflows.test.button")}</`);
     expect(page({})).not.toContain(`>${t("workflows.test.button")}</`);

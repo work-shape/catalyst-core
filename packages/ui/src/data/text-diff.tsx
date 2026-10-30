@@ -91,6 +91,21 @@ function backtrack(
   return out.reverse();
 }
 
+/**
+ * In how many places two texts differ: each run of added and removed lines between kept lines
+ * counts once. `0` where they hold the same lines.
+ */
+export function changedPlaces(before: string | undefined, after: string | undefined): number {
+  let places = 0;
+  let inChange = false;
+  for (const line of diffLines(before, after)) {
+    const changed = line.kind !== "same";
+    if (changed && !inChange) places += 1;
+    inChange = changed;
+  }
+  return places;
+}
+
 /** A run of lines as the diff shows it: lines, or kept lines folded under one row. */
 type Part = { kind: "lines"; lines: DiffLine[] } | { kind: "fold"; id: number; lines: DiffLine[] };
 

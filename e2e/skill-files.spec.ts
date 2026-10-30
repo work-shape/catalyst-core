@@ -268,7 +268,7 @@ test("a skill's files are uploaded, written, replaced and deleted, and a refused
     );
     await page.getByRole("dialog").getByRole("button", { name: "Publish", exact: true }).click();
     expect((await published).ok()).toBe(true);
-    await expect(page.locator("[data-agent-draft-badge]")).toHaveCount(0);
+    await expect(page.locator('[data-asset-status="draft"]')).toHaveCount(0);
     const live = await liveFolder(page);
     expect(live.revision).toBe(2);
     expect([...live.files.keys()]).toEqual(["SKILL.md", "assets/form.pdf"]);

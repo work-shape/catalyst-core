@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
-import { isShippedAgentSetField, type ShippedAgentField } from "@work-shape/catalyst-core";
+import {
+  isShippedAgentSetField,
+  SHIPPED_AGENT_FIELDS,
+  type ShippedAgentField
+} from "@work-shape/catalyst-core";
 import { Banner, Button, FoldedText } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import { agentConfigToForm, type AgentFormState, type LocalizedPair } from "./asset-form-model";
@@ -16,11 +20,11 @@ function comparable(field: ShippedField, value: AgentFormState[ShippedField]): s
 }
 
 /**
- * An agent that ships with the platform, such as Workshaper: each field the form holds
- * differently from what the platform ships says so under it and offers to reset it. Where a
- * release shipped a new version of a field the instance changed, the field offers the new
- * version beside the instance's, to take or to keep. For any other agent, and for a field that
- * is as shipped, the field shows alone.
+ * An agent that ships with the platform: each field the form holds differently from what the
+ * platform ships is the instance's own version, which the field's line says, and the head's
+ * "…" menu resets them all to what the platform ships. Where a release shipped a new version of
+ * a field the instance changed, the field offers the new version beside the instance's, to take
+ * or to keep. For any other agent, and for a field that is as shipped, the field shows alone.
  */
 export function shippedFieldsView(input: {
   /** The agent's stored definition, which names what the platform shipped as `shipped`. */
@@ -33,7 +37,14 @@ export function shippedFieldsView(input: {
   shipped: boolean;
   /** Whether the field holds what the platform ships. */
   asShipped(field: ShippedField): boolean;
+  /** The field holds the instance's own version instead of what the platform ships. */
+  own(field: ShippedField): boolean;
+  /** Resets every field the reader may change to what the platform ships; absent where none differs. */
+  reset: (() => void) | undefined;
+  /** The field, with the new version a release shipped where it has one. */
   around(field: ShippedField, content: ReactNode): ReactNode;
+  /** For a field without a line of its own, such as a list: that it is the instance's version. */
+  note(field: ShippedField): ReactNode;
 } {
   const stored = input.config?.shipped;
   const shipped =
@@ -43,47 +54,54 @@ export function shippedFieldsView(input: {
   const asShipped = (field: ShippedField) =>
     shipped === undefined ||
     comparable(field, input.form[field]) === comparable(field, shipped[field]);
+  const own = (field: ShippedField) => shipped !== undefined && !asShipped(field);
+  const resettable = SHIPPED_AGENT_FIELDS.filter((field) => own(field) && input.canEdit(field));
+  const newer = (field: ShippedField) => {
+    if (shipped === undefined || !input.form.shippedNewer?.includes(field)) return null;
+    const without = (input.form.shippedNewer ?? []).filter((each) => each !== field);
+    return (
+      <ShippedNewerNotice
+        field={field}
+        mine={input.form}
+        next={shipped}
+        canDecide={input.canEdit(field)}
+        onTake={() => input.onReset({ [field]: shipped[field], shippedNewer: without })}
+        onKeep={() => input.onReset({ shippedNewer: without })}
+      />
+    );
+  };
   return {
     shipped: shipped !== undefined,
     asShipped,
+    own,
+    reset:
+      shipped === undefined || resettable.length === 0
+        ? undefined
+        : () =>
+            input.onReset(Object.fromEntries(resettable.map((field) => [field, shipped[field]]))),
     around: (field, content) => {
-      if (shipped === undefined || asShipped(field)) return content;
-      const without = (input.form.shippedNewer ?? []).filter((each) => each !== field);
+      const notice = own(field) ? newer(field) : null;
+      if (notice === null) return content;
       return (
         <div className="grid gap-2" data-shipped-group={field}>
           {content}
-          {input.form.shippedNewer?.includes(field) ? (
-            <ShippedNewerNotice
-              field={field}
-              mine={input.form}
-              next={shipped}
-              canDecide={input.canEdit(field)}
-              onTake={() => input.onReset({ [field]: shipped[field], shippedNewer: without })}
-              onKeep={() => input.onReset({ shippedNewer: without })}
-            />
-          ) : (
-            <ShippedFieldNote
-              canReset={input.canEdit(field)}
-              onReset={() => input.onReset({ [field]: shipped[field] })}
-            />
-          )}
+          {notice}
         </div>
       );
+    },
+    note: (field) => {
+      if (!own(field)) return null;
+      return newer(field) ?? <ShippedFieldNote />;
     }
   };
 }
 
-function ShippedFieldNote({ canReset, onReset }: { canReset: boolean; onReset(): void }) {
+function ShippedFieldNote() {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-wrap items-center gap-2" data-shipped-differs="">
-      <span className="text-caption text-muted-foreground">{t("agentDraft.shippedDiffers")}</span>
-      {canReset ? (
-        <Button variant="link" size="sm" onClick={onReset}>
-          {t("agentDraft.shippedReset")}
-        </Button>
-      ) : null}
-    </div>
+    <p className="text-caption text-muted-foreground" data-shipped-differs="">
+      {t("agentDraft.ownVersionAlone")}
+    </p>
   );
 }
 

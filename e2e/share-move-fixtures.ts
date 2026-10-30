@@ -153,9 +153,7 @@ export async function openShare(page: Page, personal: string, name: string, titl
   );
   await page.goto(`/build/skills/${name}`);
   await expect(page.getByRole("heading", { name: title })).toBeVisible();
-  await expect(
-    page.locator("[data-asset-place]").getByText("Nur ich", { exact: true })
-  ).toBeVisible();
+  await expect(page.locator("[data-asset-place]")).toContainText("nur für dich");
   return shareFromHead(page, title);
 }
 

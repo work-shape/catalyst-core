@@ -432,7 +432,6 @@ export function KnowledgeBaseEditor({
     <AssetEditorShell
       frame={frame}
       title={form.title.trim() || form.name || t("knowledge.new")}
-      description={form.description.trim()}
       sections={sections}
       control={{
         changes: changedFields + (availabilityEdit.changed ? 1 : 0),

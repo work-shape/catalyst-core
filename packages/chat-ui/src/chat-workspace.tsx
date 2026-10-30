@@ -222,6 +222,8 @@ function ChatWorkspaceContent({
   const [dockAgentWork, setDockAgentWork] = useState<DockAgentWork>();
   // Build and Try in the dock on an agent's page.
   const agentTry = useAgentTry({ client: model.selectedChat.client, dock });
+  // "Chat" beside an agent's page with a draft opens Try on the draft: the two are one.
+  const openDockChat = agentTry.chat ?? model.dockChat.open;
   const [paletteOpen, setPaletteOpen] = useState(false);
   // A conversation's menu asked to move it into a project or out of one (PRJ-1).
   const [projectChange, setProjectChange] = useState<ProjectChange>();
@@ -730,7 +732,7 @@ function ChatWorkspaceContent({
             if (dock.open) {
               dock.close();
             } else {
-              model.dockChat.open();
+              openDockChat();
             }
           }}
         />
@@ -1042,7 +1044,7 @@ function ChatWorkspaceContent({
                                     dock={dock}
                                     running={chat.conversationRunning}
                                     shortcut={workspaceShortcutLabel("chat")}
-                                    onChat={model.dockChat.open}
+                                    onChat={openDockChat}
                                   >
                                     <DockPageChatProvider value={model.dockChat.offerPageChat}>
                                       <DockCreationScopeProvider

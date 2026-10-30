@@ -174,7 +174,7 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     });
 
     // The publish names the revision the page read, after one question.
-    await bar.getByRole("button", { name: "Publish", exact: true }).click();
+    await workflowPage.locator("[data-workflow-publish]").click();
     const publish = page.getByRole("dialog", { name: `Publish “${NAME}”?` });
     await expect(publish).toContainText("Version 1 becomes the one that runs");
     await publish.getByRole("button", { name: "Publish", exact: true }).click();
@@ -268,7 +268,10 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     await expect(bar.locator("[data-draft-live]")).toContainText(
       /^Live: version 1, published by /u
     );
-    await expect(bar.getByRole("button", { name: "Publish", exact: true })).toBeVisible();
+    await expect(workflowPage.locator("[data-workflow-publish]")).toBeVisible();
+    await expect(workflowPage.locator('[data-asset-status="draft"]')).toHaveText(
+      "Draft · not live"
+    );
 
     // The member reads the published Workflow while the draft is ahead: neither is offered.
     await memberPage.goto(workflowPath);
@@ -280,7 +283,8 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     await expect(memberWorkflow).toContainText("The first draft.");
 
     // The discard puts the draft back on the published revision, after one question.
-    await bar.getByRole("button", { name: "Discard", exact: true }).click();
+    await workflowPage.getByRole("button", { name: "More actions", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Discard", exact: true }).click();
     const discard = page.getByRole("dialog", { name: `Discard the draft of “${NAME}”?` });
     await expect(discard).toContainText("The draft goes back to the published version 1");
     await discard.getByRole("button", { name: "Discard", exact: true }).click();

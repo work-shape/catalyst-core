@@ -1,6 +1,6 @@
 import type { AgentDraft } from "@work-shape/catalyst-api-client";
 import type { TranslationContextValue } from "../../shared/i18n";
-import { ASSET_LANGUAGES, type AgentFormState, type LocalizedPair } from "./asset-form-model";
+import type { AgentFormState } from "./asset-form-model";
 import { readRefusalDetails } from "./build-refusals";
 import { apiErrorCode } from "../../shared/workspace-utils";
 
@@ -57,37 +57,6 @@ export function draftAgentFields(live: AgentFormState, draft: AgentFormState): D
   return FIELD_PARTS.filter(([, parts]) =>
     parts.some((part) => !same(live[part], draft[part]))
   ).map(([field]) => field);
-}
-
-/** The section of the agent page each field stands in, by the section's anchor. */
-const SECTION_OF_FIELD: Record<DraftAgentField, string> = {
-  displayName: "overview",
-  description: "overview",
-  welcomeMessage: "overview",
-  welcomeSubtitle: "overview",
-  instructions: "instructions",
-  additionalInstructions: "instructions",
-  maxSteps: "instructions",
-  model: "model",
-  skillNames: "skills",
-  knowledgeBases: "knowledge",
-  toolNames: "tools",
-  initialPrompts: "prompts"
-};
-
-/** The sections that hold a field the draft changes. */
-export function draftSections(fields: readonly DraftAgentField[]): Set<string> {
-  return new Set(fields.map((field) => SECTION_OF_FIELD[field]));
-}
-
-/** The languages of a text the draft changes, each with its published text. */
-export function changedLanguages(
-  live: LocalizedPair,
-  draft: LocalizedPair
-): { language: keyof LocalizedPair; text: string }[] {
-  return ASSET_LANGUAGES.filter((language) => live[language] !== draft[language]).map(
-    (language) => ({ language, text: live[language] })
-  );
 }
 
 /**
