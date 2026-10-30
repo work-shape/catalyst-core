@@ -208,6 +208,9 @@ export const unusedPlatformStores: PlatformStores = {
   get workflowStepPins() {
     return unsupported();
   },
+  get workflowWebhooks() {
+    return unsupported();
+  },
   get workflowRunDatasets() {
     return unsupported();
   },

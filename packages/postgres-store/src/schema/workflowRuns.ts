@@ -42,6 +42,7 @@ import type {
   WorkflowStep,
   WorkflowStepRunId,
   WorkflowStepRunStatus,
+  WorkflowTriggerEvent,
   WorkflowTriggerKind
 } from "@work-shape/catalyst-core";
 
@@ -132,6 +133,9 @@ export const workflowRuns = pgTable(
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     // The due time of the schedule that started the run. Null on every other run.
     scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
+    // The platform event that started the run: ids, names and counts (EW-4). Null on every
+    // other run.
+    triggerEvent: jsonb("trigger_event").$type<WorkflowTriggerEvent>(),
     // The run key a start gave the run (EW-13k). Text of a person or a step, never in an audit.
     runKey: text("run_key"),
     labels: jsonb("labels").$type<Record<string, string>>(),
@@ -191,6 +195,11 @@ export const workflowRuns = pgTable(
     uniqueIndex("workflow_runs_scheduled_for_idx")
       .on(table.clientInstanceId, table.workflow, table.scheduledFor)
       .where(sql`${table.scheduledFor} is not null`),
+    // One run per Workflow and platform event: an event dispatched a second time, by a retried
+    // job or another worker, starts nothing (EW-4).
+    uniqueIndex("workflow_runs_trigger_event_idx")
+      .on(table.clientInstanceId, table.workflow, sql`(${table.triggerEvent} ->> 'id')`)
+      .where(sql`${table.triggerEvent} is not null`),
     // A run key exists once per Workflow, mode and starter among the runs that are open or
     // `done`: a start that meets it starts nothing and is answered that run. Another starter's
     // run with the same key is not met, so a key tells no one whether someone else holds it. A

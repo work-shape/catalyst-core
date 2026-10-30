@@ -223,7 +223,14 @@ describe("the names of a Workflow", () => {
       "condition",
       "parallel"
     ]);
-    expect(WORKFLOW_TRIGGER_KINDS).toEqual(["manual", "schedule", "parent", "outside"]);
+    expect(WORKFLOW_TRIGGER_KINDS).toEqual([
+      "manual",
+      "schedule",
+      "parent",
+      "outside",
+      "webhook",
+      "platform_event"
+    ]);
     // Every executable block is part of the shared step-type contract.
     expectTypeOf<
       Exclude<WorkflowStep["type"], (typeof WORKFLOW_RESERVED_STEP_TYPES)[number]>
@@ -276,7 +283,8 @@ describe("the names of a Workflow", () => {
       fireSchedule: "workflow_run.fire_schedule",
       repairSchedules: "workflow_run.repair_schedules",
       pruneData: "workflow_run.prune_data",
-      deleteDatasets: "workflow_run.delete_datasets"
+      deleteDatasets: "workflow_run.delete_datasets",
+      dispatchEvent: "workflow_run.dispatch_event"
     });
     expect(platformModules.find((module) => module.name === "workflows")?.jobKinds).toEqual(
       expect.arrayContaining(Object.values(WORKFLOW_RUN_JOB_KINDS))
@@ -287,6 +295,7 @@ describe("the names of a Workflow", () => {
       | "workflow_run.repair_schedules"
       | "workflow_run.prune_data"
       | "workflow_run.delete_datasets"
+      | "workflow_run.dispatch_event"
     >();
     expect(WORKFLOW_DOWNLOAD_DATASET_OPERATION).toBe("workflows.download_dataset");
     expect(WORKFLOW_ACTIONS.readRunData).toBe("workflow.read_run_data");
@@ -709,13 +718,17 @@ describe("the modules workflows and dataStores", () => {
         "workflows.unpin_step",
         "workflows.rerun_steps",
         "workflows.rerun",
-        "workflows.principal_rights"
+        "workflows.principal_rights",
+        "workflows.webhook",
+        "workflows.rotate_webhook_secret",
+        "workflows.webhook_receive"
       ],
       jobKinds: [
         WORKFLOW_RUN_JOB_KINDS.executeStep,
         "workflow_run.deadline",
         WORKFLOW_RUN_JOB_KINDS.fireSchedule,
         WORKFLOW_RUN_JOB_KINDS.repairSchedules,
+        WORKFLOW_RUN_JOB_KINDS.dispatchEvent,
         "workflow_run.run_code",
         "workflow_run.sweep_code",
         WORKFLOW_RUN_JOB_KINDS.pruneData,

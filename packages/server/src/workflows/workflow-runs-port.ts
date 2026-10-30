@@ -1,5 +1,7 @@
 import type { WorkflowKind } from "@work-shape/catalyst-core";
 import type {
+  AuditActor,
+  SecretState,
   WorkflowDatasetDownloadFormat,
   ActorAccess,
   AssetScope,
@@ -117,6 +119,28 @@ export interface WorkflowRunsPort {
     cancelledBy: AuthenticatedIdentity;
     correlationId: string;
   }): Promise<WorkflowRunView | undefined>;
+  /**
+   * The webhooks of the Workflows (EW-4). Missing where the instance keeps no secrets: then no
+   * Workflow has a webhook.
+   */
+  webhooks?: {
+    /** Whether the Workflow's webhook takes requests and has a secret; never the secret. */
+    status(workflow: string): Promise<WorkflowWebhookView>;
+    /** Makes a new secret, which the answer holds once. */
+    rotate(input: {
+      workflow: string;
+      actor: AuditActor;
+      correlationId: string;
+    }): Promise<{ secret: string; version: number }>;
+    /** Checks a signed request and starts its run as the Workflow's account; throws the refusal. */
+    receive(input: {
+      workflow: string;
+      headers: Readonly<Record<string, string | readonly string[] | undefined>>;
+      body: Uint8Array;
+      input: unknown;
+      correlationId: string;
+    }): Promise<{ runId: string }>;
+  };
   readRun(runId: string): Promise<WorkflowRunView | undefined>;
   /** The runs of a Workflow, newest first: all of them, or those of one key or key prefix. */
   listRuns(input: {
@@ -189,4 +213,12 @@ export interface WorkflowListEntry {
   /** The display label of the active service principal a run acts as. */
   runsAs?: string;
   lastRun?: WorkflowLastRun;
+}
+
+/** What a publisher reads of a Workflow's webhook (EW-4). */
+interface WorkflowWebhookView {
+  enabled: boolean;
+  perMinute: number;
+  secret: SecretState;
+  version?: number;
 }

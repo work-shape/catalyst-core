@@ -74,7 +74,84 @@ export type WorkflowTrigger =
    * outside also needs every Connection operation the run may call to be exposed to `outside`
    * (connections-and-secrets.md, Exposure to outside clients).
    */
-  | { kind: "outside" };
+  | { kind: "outside" }
+  /**
+   * An outside system starts it by a signed request to the Workflow's webhook address. The
+   * request carries the run's input as its JSON body, signed with the Workflow's own secret
+   * (HMAC with a timestamp and a nonce), and is refused unsigned, late or replayed.
+   * `perMinute` bounds how many requests it accepts in a minute
+   * (`WORKFLOW_WEBHOOK_LIMITS.perMinute` when left out).
+   */
+  | { kind: "webhook"; perMinute?: number }
+  /**
+   * A platform event of `WORKFLOW_TRIGGER_EVENTS` starts it, where the run's account may read
+   * the event's source. `filter` narrows it to one source by its name.
+   */
+  | {
+      kind: "platform_event";
+      event: WorkflowTriggerEventName;
+      filter?: WorkflowTriggerEventFilter;
+    };
+
+/**
+ * The platform events a `platform_event` trigger may name: a fixed allow-list, each with the
+ * asset kind of its source, the right on that source the run's account needs for the event to
+ * start a run, the key of `filter` that names one source, and the fields of the event the run
+ * gets beside the source. An event carries ids and counts, never content.
+ */
+/** The names of the platform events a `platform_event` trigger may name. */
+export const WORKFLOW_TRIGGER_EVENT_NAMES = ["knowledge_base.sync_finished"] as const;
+export type WorkflowTriggerEventName = (typeof WORKFLOW_TRIGGER_EVENT_NAMES)[number];
+
+export const WORKFLOW_TRIGGER_EVENTS = {
+  /** A sync run of a Knowledge Base's source ended: the run, the source, its state and counts. */
+  "knowledge_base.sync_finished": {
+    source: "knowledge_base",
+    right: "knowledge_base.read",
+    filter: "knowledgeBase",
+    fields: ["syncRunId", "source", "state", "counts"]
+  }
+} as const satisfies Record<
+  WorkflowTriggerEventName,
+  { source: string; right: string; filter: string; fields: readonly string[] }
+>;
+
+export function isWorkflowTriggerEventName(name: string): name is WorkflowTriggerEventName {
+  return Object.hasOwn(WORKFLOW_TRIGGER_EVENTS, name);
+}
+
+/** `filter` of a `platform_event` trigger: one source by its name, under the event's key. */
+export type WorkflowTriggerEventFilter = Partial<Record<string, string>>;
+
+/**
+ * The event that started a run of a `platform_event` trigger, as the run keeps it: ids, names
+ * and counts. `id` is the id of the event's record, which starts a Workflow once.
+ */
+export type WorkflowTriggerEvent = {
+  id: string;
+  name: WorkflowTriggerEventName;
+  occurredAt: string;
+  source: { kind: string; id: string; name: string };
+  data: JsonObject;
+};
+
+export {
+  WORKFLOW_WEBHOOK_HEADERS,
+  WORKFLOW_WEBHOOK_LIMITS
+} from "@work-shape/catalyst-asset-schemas";
+
+/** Why a webhook request was refused, as its audit event names it. */
+export const WORKFLOW_WEBHOOK_REFUSALS = {
+  unsigned: "webhook_unsigned",
+  signature: "webhook_signature_invalid",
+  expired: "webhook_timestamp_expired",
+  replayed: "webhook_nonce_replayed",
+  rateLimited: "webhook_rate_limited",
+  noSecret: "webhook_no_secret"
+} as const;
+
+export type WorkflowWebhookRefusal =
+  (typeof WORKFLOW_WEBHOOK_REFUSALS)[keyof typeof WORKFLOW_WEBHOOK_REFUSALS];
 
 /**
  * The output of a trigger step, fixed by the engine: the run's input, when the run started as
@@ -90,6 +167,8 @@ export interface WorkflowTriggerOutput {
    * other trigger. It is the identity of a scheduled run and its run key, so a tick fires once.
    */
   scheduledFor: string | null;
+  /** The event that started a run of a `platform_event` trigger, and null for every other. */
+  event: WorkflowTriggerEvent | null;
 }
 
 /**
@@ -898,6 +977,8 @@ export const WORKFLOW_RUN_DATASET_AUDIT_EVENTS = {
  * `repair_schedules` resumes the startup scan of published definitions from its saved cursor.
  * `prune_data` removes, once a day, the values of the runs that ended longer ago than the
  * release keeps step data. `delete_datasets` removes the objects of the datasets of a run that were marked deleted.
+ * `dispatch_event` starts the runs one event of `WORKFLOW_TRIGGER_EVENTS` starts: its job is
+ * queued with the event's audit record, in the same transaction.
  * Spec: Engine on the shared job executor; Lifetime, rights, audit and limits.
  */
 export const WORKFLOW_RUN_JOB_KINDS = {
@@ -905,7 +986,8 @@ export const WORKFLOW_RUN_JOB_KINDS = {
   fireSchedule: "workflow_run.fire_schedule",
   repairSchedules: "workflow_run.repair_schedules",
   pruneData: "workflow_run.prune_data",
-  deleteDatasets: "workflow_run.delete_datasets"
+  deleteDatasets: "workflow_run.delete_datasets",
+  dispatchEvent: "workflow_run.dispatch_event"
 } as const;
 
 export type WorkflowRunJobKind =

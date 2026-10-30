@@ -8,6 +8,7 @@ import { checkResponse } from "./check-response";
 import { answerRedirect } from "./redirect-answer";
 import { paginate, pageScope, storePage } from "./paging";
 import { timingSafeEqual } from "node:crypto";
+import { Readable } from "node:stream";
 import {
   isRegisteredOperation,
   operationPathParamNames,
@@ -216,10 +217,37 @@ export interface ResourceOperationBinding<Op extends Operation> {
 }
 
 /**
+ * What the handler of a public operation that reads its body as it was sent is handed: a
+ * request signed over its bytes, such as a call of a Workflow's webhook.
+ */
+interface ReceivedCall {
+  params: Record<string, string>;
+  /** The body as the descriptor's schema parsed it. */
+  body: unknown;
+  /** The body's bytes as they were sent. */
+  rawBody: Buffer;
+  /** The request's headers, by their lowercase names. */
+  headers: Readonly<Record<string, string | readonly string[] | undefined>>;
+  context: RequestContext;
+}
+
+interface ReceiveBinding {
+  /** The most bytes the body may have. A larger one is refused before it is read to the end. */
+  bodyLimitBytes: number;
+  handle(call: ReceivedCall): Promise<unknown>;
+}
+
+/**
  * What a module of the assembly registers its operations on. It is the `operation` of a route
  * of the server without the web framework: an operation of a module answers JSON or a page.
  */
 export interface ModuleRoutes {
+  /**
+   * Registers a public operation whose handler reads the body as it was sent, beside the parsed
+   * one. It is no operation of the registry: nobody is authenticated, and the handler checks
+   * what the request carries before it does anything.
+   */
+  receive<const Op extends Operation>(operation: Op, binding: ReceiveBinding): void;
   operation<const Op extends Operation>(
     operation: Op,
     binding: OperationBindingOf<Op, never>
@@ -249,6 +277,8 @@ export interface Route {
     operation: Op,
     binding: ResourceOperationBinding<Op>
   ): void;
+  /** Registers a public operation that reads its body as sent. See `ModuleRoutes.receive`. */
+  receive<const Op extends Operation>(operation: Op, binding: ReceiveBinding): void;
   /** Every operation registered on this server so far, through whichever helper. */
   readonly registered: readonly Operation[];
 }
@@ -277,6 +307,9 @@ export function registerModuleOperations(
     operation: register,
     resourceOperation() {
       // The module's OperationSources already supply these definitions.
+    },
+    receive() {
+      // A public route of HTTP alone: it is no operation of the registry.
     }
   };
   for (const registration of registrations) registration(routes);
@@ -577,10 +610,60 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
       }
     });
   }
+  const sentBodies = new WeakMap<FastifyRequest, Buffer>();
+  function receive(operation: Operation, binding: ReceiveBinding): void {
+    if (operation.auth !== "public") {
+      throw new Error(`Operation '${operation.id}' reads its body as sent and must be public`);
+    }
+    if (operation.response.kind !== "json") {
+      throw new Error(`Operation '${operation.id}' must answer JSON`);
+    }
+    const { schema } = operation.response;
+    const limit = binding.bodyLimitBytes;
+    registered.push(operation);
+    app.route({
+      method: operation.method,
+      url: operation.path,
+      bodyLimit: limit,
+      // The bytes are kept as they arrive and handed on to the parser unchanged. A body over
+      // the limit is refused as soon as it passes it, whatever its Content-Length said.
+      preParsing: async (request, _reply, payload) => {
+        const chunks: Buffer[] = [];
+        let size = 0;
+        for await (const chunk of payload) {
+          const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+          size += bytes.length;
+          if (size > limit) {
+            throw Object.assign(new Error("The request body is too large"), {
+              code: "FST_ERR_CTP_BODY_TOO_LARGE",
+              statusCode: 413
+            });
+          }
+          chunks.push(bytes);
+        }
+        const sent = Buffer.concat(chunks);
+        sentBodies.set(request, sent);
+        return Object.assign(Readable.from([sent]), { receivedEncodedLength: sent.length });
+      },
+      handler: async (request, reply) => {
+        const { correlationId, params, body } = await admit(operation, request, reply);
+        const result = await binding.handle({
+          params,
+          body,
+          rawBody: sentBodies.get(request) ?? Buffer.alloc(0),
+          headers: request.headers,
+          context: { clientInstanceId: options.clientInstanceId, correlationId }
+        });
+        checkResponse(options, operation, schema, result);
+        return result;
+      }
+    });
+  }
   return Object.assign(route, {
     registered,
     operation: registerOperation,
-    resourceOperation: registerResourceOperation
+    resourceOperation: registerResourceOperation,
+    receive
   });
 }
 

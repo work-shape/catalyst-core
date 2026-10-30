@@ -6,6 +6,7 @@ import {
   DATA_STORE_OPERATION_RIGHTS,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
+  WORKFLOW_TRIGGER_EVENTS,
   workflowStartOperationName,
   type AssetScope,
   type ClientInstanceId,
@@ -60,7 +61,10 @@ export function workflowOperationNames(
  *   what it names, and the publish is refused without it where the operation says so
  *   (`rightNeededAtPublish`, such as `mail_sender.use` of `mail.send`); a Connection's operation needs `connection.use` on the Connection, and a
  *   Data Store's `load` needs `data_store.insert`, and `data_store.execute` as well where its
- *   mapping replaces rows or updates them on a conflict, or leaves that to a reference.
+ *   mapping replaces rows or updates them on a conflict, or leaves that to a reference;
+ * - a `platform_event` trigger narrowed to one source needs the event's right on it (such as
+ *   `knowledge_base.read` on the Knowledge Base), and the publish is refused without it. An
+ *   event of a source the account may not read starts no run.
  * An operation that does not exist is left out: the definition check refuses it.
  */
 export function workflowNeededRights(
@@ -107,6 +111,13 @@ export function workflowNeededRights(
     }
     if (step.type === "operation") addOperation(step.operation, step.input, step.id);
     if (step.type === "agent") agentStep ??= step.id;
+    if (step.type === "trigger")
+      for (const trigger of step.triggers) {
+        if (trigger.kind !== "platform_event") continue;
+        const event = WORKFLOW_TRIGGER_EVENTS[trigger.event];
+        const name = trigger.filter?.[event.filter];
+        if (name !== undefined) add(event.right, { kind: event.source, name }, step.id, "publish");
+      }
   }
   if (agentStep !== undefined)
     for (const tool of manifest.tools ?? []) addOperation(tool, undefined, agentStep);

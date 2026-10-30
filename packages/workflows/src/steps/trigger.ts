@@ -1,7 +1,17 @@
-import { workflowScheduleOptionsSchema } from "@work-shape/catalyst-core";
+import {
+  WORKFLOW_TRIGGER_EVENTS,
+  WORKFLOW_TRIGGER_EVENT_NAMES,
+  WORKFLOW_WEBHOOK_LIMITS,
+  isWorkflowTriggerEventName,
+  workflowScheduleOptionsSchema,
+  type WorkflowTriggerEventName
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { isTimeZone, parseCron } from "../cron";
 import { named, notSupported, type StepModule, type StepOf } from "./module";
+
+/** The name of an asset a `platform_event` filter names: an id of the asset kind. */
+const sourceName = z.string().regex(/^[a-z][a-z0-9_-]{0,62}$/u, "Name the source by its id");
 
 export const triggerStep = {
   schema: () =>
@@ -23,7 +33,24 @@ export const triggerStep = {
               ...workflowScheduleOptionsSchema.shape
             }),
             z.strictObject({ kind: z.literal("parent") }),
-            z.strictObject({ kind: z.literal("outside") })
+            z.strictObject({ kind: z.literal("outside") }),
+            z.strictObject({
+              kind: z.literal("webhook"),
+              perMinute: z
+                .number()
+                .int()
+                .min(1)
+                .max(WORKFLOW_WEBHOOK_LIMITS.perMinuteMax)
+                .optional()
+            }),
+            z.strictObject({
+              kind: z.literal("platform_event"),
+              event: z.custom<WorkflowTriggerEventName>(
+                (value) => typeof value === "string" && isWorkflowTriggerEventName(value),
+                `A platform event is one of ${WORKFLOW_TRIGGER_EVENT_NAMES.join(", ")}`
+              ),
+              filter: z.record(z.string(), sourceName).optional()
+            })
           ])
         )
         .min(1)
@@ -44,8 +71,8 @@ export const triggerStep = {
           : [])
       ];
     }),
-  structural: (step: StepOf<"trigger">, id: string) =>
-    step.triggers.flatMap((trigger) =>
+  structural: (step: StepOf<"trigger">, id: string) => [
+    ...step.triggers.flatMap((trigger) =>
       trigger.kind === "schedule" && !parseCron(trigger.cron)
         ? [
             {
@@ -54,5 +81,20 @@ export const triggerStep = {
             }
           ]
         : []
-    )
+    ),
+    // One address and one secret per Workflow: a second webhook would share both.
+    ...(step.triggers.filter((trigger) => trigger.kind === "webhook").length > 1
+      ? [{ path: `steps.${id}.triggers`, message: "A Workflow has at most one webhook trigger" }]
+      : []),
+    ...step.triggers.flatMap((trigger) => {
+      if (trigger.kind !== "platform_event") return [];
+      const key = WORKFLOW_TRIGGER_EVENTS[trigger.event].filter;
+      return Object.keys(trigger.filter ?? {})
+        .filter((field) => field !== key)
+        .map((field) => ({
+          path: `steps.${id}.triggers`,
+          message: `The event '${trigger.event}' is filtered by '${key}' only, not by '${field}'`
+        }));
+    })
+  ]
 } satisfies StepModule<"trigger">;

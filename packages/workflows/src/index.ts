@@ -24,7 +24,10 @@ export const WORKFLOW_OPERATION_IDS = [
   "workflows.unpin_step",
   "workflows.rerun_steps",
   "workflows.rerun",
-  "workflows.principal_rights"
+  "workflows.principal_rights",
+  "workflows.webhook",
+  "workflows.rotate_webhook_secret",
+  "workflows.webhook_receive"
 ] as const;
 
 /**
@@ -42,6 +45,7 @@ export const workflowsModule = defineModule({
     workflowDeadlineJobKind.kind,
     WORKFLOW_RUN_JOB_KINDS.fireSchedule,
     WORKFLOW_RUN_JOB_KINDS.repairSchedules,
+    WORKFLOW_RUN_JOB_KINDS.dispatchEvent,
     WORKFLOW_CODE_JOB_KIND,
     WORKFLOW_CODE_SWEEP_JOB_KIND,
     WORKFLOW_RUN_JOB_KINDS.pruneData,
@@ -152,6 +156,16 @@ export {
   type WorkflowLimitContext
 } from "./run-limits";
 export { replaceScheduleJob, workflowScheduleJobKind } from "./schedule-trigger";
+export { workflowHearsEvent } from "./event-trigger";
+export {
+  WORKFLOW_WEBHOOK_SECRET_SUBJECT,
+  workflowWebhookRefusal,
+  workflowWebhookSignature,
+  workflowWebhookTrigger,
+  type WorkflowWebhookRequest,
+  type WorkflowWebhookView,
+  type WorkflowWebhooks
+} from "./webhook-trigger";
 export { secretOperationSteps, type WorkflowOperationCalls } from "./operation-step";
 export { checkChildContracts, checkChildCycles } from "./child-contracts";
 export { childRulesRevisionWarnings } from "./child-rules-revision";

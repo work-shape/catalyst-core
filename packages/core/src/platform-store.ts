@@ -34,6 +34,7 @@ import type { RoleStore } from "./roles";
 import type { JobsStore } from "./jobs";
 import type { LiveOnceSwitchStore } from "./draft-calls";
 import type { WorkflowStepPinsStore } from "./workflow-step-pins";
+import type { WorkflowWebhookStore } from "./workflow-webhooks";
 import type { CapabilityRecordStore } from "./capability-records";
 import type { OperationRunStore } from "./operation-runs";
 import type { InfrastructureCheckStore } from "./infrastructure-checks";
@@ -115,6 +116,8 @@ export interface PlatformStores {
   workflowRuns: WorkflowRunsStore;
   /** Pinned step outputs of Workflow drafts (EW-10): names of runs, never values. */
   workflowStepPins: WorkflowStepPinsStore;
+  /** The nonces Workflows' webhook triggers accepted (EW-4): no body, no other header. */
+  workflowWebhooks: WorkflowWebhookStore;
   workflowRunDatasets: WorkflowRunDatasetsStore;
   dataStores: DataStoreRecordsStore;
   knowledgeBases: KnowledgeBaseStateStore;

@@ -35114,7 +35114,9 @@
                         "manual",
                         "schedule",
                         "parent",
-                        "outside"
+                        "outside",
+                        "webhook",
+                        "platform_event"
                       ]
                     },
                     "status": {
@@ -35606,7 +35608,9 @@
                         "manual",
                         "schedule",
                         "parent",
-                        "outside"
+                        "outside",
+                        "webhook",
+                        "platform_event"
                       ]
                     },
                     "status": {
@@ -36242,7 +36246,9 @@
                         "manual",
                         "schedule",
                         "parent",
-                        "outside"
+                        "outside",
+                        "webhook",
+                        "platform_event"
                       ]
                     },
                     "status": {
@@ -38552,7 +38558,9 @@
                               "manual",
                               "schedule",
                               "parent",
-                              "outside"
+                              "outside",
+                              "webhook",
+                              "platform_event"
                             ]
                           },
                           "status": {
@@ -39077,7 +39085,9 @@
                         "manual",
                         "schedule",
                         "parent",
-                        "outside"
+                        "outside",
+                        "webhook",
+                        "platform_event"
                       ]
                     },
                     "status": {
@@ -39620,7 +39630,9 @@
                         "manual",
                         "schedule",
                         "parent",
-                        "outside"
+                        "outside",
+                        "webhook",
+                        "platform_event"
                       ]
                     },
                     "status": {
@@ -40171,6 +40183,288 @@
           },
           "409": {
             "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/workflows/{workflow}/webhook": {
+      "get": {
+        "operationId": "workflows.webhook",
+        "summary": "Read whether a Workflow's webhook takes requests, its rate and whether it has a secret; never the secret",
+        "tags": [
+          "Workflows"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workflow",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "perMinute": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "secret": {
+                      "type": "string",
+                      "enum": [
+                        "set",
+                        "not_set",
+                        "unreadable"
+                      ]
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "enabled",
+                    "perMinute",
+                    "secret"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      },
+      "post": {
+        "operationId": "workflows.webhook_receive",
+        "summary": "Start a run of a Workflow with a webhook trigger: the JSON body is the run's input. Sign it with the Workflow's secret: catalyst-webhook-timestamp (seconds since the epoch), catalyst-webhook-nonce (once per request) and catalyst-webhook-signature = \"v1=\" + hex HMAC-SHA256 of \"<timestamp>.<nonce>.<body>\"",
+        "tags": [
+          "Workflows"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "name": "workflow",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "runId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "runId"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/workflows/{workflow}/webhook/secret": {
+      "post": {
+        "operationId": "workflows.rotate_webhook_secret",
+        "summary": "Make a new secret for a Workflow's webhook and show it once; requests signed with the old one are refused from now on",
+        "tags": [
+          "Workflows"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workflow",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "secret": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "secret",
+                    "version"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOutputNotRetained"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"

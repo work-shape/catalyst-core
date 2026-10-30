@@ -79,6 +79,7 @@ import { createPostgresJobsStore, notifyJobsEnqueued } from "./jobs/store";
 import { createPostgresOperationRunsStore } from "./postgres-operation-run-operations";
 import { createPostgresLiveOnceSwitchesStore } from "./postgres-live-once-switch-operations";
 import { createPostgresWorkflowStepPinsStore } from "./postgres-workflow-step-pin-operations";
+import { createPostgresWorkflowWebhookStore } from "./postgres-workflow-webhooks";
 import { createPostgresCapabilityRecordStore } from "./postgres-capability-record-operations";
 import { createPostgresUserOperationSettingsStore } from "./postgres-user-operation-settings";
 import { createPostgresAgentProposalStore } from "./postgres-agent-proposal-operations";
@@ -167,7 +168,7 @@ function bindStores(
     agentRuns: createPostgresAgentRunsStore(db, enqueued),
     childAgentRuns: createPostgresChildAgentRunStore(db, enqueued),
     files: createPostgresFilesStore(db, enqueued),
-    audit: createPostgresAuditStore(db),
+    audit: createPostgresAuditStore(db, enqueued),
     usage: createPostgresUsageStore(db),
     users: createPostgresUsersStore(db),
     userOperationSettings: createPostgresUserOperationSettingsStore(db),
@@ -213,6 +214,7 @@ function bindStores(
     connections: createPostgresConnectionsStore(db),
     workflowRuns: createPostgresWorkflowRunsStore(db),
     workflowStepPins: createPostgresWorkflowStepPinsStore(db),
+    workflowWebhooks: createPostgresWorkflowWebhookStore(db),
     workflowRunDatasets: createPostgresWorkflowRunDatasetsStore(db),
     dataStores: createPostgresDataStoreRecordsStore(db),
     knowledgeBases: createPostgresKnowledgeBaseStateStore(db),

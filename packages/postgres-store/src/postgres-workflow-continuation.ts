@@ -41,6 +41,7 @@ export async function createWorkflowRun(
       correlationId: run.correlationId,
       createdAt: new Date(run.createdAt),
       scheduledFor: run.scheduledFor === undefined ? null : new Date(run.scheduledFor),
+      triggerEvent: run.triggerEvent ?? null,
       runKey: run.runKey ?? null,
       labels: run.labels ?? null,
       continuation: run.continuation ?? null

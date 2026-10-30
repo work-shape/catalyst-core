@@ -295,6 +295,10 @@ export function createRunOpening(options: {
         mode: run.mode,
         principalId: run.principal.id,
         ...(run.scheduledFor === undefined ? {} : { scheduledFor: run.scheduledFor }),
+        // The event that started it, by name and id: what it carries stays in the run.
+        ...(run.triggerEvent === undefined
+          ? {}
+          : { event: run.triggerEvent.name, eventId: run.triggerEvent.id }),
         // A re-run names the run it re-runs and the step it starts again from (EW-11).
         ...(run.rerunOf === undefined
           ? {}

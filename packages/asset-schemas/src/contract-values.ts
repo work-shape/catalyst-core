@@ -984,7 +984,34 @@ export const WORKFLOW_EXECUTED_STEP_TYPES = [...WORKFLOW_STEP_TYPES] as const;
 export const WORKFLOW_RESERVED_STEP_TYPES = [] as const;
 export type WorkflowReservedStepType = (typeof WORKFLOW_RESERVED_STEP_TYPES)[number];
 
-export const WORKFLOW_TRIGGER_KINDS = ["manual", "schedule", "parent", "outside"] as const;
+/**
+ * The bounds of a `webhook` trigger. A request is at most `maxBodyBytes`, its timestamp at most
+ * `toleranceMs` away from the instance's clock, its nonce used once, and a Workflow accepts
+ * `perMinute` requests a minute unless its trigger sets its own, up to `perMinuteMax`.
+ */
+export const WORKFLOW_WEBHOOK_LIMITS = {
+  maxBodyBytes: 256 * 1_024,
+  toleranceMs: 5 * 60_000,
+  perMinute: 60,
+  perMinuteMax: 600,
+  nonceMaxLength: 200
+} as const;
+
+/** The headers of a signed webhook request. */
+export const WORKFLOW_WEBHOOK_HEADERS = {
+  timestamp: "catalyst-webhook-timestamp",
+  nonce: "catalyst-webhook-nonce",
+  signature: "catalyst-webhook-signature"
+} as const;
+
+export const WORKFLOW_TRIGGER_KINDS = [
+  "manual",
+  "schedule",
+  "parent",
+  "outside",
+  "webhook",
+  "platform_event"
+] as const;
 export type WorkflowTriggerKind = (typeof WORKFLOW_TRIGGER_KINDS)[number];
 
 export const NOTIFY_CHANNELS = ["inbox", "mail"] as const;

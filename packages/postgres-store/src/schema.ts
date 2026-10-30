@@ -39,6 +39,7 @@ import * as usersTables from "./schema/users";
 import * as workflowDatasetsTables from "./schema/workflowDatasets";
 import * as workflowRunsTables from "./schema/workflowRuns";
 import * as workflowStepPinsTables from "./schema/workflowStepPins";
+import * as workflowWebhooksTables from "./schema/workflowWebhooks";
 import * as workspacesTables from "./schema/workspaces";
 
 export * from "./schema/access";
@@ -78,6 +79,7 @@ export * from "./schema/users";
 export * from "./schema/workflowDatasets";
 export * from "./schema/workflowRuns";
 export * from "./schema/workflowStepPins";
+export * from "./schema/workflowWebhooks";
 export * from "./schema/workspaces";
 
 export const schema = {
@@ -118,5 +120,6 @@ export const schema = {
   ...workflowDatasetsTables,
   ...workflowRunsTables,
   ...workflowStepPinsTables,
+  ...workflowWebhooksTables,
   ...workspacesTables
 };

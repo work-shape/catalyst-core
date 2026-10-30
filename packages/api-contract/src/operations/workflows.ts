@@ -15,12 +15,14 @@ import {
   WORKFLOW_TEST_REVISIONS,
   WORKFLOW_STEP_TYPES,
   WORKFLOW_DATASET_DOWNLOAD_FORMATS,
-  WORKFLOW_TRIGGER_KINDS
+  WORKFLOW_TRIGGER_KINDS,
+  WORKFLOW_WEBHOOK_HEADERS,
+  CONNECTION_SECRET_STATES
 } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { assetWarningSchema } from "../assets";
 import { listQuerySchema, timestampSchema } from "../shared";
-import { defineRegisteredOperation, blob, json, page } from "./define-operation";
+import { defineOperation, defineRegisteredOperation, blob, json, page } from "./define-operation";
 
 // The Workflows of an instance and their runs: the list, the start by hand, the test run of a
 // draft, the reads and the cancel. A read answers states,
@@ -96,6 +98,16 @@ const datasetMetadataSchema = z.object({
  * A pinned step output of the caller's on a Workflow's draft (EW-10): the step and the run
  * whose output of it their test runs use. It names the run and carries no value of it.
  */
+/** What a publisher reads of a Workflow's webhook (EW-4). Never the secret. */
+export const workflowWebhookSchema = z.object({
+  /** The published definition has a webhook trigger: requests start runs. */
+  enabled: z.boolean(),
+  /** The requests a minute the trigger accepts. */
+  perMinute: z.number().int().min(1),
+  secret: z.enum(CONNECTION_SECRET_STATES),
+  version: z.number().int().min(1).optional()
+});
+
 export const workflowStepPinSchema = z.object({
   step: z.string(),
   runId: z.string(),
@@ -650,6 +662,53 @@ export const workflowOperations = {
     effect: "changing",
     response: json(workflowRunSchema),
     errors: ["NOT_FOUND"],
+    rateClass: "write"
+  }),
+  // EW-4. A Workflow's `webhook` trigger: its address takes signed requests from outside, and a
+  // publisher reads its state and makes its secret, which is shown once.
+  "workflows.webhook": defineRegisteredOperation({
+    id: "workflows.webhook",
+    method: "GET",
+    path: "/api/v1/workflows/:workflow/webhook",
+    summary:
+      "Read whether a Workflow's webhook takes requests, its rate and whether it has a secret; never the secret",
+    tag: "Workflows",
+    auth: "principal",
+    scope: "config_assets:read",
+    requires: [],
+    effect: "reading",
+    response: json(workflowWebhookSchema),
+    errors: ["NOT_FOUND"],
+    rateClass: "read"
+  }),
+  "workflows.rotate_webhook_secret": defineRegisteredOperation({
+    id: "workflows.rotate_webhook_secret",
+    method: "POST",
+    path: "/api/v1/workflows/:workflow/webhook/secret",
+    summary:
+      "Make a new secret for a Workflow's webhook and show it once; requests signed with the old one are refused from now on",
+    tag: "Workflows",
+    auth: "user",
+    scope: "config_assets:write",
+    requires: [],
+    effect: "changing",
+    // The answer is the secret, shown once.
+    secret: true,
+    response: json(z.object({ secret: z.string().min(1), version: z.number().int().min(1) })),
+    errors: ["NOT_FOUND", "CONFLICT"],
+    rateClass: "write"
+  }),
+  "workflows.webhook_receive": defineOperation({
+    id: "workflows.webhook_receive",
+    method: "POST",
+    path: "/api/v1/workflows/:workflow/webhook",
+    summary: `Start a run of a Workflow with a webhook trigger: the JSON body is the run's input. Sign it with the Workflow's secret: ${WORKFLOW_WEBHOOK_HEADERS.timestamp} (seconds since the epoch), ${WORKFLOW_WEBHOOK_HEADERS.nonce} (once per request) and ${WORKFLOW_WEBHOOK_HEADERS.signature} = "v1=" + hex HMAC-SHA256 of "<timestamp>.<nonce>.<body>"`,
+    tag: "Workflows",
+    auth: "public",
+    effect: "changing",
+    body: z.record(z.string(), z.unknown()),
+    response: json(z.object({ runId: z.string() })),
+    errors: ["NOT_FOUND", "UNAUTHENTICATED", "RATE_LIMITED", "VALIDATION_FAILED", "CONFLICT"],
     rateClass: "write"
   })
 } as const;
