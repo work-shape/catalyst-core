@@ -47,6 +47,7 @@ export * from "./knowledge-citations";
 export * from "./knowledge-extraction";
 export * from "./knowledge-fields";
 export * from "./knowledge-hit-documents";
+export * from "./knowledge-page-cache";
 export * from "./knowledge-sources";
 export * from "./localization";
 export { LOG_REDACTION } from "./logger";

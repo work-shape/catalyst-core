@@ -13,6 +13,7 @@ import {
   LEGACY_LIST_GRANTOR,
   defineKnowledgeExtractHandler,
   KNOWLEDGE_DOCUMENT_FORMATS,
+  KNOWLEDGE_PAGE_CACHE_BYTES_DEFAULT,
   KNOWLEDGE_TEXT_FORMATS,
   type KnowledgeExtractor,
   StoreBackedAuditRecorder,
@@ -72,8 +73,11 @@ export function useKnowledgeSync({
   withDataStoreJobs = false,
   firstPassStop,
   fetchWindow,
+  pageCacheBytes,
   methods = ["keyword", "semantic"]
 }: {
+  /** The bound of the page cache, smaller than the default (KB-13b). */
+  pageCacheBytes?: number;
   withDataStoreJobs?: boolean;
   /** Where a first pass stops for its confirmation, smaller than the constant (KB-ISO-1b). */
   firstPassStop?: number;
@@ -168,7 +172,7 @@ export function useKnowledgeSync({
         name: `knowledge-base:${KB}`
       });
       expect(row?.status).toBe("ready");
-      expect(row?.level).toBe(18);
+      expect(row?.level).toBe(19);
       return required(row);
     });
     const url = new URL(await fileTestDatabaseUrl());
@@ -291,6 +295,10 @@ export function useKnowledgeSync({
     const embed = vi.fn(async ({ texts }: { texts: readonly string[] }) => ({
       vectors: texts.map(() => Array.from({ length: 8 }, () => 0.25))
     }));
+    const openSource = vi.fn(async (_name: string, signal: AbortSignal) => ({
+      capability,
+      context: context(signal)
+    }));
     const knowledge = createKnowledgeBases({
       defaultLocale,
       assertFieldBudgetPriced: () => fieldExtractor?.assertBudgetPriced?.(),
@@ -298,6 +306,8 @@ export function useKnowledgeSync({
       stores: instance.stores,
       backend: dataStores.knowledgeBackend,
       sources: dataStores.knowledgeSources,
+      // KB-13b: a cited page is fetched through the same fixture source as the sync.
+      pageSource: { openSource, cacheBytes: pageCacheBytes ?? KNOWLEDGE_PAGE_CACHE_BYTES_DEFAULT },
       embedding,
       documentFormats: extractor ? KNOWLEDGE_DOCUMENT_FORMATS : KNOWLEDGE_TEXT_FORMATS,
       maxDocuments: 10000,
@@ -308,10 +318,6 @@ export function useKnowledgeSync({
       new StoreBackedAuditRecorder({ clientInstanceId, store: instance.stores.audit }),
       embed
     );
-    const openSource = vi.fn(async (_name: string, signal: AbortSignal) => ({
-      capability,
-      context: context(signal)
-    }));
     const handlers = dataStores.knowledgeSourceJobs({
       files,
       documentFormats: extractor ? KNOWLEDGE_DOCUMENT_FORMATS : KNOWLEDGE_TEXT_FORMATS,

@@ -18,7 +18,9 @@ const KNOWLEDGE_PURGE_AUDIT: Omit<PlatformEventDefinition, "name"> = {
       contents: { type: "integer", minimum: 0 },
       files: { type: "integer", minimum: 0 },
       objects: { type: "integer", minimum: 0 },
-      extractionResults: { type: "integer", minimum: 0 }
+      extractionResults: { type: "integer", minimum: 0 },
+      // Entries of the page cache deleted with the documents (KB-13b).
+      cachedPages: { type: "integer", minimum: 0 }
     }
   }
 };
@@ -163,6 +165,30 @@ export const knowledgeBaseEvents = {
         knowledgeBase: { type: "string" },
         documentId: { type: "string" },
         change: { type: "string", enum: [...KNOWLEDGE_ORIGIN_LINK_CHANGES] }
+      }
+    }
+  },
+  // A cited page of a synced document fetched through its source's Connection into the page
+  // cache (KB-13b). The subject is the Knowledge Base's asset, the actor the reader who opened
+  // it. It names the document and the source by id, the bytes, the duration and a failure code,
+  // never a file name, a path or anything the original holds. A cache hit is no event.
+  "knowledge_base.page_fetched": {
+    name: "knowledge_base.page_fetched",
+    subject: "config_asset",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["knowledgeBase", "documentId", "source", "durationMs"],
+      properties: {
+        knowledgeBase: { type: "string" },
+        documentId: { type: "string" },
+        source: { type: "string" },
+        bytes: { type: "integer", minimum: 0 },
+        durationMs: { type: "integer", minimum: 0 },
+        failure: { type: "string" }
       }
     }
   },

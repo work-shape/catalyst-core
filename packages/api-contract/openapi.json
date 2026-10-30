@@ -26295,7 +26295,7 @@
     "/api/v1/knowledge-bases/{knowledgeBase}/documents/{documentId}/content": {
       "get": {
         "operationId": "knowledge_bases.open_document",
-        "summary": "Open an original source document with knowledge_base.use; a cited document is opened in the context of its conversation's workspace; removed documents are unavailable",
+        "summary": "Open an original source document with knowledge_base.use; a cited document is opened in the context of its conversation's workspace; removed documents are unavailable; a synced document's original is fetched through its source into a 7-day page cache, and a source that cannot be reached answers CONFLICT with reason knowledge_source_unreachable",
         "tags": [
           "Knowledge Bases"
         ],
@@ -26366,6 +26366,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"

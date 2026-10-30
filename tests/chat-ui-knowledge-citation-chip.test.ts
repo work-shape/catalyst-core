@@ -176,6 +176,59 @@ describe("the chip of a cited Knowledge Base passage", () => {
     expect(host.textContent).not.toContain("Knowledge Base document not found");
   });
 
+  it("KB-13 says a synced source cannot be reached, in English and German, and can be tried again", async () => {
+    fetchMock.mockImplementation(async () =>
+      Response.json(
+        {
+          error: {
+            code: "CONFLICT",
+            message: "The source of this document cannot be reached right now.",
+            details: { reason: "knowledge_source_unreachable" }
+          }
+        },
+        { status: 409 }
+      )
+    );
+    for (const [locale, words] of [
+      ["en", "reiserichtlinie.md, p. 3: source not reachable"],
+      ["de", "reiserichtlinie.md, S. 3: Quelle nicht erreichbar"]
+    ] as const) {
+      show(hotel, locale);
+      await act(async () => chip()?.click());
+      await settle();
+      expect(label()?.textContent).toBe(words);
+      expect(label()?.getAttribute("data-knowledge-source-state")).toBe("unreachable");
+      act(() => root.render(null));
+    }
+    expect(openMock).not.toHaveBeenCalled();
+    // Reachable again: the same chip opens the page.
+    fetchMock.mockReset();
+    fetchMock
+      .mockResolvedValueOnce(
+        Response.json(
+          {
+            error: {
+              code: "CONFLICT",
+              message: "x",
+              details: { reason: "knowledge_source_unreachable" }
+            }
+          },
+          { status: 409 }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response("Hotel: 145 € je Nacht", { headers: { "content-type": "text/plain" } })
+      );
+    show(hotel, "de");
+    await act(async () => chip()?.click());
+    await settle();
+    expect(label()?.textContent).toBe("reiserichtlinie.md, S. 3: Quelle nicht erreichbar");
+    await act(async () => chip()?.click());
+    await settle();
+    expect(openMock).toHaveBeenCalledWith("blob:catalyst/source-1#page=3", "_blank");
+    expect(label()?.textContent).toBe("reiserichtlinie.md, S. 3");
+  });
+
   it("adds the origin link as its own chip where it is a web address, and leaves out any other", () => {
     show({ ...hotel, originLink: "https://dms.example.test/akte/7?seite=3" });
     const origin = host.querySelector<HTMLAnchorElement>("a");

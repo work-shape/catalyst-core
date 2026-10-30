@@ -282,6 +282,7 @@ describe("adding files to a Knowledge Base", () => {
     const { instance, record } = await instanceWithFiles();
     await inDatabase(record.location.database, (sql) =>
       sql.unsafe(`
+        drop table catalyst_kb.page_cache;
         drop trigger source_content_count_changed on catalyst_kb.contents;
         drop function catalyst_kb.source_content_count_changed();
         drop table catalyst_kb.source_counts;
@@ -339,11 +340,11 @@ describe("adding files to a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(current).toMatchObject({ status: "ready", level: 18 });
+      expect(current).toMatchObject({ status: "ready", level: 19 });
       return required(current);
     });
     expect(upgraded.migrations.map(({ number }) => number)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19
     ]);
 
     const added = await addFiles(instance, [source]);

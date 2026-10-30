@@ -648,7 +648,8 @@ export const KNOWLEDGE_JOB_KINDS = {
   reconcileSources: "knowledge_base.reconcile_sources",
   reprocess: "knowledge_base.reprocess",
   reindex: "knowledge_base.reindex",
-  endWorkflowSource: "knowledge_base.end_workflow_source"
+  endWorkflowSource: "knowledge_base.end_workflow_source",
+  expirePageCache: "knowledge_base.expire_page_cache"
 } as const;
 
 /** Chunks and optionally embeds a content in the configured ingestion process. */
@@ -992,6 +993,8 @@ export interface KnowledgeProcessingGroup {
 }
 export interface KnowledgeDocumentStore {
   readonly fieldExtraction?: import("./knowledge-fields").KnowledgeFieldStore;
+  /** The originals of synced documents fetched again when a cited page is opened (KB-13b). */
+  readonly pageCache?: import("./knowledge-page-cache").KnowledgePageCacheStore;
   /** Authorizes one effective processing revision after publish confirmation, before queuing it. */
   requestProcessing(
     input: { contentSha256: string; processingKey: string },

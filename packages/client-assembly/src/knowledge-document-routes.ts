@@ -66,12 +66,14 @@ export function knowledgeDocumentRoutes(input: {
         }
         return decide(decision);
       },
+      // A synced document's released original is fetched for this reader, and that is audited.
       execute: ({ knowledgeBase, documentId }, context) =>
         input.knowledgeBases.openDocument(
           input.files,
           knowledgeBase,
           documentId,
-          context.runtime.signal
+          context.runtime.signal,
+          { actor: context.actor, audit: context.audit, correlationId: context.correlationId }
         )
     });
     // KBW-2c: the delete question of a Workflow names what its delete ends. Only who may

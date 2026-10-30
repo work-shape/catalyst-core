@@ -1,7 +1,9 @@
 import { z } from "zod";
 import {
+  KNOWLEDGE_FILE_MAX_BYTES,
   KNOWLEDGE_INDEX_CONCURRENCY_DEFAULTS,
   KNOWLEDGE_MAX_PAGES_PER_DOCUMENT,
+  KNOWLEDGE_PAGE_CACHE_BYTES_DEFAULT,
   MODEL_BINDING_KINDS,
   MODEL_EMBEDDING_MAX_DIMENSIONS,
   MODEL_USAGE_TIERS,
@@ -92,7 +94,9 @@ export const modelBindingConfigSchema = z
  * before conversion. It applies to Knowledge Bases only; chat uploads keep their own limits.
  * `indexConcurrency` is how many contents are indexed at once, each sending its passages to the
  * embedding model: `perWorker` on one knowledge worker, `total` across all of them. Raise them
- * only where the embedding quota of the deployment allows.
+ * only where the embedding quota of the deployment allows. `pageCacheBytes` bounds the page
+ * cache of each Knowledge Base: the originals of synced documents that a reader's open of a
+ * cited page fetched from their source, kept 7 days. It holds at least one file at the limit.
  */
 export const knowledgeConfigSchema = z
   .object({
@@ -100,6 +104,11 @@ export const knowledgeConfigSchema = z
     withdrawShareConfirm: z.number().min(0).max(1).default(0.2),
     maxDocuments: z.number().int().positive().max(1_000_000).default(10_000),
     maxPagesPerDocument: z.number().int().positive().default(KNOWLEDGE_MAX_PAGES_PER_DOCUMENT),
+    pageCacheBytes: z
+      .number()
+      .int()
+      .min(KNOWLEDGE_FILE_MAX_BYTES)
+      .default(KNOWLEDGE_PAGE_CACHE_BYTES_DEFAULT),
     indexConcurrency: z
       .object({
         perWorker: z

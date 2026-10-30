@@ -333,6 +333,17 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
       );
     },
     sources: earlier.find((assembly) => assembly.knowledgeSources)?.knowledgeSources,
+    // KB-13b: a cited page of a synced document is fetched again through its source's
+    // Connection, on the Connection's own binding, never on one of the reader.
+    pageSource: {
+      cacheBytes: parts.config.knowledge.pageCacheBytes,
+      async openSource(name, signal) {
+        const connections = parts.connections;
+        if (!connections)
+          throw new DocumentSourceError("unavailable", "Connections are unavailable");
+        return connections.openDocumentSource(name, signal);
+      }
+    },
     embedding,
     documentFormats: parts.modules.isEnabled(DOCUMENTS_MODULE)
       ? KNOWLEDGE_DOCUMENT_FORMATS

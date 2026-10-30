@@ -20,6 +20,7 @@ import {
   type PlatformStores
 } from "@work-shape/catalyst-core";
 import { enqueueStoreDrop } from "../jobs";
+import { removeCachedPages, removePageCache } from "./page-cache";
 import type { KnowledgeRuntime } from "./runtime";
 
 /** Bounds a user's removal batch; split larger removals into calls. */
@@ -36,6 +37,8 @@ const FILE_BATCH = 100;
 const PURGE_PAGE = 100;
 /** The code of a purge that kept something, on the store of a deleted Knowledge Base too. */
 const PURGE_INCOMPLETE = "knowledge_purge_incomplete";
+/** The migration of a Knowledge Base's own store that made its page cache (KB-13b). */
+const PAGE_CACHE_STORE_LEVEL = 19;
 const inputSchema = z.strictObject({
   documentIds: z.array(z.string().min(1).max(200)).min(1).max(REMOVE_MAX)
 });
@@ -132,6 +135,8 @@ interface PurgeCounts {
   files: number;
   objects: number;
   extractionResults: number;
+  /** Entries of the page cache deleted with the documents (KB-13b). */
+  cachedPages: number;
 }
 
 /** Deletes an object; one that is already gone counts as deleted. */
@@ -219,7 +224,8 @@ export function createKnowledgeRemovalJobs(
             contents: 0,
             files: 0,
             objects: 0,
-            extractionResults: 0
+            extractionResults: 0,
+            cachedPages: 0
           };
           let kept = 0;
           const owner = { kind: "knowledge_base" as const, id: record.id };
@@ -313,8 +319,31 @@ export function createKnowledgeRemovalJobs(
               if (copies.length < FILE_BATCH) return;
             }
           };
+          // KB-13b: a document's cited pages go with it, and a deleted Knowledge Base's whole
+          // page cache before its store, whose rows name them, is dropped.
+          const purgePages = async () => {
+            if (retiring) {
+              const objects = await removePageCache(files, record.id);
+              counts.cachedPages += objects;
+              counts.objects += objects;
+              return;
+            }
+            // A store below the page cache's migration holds no cached page.
+            if (record.level < PAGE_CACHE_STORE_LEVEL || !payload.documentIds?.length) return;
+            const pages = await removeCachedPages(
+              files,
+              store,
+              record.id,
+              payload.documentIds,
+              control.signal
+            );
+            counts.cachedPages += pages.entries;
+            counts.objects += pages.objects;
+            if (!pages.complete) kept += 1;
+          };
           let failure: unknown;
           try {
+            await purgePages();
             await purge();
             if (retiring) await sweep();
           } catch (error) {
