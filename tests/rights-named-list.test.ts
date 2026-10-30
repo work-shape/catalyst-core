@@ -53,6 +53,8 @@ const ALLOWED: Record<string, { count: number; reason: Reason }> = {
   "packages/server/src/users/user-administration-service.ts": { count: 3, reason: NAMED.seeing },
   "packages/server/src/routes/access-routes.ts": { count: 1, reason: NAMED.seeing },
   "packages/server/src/connections/connection-access.ts": { count: 1, reason: NAMED.seeing },
+  // Rules in force names a superadmin who can change a rule to a superadmin only (GR-3).
+  "packages/server/src/guardrails/rules-in-force.ts": { count: 2, reason: NAMED.seeing },
   "packages/server/src/platform/workflow-authoring-context.ts": { count: 1, reason: NAMED.seeing },
   // One check, `actsAsWorkspaceSuperadmin`, which a personal key never passes (CLI-PARITY-5).
   "packages/server/src/workspaces/workspace-access.ts": { count: 1, reason: NAMED.owner },

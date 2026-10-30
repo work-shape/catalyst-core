@@ -5,6 +5,7 @@ import type {
 } from "@work-shape/catalyst-asset-schemas";
 export type { ToolInputParseErrorCode } from "@work-shape/catalyst-asset-schemas";
 
+import type { GuardrailAnswerRef } from "./guardrail-answer-ref";
 import type { OperationRunId, ToolCallId } from "./ids";
 import type { JsonValue } from "./json";
 import type { StoredModelFallback } from "./model-fallback";
@@ -40,6 +41,8 @@ export interface ToolDecisionWait {
   simulation?: JsonValue;
   /** The person may answer "Always allow": see `offersAlwaysAllow` of the Operation Run. */
   alwaysAllow?: true;
+  /** The guardrails that warned on the call, or will ask for an approval after it (GR-3). */
+  guardrails?: GuardrailAnswerRef[];
   expiresAt: ISODateString;
 }
 
@@ -64,6 +67,8 @@ export interface ToolDecisionRequested {
    * person sets it nothing else holds the call (OP-6).
    */
   alwaysAllow?: true;
+  /** The guardrails that warned on the call, or will ask for an approval after it (GR-3). */
+  guardrails?: GuardrailAnswerRef[];
   expiresAt: ISODateString;
 }
 

@@ -315,6 +315,7 @@ export function pauseRun(
       inputPreview: waiting.frozenInput,
       ...(waiting.simulation === undefined ? {} : { simulation: waiting.simulation }),
       ...(waiting.alwaysAllow ? { alwaysAllow: true as const } : {}),
+      ...(waiting.guardrails?.length ? { guardrails: waiting.guardrails } : {}),
       expiresAt: waiting.expiresAt
     },
     {

@@ -533,6 +533,7 @@ export function createToolOperationRunner(
           ...(result.status === "pending_confirmation" && result.alwaysAllow
             ? { alwaysAllow: true as const }
             : {}),
+          ...(result.guardrails?.length ? { guardrails: result.guardrails } : {}),
           expiresAt: result.expiresAt
         };
       }

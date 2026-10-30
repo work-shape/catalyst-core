@@ -78,7 +78,8 @@ export function createOperationApprovalFiler(
       expiresAt,
       policySource,
       approval,
-      confirmation
+      confirmation,
+      guardrails
     }) {
       const { actor: identity, origin } = call;
       if (isAuthenticatedServicePrincipal(identity) && (!runtime.workflowAgent || confirmation))
@@ -183,6 +184,7 @@ export function createOperationApprovalFiler(
         ...(call.workspaceId ? { workspaceId: call.workspaceId } : {}),
         // A source that refuses the call, and never makes it wait, is named by no request.
         ...(heldBy.success ? { heldBy: heldBy.data } : {}),
+        ...(guardrails?.length ? { guardrails: guardrails.map((answer) => ({ ...answer })) } : {}),
         expiresAt
       };
       if (call.operation === HELD_ASSET_OPERATION && options.assetPreview && options.authorizer) {

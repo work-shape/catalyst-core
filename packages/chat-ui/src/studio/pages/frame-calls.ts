@@ -8,6 +8,10 @@ import {
   type AppWorkflowRun
 } from "@work-shape/catalyst-api-client";
 import { MODEL_USAGE_LIMIT_REACHED_CODE } from "@work-shape/catalyst-core";
+import {
+  guardrailAnswerOfErrorDetails,
+  type GuardrailAnswerRef
+} from "../../chat/guardrails/guardrail-answer-model";
 
 // The calls a frame asks the interface to make. The frame holds no credential and can reach
 // nothing but the interface, so each call is made here, with the session of the person who
@@ -177,6 +181,18 @@ const PREVIEW_IS_NO_APP_REFUSALS: readonly string[] = ["data_store_needs_app"];
 export interface FrameCallHooks {
   /** A call was refused because the preview is no App (PREVIEW-1). */
   onPreviewIsNoApp?(): void;
+  /**
+   * A guardrail refused a call (GR-3). The frame is told the refusal as any other; the surface
+   * shows the guardrail's answer beside it, which the frame's own code never reads.
+   */
+  onGuardrailAnswer?(answer: GuardrailAnswerRef): void;
+}
+
+/** The details of an error the instance sent, or nothing. */
+function errorDetails(error: unknown): unknown {
+  if (!(error instanceof ApiError) || !isRecord(error.payload)) return undefined;
+  const envelope = error.payload.error;
+  return isRecord(envelope) ? envelope.details : undefined;
 }
 
 /** What the calls of a frame use of the API client: the calls of a page session. */
@@ -240,6 +256,8 @@ export function createFrameCalls(
       } catch (error) {
         const failure = frameCallFailure(error, texts);
         if (PREVIEW_IS_NO_APP_REFUSALS.includes(failure.code)) hooks?.onPreviewIsNoApp?.();
+        const guardrail = guardrailAnswerOfErrorDetails(errorDetails(error));
+        if (guardrail) hooks?.onGuardrailAnswer?.(guardrail);
         return { ok: false, error: failure };
       }
     },

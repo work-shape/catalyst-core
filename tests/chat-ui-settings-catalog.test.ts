@@ -54,7 +54,8 @@ const you = [
   "you/language-appearance",
   "you/security",
   "you/confirmations",
-  "you/usage"
+  "you/usage",
+  "you/rules"
 ];
 const workspace = ["workspace/general", "workspace/members", "workspace/usage"];
 const instance = [
@@ -210,7 +211,8 @@ describe("Settings catalog", () => {
       "you/profile",
       "you/language-appearance",
       "you/confirmations",
-      "you/usage"
+      "you/usage",
+      "you/rules"
     ]);
   });
 

@@ -87,6 +87,7 @@ export function applyAgentRunObservation(
         inputPreview: event.inputPreview,
         ...(event.simulation === undefined ? {} : { simulation: event.simulation }),
         ...(event.alwaysAllow ? { alwaysAllow: true as const } : {}),
+        ...(event.guardrails?.length ? { guardrails: event.guardrails } : {}),
         expiresAt: event.expiresAt
       }
     });
@@ -138,6 +139,9 @@ export function applyAgentRunObservation(
         : {}),
       ...(event.result.status !== "success" && event.result.connect
         ? { connect: event.result.connect }
+        : {}),
+      ...(event.result.status !== "success" && event.result.guardrail
+        ? { guardrail: event.result.guardrail }
         : {}),
       ...findSubagent(activeToolCalls, event.toolCallId)
     });

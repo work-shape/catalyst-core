@@ -9,7 +9,7 @@ import { GUARDRAIL_OUTCOME_VIEWS, readOutcome } from "./guardrail-model";
 import type { ShippedGuardrailsRead } from "./guardrail-source";
 
 /** The words of each guardrail the release ships, by its name. Another one shows the instance's. */
-const SHIPPED_WORDS: Readonly<
+export const SHIPPED_WORDS: Readonly<
   Record<
     string,
     {

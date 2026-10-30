@@ -407,6 +407,9 @@ export type SkillChangeType = (typeof SKILL_CHANGE_TYPES)[number];
 export const GUARDRAIL_OUTCOMES = ["allow", "warn", "require_approval", "block"] as const;
 export type GuardrailOutcome = (typeof GUARDRAIL_OUTCOMES)[number];
 
+/** The kinds of a guardrail's check: an RE2 pattern, or a model reading the content. */
+export const GUARDRAIL_CHECK_KINDS = ["pattern", "model_judge"] as const;
+
 export const APP_MODES = ["published", "draft"] as const;
 export type AppMode = (typeof APP_MODES)[number];
 

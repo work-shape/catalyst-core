@@ -19,6 +19,7 @@ import { LanguageAppearancePage } from "./pages/language-appearance";
 import { OwnUsagePage } from "./pages/own-usage";
 import { PersonalConnectionsPage } from "./pages/personal-connections";
 import { ProfilePage } from "./pages/profile";
+import { RulesInForcePage } from "./pages/rules-in-force";
 import { SecurityPage } from "./pages/security";
 import { WorkspaceGeneralPage } from "./pages/workspace-general";
 import { WorkspaceMembersPage } from "./pages/workspace-members";
@@ -91,6 +92,15 @@ const settingsPages: readonly SettingsPageDefinition[] = [
     width: "narrow",
     visible: everyone,
     component: OwnUsagePage
+  },
+  {
+    // Read-only, open to every signed-in person: every guardrail answer links here (GR-3).
+    id: "rules",
+    group: "you",
+    labelKey: "settings.rulesInForce",
+    width: "narrow",
+    visible: everyone,
+    component: RulesInForcePage
   },
   {
     id: "connections",

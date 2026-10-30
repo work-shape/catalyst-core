@@ -34,6 +34,7 @@ import {
   type AuthenticatedIdentity,
   type AuthenticatedUser,
   type CollaborationWorkspaceId,
+  type GuardrailAnswerRef,
   type ConversationId,
   type JsonObject,
   type LiveOnceSwitchStore,
@@ -101,6 +102,8 @@ export interface OperationApprovalRequests {
      * it is addressed to them alone and decided in their Inbox (OP-4b).
      */
     confirmation?: true;
+    /** The guardrails the request shows beside the call (GR-3). */
+    guardrails?: readonly GuardrailAnswerRef[];
   }): Promise<{ approvalRequestId: string } | undefined>;
 }
 

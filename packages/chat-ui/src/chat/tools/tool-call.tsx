@@ -21,6 +21,8 @@ import {
 import { ConnectionDraftCard } from "../../studio/build-area/connection-draft-card";
 import { useConnectionDraftHost } from "../../studio/build-area/connection-draft-host";
 import { ConnectionConnectCard } from "../../studio/build-area/connection-connect-card";
+import { GuardrailAnswer } from "../guardrails/guardrail-answer";
+import { readGuardrailRefusal } from "../guardrails/guardrail-answer-model";
 import { connectCardOfRefusal } from "../../studio/build-area/connection-connect-card-model";
 import {
   CONNECTION_OFFER_TOOL_NAME,
@@ -238,6 +240,26 @@ export function ToolCallPart({
       : undefined;
   if (connectRefusal) {
     return <ConnectionConnectCard card={connectRefusal} refused />;
+  }
+
+  // A call a guardrail refused says which, why, and who can change it (GR-3).
+  const guardrailRefusal = state === "failed" ? readGuardrailRefusal(result) : undefined;
+  if (guardrailRefusal) {
+    return (
+      <CompactToolCall
+        actionLabel={actionLabel}
+        detailSections={detailSections}
+        outcome={<GuardrailAnswer answer={guardrailRefusal} />}
+        state={state}
+        statusLabel={statusLabel}
+        summary={undefined}
+        surfacedArtifacts={[]}
+        toolTitle={toolDisplay.title}
+        subject={subject}
+        toolName={toolName}
+        result={result}
+      />
+    );
   }
 
   // The agent's draft of REST API tools: a card whose button opens the approval list. Its

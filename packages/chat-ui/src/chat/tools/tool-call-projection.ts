@@ -5,6 +5,7 @@ import { readToolDisplayPayloadFromToolResult } from "../../shared/domain-ui-wid
 import { connectionOperationOfTool } from "../../shared/connection-facts";
 import { useTranslation } from "../../shared/i18n";
 import { connectCardOfRefusal } from "../../studio/build-area/connection-connect-card-model";
+import { readGuardrailRefusal } from "../guardrails/guardrail-answer-model";
 import {
   isFailedWorkspaceExecResult,
   projectWorkspaceToolDisplay,
@@ -41,8 +42,13 @@ export function toolUiState({
   if (status?.type === "running" || status?.type === "requires-action" || result === undefined) {
     return "running";
   }
-  // A call refused for a missing sign-in carries its refusal as its output (CHAT-CONN-2b).
-  if (isFailedWorkspaceExecResult({ result, toolName }) || connectCardOfRefusal(result)) {
+  // A call refused for a missing sign-in carries its refusal as its output (CHAT-CONN-2b), and
+  // so does one a guardrail refused (GR-3).
+  if (
+    isFailedWorkspaceExecResult({ result, toolName }) ||
+    connectCardOfRefusal(result) ||
+    readGuardrailRefusal(result)
+  ) {
     return "failed";
   }
   return "completed";

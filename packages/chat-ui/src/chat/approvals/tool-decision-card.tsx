@@ -31,6 +31,7 @@ import {
   type WorkflowPublishCall
 } from "../../studio/workflows/workflow-publish-confirmation";
 import { workspaceRoutePath } from "../../shared/routes";
+import { GuardrailAnswers } from "../guardrails/guardrail-answer";
 import { useApprovalRevisionHost } from "./approval-revision-host";
 import { ApprovalRequestCard } from "./approval-request-card";
 import { formatApprovalDate } from "./approval-request-model";
@@ -353,6 +354,8 @@ export function ToolDecisionCardView({
           ) : null}
         </Banner>
       ) : null}
+      {/* The guardrails that warned about this call say why, and who can change them (GR-3). */}
+      <GuardrailAnswers answers={decision.guardrails ?? []} />
       {ask && !outcome ? ask.node : null}
       {/* A call that asks its own question, as an App publish asks "For whom?", says in that
           question what it does: its raw inputs are technical details then. */}

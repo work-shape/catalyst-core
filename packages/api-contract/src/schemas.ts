@@ -10,6 +10,7 @@ export * from "./configuration";
 export * from "./conversations";
 export * from "./errors";
 export * from "./governance";
+export * from "./guardrail-answers";
 export * from "./identity";
 export * from "./infrastructure";
 export * from "./jobs";

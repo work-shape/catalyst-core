@@ -744,6 +744,48 @@ describe("the calls of a frame", () => {
     expect(heard).toBe(1);
   });
 
+  // GR-3. Fails without the change: an App's refused action showed the frame's text alone.
+  it("tell the surface which guardrail refused an action, beside the frame's own refusal", async () => {
+    const answer = {
+      name: "no-iban",
+      title: "Keine IBAN",
+      outcome: "block" as const,
+      reason: "Bankdaten gehören nicht hierher.",
+      origin: "asset" as const,
+      scope: { kind: "instance" as const },
+      revision: 2
+    };
+    const refusals = [
+      refusal(403, "GUARDRAIL_BLOCKED", "Blocked", { guardrailId: "no-iban", guardrail: answer }),
+      refusal(403, "FORBIDDEN", "Forbidden")
+    ];
+    const heard: unknown[] = [];
+    const calls = createFrameCalls(
+      {
+        apps: {
+          sessions: {
+            write_storage: () => Promise.reject(new Error("not asked")),
+            context: () => Promise.resolve({ can: {} }),
+            call_action: () => Promise.reject(refusals.shift()),
+            get_workflow_run: () => Promise.reject(new Error("not asked"))
+          }
+        }
+      },
+      address,
+      undefined,
+      { onGuardrailAnswer: (refused) => heard.push(refused) }
+    );
+    if (!calls) throw new Error("The address names a frame");
+
+    const first = await calls.run({ type: "action", name: "save", input: {} });
+    expect(first.ok).toBe(false);
+    expect(heard).toEqual([answer]);
+    // The frame is told the refusal, never the guardrail's answer.
+    expect(JSON.stringify(first)).not.toContain("Bankdaten");
+    await calls.run({ type: "action", name: "save", input: {} });
+    expect(heard).toHaveLength(1);
+  });
+
   // Fails without the fix round: the run of a refused or failed call was dropped, so
   // `AppCallError.runId` named nothing, and each App worded a missing right itself.
   it("keep the run of a refusal and word a missing right on a Connection in the person's language", () => {

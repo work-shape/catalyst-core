@@ -18064,6 +18064,65 @@
         "x-catalyst-rate-class": "write"
       }
     },
+    "/api/v1/guardrails/in-force": {
+      "get": {
+        "operationId": "guardrails.in_force",
+        "summary": "List the rules in force for the caller: the operator's floor, the release's switches and the published guardrails of the instance and of the caller's workspaces, with who changed each and when, who can change it and its 30-day count",
+        "tags": [
+          "Guardrails"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RulesInForce"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/guardrails/shipped": {
       "get": {
         "operationId": "guardrails.list_shipped",
@@ -18387,6 +18446,136 @@
           },
           "409": {
             "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/guardrails/{name}/ask": {
+      "post": {
+        "operationId": "guardrails.ask",
+        "summary": "Send a question about one rule in force to the Inbox of who can change it: who published its revision and the holders of guardrail.publish at its scope",
+        "tags": [
+          "Guardrails"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "Catalyst-Unattended",
+            "in": "header",
+            "description": "`1` on a call of an API credential when nobody watches its terminal, such as `catalyst <kind> publish --yes`. The call is then not its caller's own confirmation: a call that needs one waits in the caller's Inbox and answers `202` with its run, status `pending_confirmation`. It only ever makes a call stricter; a browser session's call ignores it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskGuardrailRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AskGuardrailResponse"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -43655,6 +43844,9 @@
                     "state"
                   ]
                 },
+                "guardrail": {
+                  "$ref": "#/components/schemas/GuardrailAnswerRef"
+                },
                 "decision": {
                   "type": "object",
                   "properties": {
@@ -43675,6 +43867,12 @@
                     "alwaysAllow": {
                       "type": "boolean",
                       "const": true
+                    },
+                    "guardrails": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/GuardrailAnswerRef"
+                      }
                     },
                     "expiresAt": {
                       "$ref": "#/components/schemas/Timestamp"
@@ -43882,6 +44080,9 @@
                   "state"
                 ]
               },
+              "guardrail": {
+                "$ref": "#/components/schemas/GuardrailAnswerRef"
+              },
               "decision": {
                 "type": "object",
                 "properties": {
@@ -43902,6 +44103,12 @@
                   "alwaysAllow": {
                     "type": "boolean",
                     "const": true
+                  },
+                  "guardrails": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/GuardrailAnswerRef"
+                    }
                   },
                   "expiresAt": {
                     "$ref": "#/components/schemas/Timestamp"
@@ -44298,6 +44505,12 @@
               "alwaysAllow": {
                 "type": "boolean",
                 "const": true
+              },
+              "guardrails": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/GuardrailAnswerRef"
+                }
               },
               "expiresAt": {
                 "$ref": "#/components/schemas/Timestamp"
@@ -46699,6 +46912,32 @@
         "required": [
           "status",
           "artifactId"
+        ]
+      },
+      "AskGuardrailRequest": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "AskGuardrailResponse": {
+        "type": "object",
+        "properties": {
+          "addressees": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "addressees"
         ]
       },
       "Asset": {
@@ -51818,6 +52057,84 @@
           "asset"
         ]
       },
+      "GuardrailAnswerRef": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "allow",
+              "warn",
+              "require_approval",
+              "block"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "release",
+              "shipped",
+              "asset"
+            ]
+          },
+          "scope": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "instance"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "workspace"
+                  },
+                  "workspaceId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "workspaceId"
+                ]
+              }
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "approvalCannotWait": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "name",
+          "title",
+          "outcome",
+          "origin"
+        ]
+      },
       "HolderRights": {
         "type": "object",
         "properties": {
@@ -56675,6 +56992,158 @@
         "required": [
           "action",
           "change"
+        ]
+      },
+      "RuleInForce": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "on": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "filter": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "checkKind": {
+            "type": "string",
+            "enum": [
+              "pattern",
+              "model_judge"
+            ]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "allow",
+              "warn",
+              "require_approval",
+              "block"
+            ]
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "release",
+              "shipped",
+              "asset"
+            ]
+          },
+          "scope": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "instance"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "workspace"
+                  },
+                  "workspaceId": {
+                    "type": "string"
+                  },
+                  "workspaceName": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "workspaceId"
+                ]
+              }
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "alwaysAsk": {
+            "type": "boolean"
+          },
+          "changedBy": {
+            "type": "string"
+          },
+          "changedByHidden": {
+            "type": "boolean",
+            "const": true
+          },
+          "changedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "changers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "askable": {
+            "type": "boolean"
+          },
+          "hitsLast30Days": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "name",
+          "displayName",
+          "reason",
+          "on",
+          "outcome",
+          "origin",
+          "scope",
+          "changers",
+          "askable",
+          "hitsLast30Days"
+        ]
+      },
+      "RulesInForce": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuleInForce"
+            }
+          },
+          "instanceAdmin": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "RunCommand": {
