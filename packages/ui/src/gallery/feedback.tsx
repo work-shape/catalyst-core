@@ -11,6 +11,7 @@ import { Progress } from "../feedback/progress";
 import { Skeleton, SkeletonChips, SkeletonList, SkeletonPage } from "../feedback/skeleton";
 import { Spinner, type SpinnerSize } from "../feedback/spinner";
 import { Chip } from "../status/chip";
+import { draftHeaderEntry } from "./draft";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
 
@@ -111,6 +112,7 @@ export const feedbackGallery: GalleryGroup = {
       components: ["Banner"],
       render: (text) => <BannerSamples text={text} />
     },
+    draftHeaderEntry,
     {
       name: "FormNotice",
       components: ["FormNotice"],

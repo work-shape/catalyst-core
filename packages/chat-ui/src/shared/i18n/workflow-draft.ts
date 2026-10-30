@@ -3,9 +3,13 @@ import { defineTranslations } from "./translation-area";
 /** Workflows: the bar of a draft, and the question before it is published or discarded. */
 export const workflowDraft = defineTranslations({
   en: {
-    "workflows.draft.ahead": "Draft differs from published",
-    "workflows.draft.aheadBody":
-      "You see the draft here. Runs use the published version until the draft is published.",
+    "workflows.draft.changes": "Against the live version: {list}.",
+    "workflows.draft.changesNewOne": "1 new step",
+    "workflows.draft.changesNew": "{count} new steps",
+    "workflows.draft.changesChangedOne": "1 changed step",
+    "workflows.draft.changesChanged": "{count} changed steps",
+    "workflows.draft.changesRemovedOne": "1 removed step",
+    "workflows.draft.changesRemoved": "{count} removed steps",
     "workflows.draft.discard": "Discard",
     "workflows.draft.discardBody":
       "The draft goes back to the published version {number}. The discarded versions are kept.",
@@ -23,20 +27,24 @@ export const workflowDraft = defineTranslations({
       "Version {number} becomes the one that runs on its schedule.",
     "workflows.draft.publishFailed": "The draft could not be published.",
     "workflows.draft.publishChanges": "What this publish changes",
+    "workflows.draft.publishChanging": "Steps that change something, new or changed",
+    "workflows.draft.publishHosts": "Hosts outside the instance it calls for the first time",
     "workflows.draft.publishStore": "Publishes the data store “{title}” first.",
     "workflows.draft.publishStoreMigrationOne":
       "Publishes the data store “{title}” first and applies 1 change to its tables: {migrations}.",
     "workflows.draft.publishStoreMigrations":
       "Publishes the data store “{title}” first and applies {count} changes to its tables: {migrations}.",
     "workflows.draft.publishTitle": "Publish “{name}”?",
-    "workflows.draft.unpublished": "Draft · not published",
-    "workflows.draft.unpublishedBody":
-      "This workflow has no published version. It can be started once the draft is published."
+    "workflows.draft.unpublished": "Draft · not published"
   },
   de: {
-    "workflows.draft.ahead": "Entwurf weicht von der veröffentlichten Version ab",
-    "workflows.draft.aheadBody":
-      "Du siehst hier den Entwurf. Läufe nutzen die veröffentlichte Version, bis der Entwurf veröffentlicht ist.",
+    "workflows.draft.changes": "Gegenüber der Live-Version: {list}.",
+    "workflows.draft.changesNewOne": "1 neuer Schritt",
+    "workflows.draft.changesNew": "{count} neue Schritte",
+    "workflows.draft.changesChangedOne": "1 geänderter Schritt",
+    "workflows.draft.changesChanged": "{count} geänderte Schritte",
+    "workflows.draft.changesRemovedOne": "1 entfernter Schritt",
+    "workflows.draft.changesRemoved": "{count} entfernte Schritte",
     "workflows.draft.discard": "Verwerfen",
     "workflows.draft.discardBody":
       "Der Entwurf geht auf die veröffentlichte Version {number} zurück. Die verworfenen Versionen bleiben erhalten.",
@@ -54,14 +62,14 @@ export const workflowDraft = defineTranslations({
       "Version {number} wird die, die nach ihrem Zeitplan läuft.",
     "workflows.draft.publishFailed": "Der Entwurf konnte nicht veröffentlicht werden.",
     "workflows.draft.publishChanges": "Was diese Veröffentlichung ändert",
+    "workflows.draft.publishChanging": "Schritte, die etwas ändern, neu oder geändert",
+    "workflows.draft.publishHosts": "Hosts außerhalb der Instanz, die er zum ersten Mal aufruft",
     "workflows.draft.publishStore": "Veröffentlicht zuerst den Datenspeicher „{title}“.",
     "workflows.draft.publishStoreMigrationOne":
       "Veröffentlicht zuerst den Datenspeicher „{title}“ und wendet 1 Änderung an seinen Tabellen an: {migrations}.",
     "workflows.draft.publishStoreMigrations":
       "Veröffentlicht zuerst den Datenspeicher „{title}“ und wendet {count} Änderungen an seinen Tabellen an: {migrations}.",
     "workflows.draft.publishTitle": "„{name}“ veröffentlichen?",
-    "workflows.draft.unpublished": "Entwurf · nicht veröffentlicht",
-    "workflows.draft.unpublishedBody":
-      "Dieser Workflow hat keine veröffentlichte Version. Er kann gestartet werden, sobald der Entwurf veröffentlicht ist."
+    "workflows.draft.unpublished": "Entwurf · nicht veröffentlicht"
   }
 });

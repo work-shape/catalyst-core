@@ -12,6 +12,7 @@ export {
   type BadgeSize,
   type BadgeTone
 } from "./badge";
+export { ChangeTag, type ChangeKind, type ChangeTagProps } from "./change-tag";
 export { Chip, ScopeChip, type ChipProps, type ChipSize, type ScopeChipProps } from "./chip";
 export {
   ConnectionIcon,

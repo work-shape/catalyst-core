@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { Banner, Button, Dialog, KeyValue, KeyValueList } from "@work-shape/catalyst-ui";
+import {
+  Banner,
+  Button,
+  ChangeList,
+  Dialog,
+  KeyValue,
+  KeyValueList
+} from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import {
   narrativeHolds,
@@ -14,6 +21,7 @@ import {
   type AppAudience,
   type AppAudienceOffer,
   type AppPublishDataRead,
+  type AppPublishChanges,
   type AppPublishHandover,
   type AppPublishTogetherRead
 } from "./app-data";
@@ -119,6 +127,7 @@ export function AskedPublishDialog({
     waits: publishing.waits,
     narrative: question.narrative,
     handover: question.handover,
+    changes: question.changes,
     together,
     audience: {
       offer: question.audience,
@@ -213,6 +222,7 @@ export function PublishDialog({
   audience,
   together,
   handover,
+  changes: reach,
   waits = false,
   onConfirm,
   onClose
@@ -229,6 +239,8 @@ export function PublishDialog({
   together?: AppPublishTogetherRead;
   /** The widening check for the audience shown (DS-13c). Absent: nothing to say. */
   handover?: AppPublishHandover | undefined;
+  /** What the publish changes against what is live (DT-1b). Absent: not known. */
+  changes?: AppPublishChanges | undefined;
 }) {
   const { t } = useTranslation();
   const host = useAppsHost();
@@ -244,13 +256,39 @@ export function PublishDialog({
   // The live revision for its own audience again changes nothing: Publish waits for a change.
   const changes = appPublishMaySend(ask, offer, selected);
   const body = appPublishBody(offer ? selected : undefined, workspace.name, t);
+  const added = new Set(reach?.hostsAdded);
   const lists = (
     <KeyValueList>
+      {/* The actions that change something, each new or changed against what is live. */}
+      {reach !== undefined && reach.changing.length > 0 ? (
+        <KeyValue label={t("apps.publishChanging")}>
+          <ChangeList
+            data-testid="app-publish-changing"
+            items={reach.changing.map((action) => ({
+              id: action.label,
+              label: action.label,
+              change: action.change
+            }))}
+          />
+        </KeyValue>
+      ) : null}
       <KeyValue label={t("apps.publishConnections")}>
         <NameList names={ask.summary.connections} />
       </KeyValue>
       <KeyValue label={t("apps.publishHosts")}>
-        <NameList names={ask.summary.hosts} />
+        {added.size === 0 || ask.summary.hosts.length === 0 ? (
+          <NameList names={ask.summary.hosts} />
+        ) : (
+          <ChangeList
+            mono
+            data-testid="app-publish-hosts"
+            items={ask.summary.hosts.map((host) => ({
+              id: host,
+              label: host,
+              ...(added.has(host) ? { change: "new" as const } : {})
+            }))}
+          />
+        )}
       </KeyValue>
       {storedData ? (
         <AppPublishDataView

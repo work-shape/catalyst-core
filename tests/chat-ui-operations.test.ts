@@ -156,8 +156,21 @@ describe("operation runs list", () => {
     expect(markup).toContain("Produktteam");
     expect(markup).toContain("Done");
     expect(markup).toContain("4.2 sec");
-    // Seven facts stand in five columns.
-    expect(markup.match(/<th /gu)).toHaveLength(5);
+    // Eight facts stand in six columns.
+    expect(markup.match(/<th /gu)).toHaveLength(6);
+  });
+
+  // DT-1b: where each call went, Live, Test or Simulated, in a column of its own.
+  it("says where each call went", () => {
+    const markup = table([
+      run({ id: "live", target: "live" }),
+      run({ id: "test", target: "test" }),
+      run({ id: "sim", target: "dry_run" })
+    ]);
+    expect(markup).toContain(">Target</th>");
+    expect(markup).toMatch(/data-target="live"[^>]*>.*?Live</u);
+    expect(markup).toMatch(/data-target="test"[^>]*>.*?Test</u);
+    expect(markup).toMatch(/data-target="dry_run"[^>]*>.*?Simulated</u);
   });
 
   it("names every origin and status in both languages", () => {

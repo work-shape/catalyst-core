@@ -209,7 +209,13 @@ export function WorkflowPageView({
         onOpenRoute={onOpenRoute}
       />
       {edit === undefined ? null : <EditRefusedBanner edit={edit} />}
-      {draft === undefined ? null : <WorkflowDraftBar {...draft} />}
+      {draft === undefined ? null : (
+        <WorkflowDraftBar
+          {...draft}
+          {...(editing === undefined ? {} : { changes: editing.changes })}
+          onOpenRoute={onOpenRoute}
+        />
+      )}
       {trail.length === 0 ? null : (
         <div className="shrink-0 border-b px-(--layout-gutter) py-2">
           <Breadcrumb

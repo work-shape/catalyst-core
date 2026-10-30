@@ -25,7 +25,7 @@ The agent reads with your rights, through the same operations as the run page. V
 
 A new Workflow is created with the CLI (`catalyst workflow put <name> --from … --if-revision new`); see [the CLI](/configure/cli/). After that, change it with **Edit with the agent** ("Mit dem Agenten bearbeiten") on its page. A chat opens that is about this Workflow: describe what should change, and every change the agent saves becomes the next draft.
 
-A change is always a **draft** first. The banner says **Draft, not published yet** ("Entwurf, noch nicht veröffentlicht") or **Draft differs from published** ("Entwurf weicht von der veröffentlichten Version ab"). Runs keep using the published version until the draft is published.
+A change is always a **draft** first. The banner over the canvas says **Draft · reads live data · changes are simulated** ("Entwurf · liest Live-Daten · Änderungen werden simuliert"). Where the draft writes to a Data Store's test copy, the banner names it, for example **Invoices: test copy**, with a link to the copy. Under that it names the live version, for example **Live: version 4, published by Anna on Oct 12**, or **Not published yet**, and counts the steps the draft adds, changes or removes. Runs keep using the published version until the draft is published. The publish dialog lists each step that changes something, marked **New** or **Changed**, and any outside host the Workflow calls for the first time.
 
 The line **Runs as** ("Läuft als") under the heading names the active account by its display label. An unpublished draft shows the account configured in that draft too. No line is shown when that account is disabled or missing.
 

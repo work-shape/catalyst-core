@@ -12,6 +12,7 @@ import type {
   LocaleCode,
   OperationEffect,
   PlatformStores,
+  PUBLISH_CHANGE_KINDS,
   RegisteredAssetKind,
   ToolPresentation,
   WorkflowAccountRights
@@ -72,6 +73,9 @@ export interface PlatformInstructions {
  * What a revision reaches that its live revision does not, as the person who approves its
  * publish reads it. Read from the two stored configs alone.
  */
+/** How a changing call a publish makes live differs from the live revision. */
+export type PublishChangeKind = (typeof PUBLISH_CHANGE_KINDS)[number];
+
 export interface PublishReach {
   /**
    * The actions or the steps that call an operation, each new or changed against the live
@@ -81,7 +85,7 @@ export interface PublishReach {
     label: string;
     operation?: string;
     effect?: OperationEffect;
-    change: "new" | "changed";
+    change: PublishChangeKind;
   }[];
   /** Outside hosts the revision calls and the live one does not. */
   hostsAdded: readonly string[];

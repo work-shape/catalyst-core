@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createTranslationContext } from "./support/chat-ui/shared";
 import {
   DraftChangeDialog,
+  draftChangesSentence,
   WorkflowPageView,
   createInstanceSource,
   draftState,
@@ -201,7 +202,13 @@ describe("the page of a Workflow with a draft", () => {
       workflow?: typeof ahead;
       edit?: Partial<typeof edit>;
       offered?: boolean;
-      draft?: { state: "ahead" | "unpublished"; onPublish?: () => void; onDiscard?: () => void };
+      draft?: {
+        state: "ahead" | "unpublished";
+        onPublish?: () => void;
+        onDiscard?: () => void;
+        liveVersion?: { number: number; publishedAt?: string; by?: string };
+        testCopies?: readonly { name: string; title: string }[];
+      };
     } = {},
     locale: "en" | "de" = "en"
   ) =>
@@ -234,21 +241,29 @@ describe("the page of a Workflow with a draft", () => {
     expect(page()).not.toContain("data-edit-refused");
   });
 
-  it("says that the draft differs from what is published, with the publish and the discard", () => {
-    const markup = page({ draft: { state: "ahead", onPublish: noop, onDiscard: noop } });
+  // DT-1b, Workflows check 6: the head of the draft says what its calls do, names the live
+  // revision and offers the publish and the discard.
+  it("says what a draft's calls do and what is live, with the publish and the discard", () => {
+    const markup = page({
+      draft: {
+        state: "ahead",
+        onPublish: noop,
+        onDiscard: noop,
+        liveVersion: { number: 4, publishedAt: "2026-10-12T14:05:00.000Z", by: "Anna Beispiel" }
+      }
+    });
     expect(markup).toContain('data-workflow-draft="ahead"');
-    expect(markup).toContain("Draft differs from published");
-    expect(markup).toContain(t("workflows.draft.aheadBody"));
+    expect(markup).toContain("Draft · reads live data · changes are simulated");
+    expect(markup).toContain("Live: version 4, published by Anna Beispiel on Oct 12");
     expect(markup).toContain(`>${t("workflows.draft.publish")}</`);
     expect(markup).toContain(`>${t("workflows.draft.discard")}</`);
     const german = page({ draft: { state: "ahead", onPublish: noop, onDiscard: noop } }, "de");
-    expect(german).toContain(de("workflows.draft.ahead"));
     expect(german).toContain(`>${de("workflows.draft.publish")}</`);
   });
 
   it("says it without a button to a reader who may neither publish nor discard", () => {
     const markup = page({ draft: { state: "ahead" } });
-    expect(markup).toContain(t("workflows.draft.ahead"));
+    expect(markup).toContain("data-draft-header");
     expect(markup).not.toContain(`>${t("workflows.draft.publish")}</`);
     expect(markup).not.toContain(`>${t("workflows.draft.discard")}</`);
   });
@@ -259,9 +274,37 @@ describe("the page of a Workflow with a draft", () => {
       draft: { state: "unpublished", onPublish: noop }
     });
     expect(markup).toContain('data-workflow-draft="unpublished"');
-    expect(markup).toContain(t("workflows.draft.unpublished"));
-    expect(markup).not.toContain(t("workflows.draft.ahead"));
+    expect(markup).toContain("Not published yet");
+    expect(markup).not.toContain("Live: version");
     expect(markup).not.toContain(`>${t("workflows.draft.discard")}</`);
+  });
+
+  // DT-2 in the head: a store whose test copy the draft writes to is named, with its page.
+  it("names each test copy the draft's changing calls write to, with the way to it", () => {
+    const markup = page({
+      draft: { state: "ahead", testCopies: [{ name: "invoices", title: "Invoices" }] }
+    });
+    expect(markup).toContain("Invoices: test copy");
+    expect(markup).toMatch(
+      /href="[^"]*\/build\/data-stores\/invoices"[^>]*data-draft-test-target="copy"/u
+    );
+  });
+
+  it("says what the draft changes against the live version, step by step", () => {
+    const changes: Parameters<typeof draftChangesSentence>[0] = {
+      steps: new Map([
+        ["a", "new"],
+        ["b", "changed"],
+        ["c", "changed"],
+        ["d", "removed"]
+      ]),
+      fields: new Map(),
+      removed: []
+    };
+    expect(draftChangesSentence(changes, "en", t)).toBe(
+      "Against the live version: 1 new step, 2 changed steps, and 1 removed step."
+    );
+    expect(draftChangesSentence(undefined, "en", t)).toBeUndefined();
   });
 
   it("shows no bar where the draft is the published revision", () => {
@@ -289,6 +332,32 @@ describe("the page of a Workflow with a draft", () => {
     expect(dialog("publish", "Needs what administering service principals needs")).toContain(
       "Needs what administering service principals needs"
     );
+  });
+
+  // DT-1b, Apps check 45 for a Workflow: the publish lists each step that changes something,
+  // new or changed, and the outside hosts it calls for the first time.
+  it("lists the changing steps the publish makes live, new or changed, and the hosts it adds", () => {
+    const markup = render(
+      createElement(DraftChangeDialog, {
+        change: "publish",
+        name: "Month end",
+        revision: 6,
+        publishedRevision: 4,
+        changing: [
+          { label: "Write the invoice", change: "new" },
+          { label: "Send the reminder", change: "changed" }
+        ],
+        hostsAdded: ["api.example.com"],
+        loading: false,
+        error: undefined,
+        onConfirm: noop,
+        onClose: noop
+      })
+    );
+    expect(markup).toContain('data-testid="workflow-publish-changing"');
+    expect(markup).toMatch(/data-change-item="Write the invoice"[^]*?>New</u);
+    expect(markup).toMatch(/data-change-item="Send the reminder"[^]*?>Changed</u);
+    expect(markup).toMatch(/data-change-item="api\.example\.com"[^]*?>New</u);
   });
 
   // ACCEPT-2a C3: with the schedule removed, the publish says no schedule.

@@ -10,6 +10,7 @@ import {
   Badge,
   Button,
   ConfirmDialog,
+  DraftHeader,
   DropdownMenuItem,
   DropdownMenuSeparator,
   InlineError,
@@ -56,7 +57,8 @@ import { useAppsHost, type AppsWorkspace } from "./apps-host";
 import { RevisionsDrawer } from "./revisions-drawer";
 import { RefusalNotice } from "../refusal-notice";
 import type { ToldRefusal } from "../../shared/i18n/refusals";
-import { personName } from "../../shared/person-name";
+import type { WorkspaceRoute } from "../../shared/workspace-route";
+import { draftLiveOf, draftTestTargetsOf, type DraftTestCopy } from "../draft-head";
 
 /** The sides of a draft: the App in its frame, its source files, and its named actions. */
 const APP_DRAFT_VIEWS = ["preview", "files", "actions"] as const;
@@ -230,6 +232,8 @@ export function AppEdit({ app }: { app: string }) {
         publishedRevision={published}
         liveVersion={asset?.liveVersion}
         draftChangedSinceLive={asset?.draftChangedSinceLive}
+        testCopies={asset?.draftTestCopies}
+        onOpenRoute={host.showRoute}
         dataSources={dataSources}
         view={view}
         onViewChange={setView}
@@ -439,6 +443,8 @@ export function AppEditFrame({
   publishedRevision,
   liveVersion,
   draftChangedSinceLive,
+  testCopies,
+  onOpenRoute,
   dataSources,
   view,
   draftConfig,
@@ -469,6 +475,10 @@ export function AppEditFrame({
   liveVersion?: (AppLiveVersion & { by?: string }) | undefined;
   /** Whether the draft is another revision than the live one, as the instance says it. */
   draftChangedSinceLive?: boolean | undefined;
+  /** The Data Stores whose test copy the draft's changing calls write to (DT-2). */
+  testCopies?: readonly DraftTestCopy[] | undefined;
+  /** Opens a route of the workspace, such as the page of a test copy's Data Store. */
+  onOpenRoute?: ((route: WorkspaceRoute) => void) | undefined;
   /** Where the App's data comes from, one sentence per filler, once it is known. */
   dataSources?: readonly string[] | undefined;
   /** The side that is shown. Left out, the head has no switch. */
@@ -494,7 +504,7 @@ export function AppEditFrame({
   /** Renames the App in place. */
   onRename?: () => void;
 }) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const missingRightId = useId();
   const known = rights.write && draftRevision !== undefined;
   const hasSources = dataSources !== undefined && dataSources.length > 0;
@@ -623,17 +633,18 @@ export function AppEditFrame({
               ) : undefined
             }
           />
-          {/* What a draft does, and what is live beside it, in one line under the head. */}
+          {/* What a call of the draft does, where it writes for real, and what is live beside
+            it (DT-1b). The head's badge says a draft was never published. */}
           {known ? (
-            <Banner layout="page" className="shrink-0" data-testid="app-draft-line">
-              {t("apps.draftSimulates")}
-              {liveVersion?.by === undefined
-                ? null
-                : ` · ${t("apps.liveVersionBy", {
-                    number: liveVersion.number,
-                    name: personName(liveVersion.by, t)
-                  })}`}
-            </Banner>
+            <DraftHeader
+              data-testid="app-draft-line"
+              targets={draftTestTargetsOf(testCopies, onOpenRoute)}
+              live={
+                publishedRevision === undefined
+                  ? undefined
+                  : draftLiveOf(true, liveVersion, locale, t)
+              }
+            />
           ) : null}
           {/* The head is one row; what the reader may not do is said in a line under it. */}
           {missingRight ? (

@@ -501,7 +501,7 @@ Beside guardrails, fixed limits protect an instance:
 
 Every changing action on the full path leaves an **Operation Run**. That is one record of one call: which action, who called, from where, and how it ended. A reading action leaves one only when it was refused or failed. Every tool call of an agent leaves one, a reading one too. A call that is stopped at steps 1 to 4, or for invalid input, leaves none, and neither does an action off the full path.
 
-**Settings > Instance > Operations** lists them. The origin says where a call came from: User, CLI or Agent. A call that was refused has the status "Denied" and names what refused it. You need "View the System pages" to open the page. One run stays readable by whoever made the call, and by a holder of "View audit log".
+**Settings > Instance > Operations** lists them. The origin says where a call came from: User, CLI or Agent. The column **Target** says where the call went: **Live**, **Test** (a Data Store's test copy) or **Simulated**, as for a changing call of a draft. A call that was refused has the status "Denied" and names what refused it. You need "View the System pages" to open the page. One run stays readable by whoever made the call, and by a holder of "View audit log".
 
 Beside the run, the instance writes Audit Events, for example `permission.granted` when somebody writes a grant. The events the product writes hold names, ids and codes, and no content of an agent or a conversation. A tool written for one customer adds its own details to its events and has to keep to the same rule. See [Retention, audit and deletion](/operate/governance/#audit).
 

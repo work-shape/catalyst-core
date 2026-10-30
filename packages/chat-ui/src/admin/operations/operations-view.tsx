@@ -16,6 +16,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TargetBadge,
   cn
 } from "@work-shape/catalyst-ui";
 import { formatDateTime } from "../../shared/locale-format";
@@ -178,6 +179,7 @@ export function OperationRunsTable({
           <TableHead>{t("operations.actor")}</TableHead>
           <TableHead>{t("operations.workspace")}</TableHead>
           <TableHead>{t("operations.status")}</TableHead>
+          <TableHead>{t("operations.target")}</TableHead>
           <TableHead>{t("operations.started")}</TableHead>
         </TableRow>
       </TableHeader>
@@ -218,6 +220,10 @@ export function OperationRunsTable({
               </TableCell>
               <TableCell>
                 <OperationRunStatus run={run} />
+              </TableCell>
+              {/* Where the call went (ADR-0031): live, a test target, or simulated. */}
+              <TableCell data-target={run.target}>
+                <TargetBadge target={run.target} />
               </TableCell>
               <TableCell className="whitespace-nowrap text-muted-foreground">
                 {formatDateTime(run.startedAt ?? run.createdAt, locale)}

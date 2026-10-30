@@ -305,7 +305,7 @@ describe("one App", () => {
       timeout: CONDITION_WAIT_MS
     });
     // The head of a writer's draft, which a reader who may not write it is not shown.
-    expect(draft.textContent).toContain(t("apps.draftSimulates"));
+    expect(draft.textContent).toContain(uiLabelsEn.draftSimulates);
     editWithAgent.mockClear();
     await chatOnThePage();
     expect(editWithAgent).toHaveBeenLastCalledWith("fees", { fresh: false });
@@ -400,7 +400,7 @@ describe("one App", () => {
     });
     await shows(draft, t("apps.draftUnavailable"));
     expect(buttonNamed(draft, t("apps.publish"))).toBeUndefined();
-    expect(draft.textContent).not.toContain(t("apps.draftSimulates"));
+    expect(draft.textContent).not.toContain(uiLabelsEn.draftSimulates);
   });
 
   it("offers its details to a reader the App lets read, and not where the App denies it", async () => {

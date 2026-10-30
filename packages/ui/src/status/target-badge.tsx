@@ -1,3 +1,4 @@
+import type { UiLabels } from "../labels";
 import { useUiLabels } from "../ui-root";
 import { Badge, type BadgeProps, type BadgeTone } from "./badge";
 
@@ -6,6 +7,13 @@ import { Badge, type BadgeProps, type BadgeTone } from "./badge";
  * nowhere because it was simulated.
  */
 export type CallTarget = "live" | "test" | "dry_run";
+
+/** The word of each target, the same wherever a draft's calls are shown. */
+export const targetLabels: Record<CallTarget, keyof UiLabels> = {
+  live: "targetLive",
+  test: "targetTest",
+  dry_run: "targetSimulated"
+};
 
 // Live is the state that has an effect, so it takes the tone of what is live everywhere.
 const tones: Record<CallTarget, BadgeTone> = { live: "success", test: "info", dry_run: "neutral" };
@@ -26,14 +34,9 @@ export function TargetBadge({
   ...props
 }: TargetBadgeProps) {
   const labels = useUiLabels("TargetBadge");
-  const text: Record<CallTarget, string> = {
-    live: labels.targetLive,
-    test: labels.targetTest,
-    dry_run: labels.targetSimulated
-  };
   return (
     <Badge tone={tones[target]} size={size} appearance={appearance} data-target={target} {...props}>
-      {text[target]}
+      {labels[targetLabels[target]]}
     </Badge>
   );
 }

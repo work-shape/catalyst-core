@@ -755,3 +755,36 @@ describe("the sources of a step whose field is text joined from parts (EW-TEXT)"
     ]);
   });
 });
+
+// DT-1b, Workflows check 6: a test run marks where each call went, a changing step Simulated
+// (or Test, with a test copy) and a reading one Live. A run of the published revision does not.
+describe("the canvas of a test run", () => {
+  const workflow = definition([
+    trigger,
+    operation("read", "connection.bookings.list"),
+    operation("write", "data_store.invoices.insert"),
+    output
+  ]);
+  const runs = [
+    stepRun({ stepId: "start" }),
+    stepRun({ stepId: "read", target: "live" }),
+    stepRun({ stepId: "write", target: "dry_run" })
+  ];
+
+  it("marks each call of a test run with where it went", () => {
+    const tested = runOf(runs);
+    const graph = workflowGraph(workflow.steps, en, {
+      ...tested,
+      run: { ...tested.run, test: true }
+    });
+    const target = (id: string) => graph.nodes.find((node) => node.id === id)?.target;
+    expect(target("read")).toBe("live");
+    expect(target("write")).toBe("dry_run");
+    expect(target("start")).toBeUndefined();
+  });
+
+  it("marks nothing on a run of the published revision", () => {
+    const graph = workflowGraph(workflow.steps, en, runOf(runs));
+    expect(graph.nodes.every((node) => node.target === undefined)).toBe(true);
+  });
+});

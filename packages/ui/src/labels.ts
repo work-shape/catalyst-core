@@ -84,6 +84,25 @@ export interface UiLabels {
   targetSimulated: string;
   /** The button of `RunLiveOnce`. */
   runLiveOnce: string;
+  /** The first line of a `DraftHeader`: what a call of a draft does. */
+  draftSimulates: string;
+  /** A test target a `DraftHeader` names, where `{name}` stands for the asset's name. */
+  draftTestCopy: string;
+  draftTestCredential: string;
+  /** The live revision line of a `DraftHeader`: `{version}`, `{name}` and `{date}` are filled in. */
+  draftNotPublished: string;
+  draftLive: string;
+  draftLiveBy: string;
+  draftLiveOn: string;
+  draftLiveByOn: string;
+  /** What a `TextDiff` says of a line to someone who does not see its colour and sign. */
+  diffAdded: string;
+  diffRemoved: string;
+  /** The fold of a `TextDiff` over lines both texts hold, where `{count}` stands for their number. */
+  diffUnchangedOne: string;
+  diffUnchangedMany: string;
+  /** A `TextDiff` of two texts that hold the same lines. */
+  diffSame: string;
   /** The controls of a `FlowCanvas`. */
   flowZoomIn: string;
   flowZoomOut: string;
@@ -213,6 +232,19 @@ export const uiLabelsEn: UiLabels = {
   targetTest: "Test",
   targetSimulated: "Simulated",
   runLiveOnce: "Run live once",
+  draftSimulates: "Draft · reads live data · changes are simulated",
+  draftTestCopy: "{name}: test copy",
+  draftTestCredential: "{name}: test credential",
+  draftNotPublished: "Not published yet",
+  draftLive: "Live: version {version}",
+  draftLiveBy: "Live: version {version}, published by {name}",
+  draftLiveOn: "Live: version {version}, published on {date}",
+  draftLiveByOn: "Live: version {version}, published by {name} on {date}",
+  diffAdded: "Added",
+  diffRemoved: "Removed",
+  diffUnchangedOne: "1 unchanged line",
+  diffUnchangedMany: "{count} unchanged lines",
+  diffSame: "No differences.",
   flowZoomIn: "Zoom in",
   flowZoomOut: "Zoom out",
   flowFit: "Show everything",
@@ -322,6 +354,19 @@ export const uiLabelsDe: UiLabels = {
   targetTest: "Test",
   targetSimulated: "Simuliert",
   runLiveOnce: "Einmal live ausführen",
+  draftSimulates: "Entwurf · liest Live-Daten · Änderungen werden simuliert",
+  draftTestCopy: "{name}: Testkopie",
+  draftTestCredential: "{name}: Test-Zugang",
+  draftNotPublished: "Noch nicht veröffentlicht",
+  draftLive: "Live: Version {version}",
+  draftLiveBy: "Live: Version {version}, veröffentlicht von {name}",
+  draftLiveOn: "Live: Version {version}, veröffentlicht am {date}",
+  draftLiveByOn: "Live: Version {version}, veröffentlicht von {name} am {date}",
+  diffAdded: "Hinzugefügt",
+  diffRemoved: "Entfernt",
+  diffUnchangedOne: "1 unveränderte Zeile",
+  diffUnchangedMany: "{count} unveränderte Zeilen",
+  diffSame: "Keine Unterschiede.",
   flowZoomIn: "Vergrößern",
   flowZoomOut: "Verkleinern",
   flowFit: "Alles zeigen",

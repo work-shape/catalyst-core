@@ -862,6 +862,9 @@ export function toWorkflow(
       | "publishQuestion"
       | "publishHandover"
       | "publishDataStores"
+      | "publishChanges"
+      | "draftTestCopies"
+      | "liveVersion"
       | "allowed"
       | "scope"
       | "stepFacts"
@@ -908,6 +911,35 @@ export function toWorkflow(
               : {}),
             ...(pointers.publishHandover?.confirmation
               ? { handoverConfirmation: pointers.publishHandover.confirmation }
+              : {}),
+            ...(pointers.publishChanges
+              ? {
+                  publishChanges: {
+                    changing: pointers.publishChanges.changing.map(({ label, change }) => ({
+                      label,
+                      change
+                    })),
+                    hostsAdded: [...pointers.publishChanges.hostsAdded]
+                  }
+                }
+              : {}),
+            ...(pointers.draftTestCopies?.length
+              ? {
+                  testCopies: pointers.draftTestCopies.map(({ name, title }) => ({ name, title }))
+                }
+              : {}),
+            ...(pointers.liveVersion
+              ? {
+                  liveVersion: {
+                    number: pointers.liveVersion.number,
+                    ...(pointers.liveVersion.publishedAt === undefined
+                      ? {}
+                      : { publishedAt: pointers.liveVersion.publishedAt }),
+                    ...(pointers.liveVersion.by === undefined
+                      ? {}
+                      : { by: pointers.liveVersion.by })
+                  }
+                }
               : {}),
             ...(pointers.publishedRevision === undefined
               ? {}

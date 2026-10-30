@@ -77,7 +77,7 @@ export type { LiveOnceControl } from "./test-run";
 export type { StepPinControl } from "./step-pin";
 export type { StepRerunControl } from "./step-rerun";
 export { checkStartForm, startFormOf, startRefusalByField } from "./start-form";
-export { DraftChangeDialog } from "./workflow-draft";
+export { DraftChangeDialog, draftChangesSentence } from "./workflow-draft";
 export { RightsLacking } from "./workflow-publish-rights";
 export { WorkflowRemoveKnowledge } from "./workflow-remove";
 export {

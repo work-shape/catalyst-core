@@ -1,5 +1,7 @@
 import {
   AGENT_USE_SETTINGS,
+  DRAFT_TEST_TARGETS,
+  PUBLISH_CHANGE_KINDS,
   APP_AUDIENCES,
   OPERATION_EFFECTS,
   WORKSPACE_USE_ASSET_KINDS,
@@ -259,8 +261,34 @@ export const workflowStepFactSchema = workflowOperationFactSchema.partial().exte
 
 export const assetSchema = z.object({
   /**
-   * Of a live App, for a reader of its draft: its version, the number of the publish that made
-   * it live, when and by whom. Members read this number, never a revision's.
+   * What a publish of the revision read changes against the live one (DT-1b), for a reader who
+   * may publish an App or a Workflow: the changing actions or steps it makes live, each new or
+   * changed, and the outside hosts it adds. Absent for the live revision itself. The review of
+   * a held publish shows the same list.
+   */
+  publishChanges: z
+    .object({
+      changing: z.array(z.object({ label: z.string(), change: z.enum(PUBLISH_CHANGE_KINDS) })),
+      hostsAdded: z.array(z.string())
+    })
+    .optional(),
+  /**
+   * Of the draft of an App or a Workflow, for a reader who may write it: the Data Stores whose
+   * test copy its calls reach (ADR-0031, DT-2). `present`: every call goes there;
+   * `made_on_change`: a changing call makes it, and reads stay live until then.
+   */
+  draftTestCopies: z
+    .array(
+      z.object({
+        name: z.string(),
+        title: z.string(),
+        copy: z.enum(DRAFT_TEST_TARGETS)
+      })
+    )
+    .optional(),
+  /**
+   * Of a live App or Workflow, for a reader of its draft: its version, the number of the publish
+   * that made it live, when and by whom. Members read this number, never a revision's.
    */
   liveVersion: z
     .object({

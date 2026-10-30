@@ -26,6 +26,7 @@ import {
   appRowRoute,
   appState,
   AppsHostProvider,
+  fileMarks,
   AppViewFrame,
   NO_APP_RIGHTS,
   PublishDialog,
@@ -445,13 +446,19 @@ describe("the draft of an App (layout 3)", () => {
       }),
       locale
     );
-  const draftLine = (markup: string) =>
-    /data-testid="app-draft-line"[^>]*>((?:(?!<\/div>).)*)/u
-      .exec(markup)?.[1]
-      ?.replace(/<[^>]*>/gu, "") ?? "";
+  const draftLine = (markup: string) => {
+    const at = markup.indexOf('data-testid="app-draft-line"');
+    if (at < 0) return "";
+    // The banner's text up to where it closes: its content is three levels of `div` deep.
+    const head = /^[^>]*>(.*?)<\/div><\/div><\/div>/u.exec(markup.slice(at));
+    return (head?.[1] ?? "")
+      .replace(/<[^>]*>/gu, " ")
+      .replace(/\s+/gu, " ")
+      .trim();
+  };
 
-  // DAILY-WINS 6: the head says what a draft does and what is live beside it (Apps check 45);
-  // the live version and its day stand in the head's badge (APPVER-1).
+  // DAILY-WINS 6, DT-1b: the head says what a draft does and what is live beside it (Apps
+  // check 45); the live version and its day also stand in the head's badge (APPVER-1).
   it("says the draft reads live data and simulates changes, and who made what is live", () => {
     const live = {
       liveVersion: { number: 4, publishedAt: "2026-10-12T14:05:00.000Z", by: "Anna Beispiel" }
@@ -459,24 +466,36 @@ describe("the draft of an App (layout 3)", () => {
 
     expect(headed(live)).toContain("Live: version 4 · since Oct 12");
     expect(draftLine(headed(live))).toBe(
-      "Draft · reads live data · changes are simulated · Version 4 published by Anna Beispiel"
-    );
-    expect(draftLine(headed(live, "de"))).toBe(
-      "Entwurf · liest Live-Daten · Änderungen werden simuliert · Version 4 veröffentlicht von Anna Beispiel"
+      "Draft · reads live data · changes are simulated Live: version 4, published by Anna Beispiel on Oct 12"
     );
     // A version without a person, as one from before versions were recorded, names nobody.
-    expect(
-      draftLine(headed({ liveVersion: { number: 1, publishedAt: "2026-10-12T14:05:00.000Z" } }))
-    ).toBe("Draft · reads live data · changes are simulated");
+    expect(draftLine(headed({ liveVersion: { number: 1 } }))).toBe(
+      "Draft · reads live data · changes are simulated Live: version 1"
+    );
     const undated = headed({ liveVersion: { number: 1 } });
     expect(undated).toContain("Live: version 1");
     expect(undated).not.toContain("· since");
     expect(headed({ liveVersion: { number: 1 } }, "de")).not.toContain("· seit");
-    // A draft never published says so in the head, and the line says what a draft does.
+    // A draft never published says so in the head's badge; the line says what a draft does.
     const never = headed({ publishedRevision: undefined }, "de");
     expect(never).toContain("Entwurf · noch nicht veröffentlicht");
-    expect(draftLine(never)).toBe("Entwurf · liest Live-Daten · Änderungen werden simuliert");
+    expect(draftLine(never)).toBe("Draft · reads live data · changes are simulated");
     expect(headed({ rights: NO_APP_RIGHTS, ...live })).not.toContain("app-draft-line");
+  });
+
+  // DT-1b: a Data Store with a test copy is named in the head, with the way to its page.
+  it("names the test copies the draft writes to, with the way to each", () => {
+    const markup = headed({
+      liveVersion: { number: 4 },
+      testCopies: [{ name: "kunden", title: "Kunden" }],
+      onOpenRoute: () => undefined
+    });
+    expect(draftLine(markup)).toBe(
+      "Draft · reads live data · changes are simulated · Kunden: test copy Live: version 4"
+    );
+    expect(markup).toMatch(
+      /<a[^>]*href="[^"]*\/build\/data-stores\/kunden"[^>]*data-draft-test-target="copy"/u
+    );
   });
 
   // DAILY-WINS 7: the draft says where its data comes from, as the open App does.
@@ -595,6 +614,62 @@ describe("the draft of an App (layout 3)", () => {
     expect(markup).toContain("External hosts it calls");
     expect(markup).toContain(">api.example.com</code>");
     expect(markup).toContain(">Publish</button>");
+  });
+
+  // DT-1b, Apps check 45: the publish lists each changing action, new or changed against what
+  // is live, and marks the outside hosts the publish adds.
+  it("lists the changing actions the publish makes live, and marks the hosts it adds", () => {
+    const markup = render(
+      createElement(PublishDialog, {
+        name: "Angebotsrechner",
+        workspace,
+        ask: {
+          revision: 3,
+          summary: appManifestSummary({
+            manifest: {
+              connections: ["crm"],
+              actions: [{ name: "angebot_speichern", effect: "changing" }],
+              externalHosts: ["api.example.com", "maps.example.com"]
+            }
+          }),
+          readsStoredData: false
+        },
+        changes: {
+          changing: [
+            { label: "angebot_speichern", change: "new" },
+            { label: "kunde_anlegen", change: "changed" }
+          ],
+          hostsAdded: ["maps.example.com"]
+        },
+        loading: false,
+        error: undefined,
+        onConfirm() {},
+        onClose() {}
+      })
+    );
+    expect(markup).toContain("Actions that change something");
+    expect(markup).toMatch(/data-change-item="angebot_speichern"[^]*?>New</u);
+    expect(markup).toMatch(/data-change-item="kunde_anlegen"[^]*?>Changed</u);
+    expect(markup).toMatch(/data-change-item="maps\.example\.com"[^]*?>New</u);
+    // A host live already calls is named without a tag.
+    const kept = /data-change-item="api\.example\.com".*?<\/li>/u.exec(markup)?.[0];
+    expect(kept).toContain("api.example.com");
+    expect(kept).not.toContain("data-change-tag");
+  });
+
+  // DT-1b: the Files tab marks each file against what is live.
+  it("marks each file new, changed or removed against what is live", () => {
+    const marks = fileMarks(
+      [{ path: "a.tsx" }, { path: "b.tsx" }, { path: "c.tsx" }],
+      [{ path: "a.tsx" }, { path: "c.tsx" }, { path: "gone.tsx" }],
+      new Set(["a.tsx", "b.tsx"])
+    );
+    expect(Object.fromEntries(marks)).toEqual({
+      "a.tsx": "changed",
+      "b.tsx": "new",
+      "gone.tsx": "removed"
+    });
+    expect(fileMarks([{ path: "a.tsx" }], undefined, new Set()).size).toBe(0);
   });
 
   it("reads a manifest nobody vouches for without trusting its shape", () => {

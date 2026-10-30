@@ -5,6 +5,7 @@ import {
   OPERATION_EFFECTS,
   type OperationSourceKind,
   OPERATION_TARGETS,
+  PUBLISH_CHANGE_KINDS,
   WORKFLOW_RESERVED_STEP_TYPES,
   type WorkflowDatasetState,
   WORKFLOW_RUN_STATUSES,
@@ -328,6 +329,21 @@ interface WorkflowDraftView {
    * as `confirmHandover`. Absent where the publish hands nothing on, or the reader may not confirm.
    */
   handoverConfirmation?: string;
+  /**
+   * What a publish of the draft changes against the live revision (DT-1b): the steps that
+   * change something it makes live, each new or changed. Absent for a reader who may not publish.
+   */
+  publishChanges?: WorkflowPublishChangesView;
+  /** The Data Stores whose test copy the draft's calls reach, which its head names (DT-2). */
+  testCopies?: readonly { name: string; title: string }[];
+  /** The live version: the number of the publish that made it live, when and by whom. */
+  liveVersion?: { number: number; publishedAt?: string; by?: string };
+}
+
+/** What a publish changes against the live revision, as the instance lists it (DT-1b). */
+export interface WorkflowPublishChangesView {
+  changing: readonly { label: string; change: (typeof PUBLISH_CHANGE_KINDS)[number] }[];
+  hostsAdded: readonly string[];
 }
 
 /** One "Run live once" switch of the reader's, by step, and the test run that used it. */

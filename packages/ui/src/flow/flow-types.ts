@@ -1,4 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
+import type { ChangeKind } from "../status/change-tag";
+import type { CallTarget } from "../status/target-badge";
 
 /**
  * How far one part of a graph has come. `idle` is a part that is only described.
@@ -7,7 +9,7 @@ import type { ReactElement, ReactNode } from "react";
 export type FlowStatus =
   "idle" | "running" | "waiting" | "done" | "doneWithFailures" | "failed" | "skipped";
 
-export type FlowChange = "new" | "changed" | "removed" | "unsaved";
+export type FlowChange = ChangeKind;
 
 /** What a connector says: nothing, that it was taken, that it is being taken, or that it was not. */
 export type FlowEdgeState = "rest" | "done" | "active" | "skipped";
@@ -107,6 +109,8 @@ export interface FlowGraphNode extends FlowItemBase {
   footer?: string;
   /** At the end of the footer, such as how long it took. */
   meta?: string;
+  /** Where the part's call went in a test of a draft: Live, Test or Simulated. */
+  target?: CallTarget;
 }
 
 /**

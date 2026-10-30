@@ -31,7 +31,7 @@ import {
 import { z } from "zod";
 import { APP_ACTIONS, APP_ASSET_KIND } from "../apps/app-kind";
 import type { AssetTarget } from "../assets/asset-target";
-import type { WorkflowAssetKind } from "../asset-kinds/shared";
+import type { PublishChangeKind, PublishReach, WorkflowAssetKind } from "../asset-kinds/shared";
 import type { HeldCallApprovalKind } from "./held-call-kind";
 import {
   AGENT_PUBLISH_APPROVAL_KIND,
@@ -485,15 +485,7 @@ async function publishReview(
           })
           .catch(() => unavailablePublishNarrative(viewer.locale ?? options.defaultLocale ?? "en"))
       : undefined;
-  const calls = reach
-    ? await Promise.all(
-        reach.calls.map(async (call) => ({
-          ...call,
-          effect:
-            call.effect ?? (call.operation ? await options.effectOf(call.operation) : undefined)
-        }))
-      )
-    : [];
+  const changes = reach ? await publishChangesOf(reach, options.effectOf) : undefined;
   return {
     kind: subject.kind,
     name: subject.name,
@@ -516,13 +508,10 @@ async function publishReview(
     liveRevision: subject.liveRevision,
     files: await changedFiles(options, subject, next, live),
     ...(narrative ? { publishNarrative: { ...narrative } } : {}),
-    ...(reach
+    ...(reach && changes
       ? {
-          // Only what changes something: a reading call reaches nothing new.
-          changing: calls
-            .filter((call) => call.effect === "changing")
-            .map(({ label, change }) => ({ label, change })),
-          hostsAdded: [...reach.hostsAdded],
+          changing: changes.changing,
+          hostsAdded: changes.hostsAdded,
           connections: [...reach.connections],
           dataStores: reach.dataStores.map((store) => ({
             name: store.name,
@@ -531,6 +520,31 @@ async function publishReview(
           ...(reach.runAs ? { runAs: reach.runAs } : {})
         }
       : {})
+  };
+}
+
+/**
+ * What a publish changes against the live revision (DT-1b): the changing actions or steps it
+ * makes live, each new or changed, and the outside hosts it adds. A call whose definition does
+ * not say its effect is read by its operation's. The approval item, the Publish dialog of an
+ * App and the question of a Workflow's draft bar all show this one list.
+ */
+export async function publishChangesOf(
+  reach: PublishReach,
+  effectOf: (operation: string) => Promise<OperationEffect | undefined>
+): Promise<{ changing: { label: string; change: PublishChangeKind }[]; hostsAdded: string[] }> {
+  const calls = await Promise.all(
+    reach.calls.map(async (call) => ({
+      ...call,
+      effect: call.effect ?? (call.operation ? await effectOf(call.operation) : undefined)
+    }))
+  );
+  return {
+    // Only what changes something: a reading call reaches nothing new.
+    changing: calls
+      .filter((call) => call.effect === "changing")
+      .map(({ label, change }) => ({ label, change })),
+    hostsAdded: [...reach.hostsAdded]
   };
 }
 
