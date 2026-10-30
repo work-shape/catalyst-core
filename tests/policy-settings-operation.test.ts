@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { policiesSchema } from "@work-shape/catalyst-api-contract";
+import { CENTRAL_POLICY_ENTRIES_MAX } from "@work-shape/catalyst-core";
 import {
   clientInstanceId,
   setupAccessInstance,
   type AccessInstance
 } from "./support/access-instance";
+import { withTestSql } from "./support/test-sql";
 
 // Settings > Instance > Policies (OP-2): the central setting of an operation and the locks of
 // "Always allow" are set through `policies.set` and `policies.set_always_allow_lock`, which
@@ -40,39 +42,39 @@ describe("policies.set", () => {
     const before = await policies(t);
     expect(before.settings).toEqual([]);
     const row = before.operations.find(
-      (operation) => operation.operation === "platform.context.get"
+      (operation) => operation.operation === "operations.list_callable"
     );
     expect(row).toMatchObject({ kind: "platform", effect: "reading", value: "allow" });
     expect(before.operations.some((operation) => operation.operation === "policies.set")).toBe(
       true
     );
 
-    await t.expectOk(t.kai.id, "platform.context.get");
+    await t.expectOk(t.kai.id, "operations.list_callable");
     await t.expectOk(t.admin.id, "policies.set", {
-      payload: { operation: "platform.context.get", value: "deny" }
+      payload: { operation: "operations.list_callable", value: "deny" }
     });
     await t.expectRefused(
       t.kai.id,
-      "platform.context.get",
+      "operations.list_callable",
       {},
       { status: 403, code: "POLICY_DENIED" }
     );
     const after = await policies(t);
     expect(after.settings).toEqual([
-      expect.objectContaining({ operation: "platform.context.get", value: "deny" })
+      expect.objectContaining({ operation: "operations.list_callable", value: "deny" })
     ]);
     expect(
-      after.operations.find((operation) => operation.operation === "platform.context.get")
+      after.operations.find((operation) => operation.operation === "operations.list_callable")
     ).toMatchObject({ value: "deny", source: "central_setting" });
 
     // Setting it again changes and records nothing; removing it lets the call run again.
     await t.expectOk(t.admin.id, "policies.set", {
-      payload: { operation: "platform.context.get", value: "deny" }
+      payload: { operation: "operations.list_callable", value: "deny" }
     });
     await t.expectOk(t.admin.id, "policies.set", {
-      payload: { operation: "platform.context.get", value: null }
+      payload: { operation: "operations.list_callable", value: null }
     });
-    await t.expectOk(t.kai.id, "platform.context.get");
+    await t.expectOk(t.kai.id, "operations.list_callable");
 
     const changes = await audited(t, "governance.policy_setting_changed");
     expect(
@@ -82,7 +84,7 @@ describe("policies.set", () => {
         {
           actor: t.admin.id,
           metadata: expect.objectContaining({
-            operation: "platform.context.get",
+            operation: "operations.list_callable",
             before: "default",
             after: "deny"
           })
@@ -90,7 +92,7 @@ describe("policies.set", () => {
         {
           actor: t.admin.id,
           metadata: expect.objectContaining({
-            operation: "platform.context.get",
+            operation: "operations.list_callable",
             before: "deny",
             after: "default"
           })
@@ -132,10 +134,88 @@ describe("policies.set", () => {
         { status: 422, code: "VALIDATION_FAILED", details: expect.objectContaining({ reason }) }
       );
     await refused("nothing.here", "deny", "unknown_operation");
-    await refused("platform.context.get", "confirm", "reading_operation_waits");
+    await refused("operations.list_callable", "confirm", "reading_operation_waits");
     await refused("policies.set", "deny", "policy_names_itself");
     await refused("policies.*", "deny", "policy_names_itself");
     expect(await t.stores.centralPolicySettings.list({ clientInstanceId })).toEqual([]);
+  });
+
+  it("keeps the interface's own read out of reach, so a deny on a pattern locks no admin out", async () => {
+    const t = await setup();
+    const refused = (operation: string) =>
+      t.expectRefused(
+        t.admin.id,
+        "policies.set",
+        { payload: { operation, value: "deny" } },
+        {
+          status: 422,
+          code: "VALIDATION_FAILED",
+          details: expect.objectContaining({ reason: "policy_names_itself" })
+        }
+      );
+    await refused("platform.context.get");
+    await refused("platform.*");
+    // A bare `*` names no operation at all.
+    await t.expectRefused(
+      t.admin.id,
+      "policies.set",
+      { payload: { operation: "*", value: "deny" } },
+      { status: 422, code: "VALIDATION_FAILED" }
+    );
+    // What the interface loads and the Policies screen still answer.
+    await t.expectOk(t.admin.id, "platform.context.get");
+    await t.expectOk(t.admin.id, "policies.get");
+  });
+
+  it("refuses a new setting and a new lock once the instance holds the most it keeps", async () => {
+    const t = await setup();
+    // One setting the admin made, and the rest narrowed to kinds, up to the most there may be.
+    await withTestSql(async (sql) => {
+      await sql`
+        insert into central_policy_settings
+          (client_instance_id, operation, workspace_id, asset_kind, value, updated_at)
+        values (${clientInstanceId}, 'operations.list_callable', null, null, 'allow', now())`;
+      await sql`
+        insert into central_policy_settings
+          (client_instance_id, operation, workspace_id, asset_kind, value, updated_at)
+        select ${clientInstanceId}, 'assets.list', null, 'kind-' || n, 'deny', now()
+        from generate_series(2, ${CENTRAL_POLICY_ENTRIES_MAX}) as n`;
+      await sql`
+        insert into always_allow_locks (client_instance_id, operation, updated_at)
+        select ${clientInstanceId}, 'assets.' || n, now()
+        from generate_series(1, ${CENTRAL_POLICY_ENTRIES_MAX}) as n`;
+    });
+    const full = {
+      status: 422,
+      code: "VALIDATION_FAILED",
+      details: expect.objectContaining({ reason: "too_many_entries" })
+    };
+    await t.expectRefused(
+      t.admin.id,
+      "policies.set",
+      { payload: { operation: "feedback.list", value: "deny" } },
+      full
+    );
+    await t.expectRefused(
+      t.admin.id,
+      "policies.set_always_allow_lock",
+      { payload: { operation: "me.chat_skills.set", locked: true } },
+      full
+    );
+    // Every stored one is still read, and one already there still changes.
+    expect(await t.stores.centralPolicySettings.list({ clientInstanceId })).toHaveLength(
+      CENTRAL_POLICY_ENTRIES_MAX
+    );
+    await t.expectOk(t.admin.id, "policies.set", {
+      payload: { operation: "operations.list_callable", value: "deny" }
+    });
+    await t.expectRefused(
+      t.kai.id,
+      "operations.list_callable",
+      {},
+      { status: 403, code: "POLICY_DENIED" }
+    );
+    expect(await audited(t, "governance.always_allow_lock_changed")).toEqual([]);
   });
 
   it("refuses a person without policy.manage", async () => {
@@ -144,7 +224,7 @@ describe("policies.set", () => {
     await t.expectRefused(
       t.kai.id,
       "policies.set",
-      { payload: { operation: "platform.context.get", value: "deny" } },
+      { payload: { operation: "operations.list_callable", value: "deny" } },
       { status: 403, code: "FORBIDDEN" }
     );
     await t.expectRefused(

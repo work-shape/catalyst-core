@@ -392,4 +392,36 @@ describe("an outside host a person allows for their own view of a draft", () => 
       await switchTo("allow");
     }
   });
+
+  it("stays off where a pattern tightens it, and a pattern never switches it on", async () => {
+    const pattern = (value: "allow" | "confirm" | null) =>
+      t.stores.centralPolicySettings.set({
+        clientInstanceId,
+        operation: "apps.*",
+        value,
+        at: new Date().toISOString()
+      });
+    const isOff = async () => {
+      const draft = await shown(t.admin.id, "offers");
+      expect(draft.draftHosts).toBeUndefined();
+      expect(connects(draft.policy)).toBe("'none'");
+      expect(
+        refusal(await allow(t.admin.id, { fileSetId: draft.fileSetId, host: "api.example.com" }))
+      ).toMatchObject({ status: 403, code: "POLICY_DENIED" });
+    };
+    // An admin who makes every App action ask first switches no outside host on, and turns the
+    // allowed one off: `confirm` is no `allow`.
+    await pattern("confirm");
+    try {
+      await isOff();
+      // Without the switch by its own name, `apps.*` set to `allow` switches nothing on either.
+      await pattern("allow");
+      await switchTo(null);
+      await isOff();
+    } finally {
+      await pattern(null);
+      await switchTo("allow");
+    }
+    expect((await shown(t.admin.id, "offers")).draftHosts).toBeDefined();
+  });
 });

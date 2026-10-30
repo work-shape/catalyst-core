@@ -72,6 +72,7 @@ const REFUSAL_KEYS = [
   "policies.refused.policy_names_itself",
   "policies.refused.unknown_operation",
   "policies.refused.reading_operation_waits",
+  "policies.refused.too_many_entries",
   "policies.refused.locked_by_release"
 ] as const satisfies readonly TranslationKey[];
 

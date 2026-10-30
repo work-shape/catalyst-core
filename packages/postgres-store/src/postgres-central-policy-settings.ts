@@ -1,6 +1,9 @@
-import { and, asc, eq, isNull, type SQL } from "drizzle-orm";
-import type { CentralPolicySettingStore } from "@work-shape/catalyst-core";
-import type { PostgresConnection } from "./postgres-database";
+import { and, asc, count, eq, isNull, sql, type SQL } from "drizzle-orm";
+import {
+  CENTRAL_POLICY_ENTRIES_MAX,
+  type CentralPolicySettingStore
+} from "@work-shape/catalyst-core";
+import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { alwaysAllowLocks, centralPolicySettings } from "./schema/policy";
 
 type Input<Method extends keyof CentralPolicySettingStore> = Parameters<
@@ -8,10 +11,11 @@ type Input<Method extends keyof CentralPolicySettingStore> = Parameters<
 >[0];
 
 /**
- * At most so many settings and locks are read at once. Every call reads them, so an instance
- * that needs more has a policy no admin can read either.
+ * Holds a new setting or lock of one instance back until the one before it is stored, so the
+ * count before an insert stays true and no instance passes `CENTRAL_POLICY_ENTRIES_MAX`.
  */
-const ENTRIES_MAX = 2_000;
+const lockInstance = (tx: PostgresTransaction, id: string) =>
+  tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`central_policy:${id}`}))`);
 
 /** A column that equals the value, or is null where the value is absent. */
 function sameOrNull(
@@ -34,8 +38,7 @@ export function createPostgresCentralPolicySettingsStore(
           asc(centralPolicySettings.operation),
           asc(centralPolicySettings.workspaceId),
           asc(centralPolicySettings.assetKind)
-        )
-        .limit(ENTRIES_MAX);
+        );
       return rows.map((row) => ({
         operation: row.operation,
         value: row.value,
@@ -67,6 +70,13 @@ export function createPostgresCentralPolicySettingsStore(
             .set({ value: input.value, updatedAt })
             .where(where);
         } else {
+          await lockInstance(tx, input.clientInstanceId);
+          const [held] = await tx
+            .select({ n: count() })
+            .from(centralPolicySettings)
+            .where(eq(centralPolicySettings.clientInstanceId, input.clientInstanceId));
+          if ((held?.n ?? 0) >= CENTRAL_POLICY_ENTRIES_MAX)
+            return { previous: undefined, full: true };
           await tx.insert(centralPolicySettings).values({
             clientInstanceId: input.clientInstanceId,
             operation: input.operation,
@@ -84,8 +94,7 @@ export function createPostgresCentralPolicySettingsStore(
         .select()
         .from(alwaysAllowLocks)
         .where(eq(alwaysAllowLocks.clientInstanceId, input.clientInstanceId))
-        .orderBy(asc(alwaysAllowLocks.operation))
-        .limit(ENTRIES_MAX);
+        .orderBy(asc(alwaysAllowLocks.operation));
       return rows.map((row) => ({
         operation: row.operation,
         updatedAt: row.updatedAt.toISOString()
@@ -103,16 +112,26 @@ export function createPostgresCentralPolicySettingsStore(
           .returning({ operation: alwaysAllowLocks.operation });
         return { wasLocked: removed.length > 0 };
       }
-      const inserted = await db
-        .insert(alwaysAllowLocks)
-        .values({
+      return db.transaction(async (tx) => {
+        await lockInstance(tx, input.clientInstanceId);
+        const [existing] = await tx
+          .select({ operation: alwaysAllowLocks.operation })
+          .from(alwaysAllowLocks)
+          .where(where)
+          .limit(1);
+        if (existing) return { wasLocked: true };
+        const [held] = await tx
+          .select({ n: count() })
+          .from(alwaysAllowLocks)
+          .where(eq(alwaysAllowLocks.clientInstanceId, input.clientInstanceId));
+        if ((held?.n ?? 0) >= CENTRAL_POLICY_ENTRIES_MAX) return { wasLocked: false, full: true };
+        await tx.insert(alwaysAllowLocks).values({
           clientInstanceId: input.clientInstanceId,
           operation: input.operation,
           updatedAt: new Date(input.at)
-        })
-        .onConflictDoNothing()
-        .returning({ operation: alwaysAllowLocks.operation });
-      return { wasLocked: inserted.length === 0 };
+        });
+        return { wasLocked: false };
+      });
     }
   };
 }

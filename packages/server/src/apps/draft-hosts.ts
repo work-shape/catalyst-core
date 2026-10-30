@@ -22,6 +22,7 @@ import {
   type FileSetId,
   type Page,
   type OperationExecutionContext,
+  type CentralPolicySetting,
   type PolicyTarget,
   type ServedFileSet
 } from "@work-shape/catalyst-core";
@@ -59,27 +60,32 @@ export const DRAFT_HOSTS_DEFAULT_POLICY = "deny" as const;
 
 /**
  * Whether the policy lets a person allow an outside host for their view of a draft of these
- * targets: the admin's central setting of the operation, narrowed as it is, over the release's
- * `deny`. Read anew each time, so a switch set a moment ago holds at once.
+ * targets. On only where an admin set `allow` on `apps.allow_draft_host` by its own name for
+ * every target, and nothing stricter holds there: a pattern such as `apps.*` never switches it
+ * on, and any `confirm`, `approval` or `deny` that matches keeps it off. Read anew each time,
+ * so a switch set a moment ago holds at once.
  */
 async function draftHostsSwitchedOn(
   options: Pick<DraftHostOptions, "clientInstanceId" | "stores" | "config" | "operations">,
   targets: readonly PolicyTarget[]
 ): Promise<boolean> {
-  const resolved = resolvePolicy({
-    definition: {
-      name: ALLOW_DRAFT_HOST_OPERATION,
-      effect: "changing",
-      defaultPolicy: DRAFT_HOSTS_DEFAULT_POLICY
-    },
-    origin: { kind: "user" },
-    instanceDefaults: options.config.policy.defaults,
-    centralSettings: await readCentralPolicySettings(options),
-    targets,
-    callerCanConfirm: true,
-    canPause: false
-  });
-  return resolved.value !== "deny";
+  const settings = await readCentralPolicySettings(options);
+  const resolve = (centralSettings: readonly CentralPolicySetting[]) =>
+    resolvePolicy({
+      definition: {
+        name: ALLOW_DRAFT_HOST_OPERATION,
+        effect: "changing",
+        defaultPolicy: DRAFT_HOSTS_DEFAULT_POLICY
+      },
+      origin: { kind: "user" },
+      instanceDefaults: options.config.policy.defaults,
+      centralSettings,
+      targets,
+      callerCanConfirm: true,
+      canPause: false
+    }).value;
+  const named = settings.filter((setting) => setting.operation === ALLOW_DRAFT_HOST_OPERATION);
+  return resolve(named) === "allow" && resolve(settings) === "allow";
 }
 
 /**
@@ -390,6 +396,16 @@ export class DraftHosts {
       }
     } else {
       await requireConversationAccess(this.options, fileSet.conversationId, actor);
+    }
+    // The offer's own switch, asked again: a `confirm` from a pattern such as `apps.*` would
+    // let the person's click through `runOperation`, though no admin switched the click on.
+    const targets = await draftHostPolicyTargets(this.options, fileSet);
+    if (!(await draftHostsSwitchedOn(this.options, targets))) {
+      throw new AppError(
+        "POLICY_DENIED",
+        "Outside hosts in a draft are off: an admin switches them on with the policy of 'apps.allow_draft_host'",
+        { operation: ALLOW_DRAFT_HOST_OPERATION }
+      );
     }
     const hosts = await frameOutsideHosts(this.options, fileSet, {
       view: "draft",

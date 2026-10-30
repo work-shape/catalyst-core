@@ -9,6 +9,7 @@ import type {
 import {
   ALWAYS_ALLOW_BY_CLASS,
   AppError,
+  CENTRAL_POLICY_ENTRIES_MAX,
   DATA_STORE_OPERATION_PREFIX,
   KNOWLEDGE_OPERATION_PREFIX,
   PAGE_ACTION_OPERATION_PREFIX,
@@ -38,10 +39,16 @@ export type PolicySettingsOptions = Pick<
 >;
 
 /**
- * The operations of the Policies screen itself. No setting and no pattern may name them: a
- * `deny` there would leave nobody able to change the policy again.
+ * The operations of the Policies screen itself, and the read the interface needs to load and
+ * show an admin the screen (`platform.context.get`, `/api/v1/context`). No setting and no
+ * pattern may name them: a `deny` there would leave nobody able to change the policy again.
  */
-const OWN_OPERATIONS = ["policies.get", "policies.set", "policies.set_always_allow_lock"];
+const OWN_OPERATIONS = [
+  "policies.get",
+  "policies.set",
+  "policies.set_always_allow_lock",
+  "platform.context.get"
+];
 
 const now = (options: PolicySettingsOptions) => options.operations?.now?.() ?? new Date();
 
@@ -185,7 +192,7 @@ function assertEntry(options: PolicySettingsOptions, operation: string): void {
   if (OWN_OPERATIONS.some((own) => namesOperation(operation, own))) {
     throw new AppError(
       "VALIDATION_FAILED",
-      "The Policies screen's own actions keep their default, so the policy can always be changed again",
+      "The Policies screen's own actions, and the read the interface opens with, keep their default, so the policy can always be changed again",
       { reason: "policy_names_itself" }
     );
   }
@@ -236,7 +243,7 @@ export async function setPolicySetting(
     });
   }
   const at = now(options).toISOString();
-  const { previous } = await options.stores.centralPolicySettings.set({
+  const { previous, full } = await options.stores.centralPolicySettings.set({
     clientInstanceId,
     operation: input.operation,
     ...(input.workspaceId === undefined ? {} : { workspaceId: input.workspaceId }),
@@ -244,6 +251,7 @@ export async function setPolicySetting(
     value: input.value,
     at
   });
+  if (full) refuseFull("settings");
   return {
     ...(input.value === null
       ? {}
@@ -280,13 +288,23 @@ export async function setAlwaysAllowLock(
       { reason: "locked_by_release" }
     );
   }
-  const { wasLocked } = await options.stores.centralPolicySettings.setLock({
+  const { wasLocked, full } = await options.stores.centralPolicySettings.setLock({
     clientInstanceId: options.clientInstanceId,
     operation: input.operation,
     locked: input.locked,
     at: now(options).toISOString()
   });
+  if (full) refuseFull("locks");
   return { operation: input.operation, locked: input.locked, wasLocked };
+}
+
+/** A new setting or lock past what every call reads in full is refused, never read in part. */
+function refuseFull(what: "settings" | "locks"): never {
+  throw new AppError(
+    "VALIDATION_FAILED",
+    `This instance holds ${CENTRAL_POLICY_ENTRIES_MAX} ${what} already, the most it keeps. Remove one, or name several actions with one pattern such as connection.crm.*`,
+    { reason: "too_many_entries", limit: CENTRAL_POLICY_ENTRIES_MAX }
+  );
 }
 
 /** The audit event of a changed setting: the entry, its narrowing and the two values. */

@@ -91,11 +91,13 @@ export const policies = defineTranslations({
     "policies.unlockLabel": "Lift the lock for {operation}",
     "policies.lockPattern": "Lock",
     "policies.refused.policy_names_itself":
-      "The Policies screen's own actions keep their default, so the policy can always be changed again.",
+      "The Policies screen's own actions, and what the interface reads to open, keep their default, so the policy can always be changed again.",
     "policies.refused.unknown_operation":
       "This names no action there is. Name an action exactly, or every action under a prefix such as connection.crm.*",
     "policies.refused.reading_operation_waits":
       "This action only reads: it runs or is off, and asks nobody.",
+    "policies.refused.too_many_entries":
+      "There are as many settings or locks as can be kept. Remove one, or name several actions with one pattern such as connection.crm.*",
     "policies.refused.locked_by_release":
       "The technical team locks Always allow for this action. Only they can lift it."
   },
@@ -188,11 +190,13 @@ export const policies = defineTranslations({
     "policies.unlockLabel": "Sperre für {operation} aufheben",
     "policies.lockPattern": "Sperren",
     "policies.refused.policy_names_itself":
-      "Die Aktionen der Richtlinien-Seite behalten ihren Standard, damit sich die Richtlinien immer wieder ändern lassen.",
+      "Die Aktionen der Richtlinien-Seite und was die Oberfläche zum Öffnen liest, behalten ihren Standard, damit sich die Richtlinien immer wieder ändern lassen.",
     "policies.refused.unknown_operation":
       "Das nennt keine Aktion, die es gibt. Nenne eine Aktion genau oder alle Aktionen unter einem Präfix wie connection.crm.*",
     "policies.refused.reading_operation_waits":
       "Diese Aktion liest nur: Sie läuft oder ist aus und fragt niemanden.",
+    "policies.refused.too_many_entries":
+      "Es gibt so viele Einstellungen oder Sperren, wie gespeichert werden können. Entferne eine oder nenne mehrere Aktionen mit einem Muster wie connection.crm.*",
     "policies.refused.locked_by_release":
       "Das technische Team sperrt „Immer erlauben“ für diese Aktion. Nur das technische Team kann das aufheben."
   }
