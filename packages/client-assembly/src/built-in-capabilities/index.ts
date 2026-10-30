@@ -1,5 +1,8 @@
 import type { ClientInstanceCapability } from "@work-shape/catalyst-capability-sdk";
-import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import {
+  releaseGuardrailFloor,
+  type ClientInstanceConfig
+} from "@work-shape/catalyst-config-schema";
 import { GUARDRAILS_CAPABILITY_NAME, createGuardrailsCapability } from "./guardrails";
 
 export {
@@ -20,6 +23,6 @@ export function withBuiltInCapabilities(
   const passed = new Set(capabilities.map((capability) => capability.name));
   const builtIn = passed.has(GUARDRAILS_CAPABILITY_NAME)
     ? []
-    : [createGuardrailsCapability({ guardrails: config.guardrails })];
+    : [createGuardrailsCapability({ guardrails: releaseGuardrailFloor(config) })];
   return [...builtIn, ...capabilities];
 }

@@ -1,6 +1,7 @@
 import type { ChatTransport, UIMessage, UIMessageChunk } from "ai";
 import type {
   ApiClient,
+  ChatInputCheckView,
   ConversationFollowUp,
   FollowUpMode,
   LocaleCode,
@@ -29,11 +30,21 @@ export interface ProductRunTransportOptions {
   onRunStarted?: (response: StartConversationRunResponse) => void;
   /** The conversation had a run going after all: the message waits in its queue. */
   onFollowUpQueued?: (followUp: ConversationFollowUp) => void;
+  /** Whether the person sends this text despite the warnings of the guardrails on it (GR-4). */
+  acceptsGuardrailWarnings?: (text: string) => boolean;
+  /**
+   * The send failed. True where the guardrails refused the message, which the composer then
+   * shows. The send then ends without an error, which the thread would show on the last
+   * answer: the caller puts the text back into the composer once it has finished.
+   */
+  onSendRefused?: (error: unknown, text: string) => boolean;
 }
 
 /** The answer to a message for a conversation whose run is still going. */
 export interface QueuedConversationMessage {
   followUp: ConversationFollowUp;
+  /** What the guardrails could not check of it, or warned about and the person accepted. */
+  chatInput?: ChatInputCheckView;
 }
 
 export class ProductConversationRunTransport implements ChatTransport<UIMessage> {
@@ -73,15 +84,22 @@ export class ProductConversationRunTransport implements ChatTransport<UIMessage>
       client: this.options.client,
       idempotencyKey,
       locale: this.options.locale,
-      text
+      text,
+      ...(this.options.acceptsGuardrailWarnings?.(text) ? { acceptGuardrailWarnings: true } : {})
     };
     const conversationId = this.options.selectedConversationId;
-    const response = conversationId
-      ? await sendProductConversationMessage({ ...selection, conversationId })
-      : await startProductConversationRun({
-          ...selection,
-          collaborationWorkspaceId: this.options.collaborationWorkspaceId
-        });
+    let response: StartConversationRunResponse | QueuedConversationMessage;
+    try {
+      response = conversationId
+        ? await sendProductConversationMessage({ ...selection, conversationId })
+        : await startProductConversationRun({
+            ...selection,
+            collaborationWorkspaceId: this.options.collaborationWorkspaceId
+          });
+    } catch (error) {
+      if (this.options.onSendRefused?.(error, text)) return emptyUiMessageChunkStream();
+      throw error;
+    }
     if ("followUp" in response) {
       // A run this page did not know of was going: the message waits behind it.
       this.options.onMessageSubmitted?.(response.followUp.conversationId);
@@ -124,7 +142,8 @@ export async function startProductConversationRun({
   locale,
   text,
   visibility,
-  projectId
+  projectId,
+  acceptGuardrailWarnings
 }: {
   agentName?: string;
   modelBindingId?: string;
@@ -139,6 +158,8 @@ export async function startProductConversationRun({
   visibility?: "private";
   /** A new conversation that starts in this project, with the project's audience (PRJ-1). */
   projectId?: string;
+  /** The person sends the message despite the guardrails' warnings on it (GR-4). */
+  acceptGuardrailWarnings?: boolean;
 }): Promise<StartConversationRunResponse> {
   const request = runStartRequest({
     agentName,
@@ -146,7 +167,8 @@ export async function startProductConversationRun({
     reasoningEffort,
     idempotencyKey,
     locale,
-    text
+    text,
+    acceptGuardrailWarnings
   });
 
   if (conversationId) {
@@ -192,6 +214,7 @@ export async function sendProductConversationMessage({
   idempotencyKey: string;
   locale: LocaleCode;
   text: string;
+  acceptGuardrailWarnings?: boolean;
 }): Promise<StartConversationRunResponse | QueuedConversationMessage> {
   return client.conversations.runs.start({
     params: { conversationId },
@@ -205,7 +228,8 @@ function runStartRequest({
   reasoningEffort,
   idempotencyKey,
   locale,
-  text
+  text,
+  acceptGuardrailWarnings
 }: {
   agentName?: string;
   modelBindingId?: string;
@@ -213,9 +237,11 @@ function runStartRequest({
   idempotencyKey: string;
   locale: LocaleCode;
   text: string;
+  acceptGuardrailWarnings?: boolean;
 }) {
   return {
     idempotencyKey,
+    ...(acceptGuardrailWarnings ? { acceptGuardrailWarnings: true as const } : {}),
     ...(agentName ? { agentName } : {}),
     ...(modelBindingId ? { modelBindingId } : {}),
     ...(reasoningEffort ? { reasoningEffort } : {}),

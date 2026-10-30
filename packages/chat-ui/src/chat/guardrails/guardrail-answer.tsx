@@ -21,6 +21,7 @@ import { GUARDRAIL_OUTCOME_VIEWS } from "../../studio/build-area/guardrail-model
 import { SHIPPED_WORDS } from "../../studio/build-area/shipped-guardrails";
 import { useApprovalRevisionHost } from "../approvals/approval-revision-host";
 import { changersSentence, type GuardrailAnswerRef } from "./guardrail-answer-model";
+import { chatInputRuleWords } from "./chat-input-rule-words";
 
 // A guardrail's answer where the person acts (GR-3): its name, its reason, what it did, where it
 // applies and in which version, who can change it, a way to ask them, and the way to Rules in
@@ -115,8 +116,10 @@ export function GuardrailAnswerView({
   const outcome = GUARDRAIL_OUTCOME_VIEWS[answer.outcome];
   // A guardrail the platform ships reads in the reader's language.
   const shipped = answer.origin === "shipped" ? SHIPPED_WORDS[answer.name] : undefined;
-  const title = shipped ? t(shipped.title) : answer.title;
-  const reason = answer.reason ?? (rule?.reason || undefined);
+  // So does a default rule on chat input that the operator left as it is (GR-4).
+  const chatInput = chatInputRuleWords(answer);
+  const title = shipped ? t(shipped.title) : chatInput ? t(chatInput.title) : answer.title;
+  const reason = chatInput ? t(chatInput.reason) : (answer.reason ?? (rule?.reason || undefined));
   const scope = answer.scope ?? rule?.scope;
   const workspaceName = rule?.scope.kind === "workspace" ? rule.scope.workspaceName : undefined;
   const revision = answer.revision ?? rule?.revision;

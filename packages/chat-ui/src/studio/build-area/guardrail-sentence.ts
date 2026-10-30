@@ -133,6 +133,10 @@ function whenClause(facts: GuardrailRunFacts, words: GuardrailSentenceWords): st
         ? t("guardrails.runs.approvalRequest", { actor })
         : t("guardrails.runs.approvalRequestOfKind", { actor, kind });
     }
+    case "message.before_send":
+      return facts.agent === undefined
+        ? t("guardrails.runs.chatMessage")
+        : t("guardrails.runs.chatMessageToAgent", { name: facts.agent });
     default: {
       const publish = PUBLISH_EVENTS[facts.event];
       return publish ? t(publish, { actor }) : t("guardrails.runs.unknownEvent");

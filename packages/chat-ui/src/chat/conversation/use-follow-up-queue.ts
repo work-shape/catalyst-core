@@ -16,6 +16,7 @@ import {
   sendProductConversationMessage
 } from "../assistant/product-run-transport";
 import type { ReasoningEffort } from "../workspace/agent-model-selection";
+import type { ChatInputGuard } from "../guardrails/chat-input-guard";
 import { isLiveRunStatus } from "./conversation-controller-state";
 import {
   followUpDispatchReread,
@@ -72,11 +73,13 @@ export function useFollowUpQueueModel(input: {
   locale: LocaleCode;
   messageSubmitted(conversationId: string): void;
   runStarted(response: StartConversationRunResponse): void;
+  /** The guardrails on the message (GR-4): a refusal shows in the composer, the draft stays. */
+  chatInput?: Pick<ChatInputGuard, "acceptsWarnings" | "refused" | "delivered">;
   t: TranslationContextValue["t"];
 }): FollowUpQueueModel | undefined {
   const { source, client, conversationId, runStatus, messageSubmitted, runStarted, t } = input;
   const { runId, runOwnerUserId } = input;
-  const { agentName, modelBindingId, reasoningEffort, locale } = input;
+  const { agentName, modelBindingId, reasoningEffort, locale, chatInput } = input;
   const { refreshThread } = source;
   const queryClient = useQueryClient();
   // A message the server took stands in the list at once. It stays until the thread changes,
@@ -177,18 +180,21 @@ export function useFollowUpQueueModel(input: {
           idempotencyKey: createRunIdempotencyKey(),
           locale,
           text,
-          followUp
+          followUp,
+          ...(chatInput?.acceptsWarnings(text) ? { acceptGuardrailWarnings: true } : {})
         });
         messageSubmitted(conversationId);
         if ("followUp" in response) {
+          chatInput?.delivered(conversationId, response.chatInput);
           setEcho({ followUp: response.followUp, seenWith: source.followUps });
         } else {
           // The run ended meanwhile: the message started at once.
           runStarted(response);
         }
         return true;
-      } catch {
-        setError(t("followUpQueueFailed"));
+      } catch (cause) {
+        // The guardrails refused it: the composer says why, and the draft stays.
+        if (!chatInput?.refused(cause, text, conversationId)) setError(t("followUpQueueFailed"));
         return false;
       } finally {
         setQueueing(false);
@@ -196,6 +202,7 @@ export function useFollowUpQueueModel(input: {
     },
     [
       agentName,
+      chatInput,
       client,
       conversationId,
       locale,

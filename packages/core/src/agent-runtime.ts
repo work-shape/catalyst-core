@@ -220,6 +220,11 @@ export interface AgentRunProjection {
   durationMs?: number;
   parts: AgentRunProjectionPart[];
   text: string;
+  /**
+   * The reply's hold (GR-5, prepared by GR-4): `held` while it waits for its check, `withheld`
+   * with the guardrail and its reason. The text held back never reaches an observation.
+   */
+  hold?: { state: "held" } | { state: "withheld"; guardrailId: string; reason: string };
   reasoning: Array<{
     id: string;
     text: string;
@@ -324,6 +329,36 @@ export type AgentRuntimeEvent =
         text: string;
         metadata?: JsonObject;
       };
+    }
+  | {
+      /**
+       * The reply is held until a check ends (GR-5 output hold-back, prepared by GR-4): its text
+       * is not shown, and the deltas that follow are neither streamed nor stored until it is
+       * released. A client shows a waiting state.
+       */
+      type: "message_held";
+      runId: AgentRunId;
+      sequence: number;
+      createdAt: ISODateString;
+    }
+  | {
+      /** The held reply passed its check: the deltas held back follow, and it shows as usual. */
+      type: "message_released";
+      runId: AgentRunId;
+      sequence: number;
+      createdAt: ISODateString;
+    }
+  | {
+      /**
+       * The held reply was withheld: its deltas are dropped, never stored as observations or put
+       * into Agent-Visible History, and a client shows the reason in its place.
+       */
+      type: "message_withheld";
+      runId: AgentRunId;
+      sequence: number;
+      createdAt: ISODateString;
+      guardrailId: string;
+      reason: string;
     }
   | {
       /**

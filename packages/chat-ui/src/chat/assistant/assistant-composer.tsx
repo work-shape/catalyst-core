@@ -23,6 +23,7 @@ import { holdsFiles, shouldQueueSend, type SendBlock } from "./send-block";
 import { ComposerAction } from "./composer-action";
 import { followUpModeOfSend } from "./follow-up-shortcut";
 import { AddFromProjectButton } from "../projects/add-from-project";
+import { ChatInputNotice } from "../guardrails/chat-input-notice";
 
 export interface LocalUploadingAttachment {
   id: string;
@@ -337,6 +338,7 @@ export function AssistantComposer({
 
   return (
     <ComposerPrimitive.Root className="relative grid w-full gap-2" onSubmitCapture={handleSubmit}>
+      <ChatInputNotice onSendAnyway={() => composerInputRef.current?.form?.requestSubmit()} />
       <FollowUpQueue />
       <ComposerPrimitive.Attachments>
         {() => <AttachmentPreview removable />}

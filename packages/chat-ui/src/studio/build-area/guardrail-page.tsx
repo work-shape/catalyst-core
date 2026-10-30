@@ -346,7 +346,9 @@ function GuardrailHitList({
     );
   }
   const { items, hasMore, counts } = read.hits;
-  if (items.length === 0) {
+  // Hits on people's chat messages are counted, never listed (GR-4).
+  const countedOnly = items.length === 0 && counts.last30Days > 0;
+  if (items.length === 0 && !countedOnly) {
     return <EmptyState layout="inline">{t("guardrails.hitsEmpty")}</EmptyState>;
   }
   return (
@@ -355,7 +357,12 @@ function GuardrailHitList({
         <KeyValue label={t("guardrails.hitsLast7Days")}>{counts.last7Days}</KeyValue>
         <KeyValue label={t("guardrails.hitsLast30Days")}>{counts.last30Days}</KeyValue>
       </KeyValueList>
-      <List aria-label={t("guardrails.hitsTitle")}>
+      {countedOnly ? (
+        <p className="text-caption text-muted-foreground" data-guardrail-hits-counted-only="">
+          {t("guardrails.hitsCountedOnly")}
+        </p>
+      ) : null}
+      <List aria-label={t("guardrails.hitsTitle")} hidden={countedOnly}>
         {items.map((hit: GuardrailHitView) => {
           const view = GUARDRAIL_OUTCOME_VIEWS[hit.outcome];
           const Icon = hit.outcome === "block" ? ShieldX : ShieldAlert;

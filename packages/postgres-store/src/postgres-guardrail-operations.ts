@@ -1,5 +1,6 @@
-import { and, desc, eq, gte, lt, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, lt, ne, sql, type SQL } from "drizzle-orm";
 import {
+  CHAT_INPUT_EVENT,
   createPlatformId,
   type GuardrailDryRunSubject,
   type GuardrailHit,
@@ -32,7 +33,9 @@ export function createPostgresGuardrailsStore(db: PostgresConnection): Guardrail
           subjectKind: hit.subjectKind,
           subjectId: hit.subjectId ?? null,
           subjectName: hit.subjectName ?? null,
-          convertedFrom: hit.convertedFrom ?? null
+          convertedFrom: hit.convertedFrom ?? null,
+          field: hit.field ?? null,
+          matchCount: hit.matchCount ?? null
         }))
       );
     },
@@ -86,7 +89,9 @@ export function createPostgresGuardrailsStore(db: PostgresConnection): Guardrail
         .where(
           and(
             eq(guardrailHits.clientInstanceId, clientInstanceId),
-            eq(guardrailHits.guardrailName, guardrailName)
+            eq(guardrailHits.guardrailName, guardrailName),
+            // Chat messages a guardrail stopped are counted, never listed (§87(1) no. 6 BetrVG).
+            ne(guardrailHits.event, CHAT_INPUT_EVENT)
           )
         )
         .orderBy(desc(guardrailHits.createdAt), desc(guardrailHits.id))

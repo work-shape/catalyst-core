@@ -14,7 +14,8 @@ A guardrail is bound to one moment:
 - before an asset is saved, such as an agent, a skill or an App draft, whether in Studio, by an agent or with the CLI;
 - before any operation is called, by a person, an agent, an App or a Workflow;
 - before an App, a Workflow or a Data Store is published;
-- before a request for approval is filed, such as a skill change an agent proposes.
+- before a request for approval is filed, such as a skill change an agent proposes;
+- before a person's chat message is sent, see below.
 
 It can be narrowed further, for example to skills only, to one agent, or to one workspace.
 
@@ -37,6 +38,27 @@ When a guardrail blocks something an agent tried in a chat, the agent's step sho
 Every guardrail that applies runs, and the strictest answer wins. A guardrail can only make things stricter: it never allows what a right or the policy refuses.
 
 A guardrail checks either for a **text pattern** ("Muster"), such as the shape of an IBAN, or with a **model** that reads the content against a written rule. A model check is a model call of the instance and counts toward its usage.
+
+## Guardrails on chat messages
+
+A chat message is checked before it is stored and before the agent reads it: its text and the text of its attached files. These checks are fixed text patterns that run inside the instance; no message is sent to another service for them.
+
+Four rules are on unless the operator switches them off:
+
+| Rule | On a hit |
+| --- | --- |
+| **Secrets in chat** ("Geheimnisse im Chat"): API keys, access tokens, private keys | Blocks |
+| **Passwords in chat** ("Passwörter im Chat"): a password written out, such as `Passwort: …` | Warns |
+| **Card numbers in chat** ("Kartennummern im Chat"): payment card numbers that pass the Luhn check | Blocks |
+| **Special categories of personal data in chat** ("Besonders geschützte Daten im Chat"): words for health, religion, union membership and the like | Warns |
+
+An IBAN or a tax ID is not stopped.
+
+- **Blocked**: the composer says "Nicht gesendet." with the guardrail's answer. The message stays in the composer; nothing was sent or stored.
+- **Warned**: the composer says "Noch nicht gesendet." with the guardrail's answer and **Send anyway** ("Trotzdem senden"). Change the message or send it as it is.
+- **Not checked** ("Nicht geprüft"): a picture, a PDF or Word file, whose text is read only after it is sent, or a file that could not be read is not checked, and the composer names it.
+
+A hit keeps the rule, the message and how many matches there were, never the text. Chat hits are only counted, on the guardrail's page and on Rules in force.
 
 ## Read them in Studio
 

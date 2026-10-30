@@ -41,6 +41,8 @@ export const guardrails = defineTranslations({
     "guardrails.runs.dataStorePublish": "before {actor} publishes a Data Store",
     "guardrails.runs.formPagePublish": "before {actor} publishes a form page",
     "guardrails.runs.unknownEvent": "before an action this version cannot name",
+    "guardrails.runs.chatMessage": "before someone sends a chat message",
+    "guardrails.runs.chatMessageToAgent": "before someone sends a chat message to the agent {name}",
     "guardrails.runs.anyOperation": "any operation",
     "guardrails.runs.operationPrefix": "an operation whose name starts with {prefix}",
     "guardrails.runs.operationNamed": "the operation {name}",
@@ -107,6 +109,8 @@ export const guardrails = defineTranslations({
     "guardrails.hitsDescription":
       "How often and when this guardrail warned, held or blocked, and on what, without naming anyone. Hits are kept as long as the audit log.",
     "guardrails.hitsEmpty": "No hits yet. Every warning, hold and block shows here.",
+    "guardrails.hitsCountedOnly":
+      "Hits on chat messages are only counted: no list says whose message or what it said.",
     "guardrails.hitsFailed": "The hits of this guardrail could not be loaded.",
     "guardrails.hitsMore": "Only the newest {count} hits are shown.",
     "guardrails.hitsLast7Days": "Last 7 days",
@@ -166,6 +170,9 @@ export const guardrails = defineTranslations({
     "guardrails.runs.dataStorePublish": "bevor {actor} einen Data Store veröffentlicht",
     "guardrails.runs.formPagePublish": "bevor {actor} eine Formularseite veröffentlicht",
     "guardrails.runs.unknownEvent": "vor einer Aktion, die diese Version nicht benennen kann",
+    "guardrails.runs.chatMessage": "bevor jemand eine Nachricht im Chat sendet",
+    "guardrails.runs.chatMessageToAgent":
+      "bevor jemand dem Agenten {name} eine Nachricht im Chat sendet",
     "guardrails.runs.anyOperation": "eine beliebige Operation",
     "guardrails.runs.operationPrefix": "eine Operation, deren Name mit {prefix} beginnt",
     "guardrails.runs.operationNamed": "die Operation {name}",
@@ -234,6 +241,8 @@ export const guardrails = defineTranslations({
     "guardrails.hitsTitle": "Letzte Treffer",
     "guardrails.hitsDescription":
       "Wie oft, wann und bei was diese Leitplanke gewarnt, angehalten oder blockiert hat, ohne Personen zu nennen. Treffer bleiben so lange wie das Audit-Protokoll.",
+    "guardrails.hitsCountedOnly":
+      "Treffer bei Chatnachrichten werden nur gezählt: Keine Liste nennt, wessen Nachricht es war oder was darin stand.",
     "guardrails.hitsEmpty":
       "Noch keine Treffer. Jede Warnung, jedes Anhalten und jede Blockade erscheint hier.",
     "guardrails.hitsFailed": "Die Treffer dieser Leitplanke konnten nicht geladen werden.",

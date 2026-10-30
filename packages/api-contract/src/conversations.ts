@@ -28,7 +28,7 @@ import {
 } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { reasoningEffortSchema } from "./configuration";
-import { guardrailAnswerRefSchema } from "./guardrail-answers";
+import { chatInputCheckSchema, guardrailAnswerRefSchema } from "./guardrail-answers";
 import { projectFileChangeSchema } from "./projects";
 import { localeCodeSchema, timestampSchema } from "./shared";
 
@@ -540,6 +540,29 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     createdAt: timestampSchema,
     delta: z.string()
   }),
+  // A reply held until its check ends, released or withheld (GR-5; in the contract from GR-4).
+  // A held reply shows a waiting state; a withheld one shows the reason, and its deltas are
+  // never stored or streamed.
+  z.object({
+    type: z.literal("message_held"),
+    runId: z.string(),
+    sequence: z.number(),
+    createdAt: timestampSchema
+  }),
+  z.object({
+    type: z.literal("message_released"),
+    runId: z.string(),
+    sequence: z.number(),
+    createdAt: timestampSchema
+  }),
+  z.object({
+    type: z.literal("message_withheld"),
+    runId: z.string(),
+    sequence: z.number(),
+    createdAt: timestampSchema,
+    guardrailId: z.string(),
+    reason: z.string()
+  }),
   z.object({
     type: z.literal("reasoning_delta"),
     runId: z.string(),
@@ -798,6 +821,13 @@ export const agentRunProjectionSchema = z.object({
   durationMs: z.number().int().nonnegative().optional(),
   parts: z.array(agentRunProjectionPartSchema).default([]),
   text: z.string(),
+  /** A held reply waits for its check; a withheld one names the guardrail and its reason. */
+  hold: z
+    .discriminatedUnion("state", [
+      z.object({ state: z.literal("held") }),
+      z.object({ state: z.literal("withheld"), guardrailId: z.string(), reason: z.string() })
+    ])
+    .optional(),
   reasoning: z.array(
     z.object({
       id: z.string(),
@@ -901,7 +931,9 @@ export const conversationFollowUpSchema = z.object({
 });
 
 export const queuedConversationRunResponseSchema = z.object({
-  followUp: conversationFollowUpSchema
+  followUp: conversationFollowUpSchema,
+  /** What the guardrails on chat input warned about or could not check (GR-4). */
+  chatInput: chatInputCheckSchema.optional()
 });
 
 export const startConversationRunRequestSchema = z.object({
@@ -922,7 +954,13 @@ export const startConversationRunRequestSchema = z.object({
       .describe(
         "The message. It may be empty when the conversation's ready draft attachments go with it; a message with neither text nor attachments is refused."
       )
-  })
+  }),
+  acceptGuardrailWarnings: z
+    .literal(true)
+    .optional()
+    .describe(
+      "Send the message although a guardrail on chat input warns about it, after the person saw the warning. Without it a warning answers CONFLICT with the reason `chat_input_warning` and nothing is stored. A block is never overridden."
+    )
 });
 
 export const startConversationRunResponseSchema = z.object({
@@ -930,7 +968,9 @@ export const startConversationRunResponseSchema = z.object({
   userMessage: messageSchema,
   run: agentRunSchema,
   thread: z.lazy(() => conversationThreadSnapshotSchema),
-  eventsUrl: z.string()
+  eventsUrl: z.string(),
+  /** What the guardrails on chat input warned about or could not check (GR-4). */
+  chatInput: chatInputCheckSchema.optional()
 });
 
 export const createConversationRunRequestSchema = startConversationRunRequestSchema.extend({

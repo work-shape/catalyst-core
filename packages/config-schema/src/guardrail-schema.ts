@@ -10,6 +10,8 @@ import {
   GUARDRAIL_NAME_RULE,
   GUARDRAIL_ORIGINS,
   GUARDRAIL_OUTCOMES,
+  GUARDRAIL_PATTERN_CHECKSUMS,
+  GUARDRAIL_PATTERN_ONLY_EVENTS,
   type GuardrailConfig,
   type GuardrailEvent
 } from "@work-shape/catalyst-core";
@@ -59,9 +61,17 @@ const patternCheckSchema = z
         }
       }),
     fields: checkedFieldsSchema,
-    reason: z.string().trim().min(1).max(GUARDRAIL_REASON_MAX_CHARS).optional()
+    reason: z.string().trim().min(1).max(GUARDRAIL_REASON_MAX_CHARS).optional(),
+    checksum: z.enum(GUARDRAIL_PATTERN_CHECKSUMS).optional()
   })
   .strict();
+
+const checkSchema = z.discriminatedUnion("kind", [patternCheckSchema, modelJudgeCheckSchema], {
+  error: (issue) =>
+    issue.code === "invalid_union"
+      ? `A check is a 'pattern' or a 'model_judge'; code checks are not available. At ${listed(GUARDRAIL_PATTERN_ONLY_EVENTS)} only a 'pattern' runs`
+      : undefined
+});
 
 const guardrailFields = {
   description: z.string().max(2000).optional(),
@@ -76,7 +86,7 @@ const guardrailFields = {
     })
     .strict()
     .optional(),
-  check: z.discriminatedUnion("kind", [patternCheckSchema, modelJudgeCheckSchema]),
+  check: checkSchema,
   outcome: z.enum(GUARDRAIL_OUTCOMES)
 };
 
@@ -88,11 +98,19 @@ function refineGuardrail(
   guardrail: {
     on: GuardrailEvent;
     filter?: Partial<Record<string, unknown>>;
-    check: { fields?: string[] };
+    check: { kind: string; fields?: string[] };
     outcome: string;
   },
   context: z.RefinementCtx
 ): void {
+  const patternOnly: readonly string[] = GUARDRAIL_PATTERN_ONLY_EVENTS;
+  if (patternOnly.includes(guardrail.on) && guardrail.check.kind !== "pattern") {
+    context.addIssue({
+      code: "custom",
+      path: ["check", "kind"],
+      message: `A guardrail on '${guardrail.on}' checks with a 'pattern' only, which runs inside the instance: a '${guardrail.check.kind}' would send the person's message to a second provider call`
+    });
+  }
   const filterKeys: readonly string[] = GUARDRAIL_FILTER_KEYS[guardrail.on];
   for (const key of Object.keys(guardrail.filter ?? {})) {
     if (guardrail.filter?.[key] !== undefined && !filterKeys.includes(key)) {

@@ -1,0 +1,10 @@
+# The person of the chat input guardrails spec (GR-4), whose messages the default rules on chat
+# input warn about and block. No other spec uses this person.
+- email: e2e-chat-input-guardrails@example.test
+  displayLabel: E2E Zz Chat Input Guardrails
+  passwordEnvName: E2E_CHAT_INPUT_GUARDRAILS_PASSWORD
+  developmentPassword: e2e-chat-input-guardrails-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

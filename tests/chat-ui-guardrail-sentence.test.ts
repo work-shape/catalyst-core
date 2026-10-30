@@ -103,15 +103,25 @@ describe("the sentence of when a guardrail runs", () => {
   });
 
   it("names no event id, for every event and for one this build does not know", () => {
-    for (const event of [...GUARDRAIL_EVENTS, "message.before_send"]) {
+    for (const event of [...GUARDRAIL_EVENTS, "message.after_send"]) {
       for (const locale of ["en", "de"] as const) {
         const said = sentence({ ...agentSavesSkill, event, kind: undefined }, locale);
         expect(said, `${event} ${locale}`).not.toContain(event);
         expect(said).not.toMatch(/guardrails\./u);
       }
     }
-    expect(sentence({ ...agentSavesSkill, event: "message.before_send" })).toContain(
+    expect(sentence({ ...agentSavesSkill, event: "message.after_send" })).toContain(
       "before an action this version cannot name"
+    );
+  });
+
+  it("names a chat message, and the agent it goes to (GR-4)", () => {
+    const facts = { ...agentSavesSkill, event: "message.before_send", kind: undefined };
+    expect(sentence({ ...facts, agent: undefined })).toContain(
+      "Runs before someone sends a chat message"
+    );
+    expect(sentence({ ...facts, agent: "kai" }, "de")).toContain(
+      "bevor jemand dem Agenten kai eine Nachricht im Chat sendet"
     );
   });
 });

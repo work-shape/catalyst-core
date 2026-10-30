@@ -1,0 +1,138 @@
+import { z } from "zod";
+import { CHAT_INPUT_EVENT } from "@work-shape/catalyst-core";
+import type { ReleaseGuardrailConfig } from "./guardrail-schema";
+
+// The default rules on a person's chat message (GR-4), part of the operator's floor. Each is a
+// fixed pattern that runs inside the instance; no message goes to another service for them.
+// Ordinary personal data such as an IBAN or a tax ID is not stopped: the conversation is where
+// people work with it. Spec: events-workflows-and-guardrails.md, Guardrails on chat.
+
+/** Secrets: API keys, access tokens and private keys. RE2, case as the issuers write them. */
+const SECRET_PATTERNS = [
+  // A private key in PEM or OpenSSH form.
+  String.raw`-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED |PGP )?PRIVATE KEY(?: BLOCK)?-----`,
+  // AWS access key ids.
+  String.raw`\b(?:AKIA|ASIA)[0-9A-Z]{16}\b`,
+  // GitHub tokens.
+  String.raw`\bgh[pousr]_[0-9A-Za-z]{36,}`,
+  String.raw`\bgithub_pat_[0-9A-Za-z_]{40,}`,
+  // GitLab personal access tokens.
+  String.raw`\bglpat-[0-9A-Za-z_-]{20,}`,
+  // Model provider and payment keys: sk-..., sk-ant-..., sk-proj-..., sk_live_..., rk_live_...
+  String.raw`\bsk-(?:ant-|proj-)?[0-9A-Za-z_-]{32,}`,
+  String.raw`\b[rs]k_(?:live|test)_[0-9A-Za-z]{20,}`,
+  // Slack tokens.
+  String.raw`\bxox[abpors]-[0-9A-Za-z-]{20,}`,
+  // Google API keys.
+  String.raw`\bAIza[0-9A-Za-z_-]{35}\b`,
+  // JSON Web Tokens: three base64url parts, the first two JSON objects.
+  String.raw`\beyJ[0-9A-Za-z_-]{10,}\.eyJ[0-9A-Za-z_-]{10,}\.[0-9A-Za-z_-]{10,}`
+];
+
+/** A password written out as `password: …`, in English or German. */
+const PASSWORD_PATTERN = String.raw`(?i)\b(?:password|passwort|kennwort|passwd|pwd)\s*[:=]\s*\S+`;
+
+/**
+ * Payment card numbers: 13 to 19 digits, optionally in groups split by single spaces or hyphens.
+ * Only those that pass the Luhn check and stand alone count (`checksum: luhn`).
+ */
+const CARD_NUMBER_PATTERN = String.raw`\b[0-9](?:[ -]?[0-9]){12,18}\b`;
+
+/**
+ * Markers of special categories of personal data (Art. 9 GDPR): health, religion, union
+ * membership, ethnic origin, political opinions, sexual orientation, genetic and biometric data.
+ * Word stems in German and English, so that inflected forms match.
+ */
+const SPECIAL_CATEGORY_PATTERN = String.raw`(?i)\b(?:diagnos|krankschreib|krankgeschrieb|krankmeld|arbeitsunfähig|erkrank|schwerbehind|behinderung|disabilit|schwanger|pregnan|gesundheitszustand|gesundheitsdaten|health condition|health data|medical condition|hiv\b|religio|konfession|kirchensteuer|kirchenaustritt|gewerkschaft|trade union|union member|ethnische herkunft|ethnic origin|sexuelle orientierung|sexual orientation|politische meinung|politische überzeugung|political opinion|genetische daten|genetic data|biometrische daten|biometric data)`;
+
+/** The default rules on chat input, by name. Their names start with `chat-`. */
+export const CHAT_INPUT_FLOOR_GUARDRAILS = {
+  "chat-secrets": {
+    displayName: "Secrets in chat",
+    description:
+      "API keys, access tokens and private keys in a chat message or the text of its attachments.",
+    on: CHAT_INPUT_EVENT,
+    check: {
+      kind: "pattern",
+      pattern: SECRET_PATTERNS.join("|"),
+      reason:
+        "The message contains what looks like an API key, an access token or a private key. Remove it before you send the message, and change the secret if it was shared."
+    },
+    outcome: "block"
+  },
+  "chat-passwords": {
+    displayName: "Passwords in chat",
+    description: "A password written out as 'password: …' in a chat message.",
+    on: CHAT_INPUT_EVENT,
+    check: {
+      kind: "pattern",
+      pattern: PASSWORD_PATTERN,
+      reason:
+        "The message seems to contain a password. Passwords do not belong in a chat; send it only if you are sure."
+    },
+    outcome: "warn"
+  },
+  "chat-card-numbers": {
+    displayName: "Card numbers in chat",
+    description: "Payment card numbers that pass the Luhn check, in a chat message.",
+    on: CHAT_INPUT_EVENT,
+    check: {
+      kind: "pattern",
+      pattern: CARD_NUMBER_PATTERN,
+      checksum: "luhn",
+      reason:
+        "The message contains what looks like a payment card number. Remove it before you send the message."
+    },
+    outcome: "block"
+  },
+  "chat-special-categories": {
+    displayName: "Special categories of personal data in chat",
+    description:
+      "Words that point to health, religion, union membership or other special categories of personal data (Art. 9 GDPR).",
+    on: CHAT_INPUT_EVENT,
+    check: {
+      kind: "pattern",
+      pattern: SPECIAL_CATEGORY_PATTERN,
+      reason:
+        "The message may contain special categories of personal data, such as health, religion or union membership. Send it only if the task needs them."
+    },
+    outcome: "warn"
+  }
+} as const satisfies Record<string, ReleaseGuardrailConfig>;
+
+export type ChatInputFloorGuardrailName = keyof typeof CHAT_INPUT_FLOOR_GUARDRAILS;
+
+/**
+ * `chatInputGuardrails` of release config: the operator switches each default rule on chat input
+ * off with `false`. All are on where the key is missing. A guardrail of `guardrails` with the
+ * same name takes the default's place.
+ */
+export const chatInputGuardrailsConfigSchema = z
+  .object({
+    "chat-secrets": z.boolean().default(true),
+    "chat-passwords": z.boolean().default(true),
+    "chat-card-numbers": z.boolean().default(true),
+    "chat-special-categories": z.boolean().default(true)
+  })
+  .strict()
+  .prefault({}) satisfies z.ZodType<Record<ChatInputFloorGuardrailName, boolean>>;
+
+/**
+ * The operator's floor: the default rules on chat input that are switched on, first, and then
+ * `guardrails` of release config, whose own entry of the same name wins. Everything that runs or
+ * shows the floor reads it here, so `guardrails` stays what the operator wrote.
+ */
+export function releaseGuardrailFloor(config: {
+  guardrails: Readonly<Record<string, ReleaseGuardrailConfig>>;
+  chatInputGuardrails: Readonly<Record<ChatInputFloorGuardrailName, boolean>>;
+}): Record<string, ReleaseGuardrailConfig> {
+  const { guardrails, chatInputGuardrails: switches } = config;
+  const defaults: Record<string, ReleaseGuardrailConfig> = {};
+  for (const [name, on] of Object.entries(switches)) {
+    if (on && !(name in guardrails)) {
+      const rule = Object.entries(CHAT_INPUT_FLOOR_GUARDRAILS).find(([key]) => key === name)?.[1];
+      if (rule) defaults[name] = rule;
+    }
+  }
+  return { ...defaults, ...guardrails };
+}

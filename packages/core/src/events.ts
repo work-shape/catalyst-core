@@ -98,8 +98,11 @@ export interface PlatformEventContext extends Pick<
    * the payload holds references only.
    */
   checkable?(): GuardrailFields | Promise<GuardrailFields>;
-  /** What a filter narrows by beside the origin: the asset kind or the operation's name. */
-  filterBy?: { kind?: string; operation?: string };
+  /**
+   * What a filter narrows by beside the origin: the asset kind or the operation's name, and for
+   * a person's chat message the agent it is sent to.
+   */
+  filterBy?: { kind?: string; operation?: string; agent?: string };
   /**
    * Set where the action writes, publishes, deletes or tests guardrails: only the release floor
    * answers its before-events, so no published guardrail stops the change of guardrails.

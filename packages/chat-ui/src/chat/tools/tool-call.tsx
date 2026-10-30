@@ -23,6 +23,7 @@ import { useConnectionDraftHost } from "../../studio/build-area/connection-draft
 import { ConnectionConnectCard } from "../../studio/build-area/connection-connect-card";
 import { GuardrailAnswer } from "../guardrails/guardrail-answer";
 import { readGuardrailRefusal } from "../guardrails/guardrail-answer-model";
+import { readReplyHold, ReplyHoldNotice } from "../guardrails/reply-hold";
 import { connectCardOfRefusal } from "../../studio/build-area/connection-connect-card-model";
 import {
   CONNECTION_OFFER_TOOL_NAME,
@@ -435,7 +436,9 @@ export function DataPart({
   const { locale, t } = useTranslation();
   const displayPanel = useToolDisplayPanel();
   const displayWidget = useToolDisplayWidget();
+  const hold = name === "reply-hold" ? readReplyHold(data) : undefined;
   const promotedArtifacts = readWorkspacePromotedArtifactsData(data);
+  if (hold) return <ReplyHoldNotice hold={hold} />;
   if (promotedArtifacts) {
     return (
       <div className="chat-tool-part my-3 max-w-3xl">

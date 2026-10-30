@@ -26,26 +26,83 @@ const GUARDRAIL_PATTERN_STEPS = 40_000_000;
  */
 const GUARDRAIL_PATTERN_MIN_READ_CHARS = 64 * 1024;
 
-/** A compiled pattern: whether it matches somewhere in the text. */
+/** A compiled pattern: whether it matches somewhere in the text, and how often. */
 export interface GuardrailPattern {
   test(text: string): boolean;
+  /**
+   * How often it matches in the text, not overlapping, counting at most `max`. Each match
+   * continues the scan where the one before ended, so the count reads the text once, as `test`.
+   */
+  count(text: string, max: number): number;
   /** The most characters of one field it reads, by the size of its program. */
   maxChars: number;
 }
 
 /**
  * Compiles a guardrail's pattern with RE2, which has no backreferences and no lookaround and
- * matches in linear time. Throws the reason it does not compile.
+ * matches in linear time. With `checksum: luhn` a match counts only where its digits pass the
+ * Luhn check and do not run on beyond it. Throws the reason it does not compile.
  */
-export function compileGuardrailPattern(pattern: string): GuardrailPattern {
+export function compileGuardrailPattern(pattern: string, checksum?: "luhn"): GuardrailPattern {
   const compiled = RE2JS.compile(pattern);
+  const count = (text: string, max: number): number => {
+    const matcher = compiled.matcher(text);
+    let found = 0;
+    let from = 0;
+    while (found < max && from <= text.length && matcher.find(from)) {
+      const start = matcher.start();
+      const end = matcher.end();
+      if (checksum !== "luhn" || isCardNumber(text, start, end)) found += 1;
+      // An empty match moves on by one, so the scan always ends.
+      from = end > start ? end : end + 1;
+    }
+    return found;
+  };
   return {
-    test: (text) => compiled.matcher(text).find(),
+    test: (text) => (checksum ? count(text, 1) > 0 : compiled.matcher(text).find()),
+    count,
     maxChars: Math.min(
       GUARDRAIL_CHECKED_FIELD_MAX_CHARS,
       Math.floor(GUARDRAIL_PATTERN_STEPS / compiled.programSize())
     )
   };
+}
+
+/** Payment card numbers have 13 to 19 digits. */
+const CARD_DIGITS_MIN = 13;
+const CARD_DIGITS_MAX = 19;
+
+/**
+ * Whether a match is a payment card number: 13 to 19 digits that pass the Luhn check, standing
+ * alone. Digits that go on before or after it, joined by a space or a hyphen, or letters glued to
+ * it, make it part of something longer, such as an IBAN or an account number.
+ */
+function isCardNumber(text: string, start: number, end: number): boolean {
+  const digits = text.slice(start, end).replace(/[^0-9]/gu, "");
+  if (digits.length < CARD_DIGITS_MIN || digits.length > CARD_DIGITS_MAX) return false;
+  if (goesOn(text, start - 1, -1) || goesOn(text, end, 1)) return false;
+  return passesLuhn(digits);
+}
+
+function goesOn(text: string, at: number, step: 1 | -1): boolean {
+  const next = text[at];
+  if (next === undefined) return false;
+  if (/[0-9A-Za-z]/u.test(next)) return true;
+  return (next === " " || next === "-") && /[0-9]/u.test(text[at + step] ?? "");
+}
+
+/** The Luhn checksum of payment card numbers. */
+export function passesLuhn(digits: string): boolean {
+  let sum = 0;
+  for (let index = 0; index < digits.length; index += 1) {
+    let digit = Number(digits[digits.length - 1 - index]);
+    if (index % 2 === 1) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+    sum += digit;
+  }
+  return sum % 10 === 0;
 }
 
 /** Why a pattern does not compile or reads too little, or undefined where it does neither. */

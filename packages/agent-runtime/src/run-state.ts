@@ -85,6 +85,11 @@ export class RunState {
   private cancellationStarted = false;
   private messageCompleted = false;
   private streamedText = "";
+  /**
+   * The deltas of a held reply (`message_held`, GR-5): they get no sequence and are neither
+   * streamed nor stored until it is released. A withheld reply's deltas are dropped here.
+   */
+  private heldDeltas: AgentRuntimeEventDraft[] | undefined;
   private readonly reasoningById = new Map<string, string>();
   private readonly events: AgentRuntimeEvent[] = [];
   private readonly listeners = new Set<() => void>();
@@ -295,6 +300,17 @@ export class RunState {
     if (this.closed || (this.cancellationStarted && !options.allowDuringCancellation)) {
       return;
     }
+    if (this.heldDeltas && event.type === "message_delta") {
+      this.heldDeltas.push(event);
+      return;
+    }
+    if (event.type === "message_held") {
+      this.heldDeltas ??= [];
+    }
+    const released = event.type === "message_released" ? (this.heldDeltas ?? []) : [];
+    if (event.type === "message_released" || event.type === "message_withheld") {
+      this.heldDeltas = undefined;
+    }
     this.sequence += 1;
     const runtimeEvent = {
       ...event,
@@ -317,6 +333,9 @@ export class RunState {
     this.events.push(runtimeEvent);
     this.persistEvent(runtimeEvent);
     this.flush();
+    for (const delta of released) {
+      this.emitRuntimeEvent(delta, options);
+    }
   }
 
   private waitForEvent(): Promise<void> {

@@ -9,6 +9,7 @@ import {
 import { guardrailConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   AppError,
+  CHAT_INPUT_EVENT,
   GUARDRAIL_ASSET_KIND,
   GUARDRAIL_CHECKABLE_FIELDS,
   getSubjectUserId,
@@ -248,6 +249,11 @@ export async function dryRunGuardrail(
     published
   });
   const filter: GuardrailFilter = guardrail.filter ?? {};
+  // People's chat messages are never read again to try a rule on them: that would check what
+  // employees wrote (§87(1) no. 6 BetrVG). A rule on chat input is tried on sample content.
+  if (event === CHAT_INPUT_EVENT) {
+    return result({ matched: 0, evaluated: 0, notEvaluable: 0 });
+  }
   if (event === "operation.before_call" || event === "approval_request.before_create") {
     const notEvaluable = await options.stores.guardrails.countRecentActions({
       clientInstanceId: options.clientInstanceId,

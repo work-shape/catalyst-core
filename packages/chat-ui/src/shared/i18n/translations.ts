@@ -47,6 +47,7 @@ import { feedback } from "./feedback";
 import { platformReport } from "./platform-report";
 import { files } from "./files";
 import { guardrailAnswers } from "./guardrail-answers";
+import { chatInputGuardrails } from "./chat-input-guardrails";
 import { guardrails } from "./guardrails";
 import { inbox } from "./inbox";
 import { knowledge } from "./knowledge";
@@ -136,6 +137,7 @@ export const translations = combineTranslations(common)
   .and(files)
   .and(guardrails)
   .and(guardrailAnswers)
+  .and(chatInputGuardrails)
   .and(inbox)
   .and(knowledge)
   .and(localAgent)

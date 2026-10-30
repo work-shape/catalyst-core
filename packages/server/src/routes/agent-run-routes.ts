@@ -11,10 +11,8 @@ import {
 import {
   ACTIVE_AGENT_RUN_STATUSES,
   AppError,
-  type AgentRun,
   type AgentRuntimeEvent,
   type AuthenticatedUser,
-  type ChatMessage,
   type Conversation,
   type ConversationId,
   asAgentRunId,
@@ -27,7 +25,10 @@ import { ConversationWorkflow } from "../conversations/conversation-service";
 import { RunObservationWorkflow } from "../conversations/run-observation-service";
 import { awaitRunLifecycleAudit } from "../conversations/run-lifecycle-monitor";
 import { FollowUpWorkflow } from "../conversations/follow-up-service";
-import { RunStartWorkflow } from "../conversations/run-start-service";
+import {
+  RunStartWorkflow,
+  type StartedConversationMessageRun
+} from "../conversations/run-start-service";
 import type { Route } from "../http/route";
 import { conversationIdParam, withRequestLocale } from "./request-context";
 import type { ChatServerOptions } from "../types";
@@ -87,14 +88,14 @@ export function registerAgentRunRoutes(route: Route, options: ChatServerOptions)
         access,
         idempotencyKey: body.idempotencyKey,
         text: body.message.text,
-        followUp: body.followUp
+        followUp: body.followUp,
+        ...(body.acceptGuardrailWarnings ? { acceptGuardrailWarnings: true } : {})
       });
       if ("followUp" in started) return queuedConversationRunResponseSchema.parse(started);
       return createStartRunResponse(
         request,
         await readCurrentConversation(conversationId, user),
-        started.userMessage,
-        started.run,
+        started,
         user
       );
     }
@@ -116,6 +117,7 @@ export function registerAgentRunRoutes(route: Route, options: ChatServerOptions)
           access,
           idempotencyKey: body.idempotencyKey,
           text: body.message.text,
+          ...(body.acceptGuardrailWarnings ? { acceptGuardrailWarnings: true } : {}),
           title: body.conversation?.title,
           collaborationWorkspaceId: body.conversation?.collaborationWorkspaceId
             ? asCollaborationWorkspaceId(body.conversation.collaborationWorkspaceId)
@@ -128,13 +130,7 @@ export function registerAgentRunRoutes(route: Route, options: ChatServerOptions)
           ...(body.conversation?.projectId ? { projectId: body.conversation.projectId } : {})
         }
       );
-      return createStartRunResponse(
-        request,
-        started.conversation,
-        started.userMessage,
-        started.run,
-        user
-      );
+      return createStartRunResponse(request, started.conversation, started, user);
     }
   );
 
@@ -213,8 +209,7 @@ export function registerAgentRunRoutes(route: Route, options: ChatServerOptions)
   async function createStartRunResponse(
     request: FastifyRequest,
     conversation: Conversation,
-    userMessage: ChatMessage,
-    run: AgentRun,
+    { userMessage, run, chatInput }: Omit<StartedConversationMessageRun, "runId">,
     user: AuthenticatedUser
   ) {
     const eventsUrl = apiOperations["conversations.runs.observe"].buildPath({
@@ -229,7 +224,8 @@ export function registerAgentRunRoutes(route: Route, options: ChatServerOptions)
       userMessage: { ...userMessage, metadata: withoutAgentPreviewConfig(userMessage.metadata) },
       run,
       thread: await runObservation.getThreadSnapshot(conversation.id, user),
-      eventsUrl: new URL(eventsUrl, `${request.protocol}://${requestHost}`).toString()
+      eventsUrl: new URL(eventsUrl, `${request.protocol}://${requestHost}`).toString(),
+      ...(chatInput ? { chatInput } : {})
     });
   }
 }

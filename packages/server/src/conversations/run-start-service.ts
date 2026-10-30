@@ -11,6 +11,7 @@ import {
   type FollowUpMode,
   type PlatformStores,
   type JobId,
+  type MessageId,
   type AgentRun,
   type AgentRunId,
   type AuthenticatedUser,
@@ -52,7 +53,9 @@ import {
   ownAgents,
   requireAgentUse
 } from "../workspaces/agent-availability";
+import type { ChatInputCheckView } from "@work-shape/catalyst-api-contract";
 import { createEmptyAttachmentManifest } from "./attachments";
+import { checkChatInput } from "./chat-input-check";
 import { monitorRunLifecycle } from "./run-lifecycle-monitor";
 import { createConversationTitle } from "./conversation-title";
 import { generateConversationTitleJob } from "../jobs/job-kinds";
@@ -109,15 +112,25 @@ export interface SendConversationMessageCommand {
   dispatchFollowUpId?: string;
   dispatchAfterRunId?: AgentRunId;
   dispatchJobId?: JobId;
+  /** The person saw what the guardrails on chat input warned about and sends anyway (GR-4). */
+  acceptGuardrailWarnings?: boolean;
+  /**
+   * The first message of a conversation created for it, checked before the conversation was:
+   * it is stored under the id it was checked as, and not checked again.
+   */
+  checkedChatInput?: { messageId: MessageId; view?: ChatInputCheckView };
 }
 
 export type ConversationMessageRunResult =
-  StartedConversationMessageRun | { followUp: ConversationFollowUp };
+  | StartedConversationMessageRun
+  | { followUp: ConversationFollowUp; chatInput?: ChatInputCheckView };
 
 export interface StartedConversationMessageRun {
   userMessage: ChatMessage;
   run: AgentRun;
   runId: AgentRunId;
+  /** What the guardrails on chat input warned about or could not check. */
+  chatInput?: ChatInputCheckView;
 }
 
 // How long a repeated run start waits for the first one with the same idempotency key, and how
@@ -392,7 +405,28 @@ export class RunStartWorkflow {
       if (!command.dispatchFollowUpId && attachmentManifest.attachments.length === 0) {
         requireMessageText(command.text);
       }
-      const userMessageId = createPlatformId<"MessageId">("msg");
+      const userMessageId =
+        command.checkedChatInput?.messageId ?? createPlatformId<"MessageId">("msg");
+      // GR-4: the guardrails on chat input read the message and its attachments before it is
+      // stored or a model reads it. A queued message was checked when it was queued, and the
+      // first message of a new conversation before the conversation was created.
+      const chatInput = command.checkedChatInput
+        ? command.checkedChatInput.view
+        : command.dispatchFollowUpId
+          ? undefined
+          : await checkChatInput(this.options, {
+              conversationId,
+              messageId: userMessageId,
+              text: command.text,
+              attachments: draftAttachments.filter((attachment) => attachment.status === "ready"),
+              agentName,
+              ...(conversation.collaborationWorkspaceId
+                ? { workspaceId: conversation.collaborationWorkspaceId }
+                : {}),
+              user,
+              correlationId: context.correlationId,
+              acceptWarnings: command.acceptGuardrailWarnings === true
+            });
       const runId = createPlatformId<"AgentRunId">("run");
       const startedAt = new Date().toISOString();
       // The title job is enqueued in the transaction that writes the first user message, so
@@ -504,7 +538,7 @@ export class RunStartWorkflow {
             ? { extendRetentionDays: this.options.config.retention.conversationDays }
             : {})
         });
-        if ("followUp" in prepared) return prepared;
+        if ("followUp" in prepared) return { ...prepared, ...(chatInput ? { chatInput } : {}) };
         if (prepared.firstUserMessage && this.options.config.conversationTitles.enabled) {
           await stores.jobs.enqueue(
             generateConversationTitleJob,
@@ -567,7 +601,8 @@ export class RunStartWorkflow {
       return {
         userMessage: prepared.userMessage,
         run: prepared.run,
-        runId: prepared.run.id
+        runId: prepared.run.id,
+        ...(chatInput ? { chatInput } : {})
       };
     } catch (error) {
       if (command.idempotencyKey) {
@@ -628,7 +663,7 @@ export class RunStartWorkflow {
       const agentName =
         command.agentName ??
         (project ? await this.projectSetup.defaultAgentFor(user, project) : undefined);
-      await this.resolveRunSelection(
+      const selection = await this.resolveRunSelection(
         workspace,
         agentName,
         command.modelBindingId,
@@ -639,6 +674,18 @@ export class RunStartWorkflow {
         false,
         newChatOf(user, workspace, command, project)
       );
+      // A message a guardrail on chat input stops leaves no conversation behind either.
+      const messageId = createPlatformId<"MessageId">("msg");
+      const chatInput = await checkChatInput(this.options, {
+        messageId,
+        text: command.text,
+        attachments: [],
+        agentName: selection.agentName,
+        workspaceId: workspace.id,
+        user,
+        correlationId: context.correlationId,
+        acceptWarnings: command.acceptGuardrailWarnings === true
+      });
       const conversation = await this.conversations.createConversation(user, context, {
         title: command.title ?? createConversationTitle(command.text),
         collaborationWorkspaceId: command.collaborationWorkspaceId,
@@ -651,7 +698,8 @@ export class RunStartWorkflow {
         ...command,
         ...(agentName === undefined ? {} : { agentName }),
         followUp: undefined,
-        idempotencyKey: undefined
+        idempotencyKey: undefined,
+        checkedChatInput: { messageId, ...(chatInput ? { view: chatInput } : {}) }
       });
       if (command.idempotencyKey) {
         await this.options.stores.agentRuns.completeRunStartCommand({

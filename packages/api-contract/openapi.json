@@ -9690,7 +9690,7 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/ForbiddenOrGuardrailBlocked"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -12934,7 +12934,7 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/ForbiddenOrGuardrailBlocked"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -43195,6 +43195,16 @@
           }
         }
       },
+      "ForbiddenOrGuardrailBlocked": {
+        "description": "`FORBIDDEN`: The caller lacks the scope or the right this operation requires. `details.reason` is `two_factor_setup_required` where the instance requires two-factor sign-in and the person signed in with a password, or the owner of the personal key, has not set it up: every operation but `me.get` is refused until they have. `GUARDRAIL_BLOCKED`: A guardrail refused the call. `details.guardrailId` names it. `details.reason` is `check_unavailable` where a check could not answer, by an error or a timeout; `details.guardrailId` then names the event that was checked.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        }
+      },
       "ForbiddenOrPolicyDeniedOrGuardrailBlocked": {
         "description": "`FORBIDDEN`: The caller lacks the scope or the right this operation requires. `details.reason` is `two_factor_setup_required` where the instance requires two-factor sign-in and the person signed in with a password, or the owner of the personal key, has not set it up: every operation but `me.get` is refused until they have. `POLICY_DENIED`: The instance's policy does not allow this operation from here. `details.operation` names it. `details.reason` is `approval_unavailable` where the policy asks for another person's approval and the call cannot wait for one; `details.guardrailId` then names the guardrail that asked for it, where one did. It is `workflow_deleted` where a step of a run of a published Workflow needs the confirmation its publish gave, and the Workflow was deleted since. It is `approval_stale` where a call that waited can no longer be approved because what it is about changed or a newer call replaced it. It is `confirmation_required` where a subagent made a call that needs a person's confirmation or approval: a subagent never waits for one, and the agent that started it makes the call instead. `GUARDRAIL_BLOCKED`: A guardrail refused the call. `details.guardrailId` names it. `details.reason` is `check_unavailable` where a check could not answer, by an error or a timeout; `details.guardrailId` then names the event that was checked.",
         "content": {
@@ -44023,6 +44033,42 @@
           "text": {
             "type": "string"
           },
+          "hold": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "const": "held"
+                  }
+                },
+                "required": [
+                  "state"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "const": "withheld"
+                  },
+                  "guardrailId": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "state",
+                  "guardrailId",
+                  "reason"
+                ]
+              }
+            ]
+          },
           "reasoning": {
             "type": "array",
             "items": {
@@ -44523,6 +44569,86 @@
               "sequence",
               "createdAt",
               "delta"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "message_held"
+              },
+              "runId": {
+                "type": "string"
+              },
+              "sequence": {
+                "type": "number"
+              },
+              "createdAt": {
+                "$ref": "#/components/schemas/Timestamp"
+              }
+            },
+            "required": [
+              "type",
+              "runId",
+              "sequence",
+              "createdAt"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "message_released"
+              },
+              "runId": {
+                "type": "string"
+              },
+              "sequence": {
+                "type": "number"
+              },
+              "createdAt": {
+                "$ref": "#/components/schemas/Timestamp"
+              }
+            },
+            "required": [
+              "type",
+              "runId",
+              "sequence",
+              "createdAt"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "message_withheld"
+              },
+              "runId": {
+                "type": "string"
+              },
+              "sequence": {
+                "type": "number"
+              },
+              "createdAt": {
+                "$ref": "#/components/schemas/Timestamp"
+              },
+              "guardrailId": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "runId",
+              "sequence",
+              "createdAt",
+              "guardrailId",
+              "reason"
             ]
           },
           {
@@ -48971,6 +49097,49 @@
           "ok"
         ]
       },
+      "ChatInputCheck": {
+        "type": "object",
+        "properties": {
+          "textNotChecked": {
+            "type": "boolean",
+            "const": true
+          },
+          "attachmentsNotChecked": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "attachmentId": {
+                  "type": "string"
+                },
+                "filename": {
+                  "type": "string"
+                },
+                "cause": {
+                  "type": "string",
+                  "enum": [
+                    "image",
+                    "not_extracted",
+                    "too_large",
+                    "unreadable"
+                  ]
+                }
+              },
+              "required": [
+                "attachmentId",
+                "filename",
+                "cause"
+              ]
+            }
+          },
+          "guardrails": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GuardrailAnswerRef"
+            }
+          }
+        }
+      },
       "CheckAssetMoveResponse": {
         "type": "object",
         "properties": {
@@ -51512,6 +51681,11 @@
             "required": [
               "text"
             ]
+          },
+          "acceptGuardrailWarnings": {
+            "description": "Send the message although a guardrail on chat input warns about it, after the person saw the warning. Without it a warning answers CONFLICT with the reason `chat_input_warning` and nothing is stored. A block is never overridden.",
+            "type": "boolean",
+            "const": true
           },
           "conversation": {
             "$ref": "#/components/schemas/CreateConversationRequest"
@@ -56976,6 +57150,9 @@
         "properties": {
           "followUp": {
             "$ref": "#/components/schemas/ConversationFollowUp"
+          },
+          "chatInput": {
+            "$ref": "#/components/schemas/ChatInputCheck"
           }
         },
         "required": [
@@ -59037,6 +59214,11 @@
             "required": [
               "text"
             ]
+          },
+          "acceptGuardrailWarnings": {
+            "description": "Send the message although a guardrail on chat input warns about it, after the person saw the warning. Without it a warning answers CONFLICT with the reason `chat_input_warning` and nothing is stored. A block is never overridden.",
+            "type": "boolean",
+            "const": true
           }
         },
         "required": [
@@ -59061,6 +59243,9 @@
           },
           "eventsUrl": {
             "type": "string"
+          },
+          "chatInput": {
+            "$ref": "#/components/schemas/ChatInputCheck"
           }
         },
         "required": [

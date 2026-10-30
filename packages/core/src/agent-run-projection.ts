@@ -34,6 +34,12 @@ export function applyAgentRunObservation(
     text = event.message.text;
     reconcileCompletedText(parts, text);
   }
+  let hold = projection.hold;
+  if (event.type === "message_held") hold = { state: "held" };
+  if (event.type === "message_released") hold = undefined;
+  if (event.type === "message_withheld") {
+    hold = { state: "withheld", guardrailId: event.guardrailId, reason: event.reason };
+  }
   if (event.type === "reasoning_delta") {
     const entry = reasoning.find((candidate) => candidate.id === event.id) ?? {
       id: event.id,
@@ -173,8 +179,10 @@ export function applyAgentRunObservation(
     }
   }
 
+  const { hold: _hold, ...unheld } = projection;
   return {
-    ...projection,
+    ...unheld,
+    ...(hold ? { hold } : {}),
     lastSequence: Math.max(projection.lastSequence, observation.sequence),
     status: statusAfterEvent(projection.status, event),
     parts,

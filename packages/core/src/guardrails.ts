@@ -57,8 +57,24 @@ export const GUARDRAIL_CHECKABLE_FIELDS = {
   "workflow.before_publish": ["name", "content"],
   "data_store.before_publish": ["name", "content"],
   "form_page.before_publish": ["name", "content"],
-  "approval_request.before_create": ["summary", "newContent"]
+  "approval_request.before_create": ["summary", "newContent"],
+  "message.before_send": ["text", "attachments"]
 } as const satisfies Record<GuardrailEvent, readonly string[]>;
+
+/**
+ * The before-event of a person's chat message (GR-4): its text and the text extracted from its
+ * attachments, checked before the message is stored or any model reads it.
+ */
+export const CHAT_INPUT_EVENT = "message.before_send" satisfies GuardrailEvent;
+
+/**
+ * The events a guardrail may check only with a pattern, which runs in the chat server's own
+ * process: a model check would send the person's message to a second provider call. Nothing at
+ * them can wait for an approval either.
+ */
+export const GUARDRAIL_PATTERN_ONLY_EVENTS = [
+  CHAT_INPUT_EVENT
+] as const satisfies readonly GuardrailEvent[];
 
 /**
  * What a filter can narrow each event by. `kind` is the asset kind of a write or the kind of a
@@ -75,7 +91,8 @@ export const GUARDRAIL_FILTER_KEYS = {
   "workflow.before_publish": ["origin", "agent", "workspace"],
   "data_store.before_publish": ["origin", "agent", "workspace"],
   "form_page.before_publish": ["origin", "agent", "workspace"],
-  "approval_request.before_create": ["kind"]
+  "approval_request.before_create": ["kind"],
+  "message.before_send": ["agent", "workspace"]
 } as const satisfies Record<GuardrailEvent, readonly (keyof GuardrailFilter)[]>;
 
 /** Where a call can come from, as a filter's `origin` names it. */
@@ -132,7 +149,16 @@ export interface PatternCheck {
   fields?: string[];
   /** The reason a person is told on a match, in the operator's words. It never quotes the match. */
   reason?: string;
+  /**
+   * A match counts only where its digits pass this checksum: `luhn` for payment card numbers. A
+   * run of digit groups that goes on past the match, as in an IBAN, is no card number.
+   */
+  checksum?: GuardrailPatternChecksum;
 }
+
+/** The checksums a pattern's matches can be held to. */
+export const GUARDRAIL_PATTERN_CHECKSUMS = ["luhn"] as const;
+export type GuardrailPatternChecksum = (typeof GUARDRAIL_PATTERN_CHECKSUMS)[number];
 
 export type GuardrailCheck = PatternCheck | ModelJudgeCheck;
 
@@ -174,7 +200,22 @@ export interface GuardrailAnswer {
    * (`refusingWhenUnavailable`). A refusal names the reason `check_unavailable`.
    */
   unavailable?: true;
+  /**
+   * At `message.before_send`: the field the pattern matched first and how often it matched there,
+   * at most `GUARDRAIL_MATCH_COUNT_MAX`. Never the text or the match.
+   */
+  field?: string;
+  matchCount?: number;
+  /**
+   * At `message.before_send`: the fields this guardrail could not read, such as text longer than
+   * its pattern reads. They are not checked, the person is told so, and they are not blocked for
+   * it.
+   */
+  notChecked?: string[];
 }
+
+/** The most matches of one field a hit counts. */
+export const GUARDRAIL_MATCH_COUNT_MAX = 100;
 
 /** The answer as a person is shown it. A check that could not answer names no guardrail. */
 export function guardrailAnswerRef(answer: GuardrailAnswer): GuardrailAnswerRef | undefined {
@@ -231,6 +272,12 @@ export interface GuardrailHit {
    * the hit is the `block` it was answered as (`GuardrailAnswer.approvalCannotWait`).
    */
   convertedFrom?: "require_approval";
+  /**
+   * At `message.before_send`: the field that matched (`text` or `attachments`) and how often.
+   * The subject is the message, by its id. Never the text, never the match.
+   */
+  field?: string;
+  matchCount?: number;
   createdAt: ISODateString;
 }
 
@@ -268,7 +315,11 @@ export interface GuardrailStore {
     clientInstanceId: ClientInstanceId;
     hits: readonly NewGuardrailHit[];
   }): Promise<void>;
-  /** The newest hits of one guardrail, newest first. */
+  /**
+   * The newest hits of one guardrail, newest first. Hits at `message.before_send` are counted
+   * and never listed: a list of stopped chat messages leads to the people who wrote them, and
+   * monitoring employees needs the works council (§87(1) no. 6 BetrVG).
+   */
   listHits(input: {
     clientInstanceId: ClientInstanceId;
     guardrailName: string;
