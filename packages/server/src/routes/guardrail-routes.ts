@@ -150,10 +150,31 @@ export function registerGuardrailRoutes(route: Route, options: ChatServerOptions
       if (!guardrail) {
         throw new AppError("NOT_FOUND", `The release ships no Guardrail '${input.name}'`);
       }
+      if (input.alwaysAsk !== undefined && !guardrail.asksOnlyWhenWidening) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `The Guardrail '${guardrail.name}' asks at every event it is bound to already`,
+          { reason: "always_ask_unsupported" },
+          { exposeMessage: true }
+        );
+      }
+      if (input.enabled === undefined && input.alwaysAsk === undefined) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          "Say whether the Guardrail is on (enabled), or whether it asks on every publish (alwaysAsk)",
+          { reason: "nothing_to_switch" },
+          { exposeMessage: true }
+        );
+      }
+      // Each field left out stays as it was; the store writes the given ones in one statement.
+      const changed = {
+        ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
+        ...(input.alwaysAsk === undefined ? {} : { alwaysAsk: input.alwaysAsk })
+      };
       const switched = await options.stores.guardrails.switchShippedGuardrail({
         clientInstanceId,
         name: guardrail.name,
-        enabled: input.enabled,
+        ...changed,
         switchedBy: { id: context.actor.id, label: context.actor.displayLabel },
         switchedAt: (options.operations?.now?.() ?? new Date()).toISOString()
       });
@@ -162,7 +183,11 @@ export function registerGuardrailRoutes(route: Route, options: ChatServerOptions
         status: "success",
         actor: auditActorFromIdentity(context.actor),
         correlationId: context.correlationId,
-        metadata: { kind: GUARDRAIL_ASSET_KIND, name: guardrail.name, enabled: input.enabled }
+        metadata: {
+          kind: GUARDRAIL_ASSET_KIND,
+          name: guardrail.name,
+          ...changed
+        }
       });
       return shippedView(guardrail, switched, true);
     }
@@ -287,6 +312,7 @@ function shippedView(
     on: [...guardrail.on],
     outcome: guardrail.outcome,
     enabled: switched?.enabled ?? true,
+    ...(guardrail.asksOnlyWhenWidening ? { alwaysAsk: switched?.alwaysAsk ?? false } : {}),
     ...(switched ? { switchedBy: switched.switchedBy, switchedAt: switched.switchedAt } : {}),
     canSwitch
   };

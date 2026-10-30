@@ -301,9 +301,17 @@ export interface GuardrailStore {
   listShippedGuardrailSwitches(input: {
     clientInstanceId: ClientInstanceId;
   }): Promise<ShippedGuardrailSwitch[]>;
-  /** Switches one shipped guardrail on or off. */
+  /**
+   * Switches one shipped guardrail on or off, or sets whether it asks on every publish, in one
+   * statement: a field left out keeps what it was, so two admins switching the two fields at
+   * once lose neither. A guardrail nobody switched before is on and asks only when widening.
+   */
   switchShippedGuardrail(
-    input: { clientInstanceId: ClientInstanceId } & ShippedGuardrailSwitch
+    input: { clientInstanceId: ClientInstanceId } & Omit<
+      ShippedGuardrailSwitch,
+      "enabled" | "alwaysAsk"
+    > &
+      Partial<Pick<ShippedGuardrailSwitch, "enabled" | "alwaysAsk">>
   ): Promise<ShippedGuardrailSwitch>;
   /** Deletes the hits older than the audit retention. Answers how many it deleted. */
   deleteHitsOlderThan(input: { clientInstanceId: ClientInstanceId; days: number }): Promise<number>;
@@ -330,18 +338,36 @@ export interface ShippedGuardrail {
    */
   workspaceOwnedOnly?: readonly GuardrailEvent[];
   outcome: GuardrailOutcome;
+  /**
+   * It answers only where the event's fields say the publish widens reach
+   * (`PUBLISH_WIDENS_FIELD`), and wherever they cannot say. An instance admin may set it to
+   * answer at every event instead (`ShippedGuardrailSwitch.alwaysAsk`). GR-PUB-2.
+   */
+  asksOnlyWhenWidening?: true;
 }
 
 /**
- * Every publish of an App, a Workflow or a form page, and of an agent a workspace owns, waits
- * for an approval, which a holder of the kind's `approve` right gives with their own Publish
- * (GR-PUB-1, WS-PUB-1b, EW-9c).
+ * The field of a publish event that says whether the publish widens reach: `"true"` or
+ * `"false"`. A publish widens reach on its first publish, with a changing action or operation
+ * that is new or changed, an outside host, a Connection or a Data Store the live revision does
+ * not use, or a wider audience; an agent's with a tool, a model binding, a skill, a Knowledge
+ * Base or a subagent the live definition does not name, or on the publish that offers it in
+ * its workspace. A publish event without it, or with another value, counts as widening.
+ */
+export const PUBLISH_WIDENS_FIELD = "publish_widens";
+
+/**
+ * A publish of an App, a Workflow or a form page, and of an agent a workspace owns, that widens
+ * reach waits for an approval, which a holder of the kind's `approve` right gives with their own
+ * Publish (GR-PUB-1, WS-PUB-1b, EW-9c). One that widens nothing goes live on its publisher's own
+ * click, unless an instance admin set it to ask on every publish (GR-PUB-2). Only an App's and
+ * an agent's publish say whether they widen reach; a Workflow's and a form page's always ask.
  */
 export const PUBLISH_APPROVAL_GUARDRAIL = {
   name: "publishing-needs-approval",
   displayName: "Publishing needs an instance admin's approval",
   reason:
-    "A new revision of an App, a Workflow, a form page or a workspace's agent goes live once an instance admin approved it.",
+    "A new revision of an App, a Workflow, a form page or a workspace's agent that widens what it reaches goes live once an instance admin approved it.",
   on: [
     "app.before_publish",
     "workflow.before_publish",
@@ -349,7 +375,8 @@ export const PUBLISH_APPROVAL_GUARDRAIL = {
     "agent.before_publish"
   ],
   workspaceOwnedOnly: ["agent.before_publish"],
-  outcome: "require_approval"
+  outcome: "require_approval",
+  asksOnlyWhenWidening: true
 } as const satisfies ShippedGuardrail;
 
 export const SHIPPED_GUARDRAILS: readonly ShippedGuardrail[] = [PUBLISH_APPROVAL_GUARDRAIL];
@@ -362,6 +389,11 @@ export function shippedGuardrail(name: string): ShippedGuardrail | undefined {
 export interface ShippedGuardrailSwitch {
   name: string;
   enabled: boolean;
+  /**
+   * Set by an instance admin on a guardrail that asks only when a publish widens reach: it
+   * asks on every publish, as GR-PUB-1 shipped it. False where nobody set it.
+   */
+  alwaysAsk: boolean;
   switchedBy: { id: string; label: string };
   switchedAt: ISODateString;
 }

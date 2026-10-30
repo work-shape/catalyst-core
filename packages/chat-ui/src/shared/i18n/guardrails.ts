@@ -8,7 +8,10 @@ export const guardrails = defineTranslations({
     "guardrails.shippedHeading": "Shipped with the platform",
     "guardrails.shippedPublishTitle": "Publishing needs approval from an admin for all workspaces",
     "guardrails.shippedPublishText":
-      "A new version of an App, a Workflow or a workspace's agent goes live once an admin for all workspaces approved it. An admin's own Publish is the approval.",
+      "A new version that reaches more goes live once an admin for all workspaces approved it: an App's or a workspace agent's first publish, a new action that changes something, a new host, Connection, Data Store, tool or model, or more people who can use it. Any other new version goes live with its publisher's own click; a Workflow's always waits. An admin's own Publish is the approval.",
+    "guardrails.shippedPublishAlwaysText":
+      "Every new version of an App, a Workflow or a workspace's agent goes live once an admin for all workspaces approved it. An admin's own Publish is the approval.",
+    "guardrails.shippedAlwaysAsk": "Ask on every publish",
     "guardrails.shippedPublishOffText":
       "Switched off: whoever may publish an App, a Workflow or a workspace's agent makes a new version live with their own click. Nobody else is asked.",
     "guardrails.shippedPublishOffAsk":
@@ -131,7 +134,10 @@ export const guardrails = defineTranslations({
     "guardrails.shippedPublishTitle":
       "Veröffentlichen braucht die Freigabe eines Admins für alle Arbeitsbereiche",
     "guardrails.shippedPublishText":
-      "Eine neue Version einer App, eines Workflows oder eines Agenten eines Arbeitsbereichs geht erst live, wenn ein Admin für alle Arbeitsbereiche sie freigegeben hat. Veröffentlicht ein Admin selbst, ist das die Freigabe.",
+      "Eine neue Version, die mehr erreicht, geht erst live, wenn ein Admin für alle Arbeitsbereiche sie freigegeben hat: die erste Veröffentlichung einer App oder eines Agenten eines Arbeitsbereichs, eine neue Aktion, die etwas ändert, ein neuer Host, eine neue Verbindung, ein neuer Datenspeicher, ein neues Werkzeug oder Modell, oder mehr Personen, die sie nutzen können. Jede andere neue Version geht mit dem eigenen Klick live; die eines Workflows wartet immer. Veröffentlicht ein Admin selbst, ist das die Freigabe.",
+    "guardrails.shippedPublishAlwaysText":
+      "Jede neue Version einer App, eines Workflows oder eines Agenten eines Arbeitsbereichs geht erst live, wenn ein Admin für alle Arbeitsbereiche sie freigegeben hat. Veröffentlicht ein Admin selbst, ist das die Freigabe.",
+    "guardrails.shippedAlwaysAsk": "Bei jeder Veröffentlichung fragen",
     "guardrails.shippedPublishOffText":
       "Ausgeschaltet: Wer eine App, einen Workflow oder einen Agenten eines Arbeitsbereichs veröffentlichen darf, macht eine neue Version mit dem eigenen Klick live. Niemand sonst wird gefragt.",
     "guardrails.shippedPublishOffAsk":

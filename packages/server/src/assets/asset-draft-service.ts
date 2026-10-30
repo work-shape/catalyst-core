@@ -646,7 +646,13 @@ export class AssetDraftWorkflow {
     );
     const { kind, name } = target;
     const { config } = revision;
-    const publishReview = audience ? appPublishReview(asset, kind, config, audience) : undefined;
+    // The reach the call's guardrails read, where they read this asset's (GR-PUB-2): the
+    // transaction commits only while the live revision is still the one it was read against.
+    const checked =
+      call.appPublishChecked?.assetId === asset.id ? call.appPublishChecked.review : undefined;
+    const publishReview = audience
+      ? (checked ?? appPublishReview(asset, kind, config, audience))
+      : undefined;
     const move = (store: Pick<ConfigAssetStore, "publishConfigAssetRevision">) =>
       store.publishConfigAssetRevision({
         clientInstanceId: this.options.clientInstanceId,

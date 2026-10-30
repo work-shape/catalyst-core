@@ -40,7 +40,13 @@ const shipped: ShippedGuardrailView = {
 };
 
 function ready(items: ShippedGuardrailView[]): ShippedGuardrailsRead {
-  return { status: "ready", items, switching: undefined, switchTo: async () => undefined };
+  return {
+    status: "ready",
+    items,
+    switching: undefined,
+    switchTo: async () => undefined,
+    setAlwaysAsk: async () => undefined
+  };
 }
 
 /** The guardrails' list as the frame shows it, its shipped rows read from `read`. */
@@ -293,7 +299,8 @@ describe("switching off the shipped guardrail", () => {
       switchTo: async (name, enabled) => {
         switched.push([name, enabled]);
         return undefined;
-      }
+      },
+      setAlwaysAsk: async () => undefined
     };
     const host = document.createElement("div");
     document.body.append(host);
@@ -329,6 +336,85 @@ describe("switching off the shipped guardrail", () => {
     } finally {
       await act(async () => root.unmount());
       host.remove();
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+// GR-PUB-2: the publish guardrail asks only when a publish widens reach; an admin sets it to ask
+// on every publish below its text, and its text then says so.
+describe("asking on every publish", () => {
+  const render = async (read: ShippedGuardrailsRead) => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    await act(async () =>
+      root.render(
+        createElement(
+          TranslationProvider,
+          { children: null, locale: "en" },
+          createElement(UiRoot, { mode: "light", labels: uiLabelsEn }, listElement({ read }))
+        )
+      )
+    );
+    return {
+      host,
+      close: async () => {
+        await act(async () => root.unmount());
+        host.remove();
+      }
+    };
+  };
+
+  it("sets the guardrail to ask on every publish, and says what it then does", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const set: [string, boolean][] = [];
+    const read = (alwaysAsk: boolean): ShippedGuardrailsRead => ({
+      status: "ready",
+      items: [{ ...shipped, alwaysAsk }],
+      switching: undefined,
+      switchTo: async () => undefined,
+      setAlwaysAsk: async (name, value) => {
+        set.push([name, value]);
+        return undefined;
+      }
+    });
+    const widening = await render(read(false));
+    try {
+      expect(widening.host.textContent).toContain("A new version that reaches more goes live");
+      const box = required(
+        widening.host.querySelector<HTMLButtonElement>(
+          '[data-shipped-always-ask] [role="checkbox"]'
+        )
+      );
+      expect(box.getAttribute("aria-checked")).toBe("false");
+      expect(widening.host.textContent).toContain("Ask on every publish");
+      await act(async () => box.click());
+      expect(set).toEqual([["publishing-needs-approval", true]]);
+    } finally {
+      await widening.close();
+    }
+    const always = await render(read(true));
+    try {
+      expect(always.host.textContent).toContain("Every new version of an App");
+      expect(
+        always.host
+          .querySelector('[data-shipped-always-ask] [role="checkbox"]')
+          ?.getAttribute("aria-checked")
+      ).toBe("true");
+    } finally {
+      await always.close();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("offers no setting while the guardrail is off", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const off = await render(ready([{ ...shipped, enabled: false, alwaysAsk: false }]));
+    try {
+      expect(off.host.querySelector("[data-shipped-always-ask]")).toBeNull();
+    } finally {
+      await off.close();
       vi.unstubAllGlobals();
     }
   });

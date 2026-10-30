@@ -267,6 +267,7 @@ export function narrator(input: {
                 {
                   name: "publishing-needs-approval",
                   enabled: false,
+                  alwaysAsk: false,
                   switchedBy: { id: "usr_admin", label: "Admin" },
                   switchedAt: "2026-10-18T00:00:00.000Z"
                 }

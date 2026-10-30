@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { appPublishReview } from "../apps/app-publish-reach";
+import { appPublishReview, type AppPublishReview } from "../apps/app-publish-reach";
 import {
   AppError,
   getSubjectUserId,
@@ -16,7 +16,8 @@ import {
   type GuardrailFields,
   type GuardrailSubject,
   type JsonObject,
-  type OperationBeforeEvent
+  type OperationBeforeEvent,
+  PUBLISH_WIDENS_FIELD
 } from "@work-shape/catalyst-core";
 import type { AssetSyncItem } from "@work-shape/catalyst-api-contract";
 import {
@@ -29,7 +30,12 @@ import type { AssetFileInput } from "../assets/asset-files";
 import { readFileSetFile } from "../pages/page-file-sets";
 import { readDefinitionName } from "../asset-kinds/shared";
 import { scopeOf } from "../assets/asset-target";
-import { firstVersionOffering, type AgentPublishChecked } from "../approvals/agent-publish-review";
+import {
+  agentPublishWidens,
+  firstOffering,
+  firstVersionOffering,
+  type AgentPublishChecked
+} from "../approvals/agent-publish-review";
 import { withGivenTools, type AgentGiveChecked } from "../assets/agent-drafts";
 import type { AssetWorkflowOptions } from "../types";
 
@@ -273,6 +279,12 @@ export async function publishEvents(
       );
     const config = firstVersion ? (asset.config ?? {}) : (draft?.config ?? {});
     const write = assetWriteEvent({ kind: "agent", name: input.name, config });
+    // Whether the publish widens the agent's reach (GR-PUB-2): its first version, the publish
+    // that first offers it in its workspace, or a draft that names more than the live agent.
+    const widens =
+      firstVersion ||
+      (await firstOffering(options, asset)) !== undefined ||
+      agentPublishWidens(asset.config ?? {}, config);
     // The publish names its agent and the workspace that owns it: the shipped publish guardrail
     // holds the publish of a workspace's agent and not the instance's own (WS-PUB-1b).
     const publish: OperationBeforeEvent = {
@@ -282,7 +294,11 @@ export async function publishEvents(
         ...write.subject,
         id: asset.id,
         ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
-      }
+      },
+      checkable: async () => ({
+        ...(await write.checkable()),
+        [PUBLISH_WIDENS_FIELD]: String(widens)
+      })
     };
     const held: OperationBeforeEvent = {
       ...publish,
@@ -306,36 +322,58 @@ export async function publishEvents(
         })
       : undefined;
   const kind = input.kind === "app" ? options.configAssets.kinds.get(input.kind) : undefined;
-  const widening =
-    asset && revision && kind?.publishReach
+  // What the default publish guardrail reads to ask only where the publish widens reach
+  // (GR-PUB-2), against the live revision now. The publish commits only while that is still
+  // the live one: it hands the review to the committing transaction, which rechecks it.
+  const review =
+    asset && revision && revision.assetId === asset.id && kind?.publishReach
       ? appPublishReview(
           asset,
           kind,
           revision.config,
           input.audience,
           actor && !isAuthenticatedServicePrincipal(actor) ? getSubjectUserId(actor) : undefined
-        ).publishWidens
+        )
       : undefined;
   if (!revision) {
     // Nothing of the caller's to make live: the publish itself refuses it.
     return [];
   }
-  return [
-    {
-      name,
-      subject: {
-        kind: input.kind,
-        id: revision.assetId,
-        name: input.name,
-        ...writeTitle(revision.config)
-      },
-      checkable: async (): Promise<GuardrailFields> => ({
-        name: input.name,
-        content: await revisionText(options, revision),
-        ...(widening === undefined ? {} : { publish_widens: String(widening) })
-      })
-    }
-  ];
+  const event: OperationBeforeEvent = {
+    name,
+    subject: {
+      kind: input.kind,
+      id: revision.assetId,
+      name: input.name,
+      ...writeTitle(revision.config)
+    },
+    checkable: async (): Promise<GuardrailFields> => ({
+      name: input.name,
+      content: await revisionText(options, revision),
+      ...(review === undefined ? {} : { [PUBLISH_WIDENS_FIELD]: String(review.publishWidens) })
+    })
+  };
+  if (review) checkedAppPublishes.set(event, { assetId: revision.assetId, review });
+  return [event];
+}
+
+/** An App's publish as its guardrails read it: the asset and the reach against its live revision. */
+interface AppPublishChecked {
+  assetId: string;
+  review: AppPublishReview;
+}
+
+const checkedAppPublishes = new WeakMap<OperationBeforeEvent, AppPublishChecked>();
+
+/**
+ * The reach of an App's publish its guardrails were last asked about, from the events of the
+ * call: the publish commits it only while the live revision and audience are still the ones it
+ * was read against (GR-PUB-2). Nothing where no guardrail was asked.
+ */
+export function appPublishChecked(
+  events: readonly OperationBeforeEvent[] | undefined
+): AppPublishChecked | undefined {
+  return events?.flatMap((event) => checkedAppPublishes.get(event) ?? []).at(-1);
 }
 
 /**

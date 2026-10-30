@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { ShippedGuardrailView } from "@work-shape/catalyst-api-client";
-import { Badge, Chip, ConfirmDialog, InlineError, Switch } from "@work-shape/catalyst-ui";
+import { Badge, Checkbox, Chip, ConfirmDialog, InlineError, Switch } from "@work-shape/catalyst-ui";
 import { formatMomentShort } from "../../shared/locale-format";
 import { personName } from "../../shared/person-name";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
@@ -12,12 +12,20 @@ import type { ShippedGuardrailsRead } from "./guardrail-source";
 const SHIPPED_WORDS: Readonly<
   Record<
     string,
-    { title: TranslationKey; text: TranslationKey; offText: TranslationKey; ask: TranslationKey }
+    {
+      title: TranslationKey;
+      text: TranslationKey;
+      /** What it does while an admin set it to ask on every publish. */
+      alwaysText?: TranslationKey;
+      offText: TranslationKey;
+      ask: TranslationKey;
+    }
   >
 > = {
   "publishing-needs-approval": {
     title: "guardrails.shippedPublishTitle",
     text: "guardrails.shippedPublishText",
+    alwaysText: "guardrails.shippedPublishAlwaysText",
     offText: "guardrails.shippedPublishOffText",
     ask: "guardrails.shippedPublishOffAsk"
   }
@@ -81,12 +89,23 @@ export function ShippedGuardrailsLead({
         description: (
           <>
             <span className="block">
-              {words ? t(guardrail.enabled ? words.text : words.offText) : guardrail.reason}
+              {words
+                ? t(
+                    !guardrail.enabled
+                      ? words.offText
+                      : guardrail.alwaysAsk === true && words.alwaysText
+                        ? words.alwaysText
+                        : words.text
+                  )
+                : guardrail.reason}
             </span>
             <span className="block" data-shipped-state="">
               {state}
               {guardrail.canSwitch ? "" : ` ${t("guardrails.shippedAdminOnly")}`}
             </span>
+            {guardrail.enabled && guardrail.alwaysAsk !== undefined ? (
+              <ShippedGuardrailAlwaysAsk guardrail={guardrail} read={read} onRefusal={setRefusal} />
+            ) : null}
           </>
         ),
         actions: (
@@ -105,6 +124,40 @@ export function ShippedGuardrailsLead({
     rows,
     ...(refusal ? { error: <InlineError className="mb-4">{refusal}</InlineError> } : {})
   });
+}
+
+/**
+ * The setting of the publish guardrail that it asks on every publish, not only on one that
+ * widens reach (GR-PUB-2). Only who may switch the guardrail may change it.
+ */
+function ShippedGuardrailAlwaysAsk({
+  guardrail,
+  read,
+  onRefusal
+}: {
+  guardrail: ShippedGuardrailView;
+  read: Extract<ShippedGuardrailsRead, { status: "ready" }>;
+  onRefusal(refusal: string | undefined): void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <span className="mt-2 block" data-shipped-always-ask="">
+      <Checkbox
+        label={t("guardrails.shippedAlwaysAsk")}
+        checked={guardrail.alwaysAsk === true}
+        disabled={!guardrail.canSwitch || read.switching === guardrail.name}
+        onCheckedChange={(alwaysAsk) => {
+          onRefusal(undefined);
+          read
+            .setAlwaysAsk(guardrail.name, alwaysAsk)
+            .then((refused) => {
+              if (refused !== undefined) onRefusal(refused || t("guardrails.shippedSwitchFailed"));
+            })
+            .catch(() => undefined);
+        }}
+      />
+    </span>
+  );
 }
 
 /** The switch of one shipped guardrail, and the question before it is switched off. */

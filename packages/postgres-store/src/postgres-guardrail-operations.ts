@@ -43,22 +43,37 @@ export function createPostgresGuardrailsStore(db: PostgresConnection): Guardrail
         .where(eq(shippedGuardrailSwitches.clientInstanceId, clientInstanceId));
       return rows.map(switchOf);
     },
-    async switchShippedGuardrail({ clientInstanceId, name, enabled, switchedBy, switchedAt }) {
-      const values = {
-        enabled,
+    async switchShippedGuardrail({
+      clientInstanceId,
+      name,
+      enabled,
+      alwaysAsk,
+      switchedBy,
+      switchedAt
+    }) {
+      const switched = {
+        ...(enabled === undefined ? {} : { enabled }),
+        ...(alwaysAsk === undefined ? {} : { alwaysAsk }),
         switchedById: switchedBy.id,
         switchedByLabel: switchedBy.label,
         switchedAt: new Date(switchedAt)
       };
+      // One upsert: a field left out keeps the stored value, or its default on a first switch.
       const [row] = await db
         .insert(shippedGuardrailSwitches)
-        .values({ clientInstanceId, guardrailName: name, ...values })
+        .values({
+          clientInstanceId,
+          guardrailName: name,
+          enabled: true,
+          alwaysAsk: false,
+          ...switched
+        })
         .onConflictDoUpdate({
           target: [
             shippedGuardrailSwitches.clientInstanceId,
             shippedGuardrailSwitches.guardrailName
           ],
-          set: values
+          set: switched
         })
         .returning();
       if (!row) throw new Error(`Shipped guardrail '${name}' was not switched`);
@@ -230,6 +245,7 @@ function switchOf(row: typeof shippedGuardrailSwitches.$inferSelect): ShippedGua
   return {
     name: row.guardrailName,
     enabled: row.enabled,
+    alwaysAsk: row.alwaysAsk,
     switchedBy: { id: row.switchedById, label: row.switchedByLabel },
     switchedAt: row.switchedAt.toISOString()
   };

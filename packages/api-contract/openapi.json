@@ -18129,6 +18129,9 @@
                           "enabled": {
                             "type": "boolean"
                           },
+                          "alwaysAsk": {
+                            "type": "boolean"
+                          },
                           "switchedBy": {
                             "type": "object",
                             "properties": {
@@ -18201,7 +18204,7 @@
     "/api/v1/guardrails/shipped/{name}/switch": {
       "post": {
         "operationId": "guardrails.switch_shipped",
-        "summary": "Switch a guardrail the release ships off or on again, for the whole instance. A release never switches it back on",
+        "summary": "Switch a guardrail the release ships off or on again, or set the publish guardrail to ask on every publish, for the whole instance. A release never switches it back on",
         "tags": [
           "Guardrails"
         ],
@@ -18258,11 +18261,11 @@
                 "properties": {
                   "enabled": {
                     "type": "boolean"
+                  },
+                  "alwaysAsk": {
+                    "type": "boolean"
                   }
                 },
-                "required": [
-                  "enabled"
-                ],
                 "additionalProperties": false
               }
             }
@@ -18301,6 +18304,9 @@
                       ]
                     },
                     "enabled": {
+                      "type": "boolean"
+                    },
+                    "alwaysAsk": {
                       "type": "boolean"
                     },
                     "switchedBy": {

@@ -23,6 +23,7 @@ import {
 import { z } from "zod";
 import type { WorkflowAssetKind } from "../asset-kinds/shared";
 import type { AssetSetIssue } from "./asset-set";
+import type { AppPublishReview } from "../apps/app-publish-reach";
 
 /** What an asset operation knows about its caller: the call of the Operation Run. */
 export interface AssetCall {
@@ -54,6 +55,12 @@ export interface AssetCall {
    * with it (`recordHandover`), so a change never commits without them.
    */
   handover?: readonly JsonObject[];
+  /**
+   * The reach of an App's publish as its guardrails read it (GR-PUB-2): the publish of that
+   * asset commits only while its live revision and audience are still the ones it was read
+   * against, so a publish the default guardrail let through as widening nothing cannot widen.
+   */
+  appPublishChecked?: { assetId: string; review: AppPublishReview };
 }
 
 /**

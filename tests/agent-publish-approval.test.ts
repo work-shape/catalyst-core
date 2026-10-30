@@ -242,22 +242,34 @@ describe("publishing an agent a workspace owns (WS-PUB-1b)", () => {
       expect.objectContaining({ name: "kai-helper", reason: "first_publish" })
     );
 
-    // A later push changes only the draft; its approved publish keeps the offering as it is.
+    // A later push changes only the draft. One that widens nothing, such as new instructions,
+    // goes live on the publisher's own click (GR-PUB-2) and keeps the offering as it is.
     await push(t.kai.id, "kai-helper", { instructions: "Second." });
     expect(await live("kai-helper")).toMatchObject({
       revision: 2,
       config: { instructions: "Draft." }
     });
-    const again = heldSchema.parse((await publish(t.kai.id, "kai-helper", 2)).json());
-    expect((await request(t.admin.id, again.approvalRequestId)).preview.review).toMatchObject({
-      agent: { offers: false }
-    });
-    expect((await decide(t.admin.id, again.approvalRequestId)).statusCode).toBe(200);
+    const own = await publish(t.kai.id, "kai-helper", 2);
+    expect(own.statusCode, own.body).toBe(200);
     expect(await live("kai-helper")).toMatchObject({
       revision: 3,
       config: { instructions: "Second." }
     });
     expect(await listed(t.lena.id, team)).toContain("kai-helper");
+    expect(await listed(t.lena.id, other)).not.toContain("kai-helper");
+
+    // A tool the live agent does not have widens its reach: that publish waits again.
+    await push(t.kai.id, "kai-helper", { toolNames: ["known.tool", "read_skill"] });
+    const again = heldSchema.parse((await publish(t.kai.id, "kai-helper", 3)).json());
+    expect((await request(t.admin.id, again.approvalRequestId)).preview.review).toMatchObject({
+      agent: { offers: false, toolsAdded: ["read_skill"] }
+    });
+    expect(await live("kai-helper")).toMatchObject({ revision: 3 });
+    expect((await decide(t.admin.id, again.approvalRequestId)).statusCode).toBe(200);
+    expect(await live("kai-helper")).toMatchObject({
+      revision: 4,
+      config: { toolNames: ["known.tool", "read_skill"] }
+    });
     expect(await listed(t.lena.id, other)).not.toContain("kai-helper");
   });
 
@@ -385,7 +397,8 @@ describe("publishing an agent a workspace owns (WS-PUB-1b)", () => {
     const { t, team, other, create, push, publish, listed, request, decide } = await setup();
     await t.grant(t.lena.id, "agent.approve", { workspaceId: team });
     const approve = async (name: string) => {
-      await push(t.kai.id, name, { instructions: `${name} draft.` });
+      // A tool it did not have widens its reach, so the publish waits (GR-PUB-2).
+      await push(t.kai.id, name, { instructions: `${name} draft.`, toolNames: ["known.tool"] });
       const held = heldSchema.parse((await publish(t.kai.id, name, 1)).json());
       expect((await request(t.lena.id, held.approvalRequestId)).preview.review).toMatchObject({
         agent: { offers: false }
@@ -488,7 +501,7 @@ describe("publishing an agent a workspace owns (WS-PUB-1b)", () => {
       params: { kind: "agent", name: "kept-nowhere" },
       payload: { ...nowhere, expectedAvailability: nowhere }
     });
-    await push(t.kai.id, "kept-nowhere", { instructions: "Draft." });
+    await push(t.kai.id, "kept-nowhere", { instructions: "Draft.", toolNames: ["known.tool"] });
     const held = heldSchema.parse((await publish(t.kai.id, "kept-nowhere", 1)).json());
     expect((await request(t.admin.id, held.approvalRequestId)).preview.review).toMatchObject({
       agent: { offers: false }

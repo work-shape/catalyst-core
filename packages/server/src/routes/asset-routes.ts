@@ -7,6 +7,7 @@ import {
 import { ASSET_PUT_BODY_LIMIT_BYTES } from "../assets/asset-files";
 import {
   AGENT_PUBLISH_HELD_KEY,
+  appPublishChecked,
   agentGiveChecked,
   agentPublishChecked,
   assetWriteEvent,
@@ -205,11 +206,14 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
       if (input.kind === "skill") return workflow.skillDrafts.publish(context, input);
       // Asked again as the publish is made: who reads what may have changed since it was held.
       // A hand-over it confirmed is recorded in the transaction that makes it live.
-      const called = publishHandover.confirming(
+      const confirmed = publishHandover.confirming(
         context,
         { kind: input.kind, name: input.name, change: "publish" },
         await publishHandover.execute(context, input)
       );
+      // An App's publish commits the reach its guardrails read, or nothing (GR-PUB-2).
+      const checked = input.kind === "app" ? appPublishChecked(context.beforeEvents) : undefined;
+      const called = checked ? { ...confirmed, appPublishChecked: checked } : confirmed;
       const result =
         input.kind === "agent"
           ? await workflow.agentDrafts.publish(
