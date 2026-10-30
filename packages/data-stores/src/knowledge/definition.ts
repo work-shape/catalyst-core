@@ -4,10 +4,13 @@ import {
   CONNECTION_NAME_MAX_LENGTH,
   CONNECTION_NAME_PATTERN,
   CONNECTION_NAME_RULE,
+  KNOWLEDGE_DEFAULT_KEYWORD_LANGUAGES,
+  KNOWLEDGE_KEYWORD_LANGUAGES,
   KNOWLEDGE_SEARCH_METHODS,
   knowledgeRecordsRefusalSchema,
   type KnowledgeBaseTarget,
   type KnowledgeEmbeddingModel,
+  type KnowledgeKeywordLanguage,
   type KnowledgeSearchMethod
 } from "@work-shape/catalyst-core";
 import {
@@ -159,7 +162,22 @@ const definitionFieldsSchema = z.strictObject({
         })
         .optional(),
       chunking: later("indexing.chunking", "DS-7, chunking settings"),
-      languages: later("indexing.languages", "KB-12, keyword languages")
+      /**
+       * The languages keyword search stems by: one full-text column and GIN index each (KB-12).
+       * Without it German and English. A change of it, published, rebuilds the full-text
+       * columns in the background and embeds nothing.
+       */
+      languages: z
+        .array(
+          z.enum(KNOWLEDGE_KEYWORD_LANGUAGES, {
+            error: `A keyword language is one of ${KNOWLEDGE_KEYWORD_LANGUAGES.map((language) => `'${language}'`).join(", ")}.`
+          })
+        )
+        .min(1, { error: "A Knowledge Base keeps at least one keyword language" })
+        .refine((languages) => new Set(languages).size === languages.length, {
+          message: "A language is named once"
+        })
+        .optional()
     })
     .optional(),
   search: later("search", "DS-7, search settings"),
@@ -339,6 +357,19 @@ export function knowledgeEmbeddingBinding(
   return "backend" in definition
     ? undefined
     : (definition.indexing?.embedding?.binding ?? embedding.defaultBinding);
+}
+
+/**
+ * The keyword languages a Knowledge Base on the built-in backend builds and searches, in the
+ * order of `KNOWLEDGE_KEYWORD_LANGUAGES`: those its definition lists, else German and English.
+ */
+export function knowledgeKeywordLanguages(
+  definition: KnowledgeBaseDefinition
+): KnowledgeKeywordLanguage[] {
+  const listed =
+    ("backend" in definition ? undefined : definition.indexing?.languages) ??
+    KNOWLEDGE_DEFAULT_KEYWORD_LANGUAGES;
+  return KNOWLEDGE_KEYWORD_LANGUAGES.filter((language) => listed.includes(language));
 }
 
 /**

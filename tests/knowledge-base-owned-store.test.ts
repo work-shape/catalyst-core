@@ -72,7 +72,7 @@ describe("the store a Knowledge Base owns", () => {
     return eventually(async () => {
       await jobs.runDue();
       const record = await ownedRecord(world);
-      expect(record).toMatchObject({ status: "ready", level: 17 });
+      expect(record).toMatchObject({ status: "ready", level: 18 });
       return required(record);
     });
   }
@@ -165,7 +165,8 @@ describe("the store a Knowledge Base owns", () => {
         expect.objectContaining({ number: 14, name: "item_removal_hold" }),
         expect.objectContaining({ number: 15, name: "workflow_source_end" }),
         expect.objectContaining({ number: 16, name: "record_corrected_value" }),
-        expect.objectContaining({ number: 17, name: "chunk_switch_fetch_window" })
+        expect.objectContaining({ number: 17, name: "chunk_switch_fetch_window" }),
+        expect.objectContaining({ number: 18, name: "keyword_languages" })
       ]
     });
     const { database } = record.location;
@@ -195,18 +196,28 @@ describe("the store a Knowledge Base owns", () => {
     for (const table of tables) {
       expect([record.roles.app, record.roles.migration]).not.toContain(table.owner);
     }
+    // The title's words are generated; the chunks' keyword columns are filled by a trigger, so
+    // a language can be added beside them (KB-12): German and English where none is listed.
     const searchColumns = await inDatabase(
       database,
       (sql) =>
-        sql<{ name: string }[]>`
-        select table_name || '.' || column_name as name from information_schema.columns
-        where table_schema = 'catalyst_kb' and is_generated = 'ALWAYS' order by 1`
+        sql<{ name: string; generated: string }[]>`
+        select table_name || '.' || column_name as name, is_generated as generated
+        from information_schema.columns
+        where table_schema = 'catalyst_kb' and udt_name = 'tsvector' order by 1`
     );
-    expect(searchColumns.map((column) => column.name)).toEqual([
-      "chunks.search_de",
-      "chunks.search_en",
-      "documents.title_search"
+    expect(searchColumns).toEqual([
+      { name: "chunks.search_de", generated: "NEVER" },
+      { name: "chunks.search_en", generated: "NEVER" },
+      { name: "documents.title_search", generated: "ALWAYS" }
     ]);
+    expect(
+      await inDatabase(
+        database,
+        (sql) => sql`select tgname as name from pg_trigger
+          where tgrelid = 'catalyst_kb.chunks'::regclass and not tgisinternal`
+      )
+    ).toEqual([{ name: "chunk_keywords" }]);
     expect(await vectorIn(database)).toContain("vector");
 
     // No role of the store is a superuser, may create in its database, or reads the tables.
@@ -241,7 +252,7 @@ describe("the store a Knowledge Base owns", () => {
           name: `knowledge-base:${KB}`,
           title: "Objektunterlagen",
           status: "ready",
-          level: 17,
+          level: 18,
           ownedBy: { knowledgeBase: KB }
         }
       ]
@@ -285,7 +296,7 @@ describe("the store a Knowledge Base owns", () => {
         return sql`select * from catalyst_kb.migrations order by number`;
       });
       expect(ledger.map(({ number }) => number)).toEqual([
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18
       ]);
       const audits = await instance.stores.audit.listAuditEvents({
         clientInstanceId,

@@ -133,6 +133,12 @@ export const knowledge = defineTranslations({
     "knowledge.testFailed": "The query failed.",
     "knowledge.testNoRows": "The query returned no rows.",
     "knowledge.testRefused": "You may not query this knowledge base.",
+    "knowledge.advancedTitle": "Advanced",
+    "knowledge.advancedDescription":
+      "How it indexes its documents. Most knowledge bases keep these as they are.",
+    "knowledge.keywordLanguagesLabel": "Keyword languages",
+    "knowledge.keywordLanguagesHint":
+      "Search by words finds the other forms of a word in these languages too, such as its plural. Each language takes room in the store. Once a change is published, the word index is rebuilt in the background and search keeps answering meanwhile. Nothing is embedded again.",
     "knowledge.searchTitle": "Test search",
     "knowledge.searchDescription":
       "Search the published version as an agent does, with your own right to use it. Nothing is changed.",
@@ -426,6 +432,12 @@ export const knowledge = defineTranslations({
     "knowledge.testFailed": "Die Abfrage ist fehlgeschlagen.",
     "knowledge.testNoRows": "Die Abfrage hat keine Zeilen ergeben.",
     "knowledge.testRefused": "Du darfst diese Wissensbasis nicht abfragen.",
+    "knowledge.advancedTitle": "Erweitert",
+    "knowledge.advancedDescription":
+      "Wie sie ihre Dokumente indexiert. Die meisten Wissensbasen lassen das, wie es ist.",
+    "knowledge.keywordLanguagesLabel": "Sprachen der Wortsuche",
+    "knowledge.keywordLanguagesHint":
+      "Die Suche nach Wörtern findet in diesen Sprachen auch andere Formen eines Worts, etwa den Plural. Jede Sprache braucht Platz im Speicher. Sobald eine Änderung veröffentlicht ist, wird der Wortindex im Hintergrund neu aufgebaut, und die Suche antwortet währenddessen weiter. Es wird nichts neu eingebettet.",
     "knowledge.searchTitle": "Testsuche",
     "knowledge.searchDescription":
       "Durchsuche die veröffentlichte Version so wie ein Agent, mit deinem eigenen Recht, sie zu nutzen. Es wird nichts geändert.",

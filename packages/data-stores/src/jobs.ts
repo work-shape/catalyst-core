@@ -48,7 +48,9 @@ import {
 } from "./definition";
 import { describeDatabaseFailure } from "./failures";
 import { applyKnowledgeStoreSchema } from "./knowledge/builtin/store-schema";
-import { knowledgeBaseDefinitionSchema } from "./knowledge/definition";
+import { keywordLanguageState } from "./knowledge/builtin/keyword-languages";
+import { knowledgeBaseDefinitionSchema, knowledgeKeywordLanguages } from "./knowledge/definition";
+import { enqueueKeywordLanguages } from "./knowledge/reindex-job";
 import { DataStoreMigrationRefusal, applyMigration, readSignedMigrations } from "./migrating";
 import {
   DataStoreProvisioningError,
@@ -618,6 +620,9 @@ async function owningKnowledgeBase(runtime: DataStoreRuntime, record: DataStoreR
   return definition.success && !("backend" in definition.data) ? definition.data : undefined;
 }
 
+/** How long reading the keyword languages of an owned store may take. */
+const KEYWORD_LANGUAGES_READ_TIMEOUT_MS = 30_000;
+
 async function migrateOwnedStore(
   runtime: DataStoreRuntime,
   job: Job<StorePayload>,
@@ -665,6 +670,43 @@ async function migrateOwnedStore(
         metadata: { name: done.name, level, appliedCount, migrationNumber }
       });
     }
+  if (done) await queueKeywordLanguages(runtime, control, record, owner);
+}
+
+/**
+ * Queues the rebuild of the store's full-text columns where they are not those of the keyword
+ * languages the published revision lists (KB-12): every publish of the Knowledge Base brings
+ * the store to it with this job, the first one too.
+ */
+async function queueKeywordLanguages(
+  runtime: DataStoreRuntime,
+  control: JobControl,
+  record: DataStoreRecord,
+  owner: NonNullable<Awaited<ReturnType<typeof owningKnowledgeBase>>>
+): Promise<void> {
+  const wanted = knowledgeKeywordLanguages(owner);
+  let state;
+  try {
+    state = await runtime.server.executor.change(
+      {
+        ...runtime.server.asPlatform(record.location.database),
+        timeoutMs: KEYWORD_LANGUAGES_READ_TIMEOUT_MS,
+        signal: control.signal
+      },
+      keywordLanguageState
+    );
+  } catch (error) {
+    // The tables are migrated; the next publish or start reads the languages again.
+    control.logger.warn(
+      { storeId: record.id, errorName: error instanceof Error ? error.name : "unknown" },
+      "Reading the keyword languages of a Knowledge Base's store failed"
+    );
+    return;
+  }
+  if (state.building.length === 0 && state.searched.join() === wanted.join()) return;
+  await control.transaction((stores) =>
+    enqueueKeywordLanguages(stores, runtime.clientInstanceId, record.id)
+  );
 }
 
 /**

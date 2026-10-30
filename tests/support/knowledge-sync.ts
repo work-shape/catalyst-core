@@ -168,7 +168,7 @@ export function useKnowledgeSync({
         name: `knowledge-base:${KB}`
       });
       expect(row?.status).toBe("ready");
-      expect(row?.level).toBe(17);
+      expect(row?.level).toBe(18);
       return required(row);
     });
     const url = new URL(await fileTestDatabaseUrl());

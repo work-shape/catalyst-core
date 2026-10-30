@@ -26,6 +26,7 @@ import { databaseFailureError } from "../../failures";
 import { ensureVectorExtension } from "../../provisioning";
 import type { DataStoreRuntime } from "../../runtime";
 import { createDocumentRemoval } from "./remove-documents";
+import { applyKeywordLanguages, keywordLanguageState } from "./keyword-languages";
 import { searchKnowledgeStore } from "./search";
 
 // The documents and contents of a Knowledge Base on the built-in backend, as its index job and
@@ -231,7 +232,9 @@ export function createBuiltinDocumentStore(
     what: string,
     timeoutMs: number,
     signal: AbortSignal | undefined,
-    work: (sql: PostgresChangeStatements) => Promise<T>
+    work: (sql: PostgresChangeStatements) => Promise<T>,
+    /** False for a statement that runs outside a transaction, such as a concurrent index build. */
+    transaction?: false
   ): Promise<T> {
     const record = await storeOf(runtime, records, target);
     try {
@@ -239,7 +242,8 @@ export function createBuiltinDocumentStore(
         {
           ...runtime.server.asPlatform(record.location.database),
           timeoutMs,
-          ...(signal ? { signal } : {})
+          ...(signal ? { signal } : {}),
+          ...(transaction === false ? { transaction } : {})
         },
         work
       );
@@ -1129,6 +1133,24 @@ export function createBuiltinDocumentStore(
       );
       return visibleSourceHits(runtime, target.assetId, target.name, answer, (work) =>
         inStore("Checking source visibility", KNOWLEDGE_SEARCH_TIMEOUT_MS, signal, work)
+      );
+    },
+
+    keywordLanguages(signal) {
+      return inStore(
+        "Reading keyword languages",
+        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        signal,
+        keywordLanguageState
+      );
+    },
+
+    applyKeywordLanguages(languages, signal) {
+      return applyKeywordLanguages(
+        (what, options, work) =>
+          inStore(what, options.timeoutMs, signal, work, options.transaction),
+        languages,
+        signal
       );
     }
   };

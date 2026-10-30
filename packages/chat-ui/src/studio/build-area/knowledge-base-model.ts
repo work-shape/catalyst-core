@@ -59,6 +59,11 @@ export interface KnowledgeBaseForm {
   tables: KnowledgeTableForm[];
   /** The synced sources of a Knowledge Base of documents, in the definition's order. */
   sources: KnowledgeSourceForm[];
+  /**
+   * The keyword languages a Knowledge Base of documents lists in `indexing.languages` (KB-12).
+   * Empty where it lists none, and so has German and English.
+   */
+  languages: string[];
   /** What the definition holds beside what the form shows, written back as it was read. */
   kept: Record<string, unknown>;
 }
@@ -85,12 +90,38 @@ function member(value: unknown, key: string): unknown {
     : undefined;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
+ * The definition's members the form does not show, as they were read. Of `indexing` the form
+ * shows the languages: the rest of it, such as the embedding binding, is kept.
+ */
+function keptMembers(config: Record<string, unknown>): Record<string, unknown> {
+  const kept = Object.fromEntries(Object.entries(config).filter(([key]) => !FORM_MEMBERS.has(key)));
+  if (!isRecord(config.indexing)) return kept;
+  const indexing = Object.fromEntries(
+    Object.entries(config.indexing).filter(([key]) => key !== "languages")
+  );
+  const rest = Object.fromEntries(Object.entries(kept).filter(([key]) => key !== "indexing"));
+  return Object.keys(indexing).length > 0 ? { ...rest, indexing } : rest;
+}
+
+/** `indexing` as a save writes it: what was kept of it, and the languages where listed. */
+function indexingOf(form: KnowledgeBaseForm): Record<string, unknown> {
+  const kept = isRecord(form.kept.indexing) ? form.kept.indexing : {};
+  const indexing = { ...kept, ...(form.languages.length > 0 ? { languages: form.languages } : {}) };
+  return Object.keys(indexing).length > 0 ? { indexing } : {};
+}
+
 export function knowledgeBaseConfigToForm(config: Record<string, unknown>): KnowledgeBaseForm {
   const store = member(config.backend, "dataStore");
   const tables = Array.isArray(config.tables) ? config.tables : [];
   const methods = Array.isArray(config.methods)
     ? config.methods.filter((method: unknown) => typeof method === "string")
     : [];
+  const languages = member(config.indexing, "languages");
   return {
     name: text(config, "name"),
     title: text(config, "title"),
@@ -106,7 +137,10 @@ export function knowledgeBaseConfigToForm(config: Record<string, unknown>): Know
         : [];
     }),
     sources: knowledgeSourcesFromConfig(config.sources),
-    kept: Object.fromEntries(Object.entries(config).filter(([key]) => !FORM_MEMBERS.has(key)))
+    languages: Array.isArray(languages)
+      ? languages.filter((language: unknown) => typeof language === "string")
+      : [],
+    kept: keptMembers(config)
   };
 }
 
@@ -126,7 +160,8 @@ export function knowledgeBaseFormToConfig(form: KnowledgeBaseForm): Record<strin
       ...form.kept,
       ...about,
       ...(form.methods.length > 0 ? { methods: form.methods } : {}),
-      ...(form.sources.length > 0 ? { sources: knowledgeSourcesToConfig(form.sources) } : {})
+      ...(form.sources.length > 0 ? { sources: knowledgeSourcesToConfig(form.sources) } : {}),
+      ...indexingOf(form)
     };
   }
   return {
@@ -170,6 +205,7 @@ export function startedKnowledgeBaseForm(
     dataStore: "",
     tables: [],
     sources: [],
+    languages: [],
     kept: {}
   };
 }

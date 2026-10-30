@@ -168,7 +168,7 @@ describe("removing documents from a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(row).toMatchObject({ status: "ready", level: 17 });
+      expect(row).toMatchObject({ status: "ready", level: 18 });
       return required(row);
     });
     return { world, record, log, objects: createFilesystemObjectStorage(world.filesRoot) };

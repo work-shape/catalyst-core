@@ -3,12 +3,19 @@ import {
   KNOWLEDGE_RRF_K,
   KNOWLEDGE_SEARCH_LIST_DEPTH,
   type BuiltinKnowledgeTarget,
+  type KnowledgeKeywordLanguage,
   type KnowledgeQueryEmbedding,
   type KnowledgeSearchAnswer,
   type KnowledgeSearchHit,
   type KnowledgeSearchSignal
 } from "@work-shape/catalyst-core";
 import type { PostgresChangeStatements } from "@work-shape/catalyst-postgres-connector";
+import {
+  keywordColumn,
+  keywordQuery,
+  keywordWordsQuery,
+  searchedKeywordLanguages
+} from "./keyword-languages";
 
 // Search over the documents of a Knowledge Base on the built-in backend: up to three ranked
 // lists, fused by reciprocal rank (k = 60, equal weights) in one statement against the store
@@ -18,9 +25,10 @@ import type { PostgresChangeStatements } from "@work-shape/catalyst-postgres-con
 //   the active generation (`embeddings_<generation>`, `halfvec(<dimensions>)`). Only where the
 //   Knowledge Base searches by meaning, a generation is active, its table is there and the
 //   query could be embedded with its model.
-// - `keyword`: German and English full text with `websearch_to_tsquery`, over the generated
-//   columns of `chunks`. Where the Knowledge Base searches by words, and wherever `semantic`
-//   is not used, so a Knowledge Base whose embeddings are not there yet still answers.
+// - `keyword`: full text with `websearch_to_tsquery` in each keyword language whose column of
+//   `chunks` the store searches (KB-12; German and English unless the Knowledge Base lists
+//   others). Where the Knowledge Base searches by words, and wherever `semantic` is not used, so
+//   a Knowledge Base whose embeddings are not there yet still answers.
 // - `title`: the words of a document's title and file name. Each passage of a document whose
 //   title or file name holds a word of the query shares that document's place.
 //
@@ -123,11 +131,12 @@ export async function searchKnowledgeStore(
         switched = current;
         return undefined;
       }
-      signals = signalsOf(target.methods, semantic !== undefined);
+      const languages = await searchedKeywordLanguages(sql);
+      signals = signalsOf(target.methods, semantic !== undefined, languages.length > 0);
       return z
         .array(hitRow)
         .parse(
-          await sql.run(searchStatement(signals, semantic), [
+          await sql.run(searchStatement(signals, semantic, languages), [
             input.query,
             input.limit,
             ...(semantic ? [`[${semantic.vector.join(",")}]`] : [])
@@ -141,15 +150,17 @@ export async function searchKnowledgeStore(
 
 /**
  * The lists a search fuses: by meaning where it can, by words where the Knowledge Base
- * searches by words or by meaning cannot be used, and by title always.
+ * searches by words or by meaning cannot be used and the store has a keyword language, and by
+ * title always.
  */
 function signalsOf(
   methods: BuiltinKnowledgeTarget["methods"],
-  semantic: boolean
+  semantic: boolean,
+  keywords: boolean
 ): KnowledgeSearchSignal[] {
   return [
     ...(semantic ? (["semantic"] as const) : []),
-    ...(methods.includes("keyword") || !semantic ? (["keyword"] as const) : []),
+    ...(keywords && (methods.includes("keyword") || !semantic) ? (["keyword"] as const) : []),
     "title"
   ];
 }
@@ -186,22 +197,33 @@ const LIVE_CHUNK = `exists (
  */
 function searchStatement(
   signals: readonly KnowledgeSearchSignal[],
-  semantic: Pick<QueryVector, "generation" | "dimensions"> | undefined
+  semantic: Pick<QueryVector, "generation" | "dimensions"> | undefined,
+  languages: readonly KnowledgeKeywordLanguage[]
 ): string {
   const depth = KNOWLEDGE_SEARCH_LIST_DEPTH;
   const lists: string[] = [];
+  // Only the codes of `KNOWLEDGE_KEYWORD_LANGUAGES` the store answered are written into the text.
+  const keywords = signals.includes("keyword") ? languages : [];
+  const queries = keywords.flatMap((language) => [
+    `${keywordQuery(language)} as k_${language}`,
+    `${keywordWordsQuery(language)} as k_${language}_words`
+  ]);
+  /** The best rank of chunk `c` in any language, for the query `q.k_<language><suffix>`. */
+  const rank = (suffix: string) =>
+    `greatest(${keywords
+      .map(
+        (language) =>
+          `pg_catalog.ts_rank_cd(${keywordColumn(language, "c")}, q.k_${language}${suffix})`
+      )
+      .join(", ")})`;
+  /** Whether chunk `c` matches the query `q.k_<language><suffix>` in any language. */
+  const matches = (suffix: string) =>
+    `(${keywords.map((language) => `${keywordColumn(language, "c")} @@ q.k_${language}${suffix}`).join(" or ")})`;
   const parts: string[] = [
-    // The words of the query by German and English stems, and every word as typed, any of
-    // which counts, for titles and file names.
+    // The words of the query by the stems of each keyword language, and every word as typed,
+    // any of which counts, for titles and file names.
     `q as (
-      select pg_catalog.websearch_to_tsquery('german'::regconfig, $1::pg_catalog.text) as de,
-        pg_catalog.websearch_to_tsquery('english'::regconfig, $1::pg_catalog.text) as en,
-        pg_catalog.to_tsquery('german'::regconfig, pg_catalog.replace(
-          pg_catalog.plainto_tsquery('german'::regconfig, $1::pg_catalog.text)::pg_catalog.text,
-          ' & ', ' | ')) as de_words,
-        pg_catalog.to_tsquery('english'::regconfig, pg_catalog.replace(
-          pg_catalog.plainto_tsquery('english'::regconfig, $1::pg_catalog.text)::pg_catalog.text,
-          ' & ', ' | ')) as en_words,
+      select ${queries.map((query) => `${query},`).join("\n        ")}
         $1::pg_catalog.text !~* '(^|[[:space:]])(-|OR([[:space:]]|$))|"' as plain,
         pg_catalog.to_tsquery('simple'::regconfig, pg_catalog.replace(
           pg_catalog.plainto_tsquery('simple'::regconfig, $1::pg_catalog.text)::pg_catalog.text,
@@ -222,15 +244,14 @@ function searchStatement(
     );
     lists.push("select id, rank from semantic");
   }
-  if (signals.includes("keyword")) {
+  if (keywords.length > 0) {
     parts.push(
       `keyword_exact as (
         select c.id, pg_catalog.row_number() over (
-          order by greatest(pg_catalog.ts_rank_cd(c.search_de, q.de),
-            pg_catalog.ts_rank_cd(c.search_en, q.en)) desc, c.id
+          order by ${rank("")} desc, c.id
         ) as rank
         from catalyst_kb.chunks c, q
-        where (c.search_de @@ q.de or c.search_en @@ q.en) and ${LIVE_CHUNK}
+        where ${matches("")} and ${LIVE_CHUNK}
         order by rank limit ${depth}
       )`
     );
@@ -240,12 +261,11 @@ function searchStatement(
       select id, rank from keyword_exact
       union all
       select c.id, pg_catalog.row_number() over (
-        order by greatest(pg_catalog.ts_rank_cd(c.search_de, q.de_words),
-          pg_catalog.ts_rank_cd(c.search_en, q.en_words)) desc, c.id
+        order by ${rank("_words")} desc, c.id
       ) as rank
       from catalyst_kb.chunks c, q
       where q.plain and not exists (select 1 from keyword_exact)
-        and (c.search_de @@ q.de_words or c.search_en @@ q.en_words) and ${LIVE_CHUNK}
+        and ${matches("_words")} and ${LIVE_CHUNK}
       order by rank limit ${depth}
     )`);
     lists.push("select id, rank from keyword");
