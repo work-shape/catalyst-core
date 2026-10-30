@@ -119,6 +119,8 @@ export const backfillUsageAttributionJob = defineScheduledKind("usage.backfill_a
 export const recoverAbandonedModelCallsJob = defineScheduledKind("usage.recover_abandoned_calls");
 /** Corrects the usage counters and the daily sums from the usage events. */
 export const reconcileUsageJob = defineScheduledKind("usage.reconcile");
+/** Tells those who raise limits that the instance's spend limit is reached (LU-2). */
+export const noticeInstanceLimitJob = defineScheduledKind("usage.notice_instance_limit");
 
 /**
  * Removes the setup sessions of Connection sign-ins that were started and never completed.
@@ -241,6 +243,11 @@ export const reconcileUsageSchedule = defineSchedule({
   kind: reconcileUsageJob,
   every: DAY_MS,
   // The Usage page shows no sums of the days before the upgrade until the first run is through.
+  dueAtStart: true
+});
+export const noticeInstanceLimitSchedule = defineSchedule({
+  kind: noticeInstanceLimitJob,
+  every: 5 * MINUTE_MS,
   dueAtStart: true
 });
 export const checkInfrastructureSchedule = defineSchedule({

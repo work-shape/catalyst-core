@@ -98,6 +98,7 @@ function AssistantRuntimePane({
     collaborationWorkspaceId,
     newConversationPrivate,
     usageNote,
+    usageLimit,
     selectedConversationId,
     selectedConversationRetainedUntil,
     selectedConversationSubject,
@@ -494,6 +495,7 @@ function AssistantRuntimePane({
               noticeReport={visibleNotice === notice ? noticeReport : undefined}
               noticeContinue={visibleNotice === notice ? noticeContinue : undefined}
               usageNote={usageNote}
+              usageLimit={usageLimit}
               onNewConversationForPersonalData={
                 noModelForPersonalData ? chat.startNewConversation : undefined
               }

@@ -97,6 +97,7 @@ export type {
 } from "./deletion/retention";
 export { ConversationRetentionWorkflow } from "./deletion/retention";
 export { createChatServerJobs } from "./jobs";
+export { noticeReachedInstanceLimit } from "./usage/instance-limit-notice";
 export { createOperationCalls };
 export {
   APP_ACTION_LIST_MAX_APPS,

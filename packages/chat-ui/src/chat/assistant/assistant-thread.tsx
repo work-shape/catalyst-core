@@ -81,6 +81,7 @@ export function AssistantThread({
   noticeReport,
   noticeContinue,
   usageNote,
+  usageLimit,
   onNewConversationForPersonalData,
   newConversationPrivate,
   subjectLine,
@@ -140,6 +141,11 @@ export function AssistantThread({
   noticeContinue?: RunContinue;
   /** The quiet note at 80 percent of the person's own spend limit. */
   usageNote?: { text: string; dismiss(): void };
+  /**
+   * The sentence of a spend limit that stops the person: which limit, when it resets and who
+   * can raise it. The send button is closed by it as well; this is where it is read.
+   */
+  usageLimit?: string;
   /**
    * Set where the conversation holds personal data and no model the agent offers is allowed
    * for it: the composer says so and offers a new conversation (MODEL-REGION-3).
@@ -378,6 +384,11 @@ export function AssistantThread({
                     }
                   >
                     {notice}
+                  </Banner>
+                ) : null}
+                {usageLimit ? (
+                  <Banner tone="warning" className="mb-2" data-testid="usage-limit-block">
+                    {usageLimit}
                   </Banner>
                 ) : null}
                 {usageNote ? (

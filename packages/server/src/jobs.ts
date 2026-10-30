@@ -33,6 +33,8 @@ import {
   expireConversationsJob,
   expireConversationsSchedule,
   generateConversationTitleJob,
+  noticeInstanceLimitJob,
+  noticeInstanceLimitSchedule,
   pruneAuditEventsJob,
   pruneAuditEventsSchedule,
   pruneJobsJob,
@@ -57,6 +59,7 @@ import { ConversationRetentionWorkflow } from "./deletion/retention";
 import { deletionActor } from "./deletion/subject-deletion";
 import type { ChatServerOptions, ConversationRetentionOptions } from "./types";
 import { createUsageAttributionBackfill, createUsageReconciliation } from "./jobs/usage-backfill";
+import { noticeReachedInstanceLimit } from "./usage/instance-limit-notice";
 import { ExecutionWorkspaceCleanupWorkflow } from "./deletion/workspace-cleanup";
 import {
   completeWorkspaceDeletion,
@@ -295,6 +298,19 @@ export function createChatServerJobs(
       run: (_job, control) => usageReconciliation.run(control)
     }),
     defineJobHandler({
+      kind: noticeInstanceLimitJob,
+      slots: 1,
+      async run(_job, control) {
+        const noticed = await noticeReachedInstanceLimit(options, { now: now() });
+        if (noticed.length > 0) {
+          control.logger.info(
+            { noticed },
+            "Gave notice that the instance's spend limit is reached"
+          );
+        }
+      }
+    }),
+    defineJobHandler({
       kind: sweepConnectionSetupSessionsJob,
       slots: 1,
       async run(_job, control) {
@@ -316,6 +332,7 @@ export function createChatServerJobs(
     backfillUsageAttributionSchedule,
     recoverAbandonedModelCallsSchedule,
     reconcileUsageSchedule,
+    noticeInstanceLimitSchedule,
     sweepConnectionSetupSessionsSchedule
   ];
 
