@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { knowledgeOriginLinkSchema } from "@work-shape/catalyst-asset-schemas";
 import { AppError, type AppErrorCode } from "./errors";
 
 // The `document_source` capability of a Connector type: what a document management system
@@ -48,11 +49,11 @@ export const documentSourceItemSchema = z.strictObject({
    */
   size: z.number().int().min(0).optional(),
   modifiedAt: z.iso.datetime({ offset: true }),
-  /** Where a person opens the original at the source, such as the file's address in Box. */
-  originLink: z
-    .url({ protocol: /^https?$/u })
-    .max(4_000)
-    .optional(),
+  /**
+   * Where a person opens the original at the source, such as the file's address in Box. A link
+   * that is no web address or carries a credential is dropped, and the item is kept without it.
+   */
+  originLink: knowledgeOriginLinkSchema.optional().catch(undefined),
   parents: z.array(z.string().min(1).max(500)).min(1)
 });
 

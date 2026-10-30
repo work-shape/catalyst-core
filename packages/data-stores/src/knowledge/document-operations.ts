@@ -88,6 +88,8 @@ const documentSchema = z.object({
   waitCode: z.enum(KNOWLEDGE_DOCUMENT_WAIT_CODES).optional(),
   /** The source the document was synced from: only source withdrawal removes it. */
   sourceId: z.string().optional(),
+  /** Where the original lives: its source's link, or one the builder entered (DS-6b). */
+  originLink: z.string().optional(),
   addedAt: z.string(),
   updatedAt: z.string()
 });

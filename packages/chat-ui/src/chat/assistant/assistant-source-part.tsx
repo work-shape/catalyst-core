@@ -5,6 +5,7 @@ import {
   type KnowledgeCitationSource
 } from "@work-shape/catalyst-core";
 import { Chip } from "@work-shape/catalyst-ui";
+import { openOriginLink, safeOriginLink } from "../../shared/origin-link";
 import { useAttachmentContentContext } from "../files/attachment-content";
 import { KnowledgeCitationChip } from "./knowledge-citation-chip";
 
@@ -88,7 +89,7 @@ function KnowledgeSourceChips({ source }: { source: KnowledgeCitationSource }) {
           href={origin.href}
           onClick={(event) => {
             event.preventDefault();
-            window.open(origin.href, "_blank", "noopener,noreferrer");
+            openOriginLink(origin.href);
           }}
         >
           {origin.host}
@@ -96,17 +97,4 @@ function KnowledgeSourceChips({ source }: { source: KnowledgeCitationSource }) {
       ) : null}
     </>
   );
-}
-
-/** An origin link that is a web address, with the host it names; anything else is left out. */
-function safeOriginLink(link: string | undefined): { href: string; host: string } | undefined {
-  if (!link) return undefined;
-  try {
-    const url = new URL(link);
-    return url.protocol === "https:" || url.protocol === "http:"
-      ? { href: url.href, host: url.host }
-      : undefined;
-  } catch {
-    return undefined;
-  }
 }

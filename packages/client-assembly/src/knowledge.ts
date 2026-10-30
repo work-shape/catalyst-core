@@ -216,6 +216,7 @@ const knowledgeRoutes: RouteRegistration = (routes) => {
       | "list_documents"
       | "retry"
       | "remove_documents"
+      | "set_origin_link"
       | "search"
       | "extract_fields"
       | "reindex",
@@ -277,6 +278,10 @@ const knowledgeRoutes: RouteRegistration = (routes) => {
   routes.resourceOperation(
     apiOperations["knowledge_bases.remove_documents"],
     bind("remove_documents", KNOWLEDGE_BASE_ACTIONS.write)
+  );
+  routes.resourceOperation(
+    apiOperations["knowledge_bases.set_origin_link"],
+    bind("set_origin_link", KNOWLEDGE_BASE_ACTIONS.write)
   );
   routes.resourceOperation(
     apiOperations["knowledge_bases.retry_documents"],

@@ -34,6 +34,7 @@ const documentRow = z.object({
   failure_code: z.string().nullable(),
   page_count: z.number().int().nullable(),
   source_id: z.string().nullable(),
+  origin_link: z.string().nullable(),
   added_at: z.string(),
   updated_at: z.string(),
   cursor_at: z.string()
@@ -109,7 +110,8 @@ export async function listKnowledgeDocuments(
   const rows = z.array(documentRow).parse(
     await sql.run(
       `select d.id, d.managed_file_id, d.file_name, d.title, c.format, c.state,
-               c.failure_code, c.page_count, s.source_id, d.fields_pending, d.fields_pending_reason,
+               c.failure_code, c.page_count, s.source_id, d.origin_link, d.fields_pending,
+               d.fields_pending_reason,
                to_char(d.added_at at time zone 'UTC', ${ISO_UTC}) as added_at,
                to_char(c.updated_at at time zone 'UTC', ${ISO_UTC}) as updated_at,
                d.added_at::pg_catalog.text as cursor_at
@@ -157,6 +159,7 @@ function entryOf(row: z.infer<typeof documentRow>): KnowledgeDocumentEntry {
       : {}),
     ...(row.state === "pending" && waitCode.success ? { waitCode: waitCode.data } : {}),
     ...(row.source_id === null ? {} : { sourceId: row.source_id }),
+    ...(row.origin_link === null ? {} : { originLink: row.origin_link }),
     addedAt: row.added_at,
     updatedAt: row.updated_at
   };

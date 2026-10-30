@@ -233,6 +233,24 @@ export const knowledge = defineTranslations({
     "knowledge.removeSyncedRefused":
       "This document comes from a source and cannot be removed here. Remove it in the source, or narrow what the source brings in.",
     "knowledge.removed": "The document {name} was removed.",
+    "knowledge.originLinkOpen": "Open the original of {name}",
+    "knowledge.originLinkEdit": "Link to the original",
+    "knowledge.originLinkEditLabel": "Link {name} to its original",
+    "knowledge.originLinkTitle": "Where the original of {name} lives",
+    "knowledge.originLinkDescription":
+      "A citation of this document then offers the original beside the stored copy. The link appears in its citations to everyone who can read the chat, and a citation keeps the link it was given.",
+    "knowledge.originLinkField": "Address of the original",
+    "knowledge.originLinkHint":
+      "An https address of the file in its own system, such as your document management. Not a share link that opens it for anyone: links with a token are refused where they can be recognized, which is best effort, since share links can't be detected reliably.",
+    "knowledge.originLinkInvalid":
+      "Enter an http or https address, without a user name, a password or a token.",
+    "knowledge.originLinkSave": "Save link",
+    "knowledge.originLinkClear": "Remove link",
+    "knowledge.originLinkFailed": "The link could not be saved.",
+    "knowledge.originLinkSynced":
+      "This document comes from a source, which keeps its link to the original.",
+    "knowledge.originLinkSaved": "The link of {name} was saved.",
+    "knowledge.originLinkCleared": "The link of {name} was removed.",
     "knowledge.failureFormatUnsupported":
       "A knowledge base cannot read this format. It reads PDF, DOCX, TXT and Markdown.",
     "knowledge.failureOverLimit": "The file or its text is too large to read.",
@@ -529,6 +547,24 @@ export const knowledge = defineTranslations({
     "knowledge.removeWorkflowDescription":
       "Niemand findet es danach mehr in dieser Wissensbasis, und seine Kopie wird gelöscht. Der Workflow, der es gebracht hat, bringt es nicht zurück: Nur wer diese Wissensbasis veröffentlichen darf, kann es wieder zulassen.",
     "knowledge.removeFailed": "Das Dokument konnte nicht entfernt werden.",
+    "knowledge.originLinkOpen": "Original von {name} öffnen",
+    "knowledge.originLinkEdit": "Link zum Original",
+    "knowledge.originLinkEditLabel": "{name} mit dem Original verknüpfen",
+    "knowledge.originLinkTitle": "Wo das Original von {name} liegt",
+    "knowledge.originLinkDescription":
+      "Ein Zitat dieses Dokuments bietet dann neben der gespeicherten Kopie auch das Original an. Den Link sieht in den Zitaten jede Person, die den Chat lesen kann, und ein Zitat behält den Link, den es bekommen hat.",
+    "knowledge.originLinkField": "Adresse des Originals",
+    "knowledge.originLinkHint":
+      "Eine https-Adresse der Datei in ihrem eigenen System, etwa deiner Dokumentenverwaltung. Kein Freigabelink, der sie für alle öffnet: Links mit einem Token werden abgelehnt, wo sie erkennbar sind. Das gelingt nicht immer, denn Freigabelinks lassen sich nicht zuverlässig erkennen.",
+    "knowledge.originLinkInvalid":
+      "Gib eine http- oder https-Adresse ein, ohne Benutzernamen, Passwort oder Token.",
+    "knowledge.originLinkSave": "Link speichern",
+    "knowledge.originLinkClear": "Link entfernen",
+    "knowledge.originLinkFailed": "Der Link konnte nicht gespeichert werden.",
+    "knowledge.originLinkSynced":
+      "Dieses Dokument kommt aus einer Quelle, die seinen Link zum Original selbst pflegt.",
+    "knowledge.originLinkSaved": "Der Link von {name} wurde gespeichert.",
+    "knowledge.originLinkCleared": "Der Link von {name} wurde entfernt.",
     "knowledge.removeSyncedRefused":
       "Dieses Dokument kommt aus einer Quelle und lässt sich hier nicht entfernen. Entferne es in der Quelle, oder grenze ein, was die Quelle übernimmt.",
     "knowledge.removed": "Das Dokument {name} wurde entfernt.",

@@ -249,6 +249,15 @@ export interface KnowledgeBaseSource {
    * later. The files stay in their conversations.
    */
   remove(knowledgeBase: string, documentIds: readonly string[]): Promise<KnowledgeCall<unknown>>;
+  /**
+   * Sets or clears where the original of a document added by hand lives (DS-6b). Absent where
+   * the page offers no editing of it.
+   */
+  setOriginLink?(
+    knowledgeBase: string,
+    documentId: string,
+    originLink: string | null
+  ): Promise<KnowledgeCall<unknown>>;
   /** Adds files the reader can open to the Knowledge Base; it keeps a copy of each. */
   addFiles(
     knowledgeBase: string,
@@ -501,6 +510,16 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
         const outcome = await client.knowledge_bases.remove_documents({
           params: { knowledgeBase },
           body: { documentIds: [...documentIds] }
+        });
+        if (outcome.status !== "done") throw new PendingApprovalError();
+        await queryClient.invalidateQueries({ queryKey: key("documents", knowledgeBase) });
+        return outcome.output;
+      }),
+    setOriginLink: (knowledgeBase, documentId, originLink) =>
+      called(t, async () => {
+        const outcome = await client.knowledge_bases.set_origin_link({
+          params: { knowledgeBase },
+          body: { documentId, originLink }
         });
         if (outcome.status !== "done") throw new PendingApprovalError();
         await queryClient.invalidateQueries({ queryKey: key("documents", knowledgeBase) });

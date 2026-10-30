@@ -1121,6 +1121,32 @@ export function createBuiltinDocumentStore(
       );
     },
 
+    async setOriginLink(input, signal) {
+      return inStore(
+        "Setting the origin link of a document",
+        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        signal,
+        async (sql) => {
+          // A synced document's link is its source's: the next sync would write it over.
+          const [row] = z.array(originLinkRow).parse(
+            await sql.run(
+              `select source_item_id is not null as synced from catalyst_kb.documents
+               where id = $1::pg_catalog.text and withdrawn_at is null for update`,
+              [input.documentId]
+            )
+          );
+          if (!row) return "missing";
+          if (row.synced) return "synced";
+          await sql.run(
+            `update catalyst_kb.documents set origin_link = $2::pg_catalog.text
+             where id = $1::pg_catalog.text`,
+            [input.documentId, input.originLink]
+          );
+          return "set";
+        }
+      );
+    },
+
     async search(input, signal) {
       const answer = await searchKnowledgeStore(
         (work) =>
@@ -1155,6 +1181,8 @@ export function createBuiltinDocumentStore(
     }
   };
 }
+
+const originLinkRow = z.object({ synced: z.boolean() });
 
 const revisionsRow = z.object({
   state: z.enum(KNOWLEDGE_CONTENT_STATES),

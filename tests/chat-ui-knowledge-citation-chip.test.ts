@@ -184,4 +184,28 @@ describe("the chip of a cited Knowledge Base passage", () => {
     show({ ...hotel, originLink: "javascript:alert(1)" });
     expect(host.querySelector("a")).toBeNull();
   });
+
+  it("C44 offers the stored copy at its page and the original location, each opened apart", async () => {
+    fetchMock.mockResolvedValue(
+      new Response("Hotel: 145 € je Nacht", { headers: { "content-type": "text/plain" } })
+    );
+    show({ ...hotel, originLink: "https://dms.example.test/akte/7" });
+    // Two chips: the stored copy, a button, and the original, a link out.
+    expect(label()?.textContent).toContain("reiserichtlinie.md");
+    const origin = host.querySelector<HTMLAnchorElement>("a");
+    expect(origin?.textContent).toBe("dms.example.test");
+    // The stored copy opens at its page through the API.
+    await act(async () => chip()?.click());
+    await settle();
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(CONTENT);
+    expect(openMock).toHaveBeenLastCalledWith("blob:catalyst/source-1#page=3", "_blank");
+    // The original opens in a tab that cannot reach back, and reads nothing through the API.
+    await act(async () => origin?.click());
+    expect(openMock).toHaveBeenLastCalledWith(
+      "https://dms.example.test/akte/7",
+      "_blank",
+      "noopener,noreferrer"
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

@@ -6,9 +6,14 @@ import {
   CONNECTION_NAME_RULE,
   KNOWLEDGE_DEFAULT_KEYWORD_LANGUAGES,
   KNOWLEDGE_KEYWORD_LANGUAGES,
+  KNOWLEDGE_FILTER_FIELD_NAMES,
+  KNOWLEDGE_FILTER_FIELDS,
+  KNOWLEDGE_FILTER_OPERATORS,
+  KNOWLEDGE_FILTER_TYPES,
   KNOWLEDGE_SEARCH_METHODS,
   knowledgeRecordsRefusalSchema,
   type KnowledgeBaseTarget,
+  type KnowledgeFilterOperator,
   type KnowledgeEmbeddingModel,
   type KnowledgeKeywordLanguage,
   type KnowledgeSearchMethod
@@ -107,6 +112,70 @@ const tableSchema = z.strictObject({
   /** One sentence an agent reads to know what a row of it is. */
   description: z.string().trim().min(1).max(KNOWLEDGE_TABLE_DESCRIPTION_MAX_CHARS)
 });
+
+/** How many filters one Knowledge Base declares at most. Each is a line of the agent's tool. */
+const KNOWLEDGE_FILTERS_MAX_COUNT = 20;
+/** How long the sentence an agent reads of one filter may be. */
+const KNOWLEDGE_FILTER_DESCRIPTION_MAX_CHARS = 300;
+
+/** Every comparison a filter may name; its type narrows them (`KNOWLEDGE_FILTER_OPERATORS`). */
+const FILTER_OPERATORS = [
+  "eq",
+  "prefix",
+  "gt",
+  "gte",
+  "lt",
+  "lte"
+] as const satisfies readonly KnowledgeFilterOperator[];
+
+/**
+ * A filter a caller of the search may pass (DS-6b; spec: Filters): its name, the type of its
+ * value, the sentence the agent reads, the field of a document it applies to, and how it
+ * compares, `eq` by default. On the built-in backend the field is one of the document's own;
+ * filters on extracted fields come later. A filter that is not declared is refused.
+ */
+const filterSchema = z
+  .strictObject({
+    /** What a caller passes the value under, such as `stand_nach`. */
+    name: z
+      .string()
+      .regex(/^[a-z][a-z0-9_]{0,62}$/u, {
+        error:
+          "A filter name is lowercase letters, digits and '_', starting with a letter, at most 63 characters"
+      })
+      .refine((name) => !(name in Object.prototype), {
+        error: (issue) => `A filter cannot be named '${String(issue.input)}'`
+      }),
+    type: z.enum(KNOWLEDGE_FILTER_TYPES, {
+      error: `A filter is of type ${KNOWLEDGE_FILTER_TYPES.map((type) => `'${type}'`).join(" or ")}`
+    }),
+    description: z.string().trim().min(1).max(KNOWLEDGE_FILTER_DESCRIPTION_MAX_CHARS),
+    field: z.enum(KNOWLEDGE_FILTER_FIELD_NAMES, {
+      error: `A filter applies to a field of the document: ${KNOWLEDGE_FILTER_FIELD_NAMES.map((field) => `'${field}'`).join(", ")}. Filters on extracted fields come later.`
+    }),
+    op: z.enum(FILTER_OPERATORS).optional()
+  })
+  .superRefine((filter, context) => {
+    const fieldType = KNOWLEDGE_FILTER_FIELDS[filter.field];
+    if (filter.type !== fieldType) {
+      context.addIssue({
+        code: "custom",
+        path: ["type"],
+        message: `The field '${filter.field}' is of type '${fieldType}'`
+      });
+      return;
+    }
+    const operators: readonly string[] = KNOWLEDGE_FILTER_OPERATORS[filter.type];
+    if (filter.op !== undefined && !operators.includes(filter.op)) {
+      context.addIssue({
+        code: "custom",
+        path: ["op"],
+        message: `A filter of type '${filter.type}' compares with ${operators.map((op) => `'${op}'`).join(", ")}`
+      });
+    }
+  });
+
+export type KnowledgeFilterDeclaration = z.infer<typeof filterSchema>;
 
 /** Every method a definition may name. Which of them a Knowledge Base answers follows its backend. */
 const KNOWLEDGE_METHODS = ["structured", ...KNOWLEDGE_SEARCH_METHODS] as const;
@@ -209,7 +278,13 @@ const definitionFieldsSchema = z.strictObject({
       "A named query is declared once"
     )
     .optional(),
-  filters: later("filters", "DS-6b, declared filters")
+  filters: z
+    .array(filterSchema)
+    .max(KNOWLEDGE_FILTERS_MAX_COUNT)
+    .refine((filters) => new Set(filters.map((filter) => filter.name)).size === filters.length, {
+      message: "A filter name is declared once"
+    })
+    .optional()
 });
 
 type DefinitionFields = Omit<
@@ -261,6 +336,11 @@ export const knowledgeBaseDefinitionSchema = definitionFieldsSchema.transform(
         return refuse(
           "documentTypes",
           "documentTypes classify documents of the built-in backend only"
+        );
+      if (fields.filters?.length)
+        return refuse(
+          "filters",
+          "Filters narrow the search of a Knowledge Base that keeps documents. One on a Data Store is read with SQL, where a condition is a bound parameter of the statement."
         );
       if (fields.sources?.length) {
         return refuse(
