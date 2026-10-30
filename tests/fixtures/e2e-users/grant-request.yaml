@@ -1,0 +1,18 @@
+# The Owner of a workspace who asks for Builder for a member, and that member (AP-3). No other
+# spec uses these people: the Builder right the grant request gives stays with the member.
+- email: e2e-grant-request-owner@example.test
+  displayLabel: E2E Zz Grant Request Owner
+  passwordEnvName: E2E_GRANT_REQUEST_OWNER_PASSWORD
+  developmentPassword: e2e-grant-request-owner-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
+- email: e2e-grant-request-member@example.test
+  displayLabel: E2E Zz Grant Request Member
+  passwordEnvName: E2E_GRANT_REQUEST_MEMBER_PASSWORD
+  developmentPassword: e2e-grant-request-member-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
