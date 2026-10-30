@@ -331,6 +331,28 @@ export function createSecretStore(options: SecretStoreOptions): SecretStore {
 }
 
 /**
+ * The value stored for a binding, or nothing where none is stored or it does not open: one read
+ * and one decryption, and no refusal that says which. For a caller that answers the same either
+ * way, such as a webhook that checks a signature with it.
+ */
+export async function openBoundSecret(
+  options: SecretStoreOptions,
+  binding: SecretBinding
+): Promise<string | undefined> {
+  const record = await options.store.findSecret({
+    clientInstanceId: options.clientInstanceId,
+    binding
+  });
+  const opened = record ? openRecord(options, record, binding) : undefined;
+  if (!opened) return undefined;
+  try {
+    return opened.toString("utf8");
+  } finally {
+    opened.fill(0);
+  }
+}
+
+/**
  * The token set a binding names, opened for the origin it was made for. Throws
  * `connection_not_connected` where its row is gone or was set for another origin, and
  * `secret_unreadable` where it does not open or is no token set.

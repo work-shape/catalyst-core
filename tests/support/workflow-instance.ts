@@ -1,3 +1,5 @@
+import { createPostgresStores, type PostgresStores } from "@work-shape/catalyst-postgres-store";
+import { fileTestDatabaseUrl } from "./test-database";
 import { createWorkflowAssetStepFiles } from "@work-shape/catalyst-client-assembly";
 import {
   createAppAssetKind,
@@ -248,6 +250,14 @@ export interface WorkflowFixture extends ConnectionOperationsFixture {
   seedCrm(): Promise<string>;
   /** What the capture transport holds, where outbound mail is on and no transport was given. */
   capturedMail(): ReturnType<CaptureMailTransport["list"]>;
+}
+
+/**
+ * Stores on the test file's database as a process opens them whose instance has the module
+ * `workflows` off: the record of a platform event queues no job there. The caller closes them.
+ */
+export async function storesWithWorkflowsOff(): Promise<PostgresStores> {
+  return createPostgresStores({ databaseUrl: await fileTestDatabaseUrl(), workflowEvents: false });
 }
 
 /** The system sender of the fixture's outbound mail. */

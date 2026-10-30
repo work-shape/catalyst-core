@@ -528,9 +528,12 @@ function registerWorkflowRoutes(
   route.receive(apiOperations["workflows.webhook_receive"], {
     bodyLimitBytes: WORKFLOW_WEBHOOK_LIMITS.maxBodyBytes,
     handle: async ({ params, body, rawBody, headers, context }) => {
+      // The same answer as every refusal before a valid signature: the address tells nothing.
       const workflow = params.workflow;
-      if (workflow === undefined) throw new AppError("NOT_FOUND", "There is no webhook here");
-      return webhooksOf().receive({
+      const webhooks = required().webhooks;
+      if (workflow === undefined || !webhooks)
+        throw new AppError("NOT_FOUND", "There is no webhook at this address");
+      return webhooks.receive({
         workflow,
         headers,
         body: rawBody,

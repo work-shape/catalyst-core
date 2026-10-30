@@ -111,6 +111,16 @@ async function runsOf(t: WorkflowFixture) {
     .parse(response.json()).items;
 }
 
+/** A refusal as the caller reads it, without the correlation id every answer has its own of. */
+const answerOf = (response: { statusCode: number; json(): unknown }) => ({
+  status: response.statusCode,
+  error: z
+    .object({
+      error: z.object({ code: z.string(), message: z.string(), details: z.unknown().optional() })
+    })
+    .parse(response.json()).error
+});
+
 async function auditOf(t: WorkflowFixture, type: string) {
   return t.stores.audit.listAuditEvents({ clientInstanceId, type });
 }
@@ -136,19 +146,20 @@ describe("a Workflow's webhook", () => {
     expect(JSON.stringify(started)).not.toContain("billing");
   });
 
-  it("refuses an unsigned request, a bad signature, an old timestamp and a replayed nonce before any run, and audits each", async () => {
+  it("refuses an unsigned request, a bad signature, an old timestamp and a replayed nonce before any run, and audits the signed ones", async () => {
     const t = await ready();
     const { secret } = await rotate(t);
 
     const unsigned = await post(t, secret, { unsigned: true });
-    expect(unsigned.statusCode).toBe(401);
-    expect(errorReason(unsigned)).toBe("webhook_unsigned");
+    expect(unsigned.statusCode).toBe(404);
+    expect(unsigned.json()).not.toHaveProperty("error.details");
 
+    // A signature that does not match is the same 404 as an address without a webhook.
     const forged = await post(t, secret, { signature: `v1=${"0".repeat(64)}` });
-    expect(forged.statusCode).toBe(401);
-    expect(errorReason(forged)).toBe("webhook_signature_invalid");
+    expect(forged.statusCode).toBe(404);
+    expect(answerOf(forged)).toEqual(answerOf(unsigned));
     const otherSecret = await post(t, "not-the-secret");
-    expect(errorReason(otherSecret)).toBe("webhook_signature_invalid");
+    expect(otherSecret.statusCode).toBe(404);
 
     const old = Math.floor((Date.now() - WORKFLOW_WEBHOOK_LIMITS.toleranceMs) / 1000) - 60;
     const expired = await post(t, secret, { timestamp: old });
@@ -168,10 +179,39 @@ describe("a Workflow's webhook", () => {
       "webhook_nonce_replayed",
       "webhook_signature_invalid",
       "webhook_signature_invalid",
-      "webhook_timestamp_expired",
-      "webhook_unsigned"
+      "webhook_timestamp_expired"
     ]);
     expect(JSON.stringify(refused)).not.toContain("billing");
+    expect(t.workflows.uncheckedWebhookRefusals()).toBe(1);
+  });
+
+  it("counts unsigned requests instead of auditing them, and answers each as no address", async () => {
+    const t = await ready();
+    await rotate(t);
+    const malformed = [
+      { unsigned: true as const },
+      { signature: "v1=not-hex" },
+      { nonce: "has space" },
+      { timestamp: Number.NaN }
+    ];
+    for (let index = 0; index < 20; index += 1) {
+      const response = await post(t, "anything", malformed[index % malformed.length]);
+      expect(response.statusCode).toBe(404);
+    }
+    expect(await auditOf(t, "workflow.webhook_refused")).toEqual([]);
+    expect(t.workflows.uncheckedWebhookRefusals()).toBe(20);
+    expect(await runsOf(t)).toEqual([]);
+  });
+
+  it("answers the same 404 whether the Workflow is missing, has no webhook or has no secret", async () => {
+    const t = await ready();
+    const noSecret = await post(t, "anything");
+    const missing = await post(t, "anything", { workflow: "no-such-workflow" });
+    expect(noSecret.statusCode).toBe(404);
+    expect(missing.statusCode).toBe(404);
+    expect(answerOf(noSecret)).toEqual(answerOf(missing));
+    expect(noSecret.body).not.toContain("Connection");
+    expect(await auditOf(t, "workflow.webhook_refused")).toEqual([]);
   });
 
   it("refuses a body over the cap before it is read to the end", async () => {
@@ -206,14 +246,14 @@ describe("a Workflow's webhook", () => {
       perMinute: WORKFLOW_WEBHOOK_LIMITS.perMinute,
       secret: "not_set"
     });
-    expect(errorReason(await post(t, "anything"))).toBe("webhook_no_secret");
+    expect((await post(t, "anything")).statusCode).toBe(404);
 
     const first = await rotate(t);
     expect(first.version).toBe(1);
     const second = await rotate(t);
     expect(second.version).toBe(2);
     expect(second.secret).not.toBe(first.secret);
-    expect(errorReason(await post(t, first.secret))).toBe("webhook_signature_invalid");
+    expect((await post(t, first.secret)).statusCode).toBe(404);
     expect((await post(t, second.secret)).statusCode).toBe(200);
     expect(await status(t.root.id)).toMatchObject({ secret: "set", version: 2 });
 
@@ -232,10 +272,14 @@ describe("a Workflow's webhook", () => {
     expect(audit).not.toContain(second.secret);
   });
 
-  it("is no address for a Workflow without a webhook trigger", async () => {
+  it("is no address for a Workflow without a webhook trigger, even signed with its secret", async () => {
     const t = await ready({ kind: "manual" });
     const response = await post(t, "anything");
     expect(response.statusCode).toBe(404);
+    // A secret made while a webhook was published outlives it, and starts nothing.
+    const { secret } = await rotate(t);
+    expect((await post(t, secret)).statusCode).toBe(404);
+    expect(await runsOf(t)).toEqual([]);
     expect(
       (await t.expectOk(t.root.id, "workflows.webhook", { params: { workflow: WORKFLOW } })).json()
     ).toMatchObject({ enabled: false });

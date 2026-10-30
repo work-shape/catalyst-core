@@ -105,6 +105,11 @@ export interface PostgresStoresOptions {
    * path to a number of statements; nothing in an assembled instance sets it.
    */
   onStatement?(statement: string): void;
+  /**
+   * Whether the record of a platform event a Workflow trigger may name queues the job that
+   * starts its runs (EW-4): only where the module `workflows` is on. Off by default.
+   */
+  workflowEvents?: boolean;
 }
 
 export interface PostgresStores extends PlatformStores {
@@ -133,20 +138,25 @@ function handlePostgresNotice(notice: Notice, logger?: Logger): void {
 /**
  * `enqueued` hears of every job the stores insert. `inTransaction` is false for the stores of
  * the connection itself, whose `transaction` tells the workers of this process once it committed.
+ * `workflowEvents` is `PostgresStoresOptions.workflowEvents`.
  */
 function bindStores(
   db: PostgresConnection,
   enqueued: () => void = () => notifyJobsEnqueued(db),
-  inTransaction = false
+  inTransaction = false,
+  workflowEvents = false
 ): PlatformStores {
   const transact: TransactWithStores = async (fn) => {
     // A nested transaction reports to the outermost one: nothing is visible before that commits.
-    if (inTransaction) return db.transaction((tx) => fn(tx, bindStores(tx, enqueued, true)));
+    if (inTransaction)
+      return db.transaction((tx) => fn(tx, bindStores(tx, enqueued, true, workflowEvents)));
     let enqueuedInside = false;
     const noteEnqueued = () => {
       enqueuedInside = true;
     };
-    const result = await db.transaction((tx) => fn(tx, bindStores(tx, noteEnqueued, true)));
+    const result = await db.transaction((tx) =>
+      fn(tx, bindStores(tx, noteEnqueued, true, workflowEvents))
+    );
     if (enqueuedInside) notifyJobsEnqueued(db);
     return result;
   };
@@ -168,7 +178,7 @@ function bindStores(
     agentRuns: createPostgresAgentRunsStore(db, enqueued),
     childAgentRuns: createPostgresChildAgentRunStore(db, enqueued),
     files: createPostgresFilesStore(db, enqueued),
-    audit: createPostgresAuditStore(db, enqueued),
+    audit: createPostgresAuditStore(db, workflowEvents ? enqueued : undefined),
     usage: createPostgresUsageStore(db),
     users: createPostgresUsersStore(db),
     userOperationSettings: createPostgresUserOperationSettingsStore(db),
@@ -230,7 +240,7 @@ function bindStores(
       db.transaction(async (tx) => {
         if (!inTransaction)
           await tx.setTransaction({ isolationLevel: "repeatable read", accessMode: "read only" });
-        return fn(bindStores(tx, enqueued, true));
+        return fn(bindStores(tx, enqueued, true, workflowEvents));
       })
   };
 }
@@ -253,7 +263,7 @@ export async function createPostgresStores(
     ...(onStatement ? { logger: { logQuery: (statement) => onStatement(statement) } } : {})
   });
   const stores: PostgresStores = {
-    ...bindStores(db),
+    ...bindStores(db, undefined, false, options.workflowEvents ?? false),
     close: () => sql.end(),
     readiness: createDatabaseReadinessCheck(sql, options.logger)
   };

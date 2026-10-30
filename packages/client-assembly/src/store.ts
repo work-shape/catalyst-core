@@ -14,11 +14,14 @@ export async function createPlatformStore(input: {
   /** `infrastructure.database.poolSize` of the instance config. */
   poolSize: number;
   logger?: Logger;
+  /** The module `workflows` is on: platform events queue the job that starts Workflow runs. */
+  workflowEvents: boolean;
 }): Promise<PlatformStores> {
   const secrets = input.secrets ?? createEnvironmentSecrets(input.env ?? {});
   return createPostgresStores({
     databaseUrl: await secrets.resolve(PLATFORM_SECRET_NAMES.databaseUrl),
     poolSize: input.poolSize,
-    logger: input.logger ?? createLogger()
+    logger: input.logger ?? createLogger(),
+    workflowEvents: input.workflowEvents
   });
 }

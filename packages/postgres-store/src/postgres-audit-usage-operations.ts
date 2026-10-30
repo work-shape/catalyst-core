@@ -291,16 +291,17 @@ export async function backfillModelUsageAttribution(
 /**
  * `enqueued` hears of the job an event a Workflow trigger may name queues: the record of such
  * an event and the job that starts its runs are written together (EW-4). Where the record is
- * written outside a transaction, the job follows it at once.
+ * written outside a transaction, the job follows it at once. Without `enqueued`, as where the
+ * module `workflows` is off, no such job is queued.
  */
 export function createPostgresAuditStore(
   db: PostgresConnection,
-  enqueued: () => void = () => undefined
+  enqueued?: () => void
 ): AuditEventStore {
   return {
     async appendAuditEvent(input: AuditEventInput): Promise<AuditEvent> {
       const event = await appendAuditEvent(db, input);
-      const payload = workflowEventJobOf(input, event);
+      const payload = enqueued ? workflowEventJobOf(input, event) : undefined;
       if (payload) {
         await enqueueJob(db, workflowEventJobKind, payload, {
           clientInstanceId: input.clientInstanceId,
@@ -308,7 +309,7 @@ export function createPostgresAuditStore(
           dedupeKey: workflowEventJobKey(event.id),
           correlationId: input.correlationId
         });
-        enqueued();
+        enqueued?.();
       }
       return event;
     },

@@ -142,6 +142,11 @@ export interface InstanceWorkflows {
   planSchedule(workflow: string): Promise<{ workflow: string; dueAt: string } | undefined>;
   /** Cancels the open runs of a Workflow, as retiring it with its workspace does. */
   cancelOpenRuns: WorkflowEngine["cancelOpenRuns"];
+  /**
+   * The webhook requests this process refused before a signature could be checked (EW-4):
+   * counted here instead of audited one by one.
+   */
+  uncheckedWebhookRefusals(): number;
 }
 
 /**
@@ -157,7 +162,8 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
       pruneRunData: () => Promise.resolve({ runs: 0, stepRuns: 0, batches: 0 }),
       planSchedules: () => Promise.resolve([]),
       planSchedule: () => Promise.resolve(undefined),
-      cancelOpenRuns: () => Promise.resolve(0)
+      cancelOpenRuns: () => Promise.resolve(0),
+      uncheckedWebhookRefusals: () => 0
     };
   }
   const { clientInstanceId, stores, operationCalls } = parts;
@@ -375,7 +381,8 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
     pruneRunData: () => engine.pruneRunData(),
     planSchedules: engine.planSchedules,
     planSchedule: engine.planSchedule,
-    cancelOpenRuns: engine.cancelOpenRuns
+    cancelOpenRuns: engine.cancelOpenRuns,
+    uncheckedWebhookRefusals: () => engine.webhooks?.refusedUnchecked() ?? 0
   };
 }
 

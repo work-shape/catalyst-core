@@ -142,13 +142,17 @@ export {
 
 /** Why a webhook request was refused, as its audit event names it. */
 export const WORKFLOW_WEBHOOK_REFUSALS = {
-  unsigned: "webhook_unsigned",
   signature: "webhook_signature_invalid",
   expired: "webhook_timestamp_expired",
   replayed: "webhook_nonce_replayed",
-  rateLimited: "webhook_rate_limited",
-  noSecret: "webhook_no_secret"
+  rateLimited: "webhook_rate_limited"
 } as const;
+
+/**
+ * How old a platform event may be when its job runs and still start runs: an event queued long
+ * ago, such as while the job stood, starts none.
+ */
+export const WORKFLOW_TRIGGER_EVENT_MAX_AGE_MS = 24 * 60 * 60_000;
 
 export type WorkflowWebhookRefusal =
   (typeof WORKFLOW_WEBHOOK_REFUSALS)[keyof typeof WORKFLOW_WEBHOOK_REFUSALS];

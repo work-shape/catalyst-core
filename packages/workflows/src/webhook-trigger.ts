@@ -1,7 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import {
-  createConnectionCredentialResolver,
   createSecretStore,
+  openBoundSecret,
   type SecretKeyring
 } from "@work-shape/catalyst-connections";
 import {
@@ -29,11 +29,13 @@ import type { RunOrigin } from "./scheduled-start";
 // The `webhook` trigger (EW-4): an outside system posts a run's input to the Workflow's address.
 // Each Workflow has its own secret in the Secret Store, bound to its asset, made by a publisher
 // and shown once. A request is signed: HMAC-SHA256 with the secret over the timestamp, the nonce
-// and the body as sent. A request without a valid signature is refused before its body is read
-// as input; a timestamp more than five minutes off, or a nonce the Workflow accepted already, is
-// refused too, and each Workflow takes at most `perMinute` requests a minute. The run acts as
-// the Workflow's own account, and the body is its input, kept as long as the run's data. Its
-// audit records the start and every refusal, never the body.
+// and the body as sent. Until a signature is valid, every refusal is the same 404, so the address
+// says nothing of whether the Workflow exists or has a secret. A request without well-formed
+// signing headers costs no read and is only counted; one that is signed but does not match is
+// audited. After a valid signature, a timestamp more than five minutes off, a nonce the Workflow
+// accepted already and a request over `perMinute` are refused and audited. The run acts as the
+// Workflow's own account, and the body is its input, kept as long as the run's data. No audit
+// record holds the body.
 
 /** The subject of the Secret Store row of a Workflow's webhook secret. */
 export const WORKFLOW_WEBHOOK_SECRET_SUBJECT = "workflow:webhook";
@@ -42,6 +44,8 @@ export const WORKFLOW_WEBHOOK_SECRET_SUBJECT = "workflow:webhook";
 const WEBHOOK_SECRET_BYTES = 32;
 
 const NONCE_PATTERN = /^[A-Za-z0-9._~-]+$/u;
+const TIMESTAMP_PATTERN = /^\d{1,12}$/u;
+const SIGNATURE_PATTERN = /^v1=[0-9a-f]{64}$/u;
 
 /**
  * The signature of one request: `v1=` and the hex HMAC-SHA256 under the secret of
@@ -103,6 +107,12 @@ export interface WorkflowWebhooks {
   }): Promise<{ secret: string; version: number }>;
   /** Checks a request and starts its run; throws the refusal. */
   receive(request: WorkflowWebhookRequest): Promise<{ runId: string }>;
+  /**
+   * The requests this process refused before a signature could be checked: without well-formed
+   * signing headers, at no Workflow with a webhook, or for one without a secret. Counted, never
+   * audited one by one.
+   */
+  refusedUnchecked(): number;
 }
 
 interface WebhookTriggerOptions {
@@ -120,16 +130,18 @@ interface WebhookTriggerOptions {
 }
 
 const REFUSAL_MESSAGES: Record<WorkflowWebhookRefusal, string> = {
-  webhook_unsigned: `The request is not signed: send ${WORKFLOW_WEBHOOK_HEADERS.timestamp}, ${WORKFLOW_WEBHOOK_HEADERS.nonce} and ${WORKFLOW_WEBHOOK_HEADERS.signature}`,
-  webhook_signature_invalid: "The request's signature does not match the Workflow's secret",
+  webhook_signature_invalid: "There is no webhook at this address",
   webhook_timestamp_expired: `The request's timestamp is more than ${WORKFLOW_WEBHOOK_LIMITS.toleranceMs / 60_000} minutes away from now`,
   webhook_nonce_replayed: "The request's nonce was used before",
-  webhook_rate_limited: "The Workflow takes no more requests this minute",
-  webhook_no_secret: "The Workflow's webhook has no secret yet"
+  webhook_rate_limited: "The Workflow takes no more requests this minute"
 };
 
-/** The refusal of a webhook request, as the caller hears it. */
+/**
+ * The refusal of a webhook request, as the caller hears it. A signature that does not match is
+ * the same 404 as an address without a webhook; only a signed caller hears a reason.
+ */
 export function workflowWebhookRefusal(reason: WorkflowWebhookRefusal): AppError {
+  if (reason === WORKFLOW_WEBHOOK_REFUSALS.signature) return noWebhook();
   return new AppError(
     reason === WORKFLOW_WEBHOOK_REFUSALS.rateLimited ? "RATE_LIMITED" : "UNAUTHENTICATED",
     REFUSAL_MESSAGES[reason],
@@ -158,6 +170,12 @@ export function createWebhookTrigger(options: WebhookTriggerOptions): WorkflowWe
   });
   const secretStore = (rows: PlatformStores["connections"]) =>
     createSecretStore({ clientInstanceId, keyring, store: rows });
+  let unchecked = 0;
+  /** A refusal before any signature could be checked: counted, and the same 404 as every one. */
+  const refuseUnchecked = (): never => {
+    unchecked += 1;
+    throw noWebhook();
+  };
 
   async function assetOf(workflow: string): Promise<ConfigAssetRecord | undefined> {
     const asset = await stores.configAssets.getConfigAsset({
@@ -166,15 +184,6 @@ export function createWebhookTrigger(options: WebhookTriggerOptions): WorkflowWe
       name: workflow
     });
     return asset?.status === "active" ? asset : undefined;
-  }
-
-  /** The stored secret, or nothing where none is stored or it does not open. */
-  async function secretOf(asset: ConfigAssetRecord): Promise<string | undefined> {
-    const binding = bindingOf(asset);
-    const options = { clientInstanceId, keyring, store: stores.connections };
-    const status = await createSecretStore(options).status(binding);
-    if (status.state !== "set" || status.handle === undefined) return undefined;
-    return createConnectionCredentialResolver(options).resolve({ handle: status.handle, binding });
   }
 
   async function refuse(
@@ -235,10 +244,7 @@ export function createWebhookTrigger(options: WebhookTriggerOptions): WorkflowWe
 
     async receive(request) {
       const { workflow, headers, body, correlationId } = request;
-      const published = await definitions.read(workflow).catch(() => undefined);
-      const trigger = published ? workflowWebhookTrigger(published.manifest) : undefined;
-      const asset = trigger ? await assetOf(workflow) : undefined;
-      if (!published || !trigger || !asset) throw noWebhook();
+      // The headers first, which costs no read: a request that is not signed at all is counted.
       const timestamp = header(headers, WORKFLOW_WEBHOOK_HEADERS.timestamp);
       const nonce = header(headers, WORKFLOW_WEBHOOK_HEADERS.nonce);
       const signature = header(headers, WORKFLOW_WEBHOOK_HEADERS.signature);
@@ -246,21 +252,32 @@ export function createWebhookTrigger(options: WebhookTriggerOptions): WorkflowWe
         timestamp === undefined ||
         nonce === undefined ||
         signature === undefined ||
+        !TIMESTAMP_PATTERN.test(timestamp) ||
+        !SIGNATURE_PATTERN.test(signature) ||
         nonce.length > WORKFLOW_WEBHOOK_LIMITS.nonceMaxLength ||
         !NONCE_PATTERN.test(nonce)
       )
-        return refuse(asset, WORKFLOW_WEBHOOK_REFUSALS.unsigned, correlationId);
-      const secret = await secretOf(asset);
-      if (secret === undefined)
-        return refuse(asset, WORKFLOW_WEBHOOK_REFUSALS.noSecret, correlationId);
-      // The signature first: an unsigned caller learns nothing of the clock or the nonces.
+        return refuseUnchecked();
+      // Then the asset and its secret: one read each and one decryption.
+      const asset = await assetOf(workflow);
+      if (!asset) return refuseUnchecked();
+      const secret = await openBoundSecret(
+        { clientInstanceId, keyring, store: stores.connections },
+        bindingOf(asset)
+      );
+      if (secret === undefined) return refuseUnchecked();
+      // The signature before anything else: an unsigned caller learns nothing of the Workflow,
+      // the clock or the nonces.
       if (!sameSignature(signature, workflowWebhookSignature(secret, timestamp, nonce, body)))
         return refuse(asset, WORKFLOW_WEBHOOK_REFUSALS.signature, correlationId);
+      // A secret outlives a webhook taken off the published definition: it starts nothing then.
+      const published = await definitions.read(workflow).catch(() => undefined);
+      const trigger = published ? workflowWebhookTrigger(published.manifest) : undefined;
+      if (!published || !trigger) throw noWebhook();
       const received = now();
-      const sentAt = /^\d{1,12}$/u.test(timestamp) ? Number(timestamp) * 1000 : Number.NaN;
       if (
-        !Number.isFinite(sentAt) ||
-        Math.abs(received.getTime() - sentAt) > WORKFLOW_WEBHOOK_LIMITS.toleranceMs
+        Math.abs(received.getTime() - Number(timestamp) * 1000) >
+        WORKFLOW_WEBHOOK_LIMITS.toleranceMs
       )
         return refuse(asset, WORKFLOW_WEBHOOK_REFUSALS.expired, correlationId);
       // Only now is the body read as the run's input.
@@ -296,6 +313,8 @@ export function createWebhookTrigger(options: WebhookTriggerOptions): WorkflowWe
       if (outcome.runId === undefined)
         throw new AppError("INTERNAL", "The Workflow Run was not written");
       return { runId: outcome.runId };
-    }
+    },
+
+    refusedUnchecked: () => unchecked
   };
 }

@@ -1,10 +1,16 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { KNOWLEDGE_BASE_ASSET_KIND, type DataStoreRecord } from "@work-shape/catalyst-core";
+import { WORKFLOW_TRIGGER_EVENT_MAX_AGE_MS } from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
 import { put, save } from "./support/mail-workflows";
-import { runSchema, workflowFixture, type WorkflowFixture } from "./support/workflow-instance";
+import {
+  runSchema,
+  storesWithWorkflowsOff,
+  workflowFixture,
+  type WorkflowFixture
+} from "./support/workflow-instance";
 import { stepRunsOf } from "./support/workflow-runs";
 
 // The `platform_event` trigger (EW-4), on Postgres and the engine's jobs: the record of a
@@ -178,6 +184,53 @@ describe("a platform event trigger", () => {
     });
     expect(dropped.map((record) => record.metadata)).toEqual([
       { event: "knowledge_base.sync_finished", eventId: event.id, reason: "source_unreadable" }
+    ]);
+  });
+
+  it("queues nothing for an event written where the module is off", async () => {
+    const t = (fixture = await workflowFixture({ definitions: "assets" }));
+    const contracts = await knowledgeBase(t, "contracts");
+    await t.allow({ kind: "service_principal", id: t.principal.id }, "knowledge_base.read");
+    await save(t, onSync("on-any-sync"));
+    // The stores of a process whose instance has the module `workflows` off.
+    const off = await storesWithWorkflowsOff();
+    try {
+      await off.audit.appendAuditEvent({
+        clientInstanceId,
+        type: "knowledge_base.sync_finished",
+        status: "success",
+        subject: contracts,
+        correlationId: "sync-correlation",
+        metadata: SYNC
+      });
+    } finally {
+      await off.close();
+    }
+    const worker = t.worker();
+    await worker.runDue();
+    await worker.runDue();
+    expect(await runsOf(t, "on-any-sync")).toEqual([]);
+  });
+
+  it("drops an event older than a day when its job runs", async () => {
+    let clock = new Date();
+    const t = (fixture = await workflowFixture({ definitions: "assets", now: () => clock }));
+    const contracts = await knowledgeBase(t, "contracts");
+    await t.allow({ kind: "service_principal", id: t.principal.id }, "knowledge_base.read");
+    await save(t, onSync("on-any-sync"));
+    const event = await syncFinished(t, contracts);
+    clock = new Date(Date.parse(event.createdAt) + WORKFLOW_TRIGGER_EVENT_MAX_AGE_MS + 60_000);
+    const worker = t.worker();
+    await worker.runDue();
+    await worker.runDue();
+
+    expect(await runsOf(t, "on-any-sync")).toEqual([]);
+    const dropped = await t.stores.audit.listAuditEvents({
+      clientInstanceId,
+      type: "workflow.event_dropped"
+    });
+    expect(dropped.map((record) => record.metadata)).toEqual([
+      { event: "knowledge_base.sync_finished", eventId: event.id, reason: "event_expired" }
     ]);
   });
 

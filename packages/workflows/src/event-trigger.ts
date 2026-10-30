@@ -1,6 +1,7 @@
 import {
   KNOWLEDGE_BASE_ASSET_KIND,
   WORKFLOW_ASSET_KIND,
+  WORKFLOW_TRIGGER_EVENT_MAX_AGE_MS,
   WORKFLOW_TRIGGER_EVENTS,
   createActorAccess,
   defineJobHandler,
@@ -28,7 +29,8 @@ import type { RunOrigin } from "./scheduled-start";
 // job starts a run of each published Workflow whose trigger names the event and matches its
 // source, once per Workflow and event. A Workflow of a workspace hears only the events of its
 // own workspace's sources, one of the instance hears them all, and a run starts only where the
-// Workflow's account may read the event's source. The event carries ids, names and counts.
+// Workflow's account may read the event's source. The event carries ids, names and counts. An
+// event older than `WORKFLOW_TRIGGER_EVENT_MAX_AGE_MS` when its job runs starts nothing.
 
 /** The source of an event as rights are decided on it. */
 interface EventSource {
@@ -42,6 +44,7 @@ interface EventTriggerOptions {
   clientInstanceId: ClientInstanceId;
   stores: PlatformStores;
   definitions: WorkflowDefinitionSource;
+  now(): Date;
   prepareStart(published: WorkflowDefinitionRevision, given: unknown): Promise<PreparedStart>;
   openRun(
     tx: PlatformStores,
@@ -67,7 +70,7 @@ export function workflowHearsEvent(
 }
 
 export function createEventTrigger(options: EventTriggerOptions): RegisteredJobHandler {
-  const { clientInstanceId, stores, definitions, prepareStart, openRun } = options;
+  const { clientInstanceId, stores, definitions, now, prepareStart, openRun } = options;
 
   /** The source of the event as it is now; nothing where it is gone. */
   async function sourceOf(kind: string, id: string): Promise<EventSource | undefined> {
@@ -133,6 +136,20 @@ export function createEventTrigger(options: EventTriggerOptions): RegisteredJobH
     async run(job, control) {
       const { payload } = job;
       if (!isWorkflowTriggerEventName(payload.name)) return;
+      // An event that waited too long, such as while its job stood, is history: it starts no run.
+      const age = now().getTime() - Date.parse(payload.occurredAt);
+      if (!(age <= WORKFLOW_TRIGGER_EVENT_MAX_AGE_MS)) {
+        await stores.audit.appendAuditEvent({
+          clientInstanceId,
+          type: "workflow.event_dropped",
+          status: "failed",
+          actor: { displayLabel: "platform event", roles: [] },
+          subject: payload.sourceId,
+          correlationId: job.correlationId,
+          metadata: { event: payload.name, eventId: payload.eventId, reason: "event_expired" }
+        });
+        return;
+      }
       const declared = WORKFLOW_TRIGGER_EVENTS[payload.name];
       const source = await sourceOf(declared.source, payload.sourceId);
       if (!source) return;

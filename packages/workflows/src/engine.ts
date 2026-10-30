@@ -950,7 +950,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       deadlineHandler,
       schedule.handler,
       schedule.repairHandler,
-      createEventTrigger({ clientInstanceId, stores, definitions, prepareStart, openRun }),
+      createEventTrigger({ clientInstanceId, stores, definitions, now, prepareStart, openRun }),
       pruning.handler
     ],
     jobSchedules: [pruning.schedule],

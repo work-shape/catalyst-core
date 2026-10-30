@@ -143,7 +143,7 @@ test("the builder sets up a webhook and a sync event, and a signed request start
       }
     });
   const forged = await post(`v1=${"0".repeat(64)}`, randomUUID());
-  expect(forged.status()).toBe(401);
+  expect(forged.status()).toBe(404);
   const started = await post(signature, nonce);
   expect(started.status(), await started.text()).toBe(200);
   expect(z.object({ runId: z.string() }).parse(await started.json()).runId).toMatch(/\S/u);
