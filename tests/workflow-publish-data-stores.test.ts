@@ -6,7 +6,9 @@ import { expectStatus } from "./support/app-instance";
 import { eventually, required } from "./support/assertions";
 import { init, type StoreFile } from "./support/data-store-world";
 import { setupFindingsApp, type FindingsWorld } from "./support/findings-app";
-import { getTestJobs } from "./support/test-instance";
+import { runCli } from "@work-shape/catalyst-cli";
+import { testOperations } from "./support/operations";
+import { createTestFetch, getTestJobs } from "./support/test-instance";
 import { instanceWorkflowAssetKind } from "./support/workflow-instance";
 
 // LIVE-2: one Publish of a Workflow makes it live with the Data Store drafts its steps call.
@@ -467,5 +469,161 @@ describe("LIVE-2: one Publish of a Workflow makes it live with its Data Stores",
     }
     expect(await record("live2-held")).toMatchObject({ status: "ready", level: 2 });
     expect((await asset(DATA_STORE_ASSET_KIND, "live2-held"))?.publishedRevision).toBe(store);
+  });
+
+  /**
+   * `catalyst workflow publish` as the root user, through their personal key. Answers what it
+   * printed, the questions it asked and the bodies of the publish requests it sent.
+   */
+  async function cliPublish(
+    workflow: string,
+    options: { answers?: string[]; yes?: boolean; terminal?: boolean } = {}
+  ) {
+    const serverFetch = createTestFetch(t.instance, {
+      "x-test-user": t.root.id,
+      "x-test-key": "personal"
+    });
+    const out: string[] = [];
+    const err: string[] = [];
+    const questions: string[] = [];
+    const published: unknown[] = [];
+    const answers = [...(options.answers ?? [])];
+    const code = await runCli(
+      [
+        "workflow",
+        "publish",
+        workflow,
+        "--revision",
+        "2",
+        ...(options.yes ? ["--yes"] : []),
+        "--instance",
+        "https://catalyst.test"
+      ],
+      {
+        cwd: process.cwd(),
+        env: { CATALYST_API_KEY: "cat_personal" },
+        fetchImpl: async (input, init) => {
+          const request = input instanceof Request ? input : new Request(input, init);
+          if (new URL(request.url).pathname === testOperations["access_tokens.exchange"].path) {
+            return Response.json({
+              accessToken: "access-token",
+              expiresAt: new Date(Date.now() + 60_000).toISOString()
+            });
+          }
+          if (request.method === "POST" && request.url.endsWith(`/${workflow}/publish`)) {
+            published.push(await request.clone().json());
+          }
+          return serverFetch(request);
+        },
+        ...(options.terminal === false
+          ? {}
+          : {
+              prompt: async (question: string) => {
+                questions.push(question);
+                const answer = answers.shift();
+                if (answer === undefined) throw new Error("Unexpected extra publish question");
+                return answer;
+              }
+            }),
+        stdout: (text) => out.push(text),
+        stderr: (text) => err.push(text)
+      }
+    );
+    return { code, out: out.join(""), err: err.join(""), questions, published };
+  }
+
+  it("shows the store, its migration and the account in `catalyst workflow publish`, and one yes publishes them with the Workflow", async () => {
+    const store = await liveWorkflowWithPendingStore("live2-cli", "live2-cli-flow");
+
+    const result = await cliPublish("live2-cli-flow", { answers: ["d", "y"] });
+
+    expect(result.code, result.err).toBe(0);
+    // The sentence leads with the account and the store beneath it; Details keep the lines the
+    // page's question holds. The same question is asked again after them.
+    expect(result.questions).toHaveLength(2);
+    expect(result.out).toContain("runs as the account “Import findings”");
+    expect(result.out).toContain(
+      `Data Store 'Store live2-cli' (live2-cli): revision ${store} in place of 1, at level 1, applies 1 migration: add_note`
+    );
+    expect(result.out).toContain(
+      "Runs as its own account “Import findings” and may add rows to Store live2-cli."
+    );
+    expect(result.published).toEqual([
+      { revision: 2, dataStores: [{ name: "live2-cli", revision: store }] }
+    ]);
+    expect(result.out).toContain(`Published revision ${store} of Data Store 'live2-cli'.`);
+    expect(result.out).toContain("Published revision 2 of workflow 'live2-cli-flow'");
+    expect(await record("live2-cli")).toMatchObject({ status: "ready", level: 2 });
+    expect((await asset(WORKFLOW_ASSET_KIND, "live2-cli-flow"))?.publishedRevision).toBe(2);
+  });
+
+  it("changes nothing where the answer is no, where no one can answer, and where a migration fails", async () => {
+    await liveWorkflowWithPendingStore("live2-cli-no", "live2-cli-no-flow");
+
+    const declined = await cliPublish("live2-cli-no-flow", { answers: ["n"] });
+    expect(declined.code).toBe(1);
+    expect(declined.err).toBe("Nothing was published.\n");
+    expect(declined.out).toContain("applies 1 migration: add_note");
+    expect(declined.published).toEqual([]);
+
+    // A run with no terminal and no --yes is refused before it sends anything.
+    const silent = await cliPublish("live2-cli-no-flow", { terminal: false });
+    expect(silent.code).toBe(1);
+    expect(silent.err).toContain("needs your answer here");
+    expect(silent.published).toEqual([]);
+
+    expect(await record("live2-cli-no")).toMatchObject({ status: "ready", level: 1 });
+    expect((await asset(WORKFLOW_ASSET_KIND, "live2-cli-no-flow"))?.publishedRevision).toBe(1);
+
+    // Where the instance refuses after a yes, the store keeps its level and the live revision.
+    const brokenStore = await liveWorkflowWithPendingStore(
+      "live2-cli-broken",
+      "live2-cli-broken-flow",
+      broken
+    );
+    const refused = await cliPublish("live2-cli-broken-flow", { answers: ["y"] });
+    expect(refused.code).not.toBe(0);
+    expect(refused.published).toEqual([
+      { revision: 2, dataStores: [{ name: "live2-cli-broken", revision: brokenStore }] }
+    ]);
+    expect(refused.out).not.toContain("Published revision");
+    expect(await record("live2-cli-broken")).toMatchObject({ level: 1 });
+    expect((await asset(WORKFLOW_ASSET_KIND, "live2-cli-broken-flow"))?.publishedRevision).toBe(1);
+  });
+
+  it("`--yes` shows the same lines, asks nothing, and names the store in the request that waits in the Inbox", async () => {
+    const store = await liveWorkflowWithPendingStore("live2-cli-yes", "live2-cli-yes-flow");
+
+    const result = await cliPublish("live2-cli-yes-flow", { yes: true });
+
+    expect(result.code, result.err).toBe(3);
+    expect(result.questions).toEqual([]);
+    expect(result.out).toContain("applies 1 migration: add_note");
+    expect(result.out).toContain(
+      "Runs as its own account “Import findings” and may add rows to Store live2-cli-yes."
+    );
+    expect(result.err).toMatch(
+      /Waits in your Inbox for your confirmation; nothing has changed yet/u
+    );
+    expect(result.published).toEqual([
+      { revision: 2, dataStores: [{ name: "live2-cli-yes", revision: store }] }
+    ]);
+    expect(await record("live2-cli-yes")).toMatchObject({ level: 1 });
+    expect((await asset(WORKFLOW_ASSET_KIND, "live2-cli-yes-flow"))?.publishedRevision).toBe(1);
+
+    // The Allow in the Inbox is the person's click: the store and the Workflow go live with it.
+    const requestId = required(/request (\S+),/u.exec(result.err)?.[1]);
+    expectStatus(
+      await t.call(t.root.id, "approval_requests.decide", {
+        params: { requestId },
+        payload: { decision: "approve" }
+      }),
+      200
+    );
+    await getTestJobs(t.instance).runDue();
+    await eventually(async () => {
+      expect((await asset(WORKFLOW_ASSET_KIND, "live2-cli-yes-flow"))?.publishedRevision).toBe(2);
+    }, 30_000);
+    expect(await record("live2-cli-yes")).toMatchObject({ status: "ready", level: 2 });
   });
 });
