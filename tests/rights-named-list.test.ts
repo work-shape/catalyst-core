@@ -54,11 +54,8 @@ const ALLOWED: Record<string, { count: number; reason: Reason }> = {
   "packages/server/src/routes/access-routes.ts": { count: 1, reason: NAMED.seeing },
   "packages/server/src/connections/connection-access.ts": { count: 1, reason: NAMED.seeing },
   "packages/server/src/platform/workflow-authoring-context.ts": { count: 1, reason: NAMED.seeing },
-  "packages/server/src/workspaces/workspace-access.ts": { count: 2, reason: NAMED.owner },
-  "packages/server/src/workspaces/collaboration-workspace-service.ts": {
-    count: 2,
-    reason: NAMED.owner
-  },
+  // One check, `actsAsWorkspaceSuperadmin`, which a personal key never passes (CLI-PARITY-5).
+  "packages/server/src/workspaces/workspace-access.ts": { count: 1, reason: NAMED.owner },
   "packages/chat-ui/src/admin/settings/pages/access.tsx": { count: 1, reason: NAMED.handsOut },
   "packages/chat-ui/src/admin/settings/pages/users.tsx": { count: 1, reason: NAMED.account },
   "packages/chat-ui/src/admin/control-plane/user-administration-detail.tsx": {

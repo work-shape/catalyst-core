@@ -1,5 +1,11 @@
 import type { PersonalApiKey, PlatformContext } from "@work-shape/catalyst-api-client";
-import { CONNECTION_ACTIONS, PERSONAL_API_KEY_INSPECT_ACTIONS } from "@work-shape/catalyst-core";
+import {
+  CONNECTION_ACTIONS,
+  PERSONAL_API_KEY_ACCOUNT_ACTION,
+  PERSONAL_API_KEY_ACCOUNT_LEVEL_ACTIONS,
+  PERSONAL_API_KEY_INSPECT_ACTIONS,
+  PERSONAL_API_KEY_WORKSPACES_ACTION
+} from "@work-shape/catalyst-core";
 
 /** How long a new key lives, in days. The instance takes at most a year. */
 export const PERSONAL_KEY_EXPIRY_DAYS = [30, 90, 365] as const;
@@ -84,6 +90,17 @@ export function isPersonalKeyInstanceAction(action: string): boolean {
 }
 
 /**
+ * The account and workspaces level a new key may carry (CLI-PARITY-5): `account.manage`, the
+ * person's own name, model preference and keys' revocation, and
+ * `collaboration_workspace.manage`, the Shared Workspaces as the person's role in each allows.
+ * No grant gives them, so every person is offered both; neither is ticked in advance, also not
+ * for the key `catalyst setup` creates.
+ */
+export function personalKeyAccountOffer(context: PlatformContext | undefined): string[] {
+  return context === undefined ? [] : [...PERSONAL_API_KEY_ACCOUNT_LEVEL_ACTIONS];
+}
+
+/**
  * What the key `catalyst setup` asks for starts with: the reading, writing and publishing
  * rights the person holds among the ones offered, and the use level without `connection.use`.
  * Deleting is ticked by hand, and so are the instance level and `connection.use`: with it the results of a
@@ -125,12 +142,18 @@ export interface PersonalKeyLimit {
 
 /**
  * The actions a key limited this way carries: a key limited to a workspace leaves out the
- * instance level, so narrowing a key never hands it a right of the whole instance.
+ * instance level and the person's account, so narrowing a key never hands it a right of the
+ * whole instance or the account; one limited to an asset leaves out the workspaces level too,
+ * whose narrowest limit is a workspace.
  */
 function actionsWithin(actions: readonly string[], limit: PersonalKeyLimit): string[] {
-  return limit.workspaceId.trim()
-    ? actions.filter((action) => !isPersonalKeyInstanceAction(action))
-    : [...actions];
+  if (!limit.workspaceId.trim()) return [...actions];
+  return actions.filter(
+    (action) =>
+      !isPersonalKeyInstanceAction(action) &&
+      action !== PERSONAL_API_KEY_ACCOUNT_ACTION &&
+      (action !== PERSONAL_API_KEY_WORKSPACES_ACTION || !limit.assetName.trim())
+  );
 }
 
 /**

@@ -44,7 +44,7 @@ export async function requireWorkspaceAccess(
   });
   const membershipRole = membership?.role ?? null;
   // Only a superadmin's access depends on the workspace itself, so only they load it here.
-  const workspace = isSuperadmin(user)
+  const workspace = actsAsWorkspaceSuperadmin(user)
     ? await options.stores.workspaces.getWorkspace(
         options.clientInstanceId,
         collaborationWorkspaceId
@@ -110,11 +110,23 @@ export async function holdsWorkspaceBundle(
   );
 }
 
+/**
+ * Whether the superadmin override applies to this call: a superadmin is Owner of every Shared
+ * Workspace in their own session, but their personal API key acts on their memberships alone.
+ * Administering other people's workspaces through a key waits for its own level (CLI-PARITY-6b).
+ * Only a personal key gives an identity `keyScopes`, so either mark is the key.
+ */
+export function actsAsWorkspaceSuperadmin(user: AuthenticatedUser): boolean {
+  return (
+    isSuperadmin(user) && user.delegatedActor?.kind !== "api_key" && user.keyScopes === undefined
+  );
+}
+
 /** Membership decides, except that a superadmin is Owner of every Shared Workspace. */
 export function effectiveWorkspaceRole<Role extends WorkspaceMembershipRole | null>(
   user: AuthenticatedUser,
   workspace: Pick<CollaborationWorkspace, "kind">,
   membershipRole: Role
 ): WorkspaceMembershipRole | Role {
-  return isSuperadmin(user) && workspace.kind === "shared" ? "owner" : membershipRole;
+  return actsAsWorkspaceSuperadmin(user) && workspace.kind === "shared" ? "owner" : membershipRole;
 }

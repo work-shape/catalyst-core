@@ -28964,6 +28964,11 @@
             "sessionToken": [
               "me:write"
             ]
+          },
+          {
+            "accessToken": [
+              "account:manage"
+            ]
           }
         ],
         "parameters": [],
@@ -29262,6 +29267,11 @@
           {
             "sessionToken": [
               "me:write"
+            ]
+          },
+          {
+            "accessToken": [
+              "account:manage"
             ]
           }
         ],
@@ -29955,6 +29965,11 @@
           {
             "sessionToken": [
               "me:write"
+            ]
+          },
+          {
+            "accessToken": [
+              "account:manage"
             ]
           }
         ],
@@ -38539,6 +38554,11 @@
             "sessionToken": [
               "collaboration_workspace:read"
             ]
+          },
+          {
+            "accessToken": [
+              "workspaces:manage"
+            ]
           }
         ],
         "parameters": [
@@ -38625,6 +38645,11 @@
           {
             "sessionToken": [
               "collaboration_workspace:manage"
+            ]
+          },
+          {
+            "accessToken": [
+              "workspaces:manage"
             ]
           }
         ],
@@ -38744,6 +38769,11 @@
           {
             "sessionToken": [
               "collaboration_workspace:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "workspaces:manage"
             ]
           }
         ],
@@ -38888,6 +38918,11 @@
             "sessionToken": [
               "collaboration_workspace:read"
             ]
+          },
+          {
+            "accessToken": [
+              "workspaces:manage"
+            ]
           }
         ],
         "parameters": [
@@ -38951,6 +38986,11 @@
           {
             "sessionToken": [
               "collaboration_workspace:manage"
+            ]
+          },
+          {
+            "accessToken": [
+              "workspaces:manage"
             ]
           }
         ],
@@ -39079,6 +39119,11 @@
           {
             "sessionToken": [
               "collaboration_workspace:manage"
+            ]
+          },
+          {
+            "accessToken": [
+              "workspaces:manage"
             ]
           }
         ],
@@ -39210,6 +39255,11 @@
             "sessionToken": [
               "collaboration_workspace:read"
             ]
+          },
+          {
+            "accessToken": [
+              "workspaces:manage"
+            ]
           }
         ],
         "parameters": [
@@ -39307,6 +39357,11 @@
           {
             "sessionToken": [
               "collaboration_workspace:manage"
+            ]
+          },
+          {
+            "accessToken": [
+              "workspaces:manage"
             ]
           }
         ],
@@ -39427,6 +39482,11 @@
           {
             "sessionToken": [
               "collaboration_workspace:manage"
+            ]
+          },
+          {
+            "accessToken": [
+              "workspaces:manage"
             ]
           }
         ],
@@ -39555,6 +39615,11 @@
           {
             "sessionToken": [
               "collaboration_workspace:manage"
+            ]
+          },
+          {
+            "accessToken": [
+              "workspaces:manage"
             ]
           }
         ],
@@ -39778,6 +39843,11 @@
             "sessionToken": [
               "collaboration_workspace:manage"
             ]
+          },
+          {
+            "accessToken": [
+              "workspaces:manage"
+            ]
           }
         ],
         "parameters": [
@@ -39972,6 +40042,11 @@
             "sessionToken": [
               "collaboration_workspace:manage"
             ]
+          },
+          {
+            "accessToken": [
+              "workspaces:manage"
+            ]
           }
         ],
         "parameters": [
@@ -40080,6 +40155,11 @@
             "sessionToken": [
               "collaboration_workspace:read"
             ]
+          },
+          {
+            "accessToken": [
+              "workspaces:manage"
+            ]
           }
         ],
         "parameters": [
@@ -40177,6 +40257,11 @@
           {
             "sessionToken": [
               "collaboration_workspace:manage"
+            ]
+          },
+          {
+            "accessToken": [
+              "workspaces:manage"
             ]
           }
         ],
@@ -40308,6 +40393,11 @@
             "sessionToken": [
               "collaboration_workspace:manage"
             ]
+          },
+          {
+            "accessToken": [
+              "workspaces:manage"
+            ]
           }
         ],
         "parameters": [
@@ -40427,6 +40517,11 @@
           {
             "sessionToken": [
               "collaboration_workspace:manage"
+            ]
+          },
+          {
+            "accessToken": [
+              "workspaces:manage"
             ]
           }
         ],
@@ -40563,6 +40658,11 @@
           {
             "sessionToken": [
               "collaboration_workspace:manage"
+            ]
+          },
+          {
+            "accessToken": [
+              "workspaces:manage"
             ]
           }
         ],
@@ -46669,7 +46769,9 @@
           "data_store_rows:write",
           "data_store_rows:use",
           "workflow_runs:use",
-          "instance:inspect"
+          "instance:inspect",
+          "account:manage",
+          "workspaces:manage"
         ]
       },
       "CancelRunRequest": {
@@ -50724,7 +50826,9 @@
                 "data_store_rows:write",
                 "data_store_rows:use",
                 "workflow_runs:use",
-                "instance:inspect"
+                "instance:inspect",
+                "account:manage",
+                "workspaces:manage"
               ]
             }
           },

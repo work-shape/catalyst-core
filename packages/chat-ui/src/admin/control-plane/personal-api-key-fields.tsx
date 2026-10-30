@@ -1,7 +1,11 @@
 import { useState } from "react";
-import { CONNECTION_ACTIONS } from "@work-shape/catalyst-core";
+import {
+  CONNECTION_ACTIONS,
+  PERSONAL_API_KEY_ACCOUNT_ACTION,
+  PERSONAL_API_KEY_WORKSPACES_ACTION
+} from "@work-shape/catalyst-core";
 import { Checkbox, Field, Input, Picker, PickerButton, Select } from "@work-shape/catalyst-ui";
-import { useTranslation } from "../../shared/i18n";
+import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { actionLabel } from "../access/right-words";
 import {
   PERSONAL_KEY_EXPIRY_DAYS,
@@ -10,6 +14,17 @@ import {
   personalKeyExpiryOf,
   type PersonalKeyDraft
 } from "./personal-api-keys-model";
+
+/**
+ * What an action of a key allows, as the rights screens name it, and the account and
+ * workspaces level, which no grant gives and the rights screens therefore never name, in
+ * words of its own.
+ */
+export function personalKeyActionLabel(action: string, t: TranslationContextValue["t"]): string {
+  if (action === PERSONAL_API_KEY_ACCOUNT_ACTION) return t("personalApiKeys.accountManage");
+  if (action === PERSONAL_API_KEY_WORKSPACES_ACTION) return t("personalApiKeys.workspacesManage");
+  return actionLabel(action, t);
+}
 
 /** From this many workspaces on, the workspace picker shows its search field. */
 const WORKSPACE_SEARCH_FROM_COUNT = 8;
@@ -26,13 +41,15 @@ export interface PersonalKeyWorkspace {
  * CLI's connect code. The scopes are actions, each named as the rights screens name it, all
  * limited to what one workspace owns where one is chosen, and within it to one asset where its
  * id is given. The instance level is offered only while no workspace is chosen, and choosing one
- * unticks it.
+ * unticks it. The account and workspaces level goes the same way, but for the workspaces,
+ * which a key limited to a workspace manages there only, and one limited to an asset not at all.
  */
 export function PersonalKeyFields({
   draft,
   actions,
   useActions,
   instanceActions = [],
+  accountActions = [],
   workspaces,
   onChange
 }: {
@@ -43,6 +60,8 @@ export function PersonalKeyFields({
   useActions: readonly string[];
   /** The instance level offered: `system.view` where the person holds it. */
   instanceActions?: readonly string[];
+  /** The account and workspaces level offered: `account.manage` and the workspaces. */
+  accountActions?: readonly string[];
   /** The workspaces the key can be limited to. */
   workspaces: readonly PersonalKeyWorkspace[];
   onChange(draft: PersonalKeyDraft): void;
@@ -54,7 +73,14 @@ export function PersonalKeyFields({
   const workspaceLabel = (workspace: PersonalKeyWorkspace) =>
     workspace.name ?? t("personalApiKeys.workspacePersonal");
   const chosenWorkspace = workspaces.find((workspace) => workspace.id === draft.workspaceId);
-  const offered = [...actions, ...useActions, ...instanceActions];
+  const offered = [...actions, ...useActions, ...instanceActions, ...accountActions];
+  // The account level is of the whole account, and a workspace is the narrowest limit of the
+  // workspaces level: an asset limit leaves it out.
+  const accountShown = accountActions.filter((action) =>
+    action === PERSONAL_API_KEY_ACCOUNT_ACTION
+      ? !draft.workspaceId
+      : !(draft.workspaceId && draft.assetName.trim())
+  );
   const toggle = (action: string) => (checked: boolean) =>
     onChange({
       ...draft,
@@ -67,7 +93,7 @@ export function PersonalKeyFields({
       {list.map((action) => (
         <Checkbox
           key={action}
-          label={actionLabel(action, t)}
+          label={personalKeyActionLabel(action, t)}
           // Off by default: what the key's calls to a Connection return leaves the instance
           // (connections-and-secrets.md, Exposure to outside clients).
           {...(action === CONNECTION_ACTIONS.use
@@ -110,6 +136,15 @@ export function PersonalKeyFields({
           {boxes(instanceActions)}
         </fieldset>
       ) : null}
+      {accountShown.length > 0 ? (
+        <fieldset className="grid gap-2">
+          <legend className="text-label">{t("personalApiKeys.accountLevel")}</legend>
+          <p className="text-caption text-muted-foreground">
+            {t("personalApiKeys.accountLevelHint")}
+          </p>
+          {boxes(accountShown)}
+        </fieldset>
+      ) : null}
       <Field label={t("personalApiKeys.workspace")} hint={t("personalApiKeys.workspaceHint")}>
         <Picker
           search={workspaces.length >= WORKSPACE_SEARCH_FROM_COUNT}
@@ -127,8 +162,13 @@ export function PersonalKeyFields({
               workspaceId,
               ...(workspaceId
                 ? {
-                    // A workspace narrows the key: the instance level does not go with it.
-                    actions: draft.actions.filter((action) => !isPersonalKeyInstanceAction(action))
+                    // A workspace narrows the key: the instance level and the account do not
+                    // go with it.
+                    actions: draft.actions.filter(
+                      (action) =>
+                        !isPersonalKeyInstanceAction(action) &&
+                        action !== PERSONAL_API_KEY_ACCOUNT_ACTION
+                    )
                   }
                 : { assetName: "" })
             })

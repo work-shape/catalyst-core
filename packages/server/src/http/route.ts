@@ -1,5 +1,9 @@
 import type { RouteResultOr, OperationResponseResult } from "./route-response";
-import { operationScope, throwUnlessKeyCarriesUseLevel } from "./operation-scope";
+import {
+  operationScope,
+  throwUnlessKeyCarriesUseLevel,
+  throwUnlessKeyReachesWorkspace
+} from "./operation-scope";
 import { checkResponse } from "./check-response";
 import { answerRedirect } from "./redirect-answer";
 import { paginate, pageScope, storePage } from "./paging";
@@ -420,6 +424,9 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
       await requireWithinLimit(options, operation, { address: request.ip, account }, reply);
     }
     const params = readPathParams(operation, request.params);
+    if (caller.identity && operation.scope) {
+      throwUnlessKeyReachesWorkspace(caller.identity, operation, params);
+    }
     return { correlationId, caller, query, body, params, takesCredential };
   }
 

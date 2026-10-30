@@ -79,6 +79,40 @@ A key that names none of the three rights, or not the one a command needs, is re
 
 `audit events` shows the instance's audit events, which record who did what to which subject and never the content of a request, a reply, a file or a secret. `operation runs` and `operation show` name an input by its hash and hold neither the input nor the result. `jobs list` leaves out a job's payload. Reading the audit events is itself an audit event, attributed to you and to the key. `audit events`, `jobs list` and `operation runs` print one page of 50 entries, or `--limit` up to 200, with the `nextCursor` to pass to `--cursor` for the next; the other commands print the whole answer. `jobs list --status` takes one status or several separated by commas: `queued`, `running`, `succeeded`, `failed`, `dead` or `cancelled`. Without `audit.view` on the key, `operation runs` lists only your own runs, and `--actor` with another person finds none. It also takes `--operation`, `--effect reading|changing`, `--status`, `--actor`, `--origin` and `--workspace`.
 
+## Account and workspace commands
+
+These change your own account and the Shared Workspaces you belong to. A key reaches them only with the **account and workspaces level** of Settings > API keys (German: **Konto und Arbeitsbereiche**), which you tick by hand on a key you issue there; the page that confirms a `catalyst setup` or `catalyst login` code does not offer it. It has two parts: `account.manage` for your account, and `collaboration_workspace.manage` for the workspaces. The key `catalyst setup` creates carries neither. No key issues a key, changes a password or deletes an account.
+
+```sh
+catalyst me
+catalyst me update --name "Kai Berger" --locale de
+catalyst me model-preference
+catalyst me set-model-preference --from preference.json
+catalyst keys revoke <key-id>
+catalyst workspace list
+catalyst workspace create --name Finance --visibility private
+catalyst workspace update <workspace-id> --description "Month end"
+catalyst workspace delete <workspace-id> --confirm-name Finance
+catalyst workspace members <workspace-id>
+catalyst workspace members add <workspace-id> --email lena@example.com
+catalyst workspace members role <workspace-id> <user-id> --role admin
+catalyst workspace requests approve <workspace-id> <user-id>
+```
+
+| Command | Calls | Needs on the key |
+| --- | --- | --- |
+| `me`, `me model-preference` | `me.get`, `me.model_preference.get` | nothing beyond the key |
+| `me update`, `me set-model-preference` | `me.update`, `me.model_preference.set` | `account.manage` |
+| `keys revoke <key-id>` | `me.api_keys.revoke` | `account.manage` |
+| `workspace list`, `workspace directory`, `workspace create` | `workspaces.list`, `workspaces.directory.list`, `workspaces.create` | `collaboration_workspace.manage` over every workspace |
+| `workspace show`, `update`, `deletion-impact`, `delete` | `workspaces.get`, `workspaces.update`, `workspaces.deletion_impact.get`, `workspaces.delete` | `collaboration_workspace.manage` |
+| `workspace members`, `members candidates`, `members add`, `members role`, `members remove`, `members leave` | `workspaces.members.*`, `workspaces.member_candidates.list` | `collaboration_workspace.manage` |
+| `workspace requests`, `requests ask`, `requests approve`, `requests decline` | `workspaces.access_requests.*` | `collaboration_workspace.manage` |
+
+In a workspace, the instance asks your role there exactly as the Members screen does: an Admin changes regular Members only, only an Owner makes someone an Owner or deletes the workspace, and a Member changes nothing. A Superadmin's key reaches only the workspaces they are a member of, as a member: it is not Owner of every Shared Workspace, as the Superadmin is in Catalyst. The refusal is the screen's, with exit code 1. A key that names `collaboration_workspace.manage:<workspace>` reaches that workspace only, and neither lists nor creates workspaces; `account.manage` cannot be limited to a workspace. A key without the level is refused with exit code 1, and the refusal names the right. Each change is recorded in the audit log as on the screen, with the key that made it. `keys revoke` can revoke the key that runs it; its next call is refused.
+
+`workspace delete` needs `--confirm-name` with the workspace's name, as the screen does. `me update` takes `--name` and `--locale de|en`; `workspace create` and `update` take `--name`, `--description` and `--visibility discoverable|private`. Both also take `--from <file|->` with the JSON body, and a flag sets its field over the file's. `workspace members candidates` takes `--search`.
+
 ## Other commands
 
 `app actions` without a name lists actions of the published Apps you may read; with a name it reads that App's draft if you may write it, otherwise its published revision. `keys list` lists your own key metadata, never secrets. `instance workspaces` uses `instance.workspaces.list`: the Shared Workspaces that agents, Knowledge Bases and Connections can be made available in, requiring `config_assets:write` and, on the whole instance, `agent.write`, `knowledge_base.write` or `connection.write`. It is not the list of your workspace memberships.

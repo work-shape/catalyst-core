@@ -21,6 +21,7 @@ import {
   instanceUrl,
   isCompleteConnectCode,
   keysSharingAName,
+  personalKeyAccountOffer,
   personalKeyActionOffer,
   personalKeyDraftProblem,
   personalKeyExpiryOf,
@@ -58,6 +59,7 @@ const cliOffer = {
   actions: ["agent.read", "agent.write"],
   useActions: [],
   instanceActions: [],
+  accountActions: [],
   setupActions: [],
   workspaces: [],
   settled: true
@@ -190,6 +192,37 @@ describe("personal API key model", () => {
     expect(personalKeyRequest(draft, now)?.scopes).toEqual(["system.view"]);
     // Narrowed, a key of system.view alone has no scope left to send.
     expect(personalKeyDraftProblem({ ...draft, workspaceId: "ws-tax" })).toBe("scopes");
+    expect(personalKeyRequest({ ...draft, workspaceId: "ws-tax" }, now)).toBeUndefined();
+  });
+
+  it("offers the account and workspaces level to every person, and never in the key `catalyst setup` asks for", () => {
+    expect(personalKeyAccountOffer(undefined)).toEqual([]);
+    const context: PlatformContext = {
+      ...platformContext(),
+      authoringActions: ["agent.read"],
+      useActions: ["workflow.use"]
+    };
+    expect(personalKeyAccountOffer(context)).toEqual([
+      "account.manage",
+      "collaboration_workspace.manage"
+    ]);
+    expect(personalKeyActionOffer(context)).not.toContain("account.manage");
+    expect(setupKeyActions(context)).toEqual(["agent.read", "workflow.use"]);
+  });
+
+  it("sends account.manage only over the whole account and collaboration_workspace.manage at most narrowed to a workspace", () => {
+    const actions = ["agent.read", "account.manage", "collaboration_workspace.manage"];
+    expect(buildPersonalKeyScopes(actions, { workspaceId: "", assetName: "" })).toEqual(actions);
+    expect(buildPersonalKeyScopes(actions, { workspaceId: "ws-tax", assetName: "" })).toEqual([
+      "agent.read:ws-tax",
+      "collaboration_workspace.manage:ws-tax"
+    ]);
+    expect(
+      buildPersonalKeyScopes(actions, { workspaceId: "ws-tax", assetName: "vat-helper" })
+    ).toEqual(["agent.read:ws-tax/vat-helper"]);
+    const draft = { ...initialPersonalKeyDraft("laptop"), actions: ["account.manage"] };
+    expect(personalKeyRequest(draft, now)?.scopes).toEqual(["account.manage"]);
+    // Narrowed, a key of account.manage alone has no scope left to send.
     expect(personalKeyRequest({ ...draft, workspaceId: "ws-tax" }, now)).toBeUndefined();
   });
 
@@ -352,6 +385,38 @@ describe("You > API keys", () => {
     expect(renderConfirm("en").match(/aria-checked="true"/gu)).toBeNull();
   });
 
+  it("leaves the account and workspaces level off the page that confirms a connect code", () => {
+    const render = (locale: "en" | "de") =>
+      renderToStaticMarkup(
+        createElement(
+          TranslationProvider,
+          { children: null, locale },
+          createElement(ConnectCodeConfirm, {
+            code: "BCDF-GHJK",
+            request: {
+              clientLabel: "catalyst CLI on fabian-mbp",
+              createdAt: "2026-10-13T11:58:00.000Z",
+              expiresAt: "2026-10-13T12:13:00.000Z"
+            },
+            offer: {
+              ...cliOffer,
+              accountActions: ["account.manage", "collaboration_workspace.manage"],
+              setupActions: ["agent.read", "agent.write"]
+            },
+            asksUseLevel: true,
+            pending: false,
+            onConfirm: async () => undefined
+          })
+        )
+      );
+    const english = render("en");
+    expect(english).not.toContain("Account and workspaces");
+    expect(english).not.toContain("Change your name");
+    expect(english.match(/aria-checked="true"/gu)?.length).toBe(2);
+    expect(english).not.toMatch(/aria-checked="false"/u);
+    expect(render("de")).not.toContain("Konto und Arbeitsbereiche");
+  });
+
   it("says beside connection.use alone that its results are copied to the computer that holds the key", () => {
     const english = renderConfirm("en", true);
     const copies = "The results of these calls are copied to the computer that holds the key.";
@@ -462,6 +527,19 @@ describe("You > API keys in plain words", () => {
     ]);
     expect(narrowed).toContain("Edit agents: vat-helper in Tax");
     expect(narrowed).toContain("View skills in ws-gone");
+    const account = keysTable("en", [
+      key({ scopes: ["account.manage", "collaboration_workspace.manage:ws-tax"] })
+    ]);
+    expect(account).toContain(
+      "Change your name, language, what Enter does while an answer runs and your model preference, and revoke your keys"
+    );
+    expect(account).toContain(
+      "Create, change and delete workspaces, and manage their members and requests in Tax"
+    );
+    expect(account).not.toContain("account.manage");
+    expect(keysTable("de", [key({ scopes: ["collaboration_workspace.manage"] })])).toContain(
+      "Arbeitsbereiche anlegen, ändern und löschen"
+    );
   });
 
   // Badges of rights stacked and were cut at 390; one muted line breaks between words instead.
@@ -1001,7 +1079,7 @@ describe("You > API keys, for a person and an admin alike", () => {
     }
   });
 
-  it("a connect code for `catalyst setup` offers system.view unticked, sends it once ticked, and drops it when a workspace narrows the key", async () => {
+  it("a connect code for `catalyst setup` or `login` offers neither the instance level nor the account and workspaces level", async () => {
     const confirmed: ConfirmConnectCodeRequest[] = [];
     const holder: PlatformContext = {
       ...platformContext(),
@@ -1022,6 +1100,7 @@ describe("You > API keys, for a person and an admin alike", () => {
           ...cliOffer,
           actions: personalKeyActionOffer(holder),
           instanceActions: personalKeyInstanceOffer(holder),
+          accountActions: personalKeyAccountOffer(holder),
           setupActions: setupKeyActions(holder),
           workspaces: [{ id: "ws-tax", name: "Tax" }]
         },
@@ -1032,39 +1111,18 @@ describe("You > API keys, for a person and an admin alike", () => {
         }
       })
     );
-    const confirm = async () =>
-      act(async () => {
+    try {
+      const text = mounted.container.textContent;
+      expect(text).not.toContain("View the System pages");
+      expect(text).not.toContain("Lets the key only read what is shared by all workspaces");
+      expect(text).not.toContain("Account and workspaces");
+      expect(text).not.toContain("Change your name");
+      await act(async () => {
         required(
           mounted.container.querySelector<HTMLButtonElement>('button[type="submit"]')
         ).click();
       });
-    try {
-      expect(mounted.container.textContent).toContain(
-        "Lets the key only read what is shared by all workspaces: usage, audit events"
-      );
-      expect(
-        scopeBox(mounted.container, "View the System pages").getAttribute("aria-checked")
-      ).toBe("false");
-      await act(async () => {
-        scopeBox(mounted.container, "View the System pages").click();
-      });
-      await confirm();
-      expect(confirmed.at(-1)?.scopes).toEqual(["agent.read", "system.view"]);
-
-      await act(async () => {
-        required(mounted.container.querySelector<HTMLElement>('[aria-haspopup="dialog"]')).click();
-      });
-      await act(async () => {
-        required(
-          [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
-            (option) => option.textContent === "Tax"
-          )
-        ).click();
-      });
-      // A key limited to a workspace no longer offers or carries the instance level.
-      expect(mounted.container.textContent).not.toContain("View the System pages");
-      await confirm();
-      expect(confirmed.at(-1)?.scopes).toEqual(["agent.read:ws-tax"]);
+      expect(confirmed.at(-1)?.scopes).toEqual(["agent.read"]);
     } finally {
       await mounted.unmount();
     }

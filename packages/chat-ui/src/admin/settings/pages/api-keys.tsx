@@ -43,6 +43,7 @@ import {
   initialPersonalKeyDraft,
   instanceUrl,
   isCompleteConnectCode,
+  personalKeyAccountOffer,
   personalKeyActionOffer,
   personalKeyInstanceOffer,
   personalKeyRequest,
@@ -61,6 +62,8 @@ interface KeyOffer {
   useActions: string[];
   /** The instance level: `system.view` where the person holds it, never ticked in advance. */
   instanceActions: string[];
+  /** The account and workspaces level, offered to everyone and never ticked in advance. */
+  accountActions: string[];
   /** What the key `catalyst setup` asks for starts with ticked (`setupKeyActions`). */
   setupActions: string[];
   /** The workspaces whose own assets the person holds a right on: a key can be limited to one. */
@@ -89,6 +92,7 @@ export function ApiKeysPage() {
     actions: personalKeyActionOffer(context),
     useActions: personalKeyUseOffer(context),
     instanceActions: personalKeyInstanceOffer(context),
+    accountActions: personalKeyAccountOffer(context),
     setupActions: setupKeyActions(context),
     workspaces: (context?.workspaces ?? []).map((workspace) =>
       workspace.kind === "personal"
@@ -226,6 +230,7 @@ function NewKeyDialog({
           actions={offer.actions}
           useActions={offer.useActions}
           instanceActions={offer.instanceActions}
+          accountActions={offer.accountActions}
           workspaces={offer.workspaces}
           onChange={(next) => {
             setDraft(next);
@@ -400,7 +405,10 @@ export function ConnectCodeConfirm({
         draft={draft}
         actions={offer.actions}
         useActions={offer.useActions}
-        instanceActions={offer.instanceActions}
+        // The key a connect code makes (`catalyst setup`, `catalyst login`) never carries the
+        // instance level or the account and workspaces level: they are ticked on a key issued
+        // above, by hand.
+        instanceActions={[]}
         workspaces={offer.workspaces}
         onChange={(next) => {
           setDraft(next);

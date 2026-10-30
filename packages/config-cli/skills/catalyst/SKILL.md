@@ -127,6 +127,17 @@ catalyst infrastructure show
 
 These read usage, audit events, background jobs, Operation Runs, Modules and infrastructure, and need the key's instance level. The key `catalyst setup` creates does not have it. A refusal names the right the key lacks (`usage.view`, `audit.view` or `system.view`); treat it as final and tell the person, who ticks it for a key of their choice in Settings > API keys. Read them only when asked. Audit events and Operation Runs hold no payload: report them as they are and do not try to recover content from them. `audit events`, `jobs list` and `operation runs` print one page; `--cursor` takes the `nextCursor` it printed.
 
+## Change the account and workspaces
+
+```sh
+catalyst me
+catalyst workspace list
+catalyst workspace members <workspace-id>
+catalyst workspace members add <workspace-id> --email <address>
+```
+
+`me update`, `keys revoke` and the `workspace` commands change the person's own account and their workspaces, and need the key's account and workspaces level (`account.manage`, `collaboration_workspace.manage`). The key `catalyst setup` creates does not have it. Change them only when asked, and show the change first. Never delete a workspace, remove a member or revoke a key without the person's go-ahead for that one change. A refusal names the right the key lacks or says what the person's role in the workspace does not allow; treat it as final and tell the person.
+
 ## Follow a held call
 
 A change that exits 3 prints its Operation Run id. Follow it with `catalyst operation show <run-id>` and list your requests with `catalyst requests`. Add `--json` for the full record or list. A held run still exits 3; a failed, denied or expired run exits 1. Withdraw your own request with `catalyst requests --withdraw <id>` only when the person asks; the key needs an asset write or delete scope. Do not send the held change again.

@@ -73,7 +73,7 @@ describe("api operation catalog", () => {
     expect(artifact).toEqual(JSON.parse(JSON.stringify(createOpenApiDocument())));
   });
 
-  it("declares personal-key scopes only for own calls and requests, the read-only infrastructure check, the read-only instance level and the use levels of rows and starts", () => {
+  it("declares personal-key scopes only for own calls and requests, the read-only infrastructure check, the read-only instance level, the use levels of rows and starts, and the account and workspaces level", () => {
     const alternatives = Object.values(apiOperations).flatMap((operation) =>
       "personalKeyScope" in operation ? [[operation.id, operation.personalKeyScope]] : []
     );
@@ -81,9 +81,28 @@ describe("api operation catalog", () => {
       ["approval_requests.list_mine", "me:read"],
       ["approval_requests.count_pending", "me:read"],
       ["approval_requests.withdraw", "config_assets:write"],
+      ["me.update", "account:manage"],
+      ["me.model_preference.set", "account:manage"],
       ["instance.modules.list", "instance:inspect"],
       ["instance.infrastructure.get", "instance:inspect"],
       ["instance.infrastructure.check", "infrastructure:check"],
+      ["workspaces.list", "workspaces:manage"],
+      ["workspaces.create", "workspaces:manage"],
+      ["workspaces.directory.list", "workspaces:manage"],
+      ["workspaces.get", "workspaces:manage"],
+      ["workspaces.update", "workspaces:manage"],
+      ["workspaces.deletion_impact.get", "workspaces:manage"],
+      ["workspaces.delete", "workspaces:manage"],
+      ["workspaces.members.list", "workspaces:manage"],
+      ["workspaces.member_candidates.list", "workspaces:manage"],
+      ["workspaces.members.add", "workspaces:manage"],
+      ["workspaces.members.update_role", "workspaces:manage"],
+      ["workspaces.members.remove", "workspaces:manage"],
+      ["workspaces.members.leave", "workspaces:manage"],
+      ["workspaces.access_requests.create", "workspaces:manage"],
+      ["workspaces.access_requests.list", "workspaces:manage"],
+      ["workspaces.access_requests.approve", "workspaces:manage"],
+      ["workspaces.access_requests.decline", "workspaces:manage"],
       ["audit_events.list", "instance:inspect"],
       ["audit_activities.list", "instance:inspect"],
       ["usage.get_summary", "instance:inspect"],
@@ -96,7 +115,8 @@ describe("api operation catalog", () => {
       ["data_stores.query", "data_store_rows:use"],
       ["data_stores.insert", "data_store_rows:use"],
       ["data_stores.rows", "data_store_rows:use"],
-      ["knowledge_bases.query", "data_store_rows:use"]
+      ["knowledge_bases.query", "data_store_rows:use"],
+      ["me.api_keys.revoke", "account:manage"]
     ]);
     expect(apiOperations["instance.infrastructure.check"]).toMatchObject({
       auth: "user",

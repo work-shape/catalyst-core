@@ -10,6 +10,7 @@ import {
   getSubjectUserId,
   hashConnectCode,
   isAuthenticatedServicePrincipal,
+  isPersonalApiKeyAccountLevelAction,
   normalizeUserCode,
   requirePersonalApiKeyExpiry,
   requirePersonalApiKeyScopes,
@@ -47,9 +48,9 @@ type ChangeContext = Pick<
 >;
 
 /**
- * Who may issue, confirm or revoke their own keys: a person signed in themself. A call made
- * with a personal key never passes, so no key issues a key or confirms a code. Its scopes carry
- * no `me:write` either; this says the same where the scope is not asked.
+ * Who may issue their own keys and confirm a connect code: a person signed in themself. A call
+ * made with a personal key never passes, so no key issues a key or confirms a code. Its scopes
+ * carry no `me:write` either; this says the same where the scope is not asked.
  */
 export function authorizeOwnKeyChange(
   operationId: string
@@ -61,6 +62,28 @@ export function authorizeOwnKeyChange(
           action: operationId,
           reason: "no_grant",
           message: "Only a person signed in themself manages their personal API keys"
+        }
+      : { allowed: true };
+}
+
+/**
+ * Who may revoke their own key: a person signed in themself, or their own personal key whose
+ * scopes carry the account and workspaces level (CLI-PARITY-5; the scope `account:manage` is
+ * asked of the key before this). A service principal never does. A revocation only takes
+ * away, so a key that revokes itself or another key of its person gives nobody anything.
+ */
+export function authorizeOwnKeyRevocation(
+  operationId: string
+): (input: unknown, context: { actor: AuthenticatedIdentity }) => OperationAuthorization {
+  return (_input, { actor }) =>
+    isAuthenticatedServicePrincipal(actor) ||
+    (actor.delegatedActor !== undefined &&
+      (actor.delegatedActor.kind !== "api_key" || actor.keyScopes === undefined))
+      ? {
+          allowed: false,
+          action: operationId,
+          reason: "no_grant",
+          message: "Only a person, signed in or with their own API key, revokes their API keys"
         }
       : { allowed: true };
 }
@@ -293,6 +316,10 @@ export class PersonalApiKeysWorkflow {
       }
     }
     for (const scope of scopes) {
+      // The account and workspaces level is no right a grant gives: every person changes their
+      // own account, and what they may do in a workspace is their role there, asked at each
+      // call by the checks of the screen.
+      if (isPersonalApiKeyAccountLevelAction(scope.action)) continue;
       // Where the key may reach, as the caller holds it: anywhere for a scope without a
       // workspace, in the workspace for one with it. A right on one asset counts, as one in a
       // workspace does for a scope without one: the key is narrowed to the owner at each call.

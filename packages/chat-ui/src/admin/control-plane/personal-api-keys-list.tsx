@@ -20,7 +20,7 @@ import { apiErrorMessage } from "../../shared/workspace-utils";
 import { copyStateFor, type RecordedSecretCopy } from "./api-access-model";
 import { copySecretField, SecretFields, type RevealedSecret } from "./api-access-secret-fields";
 import { formatMomentShort } from "../../shared/locale-format";
-import { actionLabel } from "../access/right-words";
+import { personalKeyActionLabel } from "./personal-api-key-fields";
 import {
   keysSharingAName,
   personalKeyScopeParts,
@@ -42,7 +42,7 @@ function scopeLabel(
   workspaceName: (id: string) => string | undefined
 ): string {
   const { action, workspaceId, assetName } = personalKeyScopeParts(scope);
-  const right = actionLabel(action, t);
+  const right = personalKeyActionLabel(action, t);
   if (workspaceId === undefined) return right;
   const workspace = workspaceName(workspaceId) ?? workspaceId;
   return assetName === undefined
