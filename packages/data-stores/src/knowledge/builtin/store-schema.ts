@@ -391,6 +391,24 @@ const KEYWORD_LANGUAGES = `
     for each row execute function catalyst_kb.chunk_keywords();
 `;
 
+/**
+ * The page cache (KB-13b): one row per document whose original a reader's open fetched
+ * through its source, naming the object that holds it. Eviction takes the oldest fetch first;
+ * expiry the earliest end. It holds no file name or path, and goes with the store.
+ */
+const PAGE_CACHE = `
+  create table catalyst_kb.page_cache (
+    document_id text primary key,
+    content_sha256 text not null check (content_sha256 ~ '^[0-9a-f]{64}$'),
+    object_key text not null,
+    byte_size bigint not null check (byte_size >= 0),
+    cached_at timestamp with time zone not null default now(),
+    expires_at timestamp with time zone not null
+  );
+  create index page_cache_cached_idx on catalyst_kb.page_cache (cached_at, document_id);
+  create index page_cache_expires_idx on catalyst_kb.page_cache (expires_at);
+`;
+
 /** The tables of the store of a built-in Knowledge Base, in the order a store applies them. */
 const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   { number: 1, name: "documents", sql: DOCUMENTS },
@@ -435,7 +453,8 @@ const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   { number: 15, name: "workflow_source_end", sql: WORKFLOW_SOURCE_END },
   { number: 16, name: "record_corrected_value", sql: RECORD_FIELDS_CORRECTED_VALUE },
   { number: 17, name: "chunk_switch_fetch_window", sql: CHUNK_SWITCH_FETCH_WINDOW },
-  { number: 18, name: "keyword_languages", sql: KEYWORD_LANGUAGES }
+  { number: 18, name: "keyword_languages", sql: KEYWORD_LANGUAGES },
+  { number: 19, name: "page_cache", sql: PAGE_CACHE }
 ];
 
 /** A later applied number never proves that earlier migrations were applied. */

@@ -68,6 +68,7 @@ import { createDataStoreServer } from "./server";
 export { sizeLimitBytes } from "./definition";
 export { createKnowledgeBases, knowledgeOperationName, type KnowledgeBases } from "./knowledge";
 export { knowledgeBaseReadsClosedConnection } from "./knowledge/outside-reach";
+export type { KnowledgePageReader, KnowledgePageSourcePort } from "./knowledge/page-cache";
 export { uploadFingerprint } from "./knowledge/add-files";
 export type { KnowledgeEmbedding } from "./knowledge/definition";
 export type { WorkflowRunDatasetPort } from "./runtime";

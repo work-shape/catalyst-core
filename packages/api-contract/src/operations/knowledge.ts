@@ -366,7 +366,7 @@ export const knowledgeOperations = {
     method: "GET",
     path: "/api/v1/knowledge-bases/:knowledgeBase/documents/:documentId/content",
     summary:
-      "Open an original source document with knowledge_base.use; a cited document is opened in the context of its conversation's workspace; removed documents are unavailable",
+      "Open an original source document with knowledge_base.use; a cited document is opened in the context of its conversation's workspace; removed documents are unavailable; a synced document's original is fetched through its source into a 7-day page cache, and a source that cannot be reached answers CONFLICT with reason knowledge_source_unreachable",
     tag: "Knowledge Bases",
     auth: "user",
     scope: "data_store_rows:read",
@@ -375,7 +375,7 @@ export const knowledgeOperations = {
     effect: "reading",
     query: knowledgeOpenDocumentQuerySchema,
     response: blob(),
-    errors: ["NOT_FOUND"],
+    errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "read"
   }),
   "knowledge_bases.workflow_sources": defineRegisteredOperation({

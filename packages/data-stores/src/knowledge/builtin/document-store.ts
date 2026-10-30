@@ -1,6 +1,7 @@
 import { decodeKnowledgeDocumentCursor, listKnowledgeDocuments } from "./document-listing";
 import { hasOutdatedProcessor, processingSummary } from "./processing-summary";
 import { createKnowledgeFieldStore } from "./field-store";
+import { createKnowledgePageCacheStore } from "./page-cache-store";
 import { documentOfFile } from "./document-of-file";
 import { heldInFetchWindow } from "./fetch-window";
 import { processingContents } from "./processing-store";
@@ -281,6 +282,9 @@ export function createBuiltinDocumentStore(
     ...createDocumentRemoval(runtime, target),
     fieldExtraction: createKnowledgeFieldStore((work, signal) =>
       inStore("Extracting fields", KNOWLEDGE_DOCUMENTS_TIMEOUT_MS, signal, work)
+    ),
+    pageCache: createKnowledgePageCacheStore((work, signal) =>
+      inStore("Keeping cited pages", KNOWLEDGE_DOCUMENTS_TIMEOUT_MS, signal, work)
     ),
     requestProcessing(input, signal) {
       return inStore(

@@ -1,6 +1,8 @@
 import type { KnowledgeSources } from "./source-port";
 import type {
   ClientInstanceId,
+  ConnectorContext,
+  DocumentSourceCapability,
   KnowledgeBackend,
   KnowledgeBaseState,
   KnowledgeCheckResult,
@@ -17,6 +19,16 @@ import {
   type KnowledgeEmbedding
 } from "./definition";
 
+/** What a page open needs of the instance's Connections, and how large the cache may grow. */
+export interface KnowledgePageSourcePort {
+  openSource(
+    connection: string,
+    signal: AbortSignal
+  ): Promise<{ capability: DocumentSourceCapability; context: ConnectorContext }>;
+  /** `knowledge.pageCacheBytes`: the bound of one Knowledge Base's page cache. */
+  cacheBytes: number;
+}
+
 /** What everything that serves Knowledge Bases in one process is built on. */
 export interface KnowledgeRuntime {
   /** Instance content locale until Knowledge Bases support a content-language setting. */
@@ -26,6 +38,11 @@ export interface KnowledgeRuntime {
   stores: PlatformStores;
   backend: KnowledgeBackend;
   sources?: KnowledgeSources;
+  /**
+   * Where a cited page of a synced document is fetched again once its original was released,
+   * and how large the page cache grows (KB-13b). Absent where the process reaches no source.
+   */
+  pageSource?: KnowledgePageSourcePort;
   /** Where added files come from and their copies go. Absent where the process has none. */
   files?: KnowledgeFiles;
   /**

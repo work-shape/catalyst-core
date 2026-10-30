@@ -292,7 +292,7 @@ export function useKnowledgeWorkflow(options: { firstPassStop?: number } = {}) {
           name: `knowledge-base:${name}`
         });
         expect(row?.status).toBe("ready");
-        expect(row?.level).toBe(18);
+        expect(row?.level).toBe(19);
         return required(row);
       });
       const asset = required(

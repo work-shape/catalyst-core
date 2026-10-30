@@ -72,7 +72,7 @@ describe("the store a Knowledge Base owns", () => {
     return eventually(async () => {
       await jobs.runDue();
       const record = await ownedRecord(world);
-      expect(record).toMatchObject({ status: "ready", level: 18 });
+      expect(record).toMatchObject({ status: "ready", level: 19 });
       return required(record);
     });
   }
@@ -166,7 +166,8 @@ describe("the store a Knowledge Base owns", () => {
         expect.objectContaining({ number: 15, name: "workflow_source_end" }),
         expect.objectContaining({ number: 16, name: "record_corrected_value" }),
         expect.objectContaining({ number: 17, name: "chunk_switch_fetch_window" }),
-        expect.objectContaining({ number: 18, name: "keyword_languages" })
+        expect.objectContaining({ number: 18, name: "keyword_languages" }),
+        expect.objectContaining({ number: 19, name: "page_cache" })
       ]
     });
     const { database } = record.location;
@@ -187,6 +188,7 @@ describe("the store a Knowledge Base owns", () => {
       "ingest_items",
       "ingest_waiting",
       "migrations",
+      "page_cache",
       "source_counts",
       "source_cursors",
       "source_items",
@@ -252,7 +254,7 @@ describe("the store a Knowledge Base owns", () => {
           name: `knowledge-base:${KB}`,
           title: "Objektunterlagen",
           status: "ready",
-          level: 18,
+          level: 19,
           ownedBy: { knowledgeBase: KB }
         }
       ]
@@ -296,7 +298,7 @@ describe("the store a Knowledge Base owns", () => {
         return sql`select * from catalyst_kb.migrations order by number`;
       });
       expect(ledger.map(({ number }) => number)).toEqual([
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19
       ]);
       const audits = await instance.stores.audit.listAuditEvents({
         clientInstanceId,

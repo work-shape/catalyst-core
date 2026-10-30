@@ -1,4 +1,10 @@
 import { openKnowledgeDocument } from "./open-document";
+import {
+  createPageCacheExpiryHandler,
+  pageCacheExpiryJob,
+  type KnowledgePageReader,
+  type KnowledgePageSourcePort
+} from "./page-cache";
 import { knowledgeHitDocument } from "./hit-document";
 import { FIELD_OUTPUT_MIN_TOKENS } from "./field-budget";
 import {
@@ -115,12 +121,17 @@ export interface KnowledgeBases {
     handlers: RegisteredJobHandler[];
     retries: JobRetry[];
   };
-  /** Original bytes of a live document; the calling operation checks knowledge_base.use. */
+  /**
+   * Original bytes of a live document; the calling operation checks knowledge_base.use. A
+   * synced document's released original is fetched through its source for `reader`, whose
+   * fetch is audited (KB-13b).
+   */
   openDocument(
     files: KnowledgeFiles | undefined,
     knowledgeBase: string,
     documentId: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    reader?: KnowledgePageReader
   ): Promise<{
     filename: string;
     contentType: string;
@@ -184,6 +195,8 @@ export function createKnowledgeBases(input: {
   /** Where the described tables are read and the owned stores made. */
   backend: KnowledgeBackend;
   sources?: KnowledgeSources;
+  /** Where a released original of a synced document is fetched again for a reader (KB-13b). */
+  pageSource?: KnowledgePageSourcePort;
   assertFieldBudgetPriced?(): void;
   documentSourceOffered?(config: unknown): boolean;
   /** The embedding model release config approves for Knowledge Bases (`knowledge`), if any. */
@@ -204,6 +217,7 @@ export function createKnowledgeBases(input: {
     stores: input.stores,
     backend: input.backend,
     ...(input.sources ? { sources: input.sources } : {}),
+    ...(input.pageSource ? { pageSource: input.pageSource } : {}),
     embedding: input.embedding,
     documentFormats: input.documentFormats,
     maxDocuments: input.maxDocuments,
@@ -244,13 +258,13 @@ export function createKnowledgeBases(input: {
       input.sources
         ? input.sources.workflowSources(workflow, access, signal ?? new AbortController().signal)
         : { knowledgeBases: [], hidden: { knowledgeBases: 0, documents: 0 } },
-    async openDocument(files, knowledgeBase, documentId, signal) {
+    async openDocument(files, knowledgeBase, documentId, signal, reader) {
       const asset = await input.stores.configAssets.getConfigAsset({
         clientInstanceId: input.clientInstanceId,
         kind: KNOWLEDGE_BASE_ASSET_KIND,
         name: knowledgeBase
       });
-      return openKnowledgeDocument(runtime, files, asset, documentId, signal);
+      return openKnowledgeDocument(runtime, files, asset, documentId, signal, reader);
     },
     publishQuestion: async (question) => {
       const { sources, review } = await publishReview(question);
@@ -461,6 +475,7 @@ export function createKnowledgeBases(input: {
           ...removal.handlers,
           ...(files
             ? [
+                createPageCacheExpiryHandler(runtime, files),
                 createKnowledgeReprocessHandler({ ...runtime, files }),
                 createKnowledgeReindexHandler(runtime, {
                   auditRecorder,
@@ -476,7 +491,11 @@ export function createKnowledgeBases(input: {
               ]
             : [])
         ],
-        retries: [...cleanup.retries, ...removal.retries]
+        retries: [
+          ...cleanup.retries,
+          ...removal.retries,
+          ...(files ? [{ kind: pageCacheExpiryJob }] : [])
+        ]
       };
     },
     toolSource: createKnowledgeToolSource(runtime)

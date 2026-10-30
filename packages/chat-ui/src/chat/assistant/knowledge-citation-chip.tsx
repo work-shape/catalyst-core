@@ -1,10 +1,13 @@
-import { resolveFilePreviewCapability } from "@work-shape/catalyst-core";
+import {
+  KNOWLEDGE_SOURCE_UNREACHABLE,
+  resolveFilePreviewCapability
+} from "@work-shape/catalyst-core";
 import { FileText } from "lucide-react";
 import { useState } from "react";
 import { Chip, Spinner } from "@work-shape/catalyst-ui";
 import { useOptionalWorkspaceApiClient } from "../../shared/api/workspace-api-client";
 import { useTranslation } from "../../shared/i18n";
-import { apiErrorCode, apiErrorStatus } from "../../shared/workspace-utils";
+import { apiErrorCode, apiErrorReason, apiErrorStatus } from "../../shared/workspace-utils";
 import { saveBlobAsFile } from "../files/conversation-file-content";
 import { rasterImageType, viewerObjectUrl, type FileViewer } from "../files/viewer-object-url";
 
@@ -23,8 +26,10 @@ export interface KnowledgeCitation {
  * The chip of a cited Knowledge Base passage, "file name, p. 4". A click reads the file through
  * the API, with the reader's own session or token, and opens it at the page in a new tab; a
  * blocked tab, or a file no viewer of ours shows, saves it instead. A removed source says so and
- * opens nothing. An answer in a conversation names it, as its workspace is where the reader may
- * use the Knowledge Base.
+ * opens nothing. A synced document whose source cannot be reached says so ("Quelle nicht
+ * erreichbar") and can be tried again; the passage the answer cites stays readable beside it
+ * (KB-13). An answer in a conversation names it, as its workspace is where the reader may use
+ * the Knowledge Base.
  */
 export function KnowledgeCitationChip({
   citation,
@@ -37,7 +42,9 @@ export function KnowledgeCitationChip({
 }) {
   const { t } = useTranslation();
   const api = useOptionalWorkspaceApiClient();
-  const [state, setState] = useState<"idle" | "opening" | "removed" | "failed">("idle");
+  const [state, setState] = useState<"idle" | "opening" | "removed" | "unreachable" | "failed">(
+    "idle"
+  );
   const label =
     citation.page === undefined
       ? citation.fileName
@@ -70,9 +77,14 @@ export function KnowledgeCitationChip({
       }
       setState("idle");
     } catch (error) {
-      // The instance answers 404 for a removed, withdrawn or no longer reachable document.
+      // The instance answers 404 for a removed or withdrawn document, and names the source of a
+      // synced one that it cannot reach.
       setState(
-        apiErrorCode(error) === "NOT_FOUND" || apiErrorStatus(error) === 404 ? "removed" : "failed"
+        apiErrorReason(error) === KNOWLEDGE_SOURCE_UNREACHABLE
+          ? "unreachable"
+          : apiErrorCode(error) === "NOT_FOUND" || apiErrorStatus(error) === 404
+            ? "removed"
+            : "failed"
       );
     }
   };
@@ -91,9 +103,11 @@ export function KnowledgeCitationChip({
       <span data-knowledge-source={citation.documentId} data-knowledge-source-state={state}>
         {state === "removed"
           ? t("knowledge.citationRemoved", { name: label })
-          : state === "failed"
-            ? t("knowledge.citationFailed", { name: label })
-            : label}
+          : state === "unreachable"
+            ? t("knowledge.citationUnreachable", { name: label })
+            : state === "failed"
+              ? t("knowledge.citationFailed", { name: label })
+              : label}
       </span>
     </Chip>
   );
