@@ -1,0 +1,1 @@
+workflows.capabilities  GET /api/v1/workflow-capabilities

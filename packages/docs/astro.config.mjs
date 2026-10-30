@@ -104,7 +104,7 @@ export default defineConfig({
         },
         {
           label: "Automate",
-          items: ["automate/workflows"]
+          items: ["automate/workflows", "automate/workflow-capabilities"]
         },
         {
           label: "Connect systems",

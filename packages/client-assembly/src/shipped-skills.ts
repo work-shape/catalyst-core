@@ -11,7 +11,7 @@ import {
 import { createWorkflowAuthoringSkill, workflowsModule } from "@work-shape/catalyst-workflows";
 import { runnerPackageManifest } from "./runner-packages";
 import type { ClientInstanceCapability } from "./capabilities";
-import { platformDocsSkill } from "./platform-docs-skill";
+import { instancePlatformDocsSkill, platformDocsSkill } from "./platform-docs-skill";
 
 const workflowAuthoringSkill = createWorkflowAuthoringSkill(runnerPackageManifest.packages);
 
@@ -76,9 +76,16 @@ export function shippedSkillsOf(input: {
   capabilities: readonly ClientInstanceCapability[];
   /** Whether the instance has a tool: registered, enabled and of no module that is off. */
   hasTool(toolName: string): boolean;
+  /**
+   * The page "What a Workflow can do" with the instance's values, where the module
+   * `workflows` is on. Without it the docs carry the release's defaults.
+   */
+  workflowCapabilitiesPage?: string;
 }): ShippedSkill[] {
   return [
-    platformDocsSkill,
+    input.workflowCapabilitiesPage === undefined
+      ? platformDocsSkill
+      : instancePlatformDocsSkill(input.workflowCapabilitiesPage),
     ...SHIPPED_SKILL_KINDS.flatMap((kind) => subjectSkillsOf(kind, input.modules)),
     ...capabilitySkillsOf(input.capabilities).filter((skill) =>
       (skill.tools ?? []).every((toolName) => input.hasTool(toolName))
