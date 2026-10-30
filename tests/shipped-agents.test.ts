@@ -119,6 +119,15 @@ describe("the agent that ships with the platform", () => {
     expect(config.instructions).toContain("up to four short parts");
     expect(config.instructions).toContain("never describe a click path in words");
     expect(config.instructions).toContain("each pending Data Store in dataStores");
+    // A picture costs a model step: it looks when it needs to see the page, never after each open.
+    for (const when of [
+      "after a visual change the person asked for",
+      "when the preview report says the page drew nothing",
+      "when the person says it looks wrong",
+      "never after every open or save"
+    ]) {
+      expect(config.instructions).toContain(when);
+    }
     const listed = listSchema.parse(
       (await app.call("assets.list", { params: { kind: "agent" } })).json()
     ).items;
