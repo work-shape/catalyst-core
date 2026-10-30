@@ -81,6 +81,8 @@ import {
 import { createStartCheck } from "./run-start";
 import { createScheduleTrigger } from "./schedule-trigger";
 import { createScheduledStart } from "./scheduled-start";
+import { createEventTrigger } from "./event-trigger";
+import { createWebhookTrigger, type WorkflowWebhooks } from "./webhook-trigger";
 import { createStepExecutor, type StepEnd, type WorkflowCodeRunner } from "./step-execution";
 import { stepJobConcurrency, workflowCodeJobKind, workflowStepJobKind } from "./step-job";
 import { workflowLimitIssues, type WorkflowLimitContext } from "./run-limits";
@@ -123,6 +125,11 @@ export interface WorkflowEngineOptions {
   stores: PlatformStores;
   /** Where the published definition of a Workflow is read when a run is started. */
   definitions: WorkflowDefinitionSource;
+  /**
+   * The keys of the Secret Store: a Workflow's webhook secret is kept there. Without them the
+   * instance has no webhooks.
+   */
+  webhookKeyring?: import("@work-shape/catalyst-connections").SecretKeyring;
   /** Bound to the transaction that settles the step: Inbox and mail queue commit together. */
   notices?: (stores: PlatformStores) => Notices;
   /** The language of the notices the engine writes itself. English when left out. */
@@ -255,6 +262,8 @@ export interface WorkflowEngine {
   pruneRunData: WorkflowDataPruning["prune"];
   /** The files of runs; absent where the instance keeps no files. */
   runFiles?: WorkflowRunFiles;
+  /** The webhooks of the Workflows; absent where the instance keeps no secrets. */
+  webhooks?: WorkflowWebhooks;
 }
 
 export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEngine {
@@ -941,11 +950,25 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       deadlineHandler,
       schedule.handler,
       schedule.repairHandler,
+      createEventTrigger({ clientInstanceId, stores, definitions, now, prepareStart, openRun }),
       pruning.handler
     ],
     jobSchedules: [pruning.schedule],
     pruneRunData: pruning.prune,
     ...(runFiles ? { runFiles } : {}),
+    ...(options.webhookKeyring
+      ? {
+          webhooks: createWebhookTrigger({
+            clientInstanceId,
+            stores,
+            keyring: options.webhookKeyring,
+            definitions,
+            now,
+            prepareStart,
+            openRun
+          })
+        }
+      : {}),
     planSchedules: schedule.plan,
     planSchedule: schedule.planOne,
 

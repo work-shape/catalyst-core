@@ -7,6 +7,7 @@ import type {
   WorkflowRerunStepView,
   WorkflowRunView,
   WorkflowStepPinView,
+  WorkflowWebhookView,
   WorkflowStepRunView,
   WorkflowStepTranscriptView,
   WorkflowView
@@ -204,6 +205,10 @@ interface WorkflowDraftsSource {
   pinStep?(workflow: string, step: string, runId: string): Promise<void>;
   /** Drops the reader's pin on the step. */
   unpinStep?(workflow: string, step: string): Promise<void>;
+  /** The Workflow's webhook (EW-4). Absent where the source has none. */
+  readWebhook?(workflow: string, signal: AbortSignal): Promise<WorkflowWebhookView>;
+  /** Makes a new webhook secret, which the answer holds once. A publisher's act. */
+  rotateWebhookSecret?(workflow: string): Promise<{ secret: string; version: number }>;
   /** One revision as it is stored, such as the published one a draft is compared with. */
   readRevision(
     workflow: string,

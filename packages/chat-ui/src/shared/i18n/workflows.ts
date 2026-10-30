@@ -629,6 +629,32 @@ export const workflows = defineTranslations({
     "workflows.workflowSettings.byOutside": "By outside clients (CLI, MCP)",
     "workflows.workflowSettings.byOutsideHint":
       "A tool such as Claude Code starts it with an API key, and its result is copied to that computer. It then reads only Connections open to outside clients.",
+    "workflows.workflowSettings.byWebhook": "By a webhook",
+    "workflows.workflowSettings.byWebhookHint":
+      "An outside system posts a signed request to the workflow's address. The request's body is the run's input, and the workflow's own account runs it.",
+    "workflows.workflowSettings.onSync": "When a Knowledge Base finishes syncing",
+    "workflows.workflowSettings.onSyncHint":
+      "The run gets the sync's ids and counts, never documents. The workflow's account needs to read the Knowledge Base.",
+    "workflows.workflowSettings.onSyncKnowledgeBase": "Only this Knowledge Base",
+    "workflows.workflowSettings.onSyncKnowledgeBaseHint":
+      "Its name. Empty: every Knowledge Base the workflow's account may read.",
+    "workflows.workflowSettings.webhookAddress": "Address",
+    "workflows.workflowSettings.webhookPerMinute": "Up to {count} requests a minute",
+    "workflows.workflowSettings.webhookRate": "Requests",
+    "workflows.workflowSettings.webhookSecret": "Secret",
+    "workflows.workflowSettings.webhookSecretFailed": "The secret could not be made. Try again.",
+    "workflows.workflowSettings.webhookSecretMake": "Make secret",
+    "workflows.workflowSettings.webhookSecretNone": "None yet: the address refuses every request",
+    "workflows.workflowSettings.webhookSecretOnce":
+      "Copy the secret now. It is not shown again; a new one replaces it.",
+    "workflows.workflowSettings.webhookSecretRotate": "Make new secret",
+    "workflows.workflowSettings.webhookSecretSet": "Set (version {version})",
+    "workflows.workflowSettings.webhookSecretUnreadable":
+      "Stored, but it can no longer be read. Make a new one.",
+    "workflows.workflowSettings.webhookSigning":
+      "Each request sends the headers catalyst-webhook-timestamp (seconds), catalyst-webhook-nonce and catalyst-webhook-signature: v1= and the hex HMAC-SHA256 of timestamp.nonce.body with the secret. A request older than five minutes or a nonce sent twice is refused.",
+    "workflows.workflowSettings.webhookUnpublished":
+      "The address takes requests once the workflow is published with the webhook on.",
     "workflows.workflowSettings.calledBy": "Called by",
     "workflows.workflowSettings.description": "What it does",
     "workflows.workflowSettings.limitConcurrency": "Up to {count} steps at the same time",
@@ -1431,6 +1457,34 @@ export const workflows = defineTranslations({
     "workflows.workflowSettings.byOutside": "Durch externe Clients (CLI, MCP)",
     "workflows.workflowSettings.byOutsideHint":
       "Ein Werkzeug wie Claude Code startet ihn mit einem API-Schlüssel, und sein Ergebnis wird auf diesen Rechner kopiert. Er liest dann nur Verbindungen, die für externe Clients freigegeben sind.",
+    "workflows.workflowSettings.byWebhook": "Durch einen Webhook",
+    "workflows.workflowSettings.byWebhookHint":
+      "Ein externes System sendet eine signierte Anfrage an die Adresse des Workflows. Der Inhalt der Anfrage ist die Eingabe des Laufs, und das eigene Konto des Workflows führt ihn aus.",
+    "workflows.workflowSettings.onSync": "Wenn eine Wissensdatenbank fertig synchronisiert ist",
+    "workflows.workflowSettings.onSyncHint":
+      "Der Lauf erhält die IDs und Zahlen der Synchronisierung, nie Dokumente. Das Konto des Workflows muss die Wissensdatenbank lesen dürfen.",
+    "workflows.workflowSettings.onSyncKnowledgeBase": "Nur diese Wissensdatenbank",
+    "workflows.workflowSettings.onSyncKnowledgeBaseHint":
+      "Ihr Name. Leer: jede Wissensdatenbank, die das Konto des Workflows lesen darf.",
+    "workflows.workflowSettings.webhookAddress": "Adresse",
+    "workflows.workflowSettings.webhookPerMinute": "Bis zu {count} Anfragen pro Minute",
+    "workflows.workflowSettings.webhookRate": "Anfragen",
+    "workflows.workflowSettings.webhookSecret": "Geheimnis",
+    "workflows.workflowSettings.webhookSecretFailed":
+      "Das Geheimnis konnte nicht erstellt werden. Bitte erneut versuchen.",
+    "workflows.workflowSettings.webhookSecretMake": "Geheimnis erstellen",
+    "workflows.workflowSettings.webhookSecretNone":
+      "Noch keines: Die Adresse lehnt jede Anfrage ab",
+    "workflows.workflowSettings.webhookSecretOnce":
+      "Kopiere das Geheimnis jetzt. Es wird nicht noch einmal angezeigt; ein neues ersetzt es.",
+    "workflows.workflowSettings.webhookSecretRotate": "Neues Geheimnis erstellen",
+    "workflows.workflowSettings.webhookSecretSet": "Gesetzt (Version {version})",
+    "workflows.workflowSettings.webhookSecretUnreadable":
+      "Gespeichert, aber nicht mehr lesbar. Erstelle ein neues.",
+    "workflows.workflowSettings.webhookSigning":
+      "Jede Anfrage sendet die Header catalyst-webhook-timestamp (Sekunden), catalyst-webhook-nonce und catalyst-webhook-signature: v1= und den Hex-HMAC-SHA256 von timestamp.nonce.body mit dem Geheimnis. Eine Anfrage, die älter als fünf Minuten ist, oder eine doppelt gesendete Nonce wird abgelehnt.",
+    "workflows.workflowSettings.webhookUnpublished":
+      "Die Adresse nimmt Anfragen an, sobald der Workflow mit eingeschaltetem Webhook veröffentlicht ist.",
     "workflows.workflowSettings.calledBy": "Aufgerufen von",
     "workflows.workflowSettings.description": "Was er tut",
     "workflows.workflowSettings.limitConcurrency": "Bis zu {count} Schritte gleichzeitig",

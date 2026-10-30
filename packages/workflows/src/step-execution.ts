@@ -382,7 +382,9 @@ export function createStepExecutor(options: StepExecutorOptions) {
             startedAt: run.startedAt ?? run.createdAt,
             trigger: run.trigger,
             // The due time of the schedule that started the run, and of no other run.
-            scheduledFor: run.scheduledFor ?? null
+            scheduledFor: run.scheduledFor ?? null,
+            // The platform event that started the run: ids, names and counts.
+            event: run.triggerEvent ?? null
           };
           return { kind: "done", output: { ...output } };
         }

@@ -27,6 +27,7 @@ import type {
   WorkflowStepRunLink,
   WorkflowStepRunPlacement,
   WorkflowStepRunStatus,
+  WorkflowTriggerEvent,
   WorkflowTriggerKind
 } from "./workflows";
 
@@ -114,6 +115,11 @@ export interface WorkflowRun
    * time, however often that time is fired. Missing on every other run.
    */
   scheduledFor?: ISODateString;
+  /**
+   * The platform event that started a run of a `platform_event` trigger: its ids, names and
+   * counts, never content. One run of a Workflow exists per event. Missing on every other run.
+   */
+  triggerEvent?: WorkflowTriggerEvent;
   /** The Operation Run of the call that started the run. */
   operationRunId?: OperationRunId;
   /**
@@ -247,6 +253,7 @@ export type NewWorkflowRun = Pick<
   | "principal"
   | "startedBy"
   | "scheduledFor"
+  | "triggerEvent"
   | "operationRunId"
   | "starterRunId"
   | "startedFrom"

@@ -112,6 +112,8 @@ const runGovernance = {
   cancelledBy: true,
   cancelledAt: true,
   scheduledFor: true,
+  // The event that started the run: ids, names and counts, not a value of the run.
+  triggerEvent: true,
   continuation: true,
   dataPrunedAt: true,
   dataPruneVersion: true

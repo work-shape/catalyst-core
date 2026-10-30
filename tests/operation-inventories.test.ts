@@ -68,6 +68,16 @@ describe("a changing operation is registered or named as plain", () => {
     "conversations.follow_ups.dispatch",
     "conversations.follow_ups.steer"
   ]);
+  // EW-4 approves a Workflow's webhook: a public start whose signature establishes the
+  // Workflow's account and whose run and `workflow_run.started` audit are its record.
+  const approvedRunStarts = new Set<string>(["workflows.webhook_receive"]);
+  it("keeps the approved run starts public and identified by their signature", () => {
+    for (const name of approvedRunStarts) {
+      expect(list.changing[name]).toMatchObject({ class: "identity" });
+      expect(list.rightDecidedBy[name]).toBe("public");
+      expect(plainChanging).toContain(name);
+    }
+  });
   it("keeps the approved follow-up controls changing, unaudited and conversation-authorized", () => {
     for (const name of approvedFollowUpControls) {
       expect(list.changing[name]).toMatchObject({ class: "conversation" });
@@ -80,7 +90,8 @@ describe("a changing operation is registered or named as plain", () => {
   // operation cannot be moved into a class that stays plain without that being seen.
   it.each(classes)("counts the class %s as the baseline does", (kind) => {
     const counted = Object.entries(list.changing).filter(
-      ([name, entry]) => entry.class === kind && !approvedFollowUpControls.has(name)
+      ([name, entry]) =>
+        entry.class === kind && !approvedFollowUpControls.has(name) && !approvedRunStarts.has(name)
     ).length;
     const recorded = baseline.entries
       .filter((entry) => entry.target === "operations" && entry.rule === "plain-changing")

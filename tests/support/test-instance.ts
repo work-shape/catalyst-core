@@ -209,7 +209,8 @@ async function createDefaultInstance(
   register?: (route: TestRoute) => void
 ): Promise<TestInstance<TestStore>> {
   const stores = addTestStoreHelpers(
-    await createPostgresStores({ databaseUrl: await fileTestDatabaseUrl() })
+    // The module `workflows` is on in the tests' instance: platform events queue their job.
+    await createPostgresStores({ databaseUrl: await fileTestDatabaseUrl(), workflowEvents: true })
   );
   const config = createTestConfig();
   const state: Metadata = {
@@ -331,7 +332,8 @@ async function createConfiguredInstance(
       logger: input.postgres.logger,
       ...(input.postgres.poolSize === undefined ? {} : { poolSize: input.postgres.poolSize }),
       ...(input.postgres.onStatement ? { onStatement: input.postgres.onStatement } : {}),
-      databaseUrl: url.toString()
+      databaseUrl: url.toString(),
+      workflowEvents: true
     });
     const cleanup = stores.close.bind(stores);
     const instance = bindInstance(stores, { closed: false, cleanup });
@@ -734,7 +736,8 @@ export async function bindTestTransport(
   runtime?: HttpRuntime
 ): Promise<TestInstance<TestStore>> {
   const stores = addTestStoreHelpers(
-    await createPostgresStores({ databaseUrl: await fileTestDatabaseUrl() })
+    // The module `workflows` is on in the tests' instance: platform events queue their job.
+    await createPostgresStores({ databaseUrl: await fileTestDatabaseUrl(), workflowEvents: true })
   );
   return bindInstance(stores, {
     server,

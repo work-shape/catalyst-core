@@ -35,7 +35,8 @@ describe("the migration boundary", () => {
   async function start(databaseUrl: string): Promise<void> {
     const store = await createPlatformStore({
       env: { DATABASE_URL: databaseUrl },
-      poolSize: 2
+      poolSize: 2,
+      workflowEvents: false
     });
     await store.close?.();
   }

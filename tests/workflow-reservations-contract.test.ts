@@ -176,10 +176,11 @@ describe("what the contract reserves for datasets, child runs and run keys", () 
       input: { month: "2026-09" },
       startedAt: "2026-10-01T04:00:00.000Z",
       trigger: "schedule",
-      scheduledFor: "2026-10-01T04:00:00.000Z"
+      scheduledFor: "2026-10-01T04:00:00.000Z",
+      event: null
     };
     expectTypeOf<keyof WorkflowTriggerOutput>().toEqualTypeOf<
-      "input" | "startedAt" | "trigger" | "scheduledFor"
+      "input" | "startedAt" | "trigger" | "scheduledFor" | "event"
     >();
     expectTypeOf<WorkflowTriggerOutput["scheduledFor"]>().toEqualTypeOf<string | null>();
     expect(started.trigger).toBe("schedule");

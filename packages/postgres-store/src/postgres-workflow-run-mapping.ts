@@ -102,6 +102,7 @@ function mapRun(row: Omit<RunRow, "input" | "output" | "definition" | "checkpoin
     ...(row.cancelledBy === null ? {} : { cancelledBy: row.cancelledBy }),
     ...(row.cancelledAt === null ? {} : { cancelledAt: row.cancelledAt.toISOString() }),
     ...(row.scheduledFor === null ? {} : { scheduledFor: row.scheduledFor.toISOString() }),
+    ...(row.triggerEvent === null ? {} : { triggerEvent: row.triggerEvent }),
     ...(row.runKey === null ? {} : { runKey: row.runKey }),
     ...(row.dataPrunedAt === null ? {} : { dataPrunedAt: row.dataPrunedAt.toISOString() })
   };

@@ -9,7 +9,10 @@ workflows.list_step_runs  GET /api/v1/workflow-runs/:runId/steps
 workflows.pin_step  PUT /api/v1/workflows/:workflow/pins/:step
 workflows.rerun  POST /api/v1/workflow-runs/:runId/rerun
 workflows.rerun_steps  GET /api/v1/workflow-runs/:runId/rerun-steps
+workflows.rotate_webhook_secret  POST /api/v1/workflows/:workflow/webhook/secret
 workflows.start  POST /api/v1/workflows/:workflow/runs
 workflows.test  POST /api/v1/workflows/:workflow/test-runs
 workflows.unpin_step  DELETE /api/v1/workflows/:workflow/pins/:step
 workflows.unpublish  POST /api/v1/workflows/:workflow/unpublish
+workflows.webhook  GET /api/v1/workflows/:workflow/webhook
+workflows.webhook_receive  POST /api/v1/workflows/:workflow/webhook

@@ -79,7 +79,9 @@ export async function createClientInstanceArtifactPreviewWorker(
   const store = await createPlatformStore({
     secrets,
     poolSize: config.infrastructure.database.poolSize,
-    logger
+    logger,
+    // It writes no record of an event a Workflow trigger names.
+    workflowEvents: false
   });
   const clientInstanceId = getClientInstanceId(config);
   const sourceReader = input.sourceReaderFactory

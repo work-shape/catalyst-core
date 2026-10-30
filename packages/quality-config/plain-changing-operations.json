@@ -128,6 +128,10 @@
       "class": "identity",
       "reason": "This operation establishes the actor."
     },
+    "workflows.webhook_receive": {
+      "class": "identity",
+      "reason": "The request's signature establishes the actor, the Workflow's own account; the Workflow Run and its workflow_run.started audit are the record."
+    },
     "workspaces.ensure_personal": {
       "class": "own_account",
       "reason": "The interface calls this on every load, so an Operation Run per page load would record a hot path for no benefit."
@@ -230,6 +234,7 @@
     "view_runtime.files.get": "public",
     "view_shell.files.get": "public",
     "workflows.principal_rights": "asset_right",
+    "workflows.webhook_receive": "public",
     "workspaces.access_requests.list": "workspace_role",
     "workspaces.agents.list": "workspace_role",
     "workspaces.deletion_impact.get": "workspace_role",

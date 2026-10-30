@@ -7,7 +7,9 @@ import {
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
   WORKFLOW_OUTSIDE_TRIGGER,
+  WORKFLOW_WEBHOOK_LIMITS,
   answersOutsideClient,
+  auditActorFromIdentity,
   isAuthenticatedServicePrincipal,
   isOutsideCall,
   type AccessResource,
@@ -490,6 +492,56 @@ function registerWorkflowRoutes(
           message: "Only a person pins a step's output for their test runs"
         }
       : decide(access, WORKFLOW_ACTIONS.write, await resourceOf(input.workflow));
+
+  // EW-4. A Workflow's webhook: a reader of the Workflow sees its state, a publisher makes its
+  // secret, and anybody who holds the secret starts a run by a signed request.
+  function webhooksOf(): NonNullable<WorkflowRunsPort["webhooks"]> {
+    const webhooks = required().webhooks;
+    if (!webhooks) throw new AppError("NOT_FOUND", "This instance keeps no webhook secrets");
+    return webhooks;
+  }
+
+  route.operation(apiOperations["workflows.webhook"], {
+    authorize: async (input, { access }) =>
+      decide(access, WORKFLOW_ACTIONS.read, await resourceOf(input.workflow)),
+    resource: workflowResource,
+    module: WORKFLOWS_MODULE,
+    execute: async (input) => webhooksOf().status(input.workflow)
+  });
+
+  // The secret lets whoever holds it start runs as the Workflow's account: making it asks the
+  // right that lets the account act, `workflow.publish`.
+  route.operation(apiOperations["workflows.rotate_webhook_secret"], {
+    defaultPolicy: "allow",
+    authorize: async (input, { access }) =>
+      decide(access, WORKFLOW_ACTIONS.publish, await resourceOf(input.workflow)),
+    resource: workflowResource,
+    module: WORKFLOWS_MODULE,
+    execute: async (input, context) =>
+      webhooksOf().rotate({
+        workflow: input.workflow,
+        actor: auditActorFromIdentity(context.actor),
+        correlationId: context.correlationId
+      })
+  });
+
+  route.receive(apiOperations["workflows.webhook_receive"], {
+    bodyLimitBytes: WORKFLOW_WEBHOOK_LIMITS.maxBodyBytes,
+    handle: async ({ params, body, rawBody, headers, context }) => {
+      // The same answer as every refusal before a valid signature: the address tells nothing.
+      const workflow = params.workflow;
+      const webhooks = required().webhooks;
+      if (workflow === undefined || !webhooks)
+        throw new AppError("NOT_FOUND", "There is no webhook at this address");
+      return webhooks.receive({
+        workflow,
+        headers,
+        body: rawBody,
+        input: body,
+        correlationId: context.correlationId
+      });
+    }
+  });
 
   route.operation(apiOperations["workflows.list_pins"], {
     authorize: mayPin,

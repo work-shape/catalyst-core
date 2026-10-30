@@ -220,6 +220,9 @@ export const audit = defineTranslations({
     "audit.event.user.two_factor_reset": "Reset a user's two-factor sign-in",
     "audit.event.user.updated": "Changed a user",
     "audit.event.workflow.unpublished": "Took a workflow offline",
+    "audit.event.workflow.event_dropped": "A workflow did not start on a platform event",
+    "audit.event.workflow.webhook_refused": "A workflow's webhook refused a request",
+    "audit.event.workflow.webhook_secret_rotated": "Made a new secret for a workflow's webhook",
     "audit.event.workflow_run.cancelled": "Stopped a workflow run",
     "audit.event.workflow_run.dataset_created": "A workflow run kept a table of results",
     "audit.event.workflow_run.dataset_deleted": "Deleted a workflow run's results",
@@ -546,6 +549,12 @@ export const audit = defineTranslations({
     "audit.event.user.two_factor_reset": "Zwei-Faktor-Anmeldung eines Benutzers zurückgesetzt",
     "audit.event.user.updated": "Benutzer geändert",
     "audit.event.workflow.unpublished": "Workflow zurückgezogen",
+    "audit.event.workflow.event_dropped":
+      "Ein Workflow ist bei einem Plattformereignis nicht gestartet",
+    "audit.event.workflow.webhook_refused":
+      "Der Webhook eines Workflows hat eine Anfrage abgelehnt",
+    "audit.event.workflow.webhook_secret_rotated":
+      "Neues Geheimnis für den Webhook eines Workflows erstellt",
     "audit.event.workflow_run.cancelled": "Workflow-Lauf abgebrochen",
     "audit.event.workflow_run.dataset_created":
       "Ein Workflow-Lauf hat eine Ergebnistabelle angelegt",

@@ -376,7 +376,8 @@ export async function createClientInstanceExecutionAssembly(
   const store = await createPlatformStore({
     secrets,
     poolSize: processOptions.poolSize ?? config.infrastructure.database.poolSize,
-    logger
+    logger,
+    workflowEvents: modules.isEnabled("workflows")
   });
   const connectionParts = { config, modules, clientInstanceId, secrets, stores: store, logger };
   const connections = await createInstanceConnections(

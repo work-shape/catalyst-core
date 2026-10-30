@@ -139,7 +139,8 @@ export async function createClientInstanceWorkspaceCommandWorker(
   const store = await createPlatformStore({
     secrets: infrastructure.secrets,
     poolSize: config.infrastructure.database.poolSize,
-    logger
+    logger,
+    workflowEvents: runsCodeSteps
   });
   const clientInstanceId = getClientInstanceId(config);
   const byteStore = await createWorkspacesStore(config, infrastructure.context);

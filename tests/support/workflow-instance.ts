@@ -1,3 +1,5 @@
+import { createPostgresStores, type PostgresStores } from "@work-shape/catalyst-postgres-store";
+import { fileTestDatabaseUrl } from "./test-database";
 import { createWorkflowAssetStepFiles } from "@work-shape/catalyst-client-assembly";
 import {
   createAppAssetKind,
@@ -50,6 +52,8 @@ import { createDiagnosedJobWorker as createJobWorker } from "./job-worker-diagno
 import { clientInstanceId, setupAccessInstance } from "./access-instance";
 import { fixtureOn, operationOf, type ConnectionOperationsFixture } from "./connection-operations";
 import { personalKeyServer } from "./personal-api-keys";
+import { loadSecretKeyring } from "@work-shape/catalyst-connections";
+import { generateSecretStoreKey } from "./test-connector";
 import { recordJobErrors } from "./job-diagnostics";
 
 // The instance behind the tests of the Workflow engine: the instance of the Connection
@@ -248,6 +252,14 @@ export interface WorkflowFixture extends ConnectionOperationsFixture {
   capturedMail(): ReturnType<CaptureMailTransport["list"]>;
 }
 
+/**
+ * Stores on the test file's database as a process opens them whose instance has the module
+ * `workflows` off: the record of a platform event queues no job there. The caller closes them.
+ */
+export async function storesWithWorkflowsOff(): Promise<PostgresStores> {
+  return createPostgresStores({ databaseUrl: await fileTestDatabaseUrl(), workflowEvents: false });
+}
+
 /** The system sender of the fixture's outbound mail. */
 const MAIL_IDENTITY: MailSenderIdentity = {
   fromAddress: "catalyst@mail.example.test",
@@ -321,6 +333,8 @@ export async function workflowFixture(
     events?: (stores: PlatformStores) => PlatformEventEmitter;
     /** Personal API keys on: a request with an access token acts as the key's owner. */
     personalKeys?: true;
+    /** A Secret Store key: the Workflows' webhooks keep their secrets with it (EW-4). */
+    webhooks?: true;
     /**
      * The instance's `files` store: a write of a Workflow keeps its folder there and commits it
      * with the job `asset_repo.commit`, which a worker of the test serves (WF-GIT-1).
@@ -351,6 +365,13 @@ export async function workflowFixture(
   const workers: JobWorker[] = [];
   const workerLogs: unknown[] = [];
   const fromAssets = options.definitions === "assets";
+  const webhookKey = generateSecretStoreKey();
+  const secretKeyring = options.webhooks
+    ? await loadSecretKeyring({
+        keys: [{ id: "webhooks", ref: "WEBHOOK_KEY" }],
+        secrets: { resolve: () => Promise.resolve(webhookKey) }
+      })
+    : undefined;
   const given = options.definitions === "assets" ? undefined : options.definitions;
   // The kind asks the principals of the instance and their rights, whose stores exist once it
   // is set up.
@@ -471,7 +492,8 @@ export async function workflowFixture(
             ...(options.stepFiles ? { stepFiles: options.stepFiles } : {}),
             ...(options.codeRunner ? { codeRunner: options.codeRunner } : {}),
             ...(options.stepDataDays === undefined ? {} : { stepDataDays: options.stepDataDays }),
-            ...(options.pruneBatch ? { pruneBatch: options.pruneBatch } : {})
+            ...(options.pruneBatch ? { pruneBatch: options.pruneBatch } : {}),
+            ...(secretKeyring ? { secretKeyring } : {})
           });
           return server;
         },

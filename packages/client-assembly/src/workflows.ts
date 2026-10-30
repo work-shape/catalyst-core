@@ -1,3 +1,4 @@
+import { loadSecretKeyring } from "@work-shape/catalyst-connections";
 import type { StorePage } from "@work-shape/catalyst-core";
 import { outboundMailOf } from "./mail";
 import { commitsAssetRepos } from "./pages";
@@ -80,6 +81,11 @@ export interface InstanceWorkflowsParts extends Pick<
   /** `workflows.limits` of release config, with the release schema's defaults when left out. */
   ceilings?: WorkflowLimitCeilings;
   /**
+   * The keys of the Secret Store, where the instance names any: a Workflow's webhook secret is
+   * kept there. Without them no Workflow has a webhook.
+   */
+  secretKeyring?: WorkflowEngineOptions["webhookKeyring"];
+  /**
    * Where the published definition of a Workflow is read, in place of the instance's own
    * source: the published revisions of its Workflow assets. For a test of the engine.
    */
@@ -136,6 +142,11 @@ export interface InstanceWorkflows {
   planSchedule(workflow: string): Promise<{ workflow: string; dueAt: string } | undefined>;
   /** Cancels the open runs of a Workflow, as retiring it with its workspace does. */
   cancelOpenRuns: WorkflowEngine["cancelOpenRuns"];
+  /**
+   * The webhook requests this process refused before a signature could be checked (EW-4):
+   * counted here instead of audited one by one.
+   */
+  uncheckedWebhookRefusals(): number;
 }
 
 /**
@@ -151,7 +162,8 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
       pruneRunData: () => Promise.resolve({ runs: 0, stepRuns: 0, batches: 0 }),
       planSchedules: () => Promise.resolve([]),
       planSchedule: () => Promise.resolve(undefined),
-      cancelOpenRuns: () => Promise.resolve(0)
+      cancelOpenRuns: () => Promise.resolve(0),
+      uncheckedWebhookRefusals: () => 0
     };
   }
   const { clientInstanceId, stores, operationCalls } = parts;
@@ -193,7 +205,8 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
     stepFiles,
     ...(parts.codeRunner ? { codeRunner: parts.codeRunner } : {}),
     ...(parts.stepDataDays === undefined ? {} : { stepDataDays: parts.stepDataDays }),
-    ...(parts.pruneBatch ? { pruneBatch: parts.pruneBatch } : {})
+    ...(parts.pruneBatch ? { pruneBatch: parts.pruneBatch } : {}),
+    ...(parts.secretKeyring ? { webhookKeyring: parts.secretKeyring } : {})
   });
   // Pinned step outputs (EW-10): a person's own, on the draft of a Workflow asset.
   const stepPins = createWorkflowStepPins({
@@ -368,7 +381,8 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
     pruneRunData: () => engine.pruneRunData(),
     planSchedules: engine.planSchedules,
     planSchedule: engine.planSchedule,
-    cancelOpenRuns: engine.cancelOpenRuns
+    cancelOpenRuns: engine.cancelOpenRuns,
+    uncheckedWebhookRefusals: () => engine.webhooks?.refusedUnchecked() ?? 0
   };
 }
 
@@ -378,7 +392,13 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
  * schedule when its definition is published. A process that starts plans the schedules of
  * what is published as well, so a Workflow whose job was lost has its next due time queued.
  */
-export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceId, stores }) => {
+export const assembleWorkflows: ModuleSeam = ({
+  config,
+  modules,
+  clientInstanceId,
+  stores,
+  secrets
+}) => {
   // The instance's time zone: the schedules of its Workflows are read on its clock, by the
   // engine and by the kind that queues the job of a schedule when its definition is published.
   const { timeZone } = config.clientInstance;
@@ -441,7 +461,13 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
         ...(config.executionWorkspaces.enabled && config.infrastructure.sandbox
           ? { codeRunner: { timeoutSeconds: config.workflows.codeSteps.timeoutSeconds } }
           : {}),
-        stepDataDays: config.retention.workflowStepDataDays
+        stepDataDays: config.retention.workflowStepDataDays,
+        // A Workflow's webhook secret is kept in the Secret Store, as a Connection's is.
+        ...(config.secretStore.keys.length > 0
+          ? {
+              secretKeyring: await loadSecretKeyring({ keys: config.secretStore.keys, secrets })
+            }
+          : {})
       });
       runs = workflows;
       await workflows.planSchedules();

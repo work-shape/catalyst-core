@@ -37,7 +37,8 @@ export async function seedStandaloneAuth(
   const secrets = input.secrets ?? createEnvironmentSecrets(env);
   const store = await createPlatformStore({
     secrets,
-    poolSize: config.infrastructure.database.poolSize
+    poolSize: config.infrastructure.database.poolSize,
+    workflowEvents: false
   });
 
   try {

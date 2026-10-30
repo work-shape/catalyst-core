@@ -187,7 +187,10 @@
 {"name":"user.two_factor_reset","legacy":false,"audited":true,"phases":["after"]}
 {"name":"user.updated","legacy":true,"audited":true,"phases":["after"]}
 {"name":"workflow.before_publish","legacy":false,"audited":false,"phases":["before"]}
+{"name":"workflow.event_dropped","legacy":false,"audited":true,"phases":["after"]}
 {"name":"workflow.unpublished","legacy":false,"audited":true,"phases":["after"]}
+{"name":"workflow.webhook_refused","legacy":false,"audited":true,"phases":["after"]}
+{"name":"workflow.webhook_secret_rotated","legacy":false,"audited":true,"phases":["after"]}
 {"name":"workflow_run.cancelled","legacy":true,"audited":true,"phases":["after"]}
 {"name":"workflow_run.dataset_created","legacy":false,"audited":true,"phases":["after"]}
 {"name":"workflow_run.dataset_deleted","legacy":false,"audited":true,"phases":["after"]}
