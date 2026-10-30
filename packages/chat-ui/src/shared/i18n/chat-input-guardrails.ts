@@ -27,7 +27,7 @@ export const chatInputGuardrails = defineTranslations({
       "The message seems to contain a password. Passwords do not belong in a chat; send it only if you are sure.",
     "chatInput.rule.cardNumbersTitle": "Card numbers in chat",
     "chatInput.rule.cardNumbersReason":
-      "The message contains what looks like a payment card number. Remove it before you send the message.",
+      "The message contains what looks like a payment card number. Send it only if the task needs it.",
     "chatInput.rule.specialCategoriesTitle": "Special categories of personal data in chat",
     "chatInput.rule.specialCategoriesReason":
       "The message may contain special categories of personal data, such as health, religion or union membership. Send it only if the task needs them.",
@@ -61,7 +61,7 @@ export const chatInputGuardrails = defineTranslations({
       "Die Nachricht enthält offenbar ein Passwort. Passwörter gehören nicht in einen Chat; sende sie nur, wenn du dir sicher bist.",
     "chatInput.rule.cardNumbersTitle": "Kartennummern im Chat",
     "chatInput.rule.cardNumbersReason":
-      "Die Nachricht enthält offenbar eine Zahlungskartennummer. Entferne sie vor dem Senden.",
+      "Die Nachricht enthält offenbar eine Zahlungskartennummer. Sende sie nur, wenn die Aufgabe sie braucht.",
     "chatInput.rule.specialCategoriesTitle": "Besonders geschützte Daten im Chat",
     "chatInput.rule.specialCategoriesReason":
       "Die Nachricht enthält vielleicht besonders geschützte personenbezogene Daten, etwa zu Gesundheit, Religion oder Gewerkschaftszugehörigkeit. Sende sie nur, wenn die Aufgabe sie braucht.",

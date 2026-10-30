@@ -8,7 +8,7 @@ import { expect, test } from "./test";
 
 // The guardrails on a person's chat message (GR-4), in the composer. The suite's instance runs
 // the default rules on chat input. A password written out is warned about: the message is not
-// sent until the person sends it anyway. A card number is blocked: nothing is sent or stored,
+// sent until the person sends it anyway. An access token is blocked: nothing is sent or stored,
 // the draft stays in the composer, and after a reload neither the transcript nor the page holds
 // it. Fails without GR-4: both messages went out as they were.
 
@@ -23,9 +23,9 @@ const shotsDir = process.env.E2E_SHOTS_DIR;
 
 const WARN_TITLE = "the composer warns about a password and sends it once the person says so";
 const BLOCK_TITLE =
-  "the composer keeps a blocked card number as a draft, and nothing of it is stored";
-/** A test card number that passes the Luhn check. */
-const CARD_NUMBER = "4111 1111 1111 1111";
+  "the composer keeps a blocked access token as a draft, and nothing of it is stored";
+/** An invented token in the form of a GitHub token. */
+const TOKEN = `ghp_${"Rk4mW8pQ2x".repeat(4)}`;
 
 test.use({
   allowedPageErrors: {
@@ -129,7 +129,7 @@ async function shoot(page: Page, name: string, text: string): Promise<void> {
 test(WARN_TITLE, async ({ page }) => {
   test.setTimeout(shotsDir ? 180_000 : 90_000);
   const id = randomUUID().slice(0, 8);
-  const text = `Für den Zugang: Passwort: Sommer-${id}`;
+  const text = `Für den Zugang: Passwort: Sommer-${id}-7`;
   await signIn(page);
 
   // The first message of a conversation: the guardrail warns, nothing is sent.
@@ -173,15 +173,15 @@ test(BLOCK_TITLE, async ({ page }) => {
     timeout: 30_000
   });
 
-  const blocked = `Meine Karte ist ${CARD_NUMBER}, Vorgang ${id}`;
+  const blocked = `Mein Token ist ${TOKEN}, Vorgang ${id}`;
   await send(page, blocked);
   const notice = page.getByTestId("chat-input-refusal");
   await expect(notice).toBeVisible({ timeout: 30_000 });
   await expect(notice).toHaveAttribute("data-outcome", "block");
   await expect(notice).toContainText("Nicht gesendet.");
   await expect(
-    notice.locator('[data-testid="guardrail-answer"][data-guardrail="chat-card-numbers"]')
-  ).toContainText("Kartennummern im Chat");
+    notice.locator('[data-testid="guardrail-answer"][data-guardrail="chat-secrets"]')
+  ).toContainText("Geheimnisse im Chat");
   // A block cannot be sent anyway; the draft stays to be changed.
   await expect(notice.getByTestId("chat-input-send-anyway")).toHaveCount(0);
   await expect(composer(page)).toHaveValue(blocked);
@@ -195,12 +195,12 @@ test(BLOCK_TITLE, async ({ page }) => {
   await page.reload();
   await expect(userMessages(page).filter({ hasText: first })).toHaveCount(1, { timeout: 30_000 });
   await expect(userMessages(page)).toHaveCount(1);
-  expect(await page.locator("main, body").first().innerText()).not.toContain(CARD_NUMBER);
+  expect(await page.locator("main, body").first().innerText()).not.toContain(TOKEN);
   const conversationId = /\/c\/([^/]+)$/u.exec(page.url())?.[1];
   expect(conversationId).toBeDefined();
   const history = await page.request.get(
     `${apiBaseUrl}/api/v1/conversations/${conversationId ?? ""}/thread`
   );
   expect(history.ok()).toBe(true);
-  expect(await history.text()).not.toContain(CARD_NUMBER);
+  expect(await history.text()).not.toContain(TOKEN);
 });

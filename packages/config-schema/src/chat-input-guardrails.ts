@@ -26,24 +26,37 @@ const SECRET_PATTERNS = [
   // Google API keys.
   String.raw`\bAIza[0-9A-Za-z_-]{35}\b`,
   // JSON Web Tokens: three base64url parts, the first two JSON objects.
-  String.raw`\beyJ[0-9A-Za-z_-]{10,}\.eyJ[0-9A-Za-z_-]{10,}\.[0-9A-Za-z_-]{10,}`
+  String.raw`\beyJ[0-9A-Za-z_-]{10,}\.eyJ[0-9A-Za-z_-]{10,}\.[0-9A-Za-z_-]{10,}`,
+  // A token of 20 or more characters in an Authorization header, an x-api-key header or an
+  // api_key setting, such as OPENAI_API_KEY=… in a log.
+  String.raw`(?i:\bauthorization["']?\s*:\s*["']?(?:bearer|basic)\s+|api[_-]?key["']?\s*[:=]\s*["']?)[0-9A-Za-z._~+/=-]{20,}`,
+  // A user and password in a URL: postgres://user:password@host.
+  String.raw`\b[A-Za-z][A-Za-z0-9+.-]*://[^\s:/@]+:[^\s@/]+@`
 ];
 
-/** A password written out as `password: …`, in English or German. */
-const PASSWORD_PATTERN = String.raw`(?i)\b(?:password|passwort|kennwort|passwd|pwd)\s*[:=]\s*\S+`;
+/**
+ * A password written out as `password: …`, in English or German, whose value holds a digit or a
+ * symbol: "Passwort: kommt separat" is a note, not a password. `Kennwort` is left out, as it is
+ * also the reference line of a transfer, and `pwd`, as it is also a working directory.
+ */
+const PASSWORD_PATTERN = String.raw`(?i)\b(?:password|passwort|passwd)\s*[:=]\s*\S*[0-9!@#$%&*?^+]\S*`;
 
 /**
- * Payment card numbers: 13 to 19 digits, optionally in groups split by single spaces or hyphens.
- * Only those that pass the Luhn check and stand alone count (`checksum: luhn`).
+ * Payment card numbers: 15 to 19 digits that start as Visa (4), Mastercard (51-55, 22-27),
+ * American Express (34, 37) or Discover (6011, 65) do, optionally in groups split by single
+ * spaces or hyphens. Only those that pass the Luhn check and stand alone count (`checksum:
+ * luhn`). Any run of digits would also catch phone numbers, tax numbers, contract numbers and
+ * the references of a bank statement, a tenth of which pass the Luhn check by chance.
  */
-const CARD_NUMBER_PATTERN = String.raw`\b[0-9](?:[ -]?[0-9]){12,18}\b`;
+const CARD_NUMBER_PATTERN = String.raw`\b(?:4[0-9]{3}|5[1-5][0-9]{2}|2[2-7][0-9]{2}|3[47][0-9]{2}|6011|65[0-9]{2})(?:[ -]?[0-9]){11,15}\b`;
 
 /**
- * Markers of special categories of personal data (Art. 9 GDPR): health, religion, union
- * membership, ethnic origin, political opinions, sexual orientation, genetic and biometric data.
- * Word stems in German and English, so that inflected forms match.
+ * Statements of special categories of personal data (Art. 9 GDPR): health, religion, union
+ * membership, ethnic origin, political opinions, sexual orientation, genetic and biometric data,
+ * in German and English. Words a payslip, a tax assessment or a self-disclosure always carries,
+ * such as Kirchensteuer, Konfession or Gewerkschaftsbeitrag, are left out.
  */
-const SPECIAL_CATEGORY_PATTERN = String.raw`(?i)\b(?:diagnos|krankschreib|krankgeschrieb|krankmeld|arbeitsunfähig|erkrank|schwerbehind|behinderung|disabilit|schwanger|pregnan|gesundheitszustand|gesundheitsdaten|health condition|health data|medical condition|hiv\b|religio|konfession|kirchensteuer|kirchenaustritt|gewerkschaft|trade union|union member|ethnische herkunft|ethnic origin|sexuelle orientierung|sexual orientation|politische meinung|politische überzeugung|political opinion|genetische daten|genetic data|biometrische daten|biometric data)`;
+const SPECIAL_CATEGORY_PATTERN = String.raw`(?i)\b(?:diagnose\b|diagnosen|diagnostiziert|krankschreib|krankgeschrieb|krankmeld|erkrankung|schwerbehind|disabilit|schwanger|pregnan|gesundheitszustand|gesundheitsdaten|health condition|health data|medical condition|hiv\b|religionszugehörigkeit|gewerkschaftsmitglied|trade union|union member|ethnische herkunft|ethnic origin|sexuelle orientierung|sexual orientation|politische meinung|politische überzeugung|political opinion|genetische daten|genetic data|biometrische daten|biometric data)`;
 
 /** The default rules on chat input, by name. Their names start with `chat-`. */
 export const CHAT_INPUT_FLOOR_GUARDRAILS = {
@@ -74,21 +87,22 @@ export const CHAT_INPUT_FLOOR_GUARDRAILS = {
   },
   "chat-card-numbers": {
     displayName: "Card numbers in chat",
-    description: "Payment card numbers that pass the Luhn check, in a chat message.",
+    description:
+      "Payment card numbers of the major card networks that pass the Luhn check, in a chat message.",
     on: CHAT_INPUT_EVENT,
     check: {
       kind: "pattern",
       pattern: CARD_NUMBER_PATTERN,
       checksum: "luhn",
       reason:
-        "The message contains what looks like a payment card number. Remove it before you send the message."
+        "The message contains what looks like a payment card number. Send it only if the task needs it."
     },
-    outcome: "block"
+    outcome: "warn"
   },
   "chat-special-categories": {
     displayName: "Special categories of personal data in chat",
     description:
-      "Words that point to health, religion, union membership or other special categories of personal data (Art. 9 GDPR).",
+      "Statements of health, religion, union membership or other special categories of personal data (Art. 9 GDPR). Off unless the operator switches it on.",
     on: CHAT_INPUT_EVENT,
     check: {
       kind: "pattern",
@@ -104,7 +118,8 @@ export type ChatInputFloorGuardrailName = keyof typeof CHAT_INPUT_FLOOR_GUARDRAI
 
 /**
  * `chatInputGuardrails` of release config: the operator switches each default rule on chat input
- * off with `false`. All are on where the key is missing. A guardrail of `guardrails` with the
+ * off with `false`. All but `chat-special-categories` are on where the key is missing; that one is
+ * switched on with `true`, as the words of health and religion stand in many ordinary documents. A guardrail of `guardrails` with the
  * same name takes the default's place.
  */
 export const chatInputGuardrailsConfigSchema = z
@@ -112,7 +127,7 @@ export const chatInputGuardrailsConfigSchema = z
     "chat-secrets": z.boolean().default(true),
     "chat-passwords": z.boolean().default(true),
     "chat-card-numbers": z.boolean().default(true),
-    "chat-special-categories": z.boolean().default(true)
+    "chat-special-categories": z.boolean().default(false)
   })
   .strict()
   .prefault({}) satisfies z.ZodType<Record<ChatInputFloorGuardrailName, boolean>>;

@@ -69,18 +69,20 @@ describe("the Luhn check of a card number", () => {
 
 describe("the default rules on chat input", () => {
   // Fails without the change: release config had no rules on chat input.
-  it("are on by default, can be switched off one by one, and give way to an operator's rule", () => {
+  it("are on by default but special categories, can be switched one by one, and give way to an operator's rule", () => {
     const floorOf = (config: Record<string, unknown>) =>
       releaseGuardrailFloor(parseClientInstanceConfig({ ...createTestConfig(), ...config }));
     expect(Object.keys(floorOf({})).sort()).toEqual([
       "chat-card-numbers",
       "chat-passwords",
-      "chat-secrets",
-      "chat-special-categories"
+      "chat-secrets"
     ]);
     expect(
-      Object.keys(floorOf({ chatInputGuardrails: { "chat-special-categories": false } }))
-    ).not.toContain("chat-special-categories");
+      Object.keys(floorOf({ chatInputGuardrails: { "chat-special-categories": true } }))
+    ).toContain("chat-special-categories");
+    expect(
+      Object.keys(floorOf({ chatInputGuardrails: { "chat-passwords": false } }))
+    ).not.toContain("chat-passwords");
     const own = {
       on: CHAT_INPUT_EVENT,
       check: { kind: "pattern", pattern: "geheim" },
@@ -137,13 +139,7 @@ describe("the guardrails at message.before_send", () => {
     ["a secret", `Hier der Token: ${GITHUB_TOKEN}`, "chat-secrets", "block"],
     ["a private key", "-----BEGIN OPENSSH PRIVATE KEY-----", "chat-secrets", "block"],
     ["a password", "Passwort: Sommer2026!", "chat-passwords", "warn"],
-    ["a card number", `Zahle mit ${CARD}`, "chat-card-numbers", "block"],
-    [
-      "a special category",
-      "Ich bin seit Montag krankgeschrieben",
-      "chat-special-categories",
-      "warn"
-    ]
+    ["a card number", `Zahle mit ${CARD}`, "chat-card-numbers", "warn"]
   ])("answer %s", async (_case, text, guardrailName, outcome) => {
     const f = await floor();
     const answers = await f.runner.answer(message(text), context);
@@ -158,14 +154,14 @@ describe("the guardrails at message.before_send", () => {
       message(`Konto ${IBAN}, Steuer-ID ${TAX_ID}, Karte ${CARD_WRONG_CHECKSUM}`),
       context
     );
-    expect(answers.map((answer) => answer.outcome)).toEqual(["allow", "allow", "allow", "allow"]);
+    expect(answers.map((answer) => answer.outcome)).toEqual(["allow", "allow", "allow"]);
   });
 
   it("check the text of the attachments as their own field", async () => {
     const f = await floor();
     const answers = await f.runner.answer(message("Siehe Anhang.", `Karte ${CARD}`), context);
     expect(answers.find((answer) => answer.guardrailName === "chat-card-numbers")).toMatchObject({
-      outcome: "block",
+      outcome: "warn",
       field: "attachments",
       matchCount: 1
     });
@@ -247,7 +243,7 @@ describe("the guardrails at message.before_send", () => {
     expect(rows).toEqual([
       expect.objectContaining({
         event: CHAT_INPUT_EVENT,
-        outcome: "block",
+        outcome: "warn",
         subject_kind: "message",
         subject_id: "msg_checked",
         field: "text",
