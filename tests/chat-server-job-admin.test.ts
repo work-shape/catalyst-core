@@ -362,7 +362,7 @@ describe("Instance > Jobs: retry", () => {
     ).resolves.toEqual([]);
   });
 
-  it("offers no retry for a schedule tick or a kind it was given no retry for, and takes none", async () => {
+  it("offers no retry for a schedule tick, an owner's own discovery or a kind it was given no retry for, and takes none", async () => {
     const server = await createServer();
     await plant(
       // A tick that failed while the next one already waits under the schedule's key.
@@ -374,7 +374,15 @@ describe("Instance > Jobs: retry", () => {
       },
       // The same kind without a key: it is the kind that is not retried, not the key.
       { id: "job_tick_free", kind: "conversation.expire", status: "failed" },
-      { id: "job_unknown", kind: "mail.send", status: "dead" }
+      { id: "job_unknown", kind: "mail.send", status: "dead" },
+      // The owner's own discovery of a personal Connection opens the owner's token, so only
+      // the owner starts one (CS-9b exception).
+      {
+        id: "job_personal_discovery",
+        kind: "connection.discover_personal",
+        status: "dead",
+        subject: "own-mcp"
+      }
     );
 
     const listed = await server.call(
@@ -386,10 +394,11 @@ describe("Instance > Jobs: retry", () => {
       expect.arrayContaining([
         ["job_tick", false],
         ["job_tick_free", false],
-        ["job_unknown", false]
+        ["job_unknown", false],
+        ["job_personal_discovery", false]
       ])
     );
-    for (const jobId of ["job_tick_free", "job_unknown"]) {
+    for (const jobId of ["job_tick_free", "job_unknown", "job_personal_discovery"]) {
       const refused = await server.call("instance.jobs.retry", { params: { jobId } }, superadmin);
       expect([refused.statusCode, errorOf(refused)]).toEqual([
         409,
@@ -398,7 +407,9 @@ describe("Instance > Jobs: retry", () => {
       // The refusal took back the reset of the job.
       await expect(storedJob(jobId)).resolves.toMatchObject({ attempts: 3 });
     }
-    await expect(storedJob("job_unknown")).resolves.toMatchObject({ status: "dead" });
+    for (const jobId of ["job_unknown", "job_personal_discovery"]) {
+      await expect(storedJob(jobId)).resolves.toMatchObject({ status: "dead" });
+    }
   });
 
   it("offers no retry for a workspace command, even when the API was given one for the kind", async () => {

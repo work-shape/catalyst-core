@@ -518,6 +518,11 @@ export async function discoverConnection(
 
   // An error of a write is the store's or the job's and leaves as it is.
   if (!found) {
+    // The owner's own sign-in failed, not the server: the shared health and error code stay
+    // as they are for everyone, and the reason goes to the owner's job and its audit only.
+    if (input.personalOwner !== undefined) {
+      return { status: "failed", ...(reason === undefined ? {} : { reason }) };
+    }
     const written = await writeState({
       health: healthOfFailure(reason, connection.state?.health),
       lastErrorCode: reason ?? CONNECTION_DISCOVERY_FAILED_CODE

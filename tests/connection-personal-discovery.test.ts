@@ -103,9 +103,9 @@ async function accessToken(secret: string): Promise<string> {
 
 async function discoveryJobs() {
   return withTestSql(
-    (sql) => sql<{ status: string; payload: Record<string, unknown> }[]>`
-      select status, payload from platform_jobs
-      where kind = 'connection.discover' and subject = ${NAME}`
+    (sql) => sql<{ kind: string; status: string; payload: Record<string, unknown> }[]>`
+      select kind, status, payload from platform_jobs
+      where kind in ('connection.discover', 'connection.discover_personal') and subject = ${NAME}`
   );
 }
 
@@ -118,8 +118,13 @@ describe("the owner's own discovery of a personal MCP Connection (CS-9b exceptio
     expect(own.discovered.map((tool) => tool.name)).toContain("list_customers");
     expect(own.discoveredAt).toBeDefined();
     const jobs = await discoveryJobs();
-    expect(jobs.map((job) => job.payload)).toEqual([
-      { connectionName: NAME, personalOwner: await world.userIdOf(alice) }
+    // A kind of its own, which nobody retries by hand: it opens the owner's token only for a
+    // discovery the owner started.
+    expect(jobs.map((job) => [job.kind, job.payload])).toEqual([
+      [
+        "connection.discover_personal",
+        { connectionName: NAME, personalOwner: await world.userIdOf(alice) }
+      ]
     ]);
 
     // Bob may read the Connection, and signed in to it himself: the list is not his to see.
@@ -207,6 +212,27 @@ describe("the owner's own discovery of a personal MCP Connection (CS-9b exceptio
     }
   });
 
+  it("is not read by a start of the instance, which reads the shared Connections", async () => {
+    const queued = () =>
+      withTestSql(
+        (sql) => sql<{ id: string; subject: string }[]>`
+          select id, subject from platform_jobs
+          where kind in ('connection.discover', 'connection.discover_personal')
+            and status = 'queued'`
+      );
+    const before = new Set((await queued()).map((job) => job.id));
+    await world.seedConnections();
+    const started = (await queued()).filter((job) => !before.has(job.id));
+    // What the start queued goes, so the tests after it run only their own discoveries.
+    await withTestSql(
+      (sql) => sql`delete from platform_jobs where id in ${sql(started.map((job) => job.id))}`
+    );
+    // The instance's shared Connections are read; the personal one is not.
+    const subjects = started.map((job) => job.subject);
+    expect(subjects).toContain("keyed");
+    expect(subjects).not.toContain(NAME);
+  });
+
   it("refuses a discovery queued without its owner and contacts nothing", async () => {
     const before = await detail(alice);
     await requestConnectionDiscovery(world.instance.stores.jobs, {
@@ -214,9 +240,7 @@ describe("the owner's own discovery of a personal MCP Connection (CS-9b exceptio
       connectionName: NAME
     });
     await getTestJobs(world.instance).runDue();
-    const ownerless = (await discoveryJobs()).filter(
-      (job) => job.payload.personalOwner === undefined
-    );
+    const ownerless = (await discoveryJobs()).filter((job) => job.kind === "connection.discover");
     expect(ownerless.map((job) => job.status)).toEqual(["failed"]);
     // What the owner's discovery stored stays.
     expect((await detail(alice)).discoveredAt).toBe(before.discoveredAt);
@@ -245,4 +269,37 @@ describe("the owner's own discovery of a personal MCP Connection (CS-9b exceptio
     // The owner's agent in their own chat calls it: the exception changed nothing there.
     expect((await world.call(NAME, "list_customers", alice, "agent")).result.status).toBe("done");
   });
+
+  it("keeps a failed sign-in of the owner to the owner: the shared health and tools stay", async () => {
+    const before = await sharedState();
+    expect(before.health).toBe("ok");
+    expect((await world.disconnect(NAME, alice)).status).toBe(200);
+    await world.discover(NAME, alice);
+    const [failed] = await withTestSql(
+      (sql) => sql<{ reason: string | null; metadata: Record<string, unknown> }[]>`
+        select reason, metadata from audit_events
+        where type = 'connection.discovery_failed' and subject = ${NAME}
+        order by created_at desc limit 1`
+    );
+    expect(failed).toMatchObject({
+      reason: "connection_not_connected",
+      metadata: { connectionName: NAME, personal: true }
+    });
+    // Bob's tools, signed in himself, did not drop with Alice's sign-in.
+    expect(await sharedState()).toEqual(before);
+    expect((await world.call(NAME, "list_customers", bob, "agent")).result.status).toBe("done");
+  });
 });
+
+/** What everyone reads of the Connection: its health, error code and stored catalog. */
+async function sharedState() {
+  const [state] = await withTestSql(
+    (sql) => sql<{ health: string; last_error_code: string | null; catalog: unknown }[]>`
+      select state.health, state.last_error_code, state.catalog
+      from connection_state state
+      join config_assets asset on asset.id = state.connection_asset_id
+      where asset.kind = 'connection' and asset.name = ${NAME}`
+  );
+  if (!state) throw new Error("No state of the Connection");
+  return { ...state };
+}

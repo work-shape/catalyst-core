@@ -91,6 +91,8 @@ export interface OAuthWorld {
   identityOf(cookie: string): Promise<AuthenticatedUser>;
   /** The call path of a worker process of the instance, on the same rows. */
   calls(): Promise<ReturnType<typeof getTestExecution>["operationCalls"]>;
+  /** What a start of the instance does with its Connections, on the worker's rows. */
+  seedConnections(): Promise<void>;
   /**
    * A Connection operation called by the person as the CLI calls it, or by their agent. The
    * agent's run uses `modelRoutes`, one `eu` route unless a test names others.
@@ -444,6 +446,9 @@ export async function createOAuthWorld(
     oauth: sampleOAuth,
     identityOf,
     calls: callPath,
+    async seedConnections() {
+      await getTestExecution(worker).connections?.seed();
+    },
     async call(
       connectionName,
       operation,
@@ -548,7 +553,7 @@ export async function createOAuthWorld(
         const [waiting] = await withTestSql(
           (sql) => sql<{ count: number }[]>`
             select count(*)::int as count from platform_jobs
-            where kind = 'connection.discover' and subject = ${name}
+            where kind in ('connection.discover', 'connection.discover_personal') and subject = ${name}
               and status in ('queued', 'running')`
         );
         if (waiting?.count === 0) return;
