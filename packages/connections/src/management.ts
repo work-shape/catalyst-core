@@ -179,7 +179,9 @@ export interface ConnectionManagement
   get(
     name: string,
     agents: readonly AgentToolListing[],
-    readable?: (resource: AccessResource) => boolean
+    readable?: (resource: AccessResource) => boolean,
+    /** The reader's user id: a personal Connection's discovered tools are its owner's to see. */
+    reader?: string
   ): Promise<ConnectionView>;
   /** The type's bounded test. Writes the health and answers no data of the outside system. */
   test(
@@ -432,9 +434,13 @@ export function createConnectionManagement(
       return connection ? resourceOf(connection) : undefined;
     },
 
-    async get(name, agents, readable) {
+    async get(name, agents, readable, reader) {
       const connection = await readConnection(deps, name);
       if (!connection) throw notFound(name);
+      // The tool list the owner's own sign-in read is the owner's to see (CS-9b exception).
+      const seesDiscovered =
+        connection.config.credentialMode !== "user" ||
+        (reader !== undefined && connection.config.ownerPrincipalId === reader);
       const usedBy = agents.flatMap((agent) => {
         const toolNames = agent.toolNames.filter(
           (toolName) => parseConnectionOperationName(toolName)?.connection === name
@@ -462,7 +468,7 @@ export function createConnectionManagement(
         secret: await secretOf(connection),
         sharedCredential: connection.config.credentialMode === "shared",
         operations: operationsOf(connection),
-        discovered: discoveredOf(connection),
+        discovered: seesDiscovered ? discoveredOf(connection) : [],
         usedBy,
         ...(consumers === undefined
           ? {}
@@ -470,7 +476,7 @@ export function createConnectionManagement(
               usedByAssets: consumers.assets,
               usedByAssetsTruncated: consumers.truncated
             }),
-        ...(catalog ? { discoveredAt: catalog.discoveredAt } : {}),
+        ...(catalog && seesDiscovered ? { discoveredAt: catalog.discoveredAt } : {}),
         ...(binding === undefined ? {} : { binding }),
         ...(oauth === undefined ? {} : { oauth })
       };

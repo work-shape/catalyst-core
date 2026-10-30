@@ -261,7 +261,12 @@ export function ConnectionCreateFlow({
       personal,
       onConnected: () => {
         if (rest) {
-          // A REST API names no tools: after the sign-in its tools are added or drafted.
+          // A REST API names no tools: after the sign-in its tools are added or drafted. A
+          // personal one is never tested: only its owner's agent uses the sign-in (CS-9b).
+          if (personal) {
+            enterRestTools();
+            return;
+          }
           source
             .test(name)
             .catch(() => undefined)
@@ -398,7 +403,10 @@ export function ConnectionCreateFlow({
         config,
         url: current.form.url,
         key,
-        discovers: !currentRest,
+        // A personal Connection is never tested, and its tools are read with the person's own
+        // sign-in, which comes after the write (CS-9b exception).
+        discovers: !currentRest && !createsPersonal(current),
+        tests: !createsPersonal(current),
         ...(currentOAuth === undefined ? {} : { origin: credentialOriginKey(form) ?? "" })
       },
       memory.current,
@@ -418,6 +426,11 @@ export function ConnectionCreateFlow({
     switch (outcome.status) {
       case "connected":
         setSteps([]);
+        // Saved: the person signs in with their own account, then its tools are read.
+        if (createsPersonal(current)) {
+          enterSignIn().catch(() => setBusy(false));
+          return;
+        }
         if (currentRest) {
           enterRestTools();
           return;
@@ -557,10 +570,20 @@ export function ConnectionCreateFlow({
   /** After the sign-in: the test, then the tools the instance reads with the new account. */
   const readSignedInTools = async () => {
     setStage({ step: "signed-in" });
-    // The test writes the health; what it answers changes nothing here.
-    await source.test(name).catch(() => undefined);
-    // A personal sign-in starts no discovery by itself: the dialog asks for one.
-    if (personal) await source.discover(name).catch(() => undefined);
+    if (personal) {
+      // A personal Connection is never tested. Its owner's own sign-in reads its tools, which
+      // the dialog asks for (CS-9b exception); a refusal is said, not waited out.
+      try {
+        await source.discover(name);
+      } catch (error) {
+        setErrors(writeErrors(error));
+        setStage({ step: "form" });
+        return;
+      }
+    } else {
+      // The test writes the health; what it answers changes nothing here.
+      await source.test(name).catch(() => undefined);
+    }
     const since = Date.now();
     for (;;) {
       const detail = await source.readDetail(name).catch(() => undefined);

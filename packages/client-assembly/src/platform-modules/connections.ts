@@ -39,6 +39,7 @@ export const connectionsModule = defineModule({
   tools: [CONNECTION_PROPOSE_TOOL_NAME, CONNECTION_DRAFT_TOOL_NAME, CONNECTION_OFFER_TOOL_NAME],
   jobKinds: [
     "connection.discover",
+    "connection.discover_personal",
     "connection_setup_sessions.sweep",
     "connection_bindings.keep_alive"
   ],

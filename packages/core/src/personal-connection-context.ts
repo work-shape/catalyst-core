@@ -200,6 +200,45 @@ export async function requirePersonalConnectionContext(input: {
 }
 
 /**
+ * The one exception to the owner's agent call (CS-9b, manager ruling of 2026-10-30): the owner
+ * of a personal MCP Connection reads its tool list with their own sign-in, from the
+ * Connection's create or settings path. Only the MCP handshake and `tools/list` run; no tool is
+ * called, and no conversation is marked. Answers the owner's user id, whose binding the
+ * discovery uses. Everything else is refused with `personal_connection_context`.
+ */
+export function requirePersonalDiscoveryContext(input: {
+  actor: AuthenticatedIdentity | undefined;
+  origin: OperationOrigin | undefined;
+  connection: { connectorType: string; ownerPrincipalId?: string };
+}): string {
+  const { actor, origin, connection } = input;
+  if (!origin || origin.kind !== "user") {
+    throw personalConnectionContextError(
+      "only its owner's create or settings path may read its tools, never an agent, App, Workflow or key"
+    );
+  }
+  if (
+    !actor ||
+    isAuthenticatedServicePrincipal(actor) ||
+    actor.delegatedActor ||
+    actor.keyScopes !== undefined ||
+    actor.authenticationMethod !== "session-cookie"
+  ) {
+    throw personalConnectionContextError(
+      "the actor must be a person signed in to this instance, without a delegated actor or API key"
+    );
+  }
+  const owner = getSubjectUserId(actor);
+  if (owner !== actor.id || connection.ownerPrincipalId !== owner) {
+    throw personalConnectionContextError("only the Connection's owner may read its tools");
+  }
+  if (connection.connectorType !== "mcp") {
+    throw personalConnectionContextError("only an MCP server's tools are read with a sign-in");
+  }
+  return owner;
+}
+
+/**
  * The region refusal names the regions the instance allows, never a route's name or region.
  * The details carry the reason alone, so no Connect card is offered.
  */

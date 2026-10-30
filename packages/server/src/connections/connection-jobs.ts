@@ -8,6 +8,7 @@ import {
   subjectDedupeKey,
   type ClientInstanceId,
   type Job,
+  type JobControl,
   type JobSchedule,
   type JobsStore,
   type RegisteredJobHandler
@@ -47,6 +48,16 @@ const CONNECTION_DISCOVERY_LEASE_MS = 3 * MINUTE_MS;
 const CONNECTION_DISCOVERY_MAX_RUNNING = 4;
 const CONNECTION_DISCOVERY_SLOTS = 2;
 
+const CONNECTION_DISCOVERY_KIND = {
+  maxAttempts: CONNECTION_DISCOVERY_MAX_ATTEMPTS,
+  backoff: {
+    baseMs: CONNECTION_DISCOVERY_BACKOFF_BASE_MS,
+    maxMs: CONNECTION_DISCOVERY_BACKOFF_MAX_MS
+  },
+  leaseMs: CONNECTION_DISCOVERY_LEASE_MS,
+  concurrency: { global: CONNECTION_DISCOVERY_MAX_RUNNING, perKey: 1 }
+} as const;
+
 /**
  * Reads the operations of one Connection from its outside system. One job per Connection is
  * queued or running at a time, and one attempt of it. The payload names the Connection and
@@ -55,13 +66,23 @@ const CONNECTION_DISCOVERY_SLOTS = 2;
 export const connectionDiscoverJob = defineJobKind({
   kind: "connection.discover",
   payloadSchema: z.object({ connectionName: z.string().min(1).max(200) }),
-  maxAttempts: CONNECTION_DISCOVERY_MAX_ATTEMPTS,
-  backoff: {
-    baseMs: CONNECTION_DISCOVERY_BACKOFF_BASE_MS,
-    maxMs: CONNECTION_DISCOVERY_BACKOFF_MAX_MS
-  },
-  leaseMs: CONNECTION_DISCOVERY_LEASE_MS,
-  concurrency: { global: CONNECTION_DISCOVERY_MAX_RUNNING, perKey: 1 }
+  ...CONNECTION_DISCOVERY_KIND
+});
+
+/**
+ * The owner's own discovery of a personal MCP Connection (CS-9b exception): its payload names
+ * the owner whose sign-in reads the tools, and only the owner's admitted request queues it. It
+ * decrypts the owner's token only for a discovery the owner started, so its automatic attempts
+ * are bounded as any discovery's and nobody retries it by hand.
+ */
+const connectionPersonalDiscoverJob = defineJobKind({
+  kind: "connection.discover_personal",
+  payloadSchema: z.object({
+    connectionName: z.string().min(1).max(200),
+    personalOwner: z.string().min(1).max(200)
+  }),
+  ...CONNECTION_DISCOVERY_KIND,
+  manualRetry: false
 });
 
 /**
@@ -80,19 +101,34 @@ function enqueueConnectionDiscovery(
     clientInstanceId: ClientInstanceId;
     connectionName: string;
     behind?: Pick<Job, "dedupeKey">;
+    personalOwner?: string;
   }
-): Promise<Job<{ connectionName: string }>> {
-  const first = subjectDedupeKey(connectionDiscoverJob.kind, input.connectionName);
-  const second = `${first}:next`;
+): Promise<Job> {
+  // The owner's discovery has a kind and keys of its own: a discovery queued without an owner,
+  // which a personal Connection refuses, is not taken for it.
+  const keys = (kind: string, subject: string) => {
+    const first = subjectDedupeKey(kind, subject);
+    return {
+      clientInstanceId: input.clientInstanceId,
+      subject: input.connectionName,
+      dedupeKey: input.behind?.dedupeKey === first ? `${first}:next` : first,
+      concurrencyKey: input.connectionName
+    };
+  };
+  if (input.personalOwner !== undefined) {
+    return jobs.enqueue(
+      connectionPersonalDiscoverJob,
+      { connectionName: input.connectionName, personalOwner: input.personalOwner },
+      keys(
+        connectionPersonalDiscoverJob.kind,
+        `${input.connectionName}:owner:${input.personalOwner}`
+      )
+    );
+  }
   return jobs.enqueue(
     connectionDiscoverJob,
     { connectionName: input.connectionName },
-    {
-      clientInstanceId: input.clientInstanceId,
-      subject: input.connectionName,
-      dedupeKey: input.behind?.dedupeKey === first ? second : first,
-      concurrencyKey: input.connectionName
-    }
+    keys(connectionDiscoverJob.kind, input.connectionName)
   );
 }
 
@@ -102,7 +138,7 @@ function enqueueConnectionDiscovery(
  */
 export async function requestConnectionDiscovery(
   jobs: Pick<JobsStore, "enqueue">,
-  input: { clientInstanceId: ClientInstanceId; connectionName: string }
+  input: { clientInstanceId: ClientInstanceId; connectionName: string; personalOwner?: string }
 ): Promise<void> {
   const job = await enqueueConnectionDiscovery(jobs, input);
   if (job.status === "running") {
@@ -121,7 +157,8 @@ const FAILURES_NOT_RETRIED: ReadonlySet<string> = new Set([
   "connection_not_connected",
   "connection_needs_reconnect",
   "upstream_unauthorized",
-  "output_invalid"
+  "output_invalid",
+  "personal_connection_context"
 ]);
 
 type ConnectionDiscoveryJobOptions = Pick<ChatServerOptions, "connections" | "auditRecorder">;
@@ -186,6 +223,87 @@ export function createConnectionDiscoveryJobs(options: ConnectionDiscoveryJobOpt
   if (!connections?.discover) return kept;
   const discover = connections.discover.bind(connections);
 
+  /** One attempt of a discovery; `personalOwner` only for the owner's own (CS-9b exception). */
+  async function runDiscovery(
+    job: Job,
+    control: JobControl,
+    connectionName: string,
+    personalOwner: string | undefined
+  ): Promise<void> {
+    // Every write of the discovery is one of this attempt: an attempt that lost its
+    // lease stores nothing over what the attempt after it found.
+    const outcome = await discover(connectionName, {
+      signal: control.signal,
+      transaction: (write) => control.transaction(write),
+      ...(personalOwner === undefined ? {} : { personalOwner })
+    });
+    if (outcome.superseded === true) {
+      // The Connection changed while it was read. A new discovery reads it as it is
+      // now. This job is still running, so the new one is queued behind it.
+      await control.transaction((stores) =>
+        enqueueConnectionDiscovery(stores.jobs, {
+          clientInstanceId: job.clientInstanceId,
+          connectionName,
+          behind: job,
+          ...(personalOwner === undefined ? {} : { personalOwner })
+        })
+      );
+      return;
+    }
+    if (outcome.status === "skipped") return;
+    // The worker stops or the lease is gone: nothing was decided and nothing written.
+    // The attempt is given back.
+    if (outcome.stopped === true || (outcome.status === "failed" && control.signal.aborted)) {
+      throw new AppError("CONFLICT", "The discovery of a Connection was stopped");
+    }
+    if (outcome.status === "discovered") {
+      // What was found is counted. No name, description or schema of it is recorded.
+      // An operation left out for the credential gives the event its fixed reason, by
+      // which the timeline shows it. One left out for its schema gives the code of that.
+      const rejected = (outcome.rejectedCount ?? 0) > 0;
+      const reason = rejected ? "output_rejected" : outcome.schemaRefusal;
+      await options.auditRecorder.record({
+        type: "connection.discovered",
+        status: "success",
+        ...(reason === undefined ? {} : { reason }),
+        subject: connectionName,
+        correlationId: job.correlationId,
+        metadata: {
+          connectionName,
+          operationCount: outcome.operationCount ?? 0,
+          leftOutCount: outcome.leftOutCount ?? 0,
+          rejectedCount: outcome.rejectedCount ?? 0,
+          schemaRefusedCount: outcome.schemaRefusedCount ?? 0,
+          // Read with the owner's own sign-in (CS-9b exception). Who it was is the
+          // request's audit; the event names no person.
+          ...(personalOwner === undefined ? {} : { personal: true })
+        }
+      });
+      return;
+    }
+    const reason = outcome.reason ?? "discovery_failed";
+    const retried =
+      !FAILURES_NOT_RETRIED.has(reason) && control.attempt < CONNECTION_DISCOVERY_MAX_ATTEMPTS;
+    if (!retried) {
+      await options.auditRecorder.record({
+        type: "connection.discovery_failed",
+        status: "failed",
+        subject: connectionName,
+        reason,
+        correlationId: job.correlationId,
+        metadata: {
+          connectionName,
+          attempts: control.attempt,
+          ...(personalOwner === undefined ? {} : { personal: true })
+        }
+      });
+    }
+    // The reason is a code of this product. The job row holds nothing else of the failure.
+    const message = `The discovery of a Connection failed: ${reason}`;
+    if (FAILURES_NOT_RETRIED.has(reason)) throw new NonRetryableJobError(message, { reason });
+    throw new AppError("CONFLICT", message, { reason });
+  }
+
   return {
     schedules: kept.schedules,
     handlers: [
@@ -193,73 +311,13 @@ export function createConnectionDiscoveryJobs(options: ConnectionDiscoveryJobOpt
       defineJobHandler({
         kind: connectionDiscoverJob,
         slots: CONNECTION_DISCOVERY_SLOTS,
-        async run(job, control) {
-          const { connectionName } = job.payload;
-          // Every write of the discovery is one of this attempt: an attempt that lost its
-          // lease stores nothing over what the attempt after it found.
-          const outcome = await discover(connectionName, {
-            signal: control.signal,
-            transaction: (write) => control.transaction(write)
-          });
-          if (outcome.superseded === true) {
-            // The Connection changed while it was read. A new discovery reads it as it is
-            // now. This job is still running, so the new one is queued behind it.
-            await control.transaction((stores) =>
-              enqueueConnectionDiscovery(stores.jobs, {
-                clientInstanceId: job.clientInstanceId,
-                connectionName,
-                behind: job
-              })
-            );
-            return;
-          }
-          if (outcome.status === "skipped") return;
-          // The worker stops or the lease is gone: nothing was decided and nothing written.
-          // The attempt is given back.
-          if (outcome.stopped === true || (outcome.status === "failed" && control.signal.aborted)) {
-            throw new AppError("CONFLICT", "The discovery of a Connection was stopped");
-          }
-          if (outcome.status === "discovered") {
-            // What was found is counted. No name, description or schema of it is recorded.
-            // An operation left out for the credential gives the event its fixed reason, by
-            // which the timeline shows it. One left out for its schema gives the code of that.
-            const rejected = (outcome.rejectedCount ?? 0) > 0;
-            const reason = rejected ? "output_rejected" : outcome.schemaRefusal;
-            await options.auditRecorder.record({
-              type: "connection.discovered",
-              status: "success",
-              ...(reason === undefined ? {} : { reason }),
-              subject: connectionName,
-              correlationId: job.correlationId,
-              metadata: {
-                connectionName,
-                operationCount: outcome.operationCount ?? 0,
-                leftOutCount: outcome.leftOutCount ?? 0,
-                rejectedCount: outcome.rejectedCount ?? 0,
-                schemaRefusedCount: outcome.schemaRefusedCount ?? 0
-              }
-            });
-            return;
-          }
-          const reason = outcome.reason ?? "discovery_failed";
-          const retried =
-            !FAILURES_NOT_RETRIED.has(reason) &&
-            control.attempt < connectionDiscoverJob.maxAttempts;
-          if (!retried) {
-            await options.auditRecorder.record({
-              type: "connection.discovery_failed",
-              status: "failed",
-              subject: connectionName,
-              reason,
-              correlationId: job.correlationId,
-              metadata: { connectionName, attempts: control.attempt }
-            });
-          }
-          // The reason is a code of this product. The job row holds nothing else of the failure.
-          const message = `The discovery of a Connection failed: ${reason}`;
-          if (FAILURES_NOT_RETRIED.has(reason)) throw new NonRetryableJobError(message, { reason });
-          throw new AppError("CONFLICT", message, { reason });
-        }
+        run: (job, control) => runDiscovery(job, control, job.payload.connectionName, undefined)
+      }),
+      defineJobHandler({
+        kind: connectionPersonalDiscoverJob,
+        slots: CONNECTION_DISCOVERY_SLOTS,
+        run: (job, control) =>
+          runDiscovery(job, control, job.payload.connectionName, job.payload.personalOwner)
       })
     ]
   };

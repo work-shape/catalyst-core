@@ -224,6 +224,12 @@ export interface OpenConnectorContextInput {
   actor?: AuthenticatedIdentity;
   /** Only the operation call path supplies this owner gate and durable privacy mark. */
   personalCall?: () => Promise<void>;
+  /**
+   * The owner's own discovery of a personal MCP Connection (CS-9b exception): only the
+   * discovery path supplies it, after `requirePersonalDiscoveryContext`. The context opened
+   * with it serves the MCP handshake and `tools/list` and is handed to no tool call.
+   */
+  personalDiscovery?: { userId: string };
   type: ConnectorTypeDefinition;
   /** The Connection of the call: its asset id, its revision and the config of that revision. */
   connection: { id: string; revision: number; config: ConnectionConfig };
@@ -254,9 +260,9 @@ export async function openConnectorContext(
 ): Promise<ConnectorContext> {
   const { type, connection, egress, credentials, signal } = input;
   const { config } = connection;
-  if (config.credentialMode === "user" && !input.personalCall) {
+  if (config.credentialMode === "user" && !input.personalCall && !input.personalDiscovery) {
     throw personalConnectionContextError(
-      "personal credentials are available only through the owner's agent call, never a test or discovery"
+      "personal credentials are available only through the owner's agent call or the owner's own discovery, never a test"
     );
   }
   const settings = type.settingsSchema.safeParse(config.settings);
@@ -286,7 +292,10 @@ export async function openConnectorContext(
     const secret =
       config.authScheme === AUTH_SCHEME_OAUTH
         ? await credentials.resolveSignIn({
-            subject: credentialSubject(config, input.actor),
+            subject:
+              config.credentialMode === "user" && input.personalDiscovery
+                ? `user:${input.personalDiscovery.userId}`
+                : credentialSubject(config, input.actor),
             connectionAssetId: connection.id,
             origin,
             ...(input.refused === undefined ? {} : { refused: input.refused }),

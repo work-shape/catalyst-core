@@ -13,6 +13,8 @@ import {
   isAppError,
   isAuthenticatedServicePrincipal,
   isOutsideCall,
+  personalConnectionContextError,
+  requirePersonalDiscoveryContext,
   type ActorAccess,
   type AuthenticatedIdentity,
   type OperationAuthorization,
@@ -56,10 +58,31 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
     return decide(access, action, resource);
   }
 
-  function requestDiscovery(connectionName: string): Promise<void> {
+  function requestDiscovery(connectionName: string, personalOwner?: string): Promise<void> {
     return requestConnectionDiscovery(options.stores.jobs, {
       clientInstanceId: options.clientInstanceId,
-      connectionName
+      connectionName,
+      ...(personalOwner === undefined ? {} : { personalOwner })
+    });
+  }
+
+  /**
+   * The owner whose own sign-in reads a personal Connection's tools (CS-9b exception), or
+   * nothing for a shared Connection. Anyone else is refused before anything is queued.
+   */
+  async function personalOwnerOf(
+    name: string,
+    context: Pick<OperationExecutionContext, "actor" | "origin">
+  ): Promise<string | undefined> {
+    const port = required();
+    if ((await port.credentialMode(name)) !== "user") return undefined;
+    if (!port.ownership) {
+      throw personalConnectionContextError("this instance reads no personal Connection's tools");
+    }
+    return requirePersonalDiscoveryContext({
+      actor: context.actor,
+      origin: context.origin,
+      connection: await port.ownership(name)
     });
   }
 
@@ -130,16 +153,21 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
     resource: connectionResource,
     module: CONNECTIONS_MODULE,
     execute: async (input, context) =>
-      required().get(input.name, await readableAgents(options, context.access), (resource) => {
-        const kind = options.configAssets.kinds.get(resource.kind ?? "");
-        return (
-          kind !== undefined &&
-          options.modules.offModuleOf("kind", kind.kind) === undefined &&
-          [kind.actions.read, kind.actions.use].some(
-            (right) => right !== undefined && context.access.authorize(right, resource).allowed
-          )
-        );
-      })
+      required().get(
+        input.name,
+        await readableAgents(options, context.access),
+        (resource) => {
+          const kind = options.configAssets.kinds.get(resource.kind ?? "");
+          return (
+            kind !== undefined &&
+            options.modules.offModuleOf("kind", kind.kind) === undefined &&
+            [kind.actions.read, kind.actions.use].some(
+              (right) => right !== undefined && context.access.authorize(right, resource).allowed
+            )
+          );
+        },
+        isAuthenticatedServicePrincipal(context.actor) ? undefined : context.actor.id
+      )
   });
 
   // Who may use the Connection, under the right that reads its page.
@@ -216,8 +244,11 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
         expectedRevision: input.expectedRevision
       });
       // What the system offers may depend on whose key asks. A Connection with nothing to
-      // discover ends that discovery at once.
-      await requestDiscovery(input.name);
+      // discover ends that discovery at once. A personal Connection's tools are read only on
+      // its owner's request (CS-9b exception).
+      if ((await required().credentialMode(input.name)) !== "user") {
+        await requestDiscovery(input.name);
+      }
       return secret;
     }
   });
@@ -228,11 +259,11 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
     // A discovery stores what the system offers now and accepts nothing.
     changeClass: "reversible",
     module: CONNECTIONS_MODULE,
-    execute: async (input) => {
+    execute: async (input, context) => {
       if (!(await required().resource(input.name))) {
         throw new AppError("NOT_FOUND", `Connection '${input.name}' does not exist`);
       }
-      await requestDiscovery(input.name);
+      await requestDiscovery(input.name, await personalOwnerOf(input.name, context));
       return { status: "queued" as const };
     }
   });

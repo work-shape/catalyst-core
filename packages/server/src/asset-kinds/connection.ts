@@ -651,7 +651,8 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
         });
       }
       const discovers = options.connectorTypes.get(connection.connectorType)?.discover;
-      if (connection.enabled && discovers && configured) {
+      // A personal Connection's tools are read only on its owner's request (CS-9b exception).
+      if (connection.enabled && discovers && configured && connection.credentialMode !== "user") {
         await requestConnectionDiscovery(stores.jobs, { clientInstanceId, connectionName: name });
       }
     },

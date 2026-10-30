@@ -390,6 +390,9 @@ async function enqueueDiscoveries(
   try {
     for (const connection of await readConnections(deps)) {
       if (!connection.config.enabled || !connection.type?.discover) continue;
+      // A personal Connection is read only with its owner's own sign-in, on the owner's
+      // request (CS-9b exception); a start reads none.
+      if (connection.config.credentialMode === "user") continue;
       // A discovery that runs now may have read the Connection before this seed changed it,
       // so one always starts after a seed.
       await requestConnectionDiscovery(stores.jobs, {

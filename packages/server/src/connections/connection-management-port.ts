@@ -66,6 +66,11 @@ interface ConnectionDiscoveryAttempt {
    * holds its lease, so a discovery that was taken over stores nothing.
    */
   transaction<Result>(write: (stores: PlatformStores) => Promise<Result>): Promise<Result>;
+  /**
+   * The owner of a personal MCP Connection whose own sign-in reads its tools, as the request
+   * that queued the discovery was admitted (`requirePersonalDiscoveryContext`).
+   */
+  personalOwner?: string;
 }
 
 /**
@@ -75,6 +80,15 @@ interface ConnectionDiscoveryAttempt {
  */
 export interface ConnectionManagementPort {
   credentialMode(name: string): Promise<ConnectionCredentialMode>;
+  /**
+   * Whose a Connection is and what it reaches: what the owner's discovery of a personal MCP
+   * Connection is decided on (CS-9b exception). Missing, no personal Connection is discovered.
+   */
+  ownership?(name: string): Promise<{
+    credentialMode: ConnectionCredentialMode;
+    connectorType: string;
+    ownerPrincipalId: string;
+  }>;
   myConnections(
     userId: string,
     usable: (resource: OperationResource) => boolean
@@ -103,7 +117,9 @@ export interface ConnectionManagementPort {
   get(
     name: string,
     agents: readonly { name: string; title: string; toolNames: readonly string[] }[],
-    readable?: (resource: AccessResource) => boolean
+    readable?: (resource: AccessResource) => boolean,
+    /** The reader's user id: a personal Connection's discovered tools are its owner's to see. */
+    reader?: string
   ): Promise<ConnectionDetail>;
   /** The type's bounded test, through the one connector context. Writes the health. */
   test(
