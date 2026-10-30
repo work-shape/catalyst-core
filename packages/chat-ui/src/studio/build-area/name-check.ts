@@ -18,7 +18,10 @@ type Translate = TranslationContextValue["t"];
 export function addressCheckOf(
   answer: { ok: true; found: NameCheckAnswer } | { ok: false; error: unknown },
   t: Translate,
-  locale: LocaleCode
+  locale: LocaleCode,
+  /** What a taken name says, where the field names it otherwise than an address. */
+  takenReason?: (name: string) => string,
+  name = ""
 ): AddressCheck {
   if (answer.ok) {
     const { found } = answer;
@@ -28,7 +31,7 @@ export function addressCheckOf(
           state: "refused",
           reason:
             found.reason === "name_taken"
-              ? t("build.addressTaken")
+              ? (takenReason?.(name) ?? t("build.addressTaken"))
               : t("build.addressInvalid", { max: ASSET_ADDRESS_MAX_LENGTH })
         };
   }
@@ -54,12 +57,19 @@ export function addressBlocksCreate(check: AddressCheck): boolean {
  * The check of an address as it is typed: asked once the typing pauses, and only the answer
  * for the address shown counts. Without `checkName` nothing is asked.
  */
-export function useAddressCheck(checkName: CheckName | undefined, name: string): AddressCheck {
+export function useAddressCheck(
+  checkName: CheckName | undefined,
+  name: string,
+  /** What a taken name says, where the field names it otherwise than an address. */
+  takenReason?: (name: string) => string
+): AddressCheck {
   const { locale, t } = useTranslation();
   const [answer, setAnswer] = useState<{ name: string; check: AddressCheck }>();
-  // The caller hands a new function on every render; the check follows the name alone.
+  // The caller hands new functions on every render; the check follows the name alone.
   const check = useRef(checkName);
   check.current = checkName;
+  const taken = useRef(takenReason);
+  taken.current = takenReason;
   const asks = checkName !== undefined && name !== "";
   useEffect(() => {
     const ask = check.current;
@@ -68,7 +78,11 @@ export function useAddressCheck(checkName: CheckName | undefined, name: string):
     const timer = window.setTimeout(() => {
       ask(name).then(
         (found) =>
-          current && setAnswer({ name, check: addressCheckOf({ ok: true, found }, t, locale) }),
+          current &&
+          setAnswer({
+            name,
+            check: addressCheckOf({ ok: true, found }, t, locale, taken.current, name)
+          }),
         (error: unknown) =>
           current && setAnswer({ name, check: addressCheckOf({ ok: false, error }, t, locale) })
       );

@@ -51,6 +51,34 @@ export function credentialModeOf(config: Record<string, unknown>): ConnectionCre
   return config.credentialMode === "user" ? "user" : "shared";
 }
 
+/**
+ * Whether an MCP server or a REST API accepts no tool yet, and so gives nothing to anyone: it
+ * is incomplete, such as one a failed connect left behind. The list reads the same from the
+ * instance's `withoutTools`.
+ */
+export function isIncompleteConnection(config: Record<string, unknown>): boolean {
+  const { connectorType, operations } = config;
+  return (
+    (connectorType === "mcp" || connectorType === "http_api") &&
+    (!Array.isArray(operations) || operations.length === 0)
+  );
+}
+
+/** The fields of the New connection dialog for a stored MCP server or REST API. */
+export function connectionFormFieldsOf(config: Record<string, unknown>): {
+  title: string;
+  description: string;
+  form: ConnectionFormState;
+  credentialMode: ConnectionCredentialMode;
+} {
+  return {
+    title: textOf(config.displayName) || textOf(config.name),
+    description: textOf(config.description),
+    form: connectionConfigToForm(config),
+    credentialMode: credentialModeOf(config)
+  };
+}
+
 /** How a REST API's client proves itself at the token endpoint. */
 export const CONNECTION_TOKEN_AUTH_METHODS = CONNECTOR_TOKEN_AUTH_METHODS;
 export type ConnectionTokenAuthMethod = ConnectorTokenAuthMethod;

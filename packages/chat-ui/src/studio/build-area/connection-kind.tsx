@@ -1,6 +1,6 @@
 import { Badge, Chip, ConnectionIcon } from "@work-shape/catalyst-ui";
 import { connectionCategory } from "../../shared/connection-facts";
-import type { BuildAsset, BuildAssetKind } from "./build-asset-kind";
+import type { BuildAsset, BuildAssetKind, BuildAssetRow } from "./build-asset-kind";
 import { ConnectionCreateDialog } from "./connection-create-dialog";
 import { ConnectionAssetEditor } from "./connection-editor";
 import { connectorTypeLabel } from "./connection-form";
@@ -15,6 +15,14 @@ function releaseConnectionTitle(asset: Pick<BuildAsset, "config" | "name">): str
   const { origin, displayName } = asset.config;
   if (origin !== "release") return undefined;
   return typeof displayName === "string" && displayName !== "" ? displayName : asset.name;
+}
+
+/**
+ * An incomplete Connection: an MCP server or a REST API that accepts no tool yet, such as one a
+ * failed connect left behind. Its row says so, and offers its delete where the reader may.
+ */
+function listedIncomplete(asset: Pick<BuildAssetRow, "attributes">): boolean {
+  return asset.attributes?.withoutTools === true;
 }
 
 /**
@@ -44,8 +52,10 @@ export const connectionKind: BuildAssetKind = {
   CreateDialog: ConnectionCreateDialog,
   // A row shows the icon of the system behind the Connection, on its tile, and what the
   // Connection is for in words. Its id stands on its page.
-  row: (asset) => {
+  row: (asset, t) => {
     const { service, connectorType } = asset.attributes ?? {};
+    // Without a description of its own, an incomplete Connection's row says what it lacks.
+    const incomplete = listedIncomplete(asset) ? t("connections.incompleteRow") : undefined;
     return {
       leading: (
         <ConnectionIcon
@@ -56,9 +66,12 @@ export const connectionKind: BuildAssetKind = {
           )}
         />
       ),
-      description: asset.description?.trim() || undefined
+      description: asset.description?.trim() || incomplete
     };
   },
+  // An incomplete Connection is removed from its row, as from its page.
+  rowRemovable: listedIncomplete,
+  rowRemoveLabel: "connections.incompleteRemove",
   // An enabled Connection shows its health in the words of its page; a list of an instance
   // that names no health shows that it is on.
   badges: (asset, t) => {
@@ -68,6 +81,11 @@ export const connectionKind: BuildAssetKind = {
       <>
         {typeof connectorType === "string" ? (
           <Chip size="sm">{connectorTypeLabel(connectorType, t)}</Chip>
+        ) : null}
+        {listedIncomplete(asset) ? (
+          <Badge tone="warning" data-connection-incomplete="">
+            {t("connections.incomplete")}
+          </Badge>
         ) : null}
         {listed ? (
           <Badge tone={HEALTH_VIEWS[listed].tone} dot data-connection-list-health={listed}>

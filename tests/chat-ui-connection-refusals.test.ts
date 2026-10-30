@@ -244,7 +244,7 @@ describe("A refused new Connection", () => {
     await vi.waitFor(() =>
       expect(page.textContent).toContain("Der Server hat den Schlüssel abgelehnt.")
     );
-    expect(page.querySelector("[data-connection-create-saved]")?.textContent).toBe(
+    expect(page.querySelector("[data-connection-create-saved]")?.textContent).toContain(
       "Exampledata ist schon gespeichert und steht in der Liste, noch ohne Tools. Korrigiere das Feld und verbinde erneut, oder brich ab, um sie zu verwerfen."
     );
   });
@@ -643,7 +643,7 @@ describe("A new REST API whose key the server refuses, on the instance's answers
     expect(dialog().querySelector("[data-connection-connected]")).toBeNull();
     const { t } = createTranslationContext(locale);
     expect(dialog().textContent).toContain(t("connectionCreate.errorKey"));
-    expect(dialog().querySelector("[data-connection-create-saved]")?.textContent).toBe(
+    expect(dialog().querySelector("[data-connection-create-saved]")?.textContent).toContain(
       t("connectionCreate.savedDiscardable", { name: "Prüfung falscher Schlüssel" })
     );
     // The refused key is not kept in the field.

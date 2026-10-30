@@ -43,7 +43,11 @@ import { RefusalDetail } from "./refusal-notice";
 // document source: the name, the fields the type asks for, and Verbinden. Verbinden writes the
 // definition, sends the secret and runs the type's test; nothing is discovered.
 
-type Errors = Partial<Record<"id" | "secret" | "general", string>> & { detail?: string };
+type Errors = Partial<Record<"id" | "secret" | "general", string>> & {
+  detail?: string;
+  /** `general` says no reason: only `detail` does. */
+  untold?: boolean;
+};
 
 /** A Connection installed from a catalogue entry's part (CAT-1). */
 export interface TypedInstall {
@@ -130,7 +134,8 @@ export function TypedConnectionCreate({
   // The address a deleted Connection had reads as taken; the install writes over its delete.
   const check = useAddressCheck(
     created || install?.recreates !== undefined ? undefined : checkName,
-    name
+    name,
+    (taken) => t("connectionCreate.idTaken", { name: taken })
   );
   const complete =
     title.trim() !== "" &&
@@ -223,8 +228,9 @@ export function TypedConnectionCreate({
           ...(found.id === undefined ? {} : { id: found.id }),
           general:
             found.general ??
-            Object.values(found).find((sentence) => sentence !== undefined) ??
+            Object.values(found).find((sentence) => typeof sentence === "string") ??
             t("connectionCreate.errorFailed"),
+          ...(found.untold ? { untold: true } : {}),
           ...(detail === undefined ? {} : { detail })
         });
         return;
@@ -386,7 +392,7 @@ export function TypedConnectionCreate({
               {errors.general}
             </FormNotice>
           ) : null}
-          <RefusalDetail detail={errors.detail} />
+          <RefusalDetail detail={errors.detail} untold={errors.untold ?? false} />
         </form>
       )}
     </Dialog>

@@ -1,4 +1,4 @@
-import { FolderInput, Plus, Search, SearchX, Terminal } from "lucide-react";
+import { FolderInput, Plus, Search, SearchX, Terminal, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import {
   Avatar,
@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
   EmptyState,
   FilterBar,
+  IconButton,
   InlineError,
   Input,
   List,
@@ -541,6 +542,20 @@ function BuildFrameBody({
               ...(scope?.kind === "workspace" ? { workspaceId: scope.workspaceId } : {})
             })
           }
+          existing={async (name) => {
+            const asset = await source.peek?.(entry.kind, name);
+            if (asset === undefined) return undefined;
+            // A shipped asset is changed by a release alone.
+            const shipped = entry.shippedTitle?.(asset) !== undefined;
+            return {
+              name: asset.name,
+              config: asset.config,
+              revision: asset.revision,
+              mayWrite: !shipped && mayOnAsset(source.rights, "write", asset),
+              mayDelete:
+                !shipped && place.kind.state.canDelete && mayOnAsset(source.rights, "delete", asset)
+            };
+          }}
           onClose={() => setAsking(false)}
           onCreated={(name, then) => {
             setAsking(false);
@@ -617,6 +632,39 @@ function BuildList({
   const [now] = useState(() => new Date());
   const settledText = useSettledText(view.text);
   const list = source.useList(entry.kind, { text: settledText });
+  // A row that offers its delete in place, such as an incomplete Connection (`rowRemovable`).
+  const [removing, setRemoving] = useState<BuildAssetRow>();
+  const [removeBusy, setRemoveBusy] = useState(false);
+  const [removeError, setRemoveError] = useState<string>();
+  const rowRemovable = (asset: BuildAssetRow) =>
+    isEditableKind(entry) &&
+    entry.rowRemovable?.(asset) === true &&
+    state.canDelete &&
+    (asset.allowed?.includes("delete") ?? false);
+  const removeRow = async (asset: BuildAssetRow) => {
+    setRemoveBusy(true);
+    setRemoveError(undefined);
+    try {
+      await source.writes.delete({
+        kind: entry.kind,
+        name: asset.name,
+        expectedRevision: asset.revision
+      });
+      setRemoving(undefined);
+    } catch (error) {
+      const outcome = readBuildRefusal(error, t, locale);
+      setRemoving(undefined);
+      setRemoveError(
+        outcome.ok
+          ? t("build.deleteFailed")
+          : outcome.conflict
+            ? t("build.deleteChanged")
+            : outcome.refusals.map((refusal) => refusal.message).join(" ")
+      );
+    } finally {
+      setRemoveBusy(false);
+    }
+  };
   const scope = source.scopeOf?.(entry.kind);
   const scopeName = (of: BuildScope) => assetPlace(of, source.rights.workspaces, t).name;
   // "Wo" offers the places in the order of the ladder: Nur ich, the teams, Alle.
@@ -665,6 +713,11 @@ function BuildList({
       <>
         {listError}
         {lead.error}
+        {removeError ? (
+          <InlineError className="mb-4" data-build-row-remove-failed="">
+            {removeError}
+          </InlineError>
+        ) : null}
         {rows === undefined || leadRows === undefined ? (
           listError ? null : (
             <SkeletonList rows={6} />
@@ -738,12 +791,33 @@ function BuildList({
                 ))}
                 {rows.map((asset) => {
                   const title = asset.title.trim() || asset.name;
-                  const own = entry.row?.(asset);
+                  const own = entry.row?.(asset, t);
                   const rowText = entry.rowText?.(asset)?.trim();
                   const RowLine = entry.RowLine;
+                  const removable = rowRemovable(asset);
                   return (
                     <ListRow
                       key={asset.name}
+                      {...(removable
+                        ? {
+                            actions: (
+                              <IconButton
+                                label={
+                                  isEditableKind(entry) && entry.rowRemoveLabel
+                                    ? t(entry.rowRemoveLabel, { name: title })
+                                    : t("configDelete")
+                                }
+                                size="sm"
+                                variant="ghost"
+                                data-build-row-remove={asset.name}
+                                onClick={() => setRemoving(asset)}
+                              >
+                                <Trash2 aria-hidden="true" />
+                              </IconButton>
+                            ),
+                            actionsVisible: true
+                          }
+                        : {})}
                       leading={own?.leading ?? <RowMark entry={entry} title={title} />}
                       title={title}
                       // A kind's own line is a sentence, read whole.
@@ -856,6 +930,22 @@ function BuildList({
             <p className="text-body text-muted-foreground">{t("build.cliPushWarning")}</p>
           </div>
         </Dialog>
+      ) : null}
+      {editable ? (
+        <ConfirmDialog
+          open={removing !== undefined}
+          title={t(editable.deleteTitle, {
+            name: removing ? removing.title.trim() || removing.name : ""
+          })}
+          confirmLabel={t("configDelete")}
+          loading={removeBusy}
+          onConfirm={() => {
+            if (removing) removeRow(removing).catch(() => setRemoveBusy(false));
+          }}
+          onClose={() => setRemoving(undefined)}
+        >
+          {t(editable.deleteDescription)}
+        </ConfirmDialog>
       ) : null}
     </>
   );

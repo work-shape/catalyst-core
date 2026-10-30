@@ -66,8 +66,25 @@ export const connections = defineTranslations({
       "Check the OAuth addresses: https, without user name or fragment. Extra parameters may not name a parameter of the protocol.",
     "connections.refusedOAuthEgress":
       "A network rule blocks an address of the sign-in server. Send the technical team the host named in the details.",
-    "connections.refusedUnknown":
-      "This connection was not accepted. An admin for all workspaces sees why under Technical details.",
+    "connections.refusedUnknown": "This connection was not accepted.",
+    "connections.reasonWho":
+      "Only people who may view the System pages, such as an admin for all workspaces, see why: here, under Technical details.",
+    "connections.reasonPersonal":
+      "A personal connection cannot be tested here, and its tools cannot be read here: each person's account is used only by their own agent in a private chat.",
+    "connections.reasonUnavailable": "This connection cannot be used on this instance now.",
+    "connections.reasonNotConfigured":
+      "The settings of this connection do not fit its type. Check the address and how the key is sent.",
+    "connections.reasonSecretStore":
+      "This instance cannot store keys yet. The technical team has to set up a key of the Secret Store first.",
+    "connections.reasonTypeUnknown": "This instance does not offer this kind of connection.",
+    "connections.reasonManagedClient":
+      "This instance has no sign-in client for this service. The technical team sets one up.",
+    "connections.reasonCatalogue": "This instance does not offer this service.",
+    "connections.reasonPersonContext":
+      "Your account has no person context on this connection. An admin maps it on the connection's page.",
+    "connections.incomplete": "Incomplete",
+    "connections.incompleteRow": "Saved, but no tools yet.",
+    "connections.incompleteRemove": "Remove {name}",
     "connections.writeFailed": "The change could not be saved.",
     "connections.discoveredTitle": "Discovered tools",
     "connections.discoveredDescription":
@@ -339,8 +356,26 @@ export const connections = defineTranslations({
       "Prüfe die OAuth-Adressen: https, ohne Benutzername oder Fragment. Zusätzliche Parameter dürfen keinen Parameter des Protokolls nennen.",
     "connections.refusedOAuthEgress":
       "Eine Netzwerkregel sperrt eine Adresse des Anmeldeservers. Schick dem technischen Team den Host aus den Details.",
-    "connections.refusedUnknown":
-      "Diese Verbindung wurde nicht angenommen. Ein Admin für alle Arbeitsbereiche sieht den Grund unter Technische Details.",
+    "connections.refusedUnknown": "Diese Verbindung wurde nicht angenommen.",
+    "connections.reasonWho":
+      "Den Grund sehen nur Personen, die die Systemseiten ansehen dürfen, etwa ein Admin für alle Arbeitsbereiche: hier unter „Technische Details“.",
+    "connections.reasonPersonal":
+      "Eine persönliche Verbindung lässt sich hier nicht testen, und ihre Tools lassen sich hier nicht lesen: Das Konto einer Person nutzt nur ihr eigener Agent in einem privaten Chat.",
+    "connections.reasonUnavailable":
+      "Diese Verbindung lässt sich auf dieser Instanz gerade nicht nutzen.",
+    "connections.reasonNotConfigured":
+      "Die Einstellungen dieser Verbindung passen nicht zu ihrem Typ. Prüf die Adresse und wie der Schlüssel gesendet wird.",
+    "connections.reasonSecretStore":
+      "Diese Instanz kann noch keine Schlüssel speichern. Das technische Team muss zuerst einen Schlüssel für den Secret Store einrichten.",
+    "connections.reasonTypeUnknown": "Diese Art von Verbindung bietet diese Instanz nicht an.",
+    "connections.reasonManagedClient":
+      "Diese Instanz hat für diesen Dienst keinen Anmelde-Client. Das technische Team richtet ihn ein.",
+    "connections.reasonCatalogue": "Diesen Dienst bietet diese Instanz nicht an.",
+    "connections.reasonPersonContext":
+      "Deinem Konto ist bei dieser Verbindung kein Personenkontext zugeordnet. Ein Admin ordnet ihn auf der Seite der Verbindung zu.",
+    "connections.incomplete": "Unvollständig",
+    "connections.incompleteRow": "Gespeichert, aber noch ohne Tools.",
+    "connections.incompleteRemove": "{name} entfernen",
     "connections.writeFailed": "Die Änderung konnte nicht gespeichert werden.",
     "connections.discoveredTitle": "Gefundene Tools",
     "connections.discoveredDescription":

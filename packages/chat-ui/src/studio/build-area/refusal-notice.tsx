@@ -16,20 +16,31 @@ import {
  * The instance's own sentence about a refusal, collapsed under Technical details, for who sees
  * how the instance runs (`system.view`, RIGHTS-1e): it can name release config, which only they
  * can pass on or change. Nobody else is shown it.
+ *
+ * With `untold` the message beside it says no reason: the detail then stands open for who may
+ * read it, and everyone else is told who reads it and where.
  */
-export function RefusalDetail({ detail }: { detail: string | undefined }) {
+export function RefusalDetail({
+  detail,
+  untold
+}: {
+  detail: string | undefined;
+  untold?: boolean;
+}) {
   const page = useOptionalSettingsPage();
-  return detail !== undefined && page !== undefined ? (
-    <SystemRefusalDetail detail={detail} page={page} />
-  ) : null;
+  if (detail === undefined) return null;
+  if (page === undefined) return untold ? <ReasonWho /> : null;
+  return <SystemRefusalDetail detail={detail} page={page} untold={untold ?? false} />;
 }
 
 function SystemRefusalDetail({
   detail,
-  page
+  page,
+  untold
 }: {
   detail: string;
   page: Pick<SettingsPageContextValue, "apiBaseUrl" | "authScope" | "client">;
+  untold: boolean;
 }) {
   const { t } = useTranslation();
   const platform = usePlatformContextQuery({
@@ -37,21 +48,42 @@ function SystemRefusalDetail({
     authScope: page.authScope,
     client: page.client,
     enabled: true
-  }).data;
-  return canViewSystem(platform) ? (
-    <Disclosure data-refusal-detail="">
+  });
+  // Until the instance says who reads, neither the detail nor who reads it shows.
+  if (platform.data === undefined) return platform.isError && untold ? <ReasonWho /> : null;
+  if (!canViewSystem(platform.data)) return untold ? <ReasonWho /> : null;
+  return (
+    <Disclosure defaultOpen={untold} data-refusal-detail="">
       <DisclosureTrigger>{t("connectionCreate.details")}</DisclosureTrigger>
       <DisclosureContent>{detail}</DisclosureContent>
     </Disclosure>
-  ) : null;
+  );
+}
+
+/** Who reads the reason of a refusal the reader is not shown, and where. */
+function ReasonWho() {
+  const { t } = useTranslation();
+  return (
+    <p className="text-caption text-muted-foreground" data-refusal-reason-who="">
+      {t("connections.reasonWho")}
+    </p>
+  );
 }
 
 /** A refused change in the reader's words, with the instance's sentence for who runs it. */
-export function RefusalNotice({ message, detail }: { message: string; detail?: string }) {
+export function RefusalNotice({
+  message,
+  detail,
+  untold
+}: {
+  message: string;
+  detail?: string;
+  untold?: boolean;
+}) {
   return (
     <div className="grid gap-1">
       <FormNotice tone="error">{message}</FormNotice>
-      <RefusalDetail detail={detail} />
+      <RefusalDetail detail={detail} untold={untold ?? false} />
     </div>
   );
 }

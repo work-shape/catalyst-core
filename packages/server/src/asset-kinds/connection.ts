@@ -399,6 +399,12 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
           enabled: connection.enabled,
           // Only picks the icon a list shows.
           ...(connection.service === undefined ? {} : { service: connection.service }),
+          // An MCP server or a REST API that accepts no tool gives nothing to anyone yet: a
+          // list marks it as incomplete, such as one left behind by a connect that failed.
+          ...((connection.connectorType === "mcp" || connection.connectorType === "http_api") &&
+          connection.operations.length === 0
+            ? { withoutTools: true }
+            : {}),
           // Each person signs in with their own account: no key or shared sign-in to set.
           ...(connection.authScheme === AUTH_SCHEME_OAUTH && connection.credentialMode === "user"
             ? { personalSignIn: true }

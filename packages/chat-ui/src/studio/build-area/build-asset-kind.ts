@@ -5,6 +5,7 @@
 export type { BuildAsset, BuildAssetRow, BuildHeadActions } from "./build-kind/asset";
 export type {
   BuildCreateDialogProps,
+  BuildExistingAsset,
   BuildImportDialogProps
 } from "./build-kind/create-dialog-props";
 export type {
