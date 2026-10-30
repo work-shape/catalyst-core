@@ -20,6 +20,7 @@ import {
   type PlatformStores,
   type WorkflowRun,
   type WorkflowPinnedStep,
+  type WorkflowRunRerun,
   type WorkflowRunMode,
   type WorkflowRunStartedFrom,
   type WorkflowRunView,
@@ -293,7 +294,11 @@ export function createRunOpening(options: {
         trigger: run.trigger,
         mode: run.mode,
         principalId: run.principal.id,
-        ...(run.scheduledFor === undefined ? {} : { scheduledFor: run.scheduledFor })
+        ...(run.scheduledFor === undefined ? {} : { scheduledFor: run.scheduledFor }),
+        // A re-run names the run it re-runs and the step it starts again from (EW-11).
+        ...(run.rerunOf === undefined
+          ? {}
+          : { rerunOf: run.rerunOf.runId, rerunFromStep: run.rerunOf.fromStep })
       }
     });
     return run;
@@ -303,7 +308,10 @@ export function createRunOpening(options: {
   async function startByHand(
     revision: WorkflowDefinitionRevision,
     input: Omit<StartWorkflowRunInput, "workflow"> &
-      Pick<TestWorkflowRunInput, "startedFrom" | "pinnedSteps">,
+      Pick<TestWorkflowRunInput, "startedFrom" | "pinnedSteps"> & {
+        /** The run this one re-runs from a chosen step, which the run records (EW-11). */
+        rerunOf?: WorkflowRunRerun;
+      },
     mode: WorkflowRunMode
   ): Promise<WorkflowRunView> {
     if (input.operationRunId) {
@@ -364,6 +372,7 @@ export function createRunOpening(options: {
             ...(mode === "test" && input.pinnedSteps !== undefined && input.pinnedSteps.length > 0
               ? { pinnedSteps: input.pinnedSteps }
               : {}),
+            ...(input.rerunOf ? { rerunOf: input.rerunOf } : {}),
             actor: auditActorFromIdentity(startedBy),
             correlationId: input.correlationId
           },

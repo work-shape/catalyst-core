@@ -134,6 +134,11 @@ export interface WorkflowRun
    * pins when the run opened. Missing on every other run.
    */
   pinnedSteps?: WorkflowPinnedStep[];
+  /**
+   * The run this one re-runs from a chosen step (EW-11): the steps before that step reuse the
+   * original's outputs instead of running. Names only, no value. Missing on every other run.
+   */
+  rerunOf?: WorkflowRunRerun;
   /** Step runs created so far, the steps of every loop iteration among them. */
   stepRunCount: number;
   /**
@@ -161,6 +166,16 @@ export interface WorkflowRun
    * the run still has its values.
    */
   dataPrunedAt?: ISODateString;
+}
+
+/** What a re-run from a chosen step names of the run it re-runs (EW-11). */
+export interface WorkflowRunRerun {
+  /** The run that is re-run: of the same Workflow and mode. */
+  runId: WorkflowRunId;
+  /** The step outside every block the re-run starts again from. */
+  fromStep: string;
+  /** The steps outside every block before it whose output is the original's. */
+  reusedSteps: string[];
 }
 
 /** A step of a test run that ends with the output it had in an earlier run (EW-10). */
@@ -236,6 +251,7 @@ export type NewWorkflowRun = Pick<
   | "starterRunId"
   | "startedFrom"
   | "pinnedSteps"
+  | "rerunOf"
   | "runKey"
   | "labels"
   | "continuation"

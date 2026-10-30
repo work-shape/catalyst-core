@@ -92,6 +92,8 @@ const runGovernance = {
   startedFrom: true,
   // The pinned steps of a test run and their source runs: ids, not a value of the run.
   pinnedSteps: true,
+  // The run a re-run re-runs and its step names: ids, not a value of the run.
+  rerunOf: true,
   parentRunId: true,
   parentStepRunId: true,
   rootRunId: true,

@@ -93,6 +93,24 @@ export interface WorkflowRunsPort {
     }): Promise<WorkflowStepPinView>;
     unpin(input: { workflow: string; step: string; pinnedBy: string }): Promise<boolean>;
   };
+  /**
+   * For each step outside every block of the Workflow's revision now, whether the run can be
+   * re-run from it (EW-11): the published revision for a live run, the draft for a test run.
+   * Nothing where no run has the id.
+   */
+  rerunSteps(input: { runId: string }): Promise<WorkflowRerunStepView[] | undefined>;
+  /**
+   * Starts a new run of the run's Workflow and mode from a chosen step: the steps before it end
+   * with the run's outputs, the rest runs on the published revision, or the draft for a test run.
+   */
+  rerun(input: {
+    runId: string;
+    fromStep: string;
+    startedBy: AuthenticatedIdentity;
+    operationRunId?: OperationRunId;
+    callOrigin?: OperationOrigin;
+    correlationId: string;
+  }): Promise<WorkflowRunView>;
   /** Ends a run as `cancelled`. A run that has ended is answered as it is; none answers nothing. */
   cancel(input: {
     runId: string;
@@ -128,6 +146,13 @@ export interface WorkflowRunsPort {
    * its Workflow and on its runs.
    */
   assetOf(workflow: string): Promise<WorkflowAssetRef | undefined>;
+}
+
+/** A step as a re-run of a run treats it (EW-11): names and codes only. */
+interface WorkflowRerunStepView {
+  step: string;
+  changed: boolean;
+  refusal?: { code: string; step?: string };
 }
 
 /** A pinned step output as the API answers it: names only, no value (EW-10). */

@@ -552,6 +552,89 @@ function registerWorkflowRoutes(
     })
   });
 
+  // Re-running an ended run from a chosen step (EW-11).
+  /**
+   * Whoever may start the run's Workflow re-runs a live run, as `workflows.start` asks; a person
+   * who may write it re-runs a test run, on the draft, as `workflows.test` asks.
+   */
+  const mayRerun =
+    (access: ActorAccess, actor: AuthenticatedIdentity): RunDecision =>
+    (run, resource) => {
+      if (run?.mode !== "test") return decide(access, WORKFLOW_ACTIONS.use, resource);
+      if (isAuthenticatedServicePrincipal(actor)) {
+        return {
+          allowed: false,
+          action: WORKFLOW_ACTIONS.write,
+          reason: "no_grant",
+          message: "Only a person re-runs a test run of a Workflow's draft"
+        };
+      }
+      return decide(access, WORKFLOW_ACTIONS.write, resource);
+    };
+
+  route.operation(apiOperations["workflows.rerun_steps"], {
+    authorize: (input, { access }) => authorizeOnRun(input.runId, mayRead(access)),
+    resource: runResource,
+    module: WORKFLOWS_MODULE,
+    execute: async (input, { access }) => {
+      await runOf(input.runId, mayRead(access));
+      const items = await required().rerunSteps({ runId: input.runId });
+      if (!items) throw new AppError("NOT_FOUND", "There is no such Workflow Run");
+      return { items };
+    }
+  });
+
+  route.operation(apiOperations["workflows.rerun"], {
+    authorize: async (input, { access, actor, origin }) => {
+      // A run from a conversation marked as holding personal data stays refused, as a start is.
+      await requireUnmarkedConversation(subjects.stores, subjects.clientInstanceId, origin);
+      return authorizeOnRun(input.runId, mayRerun(access, actor));
+    },
+    resource: runResource,
+    module: WORKFLOWS_MODULE,
+    execute: async (input, context) => {
+      const { access, actor, origin } = context;
+      await requireUnmarkedConversation(subjects.stores, subjects.clientInstanceId, origin);
+      if (isOutsideCall(actor, origin)) {
+        throw new AppError(
+          "FORBIDDEN",
+          "A run is re-run from a step in the interface, not with an API key",
+          { reason: "rerun_not_outside" },
+          { exposeMessage: true }
+        );
+      }
+      const original = await runOf(input.runId, mayRerun(access, actor));
+      // The new run carries the original's step outputs: the caller reads them as the run's
+      // page shows them, so a run another person cannot read is no run here.
+      const resource = await resourceOf(original.workflow);
+      if (!decide(access, WORKFLOW_ACTIONS.read, resource).allowed) {
+        throw new AppError("NOT_FOUND", "There is no such Workflow Run");
+      }
+      if (
+        original.hasAgentSteps === true &&
+        !access.authorize(WORKFLOW_ACTIONS.readRunData, resource).allowed
+      ) {
+        throw new AppError(
+          "FORBIDDEN",
+          "Re-running this run needs the right to read its step outputs",
+          { reason: "no_grant", action: WORKFLOW_ACTIONS.readRunData },
+          { exposeMessage: true }
+        );
+      }
+      return startedRun(
+        await required().rerun({
+          runId: original.id,
+          fromStep: input.fromStep,
+          startedBy: actor,
+          operationRunId: context.runId,
+          callOrigin: origin,
+          correlationId: context.correlationId
+        }),
+        context
+      );
+    }
+  });
+
   route.operation(apiOperations["workflows.list_runs"], {
     authorize: async (input, { access }) =>
       decide(access, WORKFLOW_ACTIONS.read, await resourceOf(input.workflow)),

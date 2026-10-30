@@ -24,6 +24,7 @@ import { runKeyText, startedByText } from "./runs-list";
 import { useStartRun } from "./start-run";
 import { useRunLiveOnce, useTestRun, type LiveOnceControl } from "./test-run";
 import { useStepPins, type StepPinControl } from "./step-pin";
+import { useStepRerun, type StepRerunControl } from "./step-rerun";
 import { TestRunBadge } from "./test-run-badge";
 import { WorkflowCanvas, type WorkflowCanvasFocus } from "./workflow-canvas";
 import { EditRefusedBanner, useEditWithAgent, type WorkflowEdit } from "./workflow-draft";
@@ -109,6 +110,7 @@ export function WorkflowRunPage({
   const testAgain = useTestRun(workflow, definition.workflow);
   const liveOnce = useRunLiveOnce(workflow, definition.workflow, read.run?.ended === true);
   const pins = useStepPins(workflow, definition.workflow, runId);
+  const rerun = useStepRerun(workflow, definition.workflow, read.run);
   const edit = useEditWithAgent(workflow, definition.workflow);
   const test = read.run?.test === true;
 
@@ -163,7 +165,9 @@ export function WorkflowRunPage({
         {...(edit === undefined ? {} : { edit })}
         {...(test && liveOnce !== undefined ? { liveOnce } : {})}
         {...(pins === undefined ? {} : { pins })}
+        {...(rerun.control === undefined ? {} : { reruns: rerun.control })}
       />
+      {rerun.dialog}
       {again.dialog}
       {testAgain?.dialog}
       {cancelling ? (
@@ -196,6 +200,7 @@ export function WorkflowRunPageView({
   edit,
   liveOnce,
   pins,
+  reruns,
   retryDefinition
 }: {
   workspaceId: string;
@@ -233,6 +238,8 @@ export function WorkflowRunPageView({
     stepRun: WorkflowStepRunView | undefined,
     inBlock: boolean
   ) => StepPinControl | undefined;
+  /** On an ended run, for a reader who may start it again: "Run again from here" (EW-11). */
+  reruns?: (step: WorkflowStepView, inBlock: boolean) => StepRerunControl | undefined;
 }) {
   const translation = useTranslation();
   const { locale, t } = translation;
@@ -452,6 +459,21 @@ export function WorkflowRunPageView({
               stopping={stopping}
               failedEntries={failedEntries}
               onShowFailed={(stepId) => setFocus({ stepId })}
+              {...(run.rerunOf === undefined
+                ? {}
+                : {
+                    rerunOf: {
+                      step:
+                        workflow?.steps.find((step) => step.id === run.rerunOf?.fromStep)?.name ??
+                        run.rerunOf.fromStep,
+                      open: () =>
+                        onOpenRoute({
+                          kind: "workflow-run",
+                          ...address,
+                          run: run.rerunOf?.runId ?? run.id
+                        })
+                    }
+                  })}
             />
           )}
           {run === undefined || workflow === undefined || read.stepRuns === undefined ? null : (
@@ -487,6 +509,7 @@ export function WorkflowRunPageView({
               onOpenChild={openChild}
               {...(focus === undefined ? {} : { focus })}
               {...(pins === undefined || moment !== undefined ? {} : { pins })}
+              {...(reruns === undefined || moment !== undefined ? {} : { reruns })}
             />
           </div>
         </>
@@ -506,7 +529,8 @@ function RunNotices({
   earlierRevision,
   stopping,
   failedEntries,
-  onShowFailed
+  onShowFailed,
+  rerunOf
 }: {
   run: NonNullable<WorkflowRunRead["run"]>;
   silentFor: number | undefined;
@@ -518,6 +542,8 @@ function RunNotices({
   failedEntries: FailedEntries | undefined;
   /** Opens the failed entries of the loop with the given step id. */
   onShowFailed(stepId: string): void;
+  /** On a re-run from a chosen step: that step, by name, and the way to the run it re-runs. */
+  rerunOf?: { step: string; open(): void };
 }) {
   const { locale, t } = useTranslation();
   const failedLoop = failedEntries?.opens?.loopStepId;
@@ -542,6 +568,7 @@ function RunNotices({
     line === undefined &&
     testLine === undefined &&
     !earlierRevision &&
+    rerunOf === undefined &&
     failedEntries === undefined &&
     !(showFailure && run.failure)
   ) {
@@ -566,6 +593,20 @@ function RunNotices({
         <p data-run-line="" className="text-body text-muted-foreground">
           {line}
         </p>
+      )}
+      {rerunOf === undefined ? null : (
+        <Banner
+          tone="info"
+          layout="inline"
+          data-run-rerun-of=""
+          action={
+            <Button variant="outline" size="sm" onClick={rerunOf.open}>
+              {t("workflows.rerun.openOriginal")}
+            </Button>
+          }
+        >
+          {t("workflows.rerun.of", { step: rerunOf.step })}
+        </Banner>
       )}
       {earlierRevision ? (
         <Banner tone="info" layout="line" data-run-revision="">

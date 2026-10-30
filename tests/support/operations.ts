@@ -335,9 +335,8 @@ export function createUncheckedTestOperation() {
   });
 }
 
-export const testOperations = {
+const fixtureOperations = {
   legacyDevelopmentUsers: fixtureOperation("GET", "/auth/development/users"),
-  ...apiOperations,
   authSignIn: fixtureOperation("POST", "/api/auth/sign-in/email"),
   authSignUp: fixtureOperation("POST", "/api/auth/sign-up/email"),
   authSession: fixtureOperation("GET", "/api/auth/get-session"),
@@ -345,9 +344,6 @@ export const testOperations = {
   legacyChat: fixtureOperation("POST", "/api/chat"),
   testIp: fixtureOperation("GET", "/test/ip"),
   testStream: fixtureOperation("GET", "/stream"),
-  ...routeTestOperations,
-  ...registeredTestOperations,
-  ...resourceRouteTestOperations,
   testProviderError: fixtureOperation("GET", "/test-provider-error"),
   testInternalError: fixtureOperation("GET", "/test-internal-error"),
   testExposedError: fixtureOperation("GET", "/test-exposed-error"),
@@ -357,6 +353,18 @@ export const testOperations = {
   testHidden: fixtureOperation("GET", "/test-hidden"),
   testUnknown: fixtureOperation("GET", "/test-unknown"),
   testExposed: fixtureOperation("GET", "/test-exposed")
+};
+// Named parts keep the declared type short enough for the compiler to write out.
+export const testOperations: typeof apiOperations &
+  typeof fixtureOperations &
+  typeof routeTestOperations &
+  typeof registeredTestOperations &
+  typeof resourceRouteTestOperations = {
+  ...apiOperations,
+  ...fixtureOperations,
+  ...routeTestOperations,
+  ...registeredTestOperations,
+  ...resourceRouteTestOperations
 };
 export type TestOperationName = keyof typeof testOperations;
 export type TestCallInput = BuildApiPathOptions & {

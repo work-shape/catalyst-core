@@ -34884,6 +34884,28 @@
                         ]
                       }
                     },
+                    "rerunOf": {
+                      "type": "object",
+                      "properties": {
+                        "runId": {
+                          "type": "string"
+                        },
+                        "fromStep": {
+                          "type": "string"
+                        },
+                        "reusedSteps": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "runId",
+                        "fromStep",
+                        "reusedSteps"
+                      ]
+                    },
                     "parentRunId": {
                       "type": "string"
                     },
@@ -35354,6 +35376,28 @@
                         ]
                       }
                     },
+                    "rerunOf": {
+                      "type": "object",
+                      "properties": {
+                        "runId": {
+                          "type": "string"
+                        },
+                        "fromStep": {
+                          "type": "string"
+                        },
+                        "reusedSteps": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "runId",
+                        "fromStep",
+                        "reusedSteps"
+                      ]
+                    },
                     "parentRunId": {
                       "type": "string"
                     },
@@ -35666,6 +35710,657 @@
                 "schema": {
                   "type": "string",
                   "format": "binary"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/workflow-runs/{runId}/rerun": {
+      "post": {
+        "operationId": "workflows.rerun",
+        "summary": "Start a new run from a chosen step of an ended run: the steps before it reuse the run's outputs, the rest runs again",
+        "tags": [
+          "Workflows"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "Catalyst-Unattended",
+            "in": "header",
+            "description": "`1` on a call of an API credential when nobody watches its terminal, such as `catalyst <kind> publish --yes`. The call is then not its caller's own confirmation: a call that needs one waits in the caller's Inbox and answers `202` with its run, status `pending_confirmation`. It only ever makes a call stricter; a browser session's call ignores it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fromStep": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "fromStep"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "failedDescendantCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "failedItemCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "workflow": {
+                      "type": "string"
+                    },
+                    "definitionRevisionId": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "live",
+                        "test"
+                      ]
+                    },
+                    "trigger": {
+                      "type": "string",
+                      "enum": [
+                        "manual",
+                        "schedule",
+                        "parent",
+                        "outside"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "continued",
+                        "queued",
+                        "running",
+                        "waiting",
+                        "done",
+                        "failed",
+                        "cancelled",
+                        "limit_reached"
+                      ]
+                    },
+                    "empty": {
+                      "type": "boolean"
+                    },
+                    "principal": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "displayLabel": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "displayLabel"
+                      ]
+                    },
+                    "startedBy": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "service_principal"
+                          ]
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "id",
+                        "label"
+                      ]
+                    },
+                    "scheduledFor": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "runKey": {
+                      "type": "string"
+                    },
+                    "labels": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "continuation": {
+                      "type": "object",
+                      "properties": {
+                        "rootRunId": {
+                          "type": "string"
+                        },
+                        "previousRunId": {
+                          "type": "string"
+                        },
+                        "successorRunId": {
+                          "type": "string"
+                        },
+                        "number": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "rootRunId",
+                        "number"
+                      ]
+                    },
+                    "operationRunId": {
+                      "type": "string"
+                    },
+                    "startedFrom": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "app"
+                        },
+                        "app": {
+                          "type": "string"
+                        },
+                        "appRevisionId": {
+                          "type": "string"
+                        },
+                        "action": {
+                          "type": "string"
+                        },
+                        "workflowRevision": {
+                          "type": "string",
+                          "enum": [
+                            "draft",
+                            "published"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "app",
+                        "appRevisionId",
+                        "action",
+                        "workflowRevision"
+                      ]
+                    },
+                    "pinnedSteps": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "step": {
+                            "type": "string"
+                          },
+                          "sourceRunId": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "step",
+                          "sourceRunId"
+                        ]
+                      }
+                    },
+                    "rerunOf": {
+                      "type": "object",
+                      "properties": {
+                        "runId": {
+                          "type": "string"
+                        },
+                        "fromStep": {
+                          "type": "string"
+                        },
+                        "reusedSteps": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "runId",
+                        "fromStep",
+                        "reusedSteps"
+                      ]
+                    },
+                    "parentRunId": {
+                      "type": "string"
+                    },
+                    "parentStepRunId": {
+                      "type": "string"
+                    },
+                    "rootRunId": {
+                      "type": "string"
+                    },
+                    "depth": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 2
+                    },
+                    "itemIndex": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "itemLabel": {
+                      "type": "string"
+                    },
+                    "stepRunCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "deadlineAt": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "action": {
+                          "type": "string"
+                        },
+                        "connection": {
+                          "type": "string"
+                        },
+                        "connectionTitle": {
+                          "type": "string"
+                        },
+                        "operation": {
+                          "type": "string"
+                        },
+                        "stepRunId": {
+                          "type": "string"
+                        },
+                        "usageLimit": {
+                          "type": "object",
+                          "properties": {
+                            "period": {
+                              "type": "string",
+                              "enum": [
+                                "day",
+                                "month"
+                              ]
+                            },
+                            "metric": {
+                              "type": "string",
+                              "enum": [
+                                "modelCallCount",
+                                "tokens",
+                                "costMicros"
+                              ]
+                            },
+                            "scope": {
+                              "type": "string",
+                              "enum": [
+                                "instance",
+                                "user",
+                                "system",
+                                "workspace"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "period",
+                            "metric",
+                            "scope"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "outputPreview": {
+                      "type": "object",
+                      "properties": {
+                        "text": {
+                          "type": "string",
+                          "maxLength": 2000
+                        },
+                        "truncated": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "text",
+                        "truncated"
+                      ]
+                    },
+                    "datasets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "rowSchema": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "rowCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "bytes": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "writing",
+                              "complete",
+                              "deleted"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "rowSchema",
+                          "rowCount",
+                          "bytes",
+                          "state"
+                        ]
+                      }
+                    },
+                    "createdAt": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "startedAt": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "finishedAt": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "cancelledBy": {
+                      "type": "string"
+                    },
+                    "cancelledAt": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "dataPrunedAt": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "workflow",
+                    "definitionRevisionId",
+                    "mode",
+                    "trigger",
+                    "status",
+                    "principal",
+                    "startedBy",
+                    "rootRunId",
+                    "depth",
+                    "stepRunCount",
+                    "deadlineAt",
+                    "createdAt"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/workflow-runs/{runId}/rerun-steps": {
+      "get": {
+        "operationId": "workflows.rerun_steps",
+        "summary": "For each step outside every block, whether the run can be re-run from it on the Workflow's revision now, and why not",
+        "tags": [
+          "Workflows"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "step": {
+                            "type": "string"
+                          },
+                          "changed": {
+                            "type": "boolean"
+                          },
+                          "refusal": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "step": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "code"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "step",
+                          "changed"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
                 }
               }
             },
@@ -37627,6 +38322,28 @@
                               ]
                             }
                           },
+                          "rerunOf": {
+                            "type": "object",
+                            "properties": {
+                              "runId": {
+                                "type": "string"
+                              },
+                              "fromStep": {
+                                "type": "string"
+                              },
+                              "reusedSteps": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "runId",
+                              "fromStep",
+                              "reusedSteps"
+                            ]
+                          },
                           "parentRunId": {
                             "type": "string"
                           },
@@ -38129,6 +38846,28 @@
                           "sourceRunId"
                         ]
                       }
+                    },
+                    "rerunOf": {
+                      "type": "object",
+                      "properties": {
+                        "runId": {
+                          "type": "string"
+                        },
+                        "fromStep": {
+                          "type": "string"
+                        },
+                        "reusedSteps": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "runId",
+                        "fromStep",
+                        "reusedSteps"
+                      ]
                     },
                     "parentRunId": {
                       "type": "string"
@@ -38650,6 +39389,28 @@
                           "sourceRunId"
                         ]
                       }
+                    },
+                    "rerunOf": {
+                      "type": "object",
+                      "properties": {
+                        "runId": {
+                          "type": "string"
+                        },
+                        "fromStep": {
+                          "type": "string"
+                        },
+                        "reusedSteps": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "runId",
+                        "fromStep",
+                        "reusedSteps"
+                      ]
                     },
                     "parentRunId": {
                       "type": "string"

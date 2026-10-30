@@ -28,6 +28,7 @@ import { FailureBanner } from "./failure-banner";
 import { recipientsLine } from "./recipient-names";
 import type { LiveOnceControl } from "./test-run";
 import { StepPin, type StepPinControl } from "./step-pin";
+import { StepRerun, type StepRerunControl } from "./step-rerun";
 import { StepDatasets } from "./step-datasets";
 import { MailStepDescription, MailStepRun } from "./step-mail";
 import { simulatedCall, stepDatasets, stepOutputRows } from "./step-output";
@@ -66,6 +67,8 @@ export interface StepPanelRun {
   liveOnce?: LiveOnceControl;
   /** In a test run, on a step that ended with a pinned output: the run that output is from. */
   pinnedFrom?: { runId: string; open(): void };
+  /** In a re-run from a chosen step, on a step before it: the run its output is from (EW-11). */
+  reusedFrom?: { runId: string; open(): void };
   /** The run's datasets: what an output names that an earlier step wrote. */
   runDatasets?: readonly WorkflowDatasetView[];
   now: Date;
@@ -207,6 +210,7 @@ export function StepPanel({
   settings,
   actions,
   pin,
+  rerun,
   onClose
 }: {
   step: WorkflowStepView;
@@ -232,6 +236,8 @@ export function StepPanel({
   actions?: ReactNode;
   /** The reader's pin on the step's output for their test runs, where it is offered (EW-10). */
   pin?: StepPinControl | undefined;
+  /** On an ended run: "Run again from here", or why the run is not re-run from the step (EW-11). */
+  rerun?: StepRerunControl | undefined;
   onClose(): void;
 }) {
   const { t } = useTranslation();
@@ -282,6 +288,7 @@ export function StepPanel({
             <MailStepDescription stepId={step.id} mail={step.mail} draft={settings !== undefined} />
           )}
           {run === undefined && pin !== undefined ? <StepPin control={pin} /> : null}
+          {rerun === undefined ? null : <StepRerun control={rerun} />}
         </>
       ) : shown === "run" && run !== undefined ? (
         <StepRunDetails
@@ -289,6 +296,7 @@ export function StepPanel({
           account={account}
           run={run}
           pin={pin}
+          rerun={rerun}
           transcript={transcript}
           onOpenChild={onOpenChild}
         />
@@ -440,6 +448,7 @@ function StepRunDetails({
   account,
   run,
   pin,
+  rerun,
   transcript,
   onOpenChild
 }: {
@@ -447,6 +456,7 @@ function StepRunDetails({
   account: string | undefined;
   run: StepPanelRun;
   pin: StepPinControl | undefined;
+  rerun: StepRerunControl | undefined;
   transcript: ReactNode;
   onOpenChild: (() => void) | undefined;
 }) {
@@ -533,6 +543,8 @@ function StepRunDetails({
       {stepRun.publishedWouldAsk === "approval" ? <PublishedAsksApproval /> : null}
       {run.liveOnce === undefined ? null : <LiveOnce control={run.liveOnce} />}
       {run.pinnedFrom === undefined ? null : <PinnedFrom from={run.pinnedFrom} />}
+      {run.reusedFrom === undefined ? null : <PinnedFrom from={run.reusedFrom} reused />}
+      {rerun === undefined ? null : <StepRerun control={rerun} />}
       {pin === undefined ? null : (
         <StepPin
           control={pin}
@@ -664,21 +676,30 @@ function SimulatedOutput({ output }: { output: WorkflowOutputPreview | undefined
   );
 }
 
-/** On a step a test run ended with a pinned output: that it did, and the run it is from. */
-function PinnedFrom({ from }: { from: { runId: string; open(): void } }) {
+/**
+ * On a step that ended with the output of an earlier run instead of running: a pinned output
+ * of a test run, or the output a re-run from a later step reused. That it did, and the run.
+ */
+function PinnedFrom({
+  from,
+  reused = false
+}: {
+  from: { runId: string; open(): void };
+  reused?: boolean;
+}) {
   const { t } = useTranslation();
   return (
     <Banner
       tone="info"
       layout="inline"
-      data-pinned-from={from.runId}
+      {...(reused ? { "data-reused-from": from.runId } : { "data-pinned-from": from.runId })}
       action={
         <Button variant="outline" size="sm" onClick={from.open}>
-          {t("workflows.pin.openRun")}
+          {t(reused ? "workflows.rerun.openOriginal" : "workflows.pin.openRun")}
         </Button>
       }
     >
-      {t("workflows.pin.used")}
+      {t(reused ? "workflows.rerun.reused" : "workflows.pin.used")}
     </Banner>
   );
 }

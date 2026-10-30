@@ -102,6 +102,18 @@ export const workflowStepPinSchema = z.object({
   pinnedAt: timestampSchema
 });
 
+/**
+ * One step outside every block of a Workflow's revision, as a re-run of a run would treat it
+ * (EW-11): whether it changed since the run, and why the run cannot be re-run from it.
+ */
+export const workflowRerunStepSchema = z.object({
+  step: z.string(),
+  /** The step is not the one the run ran, or the run had no such step. */
+  changed: z.boolean(),
+  /** Missing where the run can be re-run from this step. */
+  refusal: z.object({ code: z.string(), step: z.string().optional() }).optional()
+});
+
 export const workflowRunSchema = z.object({
   /** Descendants that failed, reached a limit or contain failed items, excluding this run. */
   failedDescendantCount: z.number().int().min(0).optional(),
@@ -162,6 +174,13 @@ export const workflowRunSchema = z.object({
    * each with the run whose output it used. Missing on every other run.
    */
   pinnedSteps: z.array(z.object({ step: z.string(), sourceRunId: z.string() })).optional(),
+  /**
+   * The run this one re-runs from a chosen step (EW-11): that run, the step, and the steps
+   * before it that took the original's output instead of running. Missing on every other run.
+   */
+  rerunOf: z
+    .object({ runId: z.string(), fromStep: z.string(), reusedSteps: z.array(z.string()) })
+    .optional(),
   parentRunId: z.string().optional(),
   parentStepRunId: z.string().optional(),
   rootRunId: z.string(),
@@ -523,6 +542,39 @@ export const workflowOperations = {
     effect: "changing",
     response: json(z.object({ removed: z.boolean() })),
     errors: ["NOT_FOUND"],
+    rateClass: "write"
+  }),
+  // EW-11. Re-running an ended run from a chosen step: the steps before it keep the original's
+  // outputs, the chosen step and those after it run again on the Workflow's revision now.
+  "workflows.rerun_steps": defineRegisteredOperation({
+    id: "workflows.rerun_steps",
+    method: "GET",
+    path: "/api/v1/workflow-runs/:runId/rerun-steps",
+    summary:
+      "For each step outside every block, whether the run can be re-run from it on the Workflow's revision now, and why not",
+    tag: "Workflows",
+    auth: "principal",
+    scope: "config_assets:read",
+    requires: [],
+    effect: "reading",
+    response: json(z.object({ items: z.array(workflowRerunStepSchema) })),
+    errors: ["NOT_FOUND"],
+    rateClass: "read"
+  }),
+  "workflows.rerun": defineRegisteredOperation({
+    id: "workflows.rerun",
+    method: "POST",
+    path: "/api/v1/workflow-runs/:runId/rerun",
+    summary:
+      "Start a new run from a chosen step of an ended run: the steps before it reuse the run's outputs, the rest runs again",
+    tag: "Workflows",
+    auth: "principal",
+    scope: "config_assets:write",
+    requires: [],
+    effect: "changing",
+    body: z.object({ fromStep: z.string().min(1) }),
+    response: json(workflowRunSchema),
+    errors: ["NOT_FOUND", "CONFLICT", "VALIDATION_FAILED"],
     rateClass: "write"
   }),
   "workflows.list_runs": defineRegisteredOperation({

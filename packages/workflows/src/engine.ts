@@ -60,6 +60,7 @@ import {
 import { indexWorkflowSteps, type WorkflowStepIndex } from "./definition";
 import {
   workflowDefinitionRefusal,
+  type WorkflowDefinitionRevision,
   type WorkflowDefinitionSource,
   type WorkflowDefinitionSummary
 } from "./definition-source";
@@ -91,6 +92,13 @@ import {
   workflowOutsideRefusal
 } from "./outside-reach";
 import { createRunWaiting } from "./run-waiting";
+import {
+  WORKFLOW_RERUN_ERRORS,
+  workflowRerunOf,
+  workflowRerunRefusal,
+  workflowRerunSteps,
+  type WorkflowRerunStep
+} from "./rerun";
 
 // The engine of Workflow Runs. A run is a row, each step it reaches is a step run, and each
 // step run is executed by one job of the shared executor. A step ends in the transaction
@@ -151,6 +159,18 @@ export interface WorkflowEngineOptions {
 
 export type { StartWorkflowRunInput, TestWorkflowRunInput } from "./run-open";
 
+/** A re-run of an ended run from a chosen step (EW-11). */
+export interface RerunWorkflowRunInput extends Pick<
+  StartWorkflowRunInput,
+  "startedBy" | "operationRunId" | "callOrigin" | "correlationId"
+> {
+  runId: string;
+  /** The step outside every block the new run starts again from. */
+  fromStep: string;
+  /** For a test run: the draft the new test run runs. A live run runs the published revision. */
+  draft?: WorkflowDefinitionRevision;
+}
+
 export interface WorkflowEngine {
   /** Starts a run of the published definition from its manual trigger. */
   start(input: StartWorkflowRunInput): Promise<WorkflowRunView>;
@@ -160,6 +180,21 @@ export interface WorkflowEngine {
    * a changing step is simulated unless "Run live once" covers it.
    */
   test(input: TestWorkflowRunInput): Promise<WorkflowRunView>;
+  /**
+   * For each step outside every block of the revision a re-run of the run would run on, whether
+   * the run can be re-run from it (EW-11): the published revision, or `draft` for a test run.
+   * Nothing where no run has the id.
+   */
+  rerunSteps(input: {
+    runId: string;
+    draft?: WorkflowDefinitionRevision;
+  }): Promise<WorkflowRerunStep[] | undefined>;
+  /**
+   * Starts a new run of the same Workflow and mode from a chosen step of an ended run, with the
+   * original's input: the steps before the chosen one end with the original's outputs instead
+   * of running (EW-11). A test run's re-run is a test run of `draft`.
+   */
+  rerun(input: RerunWorkflowRunInput): Promise<WorkflowRunView>;
   /**
    * Cancels the live member of a Lauf, addressed by any member's id. No further step starts.
    * A call in flight finishes and is recorded on its step run. An ended Lauf answers its
@@ -864,6 +899,19 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     })
   );
 
+  /**
+   * The run a re-run re-runs and the revision the re-run runs on: the published one for a live
+   * run, the draft handed in for a test run. Nothing where no run has the id.
+   */
+  async function rerunTarget(runId: string, draft: WorkflowDefinitionRevision | undefined) {
+    const original = await stores.workflowRuns.readRun({ clientInstanceId, id: runId });
+    if (!original) return undefined;
+    const revision = original.mode === "test" ? draft : await definitions.read(original.workflow);
+    // A live App's Workflow that was unpublished since is named with the reason (DP-0).
+    if (!revision) throw appWorkflowRefusalError("workflow_unavailable", original.workflow);
+    return { original, revision };
+  }
+
   const deadlineHandler = createRunDeadline({ clientInstanceId, now, finishRun });
 
   const schedule = createScheduleTrigger({
@@ -937,6 +985,39 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       ];
       if (issues.length > 0) throw workflowDefinitionRefusal(draft.manifest.id, issues);
       return startByHand(draft, input, "test");
+    },
+
+    async rerunSteps({ runId, draft }) {
+      const target = await rerunTarget(runId, draft);
+      if (!target) return undefined;
+      return workflowRerunSteps(
+        { clientInstanceId, stores },
+        target.original,
+        target.revision.manifest
+      );
+    },
+
+    async rerun({ runId, fromStep, draft, ...start }) {
+      const target = await rerunTarget(runId, draft);
+      if (!target) throw new AppError("NOT_FOUND", "There is no such Workflow Run");
+      const { original, revision } = target;
+      const steps = await workflowRerunSteps(
+        { clientInstanceId, stores },
+        original,
+        revision.manifest
+      );
+      const rerunOf = workflowRerunOf(original, steps, fromStep);
+      const input = await stores.workflowRuns.readRunInput({ clientInstanceId, id: original.id });
+      if (input === undefined) throw workflowRerunRefusal(WORKFLOW_RERUN_ERRORS.outputGone);
+      if (original.mode === "test") {
+        // A test run's re-run is a test run of the draft, held to what a test run is.
+        const issues = [
+          ...(await workflowContinuationIssues(revision.manifest, operationCalls.registry)),
+          ...workflowLimitIssues(revision.manifest, limitContext)
+        ];
+        if (issues.length > 0) throw workflowDefinitionRefusal(revision.manifest.id, issues);
+      }
+      return startByHand(revision, { ...start, input, rerunOf }, original.mode);
     },
 
     async cancel(input) {

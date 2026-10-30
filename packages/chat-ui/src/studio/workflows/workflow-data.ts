@@ -17,6 +17,7 @@ import type {
   ChildWorkflowOption,
   LiveOnceSwitchView,
   WorkflowStepPinView,
+  WorkflowRerunStepView,
   WorkflowDefinitionView,
   WorkflowListItem,
   WorkflowRunView,
@@ -481,6 +482,40 @@ export function useLiveOnceSwitches(
     enabled: enabled && drafts !== undefined
   });
   return query.data;
+}
+
+/**
+ * For each step outside every block, whether the run can be re-run from it (EW-11). Read again
+ * whenever the Workflow's revision changes (`revision` is part of the key): a changed step
+ * changes the answer. Nothing is read where `enabled` is false or the source re-runs nothing.
+ */
+export function useRerunSteps(
+  runId: string,
+  enabled: boolean,
+  revision: string | number | undefined
+): readonly WorkflowRerunStepView[] | undefined {
+  const { runs } = useWorkflowsSource();
+  const keys = useWorkflowKeys();
+  const query = useQuery({
+    queryKey: [...keys.runs, "rerun-steps", runId, revision ?? ""],
+    queryFn: ({ signal }) => runs?.rerunSteps?.(runId, signal) ?? Promise.resolve([]),
+    enabled: enabled && runs?.rerunSteps !== undefined
+  });
+  return query.data;
+}
+
+/** Starts a re-run from a chosen step, where the source re-runs. */
+export function useRerunWrite():
+  ((runId: string, fromStep: string) => Promise<WorkflowRunView>) | undefined {
+  const { runs } = useWorkflowsSource();
+  const queryClient = useQueryClient();
+  const keys = useWorkflowKeys();
+  return useMemo(() => {
+    const rerun = runs?.rerun?.bind(runs);
+    if (rerun === undefined) return undefined;
+    return async (runId, fromStep) =>
+      rerun(runId, fromStep).finally(() => queryClient.invalidateQueries({ queryKey: keys.runs }));
+  }, [keys, queryClient, runs]);
 }
 
 /**

@@ -35,6 +35,7 @@ import type {
   WorkflowStepRunLog,
   WorkflowOutputPreview,
   WorkflowPinnedStep,
+  WorkflowRunRerun,
   WorkflowRunId,
   WorkflowRunMode,
   WorkflowRunStatus,
@@ -139,6 +140,9 @@ export const workflowRuns = pgTable(
     // The steps of a test run that used a pinned output, and their source runs (EW-10): names
     // only. Null on every other run.
     pinnedSteps: jsonb("pinned_steps").$type<WorkflowPinnedStep[]>(),
+    // The run this one re-runs from a chosen step, the step and the steps it reused (EW-11):
+    // names only. Null on every other run.
+    rerunOf: jsonb("rerun_of").$type<WorkflowRunRerun>(),
     continuation: jsonb("continuation").$type<{
       rootRunId: WorkflowRunId;
       previousRunId?: WorkflowRunId;

@@ -221,6 +221,23 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
     }
   };
   /**
+   * The draft a re-run of a test run runs on (EW-11), with its principal asked to exist and be
+   * active where the re-run starts, as a test run's is. Nothing for a live run.
+   */
+  async function rerunDraft(runId: string, starting: boolean) {
+    const run = await engine.readRun(runId);
+    if (run?.mode !== "test") return {};
+    // Definitions a test hands in are published revisions without a draft.
+    const draft = given ? await given.read(run.workflow) : await assets.draft(run.workflow);
+    if (!draft) throw noWorkflowDraftError(run.workflow);
+    if (starting && draft.manifest.runAs !== undefined)
+      await workflowRunAsPrincipal(
+        { clientInstanceId, apiAccess: stores.apiAccess },
+        { workflow: run.workflow, runAs: draft.manifest.runAs }
+      );
+    return { draft };
+  }
+  /**
    * The list of the instance: every published Workflow, with what a start by hand of it is
    * refused for now. One the engine of this release does not run is listed with the engine's
    * reasons, never left out, so a page says why it cannot be started instead of guessing.
@@ -333,6 +350,13 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
             });
           },
           ...(given ? {} : { pins: draftPins }),
+          // A test run is re-run on the draft (EW-11), a live run on the published revision.
+          async rerunSteps({ runId }) {
+            return engine.rerunSteps({ runId, ...(await rerunDraft(runId, false)) });
+          },
+          async rerun(input) {
+            return engine.rerun({ ...input, ...(await rerunDraft(input.runId, true)) });
+          },
           // Definitions a test hands in are no assets: a right on them is decided by name.
           assetOf: (workflow) => (given ? Promise.resolve(undefined) : assets.assetOf(workflow))
         },
