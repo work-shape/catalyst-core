@@ -369,6 +369,28 @@ const CHUNK_SWITCH_FETCH_WINDOW = `
   create index contents_pending_idx on catalyst_kb.contents (sha256) where state = 'pending';
 `;
 
+/**
+ * Keyword languages per Knowledge Base (KB-12). The full-text columns of `chunks` stop being
+ * generated: a trigger fills them for each chunk written, so a column of another language can be
+ * added, filled in batches and indexed beside those search reads, where adding a generated
+ * column would rewrite the table under a lock search waits for (`keyword-languages.ts`).
+ * Dropping the expression keeps the values and rewrites nothing. Every store keeps German and
+ * English until its Knowledge Base lists other languages.
+ */
+const KEYWORD_LANGUAGES = `
+  alter table catalyst_kb.chunks
+    alter column search_de drop expression,
+    alter column search_en drop expression;
+  create function catalyst_kb.chunk_keywords() returns trigger language plpgsql as $$
+  begin
+    new.search_de := pg_catalog.to_tsvector('german'::regconfig, new.text);
+    new.search_en := pg_catalog.to_tsvector('english'::regconfig, new.text);
+    return new;
+  end $$;
+  create trigger chunk_keywords before insert or update of text on catalyst_kb.chunks
+    for each row execute function catalyst_kb.chunk_keywords();
+`;
+
 /** The tables of the store of a built-in Knowledge Base, in the order a store applies them. */
 const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   { number: 1, name: "documents", sql: DOCUMENTS },
@@ -412,7 +434,8 @@ const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   { number: 14, name: "item_removal_hold", sql: ITEM_REMOVAL_HOLD },
   { number: 15, name: "workflow_source_end", sql: WORKFLOW_SOURCE_END },
   { number: 16, name: "record_corrected_value", sql: RECORD_FIELDS_CORRECTED_VALUE },
-  { number: 17, name: "chunk_switch_fetch_window", sql: CHUNK_SWITCH_FETCH_WINDOW }
+  { number: 17, name: "chunk_switch_fetch_window", sql: CHUNK_SWITCH_FETCH_WINDOW },
+  { number: 18, name: "keyword_languages", sql: KEYWORD_LANGUAGES }
 ];
 
 /** A later applied number never proves that earlier migrations were applied. */

@@ -576,6 +576,37 @@ describe("Knowledge Bases of documents", () => {
     const tables = knowledgeBase({ revision: 1 }).config;
     expect(knowledgeBaseFormToConfig(knowledgeBaseConfigToForm(tables))).toEqual(tables);
   });
+
+  it("writes the keyword languages chosen in Advanced beside the embedding binding it keeps (KB-12)", () => {
+    const documents = {
+      ...documentsKnowledgeBase().config,
+      indexing: { embedding: { binding: "embedding-large" } }
+    };
+    const form = knowledgeBaseConfigToForm(documents);
+    // Listing none, it writes none: German and English stay the instance's default.
+    expect(form.languages).toEqual([]);
+    expect(knowledgeBaseFormToConfig(form)).toEqual(documents);
+    expect(knowledgeBaseFormToConfig({ ...form, languages: ["de", "fr"] })).toEqual({
+      ...documents,
+      indexing: { embedding: { binding: "embedding-large" }, languages: ["de", "fr"] }
+    });
+    const listed = { ...documents, indexing: { languages: ["fr"] } };
+    expect(knowledgeBaseConfigToForm(listed).languages).toEqual(["fr"]);
+    expect(knowledgeBaseFormToConfig(knowledgeBaseConfigToForm(listed))).toEqual(listed);
+  });
+
+  it("shows the keyword languages in Advanced, German and English checked where none is listed", () => {
+    const boxOf = (html: string, language: string) =>
+      html.split(`data-knowledge-keyword-language="${language}"`)[1]?.split("</li>")[0] ?? "";
+    const english = render(documentsKnowledgeBase());
+    expect(english).toContain("Keyword languages");
+    expect(boxOf(english, "de")).toContain('data-state="checked"');
+    expect(boxOf(english, "en")).toContain('data-state="checked"');
+    expect(boxOf(english, "fr")).toContain('data-state="unchecked"');
+    const german = render(documentsKnowledgeBase(), { locale: "de" });
+    expect(german).toContain("Sprachen der Wortsuche");
+    expect(boxOf(german, "fr")).toContain("Französisch");
+  });
 });
 
 describe("the agent form", () => {

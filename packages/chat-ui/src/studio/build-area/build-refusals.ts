@@ -17,7 +17,8 @@ export type BuildRefusalField =
   | "sources"
   | "availability"
   | "agentUse"
-  | "files";
+  | "files"
+  | "indexing";
 
 /** What a refused change says, and where on the page it says it. */
 interface BuildRefusal {
@@ -280,7 +281,8 @@ const FIELD_OF_CONFIG_KEY = new Map<string, BuildRefusalField>([
   ["knowledgeBases", "knowledge"],
   ["backend", "source"],
   ["tables", "source"],
-  ["sources", "sources"]
+  ["sources", "sources"],
+  ["indexing", "indexing"]
 ]);
 
 /**

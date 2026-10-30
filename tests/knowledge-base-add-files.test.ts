@@ -298,6 +298,14 @@ describe("adding files to a Knowledge Base", () => {
         drop table catalyst_kb.source_cursors, catalyst_kb.sync_runs, catalyst_kb.source_items;
         drop table catalyst_kb.ingest_failures, catalyst_kb.ingest_items, catalyst_kb.ingest_waiting;
         drop index catalyst_kb.contents_pending_idx;
+        drop trigger chunk_keywords on catalyst_kb.chunks;
+        drop function catalyst_kb.chunk_keywords();
+        alter table catalyst_kb.chunks drop column search_de, drop column search_en;
+        alter table catalyst_kb.chunks
+          add column search_de tsvector generated always as (to_tsvector('german'::regconfig, text)) stored,
+          add column search_en tsvector generated always as (to_tsvector('english'::regconfig, text)) stored;
+        create index chunks_search_de_idx on catalyst_kb.chunks using gin (search_de);
+        create index chunks_search_en_idx on catalyst_kb.chunks using gin (search_en);
         alter table catalyst_kb.contents drop column document_type, drop column processor_revision, drop column processing_key, drop column requested_processing_key, drop column staged_revision;
         delete from catalyst_kb.migrations where number >= 2;`)
     );
@@ -331,11 +339,11 @@ describe("adding files to a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(current).toMatchObject({ status: "ready", level: 17 });
+      expect(current).toMatchObject({ status: "ready", level: 18 });
       return required(current);
     });
     expect(upgraded.migrations.map(({ number }) => number)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18
     ]);
 
     const added = await addFiles(instance, [source]);

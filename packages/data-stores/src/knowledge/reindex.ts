@@ -5,11 +5,9 @@ import {
   auditActorFromIdentity,
   createPlatformId,
   defineJobHandler,
-  defineJobKind,
   isAuthenticatedServicePrincipal,
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_EMBEDDING_STATES,
-  KNOWLEDGE_JOB_KINDS,
   KNOWLEDGE_OPERATION_PREFIX,
   type AuditRecorder,
   type AuthenticatedIdentity,
@@ -26,6 +24,7 @@ import {
 import {
   approvedEmbeddingModel,
   knowledgeBaseDefinitionSchema,
+  knowledgeKeywordLanguages,
   type BuiltinKnowledgeDefinition,
   type KnowledgeBaseDefinition,
   type KnowledgeEmbedding
@@ -42,6 +41,9 @@ import {
   type KnowledgeEmbed
 } from "./index-job";
 import type { KnowledgeRuntime } from "./runtime";
+import { knowledgeReindexJob, type ReindexPayload, type reindexPayloadSchema } from "./reindex-job";
+
+export { knowledgeReindexJob } from "./reindex-job";
 
 // Changing the embedding model of a Knowledge Base (KB-8). Spec: data-stores-and-knowledge-bases.md,
 // "Changing the embedding model", checks 24, 26, 27, 61 and 65.
@@ -107,37 +109,6 @@ export function embeddingCost(
 ): { amount: number; currency: string } {
   return { amount: (tokens * rate.perMillionTokens) / 1_000_000, currency: rate.currency };
 }
-
-const reindexOnlyPayloadSchema = z.strictObject({
-  knowledgeBaseId: z.string().min(1).max(200),
-  /** The binding the re-index embeds with: a later change of it supersedes this job. */
-  bindingId: z.string().min(1).max(200),
-  /** The run that started it, which its embedding usage is counted for. */
-  operationRunId: z.string().min(1).max(200)
-});
-
-/**
- * A job of the same kind that only drops the generations the published revision no longer
- * uses: of the same kind, so it never runs beside a re-index of the same Knowledge Base.
- */
-const dropUnusedPayloadSchema = z.strictObject({
-  knowledgeBaseId: z.string().min(1).max(200),
-  dropUnused: z.literal(true)
-});
-
-const reindexPayloadSchema = z.union([reindexOnlyPayloadSchema, dropUnusedPayloadSchema]);
-
-type ReindexPayload = z.infer<typeof reindexOnlyPayloadSchema>;
-
-/** One per Knowledge Base at a time; heartbeats keep its lease while it embeds. */
-export const knowledgeReindexJob = defineJobKind({
-  kind: KNOWLEDGE_JOB_KINDS.reindex,
-  payloadSchema: reindexPayloadSchema,
-  maxAttempts: 5,
-  backoff: { baseMs: 30_000, maxMs: 10 * 60_000 },
-  leaseMs: 2 * 60_000,
-  concurrency: { perKey: 1 }
-});
 
 /** The embedding of a Knowledge Base as its page shows it. */
 export interface KnowledgeEmbeddingState {
@@ -734,6 +705,16 @@ export function createKnowledgeReindexHandler(
           { knowledgeBaseId: job.payload.knowledgeBaseId, generations: dropped },
           "Generations of embeddings the Knowledge Base no longer uses are dropped"
         );
+      }
+      // The keyword languages of the published revision: full text only, nothing embedded.
+      if ("keywordLanguages" in job.payload) {
+        const languages = knowledgeKeywordLanguages(definition);
+        const state = await store.applyKeywordLanguages(languages, signal);
+        control.logger.info(
+          { knowledgeBaseId: job.payload.knowledgeBaseId, languages: state.searched },
+          "The keyword languages of a Knowledge Base are built"
+        );
+        return;
       }
       if (!("bindingId" in job.payload)) return;
       const payload = job.payload;

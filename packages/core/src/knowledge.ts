@@ -275,6 +275,51 @@ export const KNOWLEDGE_SEARCH_METHODS = ["semantic", "keyword"] as const;
 
 export type KnowledgeSearchMethod = (typeof KNOWLEDGE_SEARCH_METHODS)[number];
 
+/**
+ * The languages keyword search stems words by (KB-12), each with the text-search configuration
+ * Postgres ships for it. A Knowledge Base lists those it builds a full-text column for in
+ * `indexing.languages`; one that lists none has German and English, as every one before KB-12.
+ */
+export const KNOWLEDGE_KEYWORD_LANGUAGES = [
+  "da",
+  "de",
+  "en",
+  "es",
+  "fi",
+  "fr",
+  "it",
+  "nl",
+  "no",
+  "pt",
+  "sv"
+] as const;
+
+export type KnowledgeKeywordLanguage = (typeof KNOWLEDGE_KEYWORD_LANGUAGES)[number];
+
+export const KNOWLEDGE_KEYWORD_LANGUAGE_CONFIGS: Readonly<
+  Record<KnowledgeKeywordLanguage, string>
+> = {
+  da: "danish",
+  de: "german",
+  en: "english",
+  es: "spanish",
+  fi: "finnish",
+  fr: "french",
+  it: "italian",
+  nl: "dutch",
+  no: "norwegian",
+  pt: "portuguese",
+  sv: "swedish"
+};
+
+/** The keyword languages of a Knowledge Base that lists none: German and English. */
+export const KNOWLEDGE_DEFAULT_KEYWORD_LANGUAGES: readonly KnowledgeKeywordLanguage[] =
+  KNOWLEDGE_KEYWORD_LANGUAGES.filter((language) => language === "de" || language === "en");
+
+export function isKnowledgeKeywordLanguage(value: string): value is KnowledgeKeywordLanguage {
+  return KNOWLEDGE_KEYWORD_LANGUAGES.some((language) => language === value);
+}
+
 /** A Knowledge Base that describes tables of a Data Store, and the tables a backend finds there. */
 export interface DataStoreKnowledgeTarget {
   backend: "dataStore";
@@ -1121,4 +1166,25 @@ export interface KnowledgeDocumentStore {
     input: { query: string; limit: number; embed?: KnowledgeQueryEmbedding },
     signal?: AbortSignal
   ): Promise<KnowledgeSearchAnswer>;
+  /**
+   * The keyword languages of the store (KB-12): `searched`, those whose full-text column and
+   * GIN index search reads; `building`, those whose column is being filled or indexed.
+   */
+  keywordLanguages(signal?: AbortSignal): Promise<KnowledgeKeywordLanguageState>;
+  /**
+   * Brings the store's full-text columns to `languages` (KB-12): each missing one is added and
+   * filled in short transactions and indexed beside those search reads, then one transaction
+   * switches search to `languages` and drops the columns of the others. Search keeps answering
+   * from the old columns until the switch. Nothing is embedded. Answers the state after.
+   */
+  applyKeywordLanguages(
+    languages: readonly KnowledgeKeywordLanguage[],
+    signal?: AbortSignal
+  ): Promise<KnowledgeKeywordLanguageState>;
+}
+
+/** The keyword languages a store of a Knowledge Base searches and builds (KB-12). */
+export interface KnowledgeKeywordLanguageState {
+  searched: KnowledgeKeywordLanguage[];
+  building: KnowledgeKeywordLanguage[];
 }

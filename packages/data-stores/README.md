@@ -243,4 +243,6 @@ Owned-store migration 10 adds the monthly counter and the document's pending mar
 run on the additive tables; keep the new migration recorded on rollback. Admission costs one
 monthly-row lock plus an indexed document update; no list or sum grows with the corpus.
 
-Field evidence in extraction and records proposals uses the instance `localization.defaultLocale`, never the caller’s interface language. Knowledge Base content/indexing languages are not supported in this release.
+Field evidence in extraction and records proposals uses the instance `localization.defaultLocale`, never the caller’s interface language.
+
+Keyword search stems words by the languages a Knowledge Base lists in `indexing.languages` (KB-12): one full-text column and GIN index on its chunks per language, German and English where it lists none. A published change rebuilds the columns in the background through the re-index job, without an embedding call; search reads the old columns until the switch (`src/knowledge/builtin/keyword-languages.ts`).

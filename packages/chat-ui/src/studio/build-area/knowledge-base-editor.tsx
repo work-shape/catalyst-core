@@ -1,6 +1,10 @@
 import { Database } from "lucide-react";
 import { useEffect, useState } from "react";
-import { KNOWLEDGE_DOCUMENT_FORMATS } from "@work-shape/catalyst-core";
+import {
+  KNOWLEDGE_DEFAULT_KEYWORD_LANGUAGES,
+  KNOWLEDGE_DOCUMENT_FORMATS,
+  KNOWLEDGE_KEYWORD_LANGUAGES
+} from "@work-shape/catalyst-core";
 import {
   Badge,
   Banner,
@@ -401,7 +405,27 @@ export function KnowledgeBaseEditor({
             count: holders.status === "ready" ? holders.holders.length : undefined,
             body: <KnowledgeBaseHolders read={holders} />
           }
-        ])
+        ]),
+    ...(documents
+      ? [
+          {
+            id: "advanced",
+            label: t("knowledge.advancedTitle"),
+            description: t("knowledge.advancedDescription"),
+            refusalField: "indexing" as const,
+            body: (
+              <>
+                <KeywordLanguages
+                  languages={form.languages}
+                  disabled={!canWrite}
+                  onChange={(languages) => update({ languages })}
+                />
+                <FieldRefusals messages={refusalsOf(outcome, "indexing")} />
+              </>
+            )
+          }
+        ]
+      : [])
   ];
 
   return (
@@ -436,6 +460,58 @@ export function KnowledgeBaseEditor({
           ? { saveHint: t("build.savesDraft") }
           : {})}
     />
+  );
+}
+
+/**
+ * The keyword languages of a Knowledge Base of documents (KB-12): a box per language keyword
+ * search can stem by. One that lists none has German and English, shown checked. The last one
+ * checked stays: a Knowledge Base keeps one.
+ */
+function KeywordLanguages({
+  languages,
+  disabled,
+  onChange
+}: {
+  languages: readonly string[];
+  disabled: boolean;
+  onChange(languages: string[]): void;
+}) {
+  const { locale, t } = useTranslation();
+  const names = new Intl.DisplayNames([locale], { type: "language" });
+  const nameOf = (language: string) => names.of(language) ?? language;
+  // By the name the reader reads, not by its code.
+  const listed = [...KNOWLEDGE_KEYWORD_LANGUAGES].sort((left, right) =>
+    nameOf(left).localeCompare(nameOf(right), locale)
+  );
+  const chosen: readonly string[] =
+    languages.length > 0 ? languages : KNOWLEDGE_DEFAULT_KEYWORD_LANGUAGES;
+  const toggle = (language: string, on: boolean) =>
+    onChange(
+      KNOWLEDGE_KEYWORD_LANGUAGES.filter((each) => (each === language ? on : chosen.includes(each)))
+    );
+  return (
+    <Field label={t("knowledge.keywordLanguagesLabel")} hint={t("knowledge.keywordLanguagesHint")}>
+      <ul
+        aria-label={t("knowledge.keywordLanguagesLabel")}
+        className="grid gap-2 sm:grid-cols-3"
+        data-knowledge-keyword-languages=""
+      >
+        {listed.map((language) => {
+          const checked = chosen.includes(language);
+          return (
+            <li key={language} data-knowledge-keyword-language={language}>
+              <Checkbox
+                label={nameOf(language)}
+                checked={checked}
+                disabled={disabled || (checked && chosen.length === 1)}
+                onCheckedChange={(on) => toggle(language, on)}
+              />
+            </li>
+          );
+        })}
+      </ul>
+    </Field>
   );
 }
 
