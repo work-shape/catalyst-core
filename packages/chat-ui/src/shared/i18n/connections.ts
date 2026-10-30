@@ -71,15 +71,15 @@ export const connections = defineTranslations({
       "Only people who may view the System pages, such as an admin for all workspaces, see why: here, under Technical details.",
     "connections.reasonPersonal":
       "A personal connection cannot be tested here, and its tools cannot be read here: each person's account is used only by their own agent in a private chat.",
-    "connections.reasonUnavailable": "This connection cannot be used on this instance now.",
+    "connections.reasonUnavailable": "This connection cannot be used here right now.",
     "connections.reasonNotConfigured":
       "The settings of this connection do not fit its type. Check the address and how the key is sent.",
     "connections.reasonSecretStore":
-      "This instance cannot store keys yet. The technical team has to set up a key of the Secret Store first.",
-    "connections.reasonTypeUnknown": "This instance does not offer this kind of connection.",
+      "Keys cannot be stored here yet. The technical team has to set up key storage first.",
+    "connections.reasonTypeUnknown": "This kind of connection is not offered here.",
     "connections.reasonManagedClient":
-      "This instance has no sign-in client for this service. The technical team sets one up.",
-    "connections.reasonCatalogue": "This instance does not offer this service.",
+      "There is no sign-in client for this service here yet. The technical team sets one up.",
+    "connections.reasonCatalogue": "This service is not offered here.",
     "connections.reasonPersonContext":
       "Your account has no person context on this connection. An admin maps it on the connection's page.",
     "connections.incomplete": "Incomplete",
@@ -361,16 +361,15 @@ export const connections = defineTranslations({
       "Den Grund sehen nur Personen, die die Systemseiten ansehen dürfen, etwa ein Admin für alle Arbeitsbereiche: hier unter „Technische Details“.",
     "connections.reasonPersonal":
       "Eine persönliche Verbindung lässt sich hier nicht testen, und ihre Tools lassen sich hier nicht lesen: Das Konto einer Person nutzt nur ihr eigener Agent in einem privaten Chat.",
-    "connections.reasonUnavailable":
-      "Diese Verbindung lässt sich auf dieser Instanz gerade nicht nutzen.",
+    "connections.reasonUnavailable": "Diese Verbindung lässt sich hier gerade nicht nutzen.",
     "connections.reasonNotConfigured":
       "Die Einstellungen dieser Verbindung passen nicht zu ihrem Typ. Prüf die Adresse und wie der Schlüssel gesendet wird.",
     "connections.reasonSecretStore":
-      "Diese Instanz kann noch keine Schlüssel speichern. Das technische Team muss zuerst einen Schlüssel für den Secret Store einrichten.",
-    "connections.reasonTypeUnknown": "Diese Art von Verbindung bietet diese Instanz nicht an.",
+      "Schlüssel lassen sich hier noch nicht speichern. Das technische Team muss zuerst den Schlüsselspeicher einrichten.",
+    "connections.reasonTypeUnknown": "Diese Art von Verbindung wird hier nicht angeboten.",
     "connections.reasonManagedClient":
-      "Diese Instanz hat für diesen Dienst keinen Anmelde-Client. Das technische Team richtet ihn ein.",
-    "connections.reasonCatalogue": "Diesen Dienst bietet diese Instanz nicht an.",
+      "Für diesen Dienst gibt es hier noch keinen Anmelde-Client. Das technische Team richtet ihn ein.",
+    "connections.reasonCatalogue": "Dieser Dienst wird hier nicht angeboten.",
     "connections.reasonPersonContext":
       "Deinem Konto ist bei dieser Verbindung kein Personenkontext zugeordnet. Ein Admin ordnet ihn auf der Seite der Verbindung zu.",
     "connections.incomplete": "Unvollständig",
