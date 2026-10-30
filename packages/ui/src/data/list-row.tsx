@@ -33,6 +33,12 @@ export interface ListRowProps extends Omit<HTMLAttributes<HTMLLIElement>, "title
   actions?: ReactNode;
   /** Keeps `actions` visible. Otherwise they show while the row is hovered or holds the focus. */
   actionsVisible?: boolean;
+  /**
+   * Controls that belong to the row's object and need the row's whole width, such as a few
+   * switches: a line under the row, which a narrow window does not squeeze beside the actions.
+   * Only on a row that does not unfold.
+   */
+  below?: ReactNode;
   /** The row is the chosen one of its list: the selection fill and medium weight. */
   selected?: boolean;
   /** The row opens a page: the caller's link element, which wraps everything but `actions`. */
@@ -68,6 +74,7 @@ export function ListRow({
   time,
   actions,
   actionsVisible = false,
+  below,
   selected = false,
   link,
   onClick,
@@ -183,6 +190,7 @@ export function ListRow({
     return (
       <li className={cn("min-w-0", className)} {...props}>
         {row}
+        {below === undefined ? null : <div className="min-w-0 px-2 pt-0.5 pb-2">{below}</div>}
       </li>
     );
   }

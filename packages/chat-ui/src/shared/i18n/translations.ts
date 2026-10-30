@@ -70,6 +70,7 @@ import { rights } from "./rights";
 import { scheduled } from "./scheduled";
 import { settings } from "./settings";
 import { share } from "./share";
+import { workspaceBundles } from "./workspace-bundles";
 import { signIn } from "./sign-in";
 import { skillFiles } from "./skill-files";
 import { skillImport } from "./skill-import";
@@ -171,6 +172,7 @@ export const translations = combineTranslations(common)
   .and(workflowRights)
   .and(workflowDraft)
   .and(workflows)
-  .and(workspace).messages;
+  .and(workspace)
+  .and(workspaceBundles).messages;
 
 export type TranslationKey = keyof (typeof translations)["en"];

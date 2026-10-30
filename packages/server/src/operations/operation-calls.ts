@@ -29,6 +29,7 @@ import { createOperationApprovalFiler } from "../approvals/operation-approval-fi
 import { publishApprovalKinds } from "../approvals/publish-approval";
 import { createNoticeHandler } from "../notices/notice-kind";
 import { createFeedbackReviewHandler } from "../feedback/feedback-review-kind";
+import { createGrantRequestHandler } from "../approvals/grant-request-approval";
 import type { ChatServerOptions, OperationCalls, ResolvedChatServerOptions } from "../types";
 import { resolveOperationResource } from "./operation-resource";
 import { readAlwaysAllowLocks, readCentralPolicySettings } from "./central-policy";
@@ -167,6 +168,12 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
           })
         ]
       : []),
+    // Builder or Publisher for a member of a workspace, decided by an instance admin (AP-3).
+    createGrantRequestHandler({
+      clientInstanceId,
+      stores: options.stores,
+      authorizer: options.authorizer
+    }),
     // "Teilen mit…" into a place where the person lacks the right (SHARE-1).
     ...(options.configAssets
       ? createAssetMoveApprovalHandlers({
