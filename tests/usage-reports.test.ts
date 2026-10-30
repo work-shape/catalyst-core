@@ -11,6 +11,7 @@ import {
   asAgentRunId,
   asConversationId,
   asUserId,
+  createFeedbackId,
   PERSONAL_WORKSPACES_KEY,
   type CollaborationWorkspaceId,
   type UsageRateCardConfig
@@ -55,7 +56,7 @@ const tomorrow = () => new Date(Date.now() + 86_400_000).toISOString().slice(0, 
  * Personal Workspace. The administrator holds `usage.view_users` by role; Kai and Lena hold
  * nothing.
  */
-async function setup() {
+async function setup({ feedbackOn = false }: { feedbackOn?: boolean } = {}) {
   const governanceOf = (store: AccessInstance["stores"]["usage"]) =>
     new ModelUsageGovernance({
       store,
@@ -64,7 +65,10 @@ async function setup() {
       safeguards: {}
     });
   const t = await setupAccessInstance({
-    server: (stores) => ({ usageGovernance: governanceOf(stores.usage) })
+    server: (stores) => ({ usageGovernance: governanceOf(stores.usage) }),
+    // The agents offered are the stored ones, as on an assembled instance.
+    storedAssetSource: true,
+    ...(feedbackOn ? { modules: { feedback: { enabled: true } } } : {})
   });
   instances.push(t);
   const usage = governanceOf(t.stores.usage);
@@ -161,6 +165,85 @@ describe("the Breakdown", () => {
     ]);
   });
 
+  it("by agent, names the agents nobody used and counts no feedback while the Module is off", async () => {
+    const { t, shared } = await setup();
+    const breakdown = usageBreakdownSchema.parse(
+      (
+        await t.expectOk(t.admin.id, "usage.breakdown.get", {
+          query: { ...period(), groupBy: "agent" }
+        })
+      ).json()
+    );
+    // The instance's default agent was offered and caused no usage.
+    expect(breakdown.unusedAgents).toEqual(["assistant"]);
+    expect(breakdown.feedback).toBeUndefined();
+    expect(breakdown.rows.some((row) => row.feedbackCount !== undefined)).toBe(false);
+
+    // Narrowed by anything but a shared workspace, nothing is added.
+    const byModel = usageBreakdownSchema.parse(
+      (
+        await t.expectOk(t.admin.id, "usage.breakdown.get", {
+          query: { ...period(), groupBy: "agent", model: "local" }
+        })
+      ).json()
+    );
+    expect(byModel.unusedAgents).toBeUndefined();
+    // Narrowed to a shared workspace: the agents offered there.
+    await t.putAgent(t.admin.id, "drafter", {}, { workspaceId: shared });
+    const inTeam = usageBreakdownSchema.parse(
+      (
+        await t.expectOk(t.admin.id, "usage.breakdown.get", {
+          query: { ...period(), groupBy: "agent", workspace: shared }
+        })
+      ).json()
+    );
+    expect(inTeam.unusedAgents).toContain("drafter");
+    expect(inTeam.unusedAgents).not.toContain("writer");
+  });
+
+  it("by agent, counts each agent's comments in the period and names no author", async () => {
+    const { t, shared } = await setup({ feedbackOn: true });
+    const comment = (agentName: string, workspaceId: string, authorUserId: string) =>
+      t.stores.feedback.createFeedback({
+        id: createFeedbackId(),
+        clientInstanceId,
+        subjectKind: "message",
+        asset: { kind: "agent", name: agentName },
+        workspaceId,
+        authorUserId,
+        text: "Secret wording of the comment"
+      });
+    const kaiPersonal = await t.stores.workspaces.ensurePersonalWorkspace({
+      clientInstanceId,
+      userId: asUserId(t.kai.id)
+    });
+    await comment("writer", shared, t.lena.id);
+    await comment("writer", kaiPersonal.id, t.kai.id);
+
+    const breakdown = usageBreakdownSchema.parse(
+      (
+        await t.expectOk(t.admin.id, "usage.breakdown.get", {
+          query: { ...period(), groupBy: "agent" }
+        })
+      ).json()
+    );
+    expect(breakdown.rows.map((row) => [row.key, row.feedbackCount])).toEqual([
+      ["reader", 0],
+      ["writer", 2]
+    ]);
+    // Administrators review feedback by default, so the counts lead to their Inbox.
+    expect(breakdown.feedback).toEqual({ reviewable: true });
+    expect(JSON.stringify(breakdown)).not.toMatch(
+      new RegExp(`Secret|${t.kai.id}|${t.lena.id}`, "u")
+    );
+
+    // A shared workspace's own Usage tab counts only the comments made there.
+    const usage = workspaceUsageSchema.parse((await workspaceUsage(t, t.kai.id, shared)).json());
+    expect(usage.breakdown.rows.find((row) => row.key === "writer")?.feedbackCount).toBe(1);
+    // Kai reviews no feedback: the count is no link for him.
+    expect(usage.breakdown.feedback).toEqual({ reviewable: false });
+  });
+
   it("is refused to a person without the right to view usage", async () => {
     const { t } = await setup();
     await t.expectRefused(
@@ -217,6 +300,24 @@ describe("a shared workspace's Usage tab (check 14)", () => {
       { status: 403, code: "FORBIDDEN" }
     );
     expect(await audited(t, "governance.usage_users_viewed")).toEqual([]);
+  });
+
+  it("shows its Owner today's spend and the workspace's limit with its amounts", async () => {
+    const { t, shared } = await setup();
+    let usage = workspaceUsageSchema.parse((await workspaceUsage(t, t.kai.id, shared)).json());
+    expect(usage.today.modelCallCount).toBe(3);
+    expect(usage.limit).toBeUndefined();
+
+    await t.expectOk(t.admin.id, "usage.limits.set", {
+      payload: { level: "workspace", target: shared, limits: { monthly: 100 } }
+    });
+    usage = workspaceUsageSchema.parse((await workspaceUsage(t, t.kai.id, shared)).json());
+    expect(usage.limit).toMatchObject({
+      currency: "EUR",
+      month: { limit: 100, spent: expect.any(Number), reached: false },
+      day: { spent: expect.any(Number) }
+    });
+    expect(usage.limit?.day.limit).toBeUndefined();
   });
 
   it("shows no other workspace, and nothing to a member who is no Owner or Admin", async () => {

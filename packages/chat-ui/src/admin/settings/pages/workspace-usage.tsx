@@ -6,6 +6,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  List,
   PageHeader,
   SkeletonPage,
   Tabs,
@@ -27,9 +28,10 @@ import {
   usagePeriodDays,
   type UsageBreakdownState
 } from "../../control-plane/usage-breakdown";
-import { formatBillableCost } from "../../control-plane/usage-cost-format";
+import { formatBillableCost, formatMicrosCost } from "../../control-plane/usage-cost-format";
 import { usageMonths, WorkspaceMembersUsagePanel } from "../../control-plane/usage-people";
-import { DailyUsageCard, UsageActivityCard } from "../../control-plane/usage-view";
+import { DailyUsageCard, projectMonth, UsageActivityCard } from "../../control-plane/usage-view";
+import { OwnUsageRow, SPEND_PERIODS } from "./own-usage";
 
 /** A workspace's own Breakdown: its usage is all in it, so it is not grouped by workspace. */
 const WORKSPACE_DIMENSIONS: readonly UsageBreakdownDimension[] = USAGE_BREAKDOWN_DIMENSIONS.filter(
@@ -89,6 +91,11 @@ export function WorkspaceUsagePage() {
       </>
     );
   }
+  const { limit } = usage;
+  const currency = usage.month.cost.currency;
+  const spentMicros = usage.month.cost.complete ? usage.month.cost.billableCostMicros : undefined;
+  const projected =
+    spentMicros === undefined ? undefined : projectMonth(spentMicros, new Date().toISOString());
   return (
     <>
       {header}
@@ -122,8 +129,42 @@ export function WorkspaceUsagePage() {
                   tokens: usage.month.totalTokens.toLocaleString(locale)
                 })}
               </p>
+              {projected === undefined || currency === undefined ? null : (
+                <p
+                  className="text-caption text-muted-foreground"
+                  data-testid="workspace-usage-projection"
+                >
+                  {t("usageReports.projection", {
+                    amount: formatMicrosCost(projected, currency, i18n)
+                  })}
+                </p>
+              )}
+              <p className="text-caption text-muted-foreground" data-testid="workspace-usage-today">
+                {t("usageReports.today", { amount: formatBillableCost(usage.today.cost, i18n) })}
+              </p>
             </CardContent>
           </Card>
+          {limit?.currency === undefined ? null : (
+            <Card padding="md" data-testid="workspace-usage-limit">
+              <CardHeader>
+                <CardTitle>{t("usageReports.workspaceLimit")}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <List>
+                  {SPEND_PERIODS.map(({ period, label, reset }) => (
+                    <OwnUsageRow
+                      key={period}
+                      label={t(label)}
+                      state={limit[period]}
+                      currency={limit.currency ?? ""}
+                      locale={locale}
+                      reset={t(reset)}
+                    />
+                  ))}
+                </List>
+              </CardContent>
+            </Card>
+          )}
           <UsageActivityCard activity={usage.activity} />
           <DailyUsageCard
             days={usage.days}

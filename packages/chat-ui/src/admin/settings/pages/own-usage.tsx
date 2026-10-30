@@ -13,7 +13,7 @@ import { useTranslation, type TranslationKey } from "../../../shared/i18n";
 import { useSettingsPage } from "../../../shared/settings-page-context";
 import { formatSpend, nearLimit } from "../../../chat/workspace/usage-limit-block";
 
-const PERIODS: readonly {
+export const SPEND_PERIODS: readonly {
   period: keyof OwnUsage["own"];
   label: TranslationKey;
   reset: TranslationKey;
@@ -62,7 +62,7 @@ function OwnUsageView({
           <p className="text-sm text-muted-foreground">{t("limits.notPriced")}</p>
         ) : (
           <List data-testid="own-usage">
-            {PERIODS.map(({ period, label, reset }) => (
+            {SPEND_PERIODS.map(({ period, label, reset }) => (
               <OwnUsageRow
                 key={period}
                 label={t(label)}
@@ -80,7 +80,8 @@ function OwnUsageView({
   );
 }
 
-function OwnUsageRow({
+/** One period of a spend limit: what was spent, against the limit where one is set. */
+export function OwnUsageRow({
   label,
   state,
   currency,

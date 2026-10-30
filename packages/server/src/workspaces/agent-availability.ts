@@ -52,7 +52,7 @@ type AgentUseRefusal = "no_grant" | "denied";
  * The agents offered in one workspace, before the caller's rights: the instance's snapshot,
  * the agents available there, and which of them only holders of `agent.use` may use.
  */
-async function offeredAgents(options: SnapshotOptions, workspace: WorkspaceRef) {
+export async function offeredAgents(options: SnapshotOptions, workspace: WorkspaceRef) {
   const [assets, availability, limited] = await Promise.all([
     options.configAssets.source.getSnapshot(),
     options.configAssets.store.listAgentAvailability({

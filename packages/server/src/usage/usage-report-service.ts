@@ -8,10 +8,12 @@ import type {
 } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
+  PERSONAL_AGENTS_KEY,
   PERSONAL_WORKSPACES_KEY,
   USAGE_BREAKDOWN_DIMENSIONS,
   asCollaborationWorkspaceId,
   auditActorFromIdentity,
+  getSubjectUserId,
   type ActorAccess,
   type AuditRecorder,
   type AuthenticatedUser,
@@ -25,9 +27,12 @@ import type {
   UsageWorkspaceLabel,
   UsageWorkspaceLabeler
 } from "@work-shape/catalyst-usage-governance";
+import { authorizeReviewer } from "../feedback/feedback-service";
 import type { ChatServerOptions } from "../types";
+import { offeredAgents } from "../workspaces/agent-availability";
 import { requireWorkspaceAccess } from "../workspaces/workspace-access";
 import { requireOwnerOrAdmin } from "../workspaces/workspace-service-access";
+import { levelOut, resets } from "./usage-limits-service";
 
 // The Usage page (LU-3, limits spec 3.3 and 3.4). The Overview and the Breakdown read the daily
 // sums; a person's figures are read only with `usage.view_users`, and every such read is an
@@ -35,13 +40,20 @@ import { requireOwnerOrAdmin } from "../workspaces/workspace-service-access";
 
 export interface UsageReportDeps {
   clientInstanceId: ClientInstanceId;
-  stores: Pick<PlatformStores, "users" | "workspaces">;
+  stores: Pick<PlatformStores, "users" | "workspaces" | "feedback">;
   usageGovernance: Pick<
     ModelUsageGovernance,
-    "summarizeBreakdown" | "summarizeWorkspaceMembers" | "listUserMonthSpend" | "countActivity"
+    | "summarizeBreakdown"
+    | "summarizeWorkspaceMembers"
+    | "listUserMonthSpend"
+    | "countActivity"
+    | "spendStatus"
   >;
+  configAssets: Pick<ChatServerOptions["configAssets"], "source" | "store">;
   auditRecorder: AuditRecorder;
   webSearchEnabled: boolean;
+  /** The feedback Module is on: an agent's row counts the comments on its answers. */
+  feedbackEnabled: boolean;
   now?: () => Date;
 }
 
@@ -50,8 +62,10 @@ export function usageReportDeps(options: ChatServerOptions): UsageReportDeps {
     clientInstanceId: options.clientInstanceId,
     stores: options.stores,
     usageGovernance: options.usageGovernance,
+    configAssets: options.configAssets,
     auditRecorder: options.auditRecorder,
-    webSearchEnabled: options.config.webAccess.enabled && options.config.webAccess.search.enabled
+    webSearchEnabled: options.config.webAccess.enabled && options.config.webAccess.search.enabled,
+    feedbackEnabled: options.modules.isEnabled("feedback")
   };
 }
 
@@ -112,12 +126,105 @@ export function workspaceLabeler(
   };
 }
 
+type AgentRows = Pick<UsageBreakdown, "rows" | "feedback" | "unusedAgents">;
+
+/**
+ * The Breakdown by agent of the whole instance or of one shared workspace, completed (limits
+ * spec 3.3, question 5): each agent's row counts the comments on its answers where the feedback
+ * Module is on, and the agents offered there that caused no usage in the period are named.
+ * Narrowed any other way, the rows are a share of usage that comments and offers do not split
+ * by, so they stay as they are.
+ */
+async function completeAgentRows(
+  deps: UsageReportDeps,
+  input: {
+    rows: UsageBreakdown["rows"];
+    from: string;
+    to: string;
+    /** The shared workspace the rows are of; absent for the whole instance. */
+    workspaceId?: CollaborationWorkspaceId;
+    access: ActorAccess;
+  }
+): Promise<AgentRows> {
+  const { rows, workspaceId } = input;
+  const [offered, counts] = await Promise.all([
+    workspaceId === undefined
+      ? instanceAgentNames(deps)
+      : offeredAgents(
+          { clientInstanceId: deps.clientInstanceId, configAssets: deps.configAssets },
+          { kind: "shared", id: workspaceId }
+        ).then(({ available }) => available.map((agent) => agent.name)),
+    deps.feedbackEnabled
+      ? deps.stores.feedback.countFeedbackByAgent({
+          clientInstanceId: deps.clientInstanceId,
+          from: new Date(`${input.from}T00:00:00.000Z`),
+          to: new Date(`${input.to}T00:00:00.000Z`),
+          ...(workspaceId === undefined ? {} : { workspaceId })
+        })
+      : Promise.resolve(undefined)
+  ]);
+  const used = new Set(rows.map((row) => row.key));
+  const unusedAgents = [...new Set(offered)]
+    .filter((name) => !used.has(name))
+    .sort((a, b) => a.localeCompare(b));
+  if (!counts) return { rows, unusedAgents };
+  return {
+    // People's own agents in a shared workspace are one row that names none of them: no count.
+    rows: rows.map((row) =>
+      row.key === "" || row.key === PERSONAL_AGENTS_KEY
+        ? row
+        : { ...row, feedbackCount: counts.get(row.key) ?? 0 }
+    ),
+    feedback: { reviewable: authorizeReviewer(undefined, { access: input.access }).allowed },
+    unusedAgents
+  };
+}
+
+/**
+ * The agents of the instance and of its shared workspaces, by name. A person's own agent is no
+ * agent of the instance's: it is neither listed nor named.
+ */
+async function instanceAgentNames(deps: UsageReportDeps): Promise<string[]> {
+  const [assets, shared] = await Promise.all([
+    deps.configAssets.source.getSnapshot(),
+    deps.stores.workspaces.listSharedWorkspaces({ clientInstanceId: deps.clientInstanceId })
+  ]);
+  const sharedIds = new Set<string>(shared.map((workspace) => workspace.id));
+  return assets.agents
+    .filter((agent) => {
+      const scope = assets.agentKeys?.get(agent.name)?.scope;
+      return scope === undefined || scope.kind === "instance" || sharedIds.has(scope.workspaceId);
+    })
+    .map((agent) => agent.name);
+}
+
+/**
+ * The shared workspace a Breakdown by agent is of: none for the whole instance, the one it is
+ * narrowed to, or nothing to complete where it is narrowed further.
+ */
+async function agentRowsScope(
+  deps: UsageReportDeps,
+  query: UsageBreakdownQuery
+): Promise<{ workspaceId?: CollaborationWorkspaceId } | undefined> {
+  if (query.groupBy !== "agent") return undefined;
+  const { workspace, ...rest } = filterOf(query);
+  if (Object.keys(rest).length > 0) return undefined;
+  if (workspace === undefined) return {};
+  if (workspace === PERSONAL_WORKSPACES_KEY || workspace === "") return undefined;
+  const found = await deps.stores.workspaces.getWorkspace(
+    deps.clientInstanceId,
+    asCollaborationWorkspaceId(workspace)
+  );
+  return found?.kind === "shared" ? { workspaceId: found.id } : undefined;
+}
+
 /** Settings > Instance > Usage, Breakdown: the period by one dimension, shared workspaces named. */
 export async function readUsageBreakdown(
   deps: UsageReportDeps,
-  query: UsageBreakdownQuery
+  query: UsageBreakdownQuery,
+  access: ActorAccess
 ): Promise<UsageBreakdown> {
-  const [breakdown, shared] = await Promise.all([
+  const [breakdown, shared, agentScope] = await Promise.all([
     deps.usageGovernance.summarizeBreakdown({
       clientInstanceId: deps.clientInstanceId,
       from: query.from,
@@ -128,19 +235,29 @@ export async function readUsageBreakdown(
     }),
     query.groupBy === "workspace"
       ? deps.stores.workspaces.listSharedWorkspaces({ clientInstanceId: deps.clientInstanceId })
-      : Promise.resolve([])
+      : Promise.resolve([]),
+    agentRowsScope(deps, query)
   ]);
   const names = new Map(shared.map((workspace) => [workspace.id as string, workspace.name]));
+  const rows = breakdown.rows.map((row) => {
+    const name = names.get(row.key);
+    return name === undefined ? row : { ...row, name };
+  });
   return {
     from: query.from,
     to: query.to,
     groupBy: query.groupBy,
     personalWorkspacesKey: PERSONAL_WORKSPACES_KEY,
     total: breakdown.total,
-    rows: breakdown.rows.map((row) => {
-      const name = names.get(row.key);
-      return name === undefined ? row : { ...row, name };
-    })
+    ...(agentScope === undefined
+      ? { rows }
+      : await completeAgentRows(deps, {
+          rows,
+          from: query.from,
+          to: query.to,
+          access,
+          ...agentScope
+        }))
   };
 }
 
@@ -244,7 +361,8 @@ export async function readWorkspaceUsage(
   const tomorrow = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)
   ).toISOString();
-  const [days, breakdown, activity] = await Promise.all([
+  const filter = filterOf(input.query);
+  const [days, breakdown, activity, spend] = await Promise.all([
     deps.usageGovernance.summarizeBreakdown({
       ...monthQuery,
       to: (tomorrow < month.to ? tomorrow : month.to).slice(0, 10),
@@ -255,7 +373,7 @@ export async function readWorkspaceUsage(
       from: input.query.from,
       to: input.query.to,
       groupBy: input.query.groupBy,
-      filter: { ...filterOf(input.query), workspace: input.workspaceId },
+      filter: { ...filter, workspace: input.workspaceId },
       webSearchEnabled: deps.webSearchEnabled
     }),
     deps.usageGovernance.countActivity({
@@ -263,11 +381,42 @@ export async function readWorkspaceUsage(
       collaborationWorkspaceId: input.workspaceId,
       from: month.from,
       to: month.to
+    }),
+    deps.usageGovernance.spendStatus({
+      clientInstanceId: deps.clientInstanceId,
+      userId: getSubjectUserId(input.actor),
+      workspaceId: input.workspaceId
     })
   ]);
+  // The last day drawn is today: the days run up to it.
+  const { key: _today, ...today } = days.rows.at(-1) ?? { key: "", ...days.total };
+  const level = spend.workspace;
+  const limited =
+    level !== undefined &&
+    (level.day.limitMicros !== undefined || level.month.limitMicros !== undefined);
+  const agentRows =
+    input.query.groupBy === "agent" && Object.keys(filter).length === 0
+      ? await completeAgentRows(deps, {
+          rows: breakdown.rows,
+          from: input.query.from,
+          to: input.query.to,
+          workspaceId: input.workspaceId,
+          access: input.access
+        })
+      : { rows: breakdown.rows };
   return {
     workspaceName: workspace.name,
+    today,
     month: days.total,
+    // Its Owners and Admins read the workspace's amounts (limits spec 3.1).
+    ...(limited
+      ? {
+          limit: {
+            ...(spend.currency ? { currency: spend.currency } : {}),
+            ...levelOut(level, true, resets(now))
+          }
+        }
+      : {}),
     days: days.rows.map(({ key, ...window }) => ({ date: key, ...window })),
     activity,
     breakdown: {
@@ -276,7 +425,7 @@ export async function readWorkspaceUsage(
       groupBy: input.query.groupBy,
       personalWorkspacesKey: PERSONAL_WORKSPACES_KEY,
       total: breakdown.total,
-      rows: breakdown.rows
+      ...agentRows
     },
     membersVisible: input.access.authorize("usage.view_users", {
       workspaceId: input.workspaceId

@@ -20,11 +20,13 @@ import {
   TableRow
 } from "@work-shape/catalyst-ui";
 import { USAGE_BREAKDOWN_DIMENSIONS } from "@work-shape/catalyst-core";
+import { Download } from "lucide-react";
 import {
   useTranslation,
   type TranslationContextValue,
   type TranslationKey
 } from "../../shared/i18n";
+import { workspaceRoutePath } from "../../shared/routes";
 import { usageAgentLabel } from "./usage-attribution-labels";
 import { formatBillableCost } from "./usage-cost-format";
 
@@ -156,17 +158,97 @@ function usageBreakdownLabel(
   }
 }
 
+/** The comments counted on all rows. */
+function feedbackTotal(rows: readonly UsageBreakdownRow[]): number {
+  return rows.reduce((sum, row) => sum + (row.feedbackCount ?? 0), 0);
+}
+
+/** A row's part of the total cost, where both are priced in full. */
+function shareRatio(
+  row: Pick<UsageBreakdownRow, "cost">,
+  total: Pick<UsageBreakdownRow, "cost">
+): number | undefined {
+  const part = row.cost.billableCostMicros;
+  const whole = total.cost.billableCostMicros;
+  if (!row.cost.complete || !total.cost.complete || part === undefined || !whole) return undefined;
+  return part / whole;
+}
+
 function shareOf(
   row: Pick<UsageBreakdownRow, "cost">,
   total: Pick<UsageBreakdownRow, "cost">,
   locale: string
 ): string | undefined {
-  const part = row.cost.billableCostMicros;
-  const whole = total.cost.billableCostMicros;
-  if (!row.cost.complete || !total.cost.complete || part === undefined || !whole) return undefined;
-  return new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 1 }).format(
-    part / whole
-  );
+  const ratio = shareRatio(row, total);
+  return ratio === undefined
+    ? undefined
+    : new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 1 }).format(ratio);
+}
+
+/** One cell of a CSV line: quoted, and never read as a formula by a spreadsheet. */
+function csvCell(value: string | number | undefined): string {
+  if (value === undefined) return "";
+  if (typeof value === "number") return String(value);
+  const text = /^[=+\-@\t\r]/u.test(value) ? `'${value}` : value;
+  return /[",\n\r]/u.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+/**
+ * The Breakdown table as one CSV file (limits spec 4: one CSV download, no report builder):
+ * the rows as shown, then the total. Amounts are plain numbers in the currency's unit, so a
+ * spreadsheet sums them; an amount not yet priced in full is left empty.
+ */
+export function usageBreakdownCsv(
+  breakdown: UsageBreakdown,
+  label: (row: UsageBreakdownRow) => string,
+  t: TranslationContextValue["t"]
+): string {
+  const counts = breakdown.feedback !== undefined;
+  const amount = (cost: UsageBreakdownRow["cost"]) =>
+    cost.complete && cost.billableCostMicros !== undefined
+      ? cost.billableCostMicros / 1_000_000
+      : undefined;
+  const line = (cells: (string | number | undefined)[]) => cells.map(csvCell).join(",");
+  const currency = breakdown.total.cost.currency;
+  return [
+    line([
+      t(DIMENSION_LABELS[breakdown.groupBy]),
+      currency === undefined ? t("usageReports.cost") : `${t("usageReports.cost")} (${currency})`,
+      t("usageReports.share"),
+      t("usageReports.calls"),
+      t("usageReports.tokens"),
+      ...(counts ? [t("usageReports.feedback")] : [])
+    ]),
+    ...breakdown.rows.map((row) => {
+      const ratio = shareRatio(row, breakdown.total);
+      return line([
+        label(row),
+        amount(row.cost),
+        ratio === undefined ? undefined : Math.round(ratio * 10_000) / 10_000,
+        row.modelCallCount,
+        row.totalTokens,
+        ...(counts ? [row.feedbackCount] : [])
+      ]);
+    }),
+    line([
+      t("usageReports.total"),
+      amount(breakdown.total.cost),
+      undefined,
+      breakdown.total.modelCallCount,
+      breakdown.total.totalTokens,
+      ...(counts ? [feedbackTotal(breakdown.rows)] : [])
+    ])
+  ].join("\r\n");
+}
+
+function downloadCsv(name: string, csv: string): void {
+  // A byte order mark, so a spreadsheet reads the names' umlauts as UTF-8.
+  const href = URL.createObjectURL(new Blob([`﻿${csv}\r\n`], { type: "text/csv" }));
+  const link = document.createElement("a");
+  link.href = href;
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(href);
 }
 
 export function UsageBreakdownPanel({
@@ -202,10 +284,31 @@ export function UsageBreakdownPanel({
   const label = (row: UsageBreakdownRow) =>
     shown ? usageBreakdownLabel(state.groupBy, row, shown, t, agentLabel) : row.key;
   const incomplete = shown !== undefined && !shown.total.cost.complete && rows.length > 0;
+  const feedback = shown?.feedback;
+  const unusedAgents = shown?.unusedAgents ?? [];
 
   return (
     <div className="grid min-w-0 gap-4" data-testid="usage-breakdown">
       <FilterBar
+        {...(shown && rows.length > 0
+          ? {
+              actions: (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() =>
+                    downloadCsv(
+                      `usage-${shown.groupBy}-${shown.from}-${shown.to}.csv`,
+                      usageBreakdownCsv(shown, label, t)
+                    )
+                  }
+                >
+                  <Download size={14} aria-hidden="true" />
+                  {t("usageReports.downloadCsv")}
+                </Button>
+              )
+            }
+          : {})}
         filters={
           <>
             <Field label={t("usageReports.period")} className="w-44">
@@ -280,10 +383,15 @@ export function UsageBreakdownPanel({
               <TableHead align="end" priority={1}>
                 {t("usageReports.share")}
               </TableHead>
-              <TableHead align="end" priority={2}>
+              {feedback ? (
+                <TableHead align="end" priority={2}>
+                  {t("usageReports.feedback")}
+                </TableHead>
+              ) : null}
+              <TableHead align="end" priority={3}>
                 {t("usageReports.calls")}
               </TableHead>
-              <TableHead align="end" priority={3}>
+              <TableHead align="end" priority={4}>
                 {t("usageReports.tokens")}
               </TableHead>
             </TableRow>
@@ -326,6 +434,31 @@ export function UsageBreakdownPanel({
                   <TableCell align="end" className="whitespace-nowrap text-muted-foreground">
                     {shareOf(row, shown.total, locale) ?? "–"}
                   </TableCell>
+                  {feedback ? (
+                    <TableCell
+                      align="end"
+                      className="whitespace-nowrap text-muted-foreground"
+                      data-usage-feedback=""
+                    >
+                      {row.feedbackCount === undefined ? (
+                        "–"
+                      ) : feedback.reviewable && row.feedbackCount > 0 ? (
+                        <Button asChild variant="link" size="sm" className="h-auto px-0">
+                          <a
+                            href={workspaceRoutePath({ kind: "inbox-agent", agentName: row.key })}
+                            aria-label={t("usageReports.feedbackOpen", {
+                              count: row.feedbackCount.toLocaleString(locale),
+                              name
+                            })}
+                          >
+                            {row.feedbackCount.toLocaleString(locale)}
+                          </a>
+                        </Button>
+                      ) : (
+                        row.feedbackCount.toLocaleString(locale)
+                      )}
+                    </TableCell>
+                  ) : null}
                   <TableCell align="end" className="whitespace-nowrap text-muted-foreground">
                     {row.modelCallCount.toLocaleString(locale)}
                   </TableCell>
@@ -341,6 +474,11 @@ export function UsageBreakdownPanel({
                 {formatBillableCost(shown.total.cost, i18n)}
               </TableCell>
               <TableCell align="end" />
+              {feedback ? (
+                <TableCell align="end" className="whitespace-nowrap">
+                  {feedbackTotal(rows).toLocaleString(locale)}
+                </TableCell>
+              ) : null}
               <TableCell align="end" className="whitespace-nowrap">
                 {shown.total.modelCallCount.toLocaleString(locale)}
               </TableCell>
@@ -351,6 +489,15 @@ export function UsageBreakdownPanel({
           </TableBody>
         </Table>
       )}
+      {unusedAgents.length > 0 ? (
+        <p className="text-caption text-muted-foreground" data-testid="usage-unused-agents">
+          {t("usageReports.unusedAgents", {
+            names: new Intl.ListFormat(locale, { type: "conjunction" }).format(
+              unusedAgents.map((agentName) => usageAgentLabel(agentName, t, agentLabel))
+            )
+          })}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -809,7 +809,7 @@ const DAY_MS = 86_400_000;
  * The month's spend carried on in a straight line to its last day: spent so far over the days
  * gone, at least one, times the days of the month. Nothing while nothing is spent.
  */
-function projectMonth(spentMicros: number, at: string): number | undefined {
+export function projectMonth(spentMicros: number, at: string): number | undefined {
   if (spentMicros <= 0) return undefined;
   const now = new Date(at);
   const start = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);

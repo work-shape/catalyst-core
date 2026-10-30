@@ -78,6 +78,8 @@ export type WorkspaceRoute =
   | { kind: "inbox" }
   /** The Inbox with one item open beside the lists. */
   | { kind: "inbox-item"; itemId: string }
+  /** The Inbox with its lists narrowed to one agent: where the Usage page's feedback count leads. */
+  | { kind: "inbox-agent"; agentName: string }
   /** The gallery of the shared UI library. Administrators reach it by address; nothing links to it. */
   | { kind: "ui-library" }
   /** The Workflow screens on sample data, beside the UI library and for the same readers. */
@@ -196,6 +198,7 @@ export const areaRoutes: readonly AreaRoute[] = [
     paths: [
       { path: "/inbox", route: "inbox" },
       { path: "/inbox/$itemId", route: "inbox-item" },
+      { path: "/inbox/agent/$agentName", route: "inbox-agent" },
       { path: "/approvals", redirectTo: "/inbox" }
     ]
   },
@@ -338,6 +341,8 @@ function routeOf(
       return { kind };
     case "inbox-item":
       return itemId ? { kind, itemId } : undefined;
+    case "inbox-agent":
+      return params.agentName ? { kind, agentName: params.agentName } : undefined;
     case "settings":
       return group && page ? { kind, group, page } : undefined;
     case "build-kind":

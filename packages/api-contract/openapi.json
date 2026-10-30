@@ -59583,6 +59583,23 @@
             "items": {
               "$ref": "#/components/schemas/UsageBreakdownRow"
             }
+          },
+          "feedback": {
+            "type": "object",
+            "properties": {
+              "reviewable": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "reviewable"
+            ]
+          },
+          "unusedAgents": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -59642,6 +59659,11 @@
           },
           "name": {
             "type": "string"
+          },
+          "feedbackCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
           }
         },
         "required": [
@@ -60806,8 +60828,29 @@
           "workspaceName": {
             "type": "string"
           },
+          "today": {
+            "$ref": "#/components/schemas/ModelUsageWindowSummary"
+          },
           "month": {
             "$ref": "#/components/schemas/ModelUsageWindowSummary"
+          },
+          "limit": {
+            "type": "object",
+            "properties": {
+              "day": {
+                "$ref": "#/components/schemas/UsageSpendPeriod"
+              },
+              "month": {
+                "$ref": "#/components/schemas/UsageSpendPeriod"
+              },
+              "currency": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "day",
+              "month"
+            ]
           },
           "days": {
             "type": "array",
@@ -60827,6 +60870,7 @@
         },
         "required": [
           "workspaceName",
+          "today",
           "month",
           "days",
           "activity",

@@ -173,6 +173,16 @@ export interface FeedbackStore {
     summary: string;
     category?: string;
   }): Promise<FeedbackRecord | undefined>;
+  /**
+   * How many comments each agent's answers received from `from` up to `to`, by agent name,
+   * in one workspace where `workspaceId` names it. Counts only: no author, no text (LU-3).
+   */
+  countFeedbackByAgent(input: {
+    clientInstanceId: ClientInstanceId;
+    from: Date;
+    to: Date;
+    workspaceId?: string;
+  }): Promise<Map<string, number>>;
   deleteFeedback(input: { clientInstanceId: ClientInstanceId; id: FeedbackId }): Promise<boolean>;
   /** Comments created before `before`, oldest first. */
   listExpiredFeedback(input: {

@@ -20,7 +20,9 @@ import {
 export function registerUsageReportRoutes(route: Route, options: ChatServerOptions): void {
   const deps = usageReportDeps(options);
 
-  route(apiOperations["usage.breakdown.get"], ({ query }) => readUsageBreakdown(deps, query));
+  route(apiOperations["usage.breakdown.get"], ({ query, access }) =>
+    readUsageBreakdown(deps, query, access)
+  );
 
   route(apiOperations["usage.users.list"], ({ user, context, query }) =>
     readUsageUsers(deps, {

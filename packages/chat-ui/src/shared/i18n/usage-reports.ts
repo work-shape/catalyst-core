@@ -68,7 +68,13 @@ export const usageReports = defineTranslations({
     "usageReports.usersEmpty": "Nobody used a model in this month.",
     "usageReports.workspacePage": "Usage",
     "usageReports.workspaceMonth": "This month in {name}",
-    "usageReports.loadFailed": "The usage could not be loaded."
+    "usageReports.loadFailed": "The usage could not be loaded.",
+    "usageReports.feedback": "Feedback",
+    "usageReports.feedbackOpen": "{count}: open the comments on {name} in the Inbox",
+    "usageReports.unusedAgents": "Not used in this period: {names}.",
+    "usageReports.downloadCsv": "Download CSV",
+    "usageReports.today": "Today: {amount}",
+    "usageReports.workspaceLimit": "Limit of this workspace"
   },
   de: {
     "usageReports.tabs": "Nutzungsansichten",
@@ -135,6 +141,12 @@ export const usageReports = defineTranslations({
     "usageReports.usersEmpty": "In diesem Monat hat niemand ein Modell genutzt.",
     "usageReports.workspacePage": "Nutzung",
     "usageReports.workspaceMonth": "Dieser Monat in {name}",
-    "usageReports.loadFailed": "Die Nutzung konnte nicht geladen werden."
+    "usageReports.loadFailed": "Die Nutzung konnte nicht geladen werden.",
+    "usageReports.feedback": "Feedback",
+    "usageReports.feedbackOpen": "{count}: die Kommentare zu {name} im Eingang öffnen",
+    "usageReports.unusedAgents": "In diesem Zeitraum nicht genutzt: {names}.",
+    "usageReports.downloadCsv": "CSV herunterladen",
+    "usageReports.today": "Heute: {amount}",
+    "usageReports.workspaceLimit": "Limit dieses Arbeitsbereichs"
   }
 });

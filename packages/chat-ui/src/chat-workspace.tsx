@@ -1162,6 +1162,9 @@ function ChatWorkspaceContent({
                                                     ? inboxRoute.itemId
                                                     : undefined
                                                 }
+                                                {...(inboxRoute.kind === "inbox-agent"
+                                                  ? { agentName: inboxRoute.agentName }
+                                                  : {})}
                                                 onOpenItem={(itemId) =>
                                                   model.route.showRoute({
                                                     kind: "inbox-item",
