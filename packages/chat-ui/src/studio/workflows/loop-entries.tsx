@@ -31,6 +31,8 @@ export interface LoopEntry {
   status: "failed" | "running" | "done" | "cancelled";
   /** The step run that failed, where one did. */
   failed?: WorkflowStepRunView;
+  /** The step run of the entry that started a child run, where one did. */
+  child?: WorkflowStepRunView;
   /** A loop of the entry ended `done` with failed entries of its own. */
   withFailedEntries?: true;
   /** Where the calls of its steps that change something went, each once, in a test run. */
@@ -67,7 +69,8 @@ export function loopEntries(stepRuns: readonly WorkflowStepRunView[]): LoopEntry
       ...held,
       ...(targets === undefined ? {} : { targets }),
       ...(stepRun.publishedWouldAsk === "approval" ? { publishedWouldAsk: true as const } : {}),
-      ...((stepRun.loop?.failed ?? 0) > 0 ? { withFailedEntries: true as const } : {})
+      ...((stepRun.loop?.failed ?? 0) > 0 ? { withFailedEntries: true as const } : {}),
+      ...(held.child === undefined && stepRun.childRunId !== undefined ? { child: stepRun } : {})
     };
     entries.set(
       index,
@@ -204,7 +207,8 @@ export function LoopEntriesView({
 
 /**
  * One entry: its label and where it stands. A failed one says why; where it failed in a child
- * run, the row opens that run, which tells the rest. Any other failed one unfolds to why.
+ * run, the row opens that run, which tells the rest. Any other failed one unfolds to why. An
+ * entry that started a child run and did not fail elsewhere opens that run.
  */
 function LoopEntryRow({
   entry,
@@ -220,10 +224,16 @@ function LoopEntryRow({
   const failure = entry.failed?.failure;
   const failedStep = loop.steps.find((step) => step.id === entry.failed?.stepId);
   const failedAt = failedStep?.name;
-  const failedChild =
-    failedStep?.kind === "workflow" && entry.failed?.childRunId !== undefined
-      ? { step: failedStep, stepRun: entry.failed }
+  const childOf = (stepRun: WorkflowStepRunView | undefined) => {
+    const step = loop.steps.find((candidate) => candidate.id === stepRun?.stepId);
+    // A child the reader may not read does not open: its run is as closed to them as it is.
+    return step?.kind === "workflow" &&
+      step.childHidden !== true &&
+      stepRun?.childRunId !== undefined
+      ? { step, stepRun }
       : undefined;
+  };
+  const child = childOf(entry.failed) ?? (failure === undefined ? childOf(entry.child) : undefined);
   const reason =
     failure === undefined
       ? undefined
@@ -256,12 +266,12 @@ function LoopEntryRow({
           />
         </>
       }
-      {...(failedChild === undefined
+      {...(child === undefined
         ? { expandable: failure !== undefined }
-        : { onClick: () => onOpenChild(failedChild.step, failedChild.stepRun) })}
-      data-child-run={failedChild?.stepRun.childRunId}
+        : { onClick: () => onOpenChild(child.step, child.stepRun) })}
+      data-child-run={child?.stepRun.childRunId}
     >
-      {failure === undefined || failedChild !== undefined ? null : (
+      {failure === undefined || child !== undefined ? null : (
         <FailureBanner failure={failure} connection={stepConnection(failedStep, entry.failed)} />
       )}
     </ListRow>

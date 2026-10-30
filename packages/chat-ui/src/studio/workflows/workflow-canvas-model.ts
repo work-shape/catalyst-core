@@ -267,6 +267,10 @@ function stepSummary(
     const line = mailSummary(step.mail, recipients, { t, locale });
     if (line !== undefined) return line;
   }
+  if (step.childHidden === true) {
+    // In place of "Open": why it does not open, and nothing of the Workflow it starts.
+    return t("workflows.canvas.childHidden");
+  }
   if (step.description !== undefined) {
     return step.description;
   }
@@ -818,7 +822,9 @@ export function workflowGraph(
                 icon: step.service ?? sourceIcon(step)
               }
             }),
-      ...(step.kind === "workflow" ? { action: { label: t("workflows.canvas.open") } } : {}),
+      ...(step.kind === "workflow" && step.childHidden !== true
+        ? { action: { label: t("workflows.canvas.open") } }
+        : {}),
       ...state
     });
     return straight;

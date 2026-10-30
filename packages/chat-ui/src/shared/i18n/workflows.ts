@@ -183,6 +183,8 @@ export const workflows = defineTranslations({
     "workflows.canvas.loop": "Loop",
     "workflows.canvas.notReached": "Not reached",
     "workflows.canvas.open": "Open",
+    "workflows.canvas.childHidden":
+      "Starts a workflow you may not read, so it does not open from here.",
     "workflows.canvas.orByHand": "Or when someone starts it.",
     "workflows.canvas.parallel": "Parallel",
     "workflows.canvas.showEntries": "Show the entries",
@@ -405,6 +407,7 @@ export const workflows = defineTranslations({
     "workflows.settings.unnamed": "Someone you cannot see",
     "workflows.settings.workspaces": "Workspaces",
     "workflows.panel.worksOn": "Works on",
+    "workflows.panel.childHidden": "A workflow you may not read",
     "workflows.panel.writesTo": "Writes to",
     "workflows.reason.accountInactive":
       "The account the workflow works with no longer exists or is switched off.",
@@ -997,6 +1000,8 @@ export const workflows = defineTranslations({
     "workflows.canvas.loop": "Schleife",
     "workflows.canvas.notReached": "Nicht erreicht",
     "workflows.canvas.open": "Öffnen",
+    "workflows.canvas.childHidden":
+      "Startet einen Workflow, den du nicht lesen darfst. Er lässt sich von hier nicht öffnen.",
     "workflows.canvas.orByHand": "Oder wenn jemand ihn startet.",
     "workflows.canvas.parallel": "Parallel",
     "workflows.canvas.showEntries": "Einträge zeigen",
@@ -1225,6 +1230,7 @@ export const workflows = defineTranslations({
     "workflows.settings.unnamed": "Jemand, den du nicht sehen kannst",
     "workflows.settings.workspaces": "Arbeitsbereiche",
     "workflows.panel.worksOn": "Arbeitet mit",
+    "workflows.panel.childHidden": "Ein Workflow, den du nicht lesen darfst",
     "workflows.panel.writesTo": "Schreibt in",
     "workflows.reason.accountInactive":
       "Das Konto, mit dem der Workflow arbeitet, gibt es nicht mehr oder es ist abgeschaltet.",

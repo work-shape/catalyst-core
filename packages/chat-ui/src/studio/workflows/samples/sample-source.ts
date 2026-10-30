@@ -22,10 +22,35 @@ function missing(what: string): ApiError {
   return new ApiError(404, `${what} was not found.`, { code: "NOT_FOUND" });
 }
 
-/** Sample facts travel beside the manifest, as they do on an instance. */
-function stepFactsOf(sample: SampleWorkflow): Asset["stepFacts"] {
+type StepFact = NonNullable<Asset["stepFacts"]>[string];
+
+/**
+ * Sample facts travel beside the manifest, as they do on an instance. A child the reader may
+ * not read is named by its kind alone, as the server names it.
+ */
+function stepFactsOf(
+  sample: SampleWorkflow,
+  workflows: readonly SampleWorkflow[],
+  hidden: readonly string[]
+): Asset["stepFacts"] {
   return Object.fromEntries(
-    workflowStepsDeep(sample.manifest.steps).flatMap((step) => {
+    workflowStepsDeep(sample.manifest.steps).flatMap((step): [string, StepFact][] => {
+      if (step.type === "workflow" && typeof step.workflow === "string") {
+        const childId = step.workflow;
+        const child = workflows.find((entry) => entry.manifest.id === childId);
+        return [
+          [
+            step.id,
+            hidden.includes(childId) || child === undefined
+              ? { source: { kind: "workflow" } }
+              : {
+                  source: { kind: "workflow", title: child.manifest.name },
+                  title: child.manifest.name,
+                  published: true
+                }
+          ]
+        ];
+      }
       const reading = sample.readings[step.id];
       if (!reading) return [];
       return [
@@ -55,15 +80,18 @@ export function createSampleSource(
   locale: LocaleCode,
   /** The reader holds the right to start the samples. Off for the view of one who only reads. */
   mayStart = true,
-  now = Date.now()
+  now = Date.now(),
+  /** The Workflows the reader may not read: they are missing to them, as are their runs. */
+  hidden: readonly string[] = []
 ): WorkflowsSource {
-  const workflows = sampleWorkflows(locale);
+  const all = sampleWorkflows(locale);
+  const workflows = all.filter((entry) => !hidden.includes(entry.manifest.id));
   const held: SampleRun[] = [...sampleRuns(now)];
   let started = 0;
 
   const find = (runId: string): SampleRun => {
     const sample = held.find((entry) => entry.run.id === runId);
-    if (sample === undefined) {
+    if (sample === undefined || hidden.includes(sample.run.workflow)) {
       throw missing("The run");
     }
     return sample;
@@ -198,7 +226,7 @@ export function createSampleSource(
             startForm: startFormOf(sample.manifest.inputs),
             runsAs: SAMPLE_PRINCIPAL.displayLabel
           },
-          { stepFacts: stepFactsOf(sample) }
+          { stepFacts: stepFactsOf(sample, all, hidden) }
         )
       );
     },

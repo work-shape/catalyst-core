@@ -341,7 +341,7 @@ function StepDescription({
     (step.kind === "agent" ? step.instructions : step.description) ??
     (recipients === undefined ? summary : fallback === undefined ? undefined : t(fallback));
   const worksOn =
-    step.source === undefined
+    step.source === undefined && step.childHidden !== true
       ? undefined
       : step.effect === "changing"
         ? t("workflows.panel.writesTo")
@@ -370,7 +370,22 @@ function StepDescription({
               .join(", ")
           }
         ]),
-    ...(worksOn === undefined ? [] : [{ label: worksOn, value: step.source }]),
+    ...(worksOn === undefined
+      ? []
+      : [
+          {
+            label: worksOn,
+            // A Workflow the reader may not read is named by its kind alone, greyed.
+            value:
+              step.childHidden === true ? (
+                <span className="text-muted-foreground" data-child-hidden="">
+                  {t("workflows.panel.childHidden")}
+                </span>
+              ) : (
+                step.source
+              )
+          }
+        ]),
     ...(step.kind === "loop" && step.itemName !== undefined
       ? [{ label: t("workflows.panel.forEach"), value: step.itemName }]
       : []),
@@ -432,6 +447,10 @@ function StepDescription({
       ) : null}
       {sentence === undefined && rows.length === 0 ? (
         <p className="text-muted-foreground">{t("workflows.panel.nothingMore")}</p>
+      ) : null}
+      {step.childHidden === true && sentence !== summary ? (
+        // Where "Open" would stand: why it does not, once, beside the step's own sentence.
+        <p className="text-caption text-muted-foreground">{summary}</p>
       ) : null}
       {onOpenChild === undefined ? null : (
         <Button variant="outline" size="sm" className="justify-self-start" onClick={onOpenChild}>

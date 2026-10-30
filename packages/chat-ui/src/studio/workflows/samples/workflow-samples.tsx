@@ -16,8 +16,9 @@ import { createSampleSource } from "./sample-source";
 // reach, to be looked at, photographed and tested in a browser. The
 // address says what to open: `?at=<workflow>`, `?at=<workflow>/runs`,
 // `?at=<workflow>/runs/<run>`, `?at=<workflow>/open/<child>`, `?at=<workflow>/settings`, with `lang=de`, and with
-// `as=reader` as one who reads the Workflows and may start and cancel none. Light and dark
-// are the reader's own, as everywhere in the interface.
+// `as=reader` as one who reads the Workflows and may start and cancel none, and with
+// `hide=<workflow>,...` as one who may not read those Workflows. Light and dark are the
+// reader's own, as everywhere in the interface.
 
 const WORKSPACE = { id: "samples", name: "Samples" };
 
@@ -81,7 +82,17 @@ export function WorkflowSamples({
     return () => window.removeEventListener("popstate", read);
   }, []);
   const reader = asked.get("as") === "reader";
-  const source = useMemo(() => createSampleSource(locale, !reader), [locale, reader]);
+  const hide = asked.get("hide") ?? "";
+  const source = useMemo(
+    () =>
+      createSampleSource(
+        locale,
+        !reader,
+        Date.now(),
+        hide.split(",").filter((id) => id !== "")
+      ),
+    [locale, reader, hide]
+  );
   const host = useMemo<WorkflowsHost>(
     () => ({
       rights: {
