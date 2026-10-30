@@ -54,6 +54,7 @@ const addresses: [path: string, route: WorkspaceRoute, view: Area][] = [
   ],
   ["/inbox", { kind: "inbox" }, "inbox"],
   ["/inbox/apr_1", { kind: "inbox-item", itemId: "apr_1" }, "inbox"],
+  ["/inbox/agent/writer", { kind: "inbox-agent", agentName: "writer" }, "inbox"],
   ["/admin", { kind: "administration" }, "settings"],
   ["/build", { kind: "build" }, "build"],
   ["/build/agents", { kind: "build-kind", assetKind: "agents" }, "build"],

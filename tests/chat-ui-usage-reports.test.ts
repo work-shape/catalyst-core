@@ -13,6 +13,7 @@ import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { administration } from "@work-shape/catalyst-chat-ui/admin";
 import {
   UsageBreakdownPanel,
+  usageBreakdownCsv,
   UsageView,
   usagePeriodDays,
   type UsageBreakdownState
@@ -181,6 +182,79 @@ describe("the Breakdown", () => {
     );
     expect(markup).not.toContain("Sales team");
     expect(markup).not.toContain("cws_team");
+  });
+
+  const byAgent: UsageBreakdown = {
+    ...breakdown,
+    groupBy: "agent",
+    rows: [
+      { key: "writer", ...window(6, 2_400_000), feedbackCount: 3 },
+      { key: "reader", ...window(4, 1_600_000), feedbackCount: 0 }
+    ],
+    feedback: { reviewable: true },
+    unusedAgents: ["drafter"]
+  };
+  const renderByAgent = (shown: UsageBreakdown, locale: "en" | "de" = "en") =>
+    renderToStaticMarkup(
+      createElement(TranslationProvider, {
+        locale,
+        children: createElement(
+          UiRoot,
+          { mode: "light", labels: uiLabelsEn },
+          createElement(UsageBreakdownPanel, {
+            state: { ...state, groupBy: "agent" },
+            onStateChange: () => undefined,
+            breakdown: shown,
+            agentLabel: (name) => (name === "drafter" ? "Draft helper" : undefined)
+          })
+        )
+      })
+    );
+
+  it("by agent, counts the feedback and leads a reviewer to it in the Inbox", () => {
+    const markup = renderByAgent(byAgent);
+    expect(markup).toContain(">Feedback<");
+    expect(markup).toContain('href="/inbox/agent/writer"');
+    // No comment, nothing to open.
+    expect(markup).not.toContain('href="/inbox/agent/reader"');
+    expect(markup).toContain("Not used in this period: Draft helper.");
+
+    // A viewer who reviews no feedback reads the count and gets no link.
+    const plain = renderByAgent({ ...byAgent, feedback: { reviewable: false } });
+    expect(plain).not.toContain("/inbox/agent/");
+    expect(plain).toMatch(/data-usage-feedback="">3</u);
+
+    // Without the feedback Module there is no such column.
+    const { feedback: _feedback, ...withoutModule } = byAgent;
+    expect(renderByAgent(withoutModule)).not.toContain(">Feedback<");
+    expect(renderByAgent(byAgent, "de")).toContain(
+      "In diesem Zeitraum nicht genutzt: Draft helper."
+    );
+  });
+
+  it("writes the table as one CSV file a spreadsheet sums and runs nothing of", () => {
+    const shown: UsageBreakdown = {
+      ...breakdown,
+      rows: [
+        { key: "cws_team", name: '=HYPERLINK("x"), "Sales"', ...window(6, 2_400_000) },
+        { key: "personal", ...window(4, 1_600_000) }
+      ]
+    };
+    const label = (row: UsageBreakdown["rows"][number]) => row.name ?? "Personal workspaces";
+    const csv = usageBreakdownCsv(shown, label, (key) => key);
+    expect(csv.split("\r\n")).toEqual([
+      "usageReports.dimensionWorkspace,usageReports.cost (EUR),usageReports.share,usageReports.calls,usageReports.tokens",
+      `"'=HYPERLINK(""x""), ""Sales""",2.4,0.6,6,1200`,
+      "Personal workspaces,1.6,0.4,4,800",
+      "usageReports.total,4,,10,2000"
+    ]);
+    const agentLines = usageBreakdownCsv(
+      byAgent,
+      (row) => row.key,
+      (key) => key
+    ).split("\r\n");
+    expect(agentLines[1]).toBe("writer,2.4,0.6,6,1200,3");
+    expect(agentLines.at(-1)).toBe("usageReports.total,4,,10,2000,3");
   });
 
   it("reads a period as UTC days, the last one excluded", () => {

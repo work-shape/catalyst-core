@@ -57,6 +57,7 @@ function isInboxTab(value: string): value is InboxTab {
  */
 export function InboxArea({
   itemId,
+  agentName,
   onOpenItem,
   onCloseItem,
   onBesideWidthChange,
@@ -64,6 +65,8 @@ export function InboxArea({
 }: {
   /** The item of the address, when it names one. */
   itemId?: string;
+  /** The agent the address narrows the lists to, when it names one. */
+  agentName?: string;
   onOpenItem(itemId: string): void;
   onCloseItem(): void;
   /** Told how much of the main area the item takes beside the lists; 0 otherwise. */
@@ -85,7 +88,15 @@ export function InboxArea({
   const tabs = inboxTabs(canReview);
   const [chosenTab, setChosenTab] = useState<InboxTab | undefined>();
   // One filter for every list: switching tabs keeps what the reader narrowed to.
-  const [filter, setFilter] = useState<InboxFilter>(NO_INBOX_FILTER);
+  const [filter, setFilter] = useState<InboxFilter>(
+    agentName === undefined ? NO_INBOX_FILTER : { agentName }
+  );
+  // An address that names an agent narrows the lists to it once; then the filter is the reader's.
+  const [addressAgent, setAddressAgent] = useState(agentName);
+  if (agentName !== addressAgent) {
+    setAddressAgent(agentName);
+    if (agentName !== undefined) setFilter({ agentName });
+  }
   const places = host?.places;
   const tab: InboxTab =
     chosenTab !== undefined && tabs.includes(chosenTab)

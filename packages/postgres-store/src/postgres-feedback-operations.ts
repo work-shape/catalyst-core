@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, lt, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, lt, or } from "drizzle-orm";
 import {
   AppError,
   FEEDBACK_ASSET_KIND_OF,
@@ -284,6 +284,27 @@ export function createPostgresFeedbackStore(db: PostgresConnection): FeedbackSto
         )
         .returning({ id: feedback.id });
       return updated.length > 0 ? readOne(db, input) : undefined;
+    },
+
+    async countFeedbackByAgent(input) {
+      const rows = await db
+        .select({ agentName: feedback.agentName, count: count() })
+        .from(feedback)
+        .where(
+          and(
+            eq(feedback.clientInstanceId, input.clientInstanceId),
+            eq(feedback.subjectKind, "message"),
+            gte(feedback.createdAt, input.from),
+            lt(feedback.createdAt, input.to),
+            input.workspaceId === undefined
+              ? undefined
+              : eq(feedback.workspaceId, input.workspaceId)
+          )
+        )
+        .groupBy(feedback.agentName);
+      return new Map(
+        rows.flatMap((row) => (row.agentName === null ? [] : [[row.agentName, row.count] as const]))
+      );
     },
 
     async deleteFeedback(input) {

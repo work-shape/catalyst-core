@@ -241,7 +241,7 @@ export async function setUsageLimit(
 }
 
 /** The first moment after the current UTC day and month. */
-function resets(now: Date): { day: string; month: string } {
+export function resets(now: Date): { day: string; month: string } {
   return {
     day: new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)
@@ -250,7 +250,8 @@ function resets(now: Date): { day: string; month: string } {
   };
 }
 
-function levelOut(
+/** A level's day and month as a person reads them, with or without the amounts. */
+export function levelOut(
   level: UsageSpendLevelStatus,
   showAmounts: boolean,
   at: { day: string; month: string }
