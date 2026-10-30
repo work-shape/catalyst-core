@@ -602,6 +602,10 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
       unpinStep: async (workflow, step) => {
         done(await client.workflows.unpin_step({ params: { workflow, step } }));
       },
+      readWebhook: async (workflow, signal) =>
+        client.workflows.webhook({ params: { workflow }, signal }),
+      rotateWebhookSecret: async (workflow) =>
+        client.workflows.rotate_webhook_secret({ params: { workflow } }),
       readRevision: async (workflow, revision, signal) =>
         definitionOf(await readAsset(workflow, "", signal, revision)),
       validate: async (workflow, config) =>

@@ -14,6 +14,7 @@ import {
 // screens' own shapes. The data module maps what the instance answers onto these, so no screen
 // reads a type of the API contract.
 
+import type { CONNECTION_SECRET_STATES } from "@work-shape/catalyst-core";
 import type { AssetVerb } from "../../shared/build-rights";
 import type { StartForm } from "./start-form";
 
@@ -345,6 +346,17 @@ export interface WorkflowRerunStepView {
   step: string;
   changed: boolean;
   refusal?: { code: string; step?: string };
+}
+
+/**
+ * A Workflow's webhook as a reader of it sees it (EW-4): whether the published definition takes
+ * requests, how many a minute, and whether a secret is stored. Never the secret.
+ */
+export interface WorkflowWebhookView {
+  enabled: boolean;
+  perMinute: number;
+  secret: (typeof CONNECTION_SECRET_STATES)[number];
+  version?: number;
 }
 
 /** One of the reader's pinned step outputs on the draft: the step and the run it is from. */

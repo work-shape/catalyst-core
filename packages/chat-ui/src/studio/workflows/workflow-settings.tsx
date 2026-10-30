@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import {
   Banner,
   Button,
+  CommandLine,
   Field,
   FieldListEditor,
   Input,
@@ -17,6 +18,8 @@ import {
   type FieldListKind,
   type ScheduleValue
 } from "@work-shape/catalyst-ui";
+import { instanceUrl } from "../../admin/control-plane/personal-api-keys-model";
+import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { cronSchedule, scheduleCron } from "./schedule-cron";
 import { scheduleInWords, withZone } from "./schedule-words";
@@ -25,7 +28,12 @@ import { useStartRun } from "./start-run";
 import { WorkflowAppCallers } from "./workflow-app-callers";
 import { sameValue, WORKFLOW_FIELDS, type WorkflowManifest } from "./step-edits";
 import { fieldListState, leftField } from "./step-settings-parts";
-import { useRunsAvailable, useWorkflow, type WorkflowReadProblem } from "./workflow-data";
+import {
+  useRunsAvailable,
+  useWorkflow,
+  useWorkflowWebhook,
+  type WorkflowReadProblem
+} from "./workflow-data";
 import {
   useEditWithAgent,
   useWorkflowDraft,
@@ -35,7 +43,7 @@ import {
 } from "./workflow-draft";
 import { useWorkflowEditing, type WorkflowEditing } from "./workflow-editing";
 import { WorkflowHead } from "./workflow-head";
-import { editOffered, runsReadable, startOffered } from "./workflow-model";
+import { editOffered, runsReadable, startOffered, workflowRightsOn } from "./workflow-model";
 import type { WorkflowCallerView, WorkflowView } from "./workflow-views";
 import { WorkflowsFrame, routeLink, type OpenRoute } from "./workflows-frame";
 import { useWorkflowsHost } from "./workflows-host";
@@ -83,11 +91,19 @@ function triggersOf(step: Readonly<Record<string, unknown>> | undefined): Trigge
   return Array.isArray(step?.triggers) ? step.triggers.filter(isRecord) : [];
 }
 
+/** The platform event a Workflow can start on from its Settings (EW-4). */
+const SYNC_FINISHED = "knowledge_base.sync_finished";
+
+/** A trigger of the kind as it is turned on: an event trigger names the one event offered. */
+function newTrigger(kind: string): Trigger {
+  return kind === "platform_event" ? { kind, event: SYNC_FINISHED } : { kind };
+}
+
 /** The triggers with one kind on or off: one turned on is added at the end. */
 function switched(triggers: readonly Trigger[], kind: string, on: boolean): Trigger[] {
   const has = triggers.some((trigger) => trigger.kind === kind);
   if (on === has) return [...triggers];
-  return on ? [...triggers, { kind }] : triggers.filter((trigger) => trigger.kind !== kind);
+  return on ? [...triggers, newTrigger(kind)] : triggers.filter((trigger) => trigger.kind !== kind);
 }
 
 /** A limit a Workflow raises, in words. */
@@ -324,7 +340,19 @@ export function WorkflowSettingsForm({
       { kind: "schedule", cron: scheduleCron(value) ?? "", timeZone: value.zone }
     ]);
   };
-  const onCount = ["schedule", "manual", "parent", "outside"].filter(has).length;
+  const onCount = ["schedule", "manual", "parent", "outside", "webhook", "platform_event"].filter(
+    has
+  ).length;
+  const event = triggers.find((entry) => entry.kind === "platform_event");
+  const eventKnowledgeBase = isRecord(event?.filter) ? text(event.filter.knowledgeBase) : "";
+  const writeEventFilter = (name: string) =>
+    setTriggers(
+      triggers.map((entry) => {
+        if (entry.kind !== "platform_event") return entry;
+        const rest = Object.fromEntries(Object.entries(entry).filter(([key]) => key !== "filter"));
+        return name === "" ? rest : { ...rest, filter: { knowledgeBase: name } };
+      })
+    );
   // At least one way to start stays on: the last one cannot be turned off here.
   const lastOn = (kind: string) => onCount === 1 && has(kind);
   const changeWithAgent =
@@ -437,6 +465,36 @@ export function WorkflowSettingsForm({
           t("workflows.workflowSettings.byOutside"),
           t("workflows.workflowSettings.byOutsideHint")
         )}
+        {switchRow(
+          "webhook",
+          t("workflows.workflowSettings.byWebhook"),
+          t("workflows.workflowSettings.byWebhookHint")
+        )}
+        {has("webhook") ? (
+          <WorkflowWebhook
+            workflow={workflow}
+            mayRotate={host !== undefined && workflowRightsOn(host.rights, workflow).publish}
+          />
+        ) : null}
+        {switchRow(
+          "platform_event",
+          t("workflows.workflowSettings.onSync"),
+          t("workflows.workflowSettings.onSyncHint")
+        )}
+        {event === undefined ? null : (
+          <Field
+            label={t("workflows.workflowSettings.onSyncKnowledgeBase")}
+            hint={t("workflows.workflowSettings.onSyncKnowledgeBaseHint")}
+            optional
+          >
+            <Input
+              value={eventKnowledgeBase}
+              readOnly={readOnly}
+              data-event-knowledge-base=""
+              onChange={(change) => writeEventFilter(change.target.value.trim())}
+            />
+          </Field>
+        )}
         <WorkflowCallers
           workspaceId={workspaceId}
           callers={workflow.callers}
@@ -502,6 +560,83 @@ export function WorkflowSettingsForm({
       {editing === undefined ? null : (
         <WorkflowSettingsBar editing={editing} triggerId={triggerId} incomplete={onCount === 0} />
       )}
+    </div>
+  );
+}
+
+/**
+ * Where an outside system posts to start the Workflow, how it signs a request, and its secret,
+ * which a publisher makes and sees once (EW-4). The address takes requests once a revision with
+ * the webhook is published.
+ */
+function WorkflowWebhook({ workflow, mayRotate }: { workflow: WorkflowView; mayRotate: boolean }) {
+  const { t } = useTranslation();
+  const { apiBaseUrl } = useWorkspaceApiClient();
+  const webhook = useWorkflowWebhook(workflow.id, true);
+  const [secret, setSecret] = useState<string | undefined>();
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  if (webhook === undefined) return null;
+  const view = webhook.view;
+  const address = `${instanceUrl(apiBaseUrl, window.location.origin)}/api/v1/workflows/${encodeURIComponent(workflow.id)}/webhook`;
+  const makeSecret = () => {
+    setBusy(true);
+    setFailed(false);
+    webhook
+      .rotate()
+      .then((made) => setSecret(made.secret))
+      .catch(() => setFailed(true))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <div className="grid gap-3 rounded-md border p-4" data-workflow-webhook="">
+      {view?.enabled === false ? (
+        <p className="text-caption text-muted-foreground">
+          {t("workflows.workflowSettings.webhookUnpublished")}
+        </p>
+      ) : null}
+      <Field label={t("workflows.workflowSettings.webhookAddress")}>
+        <CommandLine label={t("workflows.workflowSettings.webhookAddress")} command={address} />
+      </Field>
+      <p className="text-caption text-muted-foreground">
+        {t("workflows.workflowSettings.webhookSigning")}
+      </p>
+      <KeyValueList layout="stacked">
+        <KeyValue label={t("workflows.workflowSettings.webhookSecret")}>
+          {view === undefined
+            ? "…"
+            : view.secret === "set"
+              ? t("workflows.workflowSettings.webhookSecretSet", { version: view.version ?? 1 })
+              : view.secret === "unreadable"
+                ? t("workflows.workflowSettings.webhookSecretUnreadable")
+                : t("workflows.workflowSettings.webhookSecretNone")}
+        </KeyValue>
+        {view === undefined ? null : (
+          <KeyValue label={t("workflows.workflowSettings.webhookRate")}>
+            {t("workflows.workflowSettings.webhookPerMinute", { count: view.perMinute })}
+          </KeyValue>
+        )}
+      </KeyValueList>
+      {secret === undefined ? null : (
+        <Banner tone="warning" layout="inline" data-webhook-secret="">
+          <span className="grid gap-2">
+            <span>{t("workflows.workflowSettings.webhookSecretOnce")}</span>
+            <CommandLine label={t("workflows.workflowSettings.webhookSecret")} command={secret} />
+          </span>
+        </Banner>
+      )}
+      {failed ? (
+        <Banner tone="danger" layout="inline">
+          {t("workflows.workflowSettings.webhookSecretFailed")}
+        </Banner>
+      ) : null}
+      {mayRotate ? (
+        <Button variant="outline" size="sm" className="w-fit" disabled={busy} onClick={makeSecret}>
+          {view?.secret === "set"
+            ? t("workflows.workflowSettings.webhookSecretRotate")
+            : t("workflows.workflowSettings.webhookSecretMake")}
+        </Button>
+      ) : null}
     </div>
   );
 }

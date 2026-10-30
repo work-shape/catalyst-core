@@ -23,7 +23,8 @@ import type {
   WorkflowRunView,
   WorkflowStepRunView,
   WorkflowStepTranscriptView,
-  WorkflowView
+  WorkflowView,
+  WorkflowWebhookView
 } from "./workflow-views";
 
 // The reads and the two writes of the Workflow screens, as hooks over the source at hand. No
@@ -62,7 +63,8 @@ function useWorkflowKeys() {
       runs: ["workflow-runs", source.key] as const,
       choices: ["workflow-step-choices", source.key] as const,
       liveOnce: ["workflow-live-once", source.key] as const,
-      pins: ["workflow-step-pins", source.key] as const
+      pins: ["workflow-step-pins", source.key] as const,
+      webhook: ["workflow-webhook", source.key] as const
     }),
     [apiBaseUrl, source.key]
   );
@@ -561,6 +563,39 @@ export function useStepPinWrites(): StepPinWrites | undefined {
       unpin: async (workflow, step) => unpinStep(workflow, step).finally(changed)
     };
   }, [drafts, keys, queryClient]);
+}
+
+/**
+ * A Workflow's webhook (EW-4): its state, read where `enabled`, and the one act on it, making a
+ * new secret. Nothing where the source has no webhooks.
+ */
+export function useWorkflowWebhook(
+  workflow: string,
+  enabled: boolean
+):
+  | {
+      view: WorkflowWebhookView | undefined;
+      rotate(): Promise<{ secret: string; version: number }>;
+    }
+  | undefined {
+  const { drafts } = useWorkflowsSource();
+  const keys = useWorkflowKeys();
+  const queryClient = useQueryClient();
+  const read = drafts?.readWebhook?.bind(drafts);
+  const rotate = drafts?.rotateWebhookSecret?.bind(drafts);
+  const query = useQuery({
+    queryKey: [...keys.webhook, workflow],
+    queryFn: ({ signal }) => (read ? read(workflow, signal) : Promise.reject(new Error("none"))),
+    enabled: enabled && read !== undefined
+  });
+  if (read === undefined || rotate === undefined) return undefined;
+  return {
+    view: query.data,
+    rotate: async () =>
+      rotate(workflow).finally(() =>
+        queryClient.invalidateQueries({ queryKey: [...keys.webhook, workflow] })
+      )
+  };
 }
 
 /** What a person does to the draft of a Workflow from its page and from a test run. */
