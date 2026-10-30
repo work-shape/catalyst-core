@@ -181,7 +181,7 @@ describe("the page cache of cited synced documents (KB 76)", () => {
     ).toEqual([{ n: 2 }]);
   });
 
-  it("never serves a withdrawn document, from the cache either, and the next expiry run deletes its entry", async () => {
+  it("never serves a withdrawn document, from the cache either, and its withdrawal purges its entry", async () => {
     const source = countedSource();
     const world = await setup(source.wrap);
     const files = Object.fromEntries(
@@ -211,14 +211,19 @@ describe("the page cache of cited synced documents (KB 76)", () => {
     );
     expect(await store.read(withdrawn)).toBeUndefined();
     expect(source.state.fetches).toBe(0);
-    expect(await cachedObjects(world, withdrawn)).toHaveLength(1);
-
-    await runExpiry(world);
+    // The withdrawal queued the document's removal, whose purge deletes its cached page.
+    const [queued] = await world.platform`update platform_jobs set run_after = now()
+      where kind = 'knowledge_base.remove_documents' and status = 'queued' returning id`;
+    expect(queued).toBeDefined();
+    await world.worker.runDue();
     expect(await world.sql`select document_id from catalyst_kb.page_cache`).toEqual([
       { document_id: kept }
     ]);
     expect(await cachedObjects(world, withdrawn)).toEqual([]);
     expect(await cachedObjects(world, kept)).toHaveLength(1);
+    const [purged] = await world.platform`select metadata from audit_events
+      where type = 'knowledge_base.documents_purged' and subject = ${world.record.id}`;
+    expect(purged?.metadata).toMatchObject({ cachedPages: 1 });
   });
 
   it("deletes the whole page cache with the Knowledge Base", async () => {
