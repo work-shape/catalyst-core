@@ -18,7 +18,8 @@ export const GUARDRAIL_EVENTS = [
   "workflow.before_publish",
   "data_store.before_publish",
   "form_page.before_publish",
-  "approval_request.before_create"
+  "approval_request.before_create",
+  "message.before_send"
 ] as const;
 export type GuardrailEvent = (typeof GUARDRAIL_EVENTS)[number];
 
@@ -50,7 +51,7 @@ export interface GuardrailSubject {
  * `operation` the name of the operation called in turn.
  */
 export interface OperationBeforeEvent {
-  name: Exclude<GuardrailEvent, "approval_request.before_create">;
+  name: Exclude<GuardrailEvent, "approval_request.before_create" | "message.before_send">;
   subject: GuardrailSubject;
   /** The event's checkable fields, read only where a guardrail applies and never kept. */
   checkable(): GuardrailFields | Promise<GuardrailFields>;

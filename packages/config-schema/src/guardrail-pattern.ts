@@ -26,26 +26,112 @@ const GUARDRAIL_PATTERN_STEPS = 40_000_000;
  */
 const GUARDRAIL_PATTERN_MIN_READ_CHARS = 64 * 1024;
 
-/** A compiled pattern: whether it matches somewhere in the text. */
+/**
+ * How far two pieces of a long text overlap when a pattern reads it piece by piece: a match up
+ * to this long is found whole wherever it lies, and each piece reads this much before it, so
+ * that a word boundary or the digits around a card number read as in the whole text.
+ */
+const GUARDRAIL_PATTERN_OVERLAP_CHARS = 4 * 1024;
+
+/** A compiled pattern: whether it matches somewhere in the text, and how often. */
 export interface GuardrailPattern {
   test(text: string): boolean;
-  /** The most characters of one field it reads, by the size of its program. */
+  /**
+   * How often it matches in the text, not overlapping, counting at most `max`. Each match
+   * continues the scan where the one before ended, so the count reads the text once, as `test`.
+   * A text longer than `maxChars` is read in overlapping pieces of at most `maxChars` each, so
+   * each piece stays within the work one check may do and no part of the text goes unread.
+   */
+  count(text: string, max: number): number;
+  /** The most characters it reads in one piece, by the size of its program. */
   maxChars: number;
 }
 
 /**
  * Compiles a guardrail's pattern with RE2, which has no backreferences and no lookaround and
- * matches in linear time. Throws the reason it does not compile.
+ * matches in linear time. With `checksum: luhn` a match counts only where its digits pass the
+ * Luhn check and do not run on beyond it. Throws the reason it does not compile.
  */
-export function compileGuardrailPattern(pattern: string): GuardrailPattern {
+export function compileGuardrailPattern(pattern: string, checksum?: "luhn"): GuardrailPattern {
   const compiled = RE2JS.compile(pattern);
-  return {
-    test: (text) => compiled.matcher(text).find(),
-    maxChars: Math.min(
-      GUARDRAIL_CHECKED_FIELD_MAX_CHARS,
-      Math.floor(GUARDRAIL_PATTERN_STEPS / compiled.programSize())
-    )
+  const maxChars = Math.min(
+    GUARDRAIL_CHECKED_FIELD_MAX_CHARS,
+    Math.floor(GUARDRAIL_PATTERN_STEPS / compiled.programSize())
+  );
+  /** The matches that start in [from, until) of the text, counting at most `max`. */
+  const countIn = (text: string, from: number, until: number, max: number): number => {
+    const matcher = compiled.matcher(text);
+    let found = 0;
+    let at = from;
+    while (found < max && at < until && at <= text.length && matcher.find(at)) {
+      const start = matcher.start();
+      const end = matcher.end();
+      if (start >= until) break;
+      if (checksum !== "luhn" || isCardNumber(text, start, end)) found += 1;
+      // An empty match moves on by one, so the scan always ends.
+      at = end > start ? end : end + 1;
+    }
+    return found;
   };
+  const count = (text: string, max: number): number => {
+    if (text.length <= maxChars) return countIn(text, 0, text.length + 1, max);
+    // Each piece owns the matches that start in its own part, and reads the overlap before and
+    // after it, so a match is counted once and found whole up to the overlap's length.
+    const own = Math.max(
+      GUARDRAIL_PATTERN_OVERLAP_CHARS,
+      maxChars - 2 * GUARDRAIL_PATTERN_OVERLAP_CHARS
+    );
+    let found = 0;
+    for (let start = 0; start < text.length && found < max; start += own) {
+      const from = Math.max(0, start - GUARDRAIL_PATTERN_OVERLAP_CHARS);
+      const piece = text.slice(from, start + own + GUARDRAIL_PATTERN_OVERLAP_CHARS);
+      found += countIn(piece, start - from, start - from + own, max - found);
+    }
+    return found;
+  };
+  return {
+    test: (text) =>
+      checksum || text.length > maxChars ? count(text, 1) > 0 : compiled.matcher(text).find(),
+    count,
+    maxChars
+  };
+}
+
+/** Payment card numbers have 13 to 19 digits. */
+const CARD_DIGITS_MIN = 13;
+const CARD_DIGITS_MAX = 19;
+
+/**
+ * Whether a match is a payment card number: 13 to 19 digits that pass the Luhn check, standing
+ * alone. Digits that go on before or after it, joined by a space or a hyphen, or letters glued to
+ * it, make it part of something longer, such as an IBAN or an account number.
+ */
+function isCardNumber(text: string, start: number, end: number): boolean {
+  const digits = text.slice(start, end).replace(/[^0-9]/gu, "");
+  if (digits.length < CARD_DIGITS_MIN || digits.length > CARD_DIGITS_MAX) return false;
+  if (goesOn(text, start - 1, -1) || goesOn(text, end, 1)) return false;
+  return passesLuhn(digits);
+}
+
+function goesOn(text: string, at: number, step: 1 | -1): boolean {
+  const next = text[at];
+  if (next === undefined) return false;
+  if (/[0-9A-Za-z]/u.test(next)) return true;
+  return (next === " " || next === "-") && /[0-9]/u.test(text[at + step] ?? "");
+}
+
+/** The Luhn checksum of payment card numbers. */
+export function passesLuhn(digits: string): boolean {
+  let sum = 0;
+  for (let index = 0; index < digits.length; index += 1) {
+    let digit = Number(digits[digits.length - 1 - index]);
+    if (index % 2 === 1) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+    sum += digit;
+  }
+  return sum % 10 === 0;
 }
 
 /** Why a pattern does not compile or reads too little, or undefined where it does neither. */

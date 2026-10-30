@@ -42,6 +42,7 @@ import {
   ProductConversationRunTransport,
   startProductConversationRun
 } from "./product-run-transport";
+import { ChatInputGuardProvider, useChatInputGuardModel } from "../guardrails/chat-input-guard";
 import {
   draftAttachmentsKey,
   holdsFiles,
@@ -163,6 +164,20 @@ function AssistantRuntimePane({
   const [optimisticPending, setOptimisticPending] = useState(false);
   const [rootSubmitPending, setRootSubmitPending] = useState(false);
   const [rootSubmitError, setRootSubmitError] = useState<SendRefusal | undefined>(undefined);
+  // The guardrails on the person's message (GR-4): a refusal shows above the composer.
+  const chatInputGuard = useChatInputGuardModel(selectedConversationId);
+  const {
+    acceptsWarnings: acceptsGuardrailWarnings,
+    refused: chatInputRefused,
+    delivered: chatInputDelivered
+  } = chatInputGuard;
+  const runStartedWithChatInput = useCallback(
+    (response: Parameters<typeof onRunStarted>[0]) => {
+      chatInputDelivered(response.conversation.id, response.chatInput);
+      onRunStarted(response);
+    },
+    [chatInputDelivered, onRunStarted]
+  );
   const noAgentsMessage =
     config && config.agents.length === 0 && !agentsLoading
       ? t(agentsWorkspaceScoped ? "workspaceNoAgents" : "instanceNotConfigured")
@@ -263,6 +278,7 @@ function AssistantRuntimePane({
             idempotencyKey: createRunIdempotencyKey(),
             locale,
             text: trimmedText,
+            ...(acceptsGuardrailWarnings(trimmedText) ? { acceptGuardrailWarnings: true } : {}),
             // A chat started in a project takes the project's audience.
             ...(startProjectId
               ? { projectId: startProjectId }
@@ -283,12 +299,14 @@ function AssistantRuntimePane({
             };
           }
           onMessageSubmitted(response.conversation.id);
-          onRunStarted(response);
+          runStartedWithChatInput(response);
         })
         .catch((error: unknown) => {
           if (!activeRef.current) {
             return;
           }
+          // The guardrails refused it: the composer says why, and the draft stays.
+          if (chatInputRefused(error, trimmedText, undefined)) return;
           setRootSubmitError({
             message: error instanceof Error ? error.message : "Message send failed",
             attachmentsKey
@@ -301,14 +319,16 @@ function AssistantRuntimePane({
       return true;
     },
     [
+      acceptsGuardrailWarnings,
       attachmentsKey,
+      chatInputRefused,
       client,
       collaborationWorkspaceId,
       docked,
       holdsLocalFiles,
       locale,
       onMessageSubmitted,
-      onRunStarted,
+      runStartedWithChatInput,
       requestedReasoningEffort,
       selectedAgentName,
       selectedModelBindingId,
@@ -358,10 +378,13 @@ function AssistantRuntimePane({
     reasoningEffort: requestedReasoningEffort,
     locale,
     messageSubmitted: onMessageSubmitted,
-    runStarted: onRunStarted,
+    runStarted: runStartedWithChatInput,
+    chatInput: chatInputGuard,
     t
   });
   const { refreshThread } = followUpSource;
+  /** The text of a send the guardrails refused, to go back into the composer when it ends. */
+  const refusedTextRef = useRef<string | undefined>(undefined);
   const transport = useMemo(
     () =>
       new ProductConversationRunTransport({
@@ -374,18 +397,26 @@ function AssistantRuntimePane({
         selectedReasoningEffort: requestedReasoningEffort,
         isSendDisabled: () => sendDisabledReason,
         onMessageSubmitted,
-        onRunStarted,
+        onRunStarted: runStartedWithChatInput,
+        acceptsGuardrailWarnings,
+        onSendRefused: (error, text) => {
+          if (!chatInputRefused(error, text, selectedConversationId)) return false;
+          refusedTextRef.current = text;
+          return true;
+        },
         // A run this page did not know of was going: the thread names it and the queue.
         onFollowUpQueued: (followUp) => {
           refreshThread(followUp.conversationId).catch(() => undefined);
         }
       }),
     [
+      acceptsGuardrailWarnings,
+      chatInputRefused,
       client,
       collaborationWorkspaceId,
       locale,
       onMessageSubmitted,
-      onRunStarted,
+      runStartedWithChatInput,
       refreshThread,
       requestedReasoningEffort,
       selectedAgentName,
@@ -402,6 +433,13 @@ function AssistantRuntimePane({
     toCreateMessage: toCreateMessageWithAttachments,
     onFinish() {
       setOptimisticPendingIfActive(false);
+      const refused = refusedTextRef.current;
+      if (refused === undefined) return;
+      refusedTextRef.current = undefined;
+      // The guardrails refused it and nothing was stored: the message leaves the thread and
+      // goes back to the composer.
+      runtime.thread.importExternalState(toAiSdkMessageRepository(initialMessages));
+      runtime.thread.composer.setText(refused);
     },
     onError(error) {
       const viewed = activeRef.current;
@@ -465,108 +503,110 @@ function AssistantRuntimePane({
         syncKey={messagesSyncKey}
       />
       <AssistantToolRegistry>
-        <FollowUpQueueProvider value={followUpQueue}>
-          <AgentOpensProvider value={agentOpens}>
-            <DraftBridge
-              draftKey={selectedConversationId ?? "new"}
-              draft={draft}
-              onDraftChange={onDraftChange}
-            />
-            <QueuedSendBridge
-              queuedSend={queuedSend}
-              sendBlock={sendBlock}
-              attachmentsKey={attachmentsKey}
-              collaborationWorkspaceId={collaborationWorkspaceId}
-              onSettled={settleQueuedSend}
-              onSubmitMessage={selectedConversationId ? undefined : submitRootDraftMessage}
-            />
-            <AssistantThread
-              config={config}
-              agents={config?.agents ?? []}
-              noAgentsMessage={noAgentsMessage}
-              selectedAgentName={selectedAgentName}
-              selectableModels={selectableModels}
-              personalData={personalData}
-              selectedModelBindingId={selectedModelBindingId}
-              selectedReasoningEffort={selectedReasoningEffort}
-              showContextIndicator={showContextIndicator}
-              contextSnapshot={contextSnapshot}
-              notice={visibleNotice}
-              noticeReport={visibleNotice === notice ? noticeReport : undefined}
-              noticeContinue={visibleNotice === notice ? noticeContinue : undefined}
-              usageNote={usageNote}
-              usageLimit={usageLimit}
-              onNewConversationForPersonalData={
-                noModelForPersonalData ? chat.startNewConversation : undefined
-              }
-              newConversationPrivate={newConversationPrivate}
-              subjectLine={
-                conversationSubject === undefined &&
-                pendingOpen === undefined &&
-                privateBuild === undefined ? undefined : (
-                  <>
-                    {privateBuild}
-                    {pendingOpen === undefined ? null : (
-                      <AssetOpenedChip open={pendingOpen} onGoTo={agentOpens.goTo} />
-                    )}
-                    {/* In the dock its head says what the conversation is about. */}
-                    {conversationSubject === undefined || docked ? null : (
-                      <ConversationSubjectLine
-                        subject={conversationSubject.subject}
-                        title={conversationSubject.title}
-                        workspaceId={collaborationWorkspaceId}
-                        onOpenRoute={openRoute}
-                      />
-                    )}
-                  </>
-                )
-              }
-              start={conversationStart(
-                conversationSubject === undefined
-                  ? undefined
-                  : {
-                      kind: conversationSubject.subject.kind,
-                      // Until its record arrives the title is the asset's id, which is not said.
-                      title:
-                        conversationSubject.title === conversationSubject.subject.name
-                          ? undefined
-                          : conversationSubject.title
-                    },
-                dockKind,
-                dockTarget
-              )}
-              retainedUntil={selectedConversationRetainedUntil}
-              draftAttachments={draftAttachments}
-              localUploadingAttachments={localUploadingAttachments}
-              sendBlock={sendBlock}
-              sendQueued={queuedSend !== undefined}
-              attachmentsEnabled={attachmentsEnabled}
-              attachmentAccept={attachmentAccept}
-              conversationRunning={conversationRunning}
-              activeRunId={activeRun?.run.id}
-              preparingToolName={activeRun?.projection.preparingTool?.toolName}
-              optimisticPending={optimisticPending}
-              messagesEnabled={Boolean(selectedConversationId)}
-              messagesLoaded={messagesLoaded}
-              threadLoading={snapshotStatus === "loading"}
-              loadedMessageCount={initialMessages.length}
-              messageTimes={messageTimes}
-              agentChanges={agentChanges}
-              conversationId={selectedConversationId}
-              composerFocusRequestId={composerFocusRequestId}
-              startComposerRef={startComposerRef}
-              onCancelRun={onCancelRun}
-              onSelectAgent={onSelectAgent}
-              onSelectModelBinding={selectModelBindingId}
-              onSelectReasoningEffort={selectReasoningEffort}
-              onFilesSelected={onFilesSelected}
-              onRemoveDraftAttachment={onRemoveDraftAttachment}
-              onRetryDraftAttachment={onRetryDraftAttachment}
-              onQueueSend={queueSend}
-              onSubmitMessage={selectedConversationId ? undefined : submitRootDraftMessage}
-            />
-          </AgentOpensProvider>
-        </FollowUpQueueProvider>
+        <ChatInputGuardProvider value={chatInputGuard}>
+          <FollowUpQueueProvider value={followUpQueue}>
+            <AgentOpensProvider value={agentOpens}>
+              <DraftBridge
+                draftKey={selectedConversationId ?? "new"}
+                draft={draft}
+                onDraftChange={onDraftChange}
+              />
+              <QueuedSendBridge
+                queuedSend={queuedSend}
+                sendBlock={sendBlock}
+                attachmentsKey={attachmentsKey}
+                collaborationWorkspaceId={collaborationWorkspaceId}
+                onSettled={settleQueuedSend}
+                onSubmitMessage={selectedConversationId ? undefined : submitRootDraftMessage}
+              />
+              <AssistantThread
+                config={config}
+                agents={config?.agents ?? []}
+                noAgentsMessage={noAgentsMessage}
+                selectedAgentName={selectedAgentName}
+                selectableModels={selectableModels}
+                personalData={personalData}
+                selectedModelBindingId={selectedModelBindingId}
+                selectedReasoningEffort={selectedReasoningEffort}
+                showContextIndicator={showContextIndicator}
+                contextSnapshot={contextSnapshot}
+                notice={visibleNotice}
+                noticeReport={visibleNotice === notice ? noticeReport : undefined}
+                noticeContinue={visibleNotice === notice ? noticeContinue : undefined}
+                usageNote={usageNote}
+                usageLimit={usageLimit}
+                onNewConversationForPersonalData={
+                  noModelForPersonalData ? chat.startNewConversation : undefined
+                }
+                newConversationPrivate={newConversationPrivate}
+                subjectLine={
+                  conversationSubject === undefined &&
+                  pendingOpen === undefined &&
+                  privateBuild === undefined ? undefined : (
+                    <>
+                      {privateBuild}
+                      {pendingOpen === undefined ? null : (
+                        <AssetOpenedChip open={pendingOpen} onGoTo={agentOpens.goTo} />
+                      )}
+                      {/* In the dock its head says what the conversation is about. */}
+                      {conversationSubject === undefined || docked ? null : (
+                        <ConversationSubjectLine
+                          subject={conversationSubject.subject}
+                          title={conversationSubject.title}
+                          workspaceId={collaborationWorkspaceId}
+                          onOpenRoute={openRoute}
+                        />
+                      )}
+                    </>
+                  )
+                }
+                start={conversationStart(
+                  conversationSubject === undefined
+                    ? undefined
+                    : {
+                        kind: conversationSubject.subject.kind,
+                        // Until its record arrives the title is the asset's id, which is not said.
+                        title:
+                          conversationSubject.title === conversationSubject.subject.name
+                            ? undefined
+                            : conversationSubject.title
+                      },
+                  dockKind,
+                  dockTarget
+                )}
+                retainedUntil={selectedConversationRetainedUntil}
+                draftAttachments={draftAttachments}
+                localUploadingAttachments={localUploadingAttachments}
+                sendBlock={sendBlock}
+                sendQueued={queuedSend !== undefined}
+                attachmentsEnabled={attachmentsEnabled}
+                attachmentAccept={attachmentAccept}
+                conversationRunning={conversationRunning}
+                activeRunId={activeRun?.run.id}
+                preparingToolName={activeRun?.projection.preparingTool?.toolName}
+                optimisticPending={optimisticPending}
+                messagesEnabled={Boolean(selectedConversationId)}
+                messagesLoaded={messagesLoaded}
+                threadLoading={snapshotStatus === "loading"}
+                loadedMessageCount={initialMessages.length}
+                messageTimes={messageTimes}
+                agentChanges={agentChanges}
+                conversationId={selectedConversationId}
+                composerFocusRequestId={composerFocusRequestId}
+                startComposerRef={startComposerRef}
+                onCancelRun={onCancelRun}
+                onSelectAgent={onSelectAgent}
+                onSelectModelBinding={selectModelBindingId}
+                onSelectReasoningEffort={selectReasoningEffort}
+                onFilesSelected={onFilesSelected}
+                onRemoveDraftAttachment={onRemoveDraftAttachment}
+                onRetryDraftAttachment={onRetryDraftAttachment}
+                onQueueSend={queueSend}
+                onSubmitMessage={selectedConversationId ? undefined : submitRootDraftMessage}
+              />
+            </AgentOpensProvider>
+          </FollowUpQueueProvider>
+        </ChatInputGuardProvider>
       </AssistantToolRegistry>
     </AssistantRuntimeProvider>
   );

@@ -25,6 +25,7 @@ import { createTestInstance, getTestJobs, getTestOperationCalls } from "./suppor
 import { withTestSql } from "./support/test-sql";
 import { createTestConfig } from "./support/fixtures";
 import { required, waitUntil } from "./support/assertions";
+import { guardedEvents } from "./support/guardrails";
 
 const fields = {
   agentName: "scheduled-helper",
@@ -70,6 +71,20 @@ async function fixture(cookieIdentity = false) {
     workspace,
     headers: cookieIdentity ? { origin: "http://localhost", "x-session-cookie": "yes" } : {}
   };
+}
+
+/** The fixture with the guardrails of the operator's floor running, those on chat input among them. */
+async function guardedFixture() {
+  const t = await setupAccessInstance({
+    storedAssetSource: true,
+    server: (stores) => ({ operations: { events: guardedEvents(stores, {}).events } })
+  });
+  await t.putAgent(t.admin.id, fields.agentName, {}, "all");
+  const workspace = await t.stores.workspaces.ensurePersonalWorkspace({
+    clientInstanceId,
+    userId: t.kai.id
+  });
+  return { t, workspace };
 }
 
 /** Only this start's queued tick is moved to the database's present. No wall-clock sleep. */
@@ -351,6 +366,88 @@ describe("scheduled prompts API", () => {
         conversationId: null
       })
     ]);
+  });
+
+  // GR-4: the guardrails on chat input read a scheduled prompt as they read a sent message.
+  // Fails without the change: a prompt with a card number was saved and ran unchecked.
+  it("refuses a prompt a guardrail on chat input blocks, on create and on edit", async () => {
+    const { t, workspace } = await guardedFixture();
+    const blockedPrompt = "Buche mit Karte 4111 1111 1111 1111";
+    await t.expectRefused(
+      t.kai.id,
+      "scheduled_starts.create",
+      { payload: { ...fields, prompt: blockedPrompt, collaborationWorkspaceId: workspace.id } },
+      { status: 403, code: "GUARDRAIL_BLOCKED" }
+    );
+    expect(
+      await t.stores.scheduledStarts.list({
+        clientInstanceId,
+        ownerUserId: t.kai.id,
+        page: { limit: 10 }
+      })
+    ).toEqual([]);
+    const start = scheduledStartSchema.parse(
+      (
+        await t.expectOk(t.kai.id, "scheduled_starts.create", {
+          payload: { ...fields, collaborationWorkspaceId: workspace.id }
+        })
+      ).json()
+    );
+    await t.expectRefused(
+      t.kai.id,
+      "scheduled_starts.update",
+      { params: { scheduledStartId: start.id }, payload: { ...fields, prompt: blockedPrompt } },
+      { status: 403, code: "GUARDRAIL_BLOCKED" }
+    );
+    const kept = await t.stores.scheduledStarts.get({ clientInstanceId, id: start.id });
+    expect(kept?.prompt).toBe(fields.prompt);
+  });
+
+  // Fails without the change: a run fired with whatever the prompt held when it was due.
+  it("records failed / guardrail_blocked when a guardrail blocks the prompt at its tick, and fires the next", async () => {
+    const { t, workspace } = await guardedFixture();
+    const start = scheduledStartSchema.parse(
+      (
+        await t.expectOk(t.kai.id, "scheduled_starts.create", {
+          payload: { ...fields, collaborationWorkspaceId: workspace.id }
+        })
+      ).json()
+    );
+    // As where a rule came into force after the prompt was saved.
+    const token = `ghp_${"Zq9xWv8uTs".repeat(4)}`;
+    await withTestSql(async (sql) => {
+      await sql`update scheduled_starts set prompt = ${`Nutze den Token ${token}`} where id = ${start.id}`;
+    });
+    await fireDue(t, start.id);
+    const runs = await t.stores.scheduledStarts.listRuns({
+      clientInstanceId,
+      scheduledStartId: start.id,
+      page: { limit: 10 }
+    });
+    expect(runs).toEqual([
+      expect.objectContaining({
+        status: "failed",
+        reason: "guardrail_blocked",
+        agentRunId: null,
+        conversationId: null
+      })
+    ]);
+    const hits = await withTestSql(
+      (sql) =>
+        sql`select event, outcome, field, match_count from guardrail_hits where client_instance_id = ${clientInstanceId} and guardrail_name = 'chat-secrets'`
+    );
+    expect(hits).toEqual([
+      { event: "message.before_send", outcome: "block", field: "text", match_count: 1 }
+    ]);
+    const conversations = await withTestSql(
+      (sql) =>
+        sql`select count(*)::int as count from conversations where client_instance_id = ${clientInstanceId}`
+    );
+    expect(conversations).toEqual([{ count: 0 }]);
+    // The schedule goes on: the next time is due.
+    const after = await t.stores.scheduledStarts.get({ clientInstanceId, id: start.id });
+    expect(after?.state).toBe("active");
+    expect(after?.nextRunAt).not.toBeNull();
   });
 
   it("refuses a schedule due more often than every 15 minutes, on create and on edit", async () => {

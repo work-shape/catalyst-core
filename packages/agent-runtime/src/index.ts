@@ -11,3 +11,5 @@ export {
   previewNote,
   type PreviewReportSource
 } from "./run/preview-notes";
+/** The event log of one run, with the hold of a reply that waits for its check (GR-5). */
+export { RunState, type RunStateOptions } from "./run-state";

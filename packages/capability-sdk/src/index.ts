@@ -528,6 +528,13 @@ export interface ReadConversationFileResult {
   bytes: Uint8Array;
 }
 
+/** The text a handler prepared of a conversation's file, such as a PDF's extracted text. */
+export interface PreparedFileText {
+  text: string;
+  /** The handler cut the text short at its own limit: what lies beyond was not prepared. */
+  truncated: boolean;
+}
+
 export interface ClientInstanceAttachmentHandler {
   name: string;
   maxFileBytes: number;
@@ -565,6 +572,12 @@ export interface ClientInstanceAttachmentHandler {
    */
   adoptLegacyAttachments?(input: { limit: number }): Promise<number>;
   readConversationFile(input: ReadConversationFileInput): Promise<ReadConversationFileResult>;
+  /**
+   * The text the handler prepared of a file, as the agent reads it: what the guardrails on chat
+   * input check before the message is stored (GR-4). Undefined where it prepares no text of the
+   * file, such as an image, or has not yet; `NOT_FOUND` where it does not hold the file.
+   */
+  readPreparedText?(input: ReadConversationFileInput): Promise<PreparedFileText | undefined>;
   blockingDraftAttachmentMessage(attachments: readonly DraftAttachment[]): string | undefined;
   createAttachmentManifest(attachments: readonly ConversationAttachment[]): AttachmentManifest;
   /** A wish: the platform serves only raster images, PDF and plain text inline, the rest as attachment. */

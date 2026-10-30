@@ -1,7 +1,10 @@
 import { z } from "zod";
 import {
+  CHAT_INPUT_EVENT,
   GUARDRAIL_ASSET_KIND,
   GUARDRAIL_CHECKABLE_FIELDS,
+  GUARDRAIL_MATCH_COUNT_MAX,
+  GUARDRAIL_PATTERN_ONLY_EVENTS,
   isAppError,
   isModelUsageLimitReached,
   PERSONAL_DATA_MODEL_REGION_REASON,
@@ -30,6 +33,7 @@ import {
   GUARDRAIL_CHECKED_FIELD_MAX_CHARS,
   compileGuardrailPattern,
   guardrailConfigSchema,
+  releaseGuardrailFloor,
   resolveModelBinding,
   type ClientInstanceConfig,
   type GuardrailPattern,
@@ -175,7 +179,7 @@ export class GuardrailRunner implements BeforeActionCheck {
       this.floor = options.guardrails;
       this.models = options.models;
     } else {
-      this.floor = options.config.guardrails;
+      this.floor = releaseGuardrailFloor(options.config);
       this.models = gatewayJudgeModels(options);
     }
   }
@@ -218,7 +222,9 @@ export class GuardrailRunner implements BeforeActionCheck {
                   ...(input.subject.name ? { subjectName: input.subject.name } : {}),
                   ...(answer.approvalCannotWait
                     ? { convertedFrom: "require_approval" as const }
-                    : {})
+                    : {}),
+                  ...(answer.field === undefined ? {} : { field: answer.field }),
+                  ...(answer.matchCount === undefined ? {} : { matchCount: answer.matchCount })
                 }
               ]
             : [];
@@ -338,7 +344,7 @@ export class GuardrailRunner implements BeforeActionCheck {
       // A draft under test shares its name and revision with no published one only by its
       // pattern, so the pattern is part of the key.
       pattern: this.patternOf(
-        `asset:${guardrail.name}:${revision}:${guardrail.check.kind === "pattern" ? guardrail.check.pattern : ""}`,
+        `asset:${guardrail.name}:${revision}:${guardrail.check.kind === "pattern" ? `${guardrail.check.checksum ?? ""}:${guardrail.check.pattern}` : ""}`,
         guardrail
       ),
       asset: { scope, revision }
@@ -419,12 +425,18 @@ export class GuardrailRunner implements BeforeActionCheck {
         if (entry.shipped.onlyWhenWidening && fields[PUBLISH_WIDENS_FIELD] === "false") continue;
         results.set(entry, answerOf(entry, entry.guardrail.outcome, entry.shipped.reason));
       } else if (entry.pattern) {
-        const answer = matchPattern(entry, entry.pattern, checked(fields, input.event, entry));
+        const content = checked(fields, input.event, entry);
+        const answer =
+          input.event === CHAT_INPUT_EVENT
+            ? matchChatInput(entry, entry.pattern, content)
+            : matchPattern(entry, entry.pattern, content);
         if (answer) results.set(entry, answer);
       }
     }
     const blocked = [...results.values()].some((answer) => answer.outcome === "block");
-    if (!blocked) {
+    // A model never reads a chat message: the schema refuses a judge there, and none runs.
+    const patternOnly: readonly string[] = GUARDRAIL_PATTERN_ONLY_EVENTS;
+    if (!blocked && !patternOnly.includes(input.event)) {
       const judged = await Promise.all(
         bound.flatMap((entry) => {
           if (entry.shipped || entry.pattern) return [];
@@ -461,7 +473,7 @@ export class GuardrailRunner implements BeforeActionCheck {
     if (guardrail.check.kind !== "pattern") return undefined;
     let pattern = this.patterns.get(key);
     if (!pattern) {
-      pattern = compileGuardrailPattern(guardrail.check.pattern);
+      pattern = compileGuardrailPattern(guardrail.check.pattern, guardrail.check.checksum);
       this.patterns.set(key, pattern);
     }
     return pattern;
@@ -661,6 +673,56 @@ function matchPattern(
     }
   }
   return answerOf(entry, "allow", "");
+}
+
+/**
+ * What a pattern answers on a chat message (GR-4): which field it matched first and how often,
+ * never the text. A field longer than the pattern reads at once is read in overlapping pieces,
+ * so a long message is checked whole. A field it cannot read at all, longer than any check
+ * reads, is not checked: the answer names it and the person is told, and a rule that blocks
+ * blocks it. Undefined where it had nothing to read.
+ */
+function matchChatInput(
+  entry: CheckedBound,
+  pattern: GuardrailPattern,
+  content: readonly Checked[]
+): GuardrailAnswer | undefined {
+  const { guardrail } = entry;
+  if (content.length === 0 || guardrail.check.kind !== "pattern") return undefined;
+  const notChecked: string[] = [];
+  let hit: { field: string; count: number } | undefined;
+  for (const read of content) {
+    if (read[1] === null) {
+      notChecked.push(read[0]);
+      continue;
+    }
+    if (hit) continue;
+    const [field, text] = read;
+    const count = pattern.count(text, GUARDRAIL_MATCH_COUNT_MAX);
+    if (count > 0) hit = { field, count };
+  }
+  const unread = notChecked.length > 0 ? { notChecked } : {};
+  // Unread text does not pass a rule that blocks, as everywhere else; the composer cannot send
+  // that much text in any case.
+  const [unreadField] = notChecked;
+  if (
+    !hit &&
+    unreadField !== undefined &&
+    ["block", "require_approval"].includes(guardrail.outcome)
+  ) {
+    return { ...unchecked(entry, TOO_LARGE_CAUSE), field: unreadField, ...unread };
+  }
+  if (!hit) return { ...answerOf(entry, "allow", ""), ...unread };
+  return {
+    ...answerOf(
+      entry,
+      guardrail.outcome,
+      guardrail.check.reason ?? `The ${hit.field} matches the pattern of guardrail '${entry.name}'.`
+    ),
+    field: hit.field,
+    matchCount: hit.count,
+    ...unread
+  };
 }
 
 function tooLargeMessage(chars: number): string {

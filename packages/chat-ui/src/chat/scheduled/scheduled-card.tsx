@@ -154,6 +154,10 @@ export function ScheduledStartCard({
           >
             {t(notice.message)}
           </Banner>
+        ) : notice?.kind === "guardrail" ? (
+          <Banner tone="warning" data-testid="scheduled-guardrail">
+            {t("scheduled.guardrailNotice")}
+          </Banner>
         ) : null}
         <section className="grid min-w-0 gap-1.5" aria-label={t("scheduled.recentRuns")}>
           <h3 className="text-label">{t("scheduled.recentRuns")}</h3>

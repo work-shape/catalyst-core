@@ -149,6 +149,16 @@ describe("a scheduled prompt in words", () => {
       ])
     ).toBeUndefined();
   });
+
+  // GR-4: a guardrail on chat input blocked the prompt when it fired.
+  it("tells the owner when a guardrail blocked the prompt of the latest run", () => {
+    const blocked = run({ id: "r1", status: "failed", reason: "guardrail_blocked" });
+    expect(runReasonKey(blocked)).toBe("scheduled.reason.guardrailBlocked");
+    expect(startNotice([blocked])).toEqual({ kind: "guardrail" });
+    expect(
+      startNotice([run({ id: "r2", status: "completed", conversationId: "c" }), blocked])
+    ).toBeUndefined();
+  });
 });
 
 describe("an open Scheduled page", () => {

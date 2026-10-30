@@ -1,4 +1,4 @@
-import { boolean, index, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
 import type { GuardrailEvent, GuardrailHitOutcome } from "@work-shape/catalyst-core";
 
 /**
@@ -24,6 +24,11 @@ export const guardrailHits = pgTable(
     // `require_approval` where the guardrail asked for an approval the action could not wait
     // for, and the hit is the block it was answered as. Null on every other hit.
     convertedFrom: text("converted_from").$type<"require_approval">(),
+    // At `message.before_send` (GR-4): the field that matched, `text` or `attachments`, and how
+    // often. The subject is the message by its id. Never the text, never the match. Null on
+    // the hits of every other event.
+    field: text("field"),
+    matchCount: integer("match_count"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
   },
   (table) => [

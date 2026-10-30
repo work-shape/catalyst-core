@@ -33,6 +33,7 @@ import {
   secretStoreConfigSchema
 } from "./connection-schema";
 import { dataStoresConfigSchema } from "./data-store-schema";
+import { chatInputGuardrailsConfigSchema } from "./chat-input-guardrails";
 import { releaseGuardrailsConfigSchema } from "./guardrail-schema";
 import { infrastructureConfigSchema } from "./infrastructure";
 import { instanceConfigSchema } from "./instance-schema";
@@ -567,6 +568,11 @@ export const clientInstanceConfigSchema = z.object({
   conversationTitles: conversationTitleConfigSchema,
   /** The release's guardrails: the operator's floor. Seeded as read-only assets when the API starts. */
   guardrails: releaseGuardrailsConfigSchema,
+  /**
+   * The default rules on chat input (GR-4), each on unless switched off here. With the module
+   * `guardrails` on they join the floor before `guardrails`; an entry there of the same name wins.
+   */
+  chatInputGuardrails: chatInputGuardrailsConfigSchema,
   runtime: agentRuntimeConfigSchema,
   modelContext: modelContextConfigSchema,
   webAccess: webAccessConfigSchema,

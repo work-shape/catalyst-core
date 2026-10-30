@@ -2,6 +2,7 @@ export * from "./schemas";
 export * from "./connection-schema";
 export * from "./guardrail-schema";
 export * from "./guardrail-pattern";
+export * from "./chat-input-guardrails";
 export { APPROVAL_CHECKS_WITH_GUARDRAILS_REFUSAL } from "./approval-checks-transition";
 export * from "./infrastructure";
 export * from "./instance-schema";

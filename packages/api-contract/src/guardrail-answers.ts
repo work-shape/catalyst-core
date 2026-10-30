@@ -32,6 +32,57 @@ export const guardrailAnswerRefSchema = z.object({
 export type GuardrailAnswerRefView = z.infer<typeof guardrailAnswerRefSchema>;
 
 /**
+ * Why the text of an attachment was not checked on chat input (GR-4): a picture, a document
+ * whose text is not extracted when it is sent, a text larger than a check reads, or a file that
+ * could not be read. It is said so, never silently passed.
+ */
+export const CHAT_INPUT_NOT_CHECKED_CAUSES = [
+  "image",
+  "not_extracted",
+  "too_large",
+  "unreadable"
+] as const;
+
+/**
+ * What the checks of a person's chat message say beside allowing or stopping it: what they
+ * could not read. Never the text or what matched.
+ */
+export const chatInputNotCheckedSchema = z.object({
+  /** The message is longer than a rule reads, so that rule did not check it. */
+  textNotChecked: z.literal(true).optional(),
+  attachmentsNotChecked: z
+    .array(
+      z.object({
+        attachmentId: z.string(),
+        filename: z.string(),
+        cause: z.enum(CHAT_INPUT_NOT_CHECKED_CAUSES)
+      })
+    )
+    .optional()
+});
+
+/**
+ * The checks of a message that was sent: the guardrails that warned, which the person sent
+ * anyway, and what was not checked.
+ */
+export const chatInputCheckSchema = chatInputNotCheckedSchema.extend({
+  guardrails: z.array(guardrailAnswerRefSchema).optional()
+});
+
+/**
+ * The details of a chat message a guardrail stopped (GR-4): `GUARDRAIL_BLOCKED` with
+ * `chat_input_blocked`, nothing stored and the draft kept; or `CONFLICT` with
+ * `chat_input_warning`, which the person may send anyway with `acceptGuardrailWarnings`.
+ */
+export const chatInputRefusalDetailsSchema = chatInputNotCheckedSchema.extend({
+  reason: z.enum(["chat_input_blocked", "chat_input_warning"]),
+  guardrails: z.array(guardrailAnswerRefSchema)
+});
+
+export type ChatInputCheckView = z.infer<typeof chatInputCheckSchema>;
+export type ChatInputRefusalDetails = z.infer<typeof chatInputRefusalDetailsSchema>;
+
+/**
  * One rule in force for the viewer. People are named only where the viewer may see them: their
  * co-members of a shared workspace, themselves, and everyone for a holder of the people right.
  * Hits are a count, never who was stopped or what.

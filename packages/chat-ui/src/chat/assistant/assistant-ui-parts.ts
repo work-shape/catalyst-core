@@ -208,6 +208,11 @@ export function toProjectionUiMessageParts(
     return [toToolCallUiPart(part, activeRun)];
   });
 
+  // A reply held for its check shows a waiting state; a withheld one, the reason (GR-5).
+  if (projection.hold) {
+    parts.push({ type: "data-reply-hold", data: projection.hold });
+  }
+
   if (parts.length === 0) {
     parts.push({
       type: "text",

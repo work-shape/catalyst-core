@@ -1132,6 +1132,19 @@ function createCompositeAttachmentService(
         input.fileId
       );
     },
+    async readPreparedText(input) {
+      // A handler that prepares no text, or does not hold the file, leaves it to the next.
+      for (const handler of handlers) {
+        try {
+          const prepared = await handler.readPreparedText?.(input);
+          if (prepared) return prepared;
+        } catch (error) {
+          if (error instanceof AppError && error.code === "NOT_FOUND") continue;
+          throw error;
+        }
+      }
+      return undefined;
+    },
     blockingDraftAttachmentMessage(attachments) {
       for (const handler of handlers) {
         const message = handler.blockingDraftAttachmentMessage(attachments);

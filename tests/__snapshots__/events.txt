@@ -125,6 +125,7 @@
 {"name":"live_once.used","legacy":false,"audited":true,"phases":["after"]}
 {"name":"mail.refused","legacy":false,"audited":true,"phases":["after"]}
 {"name":"mail.sent","legacy":false,"audited":true,"phases":["after"]}
+{"name":"message.before_send","legacy":false,"audited":false,"phases":["before"]}
 {"name":"message.cancelled","legacy":true,"audited":true,"phases":["after"]}
 {"name":"message.completed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"message.created","legacy":true,"audited":true,"phases":["after"]}

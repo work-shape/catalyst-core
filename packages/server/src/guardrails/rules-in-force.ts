@@ -18,6 +18,7 @@ import {
 } from "@work-shape/catalyst-core";
 import {
   guardrailConfigSchema,
+  releaseGuardrailFloor,
   type ReleaseGuardrailConfig
 } from "@work-shape/catalyst-config-schema";
 import { createNotices } from "../notices/notices";
@@ -172,20 +173,22 @@ async function listRules(options: Options, viewer: AuthenticatedUser): Promise<R
   const workspaceNames = new Map(
     workspaces.map((workspace) => [String(workspace.id), workspace.name])
   );
-  const floor = Object.entries(options.config.guardrails).map(([name, guardrail]): Rule => ({
-    view: {
-      name,
-      displayName: guardrail.displayName ?? name,
-      reason: reasonOf(guardrail),
-      on: [guardrail.on],
-      ...filterView(guardrail.filter),
-      checkKind: guardrail.check.kind,
-      outcome: guardrail.outcome,
-      origin: "release",
-      scope: { kind: "instance" },
-      askable: false
-    }
-  }));
+  const floor = Object.entries(releaseGuardrailFloor(options.config)).map(
+    ([name, guardrail]): Rule => ({
+      view: {
+        name,
+        displayName: guardrail.displayName ?? name,
+        reason: reasonOf(guardrail),
+        on: [guardrail.on],
+        ...filterView(guardrail.filter),
+        checkKind: guardrail.check.kind,
+        outcome: guardrail.outcome,
+        origin: "release",
+        scope: { kind: "instance" },
+        askable: false
+      }
+    })
+  );
   const switches = await stores.guardrails.listShippedGuardrailSwitches({ clientInstanceId });
   const shipped = SHIPPED_GUARDRAILS.map((guardrail): Rule => {
     const switched = switches.find((entry) => entry.name === guardrail.name);
