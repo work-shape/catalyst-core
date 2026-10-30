@@ -385,7 +385,7 @@ describe("You > API keys", () => {
     expect(renderConfirm("en").match(/aria-checked="true"/gu)).toBeNull();
   });
 
-  it("offers the account and workspaces level unticked, also for the key `catalyst setup` asks for", () => {
+  it("leaves the account and workspaces level off the page that confirms a connect code", () => {
     const render = (locale: "en" | "de") =>
       renderToStaticMarkup(
         createElement(
@@ -410,11 +410,11 @@ describe("You > API keys", () => {
         )
       );
     const english = render("en");
-    expect(english).toContain("Account and workspaces");
-    expect(english).toContain("Change your name and model preference, and revoke your keys");
+    expect(english).not.toContain("Account and workspaces");
+    expect(english).not.toContain("Change your name");
     expect(english.match(/aria-checked="true"/gu)?.length).toBe(2);
-    expect(english.match(/aria-checked="false"/gu)?.length).toBe(2);
-    expect(render("de")).toContain("Konto und Arbeitsbereiche");
+    expect(english).not.toMatch(/aria-checked="false"/u);
+    expect(render("de")).not.toContain("Konto und Arbeitsbereiche");
   });
 
   it("says beside connection.use alone that its results are copied to the computer that holds the key", () => {
@@ -530,7 +530,9 @@ describe("You > API keys in plain words", () => {
     const account = keysTable("en", [
       key({ scopes: ["account.manage", "collaboration_workspace.manage:ws-tax"] })
     ]);
-    expect(account).toContain("Change your name and model preference, and revoke your keys");
+    expect(account).toContain(
+      "Change your name, language, what Enter does while an answer runs and your model preference, and revoke your keys"
+    );
     expect(account).toContain(
       "Create, change and delete workspaces, and manage their members and requests in Tax"
     );
@@ -1077,7 +1079,7 @@ describe("You > API keys, for a person and an admin alike", () => {
     }
   });
 
-  it("a connect code for `catalyst setup` offers system.view unticked, sends it once ticked, and drops it when a workspace narrows the key", async () => {
+  it("a connect code for `catalyst setup` or `login` offers neither the instance level nor the account and workspaces level", async () => {
     const confirmed: ConfirmConnectCodeRequest[] = [];
     const holder: PlatformContext = {
       ...platformContext(),
@@ -1098,6 +1100,7 @@ describe("You > API keys, for a person and an admin alike", () => {
           ...cliOffer,
           actions: personalKeyActionOffer(holder),
           instanceActions: personalKeyInstanceOffer(holder),
+          accountActions: personalKeyAccountOffer(holder),
           setupActions: setupKeyActions(holder),
           workspaces: [{ id: "ws-tax", name: "Tax" }]
         },
@@ -1108,39 +1111,18 @@ describe("You > API keys, for a person and an admin alike", () => {
         }
       })
     );
-    const confirm = async () =>
-      act(async () => {
+    try {
+      const text = mounted.container.textContent;
+      expect(text).not.toContain("View the System pages");
+      expect(text).not.toContain("Lets the key only read what is shared by all workspaces");
+      expect(text).not.toContain("Account and workspaces");
+      expect(text).not.toContain("Change your name");
+      await act(async () => {
         required(
           mounted.container.querySelector<HTMLButtonElement>('button[type="submit"]')
         ).click();
       });
-    try {
-      expect(mounted.container.textContent).toContain(
-        "Lets the key only read what is shared by all workspaces: usage, audit events"
-      );
-      expect(
-        scopeBox(mounted.container, "View the System pages").getAttribute("aria-checked")
-      ).toBe("false");
-      await act(async () => {
-        scopeBox(mounted.container, "View the System pages").click();
-      });
-      await confirm();
-      expect(confirmed.at(-1)?.scopes).toEqual(["agent.read", "system.view"]);
-
-      await act(async () => {
-        required(mounted.container.querySelector<HTMLElement>('[aria-haspopup="dialog"]')).click();
-      });
-      await act(async () => {
-        required(
-          [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
-            (option) => option.textContent === "Tax"
-          )
-        ).click();
-      });
-      // A key limited to a workspace no longer offers or carries the instance level.
-      expect(mounted.container.textContent).not.toContain("View the System pages");
-      await confirm();
-      expect(confirmed.at(-1)?.scopes).toEqual(["agent.read:ws-tax"]);
+      expect(confirmed.at(-1)?.scopes).toEqual(["agent.read"]);
     } finally {
       await mounted.unmount();
     }

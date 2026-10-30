@@ -38,7 +38,8 @@ export const personalApiKeys = defineTranslations({
     "personalApiKeys.accountLevel": "Account and workspaces",
     "personalApiKeys.accountLevelHint":
       "Lets the key change your own account and your workspaces, as you can on these screens. In a workspace your role there decides what it may do. It never issues a key, changes your password or deletes your account. The key that catalyst setup creates never has it.",
-    "personalApiKeys.accountManage": "Change your name and model preference, and revoke your keys",
+    "personalApiKeys.accountManage":
+      "Change your name, language, what Enter does while an answer runs and your model preference, and revoke your keys",
     "personalApiKeys.workspacesManage":
       "Create, change and delete workspaces, and manage their members and requests",
     "personalApiKeys.workspace": "Limit to a workspace",
@@ -115,7 +116,7 @@ export const personalApiKeys = defineTranslations({
     "personalApiKeys.accountLevelHint":
       "Erlaubt dem Schlüssel, dein eigenes Konto und deine Arbeitsbereiche zu ändern, wie du es auf diesen Seiten kannst. In einem Arbeitsbereich entscheidet deine Rolle dort, was er darf. Er stellt nie einen Schlüssel aus, ändert nie dein Passwort und löscht nie dein Konto. Der Schlüssel, den catalyst setup anlegt, hat es nie.",
     "personalApiKeys.accountManage":
-      "Deinen Namen und deine Modellwahl ändern und deine Schlüssel widerrufen",
+      "Deinen Namen, deine Sprache, was Enter während einer Antwort tut, und deine Modellwahl ändern und deine Schlüssel widerrufen",
     "personalApiKeys.workspacesManage":
       "Arbeitsbereiche anlegen, ändern und löschen, ihre Mitglieder und Anfragen verwalten",
     "personalApiKeys.workspace": "Auf einen Arbeitsbereich begrenzen",

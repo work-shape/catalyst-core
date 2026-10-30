@@ -81,7 +81,7 @@ A key that names none of the three rights, or not the one a command needs, is re
 
 ## Account and workspace commands
 
-These change your own account and the Shared Workspaces you belong to. A key reaches them only with the **account and workspaces level** of Settings > API keys (German: **Konto und Arbeitsbereiche**), which you tick by hand. It has two parts: `account.manage` for your account, and `collaboration_workspace.manage` for the workspaces. The key `catalyst setup` creates carries neither. No key issues a key, changes a password or deletes an account.
+These change your own account and the Shared Workspaces you belong to. A key reaches them only with the **account and workspaces level** of Settings > API keys (German: **Konto und Arbeitsbereiche**), which you tick by hand on a key you issue there; the page that confirms a `catalyst setup` or `catalyst login` code does not offer it. It has two parts: `account.manage` for your account, and `collaboration_workspace.manage` for the workspaces. The key `catalyst setup` creates carries neither. No key issues a key, changes a password or deletes an account.
 
 ```sh
 catalyst me
@@ -109,7 +109,7 @@ catalyst workspace requests approve <workspace-id> <user-id>
 | `workspace members`, `members candidates`, `members add`, `members role`, `members remove`, `members leave` | `workspaces.members.*`, `workspaces.member_candidates.list` | `collaboration_workspace.manage` |
 | `workspace requests`, `requests ask`, `requests approve`, `requests decline` | `workspaces.access_requests.*` | `collaboration_workspace.manage` |
 
-In a workspace, the instance asks your role there exactly as the Members screen does: an Admin changes regular Members only, only an Owner makes someone an Owner or deletes the workspace, and a Member changes nothing. The refusal is the screen's, with exit code 1. A key that names `collaboration_workspace.manage:<workspace>` reaches that workspace only, and neither lists nor creates workspaces; `account.manage` cannot be limited to a workspace. A key without the level is refused with exit code 1, and the refusal names the right. Each change is recorded in the audit log as on the screen, with the key that made it. `keys revoke` can revoke the key that runs it; its next call is refused.
+In a workspace, the instance asks your role there exactly as the Members screen does: an Admin changes regular Members only, only an Owner makes someone an Owner or deletes the workspace, and a Member changes nothing. A Superadmin's key reaches only the workspaces they are a member of, as a member: it is not Owner of every Shared Workspace, as the Superadmin is in Catalyst. The refusal is the screen's, with exit code 1. A key that names `collaboration_workspace.manage:<workspace>` reaches that workspace only, and neither lists nor creates workspaces; `account.manage` cannot be limited to a workspace. A key without the level is refused with exit code 1, and the refusal names the right. Each change is recorded in the audit log as on the screen, with the key that made it. `keys revoke` can revoke the key that runs it; its next call is refused.
 
 `workspace delete` needs `--confirm-name` with the workspace's name, as the screen does. `me update` takes `--name` and `--locale de|en`; `workspace create` and `update` take `--name`, `--description` and `--visibility discoverable|private`. Both also take `--from <file|->` with the JSON body, and a flag sets its field over the file's. `workspace members candidates` takes `--search`.
 

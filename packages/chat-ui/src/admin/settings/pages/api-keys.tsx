@@ -405,8 +405,10 @@ export function ConnectCodeConfirm({
         draft={draft}
         actions={offer.actions}
         useActions={offer.useActions}
-        instanceActions={offer.instanceActions}
-        accountActions={offer.accountActions}
+        // The key a connect code makes (`catalyst setup`, `catalyst login`) never carries the
+        // instance level or the account and workspaces level: they are ticked on a key issued
+        // above, by hand.
+        instanceActions={[]}
         workspaces={offer.workspaces}
         onChange={(next) => {
           setDraft(next);
