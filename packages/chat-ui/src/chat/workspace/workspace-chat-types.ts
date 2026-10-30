@@ -35,6 +35,7 @@ import { type AgentSelectableModel, type ReasoningEffort } from "./agent-model-s
 import { type WorkspaceDock } from "./use-workspace-dock";
 import type { WorkspaceView } from "./workspace-rail";
 import type { PlatformFailure } from "../platform-report/platform-report";
+import type { RunContinueOffer } from "./workspace-chat-state";
 
 export interface WorkspaceChatModelInput {
   administration: ChatShellAdministration | undefined;
@@ -318,6 +319,11 @@ export interface SelectedChatModel {
   notice: string | undefined;
   /** Where the notice is a run's platform failure: the run, to report it to the operator. */
   noticeReport?: { runId: string; failure: PlatformFailure };
+  /**
+   * Where the notice is of a run the model provider stopped for too many requests and the person
+   * owns the conversation: the run and when its wait is over, to go on with one click (T6).
+   */
+  noticeContinue?: RunContinueOffer;
   draft: string;
   composerFocusRequestId: number;
   locale: LocaleCode;

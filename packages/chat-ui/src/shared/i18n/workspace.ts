@@ -19,6 +19,10 @@ export const workspace = defineTranslations({
     runInterrupted: "The reply was interrupted. Please send your message again.",
     runTimedOut:
       "The reply was interrupted. It does not continue on its own. The steps already done are kept: write “continue” and the agent picks up where it left off.",
+    runContinue: "Continue",
+    runContinueIn: "Continue in {seconds} s",
+    // What the button sends: the word the notice tells the person to write.
+    runContinueMessage: "continue",
     runRateLimited:
       "The model is overloaded right now, so the reply was interrupted. It does not continue on its own. The steps already done are kept: in about a minute, write “continue” and the agent picks up where it left off.",
     runPersonalDataModelRegion:
@@ -82,6 +86,9 @@ export const workspace = defineTranslations({
     runInterrupted: "Die Antwort wurde unterbrochen. Bitte sende deine Nachricht erneut.",
     runTimedOut:
       "Die Antwort wurde unterbrochen. Sie geht nicht von selbst weiter. Die erledigten Schritte bleiben erhalten: Schreib „weiter“, dann macht der Agent dort weiter, wo er aufgehört hat.",
+    runContinue: "Weitermachen",
+    runContinueIn: "Weitermachen in {seconds} s",
+    runContinueMessage: "weiter",
     runRateLimited:
       "Das Modell ist gerade überlastet, deshalb wurde die Antwort unterbrochen. Sie geht nicht von selbst weiter. Die erledigten Schritte bleiben erhalten: Schreib in etwa einer Minute „weiter“, dann macht der Agent dort weiter, wo er aufgehört hat.",
     runPersonalDataModelRegion:

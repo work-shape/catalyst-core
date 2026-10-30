@@ -72,3 +72,7 @@ export { WorkspaceUiStateProvider } from "../../../packages/chat-ui/src/chat/wor
 export { ClosedWorkspaceLinkBanner } from "../../../packages/chat-ui/src/chat/workspace/workspace-chrome";
 export { attachedFilesTitle } from "../../../packages/chat-ui/src/chat/workspace/workspace-conversation-actions";
 export { useConversationListRefresh } from "../../../packages/chat-ui/src/chat/workspace/use-conversation-list-refresh";
+export {
+  RATE_LIMIT_CONTINUE_WAIT_MS,
+  rateLimitContinueOffer
+} from "../../../packages/chat-ui/src/chat/workspace/workspace-chat-state";
