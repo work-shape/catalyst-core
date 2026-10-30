@@ -190,6 +190,33 @@ const MODEL_USAGE_LIMIT_REACHED_CODE = "MODEL_USAGE_LIMIT_REACHED";
 // after the worker had waited about a minute (`@work-shape/catalyst-model-provider`).
 const MODEL_RATE_LIMITED_CODE = "RATE_LIMITED";
 
+// How long the rate-limit notice tells the person to wait before going on ("in about a minute").
+export const RATE_LIMIT_CONTINUE_WAIT_MS = 60_000;
+
+/** The offer to go on after a run the model provider stopped for too many requests (T6). */
+export interface RunContinueOffer {
+  runId: string;
+  /** When the wait the notice names is over, in epoch milliseconds. */
+  readyAt: number;
+}
+
+/**
+ * The offer of a run that ended rate-limited: the wait is counted from when the run failed. Any
+ * other end of a run offers nothing.
+ */
+export function rateLimitContinueOffer(
+  error: ConversationControllerState["error"],
+  run: { id: string; updatedAt: string } | undefined
+): RunContinueOffer | undefined {
+  if (run === undefined || error?.class !== "run_failed") return undefined;
+  if (error.code !== MODEL_RATE_LIMITED_CODE) return undefined;
+  const endedAt = Date.parse(run.updatedAt);
+  return {
+    runId: run.id,
+    readyAt: (Number.isNaN(endedAt) ? Date.now() : endedAt) + RATE_LIMIT_CONTINUE_WAIT_MS
+  };
+}
+
 /**
  * The notice of a reached usage limit: which limit and when it resets, where the run names
  * it, and otherwise only that a limit was reached. Never the server's message.

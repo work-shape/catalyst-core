@@ -111,6 +111,7 @@ function AssistantRuntimePane({
     snapshotStatus,
     notice,
     noticeReport,
+    noticeContinue: continueOffer,
     draft,
     composerFocusRequestId,
     locale,
@@ -440,6 +441,21 @@ function AssistantRuntimePane({
     )
   );
 
+  // The button on a rate-limited run's notice sends what the person would write, through the
+  // same thread runtime as the composer (T6).
+  const continueText = t("runContinueMessage");
+  const noticeContinue = useMemo(
+    () =>
+      continueOffer && {
+        ...continueOffer,
+        canSend,
+        send: () => {
+          void runtime.thread.append(continueText);
+        }
+      },
+    [canSend, continueOffer, continueText, runtime]
+  );
+
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <RuntimeMessagesBridge
@@ -476,6 +492,7 @@ function AssistantRuntimePane({
               contextSnapshot={contextSnapshot}
               notice={visibleNotice}
               noticeReport={visibleNotice === notice ? noticeReport : undefined}
+              noticeContinue={visibleNotice === notice ? noticeContinue : undefined}
               usageNote={usageNote}
               onNewConversationForPersonalData={
                 noModelForPersonalData ? chat.startNewConversation : undefined

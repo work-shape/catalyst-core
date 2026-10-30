@@ -79,3 +79,7 @@ export {
 } from "../../../packages/chat-ui/src/chat/assistant/message-file-parts";
 export { AssistantToolRegistry } from "../../../packages/chat-ui/src/chat/assistant/assistant-tool-registry";
 export { readCompatiblePersistedToolResult } from "../../../packages/chat-ui/src/chat/assistant/assistant-message-compat";
+export {
+  RunContinueAction,
+  secondsUntil
+} from "../../../packages/chat-ui/src/chat/assistant/run-continue-action";

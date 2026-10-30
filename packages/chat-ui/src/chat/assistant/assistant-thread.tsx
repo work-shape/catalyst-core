@@ -39,6 +39,7 @@ import { findRunActivity, shouldShowRunActivity } from "./thread-activity";
 import { ToolSubjectsProvider } from "./tool-subjects";
 import { FoldedCardsProvider } from "../conversation/card-fold-context";
 import { QuestionAnswersProvider } from "../questions/question-card";
+import { RunContinueAction, type RunContinue } from "./run-continue-action";
 import { messageFeedbackSetup } from "../feedback/message-feedback";
 import {
   PlatformReportAction,
@@ -78,6 +79,7 @@ export function AssistantThread({
   contextSnapshot,
   notice,
   noticeReport,
+  noticeContinue,
   usageNote,
   onNewConversationForPersonalData,
   newConversationPrivate,
@@ -134,6 +136,8 @@ export function AssistantThread({
   notice: string | undefined;
   /** Where the notice is a run's platform failure: the run, to report it to the operator. */
   noticeReport?: { runId: string; failure: PlatformFailure };
+  /** Where the notice is of a rate-limited run: the button that goes on after the wait (T6). */
+  noticeContinue?: RunContinue;
   /** The quiet note at 80 percent of the person's own spend limit. */
   usageNote?: { text: string; dismiss(): void };
   /**
@@ -368,6 +372,8 @@ export function AssistantThread({
                           failure={noticeReport.failure}
                           variant="outline"
                         />
+                      ) : noticeContinue ? (
+                        <RunContinueAction key={noticeContinue.runId} offer={noticeContinue} />
                       ) : undefined
                     }
                   >

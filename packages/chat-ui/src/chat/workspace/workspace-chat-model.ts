@@ -95,6 +95,7 @@ import {
   activeAgentNameFor,
   conversationAgentPickFor,
   isOwnChat,
+  rateLimitContinueOffer,
   terminalRunNotice,
   withRunUnderway,
   WORKSPACE_AUTH_SCOPE,
@@ -825,6 +826,15 @@ export function useWorkspaceChatModel({
   const activeAgent = config?.agents.find((agent) => agent.name === activeAgentName);
   const selectedThread =
     threadQuery.data?.conversation.id === selectedConversationId ? threadQuery.data : undefined;
+  // A run the model provider stopped for too many requests offers its conversation's owner to go
+  // on once the wait is over (T6), beside the notice of that run only.
+  const noticeContinue =
+    notice === undefined &&
+    visibleNotice !== undefined &&
+    meQuery.data?.id !== undefined &&
+    selectedThread?.conversation.createdByUserId === meQuery.data.id
+      ? rateLimitContinueOffer(controller.error, controller.activeRun?.run)
+      : undefined;
   // The agent's proposal of a new Connection opens its dialog beside the conversation, for a
   // person who may create Connections (CHAT-CONN-1).
   const { openPage: openDockedPage } = dock;
@@ -1281,6 +1291,7 @@ export function useWorkspaceChatModel({
       snapshotStatus: selectedConversationId ? controller.snapshotStatus : "ready",
       notice: visibleNotice,
       ...(noticeReport ? { noticeReport } : {}),
+      ...(noticeContinue ? { noticeContinue } : {}),
       draft: activeDraft.draft,
       composerFocusRequestId: chrome.composerFocusRequestId,
       locale: activeLocale,
