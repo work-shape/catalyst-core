@@ -115,6 +115,9 @@ export const unusedAuthorizer: Authorizer = {
   forActor: unsupported
 };
 export const unusedPlatformStores: PlatformStores = {
+  get centralPolicySettings() {
+    return unsupported();
+  },
   get conversations() {
     return unsupported();
   },

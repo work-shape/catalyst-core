@@ -1,5 +1,6 @@
 import type { WorkflowNoticesStore } from "./workflow-notices";
 import type { UserOperationSettingStore } from "./user-operation-settings";
+import type { CentralPolicySettingStore } from "./central-policy-settings";
 import type { NoticeMailStore } from "./notice-mail";
 import type { ConversationFollowUpStore } from "./follow-up-store";
 import type { ScheduledStartsStore } from "./scheduled-starts";
@@ -93,6 +94,8 @@ export interface PlatformStores {
   users: UserStore;
   /** A person's own confirmation settings (OP-6). */
   userOperationSettings: UserOperationSettingStore;
+  /** The admin's central policy settings and "Always allow" locks (OP-2). */
+  centralPolicySettings: CentralPolicySettingStore;
   workspaces: CollaborationWorkspaceStore;
   apiAccess: ApiAccessStore;
   personalApiKeys: PersonalApiKeyStore;

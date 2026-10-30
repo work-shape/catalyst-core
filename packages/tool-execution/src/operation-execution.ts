@@ -132,7 +132,7 @@ export interface RunOperationDeps {
   audit: AuditRecorder;
   policy: {
     instanceDefaults: PolicyDefaults;
-    /** The admin's settings. OP-2 supplies the table; nothing is set before. */
+    /** The admin's settings: those of Instance > Policies (OP-2). Read for each call. */
     centralSettings(): readonly CentralPolicySetting[] | Promise<readonly CentralPolicySetting[]>;
     /** Includes a subagent's root conversation. Rechecked whenever policy is resolved. */
     personalConversation?(id: ConversationId, runId?: AgentRunId): Promise<boolean>;
@@ -144,8 +144,11 @@ export interface RunOperationDeps {
       userId: string;
       operation: string;
     }): Promise<PersonPolicySetting | undefined>;
-    /** Operations, by name or pattern, the admin locked against "Always allow" (OP-6). */
-    alwaysAllowLocked?: readonly string[];
+    /**
+     * Operations, by name or pattern, locked against "Always allow": by release config and by
+     * an admin on Instance > Policies (OP-2). Read for each call that acts for a person.
+     */
+    alwaysAllowLocked?(): readonly string[] | Promise<readonly string[]>;
   };
   /** Without it this process cannot hold a call for an approval and refuses one that needs it. */
   approvals?: OperationApprovalRequests;

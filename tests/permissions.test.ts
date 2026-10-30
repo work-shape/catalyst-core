@@ -79,6 +79,7 @@ describe("permissions", () => {
       "users.delete",
       "usage.view",
       "limits.manage",
+      "policy.manage",
       "usage.view_users",
       "audit.view",
       "system.view",
@@ -106,6 +107,7 @@ describe("permissions", () => {
       ) ||
       action === "service_principals.manage" ||
       action === "limits.manage" ||
+      action === "policy.manage" ||
       action === "usage.view_users" ||
       action === "roles.edit_built_in" ||
       action === "users.delete" ||
@@ -220,6 +222,7 @@ describe("permissions", () => {
       "users.manage",
       "usage.view",
       "limits.manage",
+      "policy.manage",
       "usage.view_users",
       "audit.view",
       "service_principals.manage",

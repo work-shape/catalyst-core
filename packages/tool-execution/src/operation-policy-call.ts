@@ -128,7 +128,7 @@ async function personOf(context: OperationPolicyContext): Promise<PolicyPerson |
   }
   return {
     ...(setting ? { setting } : {}),
-    mayAlwaysAllow: mayAlwaysAllow(definition, deps.policy.alwaysAllowLocked)
+    mayAlwaysAllow: mayAlwaysAllow(definition, (await deps.policy.alwaysAllowLocked?.()) ?? [])
   };
 }
 

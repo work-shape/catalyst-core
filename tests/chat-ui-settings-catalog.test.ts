@@ -129,9 +129,10 @@ describe("Settings catalog", () => {
       "you/api-keys",
       "you/connect",
       ...workspace,
-      // Limits is shown by `limits.manage`, a right the platform context tells.
+      // Limits and Policies are shown by `limits.manage` and `policy.manage`, rights the
+      // platform context tells.
       ...instance.flatMap((page) =>
-        page === "instance/usage" ? [page, "instance/limits"] : [page]
+        page === "instance/usage" ? [page, "instance/limits", "instance/policies"] : [page]
       ),
       ...system
     ]);

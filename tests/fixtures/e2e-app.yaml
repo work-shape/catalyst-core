@@ -199,6 +199,15 @@ tools:
     enabled: true
   - name: e2e.confirm_reversible
     enabled: true
+  - name: e2e.policy_reversible
+    enabled: true
+  - name: e2e.policy_locked
+    enabled: true
+# The Policies screen shows this lock and cannot lift it (OP-2).
+policy:
+  alwaysAllow:
+    locked:
+      - e2e.policy_locked
 ui:
   clientName: E2E Customer
   title: Workshape Catalyst E2E

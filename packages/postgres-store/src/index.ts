@@ -82,6 +82,7 @@ import { createPostgresWorkflowStepPinsStore } from "./postgres-workflow-step-pi
 import { createPostgresWorkflowWebhookStore } from "./postgres-workflow-webhooks";
 import { createPostgresCapabilityRecordStore } from "./postgres-capability-record-operations";
 import { createPostgresUserOperationSettingsStore } from "./postgres-user-operation-settings";
+import { createPostgresCentralPolicySettingsStore } from "./postgres-central-policy-settings";
 import { createPostgresAgentProposalStore } from "./postgres-agent-proposal-operations";
 import { createPostgresAgentTryConversationStore } from "./postgres-agent-try-conversation-operations";
 import { createPostgresInfrastructureChecksStore } from "./postgres-infrastructure-check-operations";
@@ -182,6 +183,7 @@ function bindStores(
     usage: createPostgresUsageStore(db),
     users: createPostgresUsersStore(db),
     userOperationSettings: createPostgresUserOperationSettingsStore(db),
+    centralPolicySettings: createPostgresCentralPolicySettingsStore(db),
     workspaces: createPostgresWorkspacesStore(db, {
       deleteWorkspace: (input) => deletePostgresWorkspace(db, input),
       getWorkspaceInDeletion: (input) => getPostgresWorkspaceInDeletion(db, input),

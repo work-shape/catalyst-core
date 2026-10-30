@@ -92,7 +92,7 @@ export async function alwaysAllowRefusal(
       locked: false
     };
   }
-  if (!mayAlwaysAllow(definition, deps.policy.alwaysAllowLocked)) {
+  if (!mayAlwaysAllow(definition, (await deps.policy.alwaysAllowLocked?.()) ?? [])) {
     return {
       message:
         "Your administrator decides whether this action asks you first; Always allow is not available for it.",

@@ -610,19 +610,39 @@ export function alwaysAllowLockIssues(
   locked: readonly string[],
   registry: Pick<OperationRegistry, "releaseNames">
 ): string[] {
-  const releaseNames = registry.releaseNames();
-  return locked.flatMap((entry) => {
-    const pattern = entry.endsWith(".*");
-    const stem = pattern ? entry.slice(0, -1) : entry;
-    const known = pattern
-      ? releaseNames.some((name) => name.startsWith(stem)) || namesDataOperations(stem, true)
-      : releaseNames.includes(entry) || namesDataOperations(entry, false);
-    return known
+  return locked.flatMap((entry) =>
+    namesKnownOperations(entry, registry)
       ? []
       : [
           `policy.alwaysAllow.locked: '${entry}' names no operation of this instance. Name an operation exactly, or every operation under a prefix such as 'connection.crm.*'`
-        ];
-  });
+        ]
+  );
+}
+
+/**
+ * The form of an entry of the admin's policy: an operation's name, `me.operation_settings.set`,
+ * or every operation under a prefix, `connection.crm.*`. A bare `*` or a part cut off,
+ * `connection.cr*`, names no operation.
+ */
+export const OPERATION_NAME_PATTERN =
+  /^[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_][A-Za-z0-9_-]*)*(?:\.\*)?$/u;
+
+/**
+ * Whether an entry of the admin's policy, a name or a pattern `<prefix>.*`, names an operation
+ * of the release or where operations come from data, such as a Connection's
+ * `connection.<name>.<operation>`, which may not exist yet.
+ */
+export function namesKnownOperations(
+  entry: string,
+  registry: Pick<OperationRegistry, "releaseNames">
+): boolean {
+  if (!OPERATION_NAME_PATTERN.test(entry)) return false;
+  const releaseNames = registry.releaseNames();
+  const pattern = entry.endsWith(".*");
+  const stem = pattern ? entry.slice(0, -1) : entry;
+  return pattern
+    ? releaseNames.some((name) => name.startsWith(stem)) || namesDataOperations(stem, true)
+    : releaseNames.includes(entry) || namesDataOperations(entry, false);
 }
 
 export function createOperationRegistry(): OperationRegistry {

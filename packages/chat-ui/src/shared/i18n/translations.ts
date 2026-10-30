@@ -31,6 +31,7 @@ import { collaborationWorkspace } from "./collaboration-workspace";
 import { common } from "./common";
 import { configAssets } from "./config-assets";
 import { confirmations } from "./confirmations";
+import { policies } from "./policies";
 import { usageLimits } from "./usage-limits";
 import { connectionCatalogue } from "./connection-catalogue";
 import { connectionCreate } from "./connection-create";
@@ -119,6 +120,7 @@ export const translations = combineTranslations(common)
   .and(collaborationWorkspace)
   .and(configAssets)
   .and(confirmations)
+  .and(policies)
   .and(usageLimits)
   .and(usageReports)
   .and(connectionCatalogue)

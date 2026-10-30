@@ -15,6 +15,7 @@ export * from "./attached-file-titles";
 export * from "./before-action-check";
 export { boundedActorAccess } from "./bounded-actor-access";
 export * from "./capability-records";
+export * from "./central-policy-settings";
 export * from "./child-agent-runs";
 export * from "./config-asset-concurrency";
 export * from "./connection-oauth";

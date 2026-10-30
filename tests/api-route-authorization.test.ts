@@ -64,6 +64,8 @@ const acceptedBodies: Partial<Record<ApiOperationName, unknown>> = {
   "service_principals.update": { displayLabel: "Service" },
   "api_credentials.create": { name: "Credential" },
   "usage.limits.set": { level: "instance", limits: { daily: 1 } },
+  "policies.set": { operation: "missing.operation", value: "deny" },
+  "policies.set_always_allow_lock": { operation: "missing.operation", locked: true },
   "users.create": { displayLabel: "Person" },
   "users.update": { displayLabel: "Person" },
   "users.identities.upsert": { authSource: "test", externalUserId: "person" },

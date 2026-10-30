@@ -16,8 +16,8 @@ import { heldSkillSaves } from "./policy";
 // policy setting that sends its calls to another person for approval, and one whose calls the
 // person the run acts for confirms. Further settings hold a skill saved into a Shared Workspace
 // named `E2E held skills`, which one test creates and deletes; they hold nothing while no
-// workspace has that name. No screen sets a central setting before
-// Instance > Policies exists (OP-2), so the suite's server names both.
+// workspace has that name. The suite's server names these settings in code, beside those an
+// admin stores on Settings > Instance > Policies (OP-2).
 // It also names the suite's Connector types, which reach nothing, and ships the four
 // general skills as a capability of a deployment does, without the commands they name.
 // `pnpm dev:demo` and the demo's own server do not load this file.
@@ -65,6 +65,23 @@ const confirmReversible = defineTool({
   outputSchema: z.object({ recorded: z.string() }),
   execute: (input) => toolSuccess({ recorded: input.text })
 });
+
+// Two reversible changes the Policies screen sets (OP-2): the first takes the admin's settings
+// and locks, the release config locks "Always allow" for the second.
+const POLICY_TOOLS = ["e2e.policy_reversible", "e2e.policy_locked"] as const;
+
+const policyTools = POLICY_TOOLS.map((name) =>
+  defineTool({
+    name,
+    effect: "changing",
+    changeClass: "reversible",
+    permission: { mode: "allow" },
+    description: "Records a note. A fixture of the browser suite: it stores nothing.",
+    inputSchema: z.object({ text: z.string().min(1) }),
+    outputSchema: z.object({ recorded: z.string() }),
+    execute: (input) => toolSuccess({ recorded: input.text })
+  })
+);
 
 const connectorSettings = z.object({ url: z.string().url().startsWith("https://") }).strict();
 
@@ -157,7 +174,7 @@ const generalSkills: ClientInstanceCapability = {
 const client = defineClientInstance({
   rootDir: new URL("..", import.meta.url),
   resultShapers: sampleResultShapers,
-  tools: [...demoTools, recordNote, confirmNote, confirmReversible],
+  tools: [...demoTools, recordNote, confirmNote, confirmReversible, ...policyTools],
   connectorTypes: [testConnector, folderSourceConnector],
   // The demo's entry, and one of the suite's own that its config does not offer.
   catalogue: [

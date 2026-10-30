@@ -93,9 +93,11 @@
 {"name":"feedback.pruned","legacy":false,"audited":true,"phases":["after"]}
 {"name":"feedback.received","legacy":false,"audited":true,"phases":["after"]}
 {"name":"form_page.before_publish","legacy":false,"audited":false,"phases":["before"]}
+{"name":"governance.always_allow_lock_changed","legacy":false,"audited":true,"phases":["after"]}
 {"name":"governance.audit_events_viewed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"governance.config_assets_viewed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"governance.config_assets_write_authorized","legacy":true,"audited":true,"phases":["after"]}
+{"name":"governance.policy_setting_changed","legacy":false,"audited":true,"phases":["after"]}
 {"name":"governance.usage_limit_changed","legacy":false,"audited":true,"phases":["after"]}
 {"name":"governance.usage_users_viewed","legacy":false,"audited":true,"phases":["after"]}
 {"name":"governance.usage_viewed","legacy":true,"audited":true,"phases":["after"]}

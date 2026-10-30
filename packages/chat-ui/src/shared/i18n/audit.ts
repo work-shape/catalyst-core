@@ -113,6 +113,8 @@ export const audit = defineTranslations({
     "audit.event.governance.config_assets_viewed": "Viewed assets across all workspaces",
     "audit.event.governance.config_assets_write_authorized":
       "Allowed a change to assets across all workspaces",
+    "audit.event.governance.policy_setting_changed": "Changed a policy",
+    "audit.event.governance.always_allow_lock_changed": "Changed an Always allow lock",
     "audit.event.governance.usage_limit_changed": "Changed a spend limit",
     "audit.event.governance.usage_users_viewed": "Viewed usage by person",
     "audit.event.governance.usage_viewed": "Viewed usage",
@@ -439,6 +441,8 @@ export const audit = defineTranslations({
     "audit.event.governance.config_assets_viewed": "Assets in allen Arbeitsbereichen angesehen",
     "audit.event.governance.config_assets_write_authorized":
       "Änderung an Assets in allen Arbeitsbereichen erlaubt",
+    "audit.event.governance.policy_setting_changed": "Richtlinie geändert",
+    "audit.event.governance.always_allow_lock_changed": "Sperre für „Immer erlauben“ geändert",
     "audit.event.governance.usage_limit_changed": "Ausgabenlimit geändert",
     "audit.event.governance.usage_users_viewed": "Nutzung pro Person angesehen",
     "audit.event.governance.usage_viewed": "Nutzung angesehen",

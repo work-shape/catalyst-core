@@ -2,6 +2,13 @@ import { z } from "zod";
 import { listQuerySchema } from "../shared";
 import { auditActivitySchema, auditEventSchema, usageSummarySchema } from "../governance";
 import {
+  alwaysAllowLockChangeSchema,
+  policiesSchema,
+  policySettingChangeSchema,
+  setAlwaysAllowLockRequestSchema,
+  setPolicySettingRequestSchema
+} from "../policies";
+import {
   setUsageSpendLimitRequestSchema,
   usageLimitsSchema,
   usageSpendLimitChangeSchema
@@ -128,6 +135,55 @@ export const governanceOperations = {
     body: setUsageSpendLimitRequestSchema,
     response: json(usageSpendLimitChangeSchema),
     errors: ["NOT_FOUND"],
+    rateClass: "write"
+  }),
+  // Instance > Policies (OP-2). The screen and any client share these three, and each change
+  // is an audit event naming the operation, the narrowing and the values, never a call's input.
+  "policies.get": defineRegisteredOperation({
+    id: "policies.get",
+    method: "GET",
+    path: "/api/v1/instance/policies",
+    summary:
+      "Read the policy of every operation: effect, change class and value, the central settings and the locks of Always allow",
+    tag: "Governance",
+    auth: "user",
+    scope: "governance:read",
+    requires: ["policy.manage"],
+    effect: "reading",
+    response: json(policiesSchema),
+    errors: [],
+    rateClass: "read"
+  }),
+  "policies.set": defineRegisteredOperation({
+    id: "policies.set",
+    method: "PUT",
+    path: "/api/v1/instance/policies/settings",
+    summary:
+      "Set or remove the central policy value of an operation or a name pattern, narrowed to a shared workspace and an asset kind where given",
+    tag: "Governance",
+    auth: "user",
+    scope: "governance:write",
+    requires: ["policy.manage"],
+    effect: "changing",
+    body: setPolicySettingRequestSchema,
+    response: json(policySettingChangeSchema),
+    errors: ["NOT_FOUND"],
+    rateClass: "write"
+  }),
+  "policies.set_always_allow_lock": defineRegisteredOperation({
+    id: "policies.set_always_allow_lock",
+    method: "PUT",
+    path: "/api/v1/instance/policies/always-allow-locks",
+    summary:
+      "Lock or unlock Always allow for an operation or a name pattern. A lock of release config cannot be lifted here.",
+    tag: "Governance",
+    auth: "user",
+    scope: "governance:write",
+    requires: ["policy.manage"],
+    effect: "changing",
+    body: setAlwaysAllowLockRequestSchema,
+    response: json(alwaysAllowLockChangeSchema),
+    errors: [],
     rateClass: "write"
   })
 } as const;

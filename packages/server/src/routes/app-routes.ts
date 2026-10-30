@@ -12,7 +12,7 @@ import { AppActionCalls } from "../apps/action-call";
 import { AppActionList } from "../apps/action-list";
 import { AppWorkflow } from "../apps/app-service";
 import { AppDraftTries } from "../apps/app-tries";
-import { DraftHosts } from "../apps/draft-hosts";
+import { DRAFT_HOSTS_DEFAULT_POLICY, DraftHosts } from "../apps/draft-hosts";
 import { PreviewCaptures } from "../apps/preview-captures";
 import { PreviewReports } from "../apps/preview-reports";
 import type { Route } from "../http/route";
@@ -121,6 +121,8 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
       await draftHosts.target(actor, access, input);
       return { allowed: true };
     },
+    // Off until an instance admin switches it on Instance > Policies.
+    defaultPolicy: DRAFT_HOSTS_DEFAULT_POLICY,
     // A setting narrowed to a workspace or to Apps finds the call of an App's draft.
     policyTargets: (input) => draftHosts.policyTargets(input.fileSetId),
     changeClass: "reversible",
