@@ -3,6 +3,7 @@ import type { ShippedSkill } from "@work-shape/catalyst-core";
 import { dataScopeSection } from "./authoring-skill/sections/data-scope";
 import { datasetsSection } from "./authoring-skill/sections/datasets";
 import { examplesSection } from "./authoring-skill/sections/examples";
+import { fitCheckSection } from "./authoring-skill/sections/fit-check";
 import { howYouWorkSection } from "./authoring-skill/sections/how-you-work";
 import { introSection } from "./authoring-skill/sections/intro";
 import { manifestSection } from "./authoring-skill/sections/manifest";
@@ -28,6 +29,7 @@ export { workflowStepTypesNotRun } from "./authoring-skill/sections/not-run-yet"
 function content(packages: readonly WorkflowRunnerPackage[]): string {
   const sections = [
     introSection,
+    fitCheckSection,
     howYouWorkSection,
     dataScopeSection,
     manifestSection,

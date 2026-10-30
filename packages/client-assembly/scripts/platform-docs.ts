@@ -1,4 +1,9 @@
 import { renderRuntimeRules } from "@work-shape/catalyst-app-build";
+import { workflowsConfigSchema } from "@work-shape/catalyst-config-schema";
+import {
+  describeWorkflowCapabilities,
+  renderWorkflowCapabilitiesPage
+} from "@work-shape/catalyst-workflows";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -102,6 +107,36 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       throw new Error("apps/sandbox.md runtime rules differ. Run pnpm generate:platform-docs.");
     }
     await writeFile(sandboxFile, updated);
+  }
+  // The page "What a Workflow can do" with the release's defaults (WF-FIT). An instance ships
+  // the same page with its own values in place of this part.
+  const capabilitiesFile = join(DOCS_ROOT, "automate/workflow-capabilities.md");
+  const capabilities = await readFile(capabilitiesFile, "utf8");
+  const capabilitiesStart = "<!-- workflow-capabilities:start -->";
+  const capabilitiesEnd = "<!-- workflow-capabilities:end -->";
+  const capabilitiesFrom = capabilities.indexOf(capabilitiesStart);
+  const capabilitiesTo = capabilities.indexOf(capabilitiesEnd);
+  if (capabilitiesFrom < 0 || capabilitiesTo < capabilitiesFrom) {
+    throw new Error("automate/workflow-capabilities.md is missing its section markers.");
+  }
+  const capabilitiesPage = renderWorkflowCapabilitiesPage(
+    describeWorkflowCapabilities({
+      config: workflowsConfigSchema.parse({}),
+      codeSteps: "available",
+      packages: { packages: [] },
+      connections: [],
+      connectorTypes: []
+    }),
+    "release"
+  );
+  const capabilitiesUpdated = `${capabilities.slice(0, capabilitiesFrom)}${capabilitiesStart}\n${capabilitiesPage}\n${capabilities.slice(capabilitiesTo)}`;
+  if (capabilities !== capabilitiesUpdated) {
+    if (process.argv.includes("--check")) {
+      throw new Error(
+        "automate/workflow-capabilities.md differs from the release's capability list. Run pnpm generate:platform-docs."
+      );
+    }
+    await writeFile(capabilitiesFile, capabilitiesUpdated);
   }
   const pages = await readPlatformDocsPages();
   const text = renderPlatformDocs(pages);

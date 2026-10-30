@@ -35043,6 +35043,325 @@
         "x-catalyst-rate-class": "write"
       }
     },
+    "/api/v1/workflow-capabilities": {
+      "get": {
+        "operationId": "workflows.capabilities",
+        "summary": "List what a Workflow can do on this instance: runtime and packages, ceilings with their settings, source bounds, the Connections you may use and what is not offered. Open to whoever may write a Workflow somewhere",
+        "tags": [
+          "Workflows"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:write"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "runtime": {
+                      "type": "object",
+                      "properties": {
+                        "codeSteps": {
+                          "type": "string",
+                          "enum": [
+                            "available",
+                            "no_sandbox"
+                          ]
+                        },
+                        "languages": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "language": {
+                                "type": "string"
+                              },
+                              "command": {
+                                "type": "string"
+                              },
+                              "endings": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "language",
+                              "command",
+                              "endings"
+                            ]
+                          }
+                        },
+                        "packages": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "version": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "version"
+                            ]
+                          }
+                        },
+                        "packageManifest": {
+                          "type": "string",
+                          "enum": [
+                            "available",
+                            "missing",
+                            "invalid"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "codeSteps",
+                        "languages",
+                        "packages",
+                        "packageManifest"
+                      ]
+                    },
+                    "ceilings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "unit": {
+                            "type": "string",
+                            "enum": [
+                              "bytes",
+                              "count",
+                              "seconds",
+                              "minutes",
+                              "cpus",
+                              "duration"
+                            ]
+                          },
+                          "about": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "unit",
+                          "about"
+                        ]
+                      }
+                    },
+                    "source": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "unit": {
+                            "type": "string",
+                            "enum": [
+                              "bytes",
+                              "count",
+                              "seconds",
+                              "minutes",
+                              "cpus",
+                              "duration"
+                            ]
+                          },
+                          "about": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "unit",
+                          "about"
+                        ]
+                      }
+                    },
+                    "reach": {
+                      "type": "object",
+                      "properties": {
+                        "codeSteps": {
+                          "type": "string",
+                          "const": "none"
+                        },
+                        "connections": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "connectorType": {
+                                "type": "string"
+                              },
+                              "enabled": {
+                                "type": "boolean"
+                              },
+                              "operations": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "effect": {
+                                      "type": "string",
+                                      "enum": [
+                                        "reading",
+                                        "changing"
+                                      ]
+                                    },
+                                    "enabled": {
+                                      "type": "boolean"
+                                    }
+                                  },
+                                  "required": [
+                                    "name",
+                                    "effect",
+                                    "enabled"
+                                  ]
+                                }
+                              },
+                              "otherOperations": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "title",
+                              "connectorType",
+                              "enabled",
+                              "operations",
+                              "otherOperations"
+                            ]
+                          }
+                        },
+                        "changingConnectorTypes": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "codeSteps",
+                        "connections",
+                        "changingConnectorTypes"
+                      ]
+                    },
+                    "notOffered": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "text": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "text"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "runtime",
+                    "ceilings",
+                    "source",
+                    "reach",
+                    "notOffered"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/workflow-runs/{runId}": {
       "get": {
         "operationId": "workflows.get_run",

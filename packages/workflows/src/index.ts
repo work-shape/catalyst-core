@@ -27,7 +27,8 @@ export const WORKFLOW_OPERATION_IDS = [
   "workflows.principal_rights",
   "workflows.webhook",
   "workflows.rotate_webhook_secret",
-  "workflows.webhook_receive"
+  "workflows.webhook_receive",
+  "workflows.capabilities"
 ] as const;
 
 /**
@@ -224,3 +225,17 @@ export {
 } from "./outside-reach";
 
 export { createWorkflowSourceCache } from "./source-cache";
+
+export {
+  connectorTypeChanges,
+  describeWorkflowCapabilities,
+  renderWorkflowCapabilitiesPage,
+  workflowCapabilityConnection,
+  workflowCapabilityValueText,
+  type WorkflowCapabilities,
+  type WorkflowCapabilitiesAudience,
+  type WorkflowCapabilitiesConfig,
+  type WorkflowCapabilityConnection,
+  type WorkflowCapabilitySetting,
+  type WorkflowCapabilityUnit
+} from "./capabilities";

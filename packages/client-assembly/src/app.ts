@@ -96,6 +96,9 @@ import {
   shippedSkillReferences,
   shippedSkillsOf
 } from "./shipped-skills";
+import { runnerPackageManifest } from "./runner-packages";
+import { codeStepAvailability, instanceWorkflowCapabilitiesPage } from "./workflow-capabilities";
+import { workflowsModule } from "./workflows";
 import { SHIPPED_AGENT_NAMES, shippedAgentsOf } from "./shipped-agents";
 import { workshaperAgent } from "./workshaper";
 import {
@@ -754,7 +757,17 @@ export async function createClientInstanceExecutionAssembly(
   const shippedSkills = shippedSkillsOf({
     modules,
     capabilities,
-    hasTool: (toolName) => toolRegistry.has(toolName)
+    hasTool: (toolName) => toolRegistry.has(toolName),
+    ...(modules.isEnabled(workflowsModule.name)
+      ? {
+          workflowCapabilitiesPage: instanceWorkflowCapabilitiesPage({
+            config: config.workflows,
+            codeSteps: codeStepAvailability(config),
+            packages: runnerPackageManifest,
+            connectorTypes: connections?.connectorTypes.types ?? []
+          })
+        }
+      : {})
   });
   skillReferences = shippedSkillReferences({ modules, capabilities, shipped: shippedSkills });
   // Asked of an agent with no model of its own, as a shipped agent is until the instance gives

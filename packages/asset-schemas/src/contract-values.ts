@@ -1248,3 +1248,26 @@ export const SERVER_PREVIEW_CAPTURE_REFUSALS = ["capture_busy", "capture_failed"
 
 /** A project: its rights, kind, audiences and limits (PRJ-1). */
 export * from "./contract-values/project";
+
+/**
+ * What `workflows.capabilities` says of a setting's number: bytes, a count, seconds, minutes,
+ * CPUs, or a duration written as text such as `7d`.
+ */
+export const WORKFLOW_CAPABILITY_UNITS = [
+  "bytes",
+  "count",
+  "seconds",
+  "minutes",
+  "cpus",
+  "duration"
+] as const;
+export type WorkflowCapabilityUnit = (typeof WORKFLOW_CAPABILITY_UNITS)[number];
+
+/**
+ * Whether the instance runs code steps: `available` where it has a sandbox and a command
+ * worker, `no_sandbox` where a code step would fail at once.
+ */
+export const WORKFLOW_CODE_STEP_AVAILABILITY = ["available", "no_sandbox"] as const;
+
+/** How the runner image's package manifest was read at startup (EW-PKG). */
+export const WORKFLOW_PACKAGE_MANIFEST_STATES = ["available", "missing", "invalid"] as const;

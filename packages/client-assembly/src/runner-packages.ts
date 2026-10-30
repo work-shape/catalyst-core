@@ -1,5 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
 import { z } from "zod";
+import type { WorkflowPackageManifestState } from "@work-shape/catalyst-core";
 import { runnerPackageKey, type WorkflowRunnerPackage } from "@work-shape/catalyst-workflows";
 
 /** The image build copies the runner's manifest into every publishing API image. */
@@ -15,7 +16,7 @@ const manifestSchema = z.array(
 
 export interface RunnerPackageManifest {
   readonly packages: readonly WorkflowRunnerPackage[];
-  readonly unavailable?: "missing" | "invalid";
+  readonly unavailable?: Exclude<WorkflowPackageManifestState, "available">;
 }
 
 /** Missing, unreadable and malformed manifests all fail closed, without stopping startup. */

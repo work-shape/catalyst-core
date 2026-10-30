@@ -65,3 +65,34 @@ export const platformDocsSkill: ShippedSkill = {
   })),
   icon: "guide"
 };
+
+/** The docs page that holds the capability list of Workflows (WF-FIT). */
+const WORKFLOW_CAPABILITIES_DOCS_PAGE = "automate/workflow-capabilities";
+
+/** Where the generated part of that page starts and ends. */
+const WORKFLOW_CAPABILITIES_MARKERS = {
+  start: "<!-- workflow-capabilities:start -->",
+  end: "<!-- workflow-capabilities:end -->"
+} as const;
+
+/**
+ * The docs as one instance ships them: the page "What a Workflow can do" holds the instance's
+ * own values in place of the release's defaults, between the same markers.
+ */
+export function instancePlatformDocsSkill(workflowCapabilitiesPage: string): ShippedSkill {
+  const path = referencePath(WORKFLOW_CAPABILITIES_DOCS_PAGE);
+  const { start, end } = WORKFLOW_CAPABILITIES_MARKERS;
+  return {
+    ...platformDocsSkill,
+    resources: (platformDocsSkill.resources ?? []).map((resource) => {
+      const from = resource.content.indexOf(start);
+      const to = resource.content.indexOf(end);
+      return resource.path !== path || from < 0 || to < from
+        ? resource
+        : {
+            ...resource,
+            content: `${resource.content.slice(0, from)}${start}\n${workflowCapabilitiesPage}\n${resource.content.slice(to)}`
+          };
+    })
+  };
+}

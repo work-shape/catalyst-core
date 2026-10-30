@@ -10,6 +10,8 @@ import {
   WORKFLOW_RUN_MODES,
   WORKFLOW_RUN_STATUSES,
   WORKFLOW_STEP_RUN_STATUSES,
+  WORKFLOW_CODE_STEP_AVAILABILITY,
+  WORKFLOW_PACKAGE_MANIFEST_STATES,
   WORKFLOW_STEP_TYPES,
   WORKFLOW_TRIGGER_KINDS
 } from "@work-shape/catalyst-asset-schemas";
@@ -41,6 +43,16 @@ export const WORKFLOW_STEP_FILES_FOLDER = "steps";
 export { WORKFLOW_STEP_TYPES } from "@work-shape/catalyst-asset-schemas";
 
 export type WorkflowStepType = (typeof WORKFLOW_STEP_TYPES)[number];
+
+/** What `workflows.capabilities` says of a bound's number, a sandbox and the runner's packages. */
+export {
+  WORKFLOW_CAPABILITY_UNITS,
+  WORKFLOW_CODE_STEP_AVAILABILITY,
+  WORKFLOW_PACKAGE_MANIFEST_STATES,
+  type WorkflowCapabilityUnit
+} from "@work-shape/catalyst-asset-schemas";
+export type WorkflowCodeStepAvailability = (typeof WORKFLOW_CODE_STEP_AVAILABILITY)[number];
+export type WorkflowPackageManifestState = (typeof WORKFLOW_PACKAGE_MANIFEST_STATES)[number];
 
 /**
  * What may start a run. Spec: Workflow definition, triggers. The spec also names `form`,

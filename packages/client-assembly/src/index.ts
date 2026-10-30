@@ -64,7 +64,12 @@ export {
   PLATFORM_TOOL_NAMES,
   agentListableToolNames
 } from "./platform-orientation";
-export { platformDocsSkill } from "./platform-docs-skill";
+export { instancePlatformDocsSkill, platformDocsSkill } from "./platform-docs-skill";
+export {
+  createWorkflowCapabilitiesRoute,
+  instanceWorkflowCapabilitiesPage,
+  type InstanceWorkflowCapabilities
+} from "./workflow-capabilities";
 export {
   createInstanceWorkflows,
   workflowLimitCeilingsOf,

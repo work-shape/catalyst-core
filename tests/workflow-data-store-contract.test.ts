@@ -700,7 +700,8 @@ describe("the modules workflows and dataStores", () => {
         "workflows.test",
         "workflows.list_runs",
         "workflows.get_run",
-        "workflows.list_step_runs"
+        "workflows.list_step_runs",
+        "workflows.capabilities"
       ],
       operations: [
         "workflows.list",
@@ -721,7 +722,8 @@ describe("the modules workflows and dataStores", () => {
         "workflows.principal_rights",
         "workflows.webhook",
         "workflows.rotate_webhook_secret",
-        "workflows.webhook_receive"
+        "workflows.webhook_receive",
+        "workflows.capabilities"
       ],
       jobKinds: [
         WORKFLOW_RUN_JOB_KINDS.executeStep,

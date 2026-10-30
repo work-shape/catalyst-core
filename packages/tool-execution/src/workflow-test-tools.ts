@@ -6,7 +6,8 @@ export const WORKFLOW_TEST_TOOL_NAMES: readonly string[] = [
   "workflows.test",
   "workflows.list_runs",
   "workflows.get_run",
-  "workflows.list_step_runs"
+  "workflows.list_step_runs",
+  "workflows.capabilities"
 ];
 
 /**
@@ -81,6 +82,18 @@ export function createWorkflowTestTools(): AnyToolDefinition[] {
         runId,
         ...paging
       }),
+      execute
+    }),
+    defineTool({
+      ...presentation,
+      name: "workflows.capabilities",
+      title: { en: "Read what a Workflow can do", de: "Lesen, was ein Workflow kann" },
+      effect: "reading",
+      description: [
+        "Read what a Workflow can do on this instance: the runner's languages and packages, every ceiling with the release config key that raises it, the bounds of a Workflow's source, the Connections the person may use with the operations exposed to workflow and which changing ones an administrator switched on, and what is not offered.",
+        "Read it before you write a Workflow, and again when a request changes what it reaches, and answer from it as the workflow-authoring skill says. It lists only what this release has built: never promise anything it does not list."
+      ].join(" "),
+      inputSchema: z.object({}),
       execute
     })
   ];

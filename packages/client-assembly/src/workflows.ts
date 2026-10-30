@@ -2,6 +2,8 @@ import { loadSecretKeyring } from "@work-shape/catalyst-connections";
 import type { StorePage } from "@work-shape/catalyst-core";
 import { outboundMailOf } from "./mail";
 import { commitsAssetRepos } from "./pages";
+import { runnerPackageManifest } from "./runner-packages";
+import { codeStepAvailability, createWorkflowCapabilitiesRoute } from "./workflow-capabilities";
 import {
   workflowsConfigSchema,
   type ClientInstanceConfig
@@ -394,6 +396,7 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
  */
 export const assembleWorkflows: ModuleSeam = ({
   config,
+  connections,
   modules,
   clientInstanceId,
   stores,
@@ -472,7 +475,18 @@ export const assembleWorkflows: ModuleSeam = ({
       runs = workflows;
       await workflows.planSchedules();
       return {
-        routes: workflows.routes,
+        routes: [
+          ...workflows.routes,
+          createWorkflowCapabilitiesRoute(
+            { clientInstanceId, stores },
+            {
+              config: config.workflows,
+              codeSteps: codeStepAvailability(config),
+              packages: runnerPackageManifest,
+              connectorTypes: connections?.connectorTypes.types ?? []
+            }
+          )
+        ],
         jobHandlers: workflows.jobHandlers,
         schedules: workflows.jobSchedules
       };
