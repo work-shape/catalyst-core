@@ -15,7 +15,6 @@ import { withTestSql } from "./support/test-sql";
 // Spec: events-workflows-and-guardrails.md, Guardrails on chat, acceptance checks 59 to 61.
 
 const SECRET = `ghp_${"Zq9xWv8uTs".repeat(4)}`;
-const CARD = "4111 1111 1111 1111";
 const PASSWORD = "Passwort: Herbstlaub-7713";
 
 let app: TestInstance | undefined;
@@ -122,11 +121,11 @@ describe("a chat message under the guardrails on chat input", () => {
       (await server.call("conversations.list")).json<{ items: unknown[] }>().items.length;
     const before = await listed();
     const blocked = await server.call("conversations.runs.create", {
-      payload: { idempotencyKey: "chat-input-create", message: { text: `Karte ${CARD}` } }
+      payload: { idempotencyKey: "chat-input-create", message: { text: `Token ${SECRET}` } }
     });
     expect(errorOf(blocked)).toMatchObject({
       code: "GUARDRAIL_BLOCKED",
-      details: { guardrailId: "chat-card-numbers" }
+      details: { guardrailId: "chat-secrets" }
     });
     expect(await listed()).toBe(before);
   });
@@ -191,17 +190,17 @@ describe("a chat message under the guardrails on chat input", () => {
   it("checks the text of a text attachment", async () => {
     const { app: server, conversationId } = await instance();
     await upload(server, conversationId, {
-      filename: "zahlung.txt",
+      filename: "zugang.txt",
       contentType: "text/plain",
-      content: `Karte: ${CARD}`
+      content: `Token: ${SECRET}`
     });
     const blocked = await send(server, conversationId, "Siehe Anhang.");
     expect(errorOf(blocked)).toMatchObject({
       code: "GUARDRAIL_BLOCKED",
-      details: { guardrailId: "chat-card-numbers" }
+      details: { guardrailId: "chat-secrets" }
     });
     const [hit] = await withTestSql(
-      (sql) => sql`SELECT field FROM guardrail_hits WHERE guardrail_name = 'chat-card-numbers'`
+      (sql) => sql`SELECT field FROM guardrail_hits WHERE guardrail_name = 'chat-secrets'`
     );
     expect(hit).toEqual({ field: "attachments" });
   });
@@ -225,7 +224,7 @@ describe("a chat message under the guardrails on chat input", () => {
   // waits until it is ready.
   it("checks the text a document capability prepared of a PDF", async () => {
     const { app: server, conversationId } = await instance({
-      preparedTexts: { "vertrag.pdf": { text: `Zahlung per Karte ${CARD}` } }
+      preparedTexts: { "vertrag.pdf": { text: `Zugang per Token ${SECRET}` } }
     });
     await upload(server, conversationId, {
       filename: "vertrag.pdf",
@@ -235,14 +234,14 @@ describe("a chat message under the guardrails on chat input", () => {
     const blocked = await send(server, conversationId, "Bitte prüfe den Vertrag.");
     expect(errorOf(blocked)).toMatchObject({
       code: "GUARDRAIL_BLOCKED",
-      details: { guardrailId: "chat-card-numbers" }
+      details: { guardrailId: "chat-secrets" }
     });
     expect(errorOf(blocked).details).not.toHaveProperty("attachmentsNotChecked");
     const [hit] = await withTestSql(
-      (sql) => sql`SELECT field FROM guardrail_hits WHERE guardrail_name = 'chat-card-numbers'`
+      (sql) => sql`SELECT field FROM guardrail_hits WHERE guardrail_name = 'chat-secrets'`
     );
     expect(hit).toEqual({ field: "attachments" });
-    expect(await everyStoredRow()).not.toContain("4111 1111 1111 1111");
+    expect(await everyStoredRow()).not.toContain(SECRET.slice(4, 24));
   });
 
   // Fails without the change: a Markdown file, which the document capability tags `md`, came

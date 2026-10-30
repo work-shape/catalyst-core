@@ -369,10 +369,10 @@ describe("scheduled prompts API", () => {
   });
 
   // GR-4: the guardrails on chat input read a scheduled prompt as they read a sent message.
-  // Fails without the change: a prompt with a card number was saved and ran unchecked.
+  // Fails without the change: a prompt with an access token was saved and ran unchecked.
   it("refuses a prompt a guardrail on chat input blocks, on create and on edit", async () => {
     const { t, workspace } = await guardedFixture();
-    const blockedPrompt = "Buche mit Karte 4111 1111 1111 1111";
+    const blockedPrompt = `Nutze den Token ghp_${"Lm3nB7vC1x".repeat(4)}`;
     await t.expectRefused(
       t.kai.id,
       "scheduled_starts.create",
