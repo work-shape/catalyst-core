@@ -1,5 +1,0 @@
----
-section: Added
----
-
-- **Workflows:** Re-run a run from a chosen step (EW-11). On the page of a run that ended `done` or `failed`, the panel of a step outside every block offers "Run again from here" ("Ab hier erneut ausführen"). The new run starts on the original's input, on the published revision for a live run or the draft for a test run; the steps before the chosen one end with the original's outputs and make no call, and the chosen step and those after it run. The run records `rerunOf` (the original, the step and the reused steps), its page links the original, and each reused step points back to it. A step that changed since the original, an output the original does not have or cannot hand on, and removed run data make every later step no place to re-run from, and the panel says why. New operations `workflows.rerun_steps` (`GET /api/v1/workflow-runs/:runId/rerun-steps`) and `workflows.rerun` (`POST /api/v1/workflow-runs/:runId/rerun`) ask what a start of the run's mode asks plus reading the run; a call from a conversation marked as holding personal data stays refused.

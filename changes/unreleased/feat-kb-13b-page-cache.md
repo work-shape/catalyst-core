@@ -1,5 +1,0 @@
----
-section: Added
----
-
-- **Knowledge Bases:** A cited page of a synced document whose original was released after extraction opens again. The instance first checks the reader's `knowledge_base.use`. It then fetches the original through the source's Connection, acting as the Knowledge Base's ingestion principal on the Connection's shared binding, never with a binding of the reader. The bytes stay in a page cache for 7 days from the fetch. The cache is bounded per Knowledge Base by `knowledge.pageCacheBytes` (default 512 MiB), and the oldest fetch is removed first when it is full. A withdrawn or changed document is never served from it. The cache is deleted with the document and with the Knowledge Base. Each fetch is audited as `knowledge_base.page_fetched`, without a file name or content. When the source cannot be reached, the instance answers 409 with the reason `knowledge_source_unreachable`. The citation chip then says "source not reachable" ("Quelle nicht erreichbar"), and the reader can click it again to retry.
