@@ -38,6 +38,7 @@ const REASONS: ConnectionCallReason[] = [
   "output_rejected",
   "upstream_unauthorized",
   "upstream_rate_limited",
+  "rate_limited",
   "upstream_timeout",
   "upstream_error",
   "upstream_conflict",

@@ -1,24 +1,32 @@
 import { randomUUID } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import {
   connectionConfigSchema,
   releaseConnectionConfigSchema
 } from "@work-shape/catalyst-config-schema";
 import {
+  CONNECTION_TRANSIENT_CALL_REASONS,
+  connectionCallReasonOf,
   createConnectorTypeRegistry,
   type JsonObject,
   type OperationLimits
 } from "@work-shape/catalyst-core";
 import {
   ConnectionCallSlots,
+  callConnectionOperation,
   createDocumentSourceOpener,
   createFixtureDocumentSource,
+  readConnection,
   type ConnectionOperationSourceDeps
 } from "@work-shape/catalyst-connections";
 import { setupConnectionInstance, connection } from "./support/connections";
 import { clientInstanceId } from "./support/access-instance";
 import { withTestSql } from "./support/test-sql";
 import { deferred } from "./support/assertions";
+import { fixture, operationOf } from "./support/connection-operations";
+
+type Fixture = Awaited<ReturnType<typeof fixture>>;
 
 async function sourceWorld(limits: OperationLimits) {
   const t = await setupConnectionInstance();
@@ -301,5 +309,97 @@ describe("Connection source limits (CS-6 acceptance 61)", () => {
       folder: { id: "top", name: "Top", path: "/" },
       folders: [{ id: "approved", name: "Approved" }]
     });
+  });
+});
+
+describe("an accepted operation's limits toward its source (EW-13a, acceptance 47)", () => {
+  /** A call of `crm` as `runOperation` makes it, through the slots of one process. */
+  async function call(t: Fixture, operationName: string, slots: ConnectionCallSlots) {
+    const stored = await readConnection(t.sourceDeps, "crm");
+    if (!stored) throw new Error("the Connection is stored");
+    return callConnectionOperation(
+      t.sourceDeps,
+      slots,
+      {
+        connectionName: "crm",
+        operationName,
+        assetId: stored.assetId,
+        revision: stored.revision
+      },
+      { text: operationName },
+      { runtime: {} }
+    );
+  }
+
+  it("holds concurrency across processes, sends nothing beyond it and leaves other operations free", async () => {
+    const t = await fixture();
+    await t.seed("crm", {
+      operations: [
+        operationOf("echo", { limits: { concurrency: 1 } }),
+        operationOf("write", { effect: "changing" })
+      ]
+    });
+    const held = deferred<void>();
+    let calls = 0;
+    t.setBehaviour(async (operation, input) => {
+      calls += 1;
+      if (operation === "echo" && calls === 1) await held.promise;
+      return input;
+    });
+    // Two processes: each has slots of its own, and only the database sees both.
+    const running = call(t, "echo", new ConnectionCallSlots());
+    await vi.waitFor(() => expect(calls).toBe(1));
+    const refused: unknown = await call(t, "echo", new ConnectionCallSlots()).catch(
+      (error: unknown) => error
+    );
+    expect(refused).toMatchObject({
+      code: "RATE_LIMITED",
+      details: { reason: "rate_limited", retryAfterSeconds: expect.any(Number) }
+    });
+    expect(connectionCallReasonOf(refused)).toBe("rate_limited");
+    expect(calls).toBe(1);
+    // Another operation of the Connection has no limit of its own and is not held up.
+    await expect(call(t, "write", new ConnectionCallSlots())).resolves.toEqual({
+      text: "write"
+    });
+    held.resolve();
+    await expect(running).resolves.toEqual({ text: "echo" });
+    // The room a call held is free once it ended.
+    await vi.waitFor(() =>
+      expect(call(t, "echo", new ConnectionCallSlots())).resolves.toEqual({ text: "echo" })
+    );
+  });
+
+  it("counts starts per period, names the seconds until there is room, and refuses every caller retryably", async () => {
+    const t = await fixture();
+    const assetId = await t.seed("crm", {
+      operations: [operationOf("echo", { limits: { perPeriod: { calls: 2, seconds: 60 } } })]
+    });
+    await t.grant(t.kai.id, "connection.use", { assetId });
+    t.setBehaviour(async (_operation, input) => input);
+    const slots = new ConnectionCallSlots();
+    await call(t, "echo", slots);
+    await call(t, "echo", slots);
+    const refused: unknown = await call(t, "echo", slots).catch((error: unknown) => error);
+    expect(refused).toMatchObject({
+      code: "RATE_LIMITED",
+      details: { reason: "rate_limited", retryAfterSeconds: expect.any(Number) }
+    });
+    const { retryAfterSeconds } = z
+      .object({ details: z.object({ retryAfterSeconds: z.number() }) })
+      .parse(refused).details;
+    expect(retryAfterSeconds).toBeGreaterThan(0);
+    expect(retryAfterSeconds).toBeLessThanOrEqual(60);
+    expect(CONNECTION_TRANSIENT_CALL_REASONS.has("rate_limited")).toBe(true);
+    // A caller other than a Workflow: the run ends rate_limited, with its sentence.
+    const outside = await t.failure(t.invoke(t.kai, "connection.crm.echo", { text: "outside" }));
+    expect(outside).toMatchObject({ code: "RATE_LIMITED", reason: "rate_limited" });
+    expect(outside.message).toMatch(/Wait a little before trying again/u);
+    // The window passed: there is room again.
+    await withTestSql(
+      (sql) =>
+        sql`update connection_source_calls set started_at=now()-interval '2 minutes', active_until=now()-interval '2 minutes', expires_at=now()-interval '1 second' where connection_asset_id=${assetId}`
+    );
+    await expect(call(t, "echo", slots)).resolves.toEqual({ text: "echo" });
   });
 });

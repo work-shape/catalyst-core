@@ -190,7 +190,11 @@ export const connectionSetupSessions = pgTable(
   ]
 );
 
-/** Short-lived source admission state: IDs and timestamps only, never source payloads. */
+/**
+ * Short-lived source admission state: IDs and timestamps only, never source payloads. A row
+ * of a Connection's own `limits` (a document source's list, changes and fetch) has an empty
+ * `operation_name`; a row of an accepted operation's `limits` names the operation.
+ */
 export const connectionSourceCalls = pgTable(
   "connection_source_calls",
   {
@@ -199,6 +203,7 @@ export const connectionSourceCalls = pgTable(
     connectionAssetId: text("connection_asset_id")
       .notNull()
       .references(() => configAssets.id, { onDelete: "cascade" }),
+    operationName: text("operation_name").notNull().default(""),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
     activeUntil: timestamp("active_until", { withTimezone: true }).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull()

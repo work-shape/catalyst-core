@@ -199,11 +199,13 @@ export interface ConnectionOperationConfig extends ConnectionOperationDeclaratio
   idempotencyKeyHeader?: string;
   /**
    * How the outside system pages this reading operation. A Workflow step that names
-   * `paginate` takes it. Reserved: the schema of a definition refuses it with
-   * `not_supported_yet` until the slice that brings paging reads it.
+   * `paginate` takes it.
    */
   paging?: OperationPaging;
-  /** The limits of calls toward the outside system. Reserved and refused like `paging`. */
+  /**
+   * The limits of calls toward the outside system. The call path holds them for the whole
+   * instance, for every caller and every page of a paged step.
+   */
   limits?: OperationLimits;
 }
 
@@ -562,10 +564,13 @@ export interface StoredSecretRecord {
  */
 export interface ConnectionsStore extends ConnectionBindingsStore {
   /** Atomically admits a source call across all processes. Called inside a transaction;
-   * the admission lock is held until commit. Expired leases recover after worker death. */
+   * the admission lock is held until commit. Expired leases recover after worker death.
+   * `operationName` counts the call toward that accepted operation's `limits`; without it
+   * the call counts toward the Connection's own. */
   admitSourceCall(input: {
     clientInstanceId: ClientInstanceId;
     connectionAssetId: string;
+    operationName?: string;
     leaseId: string;
     leaseMs: number;
     limits: OperationLimits;
@@ -574,6 +579,7 @@ export interface ConnectionsStore extends ConnectionBindingsStore {
   releaseSourceCall(input: {
     clientInstanceId: ClientInstanceId;
     connectionAssetId: string;
+    operationName?: string;
     leaseId: string;
   }): Promise<void>;
   /**

@@ -3,15 +3,19 @@ import type { ConnectionsStore } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { connectionSourceCalls as calls } from "./schema/connections";
 
-/** The caller holds a transaction; the per-Connection lock serializes admission everywhere. */
+/**
+ * The caller holds a transaction; the lock per Connection and operation serializes admission
+ * everywhere. Without an operation the call counts toward the Connection's own limits.
+ */
 export function createPostgresSourceCallOperations(
   db: PostgresConnection
 ): Pick<ConnectionsStore, "admitSourceCall" | "releaseSourceCall"> {
   return {
     async admitSourceCall(input) {
       const { clientInstanceId, connectionAssetId, limits, leaseId, leaseMs } = input;
+      const operationName = input.operationName ?? "";
       await db.execute(
-        sql`select pg_advisory_xact_lock(hashtextextended(${`source:${clientInstanceId}:${connectionAssetId}`}, 0))`
+        sql`select pg_advisory_xact_lock(hashtextextended(${`source:${clientInstanceId}:${connectionAssetId}:${operationName}`}, 0))`
       );
       await db.execute(sql`delete from ${calls} where ${calls.expiresAt} <= clock_timestamp()`);
       const periodMs = (limits.perPeriod?.seconds ?? 0) * 1000;
@@ -26,6 +30,7 @@ export function createPostgresSourceCallOperations(
           extract(epoch from (min(active_until) filter (where active_until > clock_timestamp()) - clock_timestamp())) * 1000 as active_wait,
           extract(epoch from (min(started_at) filter (where started_at > clock_timestamp() - ${periodMs} * interval '1 millisecond') + ${periodMs} * interval '1 millisecond' - clock_timestamp())) * 1000 as rate_wait
         from ${calls} where client_instance_id = ${clientInstanceId} and connection_asset_id = ${connectionAssetId}
+          and operation_name = ${operationName}
       `);
       const wait = Math.max(
         limits.concurrency !== undefined && Number(row?.active) >= limits.concurrency
@@ -40,15 +45,17 @@ export function createPostgresSourceCallOperations(
         leaseId,
         clientInstanceId,
         connectionAssetId,
+        operationName,
         startedAt: sql`clock_timestamp()`,
         activeUntil: sql`clock_timestamp() + ${leaseMs} * interval '1 millisecond'`,
         expiresAt: sql`clock_timestamp() + ${Math.max(leaseMs, periodMs)} * interval '1 millisecond'`
       });
       return { admitted: true };
     },
-    async releaseSourceCall({ clientInstanceId, connectionAssetId, leaseId }) {
+    async releaseSourceCall({ clientInstanceId, connectionAssetId, leaseId, operationName }) {
       await db.execute(sql`update ${calls} set active_until = clock_timestamp()
-        where client_instance_id = ${clientInstanceId} and connection_asset_id = ${connectionAssetId} and lease_id = ${leaseId}`);
+        where client_instance_id = ${clientInstanceId} and connection_asset_id = ${connectionAssetId}
+          and operation_name = ${operationName ?? ""} and lease_id = ${leaseId}`);
     }
   };
 }

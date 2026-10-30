@@ -4043,6 +4043,8 @@
         "",
         "A paged reading operation defaults to 60 minutes. Its Workflow may set `limits.pagedStepMinutes` above that default, up to `workflows.limits.pagedStepMinutes`; the publish question names the raise. `workflows.datasets.pages` and `pageBytes` bound the page count and each page's bytes. Connector response bounds still apply: `http_api` accepts at most 2 MiB per response. A reached ceiling fails the step with `dataset_limit` and its name; no consumer receives a partial dataset. Complete pages checkpoint their continuation, and source rate-limit deferrals preserve the page's spent retry attempts.",
         "",
+        "An accepted operation of a Connection may carry `limits` beside `paging`, such as `limits: { concurrency: 4, perPeriod: { calls: 120, seconds: 60 } }`: at most that many calls of the operation run at once, and at most `calls` start within `seconds`. The call path holds them for the whole instance, across processes and runs, and counts every page of a paged step. A Workflow step that finds no room is queued again for when there is and spends no attempt, as after a 429 with `Retry-After`; the run's deadline and the paged step's minutes still end it. Any other caller is answered `rate_limited` (HTTP 429) with the seconds to wait, and nothing is sent.",
+        "",
         "`datasetBytes` is still not raised above its default of 2 GiB. The ceiling of `limits.concurrency` is `workflows.stepSlots`."
       ]
     },

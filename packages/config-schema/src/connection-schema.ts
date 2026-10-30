@@ -20,7 +20,6 @@ import {
   CONNECTION_SERVICE_PATTERN,
   CONNECTOR_TYPE_PATTERN,
   EGRESS_PROTOCOLS,
-  WORKFLOW_ERROR_CODES,
   RESULT_SHAPER_NAME_PATTERN,
   connectionExposureRefusal,
   operationLimitsSchema,
@@ -182,9 +181,9 @@ export const connectionNameSchema = z
   .max(CONNECTION_NAME_MAX_LENGTH)
   .regex(CONNECTION_NAME_PATTERN, { message: CONNECTION_NAME_RULE });
 
-/** Source limits stay refused until EW-13s; paging belongs only to reading calls. */
-function refuseReservedFields(
-  operation: { paging?: unknown; limits?: unknown; effect: string; idempotencyKeyHeader?: string },
+/** Paging belongs only to reading calls, an idempotency key header only to changing ones. */
+function refuseMisplacedFields(
+  operation: { paging?: unknown; effect: string; idempotencyKeyHeader?: string },
   context: z.RefinementCtx,
   path: (string | number)[]
 ): void {
@@ -202,15 +201,6 @@ function refuseReservedFields(
       path: [...path, "idempotencyKeyHeader"],
       message: "Only a changing operation can name a header for its idempotency key"
     });
-  }
-  for (const field of ["limits"] as const) {
-    if (operation[field] !== undefined) {
-      context.addIssue({
-        code: "custom",
-        path: [...path, field],
-        message: `'${field}' on an operation of a Connection is not supported yet (${WORKFLOW_ERROR_CODES.notSupported})`
-      });
-    }
   }
 }
 
@@ -396,7 +386,7 @@ export const storedConnectionConfigSchema = z
           message: "Only a changing operation can carry the policy 'approval'"
         });
       }
-      refuseReservedFields(operation, context, ["operations", index]);
+      refuseMisplacedFields(operation, context, ["operations", index]);
     }
   });
 
@@ -435,7 +425,7 @@ const releaseConnectionOperationSchema = z
   })
   .strict()
   .superRefine((operation, context) => {
-    refuseReservedFields(operation, context, []);
+    refuseMisplacedFields(operation, context, []);
   });
 
 /**

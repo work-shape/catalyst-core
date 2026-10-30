@@ -58,9 +58,8 @@ function issuesOf(config: unknown) {
 }
 
 describe("the definition of a Connection", () => {
-  // Fails while `paging` and `limits` are stored and read by nothing: an operator would
-  // believe a limit that no call keeps.
-  it("accepts reading paging and refuses source limits until EW-13s", () => {
+  // The call path holds an operation's `limits` (EW-13a), so a definition keeps them.
+  it("accepts reading paging and source limits on an operation", () => {
     const base = {
       name: "accounting",
       displayName: "Accounting",
@@ -76,26 +75,26 @@ describe("the definition of a Connection", () => {
         ...base,
         operations: [{ name: "list_postings", effect: "reading", paging, limits }]
       })
-    ).toEqual([
-      {
-        path: "operations.0.limits",
-        message: "'limits' on an operation of a Connection is not supported yet (not_supported_yet)"
-      }
-    ]);
-    // Release config is read by its own schema and refuses the same.
-    expect(() =>
-      parseClientInstanceConfig({
-        ...createTestConfig(),
-        modules: { assetManagement: { enabled: true }, connections: { enabled: true } },
-        connections: {
-          accounting: {
-            connectorType: "mcp",
-            authScheme: "none",
-            operations: [{ name: "list_postings", effect: "reading", limits }]
-          }
+    ).toEqual([]);
+    expect(
+      issuesOf({
+        ...base,
+        operations: [{ name: "list_postings", effect: "reading", limits: { concurrency: 0 } }]
+      }).map((issue) => issue.path)
+    ).toEqual(["operations.0.limits.concurrency"]);
+    // Release config is read by its own schema and keeps the same.
+    const config = parseClientInstanceConfig({
+      ...createTestConfig(),
+      modules: { assetManagement: { enabled: true }, connections: { enabled: true } },
+      connections: {
+        accounting: {
+          connectorType: "mcp",
+          authScheme: "none",
+          operations: [{ name: "list_postings", effect: "reading", limits }]
         }
-      })
-    ).toThrow(/not_supported_yet/u);
+      }
+    });
+    expect(config.connections?.accounting?.operations?.[0]).toMatchObject({ limits });
   });
 
   // `service` only picks an icon, so the schema knows no list of services: a slug nobody has
