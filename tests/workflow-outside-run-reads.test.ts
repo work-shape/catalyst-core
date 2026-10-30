@@ -98,7 +98,9 @@ function setup(rootTrigger: WorkflowRunView["trigger"] = "outside") {
     readStepTranscript: vi.fn().mockResolvedValue({ messages: [{ text: data }] }),
     downloadDataset: vi.fn().mockResolvedValue({ content: data }),
     listWorkflows: vi.fn(),
-    assetOf: vi.fn().mockResolvedValue(undefined)
+    assetOf: vi.fn().mockResolvedValue(undefined),
+    rerunSteps: vi.fn(),
+    rerun: vi.fn()
   };
   const registry = createOperationRegistry();
   registerModuleOperations(registry, [

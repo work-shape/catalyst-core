@@ -337,6 +337,16 @@ export interface LiveOnceSwitchView {
   used?: { runId: string; at: string };
 }
 
+/**
+ * A step outside every block as a re-run of a run treats it (EW-11): whether it changed since
+ * the run, and why the run cannot be re-run from it, with the step that is why.
+ */
+export interface WorkflowRerunStepView {
+  step: string;
+  changed: boolean;
+  refusal?: { code: string; step?: string };
+}
+
 /** One of the reader's pinned step outputs on the draft: the step and the run it is from. */
 export interface WorkflowStepPinView {
   step: string;
@@ -496,6 +506,11 @@ export interface WorkflowRunView {
    * the run that output is from (EW-10).
    */
   pinnedSteps?: readonly { step: string; sourceRunId: string }[];
+  /**
+   * The run this one re-runs from a chosen step (EW-11), the step, and the steps before it that
+   * took that run's output instead of running.
+   */
+  rerunOf?: { runId: string; fromStep: string; reusedSteps: readonly string[] };
   /** The run whose step started this one, where it is a child run. */
   parent?: { runId: string; workflowId: string };
   /**

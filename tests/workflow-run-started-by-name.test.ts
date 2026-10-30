@@ -91,7 +91,9 @@ async function readRun(stored: WorkflowRunView, users: readonly UserRecord[]) {
     listStepRuns: vi.fn(),
     readStepTranscript: vi.fn(),
     listWorkflows: vi.fn(),
-    assetOf: vi.fn<WorkflowRunsPort["assetOf"]>().mockResolvedValue(undefined)
+    assetOf: vi.fn<WorkflowRunsPort["assetOf"]>().mockResolvedValue(undefined),
+    rerunSteps: vi.fn(),
+    rerun: vi.fn()
   };
   const stores = {
     conversations: { getConversation: vi.fn(), createdAsset: vi.fn() },

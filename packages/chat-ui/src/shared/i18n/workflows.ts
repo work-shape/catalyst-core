@@ -39,6 +39,31 @@ export const workflows = defineTranslations({
     "workflows.pin.gone": "The data of that run was removed, so its output cannot be used.",
     "workflows.pin.notPortable":
       "This output names a dataset or file of its run, which no other run can read.",
+    "workflows.rerun.button": "Run again from here",
+    "workflows.rerun.hint":
+      "Starts a new run: the steps before this one keep their outputs from this run, and this step and every step after it run again.",
+    "workflows.rerun.hintChanged":
+      "This step changed since this run. A new run from here runs it as it is now.",
+    "workflows.rerun.changed":
+      "“{step}” changed since this run, so its output cannot be reused. Run again from “{step}” instead.",
+    "workflows.rerun.outputGone":
+      "This run has no result of “{step}”, so it can be run again from there at the latest.",
+    "workflows.rerun.dataGone":
+      "The data of this run was removed, so it cannot be run again from a step.",
+    "workflows.rerun.notPortable":
+      "The output of “{step}” names a dataset or file of this run, which a new run cannot read. Run again from “{step}” instead.",
+    "workflows.rerun.confirmTitle": "Run again from “{step}”?",
+    "workflows.rerun.confirmBody":
+      "A new run starts with the input of this run. The steps before “{step}” take their outputs from this run and call nothing. “{step}” and every step after it run again, on the published version, and change what they change.",
+    "workflows.rerun.confirmBodyTest":
+      "A new test run of the draft starts with the input of this run. The steps before “{step}” take their outputs from this run and call nothing. “{step}” and every step after it run again as a test.",
+    "workflows.rerun.confirm": "Run again",
+    "workflows.rerun.keep": "Cancel",
+    "workflows.rerun.failed": "The run could not be started again.",
+    "workflows.rerun.of": "This run runs an earlier run again from “{step}”.",
+    "workflows.rerun.openOriginal": "Open the earlier run",
+    "workflows.rerun.reused":
+      "This step was not run again: its output is taken from the run this one runs again.",
     "workflows.liveOnce.again": "Run live once again",
     "workflows.liveOnce.used": "Ran live in your test run of {time}.",
     "workflows.simulated.wouldAskConfirmation":
@@ -799,6 +824,31 @@ export const workflows = defineTranslations({
       "Die Daten dieses Laufs wurden entfernt, seine Ausgabe ist nicht mehr verfügbar.",
     "workflows.pin.notPortable":
       "Diese Ausgabe nennt einen Datensatz oder eine Datei ihres Laufs, die kein anderer Lauf lesen kann.",
+    "workflows.rerun.button": "Ab hier erneut ausführen",
+    "workflows.rerun.hint":
+      "Startet einen neuen Lauf: Die Schritte davor übernehmen ihre Ausgaben aus diesem Lauf, dieser Schritt und alle danach laufen neu.",
+    "workflows.rerun.hintChanged":
+      "Dieser Schritt wurde seit diesem Lauf geändert. Ein neuer Lauf ab hier führt ihn so aus, wie er jetzt ist.",
+    "workflows.rerun.changed":
+      "„{step}“ wurde seit diesem Lauf geändert, seine Ausgabe kann nicht übernommen werden. Führe stattdessen ab „{step}“ erneut aus.",
+    "workflows.rerun.outputGone":
+      "Dieser Lauf hat kein Ergebnis von „{step}“, deshalb geht es höchstens ab dort erneut.",
+    "workflows.rerun.dataGone":
+      "Die Daten dieses Laufs wurden entfernt, deshalb kann er nicht ab einem Schritt erneut ausgeführt werden.",
+    "workflows.rerun.notPortable":
+      "Die Ausgabe von „{step}“ nennt einen Datensatz oder eine Datei dieses Laufs, die ein neuer Lauf nicht lesen kann. Führe stattdessen ab „{step}“ erneut aus.",
+    "workflows.rerun.confirmTitle": "Ab „{step}“ erneut ausführen?",
+    "workflows.rerun.confirmBody":
+      "Ein neuer Lauf startet mit der Eingabe dieses Laufs. Die Schritte vor „{step}“ übernehmen ihre Ausgaben aus diesem Lauf und rufen nichts auf. „{step}“ und alle Schritte danach laufen neu, in der veröffentlichten Fassung, und ändern, was sie ändern.",
+    "workflows.rerun.confirmBodyTest":
+      "Ein neuer Testlauf des Entwurfs startet mit der Eingabe dieses Laufs. Die Schritte vor „{step}“ übernehmen ihre Ausgaben aus diesem Lauf und rufen nichts auf. „{step}“ und alle Schritte danach laufen neu als Test.",
+    "workflows.rerun.confirm": "Erneut ausführen",
+    "workflows.rerun.keep": "Abbrechen",
+    "workflows.rerun.failed": "Der Lauf konnte nicht erneut gestartet werden.",
+    "workflows.rerun.of": "Dieser Lauf führt einen früheren Lauf ab „{step}“ erneut aus.",
+    "workflows.rerun.openOriginal": "Früheren Lauf öffnen",
+    "workflows.rerun.reused":
+      "Dieser Schritt lief nicht erneut: Seine Ausgabe stammt aus dem Lauf, den dieser erneut ausführt.",
     "workflows.liveOnce.again": "Noch einmal live ausführen",
     "workflows.liveOnce.used": "Lief live in deinem Testlauf vom {time}.",
     "workflows.simulated.wouldAskConfirmation":

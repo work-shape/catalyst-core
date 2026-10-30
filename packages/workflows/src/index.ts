@@ -22,6 +22,8 @@ export const WORKFLOW_OPERATION_IDS = [
   "workflows.list_pins",
   "workflows.pin_step",
   "workflows.unpin_step",
+  "workflows.rerun_steps",
+  "workflows.rerun",
   "workflows.principal_rights"
 ] as const;
 
@@ -125,6 +127,7 @@ export {
 } from "./definition-source";
 export {
   createWorkflowEngine,
+  type RerunWorkflowRunInput,
   type StartWorkflowRunInput,
   type TestWorkflowRunInput,
   type WorkflowEngine,
@@ -132,6 +135,7 @@ export {
 } from "./engine";
 export { workflowStepJobKind } from "./step-job";
 export { WORKFLOW_TEST_RUN_ERRORS } from "./test-run";
+export { WORKFLOW_RERUN_ERRORS, type WorkflowRerunStep } from "./rerun";
 export {
   WORKFLOW_PIN_ERRORS,
   createWorkflowStepPins,

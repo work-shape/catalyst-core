@@ -23,6 +23,7 @@ import { StepSettings, StepSettingsBar } from "./step-settings";
 import type { Translate } from "./step-settings-parts";
 import type { LiveOnceControl } from "./test-run";
 import type { StepPinControl } from "./step-pin";
+import type { StepRerunControl } from "./step-rerun";
 import type { WorkflowEdit } from "./workflow-draft";
 import type { WorkflowEditing } from "./workflow-editing";
 import { placedSteps, workflowGraph } from "./workflow-canvas-model";
@@ -151,7 +152,8 @@ export function WorkflowCanvas({
   focus,
   editing,
   edit,
-  pins
+  pins,
+  reruns
 }: {
   /** The Workflow, once its record arrived. */
   workflow: WorkflowView | undefined;
@@ -174,6 +176,8 @@ export function WorkflowCanvas({
     stepRun: WorkflowStepRunView | undefined,
     inBlock: boolean
   ) => StepPinControl | undefined;
+  /** On an ended run: "Run again from here" per step, where offered (EW-11). */
+  reruns?: (step: WorkflowStepView, inBlock: boolean) => StepRerunControl | undefined;
 }) {
   const translation = useTranslation();
   const { locale, t } = translation;
@@ -234,8 +238,20 @@ export function WorkflowCanvas({
     const stepRun = place.repeated ? undefined : frame.get(id);
     const liveOnce = run.liveOnce?.(place.step, stepRun);
     const pinnedFrom = run.run.pinnedSteps?.find((pinned) => pinned.step === id)?.sourceRunId;
+    const reusedFrom =
+      run.run.rerunOf?.reusedSteps.includes(id) === true ? run.run.rerunOf.runId : undefined;
     const workspaceId = host?.workspace?.id;
+    const openRun = (runId: string) => () =>
+      host?.showRoute({
+        kind: "workflow-run",
+        collaborationWorkspaceId: workspaceId ?? "",
+        workflow: run.run.workflowId,
+        run: runId
+      });
     return {
+      ...(reusedFrom === undefined || host === undefined || workspaceId === undefined
+        ? {}
+        : { reusedFrom: { runId: reusedFrom, open: openRun(reusedFrom) } }),
       ...(pinnedFrom === undefined || host === undefined || workspaceId === undefined
         ? {}
         : {
@@ -449,6 +465,7 @@ export function WorkflowCanvas({
               transcript={transcript}
               actions={actions}
               pin={pins?.(selected.step, selectedRun?.stepRun, selected.blockId !== undefined)}
+              rerun={reruns?.(selected.step, selected.blockId !== undefined)}
               onOpenChild={
                 selected.step.kind === "workflow"
                   ? () => onOpenChild(selected.step, selectedRun?.stepRun)

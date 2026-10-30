@@ -49,6 +49,14 @@ export function workflowStepHash(step: WorkflowStep): string {
   return sha256Hex(canonicalJson(unknownToJsonValue(step)));
 }
 
+/**
+ * Whether another run can take this output: one naming a dataset or a file of its run cannot,
+ * since those belong to that run alone.
+ */
+export function portableOutput(value: JsonValue): boolean {
+  return !holdsDatasetReference(value) && (fileReferences(value) ?? [1]).length === 0;
+}
+
 /** The step of this id outside every block, of a type whose output is pinned. */
 function pinnableStep(manifest: WorkflowManifest, id: string): WorkflowStep | undefined {
   const step = manifest.steps.find((candidate) => candidate.id === id);
@@ -155,7 +163,7 @@ export function createWorkflowStepPins(options: {
           `That run has no output of the step '${stepId}': it did not end done, or the run's data was removed`
         );
       }
-      if (holdsDatasetReference(output.value) || (fileReferences(output.value) ?? [1]).length > 0) {
+      if (!portableOutput(output.value)) {
         throw refusal(
           WORKFLOW_PIN_ERRORS.notPortable,
           `The output of the step '${stepId}' names a dataset or a file of that run, which no other run can read`
@@ -201,27 +209,39 @@ export function createWorkflowStepPins(options: {
 export type WorkflowStepPins = ReturnType<typeof createWorkflowStepPins>;
 
 /**
- * The output a step of a test run ends with where the run took a pin of it: the step outside
- * every block, in a run of the draft. Nothing for every other step run.
+ * The output a step run ends with instead of running, and the run it is taken from: in a test
+ * run of the draft a step the run took a pin of (EW-10), and in a re-run from a chosen step
+ * (EW-11) each step before that step, from the run that is re-run. Only a step outside every
+ * block; nothing for every other step run. This is the one place a step reuses an output.
  */
 export async function pinnedStepOutput(
   stores: Pick<PlatformStores, "workflowRuns">,
   run: WorkflowRun,
   stepRun: { stepId: string; containerStepRunId?: string }
 ): Promise<{ value: JsonValue } | undefined> {
-  if (run.mode !== "test" || stepRun.containerStepRunId !== undefined) return undefined;
-  const pinned = run.pinnedSteps?.find((entry) => entry.step === stepRun.stepId);
-  if (pinned === undefined) return undefined;
+  if (stepRun.containerStepRunId !== undefined) return undefined;
+  const rerun = run.rerunOf?.reusedSteps.includes(stepRun.stepId) === true;
+  const sourceRunId = rerun
+    ? run.rerunOf?.runId
+    : run.mode === "test"
+      ? run.pinnedSteps?.find((entry) => entry.step === stepRun.stepId)?.sourceRunId
+      : undefined;
+  if (sourceRunId === undefined) return undefined;
   const output = await stores.workflowRuns.findStepOutput({
     clientInstanceId: run.clientInstanceId,
-    runId: pinned.sourceRunId,
-    stepId: pinned.step
+    runId: sourceRunId,
+    stepId: stepRun.stepId
   });
   if (output === undefined) {
-    throw new WorkflowStepFailure(
-      WORKFLOW_PIN_ERRORS.outputGone,
-      `The pinned output of the step '${pinned.step}' is gone: its run's data was removed`
-    );
+    throw rerun
+      ? new WorkflowStepFailure(
+          "rerun_output_gone",
+          `The output of the step '${stepRun.stepId}' in the run this one re-runs is gone: its data was removed`
+        )
+      : new WorkflowStepFailure(
+          WORKFLOW_PIN_ERRORS.outputGone,
+          `The pinned output of the step '${stepRun.stepId}' is gone: its run's data was removed`
+        );
   }
   return output;
 }

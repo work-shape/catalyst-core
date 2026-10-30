@@ -4,6 +4,7 @@ import type {
   LiveOnceSwitchView,
   WorkflowDefinitionView,
   WorkflowListItem,
+  WorkflowRerunStepView,
   WorkflowRunView,
   WorkflowStepPinView,
   WorkflowStepRunView,
@@ -86,6 +87,13 @@ export interface WorkflowRunsSource {
   /** Starts a run of the published revision of a Workflow with the input its form gave. */
   start(workflow: string, input: Readonly<Record<string, unknown>>): Promise<WorkflowRunView>;
   cancel(runId: string): Promise<WorkflowRunView>;
+  /**
+   * For each step outside every block, whether the run can be re-run from it (EW-11). Absent
+   * where the source re-runs nothing, such as samples.
+   */
+  rerunSteps?(runId: string, signal: AbortSignal): Promise<readonly WorkflowRerunStepView[]>;
+  /** Starts a new run from a chosen step of an ended run, reusing the outputs before it. */
+  rerun?(runId: string, fromStep: string): Promise<WorkflowRunView>;
 }
 
 export interface WorkflowsSource {

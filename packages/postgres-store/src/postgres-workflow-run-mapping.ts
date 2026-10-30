@@ -88,6 +88,7 @@ function mapRun(row: Omit<RunRow, "input" | "output" | "definition" | "checkpoin
     ...(row.starterRunId === null ? {} : { starterRunId: row.starterRunId }),
     ...(row.startedFrom === null ? {} : { startedFrom: row.startedFrom }),
     ...(row.pinnedSteps === null ? {} : { pinnedSteps: row.pinnedSteps }),
+    ...(row.rerunOf === null ? {} : { rerunOf: row.rerunOf }),
     stepRunCount: row.stepRunCount,
     deadlineAt: row.deadlineAt.toISOString(),
     limits: row.limits,

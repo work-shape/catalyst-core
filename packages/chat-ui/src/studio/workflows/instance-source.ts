@@ -156,7 +156,15 @@ function runsSource(client: WorkflowsClient): WorkflowRunsSource {
     start: async (workflow, input) =>
       toWorkflowRun(done(await client.workflows.start({ params: { workflow }, body: { input } }))),
     cancel: async (runId) =>
-      toWorkflowRun(done(await client.workflows.cancel_run({ params: { runId } })))
+      toWorkflowRun(done(await client.workflows.cancel_run({ params: { runId } }))),
+    rerunSteps: async (runId, signal) =>
+      (await client.workflows.rerun_steps({ params: { runId }, signal })).items.map((item) => ({
+        step: item.step,
+        changed: item.changed,
+        ...(item.refusal === undefined ? {} : { refusal: item.refusal })
+      })),
+    rerun: async (runId, fromStep) =>
+      toWorkflowRun(done(await client.workflows.rerun({ params: { runId }, body: { fromStep } })))
   };
 }
 
