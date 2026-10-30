@@ -14,6 +14,31 @@ type Translate = TranslationContextValue["t"];
 export interface ConnectionRefusal {
   message: string;
   detail?: string;
+  /** The message says no reason: only `detail` does, for who may read it. */
+  untold?: true;
+}
+
+/**
+ * The reasons a connect or a change of a Connection meets that the instance names in a code
+ * of its own, each said in the reader's words. These sentences are the product's, never the
+ * instance's, so everyone who met the refusal reads them.
+ */
+const REASON_SENTENCES: Partial<Record<string, TranslationKey>> = {
+  personal_connection_context: "connections.reasonPersonal",
+  connection_unavailable: "connections.reasonUnavailable",
+  connection_not_configured: "connections.reasonNotConfigured",
+  secret_store_unavailable: "connections.reasonSecretStore",
+  connector_type_unknown: "connections.reasonTypeUnknown",
+  managed_client_unavailable: "connections.reasonManagedClient",
+  catalogue_entry_not_offered: "connections.reasonCatalogue",
+  person_context_unmapped: "connections.reasonPersonContext"
+};
+
+/** The sentence of a refusal whose code the page knows, in the reader's words. */
+function connectionReasonOf(error: unknown, t: Translate): string | undefined {
+  const { reason } = readRefusalDetails(error);
+  const key = reason === undefined ? undefined : REASON_SENTENCES[reason];
+  return key === undefined ? undefined : t(key);
 }
 
 /** The field of the New connection dialog an issue is about: the address for a refused egress. */
@@ -75,8 +100,13 @@ export function connectionWriteErrors(
   }
   const issues = readRefusalDetails(error).issues;
   if (issues.length === 0) {
+    const reason = connectionReasonOf(error, t);
+    if (reason !== undefined) return { errors: { general: reason } };
     const told = connectionRefusalOf(outcome, "connections.refusedUnknown", t);
-    return { errors: { general: told.message }, ...(told.detail ? { detail: told.detail } : {}) };
+    return {
+      errors: { general: told.message, ...(told.untold ? { untold: true } : {}) },
+      ...(told.detail ? { detail: told.detail } : {})
+    };
   }
   const errors: CreateFieldErrors = {};
   const details: string[] = [];
@@ -120,13 +150,18 @@ export function connectionRefusalOf(
     else if (refusal.detail !== undefined) details.push(refusal.detail);
   }
   const message = [...messages].join(" ") || t("connections.writeFailed");
-  return details.length === 0 ? { message } : { message, detail: details.join(" ") };
+  if (details.length === 0) return { message };
+  // The general fallback alone says no reason: the reader is told who reads the detail.
+  const untold = fallback === "connections.refusedUnknown" && message === t(fallback);
+  return { message, detail: details.join(" "), ...(untold ? { untold: true as const } : {}) };
 }
 
 /** Why the approved tools were not saved, and the instance's sentences for an administrator. */
 export interface ApprovalRefused {
   refusals: string[];
   detail?: string;
+  /** No refusal says a reason: only `detail` does, for who may read it. */
+  untold?: true;
 }
 
 /**
@@ -142,12 +177,18 @@ export function approvalRefusals(
   const issues = readRefusalDetails(error).issues;
   const operations = Array.isArray(config.operations) ? config.operations : [];
   if (issues.length === 0) {
+    const reason = connectionReasonOf(error, t);
+    if (reason !== undefined) return { refusals: [reason] };
     const told = connectionRefusalOf(
       readBuildRefusal(error, t, locale),
       "connections.refusedUnknown",
       t
     );
-    return { refusals: [told.message], ...(told.detail ? { detail: told.detail } : {}) };
+    return {
+      refusals: [told.message],
+      ...(told.detail ? { detail: told.detail } : {}),
+      ...(told.untold ? { untold: true as const } : {})
+    };
   }
   const refusals = issues.map((issue) => {
     const [first, index] = issue.path;

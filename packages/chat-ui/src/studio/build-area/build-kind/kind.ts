@@ -35,7 +35,10 @@ interface BuildKindBase {
    * has one, and the line under the title. A row without a line shows the title alone. No row
    * shows the asset's id.
    */
-  row?(asset: BuildAssetRow): { leading?: ReactNode; description?: string };
+  row?(
+    asset: BuildAssetRow,
+    t: (key: TranslationKey) => string
+  ): { leading?: ReactNode; description?: string };
   /** The line under a row's title: what the asset does, such as its description. */
   rowText?(asset: BuildAssetRow): string | undefined;
   /**
@@ -113,6 +116,13 @@ export interface BuildAssetKind extends BuildKindBase {
   shippedTitle?(asset: BuildAsset): string | undefined;
   /** The CLI does not write the kind yet, so its list offers no CLI entry. */
   withoutCli?: true;
+  /**
+   * Whether a row offers to delete its asset in place, such as an incomplete Connection a
+   * failed connect left behind, for a reader who may delete it. The delete is the page's: the
+   * same confirmation, rights and audit. `rowRemoveLabel` names the row's button, with `{name}`.
+   */
+  rowRemovable?(asset: BuildAssetRow): boolean;
+  rowRemoveLabel?: TranslationKey;
 }
 
 /** What the frame hands a page that shows one asset and changes nothing of it. */

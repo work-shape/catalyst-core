@@ -1,6 +1,8 @@
 import { CONNECTION_ASSET_KIND, assetAddressFromName } from "@work-shape/catalyst-core";
+import type { ReactNode } from "react";
 import {
   Banner,
+  Button,
   Field,
   FormNotice,
   Input,
@@ -78,6 +80,8 @@ export type CreateFieldErrors = Partial<
 > & {
   /** The instance's sentences behind the refusals, which only an administrator is shown. */
   detail?: string;
+  /** `general` says no reason: only `detail` does. */
+  untold?: boolean;
 };
 
 export function ConnectionCreateForm({
@@ -88,6 +92,7 @@ export function ConnectionCreateForm({
   steps,
   detailsOpen = false,
   saved,
+  idNotice,
   onChange
 }: {
   fields: CreateFields;
@@ -104,7 +109,9 @@ export function ConnectionCreateForm({
    * The Connection was saved by an earlier Verbinden that then failed: it is in the list
    * already. Whether Cancel offers to discard it.
    */
-  saved?: { discardable: boolean };
+  saved?: { discardable: boolean; onOpen?(): void };
+  /** What the dialog says of a Connection that holds the id already, with its actions. */
+  idNotice?: ReactNode;
   onChange(next: CreateFields): void;
 }) {
   const { t } = useTranslation();
@@ -309,6 +316,7 @@ export function ConnectionCreateForm({
           </Field>
         ) : null}
       </NameWithAddress>
+      {idNotice}
       {steps.length > 0 ? (
         <Steps label={t("connectionCreate.steps")} data-connection-steps="">
           {steps.map(({ step, state }) => (
@@ -330,7 +338,23 @@ export function ConnectionCreateForm({
         </Steps>
       ) : null}
       {saved ? (
-        <Banner layout="line" data-connection-create-saved="">
+        <Banner
+          layout="line"
+          data-connection-create-saved=""
+          action={
+            saved.onOpen ? (
+              <Button
+                variant="link"
+                size="sm"
+                disabled={busy}
+                data-connection-create-saved-open=""
+                onClick={saved.onOpen}
+              >
+                {t("connectionCreate.savedOpen")}
+              </Button>
+            ) : undefined
+          }
+        >
           {t(saved.discardable ? "connectionCreate.savedDiscardable" : "connectionCreate.saved", {
             name: fields.title.trim()
           })}
@@ -341,7 +365,7 @@ export function ConnectionCreateForm({
           {errors.general}
         </FormNotice>
       ) : null}
-      <RefusalDetail detail={errors.detail} />
+      <RefusalDetail detail={errors.detail} untold={errors.untold ?? false} />
     </form>
   );
 }

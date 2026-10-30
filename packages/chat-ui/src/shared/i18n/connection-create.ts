@@ -56,6 +56,19 @@ export const connectionCreate = defineTranslations({
       "The server refused the key. Enter it again or create a new one there.",
     "connectionCreate.errorKeyMissing": "The server asks for a key. Enter it and connect again.",
     "connectionCreate.errorIdTaken": "A connection with the id {name} exists already.",
+    "connectionCreate.idTaken": "The id {name} is taken. Choose another id.",
+    "connectionCreate.idTakenBy": "The id {name} is taken by the connection {title}.",
+    "connectionCreate.takenTitle": "{title} has this id already",
+    "connectionCreate.takenIncomplete": "It is incomplete: saved, but with no tools yet.",
+    "connectionCreate.takenOther": "For a second connection, choose another id.",
+    "connectionCreate.takenOpen": "Open",
+    "connectionCreate.takenReconnect": "Connect again",
+    "connectionCreate.takenReplace": "Replace",
+    "connectionCreate.replaceTitle": "Replace {title}?",
+    "connectionCreate.replaceText":
+      "{title} is deleted with its key and its tools. Then this connection is connected under the id {name}.",
+    "connectionCreate.replaceFailed": "{title} could not be deleted, so nothing was replaced.",
+    "connectionCreate.savedOpen": "Open connection",
     "connectionCreate.errorFailed": "The connection could not be made. Try again.",
     "connectionCreate.held":
       "Waiting for an approval in the Inbox. The connection is in the list and connects once it is approved.",
@@ -264,6 +277,20 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.errorKeyMissing":
       "Der Server verlangt einen Schlüssel. Gib ihn ein und verbinde erneut.",
     "connectionCreate.errorIdTaken": "Eine Verbindung mit der Id {name} gibt es schon.",
+    "connectionCreate.idTaken": "Die Id {name} ist vergeben. Wähle eine andere Id.",
+    "connectionCreate.idTakenBy": "Die Id {name} gehört schon der Verbindung „{title}“.",
+    "connectionCreate.takenTitle": "„{title}“ hat diese Id schon",
+    "connectionCreate.takenIncomplete": "Sie ist unvollständig: gespeichert, aber noch ohne Tools.",
+    "connectionCreate.takenOther": "Für eine zweite Verbindung wähle eine andere Id.",
+    "connectionCreate.takenOpen": "Öffnen",
+    "connectionCreate.takenReconnect": "Erneut verbinden",
+    "connectionCreate.takenReplace": "Ersetzen",
+    "connectionCreate.replaceTitle": "„{title}“ ersetzen?",
+    "connectionCreate.replaceText":
+      "„{title}“ wird mit ihrem Schlüssel und ihren Tools gelöscht. Danach wird diese Verbindung unter der Id {name} verbunden.",
+    "connectionCreate.replaceFailed":
+      "„{title}“ ließ sich nicht löschen, deshalb wurde nichts ersetzt.",
+    "connectionCreate.savedOpen": "Verbindung öffnen",
     "connectionCreate.errorFailed":
       "Die Verbindung konnte nicht hergestellt werden. Versuch es erneut.",
     "connectionCreate.held":

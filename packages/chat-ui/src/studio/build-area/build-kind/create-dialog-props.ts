@@ -1,6 +1,15 @@
 import type { AssetFileWrite, CheckName } from "../../../shared/api/asset-writes";
 import type { BuildWriteOutcome } from "../build-refusals";
 
+/** An asset that holds a name a new one asked for, as its reader may act on it. */
+export interface BuildExistingAsset {
+  name: string;
+  config: Record<string, unknown>;
+  revision: number;
+  mayWrite: boolean;
+  mayDelete: boolean;
+}
+
 /**
  * What the frame hands a kind's own dialog for a new asset, in place of the one that asks for
  * the name and the id: the check of the name, and the writes of the asset.
@@ -18,6 +27,11 @@ export interface BuildCreateDialogProps {
   remove(input: { name: string; expectedRevision: number }): Promise<unknown>;
   /** Whether the reader may delete the asset the dialog made. */
   mayDelete(): boolean;
+  /**
+   * The asset that holds a taken name, read now, with what the reader may do with it.
+   * Undefined where the reader may not read it.
+   */
+  existing?(name: string): Promise<BuildExistingAsset | undefined>;
   onClose(): void;
   /**
    * The asset exists: the frame closes the dialog and opens its page. `then` runs once the

@@ -27,6 +27,7 @@ export type {
   BuildAssetEditorProps,
   BuildAssetKind,
   BuildAssetRow,
+  BuildExistingAsset,
   BuildKind,
   BuildListedKind,
   BuildListLeadFilter

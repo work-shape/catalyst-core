@@ -9,10 +9,12 @@ import {
   Dialog,
   IconButton,
   Step,
-  Steps
+  Steps,
+  type AddressCheck
 } from "@work-shape/catalyst-ui";
+import type { CheckName } from "../../shared/api/asset-writes";
 import { useTranslation } from "../../shared/i18n";
-import type { BuildCreateDialogProps } from "./build-asset-kind";
+import type { BuildCreateDialogProps, BuildExistingAsset } from "./build-asset-kind";
 import { readBuildRefusal } from "./build-refusals";
 import {
   approvalRefusals,
@@ -46,8 +48,11 @@ import { connectionDraftEntry, useDraftForNewConnection } from "./connection-dra
 import { connectionReadyMessage, type ConnectionReadyOutcome } from "./connection-ready";
 import {
   DISCOVERY_WAIT_MS,
+  connectionFormFieldsOf,
   credentialOriginKey,
   emptyConnectionForm,
+  isIncompleteConnection,
+  isOAuthChoice,
   newConnectionConfig,
   oauthFormComplete,
   withApprovedOperations,
@@ -134,6 +139,7 @@ export function ConnectionCreateFlow({
   put,
   remove,
   mayDelete,
+  existing,
   onClose,
   onCreated
 }: BuildCreateDialogProps & { source: ConnectionSource; browser?: SignInBrowser }) {
@@ -207,6 +213,12 @@ export function ConnectionCreateFlow({
   const [asking, setAsking] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const [refusals, setRefusals] = useState<ApprovalRefused>();
+  /** The Connection that holds the id asked last, where the reader may read it. */
+  const [taken, setTaken] = useState<{ name: string; holder?: BuildExistingAsset }>();
+  /** The id whose Connection "Replace" deleted: it is free for this one. */
+  const [freed, setFreed] = useState<string>();
+  const [replacing, setReplacing] = useState<BuildExistingAsset>();
+  const [replaceBusy, setReplaceBusy] = useState(false);
   const [pasted, setPasted] = useState("");
   const approval = useApprovalChoice([]);
   // What the dialog wrote and sent so far: a later Verbinden picks up from here.
@@ -267,8 +279,38 @@ export function ConnectionCreateFlow({
     setStage({ step: "form" });
   };
 
+  /**
+   * The check of the id, which reads the Connection that holds a taken one, so the dialog
+   * names it and offers what the reader may do with it. An id only a deleted Connection held
+   * is free: the connect writes over that delete.
+   */
+  const askName: CheckName = async (asked) => {
+    const answer = await checkName(asked);
+    if (answer.available || answer.reason !== "name_taken") return answer;
+    const holder = await existing?.(asked).catch(() => undefined);
+    if (holder === undefined) {
+      const deleted = await source.deletedRevision?.(asked).catch(() => undefined);
+      if (deleted !== undefined) return { available: true };
+    }
+    setTaken({ name: asked, ...(holder ? { holder } : {}) });
+    return answer;
+  };
   // Once the dialog wrote the Connection, its id is its own: nothing is checked any more.
-  const check = useAddressCheck(created ? undefined : checkName, name);
+  const asked = useAddressCheck(created ? undefined : askName, name, (id) =>
+    t("connectionCreate.idTaken", { name: id })
+  );
+  const holder = asked.state === "refused" && taken?.name === name ? taken.holder : undefined;
+  const holderTitle = holder ? connectionFormFieldsOf(holder.config).title : "";
+  const replacingTitle = replacing ? connectionFormFieldsOf(replacing.config).title : "";
+  const check: AddressCheck =
+    freed !== undefined && freed === name
+      ? { state: "free" }
+      : holder
+        ? {
+            state: "refused",
+            reason: t("connectionCreate.idTakenBy", { name, title: holderTitle })
+          }
+        : asked;
   const formWithChoice = {
     ...fields.form,
     ...(oauthChoice === undefined ? {} : { authScheme: oauthChoice })
@@ -282,36 +324,47 @@ export function ConnectionCreateFlow({
     // The client credentials grant has no client without its secret.
     (oauthChoice !== "oauth_client" || fields.key !== "");
 
-  const connect = async () => {
+  /**
+   * Verbinden with the fields given. With `stored`, the definition of a Connection that held
+   * the id already is written as it is and connected again ("Connect again").
+   */
+  const connect = async (current: CreateFields = fields, stored?: Record<string, unknown>) => {
+    const target = (
+      current.typedId ?? assetAddressFromName(current.title, CONNECTION_ASSET_KIND)
+    ).trim();
+    const currentRest = current.form.connectorType === "http_api";
+    const currentOAuth = currentRest && current.auth !== "key" ? current.auth : undefined;
     // A personal MCP server takes no key: each person signs in.
-    const key = personal && !rest ? "" : fields.key;
+    const key = createsPersonal(current) && !currentRest ? "" : current.key;
     const form: ConnectionFormState = {
-      ...fields.form,
-      authScheme: oauthChoice ?? (key === "" ? "none" : fields.sendAs)
+      ...current.form,
+      authScheme: currentOAuth ?? (key === "" ? "none" : current.sendAs)
     };
-    const config = newConnectionConfig(
-      {
-        name,
-        title,
-        description: fields.description,
-        ...(personal ? { credentialMode: "user" as const } : {})
-      },
-      form
-    );
+    const config =
+      stored ??
+      newConnectionConfig(
+        {
+          name: target,
+          title: current.title.trim(),
+          description: current.description,
+          ...(createsPersonal(current) ? { credentialMode: "user" as const } : {})
+        },
+        form
+      );
     written.current = config;
     setBusy(true);
     setErrors({});
     const order: ConnectStep[] = [
       "server",
       ...(key === "" ? [] : (["key"] as const)),
-      ...(rest ? [] : (["tools"] as const))
+      ...(currentRest ? [] : (["tools"] as const))
     ];
     setSteps(order.map((step) => ({ step, state: step === "server" ? "running" : "queued" })));
     const outcome = await connectConnection(
       {
         put: async (definition, expectedRevision) => {
           try {
-            return (await put({ name, config: definition, expectedRevision })).revision;
+            return (await put({ name: target, config: definition, expectedRevision })).revision;
           } catch (error) {
             // The id is held by a deleted asset: the Connection is made again after that delete.
             const met = readBuildRefusal(error, t, locale);
@@ -324,24 +377,29 @@ export function ConnectionCreateFlow({
             ) {
               throw error;
             }
-            return (await put({ name, config: definition, expectedRevision: met.currentRevision }))
-              .revision;
+            return (
+              await put({
+                name: target,
+                config: definition,
+                expectedRevision: met.currentRevision
+              })
+            ).revision;
           }
         },
         setSecret: (value, expectedVersion, expectedRevision) =>
-          source.setSecret(name, value, expectedVersion, expectedRevision),
-        readDetail: () => source.readDetail(name),
-        test: () => source.test(name),
-        discover: () => source.discover(name),
+          source.setSecret(target, value, expectedVersion, expectedRevision),
+        readDetail: () => source.readDetail(target),
+        test: () => source.test(target),
+        discover: () => source.discover(target),
         pause: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
         now: () => Date.now()
       },
       {
         config,
-        url: fields.form.url,
+        url: current.form.url,
         key,
-        discovers: !rest,
-        ...(oauthChoice === undefined ? {} : { origin: credentialOriginKey(form) ?? "" })
+        discovers: !currentRest,
+        ...(currentOAuth === undefined ? {} : { origin: credentialOriginKey(form) ?? "" })
       },
       memory.current,
       (step, state) =>
@@ -351,15 +409,16 @@ export function ConnectionCreateFlow({
     );
     memory.current = outcome.memory;
     setBusy(false);
-    answer(outcome, key);
+    answer(outcome, key, current, target);
   };
 
-  /** What the dialog shows after a connect. */
-  const answer = (outcome: ConnectOutcome, key: string) => {
+  /** What the dialog shows after a connect with the fields given. */
+  const answer = (outcome: ConnectOutcome, key: string, current: CreateFields, target: string) => {
+    const currentRest = current.form.connectorType === "http_api";
     switch (outcome.status) {
       case "connected":
         setSteps([]);
-        if (rest) {
+        if (currentRest) {
           enterRestTools();
           return;
         }
@@ -376,10 +435,10 @@ export function ConnectionCreateFlow({
         }
         if (outcome.reason === "unauthorized") {
           // A refused key is never shown again: the field is empty and waits for a new one.
-          setFields((current) => ({ ...current, key: "" }));
+          setFields((now) => ({ ...now, key: "" }));
           setErrors({
             key: t(
-              oauthChoice !== undefined
+              currentRest && current.auth !== "key"
                 ? "connectionCreate.errorClient"
                 : key === ""
                   ? "connectionCreate.errorKeyMissing"
@@ -390,10 +449,10 @@ export function ConnectionCreateFlow({
           setErrors({
             url:
               outcome.reason === "network_denied"
-                ? egressRefusal(fields.form.url, t)
+                ? egressRefusal(current.form.url, t)
                 : t(
                     // A test path that answers without success may be refusing the key.
-                    rest && fields.form.testPath.trim() !== ""
+                    currentRest && current.form.testPath.trim() !== ""
                       ? "connectionCreate.errorTestPath"
                       : "connectionCreate.errorUrl"
                   )
@@ -406,21 +465,63 @@ export function ConnectionCreateFlow({
         return;
       case "write_failed":
         setSteps([]);
-        setErrors(writeErrors(outcome.error));
+        setErrors(writeErrors(outcome.error, target, current.form.url));
         return;
     }
   };
 
   /** The fields a refused definition is about, in the reader's words. */
-  const writeErrors = (error: unknown): CreateFieldErrors => {
-    const { errors: found, detail } = connectionWriteErrors(
-      error,
-      name,
-      t,
-      locale,
-      fields.form.url
-    );
+  const writeErrors = (error: unknown, id = name, url = fields.form.url): CreateFieldErrors => {
+    const { errors: found, detail } = connectionWriteErrors(error, id, t, locale, url);
     return detail === undefined ? found : { ...found, detail };
+  };
+
+  /**
+   * "Connect again" on the Connection that holds the id: the dialog takes it over as the one it
+   * saved, fills its fields from its definition and connects it as it is. The key it holds
+   * stays: none is sent unless one is typed afterwards.
+   */
+  const reconnect = (stored: BuildExistingAsset) => {
+    const read = connectionFormFieldsOf(stored.config);
+    const restStored = read.form.connectorType === "http_api";
+    const next: CreateFields = {
+      title: read.title,
+      description: read.description,
+      typedId: stored.name,
+      form: read.form,
+      key: "",
+      sendAs: read.form.authScheme === "header" ? "header" : "bearer",
+      auth:
+        restStored && isOAuthChoice(read.form.authScheme) ? read.form.authScheme : ("key" as const),
+      credentialMode: read.credentialMode
+    };
+    setFields(next);
+    setTaken(undefined);
+    memory.current = { revision: stored.revision };
+    written.current = stored.config;
+    connect(next, stored.config).catch(() => setBusy(false));
+  };
+
+  /** "Replace": the Connection that holds the id is deleted, then this one is connected. */
+  const replace = async (stored: BuildExistingAsset) => {
+    setReplaceBusy(true);
+    try {
+      await remove({ name: stored.name, expectedRevision: stored.revision });
+    } catch {
+      setReplaceBusy(false);
+      setReplacing(undefined);
+      setErrors({
+        general: t("connectionCreate.replaceFailed", {
+          title: connectionFormFieldsOf(stored.config).title
+        })
+      });
+      return;
+    }
+    setReplaceBusy(false);
+    setReplacing(undefined);
+    setTaken(undefined);
+    setFreed(stored.name);
+    await connect();
   };
 
   const sentenceOf = (error: unknown): string => {
@@ -708,8 +809,76 @@ export function ConnectionCreateFlow({
       >
         {t("connectionCreate.discardText")}
       </ConfirmDialog>
+      <ConfirmDialog
+        open={replacing !== undefined}
+        tone="danger"
+        title={t("connectionCreate.replaceTitle", { title: replacingTitle })}
+        confirmLabel={t("connectionCreate.takenReplace")}
+        loading={replaceBusy}
+        onConfirm={() => {
+          if (replacing) replace(replacing).catch(() => setBusy(false));
+        }}
+        onClose={() => setReplacing(undefined)}
+      >
+        {t("connectionCreate.replaceText", { title: replacingTitle, name })}
+      </ConfirmDialog>
     </>
   );
+
+  /**
+   * The Connection that holds the id: its name, whether it is incomplete, and what the reader
+   * may do with it: open it, connect it again, or replace it with this one.
+   */
+  function takenNotice(stored: BuildExistingAsset) {
+    return (
+      <Banner
+        tone="warning"
+        title={t("connectionCreate.takenTitle", { title: holderTitle })}
+        data-connection-id-taken={stored.name}
+        action={
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              data-connection-taken-open=""
+              onClick={() => onCreated(stored.name)}
+            >
+              {t("connectionCreate.takenOpen")}
+            </Button>
+            {stored.mayWrite ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                data-connection-taken-reconnect=""
+                onClick={() => reconnect(stored)}
+              >
+                {t("connectionCreate.takenReconnect")}
+              </Button>
+            ) : null}
+            {stored.mayDelete ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                data-connection-taken-replace=""
+                onClick={() => setReplacing(stored)}
+              >
+                {t("connectionCreate.takenReplace")}
+              </Button>
+            ) : null}
+          </>
+        }
+      >
+        {t(
+          isIncompleteConnection(stored.config)
+            ? "connectionCreate.takenIncomplete"
+            : "connectionCreate.takenOther"
+        )}
+      </Banner>
+    );
+  }
 
   function body() {
     switch (stage.step) {
@@ -778,7 +947,10 @@ export function ConnectionCreateFlow({
             busy={busy}
             steps={steps}
             detailsOpen={detailsOpen}
-            {...(created ? { saved: { discardable: mayDiscard } } : {})}
+            {...(created
+              ? { saved: { discardable: mayDiscard, onOpen: () => onCreated(name) } }
+              : {})}
+            idNotice={holder && !created ? takenNotice(holder) : undefined}
             onChange={setFields}
           />
         );
@@ -839,7 +1011,7 @@ export function ConnectionCreateFlow({
               />
             ) : null}
             {refusals ? <ApprovalRefusals refusals={refusals.refusals} /> : null}
-            <RefusalDetail detail={refusals?.detail} />
+            <RefusalDetail detail={refusals?.detail} untold={refusals?.untold ?? false} />
           </div>
         );
       case "review":
@@ -863,7 +1035,7 @@ export function ConnectionCreateFlow({
               disabled={busy}
             />
             {refusals ? <ApprovalRefusals refusals={refusals.refusals} /> : null}
-            <RefusalDetail detail={refusals?.detail} />
+            <RefusalDetail detail={refusals?.detail} untold={refusals?.untold ?? false} />
           </div>
         );
       case "approved": {
