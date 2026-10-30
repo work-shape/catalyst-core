@@ -8,7 +8,8 @@ import { expect } from "./test";
 // `catalyst models check` with a personal key (MODEL-CHECK-KEY): a superadmin issues a key with
 // the instance level `system.view` alone under You > API keys. The scope starts unticked, a
 // workspace narrows it away, and the key, exchanged for an access token as the CLI does,
-// reaches `instance.infrastructure.check` and not `instance.infrastructure.get`.
+// reaches `instance.infrastructure.check` and, since CLI-PARITY-6a, the read-only instance reads
+// such as `instance.infrastructure.get`, but no administration such as `users.list`.
 //
 // The key is read from the create answer into memory only: it is never printed, attached or
 // shot, and it is revoked through the signed-in session at the end. A trace would record the
@@ -205,7 +206,7 @@ async function checkInfrastructure(keyless: APIRequestContext, token: string) {
   }
 }
 
-test("a personal key with system.view alone runs the infrastructure check and nothing beside it", async ({
+test("a personal key with system.view alone checks and reads the infrastructure and reaches no administration", async ({
   page,
   playwright
 }) => {
@@ -273,12 +274,19 @@ test("a personal key with system.view alone runs the infrastructure check and no
     expect(checked.status(), "instance.infrastructure.check status").toBe(200);
     expect(infrastructureSchema.safeParse(await checked.json()).success).toBe(true);
 
-    // The page's own read stays out of the key's reach.
+    // A key issued since CLI-PARITY-6a also reads what the page shows (`instance:inspect`).
     const read = await keyless.get(`${apiBaseUrl}/api/v1/instance/infrastructure`, {
       headers: { authorization: `Bearer ${token}` }
     });
-    expect(read.status(), "instance.infrastructure.get status").toBe(403);
-    expect(refusalSchema.parse(await read.json()).error.code).toBe("FORBIDDEN");
+    expect(read.status(), "instance.infrastructure.get status").toBe(200);
+    expect(infrastructureSchema.safeParse(await read.json()).success).toBe(true);
+
+    // Administration stays out of the key's reach, though its owner holds it.
+    const users = await keyless.get(`${apiBaseUrl}/api/v1/instance/users`, {
+      headers: { authorization: `Bearer ${token}` }
+    });
+    expect(users.status(), "users.list status").toBe(403);
+    expect(refusalSchema.parse(await users.json()).error.code).toBe("FORBIDDEN");
   } finally {
     await keyless.dispose();
     if (keyId) {
