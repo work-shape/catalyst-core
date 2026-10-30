@@ -28,6 +28,7 @@ import { PageLead } from "../structure/page-lead";
 import { Section, type SectionLayout } from "../structure/section";
 import { SplitHandle } from "../structure/split-handle";
 import { SurfaceFrame, SurfaceHeader } from "../structure/surface-frame";
+import { StatusPill } from "../status/status-pill";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
 
@@ -129,6 +130,24 @@ function PageHeaderSamples({ text }: { text: GalleryText }) {
             }
             title={text.rowAgent}
             description={text.headerListDescription}
+            {...actions}
+          />
+        </div>
+      </Samples>
+      <Samples label="detail: status after the name, a line of facts under it">
+        <div className="w-full overflow-hidden rounded-lg border">
+          <PageHeader
+            variant="detail"
+            headingLevel={2}
+            className="static border-b-0"
+            back={
+              <PageHeaderBack label={text.headerBack} onClick={() => undefined}>
+                {text.headerBreadcrumbAgents}
+              </PageHeaderBack>
+            }
+            title={text.rowAgent}
+            status={<StatusPill tone="draft" label={text.pillDraft} />}
+            meta={text.headerListDescription}
             {...actions}
           />
         </div>

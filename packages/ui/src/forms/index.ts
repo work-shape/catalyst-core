@@ -23,6 +23,13 @@ export {
 } from "./name-with-address";
 export { ProposedValue, type ProposedValueProps } from "./proposed-value";
 export {
+  TextVersionSwitch,
+  VersionedText,
+  type TextVersion,
+  type TextVersionSwitchProps,
+  type VersionedTextProps
+} from "./versioned-text";
+export {
   RadioGroup,
   type RadioGroupProps,
   type RadioGroupVariant,

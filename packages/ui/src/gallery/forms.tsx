@@ -16,6 +16,7 @@ import { SaveBar } from "../forms/save-bar";
 import { Select } from "../forms/select";
 import { Switch } from "../forms/switch";
 import { Page } from "../structure/page";
+import { versionedTextEntry } from "./draft";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
 
@@ -460,6 +461,7 @@ export const formsGallery: GalleryGroup = {
         </div>
       )
     },
+    versionedTextEntry,
     {
       name: "NameWithAddress",
       components: ["NameWithAddress"],

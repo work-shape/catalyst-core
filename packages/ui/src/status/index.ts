@@ -46,4 +46,5 @@ export {
   type ServiceMarkProps,
   type ServiceMarkSize
 } from "./service-mark";
+export { StatusPill, type StatusPillProps, type StatusPillTone } from "./status-pill";
 export { TargetBadge, type CallTarget, type TargetBadgeProps } from "./target-badge";
