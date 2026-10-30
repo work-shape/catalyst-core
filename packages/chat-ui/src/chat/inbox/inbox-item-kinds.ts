@@ -11,6 +11,7 @@ import {
   Share2,
   UserCheck,
   Workflow,
+  UserCog,
   Zap,
   type LucideIcon
 } from "lucide-react";
@@ -49,6 +50,12 @@ import {
   reviewStoreLabel
 } from "./data-store-review-item";
 import { personName } from "../../shared/person-name";
+import {
+  GrantRequestBody,
+  grantRequestAcceptable,
+  grantRequestHeading,
+  grantRequestSubject
+} from "./grant-request-item";
 import {
   AssetMoveBody,
   MOVABLE_KINDS,
@@ -432,6 +439,27 @@ const assetMoveKinds: readonly InboxItemKind[] = MOVABLE_KINDS.map((kind) => ({
 }));
 
 /**
+ * Builder or Publisher for a member of a workspace (AP-3): granted or declined, a reason never
+ * required. A request that would give nothing can only be declined.
+ */
+const grantRequest: InboxItemKind = {
+  kind: "grant_request",
+  label: "inbox.kindGrantRequest",
+  icon: UserCog,
+  heading: grantRequestHeading,
+  title: grantRequestHeading,
+  subject: grantRequestSubject,
+  Body: GrantRequestBody,
+  decisions: (item) =>
+    grantRequestAcceptable(item)
+      ? [
+          { decision: "reject", label: "inbox.grantRequestDecline" },
+          { decision: "approve", label: "inbox.grantRequestGrant" }
+        ]
+      : [{ decision: "reject", label: "inbox.grantRequestDecline" }]
+};
+
+/**
  * The item kinds of the platform. This is deliberately not the client widget registry: an item
  * decides a change to the instance, so its body must not be replaceable by a client assembly.
  */
@@ -446,6 +474,7 @@ export const inboxItemKinds: readonly InboxItemKind[] = [
   workflowStep,
   feedbackReview,
   dataStoreReview,
+  grantRequest,
   ...assetMoveKinds
 ];
 

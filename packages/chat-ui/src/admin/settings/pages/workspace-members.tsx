@@ -4,6 +4,7 @@ import type {
   LocaleCode,
   WorkspaceAccessRequestItem,
   WorkspaceMember,
+  WorkspaceMemberBundles,
   WorkspaceMemberCandidate,
   WorkspaceMembershipRole
 } from "@work-shape/catalyst-api-client";
@@ -24,6 +25,7 @@ import {
 import { Trash2, UserPlus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useCollaborationWorkspaceMutations } from "../../../shared/api/collaboration-workspace-mutations";
+import { useMemberBundleChange, useMemberBundlesQuery } from "../../../shared/api/member-bundles";
 import {
   useCollaborationWorkspaceAccessRequestsQuery,
   useCollaborationWorkspaceMemberCandidatesQuery,
@@ -42,6 +44,7 @@ import {
 import { useTranslation, type TranslationKey } from "../../../shared/i18n";
 import { useSettingsPage } from "../../../shared/settings-page-context";
 import { isRefusal, refusalAskingInstanceAdmin } from "../ask-instance-admin";
+import { MemberBundleSwitches, type MemberBundleTurn } from "./workspace-member-bundles";
 
 /** The server answers a candidate search from this many characters on; below it nothing is asked. */
 const MEMBER_CANDIDATE_MIN_QUERY_CHARS = 2;
@@ -53,7 +56,7 @@ const memberRoles: readonly WorkspaceMembershipRole[] = [...WORKSPACE_MEMBERSHIP
 /** What this page changes, and the section whose top says when it fails. */
 type MembersAction = Extract<
   CollaborationWorkspaceAction,
-  "addMember" | "changeRole" | "removeMember" | "approveRequest" | "declineRequest"
+  "addMember" | "changeRole" | "removeMember" | "approveRequest" | "declineRequest" | "changeBundle"
 >;
 type MembersSection = "members" | "requests";
 
@@ -70,7 +73,8 @@ const membersActions: Record<MembersAction, { refused: TranslationKey; section: 
     declineRequest: {
       refused: "collaborationWorkspaceRefusedDeclineRequest",
       section: "requests"
-    }
+    },
+    changeBundle: { refused: "workspaceBundles.refused", section: "members" }
   };
 
 /**
@@ -123,6 +127,10 @@ function WorkspaceMembers({ workspace }: { workspace: CollaborationWorkspaceWith
     approveCollaborationWorkspaceAccessRequest,
     declineCollaborationWorkspaceAccessRequest
   } = useCollaborationWorkspaceMutations({ apiBaseUrl, authScope, client });
+  const bundlesInput = { apiBaseUrl, authScope, client, collaborationWorkspaceId };
+  // Builder and Publisher of each member (AP-3). Without them the page still lists the members.
+  const bundlesQuery = useMemberBundlesQuery({ ...bundlesInput, enabled: true });
+  const changeBundle = useMemberBundleChange(bundlesInput);
   const { t } = useTranslation();
   // The action and its key, not the message: the message follows the language, and a refusal
   // names the action and which instance admin to ask.
@@ -184,6 +192,15 @@ function WorkspaceMembers({ workspace }: { workspace: CollaborationWorkspaceWith
           : (memberCandidatesQuery.data ?? noMemberCandidates)
       }
       memberCandidatesLoading={memberCandidatesQuery.isFetching}
+      bundles={bundlesQuery.data}
+      bundlesPending={changeBundle.isPending}
+      onTurnBundle={(userId, turn) => {
+        clearError();
+        changeBundle.mutate(
+          { userId, ...turn },
+          { onError: (error) => reportError("changeBundle", error) }
+        );
+      }}
       pending={
         addCollaborationWorkspaceMember.isPending ||
         changeCollaborationWorkspaceMemberRole.isPending ||
@@ -245,6 +262,9 @@ export function WorkspaceMembersView({
   accessRequestsLoadProblem,
   memberCandidates,
   memberCandidatesLoading,
+  bundles,
+  bundlesPending = false,
+  onTurnBundle,
   pending,
   actionProblem,
   onMemberCandidateSearchChange,
@@ -264,6 +284,11 @@ export function WorkspaceMembersView({
   accessRequestsLoadProblem: Problem | undefined;
   memberCandidates: WorkspaceMemberCandidate[];
   memberCandidatesLoading: boolean;
+  /** Builder and Publisher of each member; absent while they load or where they cannot be read. */
+  bundles?: WorkspaceMemberBundles[];
+  /** A change of a member's Builder or Publisher is under way. */
+  bundlesPending?: boolean;
+  onTurnBundle?(userId: string, turn: MemberBundleTurn): void;
   /** A change to the members or the requests is under way. */
   pending: boolean;
   /** Why the last change failed, said at the top of the section it was made in. */
@@ -334,6 +359,7 @@ export function WorkspaceMembersView({
           <List>
             {members.map((member) => {
               const removable = isRemovable(member);
+              const memberBundles = bundles?.find((item) => item.userId === member.userId);
               return (
                 <ListRow
                   key={member.userId}
@@ -341,6 +367,16 @@ export function WorkspaceMembersView({
                   leading={<Avatar kind="person" name={member.displayLabel} />}
                   title={member.displayLabel}
                   description={member.email ?? undefined}
+                  below={
+                    memberBundles && onTurnBundle ? (
+                      <MemberBundleSwitches
+                        name={member.displayLabel}
+                        bundles={memberBundles}
+                        pending={pending || bundlesPending}
+                        onTurn={(turn) => onTurnBundle(member.userId, turn)}
+                      />
+                    ) : undefined
+                  }
                   time={
                     canChangeCollaborationWorkspaceRole(actorRole)
                       ? undefined

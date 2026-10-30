@@ -19,7 +19,8 @@ export type CollaborationWorkspaceAction =
   | "approveRequest"
   | "declineRequest"
   | "moveConversation"
-  | "deleteCollaborationWorkspace";
+  | "deleteCollaborationWorkspace"
+  | "changeBundle";
 
 /**
  * A workspace change that waits for somebody else's approval. Nothing has changed, and the
@@ -40,6 +41,11 @@ export function collaborationWorkspaceErrorKey(
     return "collaborationWorkspaceErrorWaitsForApproval";
   }
   const code = apiErrorCode(error) ?? statusFallbackCode(apiErrorStatus(error));
+  // A member's Builder or Publisher: refused, or changed since the list was read.
+  if (action === "changeBundle") {
+    if (code === "FORBIDDEN") return "workspaceBundles.refused";
+    if (code === "NOT_FOUND" || code === "CONFLICT") return "workspaceBundles.changed";
+  }
 
   switch (code) {
     case "UNAUTHENTICATED":
