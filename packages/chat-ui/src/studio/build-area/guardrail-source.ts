@@ -22,6 +22,11 @@ export type ShippedGuardrailsRead =
       switching: string | undefined;
       /** Switches one on or off. Answers the instance's sentence where it refused. */
       switchTo(name: string, enabled: boolean): Promise<string | undefined>;
+      /**
+       * Sets the publish guardrail to ask on every publish, or only on one that widens reach
+       * (GR-PUB-2). Answers the instance's sentence where it refused.
+       */
+      setAlwaysAsk(name: string, alwaysAsk: boolean): Promise<string | undefined>;
     };
 
 /**
@@ -50,10 +55,13 @@ export function useShippedGuardrails(
     retry: false
   });
   const change = useMutation({
-    mutationFn: async (input: { name: string; enabled: boolean }) => {
+    mutationFn: async (input: { name: string; enabled: boolean; alwaysAsk?: boolean }) => {
       const outcome = await client.guardrails.switch_shipped({
         params: { name: input.name },
-        body: { enabled: input.enabled }
+        body: {
+          enabled: input.enabled,
+          ...(input.alwaysAsk === undefined ? {} : { alwaysAsk: input.alwaysAsk })
+        }
       });
       if (outcome.status !== "done") throw new PendingApprovalError();
       return outcome.output;
@@ -69,7 +77,19 @@ export function useShippedGuardrails(
         change.mutateAsync({ name, enabled }).then(
           () => undefined,
           (error: unknown) => instanceSentence(error, t) ?? ""
-        )
+        ),
+      setAlwaysAsk: (name, alwaysAsk) =>
+        change
+          .mutateAsync({
+            name,
+            // Only a guardrail that is on asks; the setting keeps it on.
+            enabled: true,
+            alwaysAsk
+          })
+          .then(
+            () => undefined,
+            (error: unknown) => instanceSentence(error, t) ?? ""
+          )
     };
   }
   if (query.error && !query.isFetching) {

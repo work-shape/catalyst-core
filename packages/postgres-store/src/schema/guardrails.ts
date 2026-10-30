@@ -48,6 +48,8 @@ export const shippedGuardrailSwitches = pgTable(
     clientInstanceId: text("client_instance_id").notNull(),
     guardrailName: text("guardrail_name").notNull(),
     enabled: boolean("enabled").notNull(),
+    /** Asks on every publish where it would ask only when a publish widens reach (GR-PUB-2). */
+    alwaysAsk: boolean("always_ask").notNull().default(false),
     switchedById: text("switched_by_id").notNull(),
     switchedByLabel: text("switched_by_label").notNull(),
     switchedAt: timestamp("switched_at", { withTimezone: true }).notNull()

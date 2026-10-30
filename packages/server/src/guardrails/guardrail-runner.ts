@@ -5,6 +5,7 @@ import {
   isAppError,
   isModelUsageLimitReached,
   PERSONAL_DATA_MODEL_REGION_REASON,
+  PUBLISH_WIDENS_FIELD,
   type ApprovalCheckResult,
   type AssetScope,
   type BeforeActionCallContext,
@@ -138,11 +139,14 @@ type Bound =
       asset?: { scope: AssetScope; revision: number };
       shipped?: undefined;
     }
-  /** A shipped guardrail: it has no check and answers its outcome wherever it is bound. */
+  /**
+   * A shipped guardrail: it has no check and answers its outcome wherever it is bound, or, with
+   * `onlyWhenWidening`, where the event's fields do not say that the publish widens nothing.
+   */
   | {
       name: string;
       guardrail: Pick<BoundGuardrail, "displayName" | "outcome">;
-      shipped: { reason: string };
+      shipped: { reason: string; onlyWhenWidening: boolean };
       pattern?: undefined;
       asset?: undefined;
     };
@@ -360,12 +364,19 @@ export class GuardrailRunner implements BeforeActionCheck {
       clientInstanceId: this.options.clientInstanceId
     });
     const off = new Set(switches.filter((entry) => !entry.enabled).map((entry) => entry.name));
+    const alwaysAsk = new Set(
+      switches.filter((entry) => entry.alwaysAsk).map((entry) => entry.name)
+    );
     return bound
       .filter((guardrail) => !off.has(guardrail.name))
       .map((guardrail) => ({
         name: guardrail.name,
         guardrail: { displayName: guardrail.displayName, outcome: guardrail.outcome },
-        shipped: { reason: guardrail.reason }
+        shipped: {
+          reason: guardrail.reason,
+          onlyWhenWidening:
+            guardrail.asksOnlyWhenWidening === true && !alwaysAsk.has(guardrail.name)
+        }
       }));
   }
 
@@ -403,6 +414,9 @@ export class GuardrailRunner implements BeforeActionCheck {
     const results = new Map<Bound, GuardrailAnswer>();
     for (const entry of bound) {
       if (entry.shipped) {
+        // GR-PUB-2: a publish that widens nothing goes live on its publisher's own click. Only
+        // an explicit "false" says so: a field that is missing or reads otherwise asks.
+        if (entry.shipped.onlyWhenWidening && fields[PUBLISH_WIDENS_FIELD] === "false") continue;
         results.set(entry, answerOf(entry, entry.guardrail.outcome, entry.shipped.reason));
       } else if (entry.pattern) {
         const answer = matchPattern(entry, entry.pattern, checked(fields, input.event, entry));

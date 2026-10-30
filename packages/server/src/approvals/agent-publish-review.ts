@@ -359,6 +359,51 @@ export async function agentPublishReviewableSubjects(
     .map((agent) => ({ assetId: agent.id }));
 }
 
+/** The fields of an agent that change what it says or how it thinks, never what it reaches. */
+const FIELDS_WITHOUT_REACH: ReadonlySet<string> = new Set([
+  "name",
+  "displayName",
+  "description",
+  "welcomeMessage",
+  "welcomeSubtitle",
+  "instructions",
+  "additionalInstructions",
+  "reasoningEffort",
+  "modelReasoningEfforts",
+  "fastMode",
+  "maxSteps",
+  "initialPrompts",
+  "shipped",
+  "shippedNewer"
+]);
+
+/** The lists of an agent that widen its reach where an entry is added, and only then. */
+const REACH_LISTS = ["toolNames", "skillNames", "knowledgeBases", "subagentNames"] as const;
+
+/**
+ * Whether the draft widens the agent's reach against its live definition (GR-PUB-2): a tool,
+ * a model binding, a skill, a Knowledge Base or a subagent it names and the live one does not.
+ * Removing one widens nothing. Any other field that differs, and is not one that only changes
+ * what the agent says (`FIELDS_WITHOUT_REACH`), counts as widening: what is not known to keep
+ * the reach asks. The same lists the review names as added (`agentDifference`).
+ */
+export function agentPublishWidens(liveConfig: JsonObject, nextConfig: JsonObject): boolean {
+  const added = (live: readonly string[], next: readonly string[]) =>
+    next.some((entry) => !live.includes(entry));
+  if (REACH_LISTS.some((field) => added(names(liveConfig[field]), names(nextConfig[field]))))
+    return true;
+  if (added(modelBindings(liveConfig), modelBindings(nextConfig))) return true;
+  const known = new Set<string>([
+    ...FIELDS_WITHOUT_REACH,
+    ...REACH_LISTS,
+    "modelBindingId",
+    "userSelectableModelBindingIds"
+  ]);
+  return [...new Set([...Object.keys(liveConfig), ...Object.keys(nextConfig)])].some(
+    (field) => !known.has(field) && !sameValue(liveConfig[field], nextConfig[field])
+  );
+}
+
 function configOf(config: JsonObject | null | undefined): JsonObject {
   return config && isJsonObject(config) ? config : {};
 }

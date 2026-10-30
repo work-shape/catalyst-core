@@ -158,6 +158,11 @@ export const shippedGuardrailSchema = z.object({
   on: z.array(z.string()),
   outcome: guardrailOutcomeSchema,
   enabled: z.boolean(),
+  /**
+   * On a guardrail that asks only when a publish widens reach (GR-PUB-2): whether an instance
+   * admin set it to ask on every publish. Absent on a guardrail without that setting.
+   */
+  alwaysAsk: z.boolean().optional(),
   /** Who switched it last and when. Absent while nobody has: it is on as the release ships it. */
   switchedBy: z.object({ id: z.string(), label: z.string() }).optional(),
   switchedAt: timestampSchema.optional(),
@@ -167,7 +172,16 @@ export const shippedGuardrailSchema = z.object({
 
 export const shippedGuardrailsSchema = z.object({ items: z.array(shippedGuardrailSchema) });
 
-export const switchShippedGuardrailRequestSchema = z.object({ enabled: z.boolean() }).strict();
+export const switchShippedGuardrailRequestSchema = z
+  .object({
+    enabled: z.boolean(),
+    /**
+     * Only on a guardrail that asks only when a publish widens reach: true asks on every
+     * publish. Left out, it stays as it was.
+     */
+    alwaysAsk: z.boolean().optional()
+  })
+  .strict();
 
 export type ShippedGuardrailView = z.infer<typeof shippedGuardrailSchema>;
 
@@ -247,7 +261,7 @@ export const guardrailOperations = {
     method: "POST",
     path: "/api/v1/guardrails/shipped/:name/switch",
     summary:
-      "Switch a guardrail the release ships off or on again, for the whole instance. A release never switches it back on",
+      "Switch a guardrail the release ships off or on again, or set the publish guardrail to ask on every publish, for the whole instance. A release never switches it back on",
     tag: "Guardrails",
     auth: "user",
     scope: "config_assets:publish",
@@ -255,7 +269,7 @@ export const guardrailOperations = {
     effect: "changing",
     body: switchShippedGuardrailRequestSchema,
     response: json(shippedGuardrailSchema),
-    errors: ["NOT_FOUND"],
+    errors: ["NOT_FOUND", "VALIDATION_FAILED"],
     rateClass: "write"
   }),
   "guardrails.unpublish": defineRegisteredOperation({

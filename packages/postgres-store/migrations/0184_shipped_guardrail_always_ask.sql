@@ -1,0 +1,1 @@
+ALTER TABLE "shipped_guardrail_switches" ADD COLUMN "always_ask" boolean DEFAULT false NOT NULL;

@@ -43,9 +43,17 @@ export function createPostgresGuardrailsStore(db: PostgresConnection): Guardrail
         .where(eq(shippedGuardrailSwitches.clientInstanceId, clientInstanceId));
       return rows.map(switchOf);
     },
-    async switchShippedGuardrail({ clientInstanceId, name, enabled, switchedBy, switchedAt }) {
+    async switchShippedGuardrail({
+      clientInstanceId,
+      name,
+      enabled,
+      alwaysAsk,
+      switchedBy,
+      switchedAt
+    }) {
       const values = {
         enabled,
+        alwaysAsk,
         switchedById: switchedBy.id,
         switchedByLabel: switchedBy.label,
         switchedAt: new Date(switchedAt)
@@ -230,6 +238,7 @@ function switchOf(row: typeof shippedGuardrailSwitches.$inferSelect): ShippedGua
   return {
     name: row.guardrailName,
     enabled: row.enabled,
+    alwaysAsk: row.alwaysAsk,
     switchedBy: { id: row.switchedById, label: row.switchedByLabel },
     switchedAt: row.switchedAt.toISOString()
   };

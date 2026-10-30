@@ -233,7 +233,8 @@ describe("SHARE-1 audience on App availability", () => {
       200
     );
     await getTestJobs(t.instance).runDue();
-    expectStatus(await publish(t.kai.id, "widen", "self"), 202);
+    // The same revision for the same person widens nothing: it goes live on the click (GR-PUB-2).
+    expectStatus(await publish(t.kai.id, "widen", "self"), 200);
     const wider = await publish(t.kai.id, "widen", "workspace");
     expectStatus(wider, 202);
     const requestId = held.parse(wider.json()).approvalRequestId;
@@ -324,7 +325,7 @@ describe("SHARE-1 audience on App availability", () => {
     expect((await stored())?.appAvailability?.audience).toBe("workspace");
   });
 
-  it("every non-widening publish is held, including a workspace publisher narrowing an instance App", async () => {
+  it("GR-PUB-2: a publish that widens nothing goes live on its publisher's click, a workspace publisher narrowing an instance App included", async () => {
     expectStatus(await t.putApp(t.admin.id, "narrow", appFiles("narrow", { id: "narrow" })), 200);
     expectStatus(await publish(t.admin.id, "narrow", "instance"), 200);
     const review = audienceRead.parse((await get(t.kai.id, "narrow")).json()).appAudience;
@@ -335,18 +336,9 @@ describe("SHARE-1 audience on App availability", () => {
         params: { kind: "app", name: "narrow" },
         payload: { workspaceId: t.workspaceId, revision: 1 }
       }),
-      202
-    );
-    const narrowed = await publish(t.kai.id, "narrow", "workspace");
-    expectStatus(narrowed, 202);
-    expectStatus(
-      await t.call(t.admin.id, "approval_requests.decide", {
-        params: { requestId: held.parse(narrowed.json()).approvalRequestId },
-        payload: { decision: "approve" }
-      }),
       200
     );
-    await getTestJobs(t.instance).runDue();
+    expectStatus(await publish(t.kai.id, "narrow", "workspace"), 200);
     expect(
       (
         await t.stores.configAssets.getConfigAsset({
@@ -366,7 +358,8 @@ describe("SHARE-1 audience on App availability", () => {
         .filter((event) => event.metadata?.name === "narrow")
         .map((event) => event.metadata?.publish_widens)
     ).toContain(false);
-    expectStatus(await publish(t.kai.id, "narrow", "workspace"), 202);
+    // Back to the whole instance is wider again, and a workspace publisher may not choose it.
+    expectStatus(await publish(t.kai.id, "narrow", "instance"), 403);
   });
 
   it("rechecks the live audience under the committing row lock before changing availability", async () => {

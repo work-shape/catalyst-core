@@ -150,10 +150,26 @@ export function registerGuardrailRoutes(route: Route, options: ChatServerOptions
       if (!guardrail) {
         throw new AppError("NOT_FOUND", `The release ships no Guardrail '${input.name}'`);
       }
+      if (input.alwaysAsk !== undefined && !guardrail.asksOnlyWhenWidening) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `The Guardrail '${guardrail.name}' asks at every event it is bound to already`,
+          { reason: "always_ask_unsupported" },
+          { exposeMessage: true }
+        );
+      }
+      // Left out, the setting stays as it was.
+      const alwaysAsk =
+        input.alwaysAsk ??
+        (await options.stores.guardrails.listShippedGuardrailSwitches({ clientInstanceId })).find(
+          (entry) => entry.name === guardrail.name
+        )?.alwaysAsk ??
+        false;
       const switched = await options.stores.guardrails.switchShippedGuardrail({
         clientInstanceId,
         name: guardrail.name,
         enabled: input.enabled,
+        alwaysAsk,
         switchedBy: { id: context.actor.id, label: context.actor.displayLabel },
         switchedAt: (options.operations?.now?.() ?? new Date()).toISOString()
       });
@@ -162,7 +178,12 @@ export function registerGuardrailRoutes(route: Route, options: ChatServerOptions
         status: "success",
         actor: auditActorFromIdentity(context.actor),
         correlationId: context.correlationId,
-        metadata: { kind: GUARDRAIL_ASSET_KIND, name: guardrail.name, enabled: input.enabled }
+        metadata: {
+          kind: GUARDRAIL_ASSET_KIND,
+          name: guardrail.name,
+          enabled: input.enabled,
+          ...(guardrail.asksOnlyWhenWidening ? { alwaysAsk } : {})
+        }
       });
       return shippedView(guardrail, switched, true);
     }
@@ -287,6 +308,7 @@ function shippedView(
     on: [...guardrail.on],
     outcome: guardrail.outcome,
     enabled: switched?.enabled ?? true,
+    ...(guardrail.asksOnlyWhenWidening ? { alwaysAsk: switched?.alwaysAsk ?? false } : {}),
     ...(switched ? { switchedBy: switched.switchedBy, switchedAt: switched.switchedAt } : {}),
     canSwitch
   };
