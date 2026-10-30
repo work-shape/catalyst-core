@@ -21,8 +21,9 @@ import {
 import { useWorkflowEditing, type WorkflowEditing } from "./workflow-editing";
 import { WorkflowHead } from "./workflow-head";
 import { useTestRun } from "./test-run";
+import { useStepPins, type StepPinControl } from "./step-pin";
 import { editOffered, runsReadable, startOffered } from "./workflow-model";
-import type { WorkflowStartIssue, WorkflowStepView } from "./workflow-views";
+import type { WorkflowStartIssue, WorkflowStepRunView, WorkflowStepView } from "./workflow-views";
 import { WorkflowsFrame, routeLink, type OpenRoute } from "./workflows-frame";
 import { useWorkflowsHost } from "./workflows-host";
 
@@ -62,6 +63,7 @@ export function WorkflowPage({ workflow, opened }: { workflow: string; opened?: 
   const edit = useEditWithAgent(shownId, read.workflow);
   const draft = useWorkflowDraft(shownId, read.workflow);
   const test = useTestRun(shownId, read.workflow);
+  const pins = useStepPins(shownId, read.workflow);
   const editing = useWorkflowEditing({
     workspaceId: workspaceId ?? "",
     workflowId: shownId,
@@ -89,6 +91,7 @@ export function WorkflowPage({ workflow, opened }: { workflow: string; opened?: 
         runsReadable={runsReadable(host.rights, read.workflow)}
         edit={edit}
         editing={editing}
+        {...(pins === undefined ? {} : { pins })}
         draft={
           draft.bar === undefined || test === undefined
             ? draft.bar
@@ -125,6 +128,7 @@ export function WorkflowPageView({
   runsReadable: readsRuns = true,
   edit,
   editing,
+  pins,
   draft,
   onOpenChild,
   onOpenRoute,
@@ -144,6 +148,12 @@ export function WorkflowPageView({
   edit?: WorkflowEdit;
   /** Editing by hand in a step's Settings, for a reader who may write the Workflow. */
   editing?: WorkflowEditing;
+  /** The reader's pins on the draft's step outputs for their test runs (EW-10). */
+  pins?: (
+    step: WorkflowStepView,
+    stepRun: WorkflowStepRunView | undefined,
+    inBlock: boolean
+  ) => StepPinControl | undefined;
   /** The bar of the draft, where the draft is not the published revision. */
   draft?: WorkflowDraftBarState;
   onOpenChild(step: WorkflowStepView): void;
@@ -238,6 +248,7 @@ export function WorkflowPageView({
             onOpenChild={onOpenChild}
             {...(editing === undefined ? {} : { editing })}
             {...(edit === undefined ? {} : { edit })}
+            {...(editing === undefined || pins === undefined ? {} : { pins })}
           />
         )}
       </div>

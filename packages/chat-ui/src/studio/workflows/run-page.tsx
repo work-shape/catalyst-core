@@ -23,6 +23,7 @@ import { replayMoments, stepRunsAt } from "./run-replay-model";
 import { runKeyText, startedByText } from "./runs-list";
 import { useStartRun } from "./start-run";
 import { useRunLiveOnce, useTestRun, type LiveOnceControl } from "./test-run";
+import { useStepPins, type StepPinControl } from "./step-pin";
 import { TestRunBadge } from "./test-run-badge";
 import { WorkflowCanvas, type WorkflowCanvasFocus } from "./workflow-canvas";
 import { EditRefusedBanner, useEditWithAgent, type WorkflowEdit } from "./workflow-draft";
@@ -107,6 +108,7 @@ export function WorkflowRunPage({
   });
   const testAgain = useTestRun(workflow, definition.workflow);
   const liveOnce = useRunLiveOnce(workflow, definition.workflow, read.run?.ended === true);
+  const pins = useStepPins(workflow, definition.workflow, runId);
   const edit = useEditWithAgent(workflow, definition.workflow);
   const test = read.run?.test === true;
 
@@ -160,6 +162,7 @@ export function WorkflowRunPage({
         onOpenRoute={host.showRoute}
         {...(edit === undefined ? {} : { edit })}
         {...(test && liveOnce !== undefined ? { liveOnce } : {})}
+        {...(pins === undefined ? {} : { pins })}
       />
       {again.dialog}
       {testAgain?.dialog}
@@ -192,6 +195,7 @@ export function WorkflowRunPageView({
   onOpenRoute,
   edit,
   liveOnce,
+  pins,
   retryDefinition
 }: {
   workspaceId: string;
@@ -223,6 +227,12 @@ export function WorkflowRunPageView({
     step: WorkflowStepView,
     stepRun: WorkflowStepRunView | undefined
   ) => LiveOnceControl | undefined;
+  /** For a reader who may write the Workflow: pinning a step's output for their test runs. */
+  pins?: (
+    step: WorkflowStepView,
+    stepRun: WorkflowStepRunView | undefined,
+    inBlock: boolean
+  ) => StepPinControl | undefined;
 }) {
   const translation = useTranslation();
   const { locale, t } = translation;
@@ -476,6 +486,7 @@ export function WorkflowRunPageView({
               }
               onOpenChild={openChild}
               {...(focus === undefined ? {} : { focus })}
+              {...(pins === undefined || moment !== undefined ? {} : { pins })}
             />
           </div>
         </>

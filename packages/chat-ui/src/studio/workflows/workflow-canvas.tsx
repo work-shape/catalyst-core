@@ -22,6 +22,7 @@ import {
 import { StepSettings, StepSettingsBar } from "./step-settings";
 import type { Translate } from "./step-settings-parts";
 import type { LiveOnceControl } from "./test-run";
+import type { StepPinControl } from "./step-pin";
 import type { WorkflowEdit } from "./workflow-draft";
 import type { WorkflowEditing } from "./workflow-editing";
 import { placedSteps, workflowGraph } from "./workflow-canvas-model";
@@ -149,7 +150,8 @@ export function WorkflowCanvas({
   onOpenChild,
   focus,
   editing,
-  edit
+  edit,
+  pins
 }: {
   /** The Workflow, once its record arrived. */
   workflow: WorkflowView | undefined;
@@ -166,6 +168,12 @@ export function WorkflowCanvas({
   onOpenChild(step: WorkflowStepView, stepRun: WorkflowStepRunView | undefined): void;
   /** Opens the entries of a loop, as its "Show the failed" does. */
   focus?: WorkflowCanvasFocus;
+  /** The reader's pins on the draft's step outputs for their test runs, where offered (EW-10). */
+  pins?: (
+    step: WorkflowStepView,
+    stepRun: WorkflowStepRunView | undefined,
+    inBlock: boolean
+  ) => StepPinControl | undefined;
 }) {
   const translation = useTranslation();
   const { locale, t } = translation;
@@ -225,7 +233,23 @@ export function WorkflowCanvas({
     const passed = taker === undefined ? undefined : frame.get(taker.step.id)?.loop?.total;
     const stepRun = place.repeated ? undefined : frame.get(id);
     const liveOnce = run.liveOnce?.(place.step, stepRun);
+    const pinnedFrom = run.run.pinnedSteps?.find((pinned) => pinned.step === id)?.sourceRunId;
+    const workspaceId = host?.workspace?.id;
     return {
+      ...(pinnedFrom === undefined || host === undefined || workspaceId === undefined
+        ? {}
+        : {
+            pinnedFrom: {
+              runId: pinnedFrom,
+              open: () =>
+                host.showRoute({
+                  kind: "workflow-run",
+                  collaborationWorkspaceId: workspaceId,
+                  workflow: run.run.workflowId,
+                  run: pinnedFrom
+                })
+            }
+          }),
       ...(taker === undefined || passed === undefined
         ? {}
         : { passesOn: { count: passed, step: taker.step.name } }),
@@ -424,6 +448,7 @@ export function WorkflowCanvas({
               entries={entries}
               transcript={transcript}
               actions={actions}
+              pin={pins?.(selected.step, selectedRun?.stepRun, selected.blockId !== undefined)}
               onOpenChild={
                 selected.step.kind === "workflow"
                   ? () => onOpenChild(selected.step, selectedRun?.stepRun)

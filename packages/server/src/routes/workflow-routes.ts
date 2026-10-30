@@ -472,6 +472,86 @@ function registerWorkflowRoutes(
     }
   });
 
+  // Pinned step outputs (EW-10): a person's own, on the draft, for those who may write it.
+  function pinsOf(): NonNullable<WorkflowRunsPort["pins"]> {
+    const pins = required().pins;
+    if (!pins) throw new AppError("NOT_FOUND", "This instance pins no step outputs");
+    return pins;
+  }
+  const mayPin = async (
+    input: { workflow: string },
+    { access, actor }: { access: ActorAccess; actor: AuthenticatedIdentity }
+  ): Promise<OperationAuthorization> =>
+    isAuthenticatedServicePrincipal(actor)
+      ? {
+          allowed: false,
+          action: WORKFLOW_ACTIONS.write,
+          reason: "no_grant",
+          message: "Only a person pins a step's output for their test runs"
+        }
+      : decide(access, WORKFLOW_ACTIONS.write, await resourceOf(input.workflow));
+
+  route.operation(apiOperations["workflows.list_pins"], {
+    authorize: mayPin,
+    resource: workflowResource,
+    module: WORKFLOWS_MODULE,
+    execute: async (input, { actor }) => ({
+      items: await pinsOf().list({ workflow: input.workflow, pinnedBy: actor.id })
+    })
+  });
+
+  route.operation(apiOperations["workflows.pin_step"], {
+    defaultPolicy: "allow",
+    authorize: mayPin,
+    resource: workflowResource,
+    module: WORKFLOWS_MODULE,
+    execute: async (input, context) => {
+      const { access, actor } = context;
+      // A run of another Workflow, or one the caller may not read, is no run here.
+      const source = await required().readRun(input.runId);
+      const resource = await resourceOf(input.workflow);
+      if (
+        source?.workflow !== input.workflow ||
+        !decide(access, WORKFLOW_ACTIONS.read, resource).allowed
+      ) {
+        throw new AppError("NOT_FOUND", "There is no such Workflow Run");
+      }
+      // The output is the run's data: the caller reads it as the run's page shows it to them.
+      const readRunData = access.authorize(WORKFLOW_ACTIONS.readRunData, resource).allowed;
+      const outputsReadable =
+        (await runDataReadable(source, context, readRunData)) &&
+        (source.hasAgentSteps !== true || readRunData);
+      if (!outputsReadable) {
+        throw new AppError(
+          "FORBIDDEN",
+          "Pinning a step's output needs the right to read that run's step outputs",
+          { reason: "no_grant", action: WORKFLOW_ACTIONS.readRunData },
+          { exposeMessage: true }
+        );
+      }
+      return pinsOf().pin({
+        workflow: input.workflow,
+        step: input.step,
+        source,
+        pinnedBy: actor.id
+      });
+    }
+  });
+
+  route.operation(apiOperations["workflows.unpin_step"], {
+    defaultPolicy: "allow",
+    authorize: mayPin,
+    resource: workflowResource,
+    module: WORKFLOWS_MODULE,
+    execute: async (input, { actor }) => ({
+      removed: await pinsOf().unpin({
+        workflow: input.workflow,
+        step: input.step,
+        pinnedBy: actor.id
+      })
+    })
+  });
+
   route.operation(apiOperations["workflows.list_runs"], {
     authorize: async (input, { access }) =>
       decide(access, WORKFLOW_ACTIONS.read, await resourceOf(input.workflow)),

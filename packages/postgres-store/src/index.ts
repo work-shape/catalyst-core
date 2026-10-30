@@ -78,6 +78,7 @@ import { createPostgresStructuredDataStore } from "./postgres-structured-data-op
 import { createPostgresJobsStore, notifyJobsEnqueued } from "./jobs/store";
 import { createPostgresOperationRunsStore } from "./postgres-operation-run-operations";
 import { createPostgresLiveOnceSwitchesStore } from "./postgres-live-once-switch-operations";
+import { createPostgresWorkflowStepPinsStore } from "./postgres-workflow-step-pin-operations";
 import { createPostgresCapabilityRecordStore } from "./postgres-capability-record-operations";
 import { createPostgresUserOperationSettingsStore } from "./postgres-user-operation-settings";
 import { createPostgresAgentProposalStore } from "./postgres-agent-proposal-operations";
@@ -211,6 +212,7 @@ function bindStores(
     pages: createPostgresPagesStore(db),
     connections: createPostgresConnectionsStore(db),
     workflowRuns: createPostgresWorkflowRunsStore(db),
+    workflowStepPins: createPostgresWorkflowStepPinsStore(db),
     workflowRunDatasets: createPostgresWorkflowRunDatasetsStore(db),
     dataStores: createPostgresDataStoreRecordsStore(db),
     knowledgeBases: createPostgresKnowledgeBaseStateStore(db),

@@ -3,8 +3,11 @@ workflows.download_dataset  GET /api/v1/workflow-runs/:runId/datasets/:datasetId
 workflows.get_run  GET /api/v1/workflow-runs/:runId
 workflows.get_step_transcript  GET /api/v1/workflow-runs/:runId/steps/:stepRunId/transcript
 workflows.list  GET /api/v1/workflows
+workflows.list_pins  GET /api/v1/workflows/:workflow/pins
 workflows.list_runs  GET /api/v1/workflows/:workflow/runs
 workflows.list_step_runs  GET /api/v1/workflow-runs/:runId/steps
+workflows.pin_step  PUT /api/v1/workflows/:workflow/pins/:step
 workflows.start  POST /api/v1/workflows/:workflow/runs
 workflows.test  POST /api/v1/workflows/:workflow/test-runs
+workflows.unpin_step  DELETE /api/v1/workflows/:workflow/pins/:step
 workflows.unpublish  POST /api/v1/workflows/:workflow/unpublish

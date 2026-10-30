@@ -90,6 +90,8 @@ const runGovernance = {
   starterRunId: true,
   // Names of the App, its revision and its action: governance, not a value of the run.
   startedFrom: true,
+  // The pinned steps of a test run and their source runs: ids, not a value of the run.
+  pinnedSteps: true,
   parentRunId: true,
   parentStepRunId: true,
   rootRunId: true,

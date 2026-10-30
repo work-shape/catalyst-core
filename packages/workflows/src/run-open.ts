@@ -19,6 +19,7 @@ import {
   type OperationRunId,
   type PlatformStores,
   type WorkflowRun,
+  type WorkflowPinnedStep,
   type WorkflowRunMode,
   type WorkflowRunStartedFrom,
   type WorkflowRunView,
@@ -88,6 +89,8 @@ export interface TestWorkflowRunInput extends Omit<StartWorkflowRunInput, "workf
   startedBy: AuthenticatedUser;
   /** The action of an App's draft whose click started the test run (DP-1). */
   startedFrom?: WorkflowRunStartedFrom;
+  /** The starter's pins on the draft the run takes and records (EW-10). */
+  pinnedSteps?: WorkflowPinnedStep[];
 }
 
 /** The refusal of a start whose key is empty, too long, or no text. */
@@ -299,7 +302,8 @@ export function createRunOpening(options: {
   /** Opens a run that a person or a credential starts by hand, and answers it as it is read. */
   async function startByHand(
     revision: WorkflowDefinitionRevision,
-    input: Omit<StartWorkflowRunInput, "workflow"> & { startedFrom?: WorkflowRunStartedFrom },
+    input: Omit<StartWorkflowRunInput, "workflow"> &
+      Pick<TestWorkflowRunInput, "startedFrom" | "pinnedSteps">,
     mode: WorkflowRunMode
   ): Promise<WorkflowRunView> {
     if (input.operationRunId) {
@@ -356,6 +360,10 @@ export function createRunOpening(options: {
             ...(starterRunId === undefined ? {} : { starterRunId }),
             ...(input.key === undefined ? {} : { runKey: input.key }),
             ...(input.startedFrom ? { startedFrom: input.startedFrom } : {}),
+            // Only a test run takes pins, and records those it took (EW-10).
+            ...(mode === "test" && input.pinnedSteps !== undefined && input.pinnedSteps.length > 0
+              ? { pinnedSteps: input.pinnedSteps }
+              : {}),
             actor: auditActorFromIdentity(startedBy),
             correlationId: input.correlationId
           },

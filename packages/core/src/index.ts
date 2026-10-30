@@ -106,6 +106,7 @@ export type { WorkflowRunDataset } from "./workflow-datasets";
 export * from "./workflow-principal-rights";
 export * from "./workflow-runs";
 export * from "./workflow-step-job";
+export * from "./workflow-step-pins";
 export * from "./workflows";
 export * from "./yaml-data";
 export { ACCESS_SOURCES } from "@work-shape/catalyst-asset-schemas";

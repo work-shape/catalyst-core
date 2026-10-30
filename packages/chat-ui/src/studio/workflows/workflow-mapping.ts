@@ -133,6 +133,8 @@ export interface WorkflowRunResource extends TimesResource, Partial<OnTheWire<Wo
   mode?: (typeof WORKFLOW_RUN_MODES)[number];
   /** On a test run an App's draft started: the App, by name (DP-1). */
   startedFrom?: { kind: "app"; app: string };
+  /** On a test run: the steps that ended with a pinned output, and the run it is from (EW-10). */
+  pinnedSteps?: readonly { step: string; sourceRunId: string }[];
   status: WorkflowRunStatus;
   startedBy: { id: string; label: string };
   /** The account the run acts as. */
@@ -340,6 +342,9 @@ export function toWorkflowRun(run: WorkflowRunResource): WorkflowRunView {
     ...(run.mode === "test" && run.startedFrom !== undefined
       ? { fromApp: run.startedFrom.app }
       : {}),
+    ...(run.pinnedSteps === undefined || run.pinnedSteps.length === 0
+      ? {}
+      : { pinnedSteps: run.pinnedSteps }),
     ...(run.runKey === undefined ? {} : { runKey: run.runKey }),
     ...(run.continuation === undefined ? {} : { continuation: run.continuation }),
     ...(run.labels === undefined || Object.keys(run.labels).length === 0

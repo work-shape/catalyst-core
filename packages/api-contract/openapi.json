@@ -34860,6 +34860,24 @@
                         "workflowRevision"
                       ]
                     },
+                    "pinnedSteps": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "step": {
+                            "type": "string"
+                          },
+                          "sourceRunId": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "step",
+                          "sourceRunId"
+                        ]
+                      }
+                    },
                     "parentRunId": {
                       "type": "string"
                     },
@@ -35311,6 +35329,24 @@
                         "action",
                         "workflowRevision"
                       ]
+                    },
+                    "pinnedSteps": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "step": {
+                            "type": "string"
+                          },
+                          "sourceRunId": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "step",
+                          "sourceRunId"
+                        ]
+                      }
                     },
                     "parentRunId": {
                       "type": "string"
@@ -36702,6 +36738,416 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/workflows/{workflow}/pins": {
+      "get": {
+        "operationId": "workflows.list_pins",
+        "summary": "List your own pinned step outputs on a Workflow's draft; a pin whose step changed or whose run lost its data is cleared",
+        "tags": [
+          "Workflows"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workflow",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "step": {
+                            "type": "string"
+                          },
+                          "runId": {
+                            "type": "string"
+                          },
+                          "pinnedAt": {
+                            "$ref": "#/components/schemas/Timestamp"
+                          }
+                        },
+                        "required": [
+                          "step",
+                          "runId",
+                          "pinnedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/workflows/{workflow}/pins/{step}": {
+      "put": {
+        "operationId": "workflows.pin_step",
+        "summary": "Pin the output a step had in a run of the Workflow: your test runs of the draft then use it instead of running the step",
+        "tags": [
+          "Workflows"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workflow",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "step",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "Catalyst-Unattended",
+            "in": "header",
+            "description": "`1` on a call of an API credential when nobody watches its terminal, such as `catalyst <kind> publish --yes`. The call is then not its caller's own confirmation: a call that needs one waits in the caller's Inbox and answers `202` with its run, status `pending_confirmation`. It only ever makes a call stricter; a browser session's call ignores it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "runId": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "runId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "step": {
+                      "type": "string"
+                    },
+                    "runId": {
+                      "type": "string"
+                    },
+                    "pinnedAt": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    }
+                  },
+                  "required": [
+                    "step",
+                    "runId",
+                    "pinnedAt"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      },
+      "delete": {
+        "operationId": "workflows.unpin_step",
+        "summary": "Remove your pin of a step: your next test run of the draft runs the step again",
+        "tags": [
+          "Workflows"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workflow",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "step",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "Catalyst-Unattended",
+            "in": "header",
+            "description": "`1` on a call of an API credential when nobody watches its terminal, such as `catalyst <kind> publish --yes`. The call is then not its caller's own confirmation: a call that needs one waits in the caller's Inbox and answers `202` with its run, status `pending_confirmation`. It only ever makes a call stricter; a browser session's call ignores it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "removed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "removed"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
     "/api/v1/workflows/{workflow}/principal-rights": {
       "get": {
         "operationId": "workflows.principal_rights",
@@ -37156,6 +37602,24 @@
                               "action",
                               "workflowRevision"
                             ]
+                          },
+                          "pinnedSteps": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "step": {
+                                  "type": "string"
+                                },
+                                "sourceRunId": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "step",
+                                "sourceRunId"
+                              ]
+                            }
                           },
                           "parentRunId": {
                             "type": "string"
@@ -37641,6 +38105,24 @@
                         "action",
                         "workflowRevision"
                       ]
+                    },
+                    "pinnedSteps": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "step": {
+                            "type": "string"
+                          },
+                          "sourceRunId": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "step",
+                          "sourceRunId"
+                        ]
+                      }
                     },
                     "parentRunId": {
                       "type": "string"
@@ -38144,6 +38626,24 @@
                         "action",
                         "workflowRevision"
                       ]
+                    },
+                    "pinnedSteps": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "step": {
+                            "type": "string"
+                          },
+                          "sourceRunId": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "step",
+                          "sourceRunId"
+                        ]
+                      }
                     },
                     "parentRunId": {
                       "type": "string"

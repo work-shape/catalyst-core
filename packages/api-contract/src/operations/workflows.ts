@@ -92,6 +92,16 @@ const datasetMetadataSchema = z.object({
   state: z.enum(WORKFLOW_DATASET_STATES)
 });
 
+/**
+ * A pinned step output of the caller's on a Workflow's draft (EW-10): the step and the run
+ * whose output of it their test runs use. It names the run and carries no value of it.
+ */
+export const workflowStepPinSchema = z.object({
+  step: z.string(),
+  runId: z.string(),
+  pinnedAt: timestampSchema
+});
+
 export const workflowRunSchema = z.object({
   /** Descendants that failed, reached a limit or contain failed items, excluding this run. */
   failedDescendantCount: z.number().int().min(0).optional(),
@@ -147,6 +157,11 @@ export const workflowRunSchema = z.object({
       workflowRevision: z.enum(WORKFLOW_TEST_REVISIONS)
     })
     .optional(),
+  /**
+   * The steps of this test run that ended with a pinned output instead of running (EW-10),
+   * each with the run whose output it used. Missing on every other run.
+   */
+  pinnedSteps: z.array(z.object({ step: z.string(), sourceRunId: z.string() })).optional(),
   parentRunId: z.string().optional(),
   parentStepRunId: z.string().optional(),
   rootRunId: z.string(),
@@ -461,6 +476,53 @@ export const workflowOperations = {
     body: startWorkflowRunRequestSchema,
     response: json(workflowRunSchema),
     errors: ["NOT_FOUND", "CONFLICT", "VALIDATION_FAILED"],
+    rateClass: "write"
+  }),
+  // EW-10. The caller's own pinned step outputs on a Workflow's draft: their test runs end a
+  // pinned step with the output it had in an earlier run instead of running it.
+  "workflows.list_pins": defineRegisteredOperation({
+    id: "workflows.list_pins",
+    method: "GET",
+    path: "/api/v1/workflows/:workflow/pins",
+    summary:
+      "List your own pinned step outputs on a Workflow's draft; a pin whose step changed or whose run lost its data is cleared",
+    tag: "Workflows",
+    auth: "principal",
+    scope: "config_assets:read",
+    requires: [],
+    effect: "reading",
+    response: json(z.object({ items: z.array(workflowStepPinSchema) })),
+    errors: ["NOT_FOUND"],
+    rateClass: "read"
+  }),
+  "workflows.pin_step": defineRegisteredOperation({
+    id: "workflows.pin_step",
+    method: "PUT",
+    path: "/api/v1/workflows/:workflow/pins/:step",
+    summary:
+      "Pin the output a step had in a run of the Workflow: your test runs of the draft then use it instead of running the step",
+    tag: "Workflows",
+    auth: "principal",
+    scope: "config_assets:write",
+    requires: [],
+    effect: "changing",
+    body: z.object({ runId: z.string().min(1) }),
+    response: json(workflowStepPinSchema),
+    errors: ["NOT_FOUND", "CONFLICT", "VALIDATION_FAILED"],
+    rateClass: "write"
+  }),
+  "workflows.unpin_step": defineRegisteredOperation({
+    id: "workflows.unpin_step",
+    method: "DELETE",
+    path: "/api/v1/workflows/:workflow/pins/:step",
+    summary: "Remove your pin of a step: your next test run of the draft runs the step again",
+    tag: "Workflows",
+    auth: "principal",
+    scope: "config_assets:write",
+    requires: [],
+    effect: "changing",
+    response: json(z.object({ removed: z.boolean() })),
+    errors: ["NOT_FOUND"],
     rateClass: "write"
   }),
   "workflows.list_runs": defineRegisteredOperation({

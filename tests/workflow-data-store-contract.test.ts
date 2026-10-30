@@ -703,6 +703,9 @@ describe("the modules workflows and dataStores", () => {
         "workflows.list_step_runs",
         "workflows.get_step_transcript",
         "workflows.cancel_run",
+        "workflows.list_pins",
+        "workflows.pin_step",
+        "workflows.unpin_step",
         "workflows.principal_rights"
       ],
       jobKinds: [

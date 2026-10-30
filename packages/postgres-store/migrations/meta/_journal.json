@@ -1282,6 +1282,13 @@
       "when": 1793314314847,
       "tag": "0182_feedback_apps_workflows_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 183,
+      "version": "7",
+      "when": 1793321645611,
+      "tag": "0183_workflow_step_pins",
+      "breakpoints": true
     }
   ]
 }
