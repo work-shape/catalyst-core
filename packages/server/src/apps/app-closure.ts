@@ -1,4 +1,4 @@
-import { declaredDataStoresOf } from "@work-shape/catalyst-app-build";
+import { compiledActionsOf, declaredDataStoresOf } from "@work-shape/catalyst-app-build";
 import {
   AppError,
   DATA_STORE_ACTIONS,
@@ -9,7 +9,9 @@ import {
   type ActorAccess,
   type AssetScope,
   type ConfigAssetRecord,
-  type JsonObject
+  type DraftTestTarget,
+  type JsonObject,
+  type OperationEffect
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { accessResource } from "../assets/asset-access";
@@ -390,4 +392,77 @@ export async function storesPendingWith(
     });
   }
   return pending;
+}
+
+/** A Data Store a draft calls whose calls go to its test copy (ADR-0031, DT-2), as the draft's head names it. */
+export interface DraftTestCopyTarget {
+  name: string;
+  /** What people read of the store, where the reader may read it; else its name. */
+  title: string;
+  /** `present`: every call of the draft goes there. `made_on_change`: its first change makes it. */
+  copy: DraftTestTarget;
+}
+
+/**
+ * The Data Stores a draft's calls reach the test copy of, each once, as `runOperation()`
+ * decides a call (`draftCallTarget`): a store whose copy exists, and a store without one that
+ * a changing call of the draft would make it for. A store whose copy does not exist and that
+ * the draft only reads is read live, so it is not named. A retired store has no copy.
+ */
+export async function draftTestTargets(
+  options: Pick<AssetWorkflowOptions, "clientInstanceId" | "configAssets" | "stores">,
+  binder: StoreBinder,
+  access: Pick<ActorAccess, "authorize">,
+  effectOf: (operation: string) => Promise<OperationEffect | undefined>
+): Promise<DraftTestCopyTarget[]> {
+  const { clientInstanceId } = options;
+  const targets: DraftTestCopyTarget[] = [];
+  for (const { name } of storesBoundBy(options, binder)) {
+    const asset = await options.configAssets.store.getConfigAsset({
+      clientInstanceId,
+      kind: DATA_STORE_ASSET_KIND,
+      name
+    });
+    if (asset?.status !== "active" || !appReachesDataStore(binder.scope, asset.scope)) continue;
+    const record = await options.stores.dataStores.findDataStoreByName({ clientInstanceId, name });
+    if (!record || record.status === "retired") continue;
+    const copy = (await options.stores.dataStores.getTestCopy({
+      clientInstanceId,
+      storeId: record.id
+    }))
+      ? "present"
+      : "made_on_change";
+    if (copy === "made_on_change" && !(await changesStore(options, binder, name, effectOf))) {
+      continue;
+    }
+    const readable = access.authorize(
+      DATA_STORE_ACTIONS.read,
+      accessResource(DATA_STORE_ASSET_KIND, name, asset.scope, asset.id)
+    ).allowed;
+    targets.push({ name, title: readable ? assetTitle(asset.config, name) : name, copy });
+  }
+  return targets;
+}
+
+/** Whether a call of the draft changes the store: an App's `sql` action, a Workflow's step. */
+async function changesStore(
+  options: Pick<AssetWorkflowOptions, "configAssets">,
+  binder: StoreBinder,
+  name: string,
+  effectOf: (operation: string) => Promise<OperationEffect | undefined>
+): Promise<boolean> {
+  if (binder.kind !== WORKFLOW_ASSET_KIND) {
+    return compiledActionsOf(binder.config.manifest).some(
+      (action) => action.kind === "sql" && action.dataStore === name && action.effect !== "reading"
+    );
+  }
+  // Against no live revision every step that calls an operation is listed, each once.
+  const calls =
+    options.configAssets.kinds.get(WORKFLOW_ASSET_KIND)?.publishReach?.(binder.config, undefined)
+      .calls ?? [];
+  for (const call of calls) {
+    if (!call.operation?.startsWith(`data_store.${name}.`)) continue;
+    if ((call.effect ?? (await effectOf(call.operation))) === "changing") return true;
+  }
+  return false;
 }

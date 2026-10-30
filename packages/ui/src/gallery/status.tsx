@@ -19,6 +19,7 @@ import { ServiceMark, type ServiceMarkSize } from "../status/service-mark";
 import { KnowsHowTo, SkillIcon, type SkillIconSize } from "../status/skill-icon";
 import { TargetBadge, type CallTarget } from "../status/target-badge";
 import { SERVICE_MARK_SAMPLE_COLORS, SERVICE_MARK_SAMPLE_LOGO } from "../theme/service-mark";
+import { changeTagEntry } from "./draft";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
 
@@ -188,6 +189,7 @@ export const statusGallery: GalleryGroup = {
         </Samples>
       )
     },
+    changeTagEntry,
     {
       name: "Avatar",
       components: ["Avatar"],

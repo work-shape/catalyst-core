@@ -600,7 +600,14 @@ describe("a Workflow stored as an asset", () => {
       name: "Notify clients",
       definitionRevisionId: firstId
     });
+    // The head of the draft names the live version by its number (DT-1b), as an App's does.
+    const liveVersion = async () =>
+      z
+        .object({ liveVersion: z.object({ number: z.number() }).passthrough().optional() })
+        .parse((await t.expectOk(t.root.id, "assets.get", { params: address })).json()).liveVersion;
+    expect(await liveVersion()).toMatchObject({ number: 1 });
     expect((await publish(t, second)).statusCode).toBe(200);
+    expect(await liveVersion()).toMatchObject({ number: 2 });
     const secondId = await published(t);
     expect(secondId).not.toBe(firstId);
     expect((await listed(t))[0]).toMatchObject({

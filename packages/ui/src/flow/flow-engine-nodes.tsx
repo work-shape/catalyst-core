@@ -17,6 +17,7 @@ import type { UiLabels } from "../labels";
 import { RegistryIcon } from "../status/registry-icon";
 import { useUiLabels } from "../ui-root";
 import { FlowEdge, flowEdgePath, type FlowEdgeEnd } from "./flow-edge";
+import { targetLabels } from "../status/target-badge";
 import { flowChangeLabels } from "./flow-change";
 import { FlowGroup } from "./flow-group";
 import { FlowLanes } from "./flow-lanes";
@@ -202,7 +203,8 @@ function accessibleName(item: FlowGraphNode | FlowGraphGroup, labels: UiLabels):
     item.eyebrow,
     item.title,
     word === undefined ? undefined : labels[word],
-    item.change === undefined ? undefined : labels[flowChangeLabels[item.change]]
+    item.change === undefined ? undefined : labels[flowChangeLabels[item.change]],
+    "target" in item && item.target !== undefined ? labels[targetLabels[item.target]] : undefined
   ]
     .filter((part) => part !== undefined && part !== "")
     .join(", ");
@@ -277,6 +279,7 @@ function StepNode({ id, data }: NodeProps<StepRfNode>) {
       footer={item.footer}
       meta={item.meta}
       status={item.status}
+      {...(item.target === undefined ? {} : { target: item.target })}
       selected={data.marked}
       compact={compact}
       stacked={item.kind === "subflow"}

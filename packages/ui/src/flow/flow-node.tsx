@@ -3,7 +3,9 @@ import type { HTMLAttributes, KeyboardEvent, ReactNode, Ref } from "react";
 import { cn } from "../cn";
 import { Spinner } from "../feedback/spinner";
 import type { UiLabels } from "../labels";
+import { ChangeTag } from "../status/change-tag";
 import { IconTile } from "../status/icon-tile";
+import { TargetBadge, type CallTarget } from "../status/target-badge";
 import { useUiLabels } from "../ui-root";
 import { FlowChangeFrame, flowChangeLabels } from "./flow-change";
 import type { FlowChange, FlowEdgeState, FlowStatus } from "./flow-types";
@@ -195,19 +197,18 @@ export function FlowHead({
             {eyebrow}
           </span>
         )}
-        {change === undefined ? null : (
-          <span
-            data-slot="flow-change"
-            // A line of its own under the type, so the title keeps the whole width. Zoomed
-            // out, the frame alone shows the change.
-            className={cn(
-              compact
-                ? "sr-only"
-                : "my-0.5 justify-self-start rounded-md bg-primary-soft px-1.5 py-0.5 text-caption leading-3.5 font-medium text-primary-soft-foreground"
-            )}
-          >
+        {change === undefined ? null : compact ? (
+          // Zoomed out, the frame alone shows the change.
+          <span data-slot="flow-change" className="sr-only">
             {labels[flowChangeLabels[change]]}
           </span>
+        ) : (
+          // A line of its own under the type, so the title keeps the whole width.
+          <ChangeTag
+            data-slot="flow-change"
+            change={change}
+            className="my-0.5 justify-self-start"
+          />
         )}
         <span
           data-slot="flow-title"
@@ -248,6 +249,8 @@ export interface FlowNodeProps extends Omit<HTMLAttributes<HTMLDivElement>, "tit
   /** At the end of the footer, such as how long it took. */
   meta?: ReactNode;
   status?: FlowStatus;
+  /** Where the node's call went in a test of a draft: Live, Test or Simulated, in the footer. */
+  target?: CallTarget;
   selected?: boolean;
   /** Icon and title only, in a size that reads from far away. The frame keeps its size. */
   compact?: boolean;
@@ -281,6 +284,7 @@ export function FlowNode({
   footer,
   meta,
   status = "idle",
+  target,
   selected = false,
   compact = false,
   stacked = false,
@@ -300,7 +304,10 @@ export function FlowNode({
   const hasRows = rows !== undefined && rows.length > 0;
   // A node with rows ends with its rows: its status is in the corner and in its name.
   const showsFooter =
-    footer !== undefined || meta !== undefined || (statusWord !== undefined && !hasRows);
+    footer !== undefined ||
+    meta !== undefined ||
+    target !== undefined ||
+    (statusWord !== undefined && !hasRows);
   const head = { icon, accent, eyebrow, title, change };
 
   // The whole anatomy stays in the frame when it is compact, hidden, so the frame keeps the
@@ -474,6 +481,9 @@ export function FlowNode({
                 <span className="sr-only"> {statusWord}</span>
               ) : null}
             </span>
+            {target === undefined ? null : (
+              <TargetBadge data-slot="flow-target" target={target} className="-my-0.5" />
+            )}
             {meta === undefined ? null : (
               <span className="shrink-0 pl-2 whitespace-nowrap tabular-nums">{meta}</span>
             )}

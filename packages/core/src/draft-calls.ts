@@ -1,3 +1,4 @@
+import type { DRAFT_TEST_TARGETS } from "@work-shape/catalyst-asset-schemas";
 import type { ClientInstanceId } from "./ids";
 import type { OperationTarget } from "./operation-runs";
 import type { OperationEffect } from "./operations";
@@ -17,7 +18,7 @@ import type { ISODateString } from "./time";
  * exists, such as a Data Store's test copy; `made_on_change` where it does not and a changing
  * call of a draft makes it. An asset without one has none.
  */
-export type DraftTestTarget = "present" | "made_on_change";
+export type DraftTestTarget = (typeof DRAFT_TEST_TARGETS)[number];
 
 /**
  * Where a call of a draft goes, by what it does, the called asset's test target and whether its

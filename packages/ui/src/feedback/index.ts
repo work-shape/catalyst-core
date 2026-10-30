@@ -1,4 +1,10 @@
 export { Banner, type BannerLayout, type BannerProps, type BannerTone } from "./banner";
+export {
+  DraftHeader,
+  type DraftHeaderProps,
+  type DraftLiveRevision,
+  type DraftTestTarget
+} from "./draft-header";
 export { EmptyState, type EmptyStateLayout, type EmptyStateProps } from "./empty-state";
 export { FormNotice, type FormNoticeProps, type FormNoticeTone } from "./form-notice";
 export { InlineError } from "./inline-error";

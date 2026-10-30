@@ -356,6 +356,17 @@ export interface AppPublishQuestionRead {
    * source, and while the answer for the audience shown loads.
    */
   handover?: AppPublishHandover;
+  /**
+   * What the publish changes against what is live (DT-1b): each action that changes something,
+   * new or changed, and the outside hosts it adds. Absent until the first answer arrived.
+   */
+  changes?: AppPublishChanges;
+}
+
+/** What a publish changes against what is live, as the instance reads it from the draft. */
+export interface AppPublishChanges {
+  changing: readonly NonNullable<Asset["publishChanges"]>["changing"][number][];
+  hostsAdded: readonly string[];
 }
 
 /** What the instance answers of the widening check of one publish (DS-13c). */
@@ -418,7 +429,8 @@ export function useAppPublishNarrative(
         narrative: parsePublishNarrative(asset.publishNarrative),
         audience: appAudienceOffer(asset.appAudience),
         readsStoredData: appReadsStoredData(asset.config),
-        ...(asset.publishHandover ? { handover: asset.publishHandover } : {})
+        ...(asset.publishHandover ? { handover: asset.publishHandover } : {}),
+        ...(asset.publishChanges ? { changes: asset.publishChanges } : {})
       };
     },
     placeholderData: keepPreviousData,
@@ -428,7 +440,13 @@ export function useAppPublishNarrative(
   const retry = () => void query.refetch().catch(() => undefined);
   const offer = query.data?.audience;
   // The config is the revision's whatever the audience, so the last answer's flag holds.
-  const reads = query.data === undefined ? {} : { readsStoredData: query.data.readsStoredData };
+  const reads =
+    query.data === undefined
+      ? {}
+      : {
+          readsStoredData: query.data.readsStoredData,
+          ...(query.data.changes ? { changes: query.data.changes } : {})
+        };
   if (query.isError) {
     return { narrative: { status: "failed", reason: "read", retry }, audience: offer, ...reads };
   }

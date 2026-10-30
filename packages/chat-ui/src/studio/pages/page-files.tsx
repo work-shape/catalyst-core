@@ -5,11 +5,14 @@ import { ApiError, type PageSourceFileEntryResponse } from "@work-shape/catalyst
 import {
   Badge,
   Button,
+  ChangeTag,
   cn,
   EmptyState,
   List,
   ListRow,
-  SkeletonList
+  SkeletonList,
+  TextDiff,
+  type ChangeKind
 } from "@work-shape/catalyst-ui";
 import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
 import { useTranslation } from "../../shared/i18n";
@@ -134,7 +137,9 @@ type FileContent =
   | { status: "loading" }
   | { status: "failed" }
   | { status: "not-text" }
-  | { status: "ready"; text: string };
+  | { status: "ready"; text: string }
+  /** The file against what is live: a new file has nothing before, a removed one nothing after. */
+  | { status: "diff"; before?: string | undefined; after?: string | undefined };
 
 /**
  * The list of files beside the open file. Where the surface is too narrow for both, the file
@@ -143,6 +148,7 @@ type FileContent =
 export function PageFilesView({
   files,
   changed,
+  marks,
   open,
   content,
   listShown,
@@ -151,6 +157,8 @@ export function PageFilesView({
 }: {
   files: readonly SourceFile[] | "loading" | "failed";
   changed: ReadonlySet<string>;
+  /** Against what is live, per path: new, changed or removed. Marks in place of "Changed". */
+  marks?: ReadonlyMap<string, Exclude<ChangeKind, "unsaved">>;
   open: string | undefined;
   content: FileContent;
   /** In a narrow surface: the list is shown in place of the file. */
@@ -199,7 +207,9 @@ export function PageFilesView({
                 size="compact"
                 title={<span className="font-mono text-code">{file.path}</span>}
                 chips={
-                  changed.has(file.path) ? (
+                  marks?.has(file.path) ? (
+                    <ChangeTag change={marks.get(file.path) ?? "changed"} />
+                  ) : changed.has(file.path) ? (
                     <Badge size="sm" tone="info">
                       {t("pages.fileChanged")}
                     </Badge>
@@ -212,7 +222,23 @@ export function PageFilesView({
           </List>
         </nav>
         <div className={cn("min-h-0 min-w-0 flex-col @lg:flex", listShown ? "hidden" : "flex")}>
-          {content.status === "ready" ? (
+          {content.status === "diff" ? (
+            <>
+              <div className="flex shrink-0 items-center gap-2 border-b bg-card px-2 py-1">
+                <span className="shrink-0 @lg:hidden">{backToList}</span>
+                <span className="min-w-0 truncate font-mono text-caption text-muted-foreground">
+                  {open}
+                </span>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto pb-(--layout-page-end)">
+                <TextDiff
+                  data-testid="app-file-diff"
+                  {...(content.before === undefined ? {} : { before: content.before })}
+                  {...(content.after === undefined ? {} : { after: content.after })}
+                />
+              </div>
+            </>
+          ) : content.status === "ready" ? (
             <StoredFileView
               className="min-h-0 flex-1"
               path={open}

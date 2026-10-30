@@ -158,14 +158,15 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
   const workflowPath = `/w/${workspaceId}/workflows/${id}`;
 
   try {
-    // A draft that was never published: the bar says that, and not that it differs.
+    // A draft that was never published: the head says what a draft's calls do, and that
+    // nothing is live (DT-1b).
     await page.goto(workflowPath);
     const workflowPage = page.getByTestId("workflow-page");
     await expect(workflowPage.getByRole("heading", { level: 1 })).toHaveText(NAME);
     const bar = workflowPage.locator("[data-workflow-draft]");
     await expect(bar).toHaveAttribute("data-workflow-draft", "unpublished");
-    await expect(bar).toContainText("Draft · not published");
-    await expect(bar).not.toContainText("Draft differs from published");
+    await expect(bar).toContainText("Draft · reads live data · changes are simulated");
+    await expect(bar).toContainText("Not published yet");
     await expect(bar.getByRole("button", { name: "Discard", exact: true })).toHaveCount(0);
     await expect(chatAction(page)).toBeVisible();
     await shootSurface(page, "nav-2-workflow-draft-page", async () => {
@@ -257,12 +258,16 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     await expect(bar).toHaveAttribute("data-workflow-draft", "ahead");
     await expect(workflowPage.getByTestId("workflow-canvas")).toBeVisible();
 
-    // Back where "Edit with the agent" was pressed, the bar says that the draft differs.
+    // Back where "Edit with the agent" was pressed, the head names the live version and what
+    // the draft changed against it (DT-1b).
     await page.goBack();
     await expect(page).toHaveURL((url) => url.pathname === workflowPath && url.search === "");
     await expect(workflowPage.getByRole("heading", { level: 1 })).toHaveText(NAME);
     await expect(bar).toHaveAttribute("data-workflow-draft", "ahead");
-    await expect(bar).toContainText("Draft differs from published");
+    await expect(bar).toContainText("Draft · reads live data · changes are simulated");
+    await expect(bar.locator("[data-draft-live]")).toContainText(
+      /^Live: version 1, published by /u
+    );
     await expect(bar.getByRole("button", { name: "Publish", exact: true })).toBeVisible();
 
     // The member reads the published Workflow while the draft is ahead: neither is offered.
@@ -292,7 +297,8 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
     await page.reload();
     await expect(chatAction(page)).toHaveText(/^Chat/u);
-    await expect(bar).toContainText("Entwurf weicht von der veröffentlichten Version ab");
+    await expect(bar).toContainText("Entwurf · liest Live-Daten · Änderungen werden simuliert");
+    await expect(bar.locator("[data-draft-live]")).toContainText(/^Live: Version 1/u);
     await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "en"));
 
     // In a plain conversation of the builder's own workspace, a read of an asset moves

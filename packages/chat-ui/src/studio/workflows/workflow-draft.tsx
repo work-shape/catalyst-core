@@ -1,10 +1,20 @@
 import { useState, type ReactNode } from "react";
 import { ApiError } from "@work-shape/catalyst-api-client";
-import { Banner, Button, ConfirmDialog, InlineError } from "@work-shape/catalyst-ui";
+import {
+  Banner,
+  Button,
+  ChangeList,
+  ConfirmDialog,
+  DraftHeader,
+  InlineError
+} from "@work-shape/catalyst-ui";
 import type { DraftDecision } from "../build-area/build-data";
 import { instanceSentence, PendingApprovalError } from "../build-area/build-refusals";
 import { useOfferDockPageChat } from "../../shared/dock-page-chat";
+import { draftLiveOf, draftTestTargetsOf, type LiveVersionFacts } from "../draft-head";
 import { useTranslation } from "../../shared/i18n";
+import type { DraftChanges } from "./draft-changes";
+import type { OpenRoute } from "./workflows-frame";
 import {
   narrativeHolds,
   PublishDetails,
@@ -19,7 +29,12 @@ import {
   workflowRightsOn,
   type WorkflowDraftState
 } from "./workflow-model";
-import type { WorkflowPublishStoreView, WorkflowStepView, WorkflowView } from "./workflow-views";
+import type {
+  WorkflowPublishChangesView,
+  WorkflowPublishStoreView,
+  WorkflowStepView,
+  WorkflowView
+} from "./workflow-views";
 import { useWorkflowsHost } from "./workflows-host";
 import { WorkflowPublishRights } from "./workflow-publish-rights";
 import { workflowPublishRefusal } from "./workflow-publish-rights-model";
@@ -113,6 +128,14 @@ export function EditRefusedBanner({
 /** The bar of a draft as the page of a Workflow shows it. */
 export interface WorkflowDraftBarState {
   state: WorkflowDraftState;
+  /** The live version, as the instance names it. Absent while unknown, or never published. */
+  liveVersion?: LiveVersionFacts;
+  /** The Data Stores whose test copy the draft's calls reach (DT-2). */
+  testCopies?: readonly { name: string; title: string }[];
+  /** How the saved draft differs from the published revision, step by step (WF-EDIT-1). */
+  changes?: DraftChanges;
+  /** Opens a test copy's store. Absent: the store is named without a way to it. */
+  onOpenRoute?: OpenRoute;
   /** Absent for a reader who may not write the Workflow. */
   onTest?: () => void;
   /** Absent for a reader who may not publish Workflows. */
@@ -121,20 +144,62 @@ export interface WorkflowDraftBarState {
   onDiscard?: () => void;
 }
 
+/** How many steps of the draft are new, changed and removed, in one sentence; none: nothing. */
+export function draftChangesSentence(
+  changes: DraftChanges | undefined,
+  locale: string,
+  t: ReturnType<typeof useTranslation>["t"]
+): string | undefined {
+  if (changes === undefined) return undefined;
+  const counts = { new: 0, changed: 0, removed: 0 };
+  for (const change of changes.steps.values()) counts[change] += 1;
+  const number = (count: number) => new Intl.NumberFormat(locale).format(count);
+  const parts = [
+    counts.new === 0
+      ? undefined
+      : counts.new === 1
+        ? t("workflows.draft.changesNewOne")
+        : t("workflows.draft.changesNew", { count: number(counts.new) }),
+    counts.changed === 0
+      ? undefined
+      : counts.changed === 1
+        ? t("workflows.draft.changesChangedOne")
+        : t("workflows.draft.changesChanged", { count: number(counts.changed) }),
+    counts.removed === 0
+      ? undefined
+      : counts.removed === 1
+        ? t("workflows.draft.changesRemovedOne")
+        : t("workflows.draft.changesRemoved", { count: number(counts.removed) })
+  ].filter((part) => part !== undefined);
+  if (parts.length === 0) return undefined;
+  return t("workflows.draft.changes", {
+    list: new Intl.ListFormat(locale, { type: "conjunction" }).format(parts)
+  });
+}
+
 /**
- * Says that what the page draws is a draft that is not the published revision, and offers to
- * test it, publish it or discard it to whoever may. A draft of a Workflow that was never
- * published is said as that: there is no published revision it could differ from.
+ * The head of a Workflow's draft (DT-1b): what a test run of it does, the stores whose test
+ * copy it reaches, the live version or that none is, and what the draft changes against it,
+ * with Test run, Publish and Discard for whoever may. The canvas under it marks each change.
  */
-export function WorkflowDraftBar({ state, onTest, onPublish, onDiscard }: WorkflowDraftBarState) {
-  const { t } = useTranslation();
+export function WorkflowDraftBar({
+  state,
+  liveVersion,
+  testCopies = [],
+  changes,
+  onOpenRoute,
+  onTest,
+  onPublish,
+  onDiscard
+}: WorkflowDraftBarState) {
+  const { locale, t } = useTranslation();
+  const changed = draftChangesSentence(changes, locale, t);
   return (
-    <Banner
-      tone="info"
-      layout="page"
-      className="shrink-0"
+    <DraftHeader
       data-workflow-draft={state}
-      title={t(state === "ahead" ? "workflows.draft.ahead" : "workflows.draft.unpublished")}
+      live={draftLiveOf(state === "ahead", liveVersion, locale, t)}
+      targets={draftTestTargetsOf(testCopies, onOpenRoute)}
+      {...(changed === undefined ? {} : { changes: changed })}
       action={
         onTest === undefined && onPublish === undefined && onDiscard === undefined ? undefined : (
           <>
@@ -156,9 +221,7 @@ export function WorkflowDraftBar({ state, onTest, onPublish, onDiscard }: Workfl
           </>
         )
       }
-    >
-      {t(state === "ahead" ? "workflows.draft.aheadBody" : "workflows.draft.unpublishedBody")}
-    </Banner>
+    />
   );
 }
 
@@ -233,6 +296,8 @@ export function useWorkflowDraft(
   return {
     bar: {
       state,
+      ...(draft.liveVersion === undefined ? {} : { liveVersion: draft.liveVersion }),
+      ...(draft.testCopies === undefined ? {} : { testCopies: draft.testCopies }),
       ...(writes !== undefined && rights.publish ? { onPublish: ask("publish") } : {}),
       ...(writes !== undefined && rights.write && state === "ahead"
         ? { onDiscard: ask("discard") }
@@ -248,6 +313,12 @@ export function useWorkflowDraft(
           {...(starts === undefined ? {} : { starts })}
           {...(draft.publishQuestion ? { question: draft.publishQuestion } : {})}
           {...(draft.publishDataStores ? { stores: draft.publishDataStores } : {})}
+          {...(draft.publishChanges
+            ? {
+                changing: draft.publishChanges.changing,
+                hostsAdded: draft.publishChanges.hostsAdded
+              }
+            : {})}
           rights={<WorkflowPublishRights workflow={workflow} />}
           narrative={narrative}
           loading={busy}
@@ -292,6 +363,8 @@ export function DraftChangeDialog({
   starts,
   question = [],
   stores = [],
+  changing = [],
+  hostsAdded = [],
   rights,
   narrative = NO_NARRATIVE,
   loading,
@@ -311,6 +384,10 @@ export function DraftChangeDialog({
   question?: readonly string[];
   /** The Data Stores the publish publishes first, with the changes to their tables (LIVE-2). */
   stores?: readonly WorkflowPublishStoreView[];
+  /** The steps that change something the publish makes live, each new or changed (DT-1b). */
+  changing?: WorkflowPublishChangesView["changing"];
+  /** The hosts outside the instance the publish lets its steps call that live did not. */
+  hostsAdded?: WorkflowPublishChangesView["hostsAdded"];
   /** What the technical accounts of the publish lack, and the step that gives it. */
   rights?: ReactNode;
   /** The instance's sentence on the publish, read for `revision`. */
@@ -344,6 +421,29 @@ export function DraftChangeDialog({
             <li key={line}>{line}</li>
           ))}
         </ul>
+      ) : null}
+      {changing.length > 0 ? (
+        <div className="mt-3 grid gap-1.5" data-testid="workflow-publish-changing">
+          <p className="text-label text-foreground">{t("workflows.draft.publishChanging")}</p>
+          <ChangeList
+            aria-label={t("workflows.draft.publishChanging")}
+            items={changing.map((step) => ({
+              id: step.label,
+              label: step.label,
+              change: step.change
+            }))}
+          />
+        </div>
+      ) : null}
+      {hostsAdded.length > 0 ? (
+        <div className="mt-3 grid gap-1.5" data-testid="workflow-publish-hosts">
+          <p className="text-label text-foreground">{t("workflows.draft.publishHosts")}</p>
+          <ChangeList
+            mono
+            aria-label={t("workflows.draft.publishHosts")}
+            items={hostsAdded.map((host) => ({ id: host, label: host, change: "new" }))}
+          />
+        </div>
       ) : null}
       {rights}
     </>

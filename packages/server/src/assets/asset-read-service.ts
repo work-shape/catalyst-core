@@ -4,7 +4,13 @@ import { workflowCallers } from "../workflows/workflow-callers";
 import { agentDependencyAvailability } from "./agent-dependency-availability";
 import { appAudienceReview } from "../apps/app-audience";
 import { publishHandoverGate } from "./data-handover";
-import { appWorkflowClosure, storesPendingWith, workflowPending } from "../apps/app-closure";
+import {
+  appWorkflowClosure,
+  draftTestTargets,
+  storesPendingWith,
+  workflowPending
+} from "../apps/app-closure";
+import { publishChangesOf } from "../approvals/publish-approval";
 import { APP_ASSET_KIND } from "../apps/app-kind";
 import type { AppAudience, AuditActor } from "@work-shape/catalyst-core";
 import {
@@ -444,9 +450,37 @@ export class AssetReadWorkflow {
         : undefined;
     const saveApproval = await this.saveApproval(call, target);
     // The version the draft's head names: the newest publication, while something is live.
+    const draftsCalls = target.kind.kind === "app" || target.kind.kind === "workflow";
     const liveVersion =
-      target.kind.kind === "app" && !publishedOnly && asset.publishedRevision !== undefined
+      draftsCalls && !publishedOnly && asset.publishedRevision !== undefined
         ? await this.liveVersion(asset.id, asset.publishedRevision)
+        : undefined;
+    const effectOf = async (operation: string) =>
+      (await this.options.operationCalls?.registry.resolve(operation))?.effect;
+    // What a publish of the revision read changes against the live one, for who may publish
+    // it: the one list the approval item shows too (DT-1b).
+    const readRevision = content.contentRevision ?? asset.revision;
+    const publishChanges =
+      draftsCalls &&
+      !publishedOnly &&
+      allowed.includes("publish") &&
+      target.kind.publishReach !== undefined &&
+      readRevision !== asset.publishedRevision
+        ? await publishChangesOf(
+            target.kind.publishReach(content.config, asset.publishedConfig ?? undefined),
+            effectOf
+          )
+        : undefined;
+    // The stores whose test copy the draft's calls reach, for who may write the draft: its
+    // head names them (DT-1b, DT-2).
+    const draftTestCopies =
+      draftsCalls && !publishedOnly && !address.revision && allowed.includes("write")
+        ? await draftTestTargets(
+            this.options,
+            { kind: target.kind.kind, scope: asset.scope, config: content.config },
+            call.access,
+            effectOf
+          )
         : undefined;
     // Read-only presence: existing checkout/conversation retention and region, no new payload
     // or audit record. Only a writer reads it; the store names current workspace co-members.
@@ -486,6 +520,8 @@ export class AssetReadWorkflow {
           }
         : {}),
       ...(liveVersion ? { liveVersion } : {}),
+      ...(publishChanges ? { publishChanges } : {}),
+      ...(draftTestCopies?.length ? { draftTestCopies } : {}),
       ...(target.kind.kind === "app" && !publishedOnly && asset.publishedRevision !== undefined
         ? { draftChangedSinceLive: asset.revision !== asset.publishedRevision }
         : {}),

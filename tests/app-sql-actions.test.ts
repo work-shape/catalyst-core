@@ -297,6 +297,70 @@ describe("a statement of an App on a Data Store", () => {
     await t.dropTestCopy();
   });
 
+  // DT-1b, Apps check 45: the read of a draft names, to whoever may publish it, each changing
+  // action the publish makes live, new or changed, and the test copy its changes go to.
+  it("names what a publish of the draft changes and the test copy the draft writes to", async () => {
+    const name = "findings-reach";
+    await publishApp(name, { marker: "live" });
+    // The draft's `add_finding` no longer writes the amount; `list_findings` reads and stays.
+    const files = findingsApp({ id: name, marker: "draft" }).map((file) =>
+      file.path === "actions/add_finding.sql" && "text" in file
+        ? {
+            ...file,
+            text: file.text
+              .replace("-- @param amount number optional\n", "")
+              .replace(", amount)", ")")
+              .replace(", $amount)", ")")
+          }
+        : file
+    );
+    expectStatus(await t.putApp(t.admin.id, name, files), 200);
+    const read = async (userId: string) => {
+      const response = await t.call(userId, "assets.get", {
+        params: { kind: "app", name },
+        query: { workspaceId: t.workspaceId }
+      });
+      expectStatus(response, 200);
+      return z
+        .object({
+          publishChanges: z.unknown().optional(),
+          draftTestCopies: z
+            .array(z.object({ name: z.string(), copy: z.string() }).passthrough())
+            .optional()
+        })
+        .passthrough()
+        .parse(response.json());
+    };
+
+    const before = await read(t.admin.id);
+    expect(before.publishChanges).toEqual({
+      changing: [{ label: "add_finding", change: "changed" }],
+      hostsAdded: []
+    });
+    // No copy yet: the draft's first change makes it, so the head names it already.
+    expect(before.draftTestCopies).toMatchObject([{ name: "findings", copy: "made_on_change" }]);
+
+    const draft = await t.openApp(t.admin.id, "draft", name);
+    const made = await t.callAction(
+      t.admin.id,
+      draft,
+      "add_finding",
+      {
+        run: "run-reach",
+        client: "client-reach",
+        rule: "vat-rate",
+        revision: 2,
+        severity: "info"
+      },
+      { "idempotency-key": "dt-1b-reach" }
+    );
+    expectStatus(made, 200);
+    expect((await read(t.admin.id)).draftTestCopies).toMatchObject([
+      { name: "findings", copy: "present" }
+    ]);
+    await t.dropTestCopy();
+  });
+
   it("asks the publisher of an App for the right on the store its actions use, and a writer of a draft for their own", async () => {
     // `pia` builds and publishes Apps by her role, which gives the rights on stores too: she
     // is denied them on this store, first both and then one.

@@ -326,6 +326,12 @@ export type CatalogueCategory = (typeof CATALOGUE_CATEGORIES)[number];
 export const OPERATION_TARGETS = ["live", "test", "dry_run"] as const;
 export type OperationTarget = (typeof OPERATION_TARGETS)[number];
 
+/** The test target of an asset a call of a draft reaches (ADR-0031): there, or made by a change. */
+export const DRAFT_TEST_TARGETS = ["present", "made_on_change"] as const;
+
+/** How a changing call a publish makes live differs from the live revision (DT-1b). */
+export const PUBLISH_CHANGE_KINDS = ["new", "changed"] as const;
+
 export const OPERATION_RUN_STATUSES = [
   "running",
   "pending_confirmation",

@@ -47240,6 +47240,69 @@
       "Asset": {
         "type": "object",
         "properties": {
+          "publishChanges": {
+            "type": "object",
+            "properties": {
+              "changing": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "change": {
+                      "type": "string",
+                      "enum": [
+                        "new",
+                        "changed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "label",
+                    "change"
+                  ]
+                }
+              },
+              "hostsAdded": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "changing",
+              "hostsAdded"
+            ]
+          },
+          "draftTestCopies": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "copy": {
+                  "type": "string",
+                  "enum": [
+                    "present",
+                    "made_on_change"
+                  ]
+                }
+              },
+              "required": [
+                "name",
+                "title",
+                "copy"
+              ]
+            }
+          },
           "liveVersion": {
             "type": "object",
             "properties": {

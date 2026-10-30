@@ -39,7 +39,8 @@ type Translate = CanvasText["t"];
 
 /** What the canvas draws of one run. */
 export interface CanvasRun {
-  run: Pick<WorkflowRunView, "startedBy" | "createdAt" | "startedAt" | "ended" | "runsAs">;
+  run: Pick<WorkflowRunView, "startedBy" | "createdAt" | "startedAt" | "ended" | "runsAs"> &
+    Partial<Pick<WorkflowRunView, "test">>;
   /** The step runs outside every item of a loop: at most one per step of the definition. */
   stepRuns: readonly WorkflowStepRunView[];
   now: Date;
@@ -476,7 +477,7 @@ export function workflowGraph(
   const ran = (
     step: WorkflowStepView,
     place: Place
-  ): Partial<Pick<FlowGraphNode, "status" | "footer" | "meta" | "title">> => {
+  ): Partial<Pick<FlowGraphNode, "status" | "footer" | "meta" | "title" | "target">> => {
     if (run === undefined) {
       return {};
     }
@@ -519,6 +520,8 @@ export function workflowGraph(
         : undefined;
     return {
       status,
+      // DT-1b: in a test run every call says where it went, Live, Test or Simulated.
+      ...(run.run.test === true && stepRun.target !== undefined ? { target: stepRun.target } : {}),
       // C5: the sentence of the failure's reason, until the contract carries one per step.
       ...(stepRun.failure === undefined
         ? stepRun.status === "cancelled"

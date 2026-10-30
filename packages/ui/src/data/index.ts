@@ -9,6 +9,7 @@ export {
   type ChartSeries
 } from "./chart-data";
 export type { ChartType } from "./chart-engine";
+export { ChangeList, type ChangeListItem, type ChangeListProps } from "./change-list";
 export { CodeBlock, type CodeBlockProps, type CodeToken } from "./code-block";
 export { CodeFile, type CodeFileProps } from "./code-file";
 export { CommandLine, type CommandLineProps } from "./command-line";
@@ -43,6 +44,7 @@ export {
 } from "./steps";
 export { LevelMeter, type LevelMeterProps, type LevelMeterScale } from "./level-meter";
 export { QrCode, type QrCodeProps } from "./qr-code";
+export { diffLines, TextDiff, type DiffLine, type TextDiffProps } from "./text-diff";
 export { Timeline, type TimelineProps, type TimelineRow } from "./timeline";
 export { ListMarker, TimeMarker, type ListMarkerProps, type TimeMarkerProps } from "./time-marker";
 export {
