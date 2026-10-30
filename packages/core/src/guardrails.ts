@@ -301,9 +301,17 @@ export interface GuardrailStore {
   listShippedGuardrailSwitches(input: {
     clientInstanceId: ClientInstanceId;
   }): Promise<ShippedGuardrailSwitch[]>;
-  /** Switches one shipped guardrail on or off. */
+  /**
+   * Switches one shipped guardrail on or off, or sets whether it asks on every publish, in one
+   * statement: a field left out keeps what it was, so two admins switching the two fields at
+   * once lose neither. A guardrail nobody switched before is on and asks only when widening.
+   */
   switchShippedGuardrail(
-    input: { clientInstanceId: ClientInstanceId } & ShippedGuardrailSwitch
+    input: { clientInstanceId: ClientInstanceId } & Omit<
+      ShippedGuardrailSwitch,
+      "enabled" | "alwaysAsk"
+    > &
+      Partial<Pick<ShippedGuardrailSwitch, "enabled" | "alwaysAsk">>
   ): Promise<ShippedGuardrailSwitch>;
   /** Deletes the hits older than the audit retention. Answers how many it deleted. */
   deleteHitsOlderThan(input: { clientInstanceId: ClientInstanceId; days: number }): Promise<number>;

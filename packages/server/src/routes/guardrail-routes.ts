@@ -158,18 +158,23 @@ export function registerGuardrailRoutes(route: Route, options: ChatServerOptions
           { exposeMessage: true }
         );
       }
-      // Left out, the setting stays as it was.
-      const alwaysAsk =
-        input.alwaysAsk ??
-        (await options.stores.guardrails.listShippedGuardrailSwitches({ clientInstanceId })).find(
-          (entry) => entry.name === guardrail.name
-        )?.alwaysAsk ??
-        false;
+      if (input.enabled === undefined && input.alwaysAsk === undefined) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          "Say whether the Guardrail is on (enabled), or whether it asks on every publish (alwaysAsk)",
+          { reason: "nothing_to_switch" },
+          { exposeMessage: true }
+        );
+      }
+      // Each field left out stays as it was; the store writes the given ones in one statement.
+      const changed = {
+        ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
+        ...(input.alwaysAsk === undefined ? {} : { alwaysAsk: input.alwaysAsk })
+      };
       const switched = await options.stores.guardrails.switchShippedGuardrail({
         clientInstanceId,
         name: guardrail.name,
-        enabled: input.enabled,
-        alwaysAsk,
+        ...changed,
         switchedBy: { id: context.actor.id, label: context.actor.displayLabel },
         switchedAt: (options.operations?.now?.() ?? new Date()).toISOString()
       });
@@ -181,8 +186,7 @@ export function registerGuardrailRoutes(route: Route, options: ChatServerOptions
         metadata: {
           kind: GUARDRAIL_ASSET_KIND,
           name: guardrail.name,
-          enabled: input.enabled,
-          ...(guardrail.asksOnlyWhenWidening ? { alwaysAsk } : {})
+          ...changed
         }
       });
       return shippedView(guardrail, switched, true);

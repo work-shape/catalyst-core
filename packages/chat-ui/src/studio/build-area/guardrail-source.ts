@@ -55,14 +55,11 @@ export function useShippedGuardrails(
     retry: false
   });
   const change = useMutation({
-    mutationFn: async (input: { name: string; enabled: boolean; alwaysAsk?: boolean }) => {
-      const outcome = await client.guardrails.switch_shipped({
-        params: { name: input.name },
-        body: {
-          enabled: input.enabled,
-          ...(input.alwaysAsk === undefined ? {} : { alwaysAsk: input.alwaysAsk })
-        }
-      });
+    mutationFn: async (
+      input: { name: string } & ({ enabled: boolean } | { alwaysAsk: boolean })
+    ) => {
+      const { name, ...body } = input;
+      const outcome = await client.guardrails.switch_shipped({ params: { name }, body });
       if (outcome.status !== "done") throw new PendingApprovalError();
       return outcome.output;
     },
@@ -79,17 +76,11 @@ export function useShippedGuardrails(
           (error: unknown) => instanceSentence(error, t) ?? ""
         ),
       setAlwaysAsk: (name, alwaysAsk) =>
-        change
-          .mutateAsync({
-            name,
-            // Only a guardrail that is on asks; the setting keeps it on.
-            enabled: true,
-            alwaysAsk
-          })
-          .then(
-            () => undefined,
-            (error: unknown) => instanceSentence(error, t) ?? ""
-          )
+        // Only this setting: whether the guardrail is on stays as another admin left it.
+        change.mutateAsync({ name, alwaysAsk }).then(
+          () => undefined,
+          (error: unknown) => instanceSentence(error, t) ?? ""
+        )
     };
   }
   if (query.error && !query.isFetching) {

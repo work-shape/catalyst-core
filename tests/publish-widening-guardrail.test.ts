@@ -88,7 +88,7 @@ describe("GR-PUB-2: the default publish guardrail asks only when a publish widen
   const setAlwaysAsk = (userId: string, alwaysAsk: boolean) =>
     t.call(userId, "guardrails.switch_shipped", {
       params: { name: PUBLISH_APPROVAL_GUARDRAIL.name },
-      payload: { enabled: true, alwaysAsk }
+      payload: { alwaysAsk }
     });
   const requests = () =>
     t.stores.approvals.countApprovalRequests({ clientInstanceId, kinds: ["app_publish"] });
@@ -179,7 +179,6 @@ describe("GR-PUB-2: the default publish guardrail asks only when a publish widen
           actor: expect.objectContaining({ userId: t.admin.id }),
           metadata: expect.objectContaining({
             name: PUBLISH_APPROVAL_GUARDRAIL.name,
-            enabled: true,
             alwaysAsk: true
           })
         })
@@ -194,14 +193,28 @@ describe("GR-PUB-2: the default publish guardrail asks only when a publish widen
           alwaysAsk: true
         })
       ]);
-      // Switching the guardrail off and on again keeps the setting.
-      expectStatus(
-        await t.call(t.admin.id, "guardrails.switch_shipped", {
+      // Each switch writes only its own field: switching the guardrail off and on again keeps
+      // the setting, and the setting leaves the guardrail as it was.
+      const switchTo = (payload: Record<string, boolean>) =>
+        t.call(t.admin.id, "guardrails.switch_shipped", {
           params: { name: PUBLISH_APPROVAL_GUARDRAIL.name },
-          payload: { enabled: true }
-        }),
-        200
-      );
+          payload
+        });
+      const switched = z.looseObject({ enabled: z.boolean(), alwaysAsk: z.boolean() });
+      expect(switched.parse((await switchTo({ enabled: false })).json())).toMatchObject({
+        enabled: false,
+        alwaysAsk: true
+      });
+      expect(switched.parse((await switchTo({ alwaysAsk: true })).json())).toMatchObject({
+        enabled: false,
+        alwaysAsk: true
+      });
+      expectStatus(await switchTo({ enabled: true }), 200);
+      const nothing = await switchTo({});
+      expectStatus(nothing, 422);
+      expect(errorSchema.parse(nothing.json()).error.details).toMatchObject({
+        reason: "nothing_to_switch"
+      });
 
       const response = await t.publish(t.kai.id, "always", 2);
 

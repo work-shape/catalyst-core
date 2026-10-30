@@ -174,7 +174,8 @@ export const shippedGuardrailsSchema = z.object({ items: z.array(shippedGuardrai
 
 export const switchShippedGuardrailRequestSchema = z
   .object({
-    enabled: z.boolean(),
+    /** Left out, it stays as it was. One of `enabled` and `alwaysAsk` is required. */
+    enabled: z.boolean().optional(),
     /**
      * Only on a guardrail that asks only when a publish widens reach: true asks on every
      * publish. Left out, it stays as it was.

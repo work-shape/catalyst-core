@@ -58,7 +58,7 @@ Every instance carries one guardrail of the platform, **Publishing needs an inst
 - An instance admin can tick **Ask on every publish** ("Bei jeder Veröffentlichung fragen") on that card: then every new version waits, whether it widens or not. Ticking and unticking it is recorded in the audit log.
 - An instance admin can switch it off on that card, after a question. Then whoever may publish makes a new version live with their own click. Switching it off and on is recorded in the audit log, and an update of the platform never switches it back on.
 
-Whatever the switch says, a new version goes live only on a person's click. `--yes` on the CLI publishes nothing by itself: the publish waits in your own Inbox, which nobody else sees, and your **Allow** there is your click on Publish. An instance approver's Allow makes it live at once; anyone else's files the item above for the instance admins. A publish from an agent or another program publishes nothing.
+Whatever the switch says, a new version goes live only on a person's click. `--yes` on the CLI publishes nothing by itself: the publish waits in your own Inbox, which nobody else sees, and your **Allow** there is your click on Publish. An instance approver's Allow makes it live at once; anyone else's files the item above for the instance admins. A publish from an agent publishes nothing by itself: it waits for its person's click. A personal API key acts as its person: its `assets.publish` without the `Catalyst-Unattended` header makes a version that widens nothing live at once, as the CLI's own publish after its question does. A call with the header, from a program nobody watches, is held in its person's Inbox like `--yes`.
 
 ## Where guardrails come from
 

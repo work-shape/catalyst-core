@@ -51,22 +51,29 @@ export function createPostgresGuardrailsStore(db: PostgresConnection): Guardrail
       switchedBy,
       switchedAt
     }) {
-      const values = {
-        enabled,
-        alwaysAsk,
+      const switched = {
+        ...(enabled === undefined ? {} : { enabled }),
+        ...(alwaysAsk === undefined ? {} : { alwaysAsk }),
         switchedById: switchedBy.id,
         switchedByLabel: switchedBy.label,
         switchedAt: new Date(switchedAt)
       };
+      // One upsert: a field left out keeps the stored value, or its default on a first switch.
       const [row] = await db
         .insert(shippedGuardrailSwitches)
-        .values({ clientInstanceId, guardrailName: name, ...values })
+        .values({
+          clientInstanceId,
+          guardrailName: name,
+          enabled: true,
+          alwaysAsk: false,
+          ...switched
+        })
         .onConflictDoUpdate({
           target: [
             shippedGuardrailSwitches.clientInstanceId,
             shippedGuardrailSwitches.guardrailName
           ],
-          set: values
+          set: switched
         })
         .returning();
       if (!row) throw new Error(`Shipped guardrail '${name}' was not switched`);
