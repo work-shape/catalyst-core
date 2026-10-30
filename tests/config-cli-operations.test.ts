@@ -296,6 +296,79 @@ describe("write-only CLI secret input", () => {
     expect(JSON.stringify(result)).not.toContain(secret);
   });
 
+  it("sets the test credential with --test, over its own version, and never touches the live secret", async () => {
+    const secret = generateTestSecret();
+    const writes: { path: string; method: string; body: unknown }[] = [];
+    const testCredentialPath = apiOperations["connections.set_test_credential"].path.replace(
+      ":name",
+      "outside"
+    );
+    const fetchImpl = apiFetch(async (request) => {
+      const path = new URL(request.url).pathname;
+      if (request.method === "GET") {
+        if (path.split("/").includes("assets")) return secretSetRead(request, 7);
+        return Response.json({
+          ...connectionDetail(7),
+          testCredential: { state: "set", version: 2, takesEndpoint: true }
+        });
+      }
+      writes.push({
+        path,
+        method: request.method,
+        body: request.method === "DELETE" ? undefined : await request.json()
+      });
+      return request.method === "DELETE"
+        ? Response.json({ state: "not_set" })
+        : Response.json({ state: "set", version: 3 });
+    });
+    const set = await run(
+      [
+        "connection",
+        "secret",
+        "set",
+        "outside",
+        "--test",
+        "--endpoint",
+        "https://sandbox.example.com/api",
+        "--account",
+        "Sandbox"
+      ],
+      { fetchImpl, stdin: Readable.from([secret]) }
+    );
+    expect(set).toEqual({ code: 0, out: '{\n  "state": "set",\n  "version": 3\n}\n', err: "" });
+    const removed = await run(["connection", "secret", "remove", "outside", "--test"], {
+      fetchImpl
+    });
+    expect(removed.code).toBe(0);
+    expect(writes).toEqual([
+      {
+        path: testCredentialPath,
+        method: "PUT",
+        body: {
+          value: secret,
+          expectedVersion: 2,
+          expectedRevision: 3,
+          endpoint: "https://sandbox.example.com/api",
+          account: "Sandbox"
+        }
+      },
+      { path: testCredentialPath, method: "DELETE", body: undefined }
+    ]);
+    expect(JSON.stringify([set, removed])).not.toContain(secret);
+  });
+
+  it("refuses the test credential's flags without --test, and a remove of the live secret", async () => {
+    const fetchImpl = vi.fn<typeof fetch>();
+    for (const args of [
+      ["connection", "secret", "set", "outside", "--endpoint", "https://sandbox.example.com"],
+      ["connection", "secret", "remove", "outside"],
+      ["connection", "test", "outside", "--test"]
+    ]) {
+      expect((await run(args, { fetchImpl })).code).toBe(2);
+    }
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it("reuses the secret write idempotency key after a dropped connection", async () => {
     const secret = generateTestSecret();
     const keys: (string | null)[] = [];

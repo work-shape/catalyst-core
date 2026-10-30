@@ -253,6 +253,37 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
     }
   });
 
+  route.operation(apiOperations["connections.set_test_credential"], {
+    authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.write, input.name),
+    resource: connectionResource,
+    // A test credential that was replaced cannot be brought back.
+    inputWithoutSecrets: (input) => ({ ...input, value: SECRET_MARK }),
+    module: CONNECTIONS_MODULE,
+    execute: (input, context) =>
+      required().setTestCredential(
+        input.name,
+        {
+          value: input.value,
+          ...(input.endpoint === undefined ? {} : { endpoint: input.endpoint }),
+          ...(input.account === undefined ? {} : { account: input.account }),
+          expectedVersion: input.expectedVersion,
+          expectedRevision: input.expectedRevision
+        },
+        { actor: auditActorFromIdentity(context.actor), correlationId: context.correlationId }
+      )
+  });
+  route.operation(apiOperations["connections.remove_test_credential"], {
+    authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.write, input.name),
+    resource: connectionResource,
+    // The secret is deleted: setting it again is the way back.
+    module: CONNECTIONS_MODULE,
+    execute: (input, context) =>
+      required().removeTestCredential(input.name, {
+        actor: auditActorFromIdentity(context.actor),
+        correlationId: context.correlationId
+      })
+  });
+
   route.operation(apiOperations["connections.discover"], {
     authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.write, input.name),
     resource: connectionResource,

@@ -73,6 +73,8 @@ interface PageInput {
   entries?: CatalogueEntryOffer[];
   /** The settings page's context, which the reader's own sign-in of a personal one reads. */
   settings?: boolean;
+  /** The source writes the test credential. Yes unless it says no. */
+  testCredentialWrites?: boolean;
 }
 
 /** The page at the Connection's address, inside the frame, with fixed answers. */
@@ -86,6 +88,9 @@ function renderPage(input: PageInput = {}): string {
     useHolders: () => input.holders ?? { status: "hidden" },
     useCatalogueEntries: () => input.entries ?? [],
     setSecret: async () => undefined,
+    ...(input.testCredentialWrites === false
+      ? {}
+      : { setTestCredential: async () => undefined, removeTestCredential: async () => undefined }),
     discover: async () => undefined,
     readDetail: async (name) => connectionDetail(name, input.detail),
     test: async () => testResult("ready"),
@@ -306,6 +311,53 @@ describe("Connection page", () => {
     });
     expect(offen).toContain(">Nicht nötig<");
     expect(offen).toContain("Das externe System verlangt keine Zugangsdaten.");
+  });
+
+  // DT-3: the test credential of a shared Connection, never its value.
+  it("shows the test credential's state, account, address and who set it, and offers its writes to a writer", () => {
+    const set = renderPage({
+      detail: {
+        testCredential: {
+          state: "set",
+          version: 3,
+          account: "Sandbox tenant",
+          endpoint: "https://sandbox.example.test/mcp",
+          setAt: "2026-10-20T09:00:00.000Z",
+          takesEndpoint: true
+        }
+      }
+    });
+    expect(set).toContain("data-connection-test-credential");
+    expect(set).toContain('data-test-credential-state="set"');
+    expect(set).toContain("Sandbox tenant");
+    expect(set).toContain("https://sandbox.example.test/mcp");
+    expect(set).toContain(">Enter a new test credential<");
+    expect(set).toContain(">Remove test credential<");
+
+    const notSet = renderPage({
+      detail: { testCredential: { state: "not_set", takesEndpoint: true } },
+      locale: "de"
+    });
+    expect(notSet).toContain(">Testzugang<");
+    expect(notSet).toContain(">Nicht gesetzt<");
+    expect(notSet).toContain(">Testzugang eingeben<");
+    expect(notSet).not.toContain(">Testzugang entfernen<");
+
+    const stale = renderPage({
+      detail: { testCredential: { state: "stale", version: 1, takesEndpoint: true } }
+    });
+    expect(stale).toContain("data-test-credential-stale");
+    expect(stale).toContain("they never use the live key instead");
+
+    // A reader who may not change the Connection sees the state and no write.
+    const readOnly = renderPage({
+      mayTest: false,
+      detail: { testCredential: { state: "set", version: 1, takesEndpoint: true } }
+    });
+    expect(readOnly).toContain('data-test-credential-state="set"');
+    expect(readOnly).not.toContain("data-test-credential-open");
+    // A Connection that takes none has no section.
+    expect(renderPage()).not.toContain("data-connection-test-credential");
   });
 
   it("says each recorded state in one sentence, in English and in German", () => {

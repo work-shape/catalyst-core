@@ -698,7 +698,35 @@ function idempotencyKeyOf(
  * run to read and no recorder.
  */
 export type ConnectionCallContext = Pick<OperationExecutionContext, "runtime" | "idempotencyKey"> &
-  Partial<Pick<OperationExecutionContext, "runId" | "audit" | "actor" | "origin" | "byAppAction">>;
+  Partial<
+    Pick<
+      OperationExecutionContext,
+      "runId" | "audit" | "actor" | "origin" | "byAppAction" | "target"
+    >
+  >;
+
+/**
+ * The test credential a call of a draft goes to, where `runOperation()` sent it there (target
+ * `test`, ADR-0031): read for each attempt, so a rotation in between is used and a removal
+ * refuses. Without one the call is refused with `test_target_missing`; it never falls back to
+ * the live credential. Nothing for any other call, which never reaches the test credential.
+ */
+async function testCredentialOf(
+  deps: ConnectionOperationSourceDeps,
+  connection: StoredConnection,
+  context: ConnectionCallContext
+): Promise<OpenConnectorContextInput["test"]> {
+  if (context.target !== "test") return undefined;
+  const stored = await deps.stores.connections.getConnectionTestCredential({
+    clientInstanceId: deps.clientInstanceId,
+    connectionAssetId: connection.assetId
+  });
+  if (!stored) throw connectionCallError("test_target_missing");
+  return {
+    secretHandle: stored.secretHandle,
+    ...(stored.endpoint === undefined ? {} : { endpoint: stored.endpoint })
+  };
+}
 
 /**
  * Refuses a call an App action makes of a Connection that sends person context, before
@@ -888,8 +916,14 @@ async function call(
     let secret: string | undefined;
     /** Opens the context of the call; `refused` names a token a 401 refused. */
     const open = async (refused?: string): Promise<ConnectorContext> => {
+      const test = await current(
+        testCredentialOf(deps, connection, context),
+        aborted.promise,
+        deadline.signal
+      );
       // Egress first, then the credential: `openConnectorContext` keeps that order.
       const opening = openConnectorContext({
+        ...(test === undefined ? {} : { test }),
         type,
         ...(connection.config.credentialMode === "user"
           ? {
@@ -979,7 +1013,8 @@ async function call(
       if (reason === "connection_needs_reconnect" && lacksScope(caught)) {
         error = await withoutGrantedScopes(deps, connection, context, caught);
         await recordMissingScope(connection, context, missingScopesOf(errorDetails(error), secret));
-      } else {
+      } else if (context.target !== "test") {
+        // The health is the live credential's: what a test credential met says nothing of it.
         await recordFailedHealth(deps, connection, reason);
       }
       if (reason === undefined) {

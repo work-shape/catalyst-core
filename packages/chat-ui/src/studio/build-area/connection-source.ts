@@ -127,6 +127,23 @@ export interface ConnectionSource {
     expectedVersion: number | null,
     expectedRevision: number
   ): Promise<void>;
+  /**
+   * Sets or rotates the Connection's test credential (ADR-0031): drafts' calls use it, and
+   * never the live key. The value goes to the instance and is kept nowhere here. The page
+   * reads the Connection again afterwards.
+   */
+  setTestCredential?(
+    name: string,
+    input: {
+      value: string;
+      endpoint?: string;
+      account?: string;
+      expectedVersion: number | null;
+      expectedRevision: number;
+    }
+  ): Promise<void>;
+  /** Removes the Connection's test credential. The page reads the Connection again. */
+  removeTestCredential?(name: string): Promise<void>;
   /** Asks the instance to read the Connection's tools again. Throws `PendingApprovalError` when held. */
   discover(name: string): Promise<void>;
   /**
@@ -341,6 +358,20 @@ export function useConnectionSource(): ConnectionSource {
           params: { name },
           body: { value, expectedVersion, expectedRevision }
         });
+      } finally {
+        await queryClient.invalidateQueries({ queryKey: detailKey(name) });
+      }
+    },
+    async setTestCredential(name, body) {
+      try {
+        await calls.set_test_credential({ params: { name }, body });
+      } finally {
+        await queryClient.invalidateQueries({ queryKey: detailKey(name) });
+      }
+    },
+    async removeTestCredential(name) {
+      try {
+        await calls.remove_test_credential({ params: { name } });
       } finally {
         await queryClient.invalidateQueries({ queryKey: detailKey(name) });
       }

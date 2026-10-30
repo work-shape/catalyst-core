@@ -529,6 +529,7 @@ export function createHttpApiConnectorType(
     authSchemes: ["none", "bearer", "header", "oauth", "oauth_client"],
     secretFields: ["key"],
     target: (settings) => egressTargetOfUrl(settingsOf(settings).baseUrl),
+    endpointSetting: "baseUrl",
     oauthEndpoints: endpointsOf,
     // The sign-in reads the authorization server from the settings: no server is asked first.
     signIn: {

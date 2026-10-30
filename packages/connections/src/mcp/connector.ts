@@ -245,6 +245,7 @@ export function createMcpConnectorType(options: McpConnectorOptions = {}): Conne
     authSchemes: ["none", "bearer", "header", "oauth"],
     secretFields: ["key"],
     target: (settings) => egressTargetOfUrl(settingsOf(settings).url),
+    endpointSetting: "url",
     credentialHeaderName: (settings) => settingsOf(settings).headerName,
     carriesIdempotencyKey: true,
     limits: {

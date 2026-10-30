@@ -1331,6 +1331,20 @@
       "when": 1793342450446,
       "tag": "0189_guardrail_hit_field",
       "breakpoints": true
+    },
+    {
+      "idx": 190,
+      "version": "7",
+      "when": 1793344727101,
+      "tag": "0190_connection_test_credentials",
+      "breakpoints": true
+    },
+    {
+      "idx": 191,
+      "version": "7",
+      "when": 1793344737605,
+      "tag": "0191_validate_connection_test_credentials",
+      "breakpoints": true
     }
   ]
 }

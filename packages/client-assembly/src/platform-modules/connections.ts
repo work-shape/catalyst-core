@@ -21,6 +21,8 @@ export const connectionsModule = defineModule({
     "connections.access",
     "connections.test",
     "connections.set_secret",
+    "connections.set_test_credential",
+    "connections.remove_test_credential",
     "connections.discover",
     "connections.source_folders",
     "connections.oauth_start",

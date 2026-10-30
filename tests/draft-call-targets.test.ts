@@ -576,6 +576,33 @@ describe("a call made by a draft", () => {
     });
   });
 
+  // DT-3: the test credential of the Connection a step calls.
+  it("sends a test run's calls to the Connection's test credential, and a live run's to the live one", async () => {
+    const t = await ready();
+    const read = await t.call(t.admin.id, "assets.get", {
+      params: { kind: "connection", name: "crm" }
+    });
+    const testValue = `test-${crypto.randomUUID()}`;
+    const set = await t.call(t.admin.id, "connections.set_test_credential", {
+      params: { name: "crm" },
+      payload: {
+        value: testValue,
+        expectedVersion: null,
+        expectedRevision: z.object({ revision: z.number() }).parse(read.json()).revision
+      }
+    });
+    expect(set.statusCode, set.body).toBe(200);
+    const before = t.handed.length;
+
+    const changing = await stepCall(t);
+    expect(changing.run).toMatchObject({ target: "test", status: "done" });
+    const reading = await stepCall(t, { operation: "echo" });
+    expect(reading.run).toMatchObject({ target: "test", status: "done" });
+    const live = await stepCall(t, { live: true });
+    expect(live.run).toMatchObject({ target: "live", status: "done" });
+    expect(t.handed.slice(before)).toEqual([testValue, testValue, t.secret]);
+  });
+
   it("bounds only a person's call from a step of a Workflow", async () => {
     const t = await ready();
     const draft = await draftOf(t, "clients");

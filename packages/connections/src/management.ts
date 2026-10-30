@@ -6,8 +6,11 @@ import {
   CONNECTION_REFUSALS,
   CREDENTIAL_REFUSALS,
   EGRESS_DENIED,
+  SECRET_WRITE_CONFLICT,
   SHARED_CREDENTIAL_SUBJECT,
+  TEST_CREDENTIAL_SUBJECT,
   connectionCallError,
+  egressSettingFor,
   connectionCallReasonOf,
   connectionOperationName,
   parseConnectionOperationName,
@@ -15,6 +18,9 @@ import {
   type JsonObject,
   type AuditActor,
   type ConnectionProviderRevocation,
+  type ConnectionTestCredentialRecord,
+  type ConnectionTestCredentialState,
+  type EgressTarget,
   type ConnectionBindingState,
   type ConnectionOAuthRegistration,
   type ConnectionCallReason,
@@ -49,7 +55,9 @@ import {
   AUTH_SCHEME_NONE,
   NO_CREDENTIALS,
   connectionOriginOf,
-  openConnectorContext
+  openConnectorContext,
+  takesTestCredential,
+  testCredentialSettings
 } from "./connector-context";
 import { adminConsentUrl } from "./oauth/admin-consent";
 import { registeredClientOf } from "./oauth/client-registration";
@@ -120,6 +128,40 @@ export interface ConnectionOAuthView {
   adminConsentUrl?: string;
 }
 
+/**
+ * The test credential of a shared Connection (ADR-0031, DT-3): what a draft's calls are made
+ * with instead of the live credential. Never its value or a handle of it.
+ */
+export interface ConnectionTestCredentialView {
+  /**
+   * `stale` where one is stored that no call can use: the Connection's address or auth scheme
+   * changed since it was set. A draft's calls are refused then, never sent live.
+   */
+  state: ConnectionTestCredentialState;
+  version?: number;
+  /** Its own address, where it has one; without one the calls go to the Connection's. */
+  endpoint?: string;
+  /** The test account as the person who set it named it. */
+  account?: string;
+  setAt?: string;
+  /** The person who set it. */
+  setBy?: string;
+  /** The Connection's type takes an address of the test credential's own. */
+  takesEndpoint: boolean;
+}
+
+/** What a test credential is set with. The value is written once and never read back. */
+export interface ConnectionTestCredentialInput {
+  value: string;
+  /** Its own address, in the Connection type's endpoint setting. Left out, the Connection's. */
+  endpoint?: string;
+  account?: string;
+  /** The version the writer saw, `null` for none. */
+  expectedVersion: number | null;
+  /** The revision of the Connection the writer read. */
+  expectedRevision: number;
+}
+
 export interface ConnectionView {
   name: string;
   health: ConnectionHealth;
@@ -137,6 +179,8 @@ export interface ConnectionView {
   binding?: ConnectionBindingView;
   /** Only for a Connection whose auth scheme is `oauth`. */
   oauth?: ConnectionOAuthView;
+  /** Only for a shared Connection that takes one, or where one is stored. */
+  testCredential?: ConnectionTestCredentialView;
 }
 
 export interface ConnectionTestView {
@@ -208,6 +252,25 @@ export interface ConnectionManagement
     name: string,
     input: { value: string; expectedVersion: number | null; expectedRevision: number }
   ): Promise<{ state: "set"; version: number }>;
+  /**
+   * Sets or rotates the test credential of a shared Connection with a typed secret (ADR-0031,
+   * DT-3), as the next version: a draft's calls go there, and never to the live credential.
+   * Its own address, where it names one, must be on the egress list. `expectedVersion` and
+   * `expectedRevision` refuse a write that crossed another as `setSecret` does.
+   */
+  setTestCredential(
+    name: string,
+    input: ConnectionTestCredentialInput,
+    audit: { actor: AuditActor; correlationId: string }
+  ): Promise<{ state: "set"; version: number }>;
+  /**
+   * Removes the test credential and its secret: a draft's changing calls are simulated again,
+   * its reading calls go live. CONFLICT `test_credential_not_set` where there is none.
+   */
+  removeTestCredential(
+    name: string,
+    audit: { actor: AuditActor; correlationId: string }
+  ): Promise<{ state: "not_set" }>;
   /** Starts the shared OAuth sign-in of a Connection. See `ConnectionSignIn`. */
   oauthStart: ConnectionSignIn["start"];
   /** Completes a sign-in at its callback. See `ConnectionSignIn`. */
@@ -264,6 +327,53 @@ function discoveredOf(connection: StoredConnection): ConnectionDiscoveredToolVie
 
 function secretWriteRefusal(reason: string, sentence: string): AppError {
   return new AppError("CONFLICT", `${reason}: ${sentence}`, { reason });
+}
+
+/** The origin the test credential is set for and sent to, or nothing where none fits. */
+function testCredentialOriginOf(
+  connection: StoredConnection,
+  endpoint: string | undefined
+): string | undefined {
+  if (!connection.type || !takesTestCredential(connection.config)) return undefined;
+  const settings = testCredentialSettings(connection.type, connection.config.settings, endpoint);
+  return settings === undefined ? undefined : connectionOriginOf(connection.type, { settings });
+}
+
+function testCredentialViewOf(
+  connection: StoredConnection,
+  stored: ConnectionTestCredentialRecord | undefined
+): ConnectionTestCredentialView | undefined {
+  const takes = connection.type !== undefined && takesTestCredential(connection.config);
+  if (!takes && !stored) return undefined;
+  const takesEndpoint = takes && connection.type?.endpointSetting !== undefined;
+  if (!stored) return { state: "not_set", takesEndpoint };
+  const usable = testCredentialOriginOf(connection, stored.endpoint) === stored.origin;
+  return {
+    state: usable ? "set" : "stale",
+    version: stored.secretVersion,
+    ...(stored.endpoint === undefined ? {} : { endpoint: stored.endpoint }),
+    ...(stored.accountLabel === undefined ? {} : { account: stored.accountLabel }),
+    setAt: stored.connectedAt,
+    ...(stored.connectedBy === undefined ? {} : { setBy: stored.connectedBy }),
+    takesEndpoint
+  };
+}
+
+/** The test credential's address as its type reads it. Nothing where it does not fit. */
+function testCredentialTargetOf(
+  connection: StoredConnection,
+  endpoint: string | undefined
+): EgressTarget | undefined {
+  const { type, config } = connection;
+  if (!type) return undefined;
+  const settings = testCredentialSettings(type, config.settings, endpoint);
+  const parsed = settings === undefined ? undefined : type.settingsSchema.safeParse(settings);
+  if (!parsed?.success) return undefined;
+  try {
+    return type.target(parsed.data);
+  } catch {
+    return undefined;
+  }
 }
 
 function operationsOf(connection: StoredConnection): ConnectionOperationView[] {
@@ -456,6 +566,15 @@ export function createConnectionManagement(
         : undefined;
       const binding = await bindingOf(connection, origin);
       const oauth = oauthOf(connection);
+      const testCredential = testCredentialViewOf(
+        connection,
+        connection.config.credentialMode === "user"
+          ? undefined
+          : await deps.stores.connections.getConnectionTestCredential({
+              clientInstanceId: deps.clientInstanceId,
+              connectionAssetId: connection.assetId
+            })
+      );
       return {
         name: connection.config.name,
         health: state?.health ?? "unknown",
@@ -478,7 +597,8 @@ export function createConnectionManagement(
             }),
         ...(catalog && seesDiscovered ? { discoveredAt: catalog.discoveredAt } : {}),
         ...(binding === undefined ? {} : { binding }),
-        ...(oauth === undefined ? {} : { oauth })
+        ...(oauth === undefined ? {} : { oauth }),
+        ...(testCredential === undefined ? {} : { testCredential })
       };
     },
 
@@ -618,6 +738,151 @@ export function createConnectionManagement(
           });
         }
         return { state: "set" as const, version: written.version };
+      });
+    },
+
+    async setTestCredential(name, input, audit) {
+      const { value, endpoint, account, expectedVersion, expectedRevision } = input;
+      return deps.stores.transaction(async (stores) => {
+        // Held until the end: a write of the Connection, and another write of its test
+        // credential, waits. The version read below is the one the write replaces.
+        const connection = await readConnection({ ...deps, stores }, name, { held: true });
+        if (!connection) throw notFound(name);
+        const { config } = connection;
+        if (connection.revision !== expectedRevision) {
+          throw new AppError(
+            "CONFLICT",
+            `${CONNECTION_REFUSALS.changedSinceRead}: the Connection was changed by somebody else since it was read. Nothing was stored; read the Connection again`,
+            { reason: CONNECTION_REFUSALS.changedSinceRead }
+          );
+        }
+        if (!connection.type || !takesTestCredential(config)) {
+          throw secretWriteRefusal(
+            CONNECTION_REFUSALS.testCredentialUnsupported,
+            "a test credential is set on a shared Connection that sends a bearer token or an API key header"
+          );
+        }
+        if (!deps.keyring) {
+          throw secretWriteRefusal(
+            CONNECTION_REFUSALS.secretStoreUnavailable,
+            "this instance names no key of the Secret Store. An operator names one under 'secretStore.keys'"
+          );
+        }
+        // Its own address is read as the Connection's would be, and must be on the egress list
+        // before anything is stored: a test call never goes where a live one could not.
+        const target = testCredentialTargetOf(connection, endpoint);
+        if (target === undefined) {
+          throw new AppError(
+            "VALIDATION_FAILED",
+            "The test credential's address does not fit the Connection's connector type",
+            { reason: "invalid_endpoint" }
+          );
+        }
+        if (!deps.egress.admits(target)) {
+          throw new AppError(
+            "VALIDATION_FAILED",
+            `${EGRESS_DENIED}: the address ${target.host}:${target.port} is not on this instance's egress list. ${egressSettingFor(target)}`,
+            { reason: EGRESS_DENIED, host: target.host }
+          );
+        }
+        const origin = testCredentialOriginOf(connection, endpoint);
+        if (origin === undefined) {
+          throw secretWriteRefusal(
+            CREDENTIAL_REFUSALS.notConfigured,
+            "the Connection's settings name no address its connector type reads. Fix the settings first"
+          );
+        }
+        const key = {
+          clientInstanceId: deps.clientInstanceId,
+          connectionAssetId: connection.assetId
+        };
+        const stored = await stores.connections.getConnectionTestCredential(key);
+        if ((stored?.secretVersion ?? null) !== expectedVersion) {
+          throw new AppError(
+            "CONFLICT",
+            `${SECRET_WRITE_CONFLICT}: the test credential was changed by somebody else since it was read. Nothing was stored; read the Connection again`,
+            { reason: SECRET_WRITE_CONFLICT }
+          );
+        }
+        // The version was compared above, under the Connection's lock: the Secret Store writes
+        // the version that follows the stored one, for whichever address.
+        const written = await createSecretStore({
+          clientInstanceId: deps.clientInstanceId,
+          keyring: deps.keyring,
+          store: stores.connections
+        }).put({
+          binding: { connectionAssetId: connection.assetId, subject: TEST_CREDENTIAL_SUBJECT },
+          value,
+          source: "runtime",
+          origin
+        });
+        const label = account?.trim();
+        const record = await stores.connections.putConnectionTestCredential({
+          ...key,
+          secretHandle: written.handle,
+          secretVersion: written.version,
+          ...(endpoint === undefined ? {} : { endpoint }),
+          ...(label ? { accountLabel: label } : {}),
+          origin,
+          ...(audit.actor.userId === undefined ? {} : { connectedBy: audit.actor.userId }),
+          expectedRowVersion: stored?.rowVersion ?? null
+        });
+        if (!record) {
+          throw new AppError(
+            "CONFLICT",
+            `${SECRET_WRITE_CONFLICT}: the test credential was written by somebody else at the same time. Nothing was stored; try again`,
+            { reason: SECRET_WRITE_CONFLICT }
+          );
+        }
+        await stores.audit.appendAuditEvent({
+          clientInstanceId: deps.clientInstanceId,
+          type: "connection.test_credential_set",
+          status: "success",
+          ...audit,
+          subject: connection.assetId,
+          metadata: {
+            connectionName: config.name,
+            connectionRevision: connection.revision,
+            subjectKind: TEST_CREDENTIAL_SUBJECT,
+            version: written.version,
+            rotated: stored !== undefined,
+            ...(endpoint === undefined ? {} : { endpointHost: target.host })
+          }
+        });
+        return { state: "set" as const, version: written.version };
+      });
+    },
+
+    async removeTestCredential(name, audit) {
+      return deps.stores.transaction(async (stores) => {
+        const connection = await readConnection({ ...deps, stores }, name, { held: true });
+        if (!connection) throw notFound(name);
+        const key = {
+          clientInstanceId: deps.clientInstanceId,
+          connectionAssetId: connection.assetId
+        };
+        const removed = await stores.connections.deleteConnectionTestCredential(key);
+        await stores.connections.deleteSecrets({ ...key, subject: TEST_CREDENTIAL_SUBJECT });
+        if (!removed) {
+          throw new AppError(
+            "CONFLICT",
+            `${CONNECTION_REFUSALS.testCredentialNotSet}: the Connection has no test credential to remove`,
+            { reason: CONNECTION_REFUSALS.testCredentialNotSet }
+          );
+        }
+        await stores.audit.appendAuditEvent({
+          clientInstanceId: deps.clientInstanceId,
+          type: "connection.test_credential_removed",
+          status: "success",
+          ...audit,
+          subject: connection.assetId,
+          metadata: {
+            connectionName: connection.config.name,
+            connectionRevision: connection.revision,
+            subjectKind: TEST_CREDENTIAL_SUBJECT
+          }
+        });
+        return { state: "not_set" as const };
       });
     },
 

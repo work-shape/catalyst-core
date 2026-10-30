@@ -59,6 +59,7 @@ const APP_EXPOSURE: ConnectionExposure = "bridge";
 const connectionFactsSchema = z.object({
   displayName: z.string(),
   enabled: z.boolean(),
+  credentialMode: z.string().optional(),
   operations: z.array(
     z.object({ name: z.string(), enabled: z.boolean(), exposure: z.array(z.string()) })
   )
@@ -67,6 +68,8 @@ const connectionFactsSchema = z.object({
 interface ConnectionFacts extends z.infer<typeof connectionFactsSchema> {
   /** The reader may read the Connection, so its label is told. */
   readable: boolean;
+  /** A test credential is set on the shared Connection: a draft's call goes there (DT-3). */
+  testCredential: boolean;
 }
 
 const manifestOfConfigSchema = z.object({ manifest: z.unknown() });
@@ -220,7 +223,7 @@ export class AppActionList {
       }
       const resource = appResourceOf(scoped(asset));
       const host = appRevisionHost(asset.name, resource, revision.view, revision.dataStores);
-      const targetOf = await this.draftTargets(caller.actor, revision);
+      const targetOf = await this.draftTargets(caller.actor, revision, connections);
       const can = await appActionPermissions(environment, {
         viewer: caller.actor,
         access: caller.access,
@@ -314,7 +317,8 @@ export class AppActionList {
    */
   private async draftTargets(
     reader: AuthenticatedIdentity,
-    revision: ListedRevision
+    revision: ListedRevision,
+    connections: ReadonlyMap<string, ConnectionFacts>
   ): Promise<((action: CompiledAppAction) => AppAction["target"]) | undefined> {
     if (revision.view !== "draft") return undefined;
     // The reader's own switches on the current draft: an App's call deletes the one it uses.
@@ -332,9 +336,15 @@ export class AppActionList {
     // exists, and a changing one makes it (ADR-0031, DT-2).
     const copies = await this.testCopies(revision.actions);
     // A `workflow` action of a draft starts a test run, which no switch makes live (DP-1).
+    // A `connection` action goes to the Connection's test credential once one is set (DT-3).
     return (action) => {
       if (action.kind === "workflow") return "test";
-      const testTarget = action.kind === "sql" ? copies.get(action.dataStore) : undefined;
+      const testTarget =
+        action.kind === "sql"
+          ? copies.get(action.dataStore)
+          : connections.get(action.connection)?.testCredential
+            ? ("present" as const)
+            : undefined;
       return draftCallTarget({
         effect: action.effect,
         liveOnce: mine.has(action.name),
@@ -394,7 +404,14 @@ export class AppActionList {
           assetId: asset.id,
           name: asset.name
         }).allowed;
-        return [[name, { ...facts.data, readable }] as const];
+        const testCredential =
+          // A stored config without the field is shared, as the call path reads it.
+          facts.data.credentialMode !== "user" &&
+          (await this.options.stores.connections.getConnectionTestCredential({
+            clientInstanceId: this.options.clientInstanceId,
+            connectionAssetId: asset.id
+          })) !== undefined;
+        return [[name, { ...facts.data, readable, testCredential }] as const];
       })
     );
     return new Map(read.flat());

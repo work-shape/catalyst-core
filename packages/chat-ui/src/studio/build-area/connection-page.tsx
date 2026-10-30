@@ -68,6 +68,7 @@ import {
   recordedHealth
 } from "./connection-status";
 import { withOAuthSettings } from "./connection-sign-in-model";
+import { ConnectionTestCredentialSection } from "./connection-test-credential";
 import type { ConnectionHoldersRead, ConnectionSource } from "./connection-source";
 
 /** A member of the definition that is a text, or nothing. */
@@ -270,6 +271,25 @@ export function ConnectionPage({
             }
           ]
         : []),
+    ...(detail?.testCredential
+      ? [
+          {
+            id: "test-credential",
+            label: t("connections.testCredentialTitle"),
+            description: t("connections.testCredentialDescription"),
+            body: (
+              <ConnectionTestCredentialSection
+                name={asset.name}
+                revision={asset.revision}
+                testCredential={detail.testCredential}
+                source={source}
+                mayWrite={source.mayTest(asset)}
+                written={written}
+              />
+            )
+          }
+        ]
+      : []),
     {
       id: "settings",
       label: t("connections.settingsTitle"),

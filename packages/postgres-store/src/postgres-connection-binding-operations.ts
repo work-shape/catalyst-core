@@ -13,11 +13,13 @@ import {
   sql
 } from "drizzle-orm";
 import { AppError } from "@work-shape/catalyst-core";
+import { TEST_CREDENTIAL_SUBJECT } from "@work-shape/catalyst-core";
 import type {
   ConnectionBindingKey,
   ConnectionBindingRecord,
   ConnectionBindingsStore,
-  ConnectionSetupSessionRecord
+  ConnectionSetupSessionRecord,
+  ConnectionTestCredentialRecord
 } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { connectionBindings, connectionSetupSessions, productUsers } from "./schema";
@@ -64,6 +66,30 @@ function mapBinding(row: BindingRow): ConnectionBindingRecord {
   };
 }
 
+/** The test credential of a `static` row with subject `test`. It holds no value. */
+function mapTestCredential(row: BindingRow): ConnectionTestCredentialRecord | undefined {
+  if (
+    row.scheme !== "static" ||
+    row.subject !== TEST_CREDENTIAL_SUBJECT ||
+    row.secretHandle === null ||
+    row.secretVersion === null
+  ) {
+    return undefined;
+  }
+  return {
+    clientInstanceId: row.clientInstanceId,
+    connectionAssetId: row.connectionAssetId,
+    secretHandle: row.secretHandle,
+    secretVersion: row.secretVersion,
+    ...(row.endpoint === null ? {} : { endpoint: row.endpoint }),
+    ...(row.accountLabel === null ? {} : { accountLabel: row.accountLabel }),
+    origin: row.origin,
+    connectedAt: row.connectedAt.toISOString(),
+    ...(row.connectedBy === null ? {} : { connectedBy: row.connectedBy }),
+    rowVersion: row.rowVersion
+  };
+}
+
 /** The session of a row, or nothing for a row without the resource or client it was started with. */
 function mapSession(row: SessionRow): ConnectionSetupSessionRecord | undefined {
   if (row.resource === null || row.clientId === null) return undefined;
@@ -104,6 +130,11 @@ export function createPostgresConnectionBindingOperations(
 ): ConnectionBindingsStore {
   const oauthBindingOf = (key: ConnectionBindingKey) =>
     and(bindingOf(key), eq(connectionBindings.scheme, "oauth"));
+  const testCredentialOf = (key: Omit<ConnectionBindingKey, "subject">) =>
+    and(
+      bindingOf({ ...key, subject: TEST_CREDENTIAL_SUBJECT }),
+      eq(connectionBindings.scheme, "static")
+    );
   return {
     async listConnectionBindings({ clientInstanceId, connectionAssetId, userId }) {
       const rows = await db
@@ -201,6 +232,64 @@ export function createPostgresConnectionBindingOperations(
         .where(where)
         .returning({ subject: connectionBindings.subject });
       return rows.length === 1;
+    },
+    async getConnectionTestCredential(input) {
+      const [row] = await db
+        .select()
+        .from(connectionBindings)
+        .where(testCredentialOf(input))
+        .limit(1);
+      return row ? mapTestCredential(row) : undefined;
+    },
+    async putConnectionTestCredential({ expectedRowVersion, ...credential }) {
+      const values = {
+        userId: null,
+        state: "connected" as const,
+        scheme: "static" as const,
+        accountId: null,
+        accountLabel: credential.accountLabel ?? null,
+        grantedScopes: [],
+        secretHandle: credential.secretHandle,
+        secretVersion: credential.secretVersion,
+        contextHeader: null,
+        contextValue: null,
+        endpoint: credential.endpoint ?? null,
+        connectedAt: statementTime,
+        connectedBy: credential.connectedBy ?? null,
+        stateChangedAt: statementTime,
+        stateChangedBy: credential.connectedBy ?? null,
+        stateReason: null,
+        origin: credential.origin
+      };
+      if (expectedRowVersion === null) {
+        const [row] = await db
+          .insert(connectionBindings)
+          .values({
+            clientInstanceId: credential.clientInstanceId,
+            connectionAssetId: credential.connectionAssetId,
+            subject: TEST_CREDENTIAL_SUBJECT,
+            ...values,
+            rowVersion: 1
+          })
+          .onConflictDoNothing()
+          .returning();
+        return row ? mapTestCredential(row) : undefined;
+      }
+      const [row] = await db
+        .update(connectionBindings)
+        .set({ ...values, rowVersion: sql`${connectionBindings.rowVersion} + 1` })
+        .where(
+          and(testCredentialOf(credential), eq(connectionBindings.rowVersion, expectedRowVersion))
+        )
+        .returning();
+      return row ? mapTestCredential(row) : undefined;
+    },
+    async deleteConnectionTestCredential(input) {
+      const rows = await db
+        .delete(connectionBindings)
+        .where(testCredentialOf(input))
+        .returning({ subject: connectionBindings.subject });
+      return rows.length > 0;
     },
     async getConnectionBinding(key) {
       const query = db.select().from(connectionBindings).where(oauthBindingOf(key)).limit(1);

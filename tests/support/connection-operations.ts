@@ -258,6 +258,7 @@ export async function fixtureOn<Instance extends AccessInstance>(
     secretFields: ["token"],
     target: (settings: Record<string, JsonValue>) =>
       egressTargetOfUrl(settingsSchema.parse(settings).url),
+    endpointSetting: "url",
     test: () => Promise.resolve({ status: "ready" as const }),
     carriesIdempotencyKey: true as const,
     execute(operation: string, input: JsonValue, context: ConnectorContext) {

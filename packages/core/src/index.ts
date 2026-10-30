@@ -158,6 +158,8 @@ export { CONNECTION_OPERATION_POLICIES } from "@work-shape/catalyst-asset-schema
 export { CONNECTION_OPERATION_STATUSES } from "@work-shape/catalyst-asset-schemas";
 export { CONNECTION_ORIGINS } from "@work-shape/catalyst-asset-schemas";
 export { CONNECTION_SECRET_STATES } from "@work-shape/catalyst-asset-schemas";
+export { CONNECTION_TEST_CREDENTIAL_STATES } from "@work-shape/catalyst-asset-schemas";
+export type { ConnectionTestCredentialState } from "@work-shape/catalyst-asset-schemas";
 export { CONNECTOR_TEST_STATUSES } from "@work-shape/catalyst-asset-schemas";
 export { CONVERSATION_ATTACHMENT_STATUSES } from "@work-shape/catalyst-asset-schemas";
 export { CONVERSATION_VISIBILITIES } from "@work-shape/catalyst-asset-schemas";

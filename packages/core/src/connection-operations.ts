@@ -167,6 +167,11 @@ export const CONNECTION_CALL_REASONS = {
   connection_not_connected: "CONFLICT",
   /** The outside system refused the Connection's sign-in; someone has to sign in again. */
   connection_needs_reconnect: "CONFLICT",
+  /**
+   * A call of a draft was sent to the Connection's test credential (ADR-0031), which is gone or
+   * no longer fits the Connection. It is never made with the live credential instead.
+   */
+  test_target_missing: "CONFLICT",
   operation_unknown: "NOT_FOUND",
   operation_disabled: "CONFLICT",
   operation_needs_review: "CONFLICT",
@@ -243,6 +248,8 @@ const CONNECTION_CALL_MESSAGES: Record<ConnectionCallReason, string> = {
     "personal connections require model routes in a region the instance allows for them",
   connection_not_connected: "nobody has signed in to the outside system for the Connection",
   connection_needs_reconnect: "the outside system refused the Connection's sign-in",
+  test_target_missing:
+    "the Connection's test credential is gone or no longer fits its settings; the call was not made",
   operation_unknown: "the Connection has no such operation now",
   operation_disabled: "the operation is disabled",
   operation_needs_review: "the outside system changed the operation and the change is not accepted",
@@ -347,6 +354,8 @@ const CONNECTION_CALL_SENTENCES: Record<
     `${c} cannot be used because nobody has signed in to the outside system for it. Trying again will not help until an administrator signs in under ${WHERE}.`,
   connection_needs_reconnect: (c) =>
     `${c} cannot be used because its sign-in at the outside system has ended. Trying again will not help until an administrator signs in again under ${WHERE}.`,
+  test_target_missing: (c) =>
+    `This test of a draft was not sent to ${c}: its test credential was removed, or no longer fits the connection's address or auth scheme. Nothing was sent with the live credential instead. Trying again will not help until an administrator sets the test credential again, or removes it, under ${WHERE}.`,
   operation_unknown: (c) =>
     `${c} does not offer this action at the moment. Trying again will not help. An administrator can check the actions of the connection under ${WHERE}.`,
   operation_disabled: (c) =>
