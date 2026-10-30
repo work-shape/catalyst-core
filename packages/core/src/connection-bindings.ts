@@ -41,8 +41,11 @@ export const CONNECTION_BINDING_REFUSALS = [
 ] as const;
 export type ConnectionBindingRefusal = (typeof CONNECTION_BINDING_REFUSALS)[number];
 
-/** How the binding was obtained. `static` is reserved for DT-3 and CS-9a. */
-export type ConnectionBindingScheme = "oauth" | "person_context";
+/**
+ * How the binding was obtained: a sign-in, a person-context mapping, or a typed secret
+ * (`static`, the test credential of DT-3).
+ */
+export type ConnectionBindingScheme = "oauth" | "person_context" | "static";
 
 /**
  * The subject of the secret that holds a binding's token set: `oauth:<binding subject>`, so
@@ -57,7 +60,7 @@ export function signInSecretSubject(bindingSubject: string): string {
 export interface ConnectionBindingKey {
   clientInstanceId: ClientInstanceId;
   connectionAssetId: string;
-  /** `shared`, later `user:<id>` or `test`. Derived by the platform, never named by a caller. */
+  /** `shared`, `user:<id>` or `test`. Derived by the platform, never named by a caller. */
   subject: string;
 }
 
@@ -145,6 +148,31 @@ export type ConsumedConnectionSetupSession =
   | { outcome: "expired" }
   | { outcome: "unknown" };
 
+/**
+ * The test credential of a shared Connection (ADR-0031, DT-3): a binding with subject `test` and
+ * scheme `static`. The secret is a Secret Store row under the same subject, named by handle and
+ * version, and set for `origin` only. It holds no value.
+ */
+export interface ConnectionTestCredentialRecord {
+  clientInstanceId: ClientInstanceId;
+  connectionAssetId: string;
+  secretHandle: string;
+  secretVersion: number;
+  /**
+   * The test credential's own value of the type's endpoint setting, for a sandbox on a host of
+   * its own. Absent: the Connection's own address.
+   */
+  endpoint?: string;
+  /** The test account as the person who set it named it. Shown, never used to authorize. */
+  accountLabel?: string;
+  /** The origin (`egressOriginOf`) the test credential was set for. It is sent nowhere else. */
+  origin: string;
+  /** When it was set or rotated last, and by whom (a user or principal id). */
+  connectedAt: string;
+  connectedBy?: string;
+  rowVersion: number;
+}
+
 /** The rows of bindings and setup sessions. Times are the database's. */
 export interface ConnectionPersonContextSubject {
   subjectKind: Extract<GrantHolderKind, "user" | "service_principal">;
@@ -189,6 +217,26 @@ export interface ConnectionBindingsStore {
   getConnectionBinding(
     key: ConnectionBindingKey & { lock?: "update" }
   ): Promise<ConnectionBindingRecord | undefined>;
+  /** The test credential of a Connection (subject `test`, scheme `static`), if it has one. */
+  getConnectionTestCredential(input: {
+    clientInstanceId: ClientInstanceId;
+    connectionAssetId: string;
+  }): Promise<ConnectionTestCredentialRecord | undefined>;
+  /**
+   * Writes the test credential's binding, at the row version the writer read: `null` creates
+   * it, a number replaces that version of it, as a rotation does. Answers the stored binding, or
+   * `undefined` and writes nothing where the row is not what the writer read.
+   */
+  putConnectionTestCredential(
+    input: Omit<ConnectionTestCredentialRecord, "connectedAt" | "rowVersion"> & {
+      expectedRowVersion: number | null;
+    }
+  ): Promise<ConnectionTestCredentialRecord | undefined>;
+  /** Deletes the test credential's binding. `false` where there was none. */
+  deleteConnectionTestCredential(input: {
+    clientInstanceId: ClientInstanceId;
+    connectionAssetId: string;
+  }): Promise<boolean>;
   /**
    * Writes a completed sign-in as a connected binding. `expectedRowVersion` is the version the
    * writer read: `null` creates the binding, a number replaces that version of it, as a new

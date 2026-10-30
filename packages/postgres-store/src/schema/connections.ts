@@ -114,6 +114,8 @@ export const connectionBindings = pgTable(
     secretVersion: integer("secret_version"),
     contextHeader: text("context_header"),
     contextValue: text("context_value"),
+    /** A test credential's own address (DT-3): its value of the type's endpoint setting. */
+    endpoint: text("endpoint"),
     accessExpiresAt: timestamp("access_expires_at", { withTimezone: true }),
     lastRefreshedAt: timestamp("last_refreshed_at", { withTimezone: true }),
     connectedAt: timestamp("connected_at", { withTimezone: true }).notNull(),
@@ -139,8 +141,9 @@ export const connectionBindings = pgTable(
     ),
     check(
       "connection_bindings_scheme_check",
-      sql`(${table.scheme} = 'oauth' and ${table.secretHandle} is not null and ${table.secretVersion} is not null and ${table.contextHeader} is null and ${table.contextValue} is null)
-        or (${table.scheme} = 'person_context' and ${table.secretHandle} is null and ${table.secretVersion} is null and ${table.contextHeader} is not null and (${table.contextValue} is not null or ${table.state} = 'revoked') and ${table.subject} ~ '^person_context:(user|service_principal):.+$')`
+      sql`(${table.scheme} = 'oauth' and ${table.secretHandle} is not null and ${table.secretVersion} is not null and ${table.contextHeader} is null and ${table.contextValue} is null and ${table.endpoint} is null)
+        or (${table.scheme} = 'person_context' and ${table.secretHandle} is null and ${table.secretVersion} is null and ${table.contextHeader} is not null and (${table.contextValue} is not null or ${table.state} = 'revoked') and ${table.subject} ~ '^person_context:(user|service_principal):.+$' and ${table.endpoint} is null)
+        or (${table.scheme} = 'static' and ${table.subject} = 'test' and ${table.userId} is null and ${table.secretHandle} is not null and ${table.secretVersion} is not null and ${table.contextHeader} is null and ${table.contextValue} is null)`
     ),
     check("connection_bindings_row_version_check", sql`${table.rowVersion} >= 1`),
     check(

@@ -305,6 +305,59 @@ describe("a Connection made on the instance", () => {
     expect((await setSecret(instance, generateTestSecret(), null)).statusCode).toBe(200);
   });
 
+  it("drops the test credential when the address or the auth scheme changes", async () => {
+    const elsewhere = "93.184.216.35";
+    const instance = await world().start({
+      egress: [
+        { protocol: "https", host: OUTSIDE_HOST, port: 443 },
+        { protocol: "https", host: elsewhere, port: 443 }
+      ]
+    });
+    started.push(instance);
+    await put(instance, definition(), null);
+    const setTest = async () =>
+      instance.call("connections.set_test_credential", {
+        params: { name: NAME },
+        payload: {
+          value: generateTestSecret(),
+          expectedVersion: null,
+          expectedRevision: await revisionOf(instance)
+        }
+      });
+    const testCredential = async () => ({
+      bindings: await withTestSql(
+        (sql) => sql<{ subject: string }[]>`
+          select b.subject from connection_bindings b
+          join config_assets a on a.id = b.connection_asset_id
+          where a.name = ${NAME} and b.subject = 'test'`
+      ),
+      view: z
+        .object({ testCredential: z.object({ state: z.string() }).optional() })
+        .parse((await instance.call("connections.get", { params: { name: NAME } })).json())
+        .testCredential?.state
+    });
+
+    expect((await setTest()).statusCode).toBe(200);
+    expect((await testCredential()).view).toBe("set");
+    expect(
+      (await put(instance, definition({ settings: { url: `https://${elsewhere}/mcp` } }), 1))
+        .statusCode
+    ).toBe(200);
+    expect(await testCredential()).toEqual({ bindings: [], view: "not_set" });
+    expect(await secretsOfConnection()).toEqual([]);
+
+    expect((await setTest()).statusCode).toBe(200);
+    const changed = await put(
+      instance,
+      definition({ settings: { url: `https://${elsewhere}/mcp` }, authScheme: "none" }),
+      2
+    );
+    expect(changed.statusCode).toBe(200);
+    // A Connection that sends no secret shows no test credential at all.
+    expect(await testCredential()).toEqual({ bindings: [], view: undefined });
+    expect(await secretsOfConnection()).toEqual([]);
+  });
+
   it("never sends the key to the new origin when removing it beside the write fails", async () => {
     const w = world();
     const elsewhere = "93.184.216.35";

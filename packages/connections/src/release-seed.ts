@@ -348,6 +348,10 @@ export async function seedReleaseConnections(
           connectionAssetId: asset.id
         });
         await stores.connections.deleteSecrets({ clientInstanceId, connectionAssetId: asset.id });
+        await stores.connections.deleteConnectionTestCredential({
+          clientInstanceId,
+          connectionAssetId: asset.id
+        });
         await stores.connections.deleteConnectionState({
           clientInstanceId,
           connectionAssetId: asset.id

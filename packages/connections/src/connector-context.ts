@@ -6,7 +6,10 @@ import {
   LOG_REDACTION,
   CONNECTION_AUTH_SCHEME_OAUTH_CLIENT,
   SHARED_CREDENTIAL_SUBJECT,
+  TEST_CREDENTIAL_SUBJECT,
+  takesTestCredentialScheme,
   connectionCallError,
+  connectionCallReasonOf,
   connectionCredentialOrigin,
   egressOriginOf,
   type AuthenticatedIdentity,
@@ -247,6 +250,35 @@ export interface OpenConnectorContextInput {
   checkSignIn?: () => Promise<void>;
   /** Read afresh for this attempt, never cached on the shared Connection. */
   resolvePersonContext?: (header: string, origin: string) => Promise<string>;
+  /**
+   * The test credential of a shared Connection, for a call of a draft that `runOperation()`
+   * sent to it (target `test`, ADR-0031). The call goes to its address, with its secret, and
+   * every refusal says `test_target_missing`: it never falls back to the live credential.
+   * Absent for every other call, which never reaches the test credential.
+   */
+  test?: { secretHandle: string; endpoint?: string };
+}
+
+/**
+ * The settings a test credential's calls are made with: the Connection's own, with the test
+ * credential's address in the type's endpoint setting where it names one. Nothing where it
+ * names one and the type has no endpoint setting.
+ */
+export function testCredentialSettings(
+  type: Pick<ConnectorTypeDefinition, "endpointSetting">,
+  settings: JsonObject,
+  endpoint: string | undefined
+): JsonObject | undefined {
+  if (endpoint === undefined) return settings;
+  if (type.endpointSetting === undefined) return undefined;
+  return { ...settings, [type.endpointSetting]: endpoint };
+}
+
+/** Whether a Connection takes a test credential at all: shared, with a scheme of a typed secret. */
+export function takesTestCredential(
+  config: Pick<ConnectionConfig, "credentialMode" | "authScheme">
+): boolean {
+  return config.credentialMode === "shared" && takesTestCredentialScheme(config.authScheme);
 }
 
 /**
@@ -265,8 +297,15 @@ export async function openConnectorContext(
       "personal credentials are available only through the owner's agent call or the owner's own discovery, never a test"
     );
   }
-  const settings = type.settingsSchema.safeParse(config.settings);
-  if (!settings.success || !type.authSchemes.includes(config.authScheme)) {
+  const { test } = input;
+  // A test credential the Connection no longer takes is not used, and nothing else is instead.
+  if (test && !takesTestCredential(config)) throw connectionCallError("test_target_missing");
+  const configured = test
+    ? testCredentialSettings(type, config.settings, test.endpoint)
+    : config.settings;
+  const settings = configured === undefined ? undefined : type.settingsSchema.safeParse(configured);
+  if (!settings?.success || !type.authSchemes.includes(config.authScheme)) {
+    if (test) throw connectionCallError("test_target_missing");
     throw new AppError(
       "CONFLICT",
       `${CREDENTIAL_REFUSALS.notConfigured}: the Connection's settings do not fit its connector type`,
@@ -283,14 +322,29 @@ export async function openConnectorContext(
   if (config.authScheme !== AUTH_SCHEME_NONE) {
     // Only a secret set, or a sign-in made, for the origin the call goes to is handed out.
     const origin = credentialOriginOf(type, settings.data, target);
+    // The test credential, set for this origin only. Its schemes send the secret as it is.
+    const testSecret = (handle: string) =>
+      credentials
+        .resolve({
+          handle,
+          binding: { connectionAssetId: connection.id, subject: TEST_CREDENTIAL_SUBJECT },
+          origin
+        })
+        .catch((error: unknown) => {
+          // Gone, or set for another address: the test target is missing, never replaced.
+          throw connectionCallReasonOf(error) === CREDENTIAL_REFUSALS.notConfigured
+            ? connectionCallError("test_target_missing")
+            : error;
+        });
     const ownSecret = () =>
       credentials.resolve({
         handle: storedSecretHandle(config),
         binding: { connectionAssetId: connection.id, subject: SHARED_CREDENTIAL_SUBJECT },
         origin
       });
-    const secret =
-      config.authScheme === AUTH_SCHEME_OAUTH
+    const secret = test
+      ? await testSecret(test.secretHandle)
+      : config.authScheme === AUTH_SCHEME_OAUTH
         ? await credentials.resolveSignIn({
             subject:
               config.credentialMode === "user" && input.personalDiscovery

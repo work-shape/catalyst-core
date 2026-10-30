@@ -699,6 +699,12 @@ export type ConnectionOperationStatus = (typeof CONNECTION_OPERATION_STATUSES)[n
 
 export const CONNECTION_SECRET_STATES = ["set", "not_set", "unreadable"] as const;
 export type ConnectionSecretState = (typeof CONNECTION_SECRET_STATES)[number];
+/**
+ * The states of a Connection's test credential (ADR-0031). `stale`: one is stored that no call
+ * can use, since the Connection's address or auth scheme changed after it was set.
+ */
+export const CONNECTION_TEST_CREDENTIAL_STATES = ["not_set", "set", "stale"] as const;
+export type ConnectionTestCredentialState = (typeof CONNECTION_TEST_CREDENTIAL_STATES)[number];
 
 export const CONNECTOR_TEST_STATUSES = [
   "ready",

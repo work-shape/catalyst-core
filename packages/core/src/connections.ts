@@ -401,6 +401,25 @@ export const EGRESS_UNRESOLVED = "egress_unresolved";
 /** The one subject a shared credential has. A credential per person names that person. */
 export const SHARED_CREDENTIAL_SUBJECT = "shared";
 
+/**
+ * The subject of a shared Connection's test credential (ADR-0031, DT-3): the second credential,
+ * for the outside system's sandbox or test account, that calls of a draft use. It is selected
+ * from the call's target and never named by a caller.
+ */
+export const TEST_CREDENTIAL_SUBJECT = "test";
+
+/**
+ * The auth schemes a test credential is offered for: those that send the typed secret as it
+ * is. A scheme that obtains a token, by a sign-in or the client credentials grant, has no test
+ * account yet; its token caches are kept by Connection and would mix the two credentials.
+ */
+export function takesTestCredentialScheme(authScheme: string): boolean {
+  return authScheme === "bearer" || authScheme === "header";
+}
+
+/** The longest test account name a test credential keeps. It is shown, never used to authorize. */
+export const TEST_CREDENTIAL_ACCOUNT_MAX_CHARS = 200;
+
 /** Which Connection, and whose credential of it, a secret is bound to. */
 export interface SecretBinding {
   connectionAssetId: string;
@@ -825,6 +844,13 @@ interface ConnectorTypeBase {
    */
   target(settings: JsonObject): EgressTarget;
   /**
+   * The top-level setting that holds the address a Connection of this type connects to, such
+   * as `url`. A test credential may name its own value of it, for a sandbox on a host of its own
+   * (DT-3); the address is read by `settingsSchema` and checked by the egress checker like the
+   * live one. A type without it takes a test credential for its own address only.
+   */
+  endpointSetting?: string;
+  /**
    * The request header that carries the secret under the auth scheme `header`. It is a name
    * of the type's typed settings; the value is never a setting.
    */
@@ -1002,7 +1028,14 @@ export const CONNECTION_REFUSALS = {
    * the one this instance ships: it keeps the settings of the entry's current version only, so
    * it is updated to that version (relinked) before any other change.
    */
-  catalogueUpdateRequired: "catalogue_update_required"
+  catalogueUpdateRequired: "catalogue_update_required",
+  /**
+   * The Connection takes no test credential: it is a personal connection, its auth scheme does
+   * not send a typed secret, or the test credential names an address its type has no setting for.
+   */
+  testCredentialUnsupported: "test_credential_unsupported",
+  /** The Connection holds no test credential to remove. */
+  testCredentialNotSet: "test_credential_not_set"
 } as const;
 
 /** What a person is told where App exposure and a person context header meet. */

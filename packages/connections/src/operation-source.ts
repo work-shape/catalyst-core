@@ -281,6 +281,21 @@ function definitionOf(
       ? { repeatsUnderKey: true as const }
       : {}),
     ...(connection.config.credentialMode === "user" ? { personalConnection: true as const } : {}),
+    // A shared Connection's test credential is its test target (ADR-0031, DT-3): where one is
+    // set, every call of a draft goes there, reading and changing alike. Asked only for a draft.
+    ...(connection.config.credentialMode === "shared"
+      ? {
+          testTarget: {
+            state: async () =>
+              (await deps.stores.connections.getConnectionTestCredential({
+                clientInstanceId: deps.clientInstanceId,
+                connectionAssetId: connection.assetId
+              }))
+                ? ("present" as const)
+                : undefined
+          }
+        }
+      : {}),
     // An MCP read still sends its arguments to an outside host; readOnlyHint is no boundary.
     ...(connection.config.connectorType === "mcp" && connection.config.credentialMode !== "user"
       ? {

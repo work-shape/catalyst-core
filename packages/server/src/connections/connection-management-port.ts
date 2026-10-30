@@ -152,6 +152,27 @@ export interface ConnectionManagementPort {
     input: { value: string; expectedVersion: number | null; expectedRevision: number }
   ): Promise<ConnectionSecretState>;
   /**
+   * Sets or rotates the test credential of a shared Connection (ADR-0031): a draft's calls use
+   * it, never the live credential. Its own address must be on the egress list. The value is
+   * never answered, logged, audited or read back.
+   */
+  setTestCredential(
+    name: string,
+    input: {
+      value: string;
+      endpoint?: string;
+      account?: string;
+      expectedVersion: number | null;
+      expectedRevision: number;
+    },
+    audit: { actor: AuditActor; correlationId: string }
+  ): Promise<{ state: "set"; version: number }>;
+  /** Removes the test credential and its secret. */
+  removeTestCredential(
+    name: string,
+    audit: { actor: AuditActor; correlationId: string }
+  ): Promise<{ state: "not_set" }>;
+  /**
    * Reads what the outside system offers into the Connection's catalog, bounded in time and
    * size. It makes nothing callable that the accepted list does not name. A failure is an
    * answer and leaves the stored catalog. Missing where the assembly brings no discovery:

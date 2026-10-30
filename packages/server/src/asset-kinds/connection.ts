@@ -9,6 +9,7 @@ import {
   CONNECTION_REFUSALS,
   EGRESS_DENIED,
   SHARED_CREDENTIAL_SUBJECT,
+  TEST_CREDENTIAL_SUBJECT,
   connectionCredentialOrigin,
   connectionOAuthTargets,
   createConnectionSecretHandle,
@@ -587,6 +588,25 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
             subject: SHARED_CREDENTIAL_SUBJECT
           });
         }
+        // The test credential was set for the Connection's address and auth scheme as they
+        // were (ADR-0031): once either moves, or each person uses their own account, it goes
+        // too, binding and secret, so no stale test key is kept. Setting it again is the way
+        // back.
+        if (
+          moved ||
+          readDefinitionField(previous, "authScheme") !== next.data.authScheme ||
+          next.data.credentialMode === "user"
+        ) {
+          await stores.connections.deleteConnectionTestCredential({
+            clientInstanceId,
+            connectionAssetId: assetId
+          });
+          await stores.connections.deleteSecrets({
+            clientInstanceId,
+            connectionAssetId: assetId,
+            subject: TEST_CREDENTIAL_SUBJECT
+          });
+        }
         if (moved) {
           // A client registered for the old server is no client of the new one.
           await stores.connections.putConnectionOAuthClient({
@@ -661,6 +681,11 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
     // with a Connection made again under its name, and they were not made on that one.
     async onRemove({ clientInstanceId, assetId, stores }) {
       await stores.connections.deleteSecrets({ clientInstanceId, connectionAssetId: assetId });
+      // The test credential's secret went with the line above; its binding goes with it.
+      await stores.connections.deleteConnectionTestCredential({
+        clientInstanceId,
+        connectionAssetId: assetId
+      });
       await stores.connections.deleteConnectionState({
         clientInstanceId,
         connectionAssetId: assetId

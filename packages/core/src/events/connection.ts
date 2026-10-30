@@ -69,6 +69,50 @@ export const connectionEvents = {
       }
     }
   },
+  // A shared Connection's test credential was set or rotated (ADR-0031, DT-3). The metadata
+  // names its version, whether it replaced one, and the host of its own address where it has
+  // one: never the value, a handle or the test account's name.
+  "connection.test_credential_set": {
+    name: "connection.test_credential_set",
+    subject: "connection",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["connectionName", "connectionRevision", "subjectKind", "version", "rotated"],
+      properties: {
+        connectionName: { type: "string" },
+        connectionRevision: { type: "integer" },
+        subjectKind: { type: "string", enum: ["test"] },
+        version: { type: "integer" },
+        rotated: { type: "boolean" },
+        endpointHost: { type: "string" },
+        operationRunId: { type: "string" }
+      }
+    }
+  },
+  // A shared Connection's test credential was removed: its binding and its secret are gone, and
+  // a draft's changing calls are simulated again.
+  "connection.test_credential_removed": {
+    name: "connection.test_credential_removed",
+    subject: "connection",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["connectionName", "connectionRevision", "subjectKind"],
+      properties: {
+        connectionName: { type: "string" },
+        connectionRevision: { type: "integer" },
+        subjectKind: { type: "string", enum: ["test"] },
+        operationRunId: { type: "string" }
+      }
+    }
+  },
   // A catalogue install made a deleted Connection again and lifted the access rows its delete
   // kept, so it starts with the access of a first install. The metadata counts the rows; it
   // names no holder, action or effect.
