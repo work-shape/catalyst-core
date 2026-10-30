@@ -16,6 +16,24 @@ export const governanceEvents = {
     name: "governance.config_assets_write_authorized",
     subject: "instance"
   },
+  // An admin set, changed or removed a central policy setting (OP-2): the operation or pattern,
+  // the workspace and asset kind it is narrowed to, and the value before and after. Nothing of
+  // any call's input.
+  "governance.policy_setting_changed": {
+    name: "governance.policy_setting_changed",
+    subject: "instance",
+    legacy: false,
+    audited: true,
+    phases: ["after"]
+  },
+  // An admin locked "Always allow" for an operation or a pattern, or lifted their lock (OP-2).
+  "governance.always_allow_lock_changed": {
+    name: "governance.always_allow_lock_changed",
+    subject: "instance",
+    legacy: false,
+    audited: true,
+    phases: ["after"]
+  },
   // A spend limit was set, changed or removed (LU-2): its level, the workspace or user it names,
   // and the amounts before and after. Nothing of what anyone spent.
   "governance.usage_limit_changed": {

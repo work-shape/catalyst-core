@@ -39,23 +39,19 @@ const connects = (policy: string) => /connect-src ([^;]*)/u.exec(policy)?.[1];
 
 describe("an outside host a person allows for their own view of a draft", () => {
   let t: AppInstance;
-  // The release config the instance reads, switched by the tests.
-  const release = { enabled: true };
+  /** The admin's setting on Instance > Policies (OP-2): `null` leaves the default, off. */
+  const switchTo = (value: "allow" | null) =>
+    t.stores.centralPolicySettings.set({
+      clientInstanceId,
+      operation: "apps.allow_draft_host",
+      value,
+      at: new Date().toISOString()
+    });
   beforeAll(async () => {
     t = await setupAppInstance({
-      server: (_stores, config) => {
+      server: () => {
         const base = recordAuthAdapter();
         return {
-          config: {
-            ...config,
-            apps: {
-              draftHosts: {
-                get enabled() {
-                  return release.enabled;
-                }
-              }
-            }
-          },
           authAdapter: {
             ...base,
             async authenticate(request) {
@@ -69,6 +65,7 @@ describe("an outside host a person allows for their own view of a draft", () => 
         };
       }
     });
+    await switchTo("allow");
   });
   afterAll(async () => {
     await t.close();
@@ -381,8 +378,8 @@ describe("an outside host a person allows for their own view of a draft", () => 
     });
   });
 
-  it("offers and reads nothing where the release switch is off", async () => {
-    release.enabled = false;
+  it("offers and reads nothing while no admin has switched it on", async () => {
+    await switchTo(null);
     try {
       const draft = await shown(t.admin.id, "offers");
       expect(draft.draftHosts).toBeUndefined();
@@ -390,9 +387,9 @@ describe("an outside host a person allows for their own view of a draft", () => 
       expect(connects(draft.policy)).toBe("'none'");
       expect(
         refusal(await allow(t.admin.id, { fileSetId: draft.fileSetId, host: "api.example.com" }))
-      ).toEqual({ status: 404, code: "NOT_FOUND", reason: "draft_hosts_off" });
+      ).toMatchObject({ status: 403, code: "POLICY_DENIED" });
     } finally {
-      release.enabled = true;
+      await switchTo("allow");
     }
   });
 });

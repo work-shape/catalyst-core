@@ -1345,6 +1345,13 @@
       "when": 1793344737605,
       "tag": "0191_validate_connection_test_credentials",
       "breakpoints": true
+    },
+    {
+      "idx": 192,
+      "version": "7",
+      "when": 1793348457331,
+      "tag": "0192_central_policy_settings",
+      "breakpoints": true
     }
   ]
 }

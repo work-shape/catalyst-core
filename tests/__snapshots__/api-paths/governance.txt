@@ -1,5 +1,8 @@
 audit_activities.list  GET /api/v1/instance/audit-activities
 audit_events.list  GET /api/v1/instance/audit-events
+policies.get  GET /api/v1/instance/policies
+policies.set  PUT /api/v1/instance/policies/settings
+policies.set_always_allow_lock  PUT /api/v1/instance/policies/always-allow-locks
 usage.breakdown.get  GET /api/v1/instance/usage/breakdown
 usage.get_summary  GET /api/v1/instance/usage
 usage.limits.get  GET /api/v1/instance/usage/limits

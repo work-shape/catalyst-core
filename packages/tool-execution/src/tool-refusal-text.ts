@@ -180,6 +180,7 @@ const OWN_ACTION_WORDS: Record<OwnWordAction, Words> = {
   "users.delete": { en: "delete users", de: "Benutzer löschen" },
   "usage.view": { en: "view usage", de: "Nutzung ansehen" },
   "limits.manage": { en: "set spend limits", de: "Ausgabenlimits festlegen" },
+  "policy.manage": { en: "set the policy of operations", de: "Richtlinien für Aktionen festlegen" },
   "usage.view_users": { en: "view usage by person", de: "Nutzung pro Person ansehen" },
   "audit.view": { en: "view the audit log", de: "Auditprotokoll ansehen" },
   "system.view": { en: "view the System pages", de: "Systemseiten ansehen" },

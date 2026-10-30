@@ -439,11 +439,14 @@ export class AppWorkflow {
     if (!fileSet || !contentKey) {
       throw new AppError("NOT_FOUND", "App is not available");
     }
-    // The viewer's own allowances of hosts for this draft count for the viewer alone.
+    // The viewer's own allowances of hosts for this draft count for the viewer alone, where
+    // the admin's policy switched draft hosts on for this App.
+    const policyTargets = [{ assetKind: asset.kind, workspaceId: asset.scope.workspaceId }];
     const outsideHosts = await withViewerAllowances(this.options, {
       owner: { kind: "app", id: asset.id },
       shownNumber: fileSet.number,
       viewerId: getSubjectUserId(caller.user),
+      targets: policyTargets,
       base: await appOutsideHosts(this.options.stores.pages, {
         clientInstanceId: this.options.clientInstanceId,
         assetId: asset.id,
@@ -454,11 +457,12 @@ export class AppWorkflow {
     });
     const draftHosts =
       input.mode === "draft"
-        ? draftHostsOffer(this.options, {
+        ? await draftHostsOffer(this.options, {
             caller: caller.user,
             mayWrite: writes,
             heldBack: outsideHosts.heldBack,
-            manifest: fileSet.manifest
+            manifest: fileSet.manifest,
+            targets: policyTargets
           })
         : undefined;
     const expiresAt = Math.floor(Date.now() / 1000) + APP_CONTENT_TOKEN_TTL_SECONDS;

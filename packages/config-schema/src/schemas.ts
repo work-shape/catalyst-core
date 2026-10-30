@@ -374,19 +374,24 @@ export const supportConfigSchema = z
   .prefault({});
 
 /**
- * Apps of the module `apps`. `draftHosts.enabled: true` lets a person who builds an App allow
- * an outside host its draft lists for their own view of that draft, with one click, before the
- * draft is published (DRAFT-HOSTS-1). Off, the default, a draft connects only to the hosts of
- * its published revision, and no click is offered or accepted.
+ * Apps of the module `apps`. Nothing is set here now. Whether a person who builds an App may
+ * allow an outside host its draft lists for their own view of that draft (DRAFT-HOSTS-1) is the
+ * central policy of `apps.allow_draft_host` on Instance > Policies (OP-2), off until an admin
+ * switches it on. The release switch `draftHosts` it replaced is refused with that sentence.
  */
 export const appsConfigSchema = z
-  .object({
-    draftHosts: z
-      .object({ enabled: z.boolean().default(false) })
-      .strict()
-      .prefault({})
-  })
+  .object({ draftHosts: z.unknown().optional() })
   .strict()
+  .superRefine((apps, context) => {
+    if (apps.draftHosts !== undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["draftHosts"],
+        message:
+          "'apps.draftHosts' was removed: an instance admin switches outside hosts in drafts on Settings > Instance > Policies, with a setting for 'apps.allow_draft_host'. Delete the key"
+      });
+    }
+  })
   .prefault({});
 
 const perMinuteSchema = z.number().int().positive();
@@ -438,8 +443,8 @@ const policyConfigSchema = z
      * Whether people may set "Always allow" for their own agents' calls (OP-6). A `reversible`
      * change may be always allowed, `irreversible` and `outward` changes and changes without a
      * class may not. `locked` takes it away from operations by name or by a pattern such as
-     * `connection.crm.*`; a lock never gives it. The admin's lock lives here until the Policies
-     * screen (OP-2) holds it.
+     * `connection.crm.*`; a lock never gives it. An admin locks more on Instance > Policies
+     * (OP-2); the screen shows these and cannot lift them.
      */
     alwaysAllow: z
       .object({

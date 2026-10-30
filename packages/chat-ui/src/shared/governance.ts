@@ -37,6 +37,13 @@ export function canManageSpendLimits(
   return Boolean(platform?.instanceActions.includes("limits.manage"));
 }
 
+/** Sets the central policy of operations on Settings › Instance › Policies (OP-2). */
+export function canManagePolicies(
+  platform: Pick<PlatformContext, "instanceActions"> | undefined
+): boolean {
+  return Boolean(platform?.instanceActions.includes("policy.manage"));
+}
+
 /** Retries a failed or dead job on Settings › Instance › Jobs (RIGHTS-1e): a right of the instance itself. */
 export function canRetryJobs(
   platform: Pick<PlatformContext, "instanceActions"> | undefined

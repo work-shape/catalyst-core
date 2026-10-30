@@ -350,7 +350,7 @@ export function offersAlwaysAllow(input: PolicyInput, resolution: PolicyResoluti
 }
 
 /** Whether a setting's operation, a name or a pattern such as `connection.crm.*`, names one. */
-function namesOperation(pattern: string, operation: string): boolean {
+export function namesOperation(pattern: string, operation: string): boolean {
   return pattern.endsWith(".*")
     ? operation.startsWith(pattern.slice(0, -1))
     : pattern === operation;

@@ -59,6 +59,7 @@ export * from "./object-storage";
 export * from "./operation-denial";
 export * from "./operation-execution-stop";
 export * from "./operation-policy";
+export * from "./central-policy-settings";
 export * from "./operation-registry";
 export * from "./operation-runs";
 export * from "./operations";

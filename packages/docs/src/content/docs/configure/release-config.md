@@ -369,15 +369,7 @@ The shell answers only requests a browser makes for a frame: a request whose `Se
 
 An App's manifest lists the outside hosts its frame may connect to (`externalHosts`). A published revision connects to the hosts it lists: whoever publishes it reviews them. A draft connects only to the hosts its published revision lists, and a Page in a conversation connects to none. The preview names each host it holds back.
 
-`apps.draftHosts.enabled` lets a builder allow such a host for their own preview of a draft, before anyone publishes it:
-
-```yaml
-apps:
-  draftHosts:
-    enabled: true
-```
-
-The default is `false`. Off, the instance offers no click, refuses `apps.allow_draft_host` with `404` and reads no allowance stored while it was on.
+An instance admin lets builders allow such a host for their own preview of a draft, before anyone publishes it, on **Settings > Instance > Policies**: a setting of `confirm` or `allow` for the operation `apps.allow_draft_host`, for the whole instance, for one workspace or for Apps. The operation's own default is `deny`. While it resolves to `deny` the instance offers no click, refuses `apps.allow_draft_host` with `POLICY_DENIED` and reads no allowance stored while it was on. The release switch `apps.draftHosts.enabled` of earlier releases is gone; a config that still names it does not load.
 
 On, the preview of a draft offers **Allow for my preview** to a person who may write the App, or who reads the conversation of the Page. What an allowance does:
 
@@ -392,7 +384,7 @@ The limits:
 - **An allowed host receives what the preview shows.** The frame can send an allowed host what it shows its builder, what it keeps in the builder's App storage, and, where the draft reads data through its actions from a Connection, a Data Store or a Workflow, what the builder may read. The preview says so beside the click.
 - **Allow or deny, never an approval.** Only the person's own click allows, so a policy that holds `apps.allow_draft_host` for another person's approval can never complete it: the approved call is refused.
 - **DNS is not checked.** A public name that resolves to an address of a private network is allowed like any other name. A browser's own protection against requests to private networks is the only guard.
-- **Switching off and on again.** An allowance stored while the switch was on, whose draft still lists the host, holds again once the switch is back on.
+- **Switching off and on again.** An allowance stored while the policy let it, whose draft still lists the host, holds again once the policy lets it again.
 - **No runtime switch yet.** An administrator cannot turn the click off without a release. Once operation policies are stored centrally, a `deny` on `apps.allow_draft_host` refuses it.
 
 ## Agent And Skill Configuration Assets

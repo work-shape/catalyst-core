@@ -1,5 +1,6 @@
 import {
   canManageApiAccess,
+  canManagePolicies,
   canManageServicePrincipals,
   canManageSpendLimits,
   canManageUsers,
@@ -18,6 +19,7 @@ import { JobsPage } from "./pages/jobs";
 import { LimitsPage } from "./pages/limits";
 import { ModulesPage } from "./pages/modules";
 import { OperationsPage } from "./pages/operations";
+import { PoliciesPage } from "./pages/policies";
 import { UsagePage } from "./pages/usage";
 import { UsersPage } from "./pages/users";
 import { WorkspacesPage } from "./pages/workspaces";
@@ -67,6 +69,13 @@ export const administration: ChatShellAdministration = {
       labelKey: "settings.limits",
       visible: (viewer) => canManageSpendLimits(viewer.platform),
       component: LimitsPage
+    },
+    {
+      id: "policies",
+      group: "instance",
+      labelKey: "settings.policies",
+      visible: (viewer) => canManagePolicies(viewer.platform),
+      component: PoliciesPage
     },
     {
       id: "audit",

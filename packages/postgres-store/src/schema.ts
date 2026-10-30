@@ -30,6 +30,7 @@ import * as liveOnceSwitchesTables from "./schema/liveOnceSwitches";
 import * as capabilityRecordsTables from "./schema/capabilityRecords";
 import * as noticeMailTables from "./schema/noticeMail";
 import * as operationRunsTables from "./schema/operationRuns";
+import * as policyTables from "./schema/policy";
 import * as pagesTables from "./schema/pages";
 import * as projectsTables from "./schema/projects";
 import * as scheduledStartsTables from "./schema/scheduledStarts";
@@ -70,6 +71,7 @@ export * from "./schema/liveOnceSwitches";
 export * from "./schema/capabilityRecords";
 export * from "./schema/noticeMail";
 export * from "./schema/operationRuns";
+export * from "./schema/policy";
 export * from "./schema/pages";
 export * from "./schema/projects";
 export * from "./schema/scheduledStarts";
@@ -111,6 +113,7 @@ export const schema = {
   ...capabilityRecordsTables,
   ...noticeMailTables,
   ...operationRunsTables,
+  ...policyTables,
   ...pagesTables,
   ...projectsTables,
   ...scheduledStartsTables,

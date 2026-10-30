@@ -50,7 +50,8 @@ export async function heldSkillSaves(
  * call, the caller too if they hold it.
  *
  * It gives the Inbox a registered operation to hold without a model call, which
- * `pnpm demo:seed` uses. No screen sets such a setting yet, so the demo's server names it.
+ * `pnpm demo:seed` uses. Settings > Instance > Policies narrows a setting to a workspace that
+ * exists; this one follows a name before the workspace is made, so the demo's server names it.
  * `instance` answers the running instance once there is one.
  */
 export function demoOperations(instance: () => PolicyInstance | undefined): Operations {

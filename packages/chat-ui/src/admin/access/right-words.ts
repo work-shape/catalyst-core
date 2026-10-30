@@ -53,6 +53,7 @@ const ownActionKeys: Record<Exclude<PlatformAction, VerbAction>, TranslationKey>
   "users.delete": "rights.actionUsersDelete",
   "usage.view": "rights.actionUsageView",
   "limits.manage": "rights.actionLimitsManage",
+  "policy.manage": "rights.actionPolicyManage",
   "usage.view_users": "rights.actionUsageViewUsers",
   "system.view": "rights.actionSystemView",
   "jobs.retry": "rights.actionJobsRetry",

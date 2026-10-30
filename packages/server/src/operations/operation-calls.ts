@@ -31,6 +31,7 @@ import { createNoticeHandler } from "../notices/notice-kind";
 import { createFeedbackReviewHandler } from "../feedback/feedback-review-kind";
 import type { ChatServerOptions, OperationCalls, ResolvedChatServerOptions } from "../types";
 import { resolveOperationResource } from "./operation-resource";
+import { readAlwaysAllowLocks, readCentralPolicySettings } from "./central-policy";
 import { createAuditingEventEmitter } from "./event-emitter";
 import { holdsWorkspaceBundle } from "../workspaces/workspace-access";
 import {
@@ -117,11 +118,11 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
     personalConversation: (id, runId) =>
       personalDataConversation(options.stores, clientInstanceId, id, runId),
     instanceDefaults: options.config.policy.defaults,
-    centralSettings: () => options.operations?.centralPolicySettings?.() ?? [],
+    centralSettings: () => readCentralPolicySettings(options),
     // Read for each call that acts for a person, so a value set a moment ago holds at once.
     personSetting: ({ userId, operation }) =>
       options.stores.userOperationSettings.get({ clientInstanceId, userId, operation }),
-    alwaysAllowLocked: options.config.policy.alwaysAllow.locked
+    alwaysAllowLocked: () => readAlwaysAllowLocks(options)
   };
   // The sentence a publish question opens with, the same for a read and a held publish. It
   // dry-evaluates runtime admission without executing a step, calling a model or keeping hits.

@@ -13,6 +13,7 @@ import {
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
   isFileSetId,
+  resolvePolicy,
   type ActorAccess,
   type AuthenticatedIdentity,
   type AuthenticatedUser,
@@ -26,6 +27,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { accessResource } from "../assets/asset-access";
 import { requireConversationAccess } from "../conversations/conversation-access";
+import { readCentralPolicySettings } from "../operations/central-policy";
 import type { AppContentMode } from "../pages/app-content";
 import type { ResolvedChatServerOptions } from "../types";
 import { appOutsideHosts, type AppOutsideHosts } from "./app-outside-hosts";
@@ -38,17 +40,69 @@ import { APP_ACTIONS } from "./app-kind";
 // to it, nobody else's does. The allowance holds until the App is published or its draft
 // discarded, and ends for good once a draft no longer lists the host.
 //
-// Release config switches it (`apps.draftHosts.enabled`, off by default): off, no host is
-// offered or accepted, and allowances stored while it was on are not read. An administrator's
-// runtime switch is the central policy setting of the operation once OP-2 ships it: a
-// `deny` on `apps.allow_draft_host` then refuses the click through `runOperation`, and the
-// preview offers no click where the policy denies it.
+// An instance admin switches it on Instance > Policies (OP-2): the operation's own default is
+// `deny`, so nothing is offered or accepted until a central setting of `apps.allow_draft_host`
+// says otherwise, for the instance, a workspace or Apps. Where it resolves to `deny`, the click
+// is refused through `runOperation`, the preview offers none, and allowances stored while it
+// was on are not read.
 
-type DraftHostOptions = Pick<ResolvedChatServerOptions, "clientInstanceId" | "stores" | "config">;
+type DraftHostOptions = Pick<
+  ResolvedChatServerOptions,
+  "clientInstanceId" | "stores" | "config" | "operations"
+>;
 
-/** Whether the release lets a person allow an outside host for their view of a draft. */
-function draftHostsEnabled(options: Pick<DraftHostOptions, "config">): boolean {
-  return options.config.apps.draftHosts.enabled;
+/** The operation of the click, and the switch an admin sets on Instance > Policies. */
+export const ALLOW_DRAFT_HOST_OPERATION = "apps.allow_draft_host";
+
+/** Off until an admin switches it on: the release's own policy of the operation. */
+export const DRAFT_HOSTS_DEFAULT_POLICY = "deny" as const;
+
+/**
+ * Whether the policy lets a person allow an outside host for their view of a draft of these
+ * targets: the admin's central setting of the operation, narrowed as it is, over the release's
+ * `deny`. Read anew each time, so a switch set a moment ago holds at once.
+ */
+export async function draftHostsSwitchedOn(
+  options: Pick<DraftHostOptions, "clientInstanceId" | "stores" | "config" | "operations">,
+  targets: readonly PolicyTarget[]
+): Promise<boolean> {
+  const resolved = resolvePolicy({
+    definition: {
+      name: ALLOW_DRAFT_HOST_OPERATION,
+      effect: "changing",
+      defaultPolicy: DRAFT_HOSTS_DEFAULT_POLICY
+    },
+    origin: { kind: "user" },
+    instanceDefaults: options.config.policy.defaults,
+    centralSettings: await readCentralPolicySettings(options),
+    targets,
+    callerCanConfirm: true,
+    canPause: false
+  });
+  return resolved.value !== "deny";
+}
+
+/**
+ * What the policy is asked about for a served file set: the App and its workspace for an App's
+ * draft, the workspace of the conversation for a Page.
+ */
+export async function draftHostPolicyTargets(
+  options: Pick<DraftHostOptions, "clientInstanceId" | "stores">,
+  fileSet: ServedFileSet
+): Promise<PolicyTarget[]> {
+  if (!fileSet.asset) {
+    const conversation = await options.stores.conversations.getConversation(
+      options.clientInstanceId,
+      fileSet.conversationId
+    );
+    return conversation ? [{ workspaceId: conversation.collaborationWorkspaceId }] : [];
+  }
+  return [
+    {
+      assetKind: fileSet.asset.kind,
+      ...(fileSet.asset.workspaceId === undefined ? {} : { workspaceId: fileSet.asset.workspaceId })
+    }
+  ];
 }
 
 /**
@@ -109,24 +163,34 @@ export async function frameOutsideHosts(
         publishedFileSetId: fileSet.asset.publishedFileSetId
       })
     : { allowed: [], heldBack: declaredExternalHostsOf(fileSet.manifest) };
+  if (base.heldBack.length === 0) return base;
   return withViewerAllowances(options, {
     owner: ownerOf(fileSet),
     shownNumber: fileSet.number,
     viewerId: input.viewerId,
+    targets: await draftHostPolicyTargets(options, fileSet),
     base
   });
 }
 
 /**
  * The hosts of a view of a draft once its viewer's own allowances are added: each held-back
- * host the viewer allowed for this draft, where the release switch is on.
+ * host the viewer allowed for this draft, where the admin switched draft hosts on for it.
  */
 export async function withViewerAllowances(
   options: DraftHostOptions,
-  input: { owner: DraftHostOwner; shownNumber: number; viewerId: string; base: AppOutsideHosts }
+  input: {
+    owner: DraftHostOwner;
+    shownNumber: number;
+    viewerId: string;
+    targets: readonly PolicyTarget[];
+    base: AppOutsideHosts;
+  }
 ): Promise<AppOutsideHosts> {
   const { base } = input;
-  if (base.heldBack.length === 0 || !draftHostsEnabled(options)) return base;
+  if (base.heldBack.length === 0 || !(await draftHostsSwitchedOn(options, input.targets))) {
+    return base;
+  }
   const allowed = new Set(
     await options.stores.pages.listDraftHostAllowances({
       clientInstanceId: options.clientInstanceId,
@@ -144,18 +208,19 @@ export async function withViewerAllowances(
 /**
  * What a preview tells its caller about the hosts it holds back: which of them the caller may
  * allow for their own view, and whether the draft reads data a host could receive. Nothing
- * where the release switch is off.
+ * where the admin's policy keeps draft hosts off for it.
  */
-export function draftHostsOffer(
-  options: Pick<DraftHostOptions, "config">,
+export async function draftHostsOffer(
+  options: DraftHostOptions,
   input: {
     caller: AuthenticatedIdentity;
     mayWrite: boolean;
     heldBack: readonly string[];
     manifest: unknown;
+    targets: readonly PolicyTarget[];
   }
-): { allowable: string[]; readsData: boolean } | undefined {
-  if (!draftHostsEnabled(options)) return undefined;
+): Promise<{ allowable: string[]; readsData: boolean } | undefined> {
+  if (!(await draftHostsSwitchedOn(options, input.targets))) return undefined;
   const offered = input.mayWrite && clickedByPerson(input.caller);
   return {
     allowable: offered ? input.heldBack.filter(allowableDraftHost) : [],
@@ -212,8 +277,10 @@ export async function moveDraftHosts(
   }
 ): Promise<void> {
   // The allowances are the person's own, whoever saves for them: a Service Principal has none.
-  if (!draftHostsEnabled(options) || isAuthenticatedServicePrincipal(call.actor)) return;
+  if (isAuthenticatedServicePrincipal(call.actor)) return;
   try {
+    const target = { assetKind: APP_ASSET_KIND, workspaceId: input.app.workspaceId };
+    if (!(await draftHostsSwitchedOn(options, [target]))) return;
     const userId = asUserId(getSubjectUserId(call.actor));
     const declared = new Set(declaredExternalHostsOf(input.source.manifest));
     const hosts = (
@@ -276,9 +343,9 @@ export class DraftHosts {
 
   /**
    * The draft the caller's preview shows and whose allowance they may change, or a refusal:
-   * the release switch, a click by the person, a host the build would accept, the draft of
-   * an App the caller may write or a Page of a conversation they read, and a host that draft
-   * lists and holds back.
+   * a click by the person, a host the build would accept, the draft of an App the caller may
+   * write or a Page of a conversation they read, and a host that draft lists and holds back.
+   * The admin's switch is the policy of the call, which `runOperation` asks after this.
    */
   async target(
     actor: AuthenticatedIdentity,
@@ -290,13 +357,6 @@ export class DraftHosts {
     heldBack: boolean;
     person: AuthenticatedUser;
   }> {
-    if (!draftHostsEnabled(this.options)) {
-      throw new AppError(
-        "NOT_FOUND",
-        "This instance does not let a draft reach an outside host before it is published",
-        { reason: "draft_hosts_off" }
-      );
-    }
     if (!clickedByPerson(actor)) {
       throw new AppError(
         "FORBIDDEN",
@@ -363,22 +423,7 @@ export class DraftHosts {
           fileSetId
         })
       : undefined;
-    if (!fileSet) return [];
-    if (!fileSet.asset) {
-      const conversation = await this.options.stores.conversations.getConversation(
-        this.options.clientInstanceId,
-        fileSet.conversationId
-      );
-      return conversation ? [{ workspaceId: conversation.collaborationWorkspaceId }] : [];
-    }
-    return [
-      {
-        assetKind: fileSet.asset.kind,
-        ...(fileSet.asset.workspaceId === undefined
-          ? {}
-          : { workspaceId: fileSet.asset.workspaceId })
-      }
-    ];
+    return fileSet ? draftHostPolicyTargets(this.options, fileSet) : [];
   }
 
   /** Stores the allowance and records it. A host the frame connects to already is left as it is. */

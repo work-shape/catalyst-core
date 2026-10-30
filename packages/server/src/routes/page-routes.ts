@@ -34,7 +34,7 @@ import {
   isHtmlContentType,
   mintAppContentToken
 } from "../pages/app-content";
-import { draftHostsOffer, frameOutsideHosts } from "../apps/draft-hosts";
+import { draftHostPolicyTargets, draftHostsOffer, frameOutsideHosts } from "../apps/draft-hosts";
 import { mayOpenAssetFileSet } from "../assets/asset-access";
 import { kindPreviewOf, mintAssetPreview, servesInPreview } from "../pages/asset-preview";
 import { ConversationWorkflow } from "../conversations/conversation-service";
@@ -215,16 +215,17 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
     });
     // What the frame holds back of the hosts the Page lists, and which of them the caller may
     // allow for their own view: a Page is the caller's own draft, never reviewed.
-    const hosts = await frameOutsideHosts(
-      options,
-      { ...fileSet, conversationId: page.conversationId },
-      { view: "draft", viewerId: getSubjectUserId(user) }
-    );
-    const draftHosts = draftHostsOffer(options, {
+    const served = { ...fileSet, conversationId: page.conversationId };
+    const hosts = await frameOutsideHosts(options, served, {
+      view: "draft",
+      viewerId: getSubjectUserId(user)
+    });
+    const draftHosts = await draftHostsOffer(options, {
       caller: user,
       mayWrite: true,
       heldBack: hosts.heldBack,
-      manifest: fileSet.manifest
+      manifest: fileSet.manifest,
+      targets: await draftHostPolicyTargets(options, served)
     });
     void reply.header("cache-control", "no-store");
     return {

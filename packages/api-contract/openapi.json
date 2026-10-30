@@ -22874,6 +22874,315 @@
         "x-catalyst-rate-class": "write"
       }
     },
+    "/api/v1/instance/policies": {
+      "get": {
+        "operationId": "policies.get",
+        "summary": "Read the policy of every operation: effect, change class and value, the central settings and the locks of Always allow",
+        "tags": [
+          "Governance"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "governance:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "governance:read"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policies"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-requires": [
+          "policy.manage"
+        ],
+        "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/instance/policies/always-allow-locks": {
+      "put": {
+        "operationId": "policies.set_always_allow_lock",
+        "summary": "Lock or unlock Always allow for an operation or a name pattern. A lock of release config cannot be lifted here.",
+        "tags": [
+          "Governance"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "governance:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "governance:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "Catalyst-Unattended",
+            "in": "header",
+            "description": "`1` on a call of an API credential when nobody watches its terminal, such as `catalyst <kind> publish --yes`. The call is then not its caller's own confirmation: a call that needs one waits in the caller's Inbox and answers `202` with its run, status `pending_confirmation`. It only ever makes a call stricter; a browser session's call ignores it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAlwaysAllowLockRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlwaysAllowLockChange"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-requires": [
+          "policy.manage"
+        ],
+        "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/instance/policies/settings": {
+      "put": {
+        "operationId": "policies.set",
+        "summary": "Set or remove the central policy value of an operation or a name pattern, narrowed to a shared workspace and an asset kind where given",
+        "tags": [
+          "Governance"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "governance:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "governance:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "Catalyst-Unattended",
+            "in": "header",
+            "description": "`1` on a call of an API credential when nobody watches its terminal, such as `catalyst <kind> publish --yes`. The call is then not its caller's own confirmation: a call that needs one waits in the caller's Inbox and answers `202` with its run, status `pending_confirmation`. It only ever makes a call stricter; a browser session's call ignores it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPolicySettingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicySettingChange"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-requires": [
+          "policy.manage"
+        ],
+        "x-catalyst-rate-class": "write"
+      }
+    },
     "/api/v1/instance/service-principals": {
       "get": {
         "operationId": "service_principals.list",
@@ -45995,6 +46304,47 @@
           "allowed"
         ]
       },
+      "AlwaysAllowLock": {
+        "type": "object",
+        "properties": {
+          "operation": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "release",
+              "instance"
+            ]
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        },
+        "required": [
+          "operation",
+          "source"
+        ]
+      },
+      "AlwaysAllowLockChange": {
+        "type": "object",
+        "properties": {
+          "operation": {
+            "type": "string"
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "wasLocked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "operation",
+          "locked",
+          "wasLocked"
+        ]
+      },
       "AnnotateFeedbackRequest": {
         "type": "object",
         "properties": {
@@ -56809,6 +57159,249 @@
           "reportedAt"
         ]
       },
+      "Policies": {
+        "type": "object",
+        "properties": {
+          "defaults": {
+            "type": "object",
+            "properties": {
+              "reading": {
+                "type": "string",
+                "enum": [
+                  "allow",
+                  "deny"
+                ]
+              },
+              "changing": {
+                "$ref": "#/components/schemas/PolicyValue"
+              }
+            },
+            "required": [
+              "reading",
+              "changing"
+            ]
+          },
+          "alwaysAllowByClass": {
+            "type": "object",
+            "properties": {
+              "reversible": {
+                "type": "boolean"
+              },
+              "irreversible": {
+                "type": "boolean"
+              },
+              "outward": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "reversible",
+              "irreversible",
+              "outward"
+            ]
+          },
+          "operations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PolicyOperation"
+            }
+          },
+          "settings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PolicySetting"
+            }
+          },
+          "locks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlwaysAllowLock"
+            }
+          },
+          "workspaces": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ]
+            }
+          },
+          "assetKinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "truncated": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "prefix": {
+                  "type": "string"
+                },
+                "limit": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "prefix",
+                "limit"
+              ]
+            }
+          }
+        },
+        "required": [
+          "defaults",
+          "alwaysAllowByClass",
+          "operations",
+          "settings",
+          "locks",
+          "workspaces",
+          "assetKinds",
+          "truncated"
+        ]
+      },
+      "PolicyOperation": {
+        "type": "object",
+        "properties": {
+          "operation": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "tool",
+              "connection",
+              "app",
+              "workflow",
+              "data_store",
+              "knowledge_base",
+              "platform"
+            ]
+          },
+          "effect": {
+            "type": "string",
+            "enum": [
+              "reading",
+              "changing"
+            ]
+          },
+          "changeClass": {
+            "type": "string",
+            "enum": [
+              "reversible",
+              "irreversible",
+              "outward"
+            ]
+          },
+          "value": {
+            "$ref": "#/components/schemas/PolicyValue"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "instance_default",
+              "declared_default",
+              "central_setting",
+              "policy_floor"
+            ]
+          },
+          "declaredDefault": {
+            "$ref": "#/components/schemas/PolicyValue"
+          },
+          "floor": {
+            "$ref": "#/components/schemas/PolicyValue"
+          },
+          "mayAlwaysAllow": {
+            "type": "boolean"
+          },
+          "alwaysAllowLock": {
+            "type": "string",
+            "enum": [
+              "release",
+              "instance"
+            ]
+          }
+        },
+        "required": [
+          "operation",
+          "kind",
+          "effect",
+          "value",
+          "source",
+          "mayAlwaysAllow"
+        ]
+      },
+      "PolicyOperationPattern": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 300,
+        "pattern": "^[A-Za-z][A-Za-z0-9_-]*(?:\\.[A-Za-z0-9_][A-Za-z0-9_-]*)*(?:\\.\\*)?$"
+      },
+      "PolicySetting": {
+        "type": "object",
+        "properties": {
+          "operation": {
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/PolicyValue"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "workspaceName": {
+            "type": "string"
+          },
+          "assetKind": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        },
+        "required": [
+          "operation",
+          "value",
+          "updatedAt"
+        ]
+      },
+      "PolicySettingChange": {
+        "type": "object",
+        "properties": {
+          "setting": {
+            "$ref": "#/components/schemas/PolicySetting"
+          },
+          "previous": {
+            "$ref": "#/components/schemas/PolicyValue"
+          }
+        }
+      },
+      "PolicyValue": {
+        "type": "string",
+        "enum": [
+          "allow",
+          "confirm",
+          "approval",
+          "deny"
+        ]
+      },
       "PreviewReport": {
         "type": "object",
         "properties": {
@@ -59471,6 +60064,21 @@
           "use"
         ]
       },
+      "SetAlwaysAllowLockRequest": {
+        "type": "object",
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/PolicyOperationPattern"
+          },
+          "locked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "operation",
+          "locked"
+        ]
+      },
       "SetAssetAvailabilityRequest": {
         "type": "object",
         "properties": {
@@ -59612,6 +60220,37 @@
         },
         "required": [
           "inMyChats"
+        ]
+      },
+      "SetPolicySettingRequest": {
+        "type": "object",
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/PolicyOperationPattern"
+          },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "assetKind": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "value": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PolicyValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "operation",
+          "value"
         ]
       },
       "SetProjectAudienceRequest": {
