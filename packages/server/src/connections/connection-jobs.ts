@@ -50,11 +50,15 @@ const CONNECTION_DISCOVERY_SLOTS = 2;
 /**
  * Reads the operations of one Connection from its outside system. One job per Connection is
  * queued or running at a time, and one attempt of it. The payload names the Connection and
- * holds nothing of it.
+ * holds nothing of it. `personalOwner` names the owner whose own sign-in reads a personal MCP
+ * Connection's tools; only the owner's admitted request queues a job with it.
  */
 export const connectionDiscoverJob = defineJobKind({
   kind: "connection.discover",
-  payloadSchema: z.object({ connectionName: z.string().min(1).max(200) }),
+  payloadSchema: z.object({
+    connectionName: z.string().min(1).max(200),
+    personalOwner: z.string().min(1).max(200).optional()
+  }),
   maxAttempts: CONNECTION_DISCOVERY_MAX_ATTEMPTS,
   backoff: {
     baseMs: CONNECTION_DISCOVERY_BACKOFF_BASE_MS,
@@ -80,13 +84,23 @@ function enqueueConnectionDiscovery(
     clientInstanceId: ClientInstanceId;
     connectionName: string;
     behind?: Pick<Job, "dedupeKey">;
+    personalOwner?: string;
   }
-): Promise<Job<{ connectionName: string }>> {
-  const first = subjectDedupeKey(connectionDiscoverJob.kind, input.connectionName);
+): Promise<Job<{ connectionName: string; personalOwner?: string }>> {
+  // The owner's discovery has keys of its own: a discovery queued without an owner, which a
+  // personal Connection refuses, is not taken for it.
+  const dedupeSubject =
+    input.personalOwner === undefined
+      ? input.connectionName
+      : `${input.connectionName}:owner:${input.personalOwner}`;
+  const first = subjectDedupeKey(connectionDiscoverJob.kind, dedupeSubject);
   const second = `${first}:next`;
   return jobs.enqueue(
     connectionDiscoverJob,
-    { connectionName: input.connectionName },
+    {
+      connectionName: input.connectionName,
+      ...(input.personalOwner === undefined ? {} : { personalOwner: input.personalOwner })
+    },
     {
       clientInstanceId: input.clientInstanceId,
       subject: input.connectionName,
@@ -102,7 +116,7 @@ function enqueueConnectionDiscovery(
  */
 export async function requestConnectionDiscovery(
   jobs: Pick<JobsStore, "enqueue">,
-  input: { clientInstanceId: ClientInstanceId; connectionName: string }
+  input: { clientInstanceId: ClientInstanceId; connectionName: string; personalOwner?: string }
 ): Promise<void> {
   const job = await enqueueConnectionDiscovery(jobs, input);
   if (job.status === "running") {
@@ -121,7 +135,8 @@ const FAILURES_NOT_RETRIED: ReadonlySet<string> = new Set([
   "connection_not_connected",
   "connection_needs_reconnect",
   "upstream_unauthorized",
-  "output_invalid"
+  "output_invalid",
+  "personal_connection_context"
 ]);
 
 type ConnectionDiscoveryJobOptions = Pick<ChatServerOptions, "connections" | "auditRecorder">;
@@ -194,12 +209,13 @@ export function createConnectionDiscoveryJobs(options: ConnectionDiscoveryJobOpt
         kind: connectionDiscoverJob,
         slots: CONNECTION_DISCOVERY_SLOTS,
         async run(job, control) {
-          const { connectionName } = job.payload;
+          const { connectionName, personalOwner } = job.payload;
           // Every write of the discovery is one of this attempt: an attempt that lost its
           // lease stores nothing over what the attempt after it found.
           const outcome = await discover(connectionName, {
             signal: control.signal,
-            transaction: (write) => control.transaction(write)
+            transaction: (write) => control.transaction(write),
+            ...(personalOwner === undefined ? {} : { personalOwner })
           });
           if (outcome.superseded === true) {
             // The Connection changed while it was read. A new discovery reads it as it is
@@ -208,7 +224,8 @@ export function createConnectionDiscoveryJobs(options: ConnectionDiscoveryJobOpt
               enqueueConnectionDiscovery(stores.jobs, {
                 clientInstanceId: job.clientInstanceId,
                 connectionName,
-                behind: job
+                behind: job,
+                ...(personalOwner === undefined ? {} : { personalOwner })
               })
             );
             return;
@@ -236,7 +253,10 @@ export function createConnectionDiscoveryJobs(options: ConnectionDiscoveryJobOpt
                 operationCount: outcome.operationCount ?? 0,
                 leftOutCount: outcome.leftOutCount ?? 0,
                 rejectedCount: outcome.rejectedCount ?? 0,
-                schemaRefusedCount: outcome.schemaRefusedCount ?? 0
+                schemaRefusedCount: outcome.schemaRefusedCount ?? 0,
+                // Read with the owner's own sign-in (CS-9b exception). Who it was is the
+                // request's audit; the event names no person.
+                ...(personalOwner === undefined ? {} : { personal: true })
               }
             });
             return;

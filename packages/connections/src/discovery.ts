@@ -126,6 +126,12 @@ export interface DiscoverConnectionInput {
   now?: () => Date;
   /** Instead of `CONNECTION_DISCOVERY_TIMEOUT_MS`. For tests. */
   timeoutMs?: number;
+  /**
+   * The user id of a personal Connection's owner, whose own sign-in reads its tools: set only
+   * where `requirePersonalDiscoveryContext` admitted the owner's request. A personal
+   * Connection is discovered with nothing else.
+   */
+  personalOwner?: string;
 }
 
 /**
@@ -391,6 +397,9 @@ async function discoverOperations(
     },
     egress: input.egress,
     credentials: input.credentials ?? NO_CREDENTIALS,
+    ...(connection.config.credentialMode === "user" && input.personalOwner !== undefined
+      ? { personalDiscovery: { userId: input.personalOwner } }
+      : {}),
     signal: deadline.signal
   });
   opening.catch(() => undefined);
@@ -401,6 +410,18 @@ async function discoverOperations(
     discovered: await Promise.race([discovering, deadline.passed]),
     secret: context.credentialFor(context.target)?.secret
   };
+}
+
+/**
+ * Whether the discovery of a personal Connection runs: asked by its owner, who still owns it,
+ * on an MCP server. The request was checked already; this holds for the revision read now.
+ */
+function ownerMayDiscover(input: DiscoverConnectionInput, connection: StoredConnection): boolean {
+  return (
+    input.personalOwner !== undefined &&
+    connection.config.connectorType === "mcp" &&
+    connection.config.ownerPrincipalId === input.personalOwner
+  );
 }
 
 /**
@@ -421,6 +442,10 @@ export async function discoverConnection(
   const type = connection?.type;
   if (!connection || !type || !type.discover || !connection.config.enabled) {
     return { status: "skipped" };
+  }
+  if (connection.config.credentialMode === "user" && !ownerMayDiscover(input, connection)) {
+    // Nothing is contacted and nothing written: the stored tools and health stay the owner's.
+    return { status: "failed", reason: "personal_connection_context" };
   }
   const discover = type.discover.bind(type);
   const write = <Result>(fn: (tx: PlatformStores) => Promise<Result>): Promise<Result> =>

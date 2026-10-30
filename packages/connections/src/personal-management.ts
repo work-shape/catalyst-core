@@ -43,6 +43,13 @@ export function createPersonalConnectionManagement(deps: ConnectionOperationSour
       if (!connection) throw new AppError("NOT_FOUND", `Connection '${name}' does not exist`);
       return connection.config.credentialMode;
     },
+    /** What the owner's discovery of a personal Connection is decided on (CS-9b exception). */
+    async ownership(name: string) {
+      const connection = await readConnection(deps, name);
+      if (!connection) throw new AppError("NOT_FOUND", `Connection '${name}' does not exist`);
+      const { credentialMode, connectorType, ownerPrincipalId } = connection.config;
+      return { credentialMode, connectorType, ownerPrincipalId };
+    },
     async myConnections(userId: string, usable: (resource: OperationResource) => boolean) {
       const [connections, bindings] = await Promise.all([
         readConnections(deps),

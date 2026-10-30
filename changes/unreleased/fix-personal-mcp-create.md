@@ -1,0 +1,6 @@
+---
+section: Fixed
+---
+
+- **Personal connections:** A personal MCP server made in the New connection dialog no longer fails at its test. The dialog saves it without a test, asks the person for their own sign-in, and then reads its tools with that sign-in. A personal REST API is saved without a test as well.
+- **Personal connections (CS-9b exception):** `connections.discover` on a personal MCP Connection runs the MCP handshake and `tools/list` with its owner's own binding, never a tool call, only for the owner (`ownerPrincipalId`) signed in to the instance in a first-party session, with no delegated actor, no API key and no Workflow, App, agent or schedule as origin. Anyone else is refused with `personal_connection_context` before anything is queued. The job carries the owner as `personalOwner` and checks it again against the Connection's revision; a discovery queued without it contacts nothing and is not retried. Saving a personal Connection, setting its client secret and a start of the instance queue no discovery of it. The discovery marks no conversation, its `connection.discovered` event carries counts and `personal: true` only, and only the owner sees the discovered tools in `connections.get`. Its test stays refused.
