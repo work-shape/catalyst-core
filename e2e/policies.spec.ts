@@ -107,11 +107,11 @@ test("an admin sets an action's policy and its lock, and cannot lift a lock of t
       const locked = row.getByTestId("policy-always-allow");
       await expect(locked).toHaveAttribute("data-locked", "release");
       await expect(locked.getByRole("switch")).toBeDisabled();
-      await expect(locked).toContainText("The release config locks Always allow for this action.");
+      await expect(locked).toContainText("The technical team locks Always allow for this action.");
       const releaseLock = page.locator(
         `[data-testid="policy-lock"][data-operation="${LOCKED}"][data-source="release"]`
       );
-      await expect(releaseLock).toContainText("Release config");
+      await expect(releaseLock).toContainText("Technical team");
       await expect(releaseLock.getByRole("button")).toHaveCount(0);
       await expectNoSidewaysScroll(page);
       await shoot(page, `policies-release-lock-${colorScheme}-390`);

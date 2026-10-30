@@ -57,8 +57,9 @@ describe("platform.context.get statements", () => {
     expect(withGrants.context.assetActions).toEqual(["agent.read", "connection.read"]);
     expect(withGrants.grantReads).toBe(1);
     expect(withGrants.count).toBe(without.count);
-    // Authentication, authorization's one load of the holder and the grant rows, and the
-    // Shared Workspaces and the caller's own, whose rights the context names (WS-OWN-1a).
+    // Authentication, authorization's one load of the holder and the grant rows, the central
+    // policy settings, and the Shared Workspaces and the caller's own, whose rights the
+    // context names (WS-OWN-1a).
     expect(withGrants.count).toBe(CONTEXT_STATEMENTS);
   });
 });
@@ -66,6 +67,7 @@ describe("platform.context.get statements", () => {
 /**
  * What `platform.context.get` sent before it named `assetActions`, less the read of the
  * retired name-prefix records: the test sign-in reads the person's record in one statement,
- * as the evaluator reads the rights from the rows (AP-4).
+ * as the evaluator reads the rights from the rows (AP-4). One more reads the central policy
+ * settings, which every call reads so an admin's change holds from the next call (OP-2).
  */
-const CONTEXT_STATEMENTS = 5;
+const CONTEXT_STATEMENTS = 6;

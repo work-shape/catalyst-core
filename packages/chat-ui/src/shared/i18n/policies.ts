@@ -11,7 +11,7 @@ export const policies = defineTranslations({
     "policies.saved": "Saved",
     "policies.defaults": "Defaults",
     "policies.defaultsDescription":
-      "What an action does where nothing below says otherwise. Set in the release config by whoever runs the instance.",
+      "What an action does where nothing below says otherwise. The technical team sets these.",
     "policies.defaultReading": "Actions that only read",
     "policies.defaultChanging": "Actions that change something",
     "policies.alwaysAllowClasses": "Who may choose Always allow",
@@ -26,7 +26,7 @@ export const policies = defineTranslations({
     "policies.valueSentence.approval": "Waits for an approval by someone who may approve it",
     "policies.valueSentence.deny": "Off: it never runs and agents are not offered it",
     "policies.default": "Default: {value}",
-    "policies.source.instance_default": "default of the instance",
+    "policies.source.instance_default": "default for all workspaces",
     "policies.source.declared_default": "default of this action",
     "policies.source.central_setting": "set here",
     "policies.source.policy_floor": "this action always asks at least this",
@@ -59,7 +59,7 @@ export const policies = defineTranslations({
     "policies.valueField": "Policy",
     "policies.actions": "Actions",
     "policies.actionsDescription":
-      "Every action of this instance. Open one to set its policy and whether people may always allow it.",
+      "Every action there is. Open one to set its policy and whether people may always allow it.",
     "policies.search": "Search actions",
     "policies.kindFilter": "Show",
     "policies.allKinds": "All actions",
@@ -79,13 +79,13 @@ export const policies = defineTranslations({
     "policies.alwaysAllowNotForClass":
       "People cannot always allow this action: it cannot be undone or sends to others.",
     "policies.lockedByRelease":
-      "The release config locks Always allow for this action. This screen cannot lift that lock; whoever runs the instance can.",
+      "The technical team locks Always allow for this action. This screen cannot lift that lock; only they can.",
     "policies.lockedByPattern": "Locked by the setting for {pattern}.",
     "policies.locks": "Always allow locks",
     "policies.locksDescription":
-      "Actions and patterns nobody may always allow. Locks of the release config are listed and cannot be lifted here.",
+      "Actions and patterns nobody may always allow. Locks of the technical team are listed and cannot be lifted here.",
     "policies.locksEmpty": "No locks.",
-    "policies.lockSource.release": "Release config",
+    "policies.lockSource.release": "Technical team",
     "policies.lockSource.instance": "Set here",
     "policies.unlock": "Lift",
     "policies.unlockLabel": "Lift the lock for {operation}",
@@ -93,11 +93,11 @@ export const policies = defineTranslations({
     "policies.refused.policy_names_itself":
       "The Policies screen's own actions keep their default, so the policy can always be changed again.",
     "policies.refused.unknown_operation":
-      "This names no action of this instance. Name an action exactly, or every action under a prefix such as connection.crm.*",
+      "This names no action there is. Name an action exactly, or every action under a prefix such as connection.crm.*",
     "policies.refused.reading_operation_waits":
       "This action only reads: it runs or is off, and asks nobody.",
     "policies.refused.locked_by_release":
-      "The release config locks Always allow for this action. Whoever runs the instance can lift it."
+      "The technical team locks Always allow for this action. Only they can lift it."
   },
   de: {
     "settings.policies": "Richtlinien",
@@ -108,7 +108,7 @@ export const policies = defineTranslations({
     "policies.saved": "Gespeichert",
     "policies.defaults": "Standard",
     "policies.defaultsDescription":
-      "Was eine Aktion tut, wo unten nichts anderes steht. Festgelegt in der Release-Konfiguration von denen, die die Instanz betreiben.",
+      "Was eine Aktion tut, wo unten nichts anderes steht. Das technische Team legt das fest.",
     "policies.defaultReading": "Aktionen, die nur lesen",
     "policies.defaultChanging": "Aktionen, die etwas ändern",
     "policies.alwaysAllowClasses": "Wer „Immer erlauben“ wählen darf",
@@ -123,7 +123,7 @@ export const policies = defineTranslations({
     "policies.valueSentence.approval": "Wartet auf die Freigabe durch jemanden, der freigeben darf",
     "policies.valueSentence.deny": "Aus: Sie läuft nie, und Agenten wird sie nicht angeboten",
     "policies.default": "Standard: {value}",
-    "policies.source.instance_default": "Standard der Instanz",
+    "policies.source.instance_default": "Standard für alle Arbeitsbereiche",
     "policies.source.declared_default": "Standard dieser Aktion",
     "policies.source.central_setting": "hier festgelegt",
     "policies.source.policy_floor": "diese Aktion fragt immer mindestens so",
@@ -156,7 +156,7 @@ export const policies = defineTranslations({
     "policies.valueField": "Richtlinie",
     "policies.actions": "Aktionen",
     "policies.actionsDescription":
-      "Jede Aktion dieser Instanz. Öffne eine, um ihre Richtlinie festzulegen und ob Personen sie immer erlauben dürfen.",
+      "Jede Aktion, die es gibt. Öffne eine, um ihre Richtlinie festzulegen und ob Personen sie immer erlauben dürfen.",
     "policies.search": "Aktionen suchen",
     "policies.kindFilter": "Anzeigen",
     "policies.allKinds": "Alle Aktionen",
@@ -176,13 +176,13 @@ export const policies = defineTranslations({
     "policies.alwaysAllowNotForClass":
       "Personen können diese Aktion nicht immer erlauben: Sie lässt sich nicht rückgängig machen oder sendet an andere.",
     "policies.lockedByRelease":
-      "Die Release-Konfiguration sperrt „Immer erlauben“ für diese Aktion. Diese Seite kann die Sperre nicht aufheben, nur wer die Instanz betreibt.",
+      "Das technische Team sperrt „Immer erlauben“ für diese Aktion. Diese Seite kann die Sperre nicht aufheben, nur das technische Team.",
     "policies.lockedByPattern": "Gesperrt durch die Einstellung für {pattern}.",
     "policies.locks": "Sperren für „Immer erlauben“",
     "policies.locksDescription":
-      "Aktionen und Muster, die niemand immer erlauben darf. Sperren der Release-Konfiguration stehen hier und lassen sich hier nicht aufheben.",
+      "Aktionen und Muster, die niemand immer erlauben darf. Sperren des technischen Teams stehen hier und lassen sich hier nicht aufheben.",
     "policies.locksEmpty": "Keine Sperren.",
-    "policies.lockSource.release": "Release-Konfiguration",
+    "policies.lockSource.release": "Technisches Team",
     "policies.lockSource.instance": "Hier festgelegt",
     "policies.unlock": "Aufheben",
     "policies.unlockLabel": "Sperre für {operation} aufheben",
@@ -190,10 +190,10 @@ export const policies = defineTranslations({
     "policies.refused.policy_names_itself":
       "Die Aktionen der Richtlinien-Seite behalten ihren Standard, damit sich die Richtlinien immer wieder ändern lassen.",
     "policies.refused.unknown_operation":
-      "Das nennt keine Aktion dieser Instanz. Nenne eine Aktion genau oder alle Aktionen unter einem Präfix wie connection.crm.*",
+      "Das nennt keine Aktion, die es gibt. Nenne eine Aktion genau oder alle Aktionen unter einem Präfix wie connection.crm.*",
     "policies.refused.reading_operation_waits":
       "Diese Aktion liest nur: Sie läuft oder ist aus und fragt niemanden.",
     "policies.refused.locked_by_release":
-      "Die Release-Konfiguration sperrt „Immer erlauben“ für diese Aktion. Nur wer die Instanz betreibt, kann das aufheben."
+      "Das technische Team sperrt „Immer erlauben“ für diese Aktion. Nur das technische Team kann das aufheben."
   }
 });
