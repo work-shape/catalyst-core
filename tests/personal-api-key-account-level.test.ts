@@ -473,6 +473,50 @@ describe("the account and workspaces level of a personal key", () => {
     ).toBe(3);
   });
 
+  it("gives a superadmin's key their memberships only, never the Owner role of another person's workspace", async () => {
+    const t = await setupPersonalKeyInstance();
+    const created = await t.expectOk(t.kai.id, "workspaces.create", {
+      payload: { name: "Kai Private" }
+    });
+    const collaborationWorkspaceId = workspaceSchema.parse(created.json()).id;
+    const params = { collaborationWorkspaceId };
+    const ids = (response: { json(): unknown }) =>
+      pageSchema.parse(response.json()).items.map((item) => item["id"]);
+
+    // In their own session the superadmin is Owner of every Shared Workspace, as before.
+    expect(ids(await t.expectOk(t.root.id, "workspaces.list"))).toContain(collaborationWorkspaceId);
+    expect((await t.expectOk(t.root.id, "workspaces.get", { params })).json()).toMatchObject({
+      role: "owner",
+      membershipRole: null
+    });
+
+    // Their key with the workspaces level acts on their memberships alone.
+    const { headers } = await keyHeaders(t, t.root.id, [WORKSPACES]);
+    const listed = await t.call(t.root.id, "workspaces.list", { headers });
+    expect(listed.statusCode, listed.body).toBe(200);
+    expect(ids(listed)).not.toContain(collaborationWorkspaceId);
+    for (const [operation, input] of [
+      ["workspaces.get", { params }],
+      ["workspaces.members.list", { params }],
+      ["workspaces.deletion_impact.get", { params }],
+      ["workspaces.update", { params, payload: { name: "Taken" } }],
+      ["workspaces.members.add", { params, payload: { email: "lena@example.test" } }],
+      ["workspaces.delete", { params, payload: { confirmName: "Kai Private" } }]
+    ] as const) {
+      const response = await t.call(t.root.id, operation, { ...input, headers });
+      expect(response.statusCode, `${operation}: ${response.body}`).toBe(404);
+    }
+    expect((await t.expectOk(t.kai.id, "workspaces.get", { params })).json()).toMatchObject({
+      name: "Kai Private"
+    });
+    expect(
+      await t.stores.workspaces.listMemberships({
+        clientInstanceId,
+        collaborationWorkspaceId: asCollaborationWorkspaceId(collaborationWorkspaceId)
+      })
+    ).toHaveLength(1);
+  });
+
   it("reaches one workspace only with a key limited to it, and neither lists nor creates workspaces", async () => {
     const t = await setupPersonalKeyInstance();
     const ownerKey = (await keyHeaders(t, t.kai.id, [WORKSPACES])).headers;

@@ -3,7 +3,6 @@ import {
   asUserId,
   auditActorFromUser,
   getSubjectUserId,
-  isSuperadmin,
   type ActorAccess,
   type AuthenticatedUser,
   type CollaborationWorkspace,
@@ -27,6 +26,7 @@ import type { ChatServerOptions } from "../types";
 import { getWorkspaceAssetSnapshot } from "./agent-availability";
 import { recordWorkspaceChange } from "./workspace-service-audit";
 import {
+  actsAsWorkspaceSuperadmin,
   effectiveWorkspaceRole,
   requireWorkspaceAccess,
   type WorkspaceAccess
@@ -138,7 +138,7 @@ export class CollaborationWorkspaceWorkflow {
       userId
     });
     const memberWorkspaceIds = new Set(memberWorkspaces.map((workspace) => workspace.id));
-    const otherSharedWorkspaces = isSuperadmin(user)
+    const otherSharedWorkspaces = actsAsWorkspaceSuperadmin(user)
       ? (
           await this.options.stores.workspaces.listSharedWorkspaces({
             clientInstanceId: this.options.clientInstanceId
@@ -274,7 +274,7 @@ export class CollaborationWorkspaceWorkflow {
     const ownsIt = inDeletion.memberships.some(
       (membership) => membership.userId === userId && membership.role === "owner"
     );
-    if (!ownsIt && !isSuperadmin(user)) {
+    if (!ownsIt && !actsAsWorkspaceSuperadmin(user)) {
       throw new AppError("NOT_FOUND", "Collaboration Workspace is not available");
     }
     return { inDeletion, refusal: undefined };
