@@ -8,6 +8,7 @@ import {
   type CollaborationWorkspace,
   type CollaborationWorkspaceId,
   type OperationAuthorization,
+  type PermissionGrant,
   type PlatformStores,
   type RuntimeAssetSnapshot,
   type UserRecord,
@@ -24,6 +25,7 @@ import {
 } from "../deletion/workspace-deletion";
 import type { ChatServerOptions } from "../types";
 import { getWorkspaceAssetSnapshot } from "./agent-availability";
+import { endMemberBundles, recordBundlesEnded } from "./member-bundle-rows";
 import { recordWorkspaceChange } from "./workspace-service-audit";
 import {
   actsAsWorkspaceSuperadmin,
@@ -503,16 +505,15 @@ export class CollaborationWorkspaceWorkflow {
     if (actor.role === "admin" && target.role !== "member") {
       throw refusalError(call.operationId, "Workspace Admins may remove regular Members only");
     }
-    const removed = await this.underOwnerLock(collaborationWorkspaceId, target, (stores) =>
-      stores.workspaces.removeMembership({
-        clientInstanceId: this.options.clientInstanceId,
-        collaborationWorkspaceId,
-        userId: targetUserId
-      })
+    const { removed, bundles } = await this.underOwnerLock(
+      collaborationWorkspaceId,
+      target,
+      (stores) => this.endMembership(stores, collaborationWorkspaceId, targetUserId)
     );
     await this.record(call, collaborationWorkspaceId, "collaboration_workspace.member_removed", {
       targetUserId
     });
+    await recordBundlesEnded(call, bundles);
     return removed;
   }
 
@@ -534,20 +535,38 @@ export class CollaborationWorkspaceWorkflow {
     if (!access.membershipRole) {
       throw new AppError("CONFLICT", "User is not a workspace member");
     }
-    const removed = await this.underOwnerLock(
+    const { removed, bundles } = await this.underOwnerLock(
       collaborationWorkspaceId,
       { userId: access.userId },
-      (stores) =>
-        stores.workspaces.removeMembership({
-          clientInstanceId: this.options.clientInstanceId,
-          collaborationWorkspaceId,
-          userId: access.userId
-        })
+      (stores) => this.endMembership(stores, collaborationWorkspaceId, access.userId)
     );
     await this.record(call, collaborationWorkspaceId, "collaboration_workspace.member_left", {
       targetUserId: access.userId
     });
+    await recordBundlesEnded(call, bundles);
     return removed;
+  }
+
+  /**
+   * Removes the membership and, in the same transaction, the member's Builder and Publisher
+   * rows in the workspace (AP-3): they were given for this workspace's members, and once the
+   * member is gone the Members screen can no longer show or take them back.
+   */
+  private async endMembership(
+    stores: PlatformStores,
+    collaborationWorkspaceId: CollaborationWorkspaceId,
+    userId: UserRecord["id"]
+  ): Promise<{ removed: WorkspaceMembership; bundles: PermissionGrant[] }> {
+    const removed = await stores.workspaces.removeMembership({
+      clientInstanceId: this.options.clientInstanceId,
+      collaborationWorkspaceId,
+      userId
+    });
+    const bundles = await endMemberBundles(stores.access, this.options.clientInstanceId, {
+      workspaceId: collaborationWorkspaceId,
+      userId
+    });
+    return { removed, bundles };
   }
 
   async browseDirectory(user: AuthenticatedUser): Promise<WorkspaceDirectoryItem[]> {

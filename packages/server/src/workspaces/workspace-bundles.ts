@@ -8,13 +8,11 @@ import {
   type ActorAccess,
   type ApprovalRequest,
   type AuthenticatedUser,
-  type ClientInstanceId,
   type CollaborationWorkspaceId,
   type MemberBundleChange,
   type MemberBundleState,
   type OperationAuthorization,
   type PermissionGrant,
-  type PlatformStores,
   type UserRecord,
   type WorkspaceBundle
 } from "@work-shape/catalyst-core";
@@ -22,6 +20,7 @@ import { ApprovalRequestWorkflow } from "../approvals/approval-request-service";
 import { AccessWorkflow, grantAuditMetadata } from "../access/access-service";
 import { requireManageableHolder } from "../access/grant-holder-rules";
 import { withRightsHeld } from "../access/rights-held";
+import { bundleRows, type GrantRequestSubject } from "./member-bundle-rows";
 import type { ChatServerOptions } from "../types";
 import { requireWorkspaceAccess } from "./workspace-access";
 import {
@@ -43,13 +42,6 @@ export const GRANT_REQUEST_KIND = "grant_request";
 
 /** Who decides a request and gives a bundle at once: an instance admin, who holds it too. */
 export const GRANT_DECIDING_RIGHT = "users.manage";
-
-/** What one request is about: the bundle, the member, the workspace. */
-export interface GrantRequestSubject {
-  workspaceId: string;
-  userId: string;
-  bundle: WorkspaceBundle;
-}
 
 /** One bundle of one member as the caller reads it, and what their switch does. */
 export interface MemberBundleView {
@@ -83,23 +75,6 @@ export function holdsBundle(
   bundle: WorkspaceBundle
 ): boolean {
   return access?.authorize(bundle, { workspaceId }).allowed ?? false;
-}
-
-/** The member's own rows of the bundle in this workspace: what the Members screen takes back. */
-export async function bundleRows(
-  stores: Pick<PlatformStores["access"], "listGrants">,
-  clientInstanceId: ClientInstanceId,
-  subject: GrantRequestSubject
-): Promise<PermissionGrant[]> {
-  const rows = await stores.listGrants({
-    clientInstanceId,
-    holderKind: "user",
-    holderId: subject.userId,
-    action: subject.bundle,
-    scopeKind: "workspace",
-    scopeId: subject.workspaceId
-  });
-  return rows.filter((row) => row.effect === "allow");
 }
 
 /**
