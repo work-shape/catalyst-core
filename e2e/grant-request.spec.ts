@@ -68,7 +68,13 @@ test("the Owner asks for Builder for a member, and an instance admin grants it",
   pageErrors
 }) => {
   test.setTimeout(120_000);
-  await page.setViewportSize(PHONE);
+  // The member signs in once, so that an account stands to be added.
+  const memberContext = await browser.newContext({ baseURL, viewport: DESKTOP });
+  await pageErrors.watch(memberContext);
+  await signIn(await memberContext.newPage(), member);
+  await memberContext.close();
+  // Signing in waits for the main navigation, which a wide window shows.
+  await page.setViewportSize(DESKTOP);
   await signIn(page, owner);
   await inEnglish(page);
   const workspace = `E2E Grant ${Date.now()}`;
@@ -97,11 +103,12 @@ test("the Owner asks for Builder for a member, and an instance admin grants it",
   await shoot(page, "grant-request-members-requested", ownRow);
 
   // An instance admin who holds Builder grants it in the Inbox.
-  const context = await browser.newContext({ baseURL, viewport: PHONE });
+  const context = await browser.newContext({ baseURL, viewport: DESKTOP });
   await pageErrors.watch(context);
   const admin = await context.newPage();
   await signIn(admin, reviewer);
   await inEnglish(admin);
+  await admin.setViewportSize(PHONE);
   await admin.goto("/inbox");
   const row = admin.getByTestId("inbox-row").filter({ hasText: workspace });
   await expect(row).toHaveCount(1);
