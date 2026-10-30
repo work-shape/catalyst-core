@@ -28,7 +28,7 @@ export const workflowDraft = defineTranslations({
     "workflows.draft.publishFailed": "The draft could not be published.",
     "workflows.draft.publishChanges": "What this publish changes",
     "workflows.draft.publishChanging": "Steps that change something, new or changed",
-    "workflows.draft.publishHosts": "Hosts outside the instance it calls for the first time",
+    "workflows.draft.publishHosts": "Outside hosts it calls for the first time",
     "workflows.draft.publishStore": "Publishes the data store “{title}” first.",
     "workflows.draft.publishStoreMigrationOne":
       "Publishes the data store “{title}” first and applies 1 change to its tables: {migrations}.",
@@ -63,7 +63,7 @@ export const workflowDraft = defineTranslations({
     "workflows.draft.publishFailed": "Der Entwurf konnte nicht veröffentlicht werden.",
     "workflows.draft.publishChanges": "Was diese Veröffentlichung ändert",
     "workflows.draft.publishChanging": "Schritte, die etwas ändern, neu oder geändert",
-    "workflows.draft.publishHosts": "Hosts außerhalb der Instanz, die er zum ersten Mal aufruft",
+    "workflows.draft.publishHosts": "Externe Hosts, die er zum ersten Mal aufruft",
     "workflows.draft.publishStore": "Veröffentlicht zuerst den Datenspeicher „{title}“.",
     "workflows.draft.publishStoreMigrationOne":
       "Veröffentlicht zuerst den Datenspeicher „{title}“ und wendet 1 Änderung an seinen Tabellen an: {migrations}.",
