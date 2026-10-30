@@ -320,7 +320,7 @@ test("a Workflow's test run marks where each call went, and Run live once sends 
 
     // The publish lists the changing step it makes live, marked changed; the reading one is
     // not listed. Nothing is published here.
-    await head.getByRole("button", { name: "Publish", exact: true }).click();
+    await workflowPage.locator("[data-workflow-publish]").click();
     const publish = page.getByRole("dialog", { name: `Publish “${WORKFLOW_NAME}”?` });
     const details = publish.getByTestId("publish-details").getByRole("button", { name: "Details" });
     if ((await details.count()) > 0) await details.click();

@@ -419,11 +419,9 @@ for (const viewport of [DESKTOP, PHONE]) {
           decision === "approve" ? "instance" : fixture.personal
         );
         await requester.goto(`/build/skills/${fixture.name}`);
-        await expect(
-          requester
-            .locator("[data-asset-place]")
-            .getByText(decision === "approve" ? "Alle" : "Nur ich", { exact: true })
-        ).toBeVisible();
+        await expect(requester.locator("[data-asset-place]")).toContainText(
+          decision === "approve" ? "für alle" : "nur für dich"
+        );
       } finally {
         await fixture.cleanup();
         await requester.context().close();

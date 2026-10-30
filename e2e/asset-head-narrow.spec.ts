@@ -41,10 +41,13 @@ async function expectHeadInWindow(page: Page, width: number): Promise<void> {
   expect(widest).toBeLessThanOrEqual(width);
 }
 
-async function shoot(page: Page, name: string): Promise<void> {
+async function shoot(page: Page, name: string, named = false): Promise<void> {
   if (!shotsDir) return;
   await mkdir(shotsDir, { recursive: true });
-  await page.screenshot({ path: join(shotsDir, `${name}-de-390.png`), animations: "disabled" });
+  await page.screenshot({
+    path: join(shotsDir, named ? `${name}-de.png` : `${name}-de-390.png`),
+    animations: "disabled"
+  });
 }
 
 test("the head of a skill and of an agent with a draft keeps its actions in the window at 390 px", async ({
@@ -107,7 +110,53 @@ test("the head of a skill and of an agent with a draft keeps its actions in the 
 
     await page.goto(`/build/agents/${agent}`);
     await expect(page.getByRole("button", { name: "Veröffentlichen" })).toBeVisible();
+    // The state stays beside the name however narrow the window.
+    await expect(page.locator('[data-asset-status="draft"]')).toBeInViewport();
     await expectHeadInWindow(page, width);
     if (width === 390) await shoot(page, "head-agent-draft");
   }
+
+  // The head says each thing once: one state after the name, one muted line under it, Publish
+  // as its one primary button and every other action in "…". The description, the chips and
+  // the draft banner are gone; the text's live version shows in its own box.
+  const head = page.locator("[data-page-head]");
+  const instructions = page.locator("section#instructions");
+  for (const scheme of ["light", "dark"] as const) {
+    for (const width of [390, 1440]) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/build/agents/${agent}`);
+      await expect(head.locator('[data-asset-status="draft"]')).toHaveText("Entwurf · nicht live");
+      await expect(head.locator("[data-asset-status]")).toHaveCount(1);
+      await expect(head.locator("[data-asset-place]")).toHaveText(/ · für alle$/u);
+      await expect(head).not.toContainText("Prüft Verträge.");
+      await expect(head.locator('[data-slot="page-header-chips"]')).toHaveCount(0);
+      await expect(page.locator('[data-agent-draft="pending"]')).toHaveCount(0);
+      await expect(head.getByRole("button", { name: "Verlauf", exact: true })).toHaveCount(0);
+      await expect(head.getByRole("button", { name: "Ausprobieren", exact: true })).toHaveCount(0);
+      await expect(instructions).toContainText("Weicht an einer Stelle von Live ab");
+      await shoot(page, `head-agent-${scheme}-${String(width)}`, true);
+
+      // The state's popover names the draft and the live version, and leads to the changes.
+      await head.locator('[data-asset-status="draft"]').click();
+      const sentence = page.locator("[data-asset-status-sentence]");
+      await expect(sentence).toContainText(
+        /^Entwurfsversion \d+ von .+\. Live ist Version \d+\.$/u
+      );
+      await shoot(page, `head-agent-status-${scheme}-${String(width)}`, true);
+      await page.getByRole("button", { name: "Unterschiede ansehen", exact: true }).click();
+      await expect(sentence).toHaveCount(0);
+      await expect(instructions.locator("[data-versioned-text-changes]")).toBeVisible();
+      await expect(instructions.getByRole("radio", { name: "Unterschiede" })).toBeChecked();
+      await shoot(page, `head-agent-changes-${scheme}-${String(width)}`, true);
+    }
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+
+  // "Chat" and "Try" are one: beside an agent with a draft, Chat opens Try, which runs the draft.
+  await page.goto(`/build/agents/${agent}`);
+  await page.getByRole("button", { name: "Chat", exact: true }).click();
+  await expect(
+    page.getByTestId("dock-tabs").getByRole("tab", { name: "Ausprobieren", exact: true })
+  ).toHaveAttribute("aria-selected", "true");
 });

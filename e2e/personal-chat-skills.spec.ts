@@ -146,7 +146,7 @@ test("a person's own skill switched on for their chats is read by the agent they
     await expect(section).toBeVisible();
     const toggle = section.getByRole("switch", { name: /In meinen Chats verwenden/u });
     await expect(toggle).not.toBeChecked();
-    await expect(page.locator('[data-skill-my-chats="on"]')).toHaveCount(0);
+    await expect(page.locator("[data-asset-place]")).not.toContainText("In meinen Chats");
     const saved = page.waitForResponse(
       (response) =>
         response.request().method() === "PUT" && response.url().includes("/me/chat-skills/")
@@ -154,7 +154,7 @@ test("a person's own skill switched on for their chats is read by the agent they
     await toggle.click();
     expect((await saved).ok()).toBe(true);
     await expect(toggle).toBeChecked();
-    await expect(page.locator('[data-skill-my-chats="on"]')).toHaveText("In meinen Chats");
+    await expect(page.locator("[data-asset-place]")).toContainText("In meinen Chats");
     expect(await ownSkill(page)).toEqual({ name: NAME, inMyChats: true });
     await shoot(page, section, "switch");
 
@@ -168,7 +168,7 @@ test("a person's own skill switched on for their chats is read by the agent they
     // Switched off, it is gone from the page head and from the next chat.
     await page.goto(`/build/skills/${NAME}`);
     await section.getByRole("switch", { name: /In meinen Chats verwenden/u }).click();
-    await expect(page.locator('[data-skill-my-chats="on"]')).toHaveCount(0);
+    await expect(page.locator("[data-asset-place]")).not.toContainText("In meinen Chats");
     await expect.poll(async () => (await ownSkill(page))?.inMyChats).toBe(false);
     await page.goto(`/w/${personalId}`);
     const after = await callTool(page, "read_skill", { name: NAME });

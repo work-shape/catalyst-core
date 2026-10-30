@@ -119,9 +119,7 @@ for (const viewport of [DESKTOP, PHONE]) {
           .getByText(fixture.title, { exact: true })
       ).toBeVisible();
       await page.goto(`/build/skills/${fixture.name}`);
-      await expect(
-        page.locator("[data-asset-place]").getByText("Alle", { exact: true })
-      ).toBeVisible();
+      await expect(page.locator("[data-asset-place]")).toContainText("für alle");
     } finally {
       await fixture.cleanup();
     }

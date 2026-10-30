@@ -137,7 +137,16 @@ const instructionsOf = (page: Page) =>
 
 const saveDraftOf = (page: Page) => page.getByRole("button", { name: "Save draft", exact: true });
 
-const badgeOf = (page: Page) => page.locator("[data-agent-draft-badge]");
+/** The head's one state while the agent has a draft: "Draft · not live", by its revision. */
+const badgeOf = (page: Page) => page.locator('[data-asset-status="draft"]');
+
+/** The state's popover names the draft, who saved it and when, and the live version. */
+async function expectDraftSentence(page: Page, text: string) {
+  await badgeOf(page).click();
+  await expect(page.locator("[data-asset-status-sentence]")).toContainText(text);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("[data-asset-status-sentence]")).toHaveCount(0);
+}
 
 /** The agent's row in Build > Agents, found by its search. */
 async function studioRow(page: Page, displayName: string) {
@@ -169,32 +178,41 @@ test("the agent page saves a draft twice, publishes it, and discards the next on
     // Save draft writes the draft; the page shows it and the live agent stays.
     await instructionsOf(page).fill("Check every contract for a signature and name the clause.");
     await saveDraftOf(page).click();
-    await expect(badgeOf(page)).toHaveText("Draft version 1");
-    // The banner names the author and the time; the head's badge only the revision.
-    await expect(page.locator('[data-agent-draft="pending"]')).toContainText(
-      "E2E Superadmin saved draft version 1 on "
-    );
+    await expect(badgeOf(page)).toHaveAttribute("data-draft-revision", "1");
+    // The head says "Draft · not live" once; its popover names the author and the time.
+    await expect(badgeOf(page)).toHaveText("Draft · not live");
+    await expectDraftSentence(page, "Draft version 1 by E2E Superadmin, ");
     await expect(instructionsOf(page)).toHaveValue(
       "Check every contract for a signature and name the clause."
     );
-    await expect(page.locator('[data-published-field="instructions"]')).toContainText(
+    // The field says how it differs from live, and shows the live text and the changed lines
+    // in its own box: the page does not grow.
+    const instructions = page.locator("section#instructions");
+    await expect(instructions).toContainText("Differs from live in one place");
+    await instructions.getByRole("radio", { name: "Live", exact: true }).click();
+    await expect(instructions.locator("[data-versioned-text-live]")).toHaveText(
       "Check every contract for a signature."
     );
+    await instructions.getByRole("radio", { name: "Changes", exact: true }).click();
+    await expect(instructions.locator("[data-versioned-text-changes]")).toContainText(
+      "name the clause"
+    );
+    await instructions.getByRole("radio", { name: "Draft", exact: true }).click();
+    await expect(instructions.locator("[data-versioned-text-live]")).toHaveCount(0);
     expect(await assetRevision(page, agentPath(name))).toBe(live);
     expect(await liveInstructions(page, name)).toBe("Check every contract for a signature.");
 
     // A second save writes the draft again, on the revision the first one wrote.
     await instructionsOf(page).fill("Name the clause that misses a signature.");
     await saveDraftOf(page).click();
-    await expect(badgeOf(page)).toHaveText("Draft version 2");
+    await expect(badgeOf(page)).toHaveAttribute("data-draft-revision", "2");
     await expect(page.locator("[data-agent-draft-behind]")).toHaveCount(0);
     expect(await draftRevision(page, name)).toBe(2);
     expect(await liveInstructions(page, name)).toBe("Check every contract for a signature.");
 
-    // At phone width the head gives its badge way to the name; the banner names the draft.
+    // At phone width the head keeps its state beside the name.
     await shootSurface(page, "ad-4-draft", async () => {
-      await expect(badgeOf(page)).toBeAttached();
-      await expect(page.locator('[data-agent-draft="pending"]')).toBeVisible();
+      await expect(badgeOf(page)).toBeVisible();
     });
 
     // Build > Agents marks the agent that has a draft.
@@ -218,7 +236,7 @@ test("the agent page saves a draft twice, publishes it, and discards the next on
     // Discard, from the "…" menu and behind a dialog, drops the next draft; the agent stays.
     await instructionsOf(page).fill("Only read the contract.");
     await saveDraftOf(page).click();
-    await expect(badgeOf(page)).toHaveText(/^Draft version \d+$/u);
+    await expect(badgeOf(page)).toHaveText("Draft · not live");
     await page.getByRole("button", { name: "More actions", exact: true }).click();
     await page.getByRole("menuitem", { name: "Discard draft", exact: true }).click();
     const discard = page.getByRole("dialog", { name: `Discard the draft of ${displayName}?` });
@@ -261,10 +279,8 @@ test("a writer without agent.publish, a draft written meanwhile, a reader, and a
     writerPage.setDefaultTimeout(30_000);
     await signIn(writerPage, writer);
     await writerPage.goto(`/build/agents/${name}`);
-    await expect(badgeOf(writerPage)).toHaveText("Draft version 1");
-    await expect(writerPage.locator('[data-agent-draft="pending"]')).toContainText(
-      "E2E Superadmin saved draft version 1 on "
-    );
+    await expect(badgeOf(writerPage)).toHaveAttribute("data-draft-revision", "1");
+    await expectDraftSentence(writerPage, "Draft version 1 by E2E Superadmin, ");
     await expect(instructionsOf(writerPage)).toHaveValue("Check every contract twice.");
     const publish = writerPage.locator("[data-agent-publish]");
     await expect(publish).toBeDisabled();
@@ -289,15 +305,13 @@ test("a writer without agent.publish, a draft written meanwhile, a reader, and a
     await behind.scrollIntoViewIfNeeded();
     await shootOnce(writerPage, "ad-4-behind-1280-light-en");
     await behind.getByRole("button", { name: "Load the newer draft", exact: true }).click();
-    await expect(badgeOf(writerPage)).toHaveText("Draft version 2");
+    await expect(badgeOf(writerPage)).toHaveAttribute("data-draft-revision", "2");
     await expect(instructionsOf(writerPage)).toHaveValue("Read the contract three times.");
     // The writer goes on from the newer draft and saves on it.
     await instructionsOf(writerPage).fill("Read the contract three times, slowly.");
     await saveDraftOf(writerPage).click();
-    await expect(badgeOf(writerPage)).toHaveText("Draft version 3");
-    await expect(writerPage.locator('[data-agent-draft="pending"]')).toContainText(
-      "E2E Zz Agent Draft Writer saved draft version 3 on "
-    );
+    await expect(badgeOf(writerPage)).toHaveAttribute("data-draft-revision", "3");
+    await expectDraftSentence(writerPage, "Draft version 3 by E2E Zz Agent Draft Writer, ");
     expect(await draftRevision(page, name)).toBe(3);
 
     // A reader of the agent sees the live agent: no draft, no badge, no Publish.
@@ -356,7 +370,7 @@ test("a writer without agent.publish, a draft written meanwhile, a reader, and a
     expect(publishGranted.ok(), await publishGranted.text()).toBe(true);
     grants.push(idSchema.parse(await publishGranted.json()).id);
     await writerPage.reload();
-    await expect(badgeOf(writerPage)).toHaveText("Draft version 3");
+    await expect(badgeOf(writerPage)).toHaveAttribute("data-draft-revision", "3");
     await writerPage.locator("[data-agent-publish]").click();
     await writerPage
       .getByRole("dialog", { name: `Publish ${displayName}?` })
