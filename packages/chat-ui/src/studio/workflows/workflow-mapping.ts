@@ -785,6 +785,11 @@ function readSteps(value: unknown, known: StepNames): WorkflowStepView[] {
       ...(sourceKind === undefined ? {} : { sourceKind }),
       ...(service === undefined ? {} : { service }),
       ...(kind === "workflow" && child !== undefined ? { workflow: child } : {}),
+      // The server names a child the reader may not read by its kind alone, with no title and
+      // no word on whether it is published.
+      ...(kind === "workflow" && fact?.source?.kind === "workflow" && fact.published === undefined
+        ? { childHidden: true as const }
+        : {}),
       steps: kind === "loop" ? readSteps(raw.steps, inside) : [],
       ...(branches === undefined ? {} : { branches }),
       ...(kind === "notify"

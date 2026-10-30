@@ -816,6 +816,65 @@ describe("a fan-out that ended done with failed child runs", () => {
     expect(markup).toContain("1002 · Weber KG");
     expect(markup).toContain('data-child-run="wr_child_1002"');
   });
+
+  const entriesOf = (workflow: typeof fanOut, stepRuns: StepRunResource[]) => {
+    const loop = placedSteps(workflow.steps).get("each_client")?.step;
+    if (loop === undefined) throw new Error("The Workflow has no loop.");
+    return render(
+      createElement(LoopEntriesView, {
+        loop,
+        counts: { total: 600, done: 600, failed: 0, running: 0 },
+        filter: "all",
+        onFilterChange: noop,
+        read: {
+          stepRuns: stepRuns.map(toWorkflowStepRun),
+          failed: false,
+          hasMore: false,
+          loadingMore: false,
+          loadMore: noop,
+          retry: noop
+        },
+        onOpenChild: noop
+      })
+    );
+  };
+  const doneChild = stepRun({
+    id: "sr_1_check",
+    stepId: "check",
+    stepType: "workflow",
+    containerStepRunId: "sr_loop",
+    iteration: { index: 1, label: "1003 · Klein GmbH" },
+    childRunId: "wr_child_1003"
+  });
+
+  it("links every child run of a loop, not only a failed one (EW-13)", () => {
+    expect(entriesOf(fanOut, [doneChild])).toContain('data-child-run="wr_child_1003"');
+  });
+
+  it("opens neither a child the reader may not read nor its runs, and names it by its kind", () => {
+    // The server names a child the reader may not read by its kind alone.
+    const childLoop = {
+      each_client: {
+        steps: [
+          { id: "check", name: "Check the client", type: "workflow", workflow: "client-check" }
+        ]
+      }
+    };
+    const hidden = workflowOf(childLoop, { check: { source: { kind: "workflow" } } });
+    const check = placedSteps(hidden.steps).get("check")?.step;
+    expect(check?.childHidden).toBe(true);
+    expect(entriesOf(hidden, [doneChild])).not.toContain("data-child-run");
+    const node = workflowGraph(hidden.steps, en).nodes.find((entry) => entry.id === "check");
+    expect(node?.action).toBeUndefined();
+    expect(node?.summary).toBe(t("workflows.canvas.childHidden"));
+    // A child the reader may read keeps "Open".
+    const readable = workflowOf(childLoop, {
+      check: { source: { kind: "workflow", title: "Client check" }, published: true }
+    });
+    expect(
+      workflowGraph(readable.steps, en).nodes.find((entry) => entry.id === "check")?.action
+    ).toEqual({ label: t("workflows.canvas.open") });
+  });
 });
 
 describe("Workflow agent step panels (CR-2)", () => {

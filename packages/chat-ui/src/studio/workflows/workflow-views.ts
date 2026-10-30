@@ -160,6 +160,11 @@ export interface WorkflowStepView {
   concurrency?: number;
   /** On a `workflow` step: the id of the Workflow it starts. */
   workflow?: string;
+  /**
+   * On a `workflow` step: the reader may not read the Workflow it starts. Neither it nor its
+   * runs open, and nothing of it is shown but that it is a Workflow.
+   */
+  childHidden?: true;
   /** On a `condition` or `parallel` step: its paths, in their order. */
   branches?: readonly WorkflowBranchView[];
   /** On a loop: the id of the step whose result holds its entries. */

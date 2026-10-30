@@ -445,7 +445,7 @@ export function WorkflowCanvas({
           }
           chose.current = true;
           if (step.kind === "workflow") {
-            onOpenChild(step, frame.get(id));
+            if (step.childHidden !== true) onOpenChild(step, frame.get(id));
           } else {
             open(id, "entries");
           }
@@ -467,7 +467,7 @@ export function WorkflowCanvas({
               pin={pins?.(selected.step, selectedRun?.stepRun, selected.blockId !== undefined)}
               rerun={reruns?.(selected.step, selected.blockId !== undefined)}
               onOpenChild={
-                selected.step.kind === "workflow"
+                selected.step.kind === "workflow" && selected.step.childHidden !== true
                   ? () => onOpenChild(selected.step, selectedRun?.stepRun)
                   : undefined
               }
