@@ -809,9 +809,15 @@ function searchToolInputJsonSchema(
   knowledgeBases: readonly string[],
   filters: readonly KnowledgeFilterDeclaration[]
 ): JsonObject {
-  // A name two Knowledge Bases declare is one property: the first one's description.
+  // A name two Knowledge Bases declare is one property: the first one's description, and a date
+  // only where every one of them takes a date. Each Knowledge Base's own line says what it takes.
   const byName = new Map<string, KnowledgeFilterDeclaration>();
-  for (const filter of filters) if (!byName.has(filter.name)) byName.set(filter.name, filter);
+  const mixed = new Set<string>();
+  for (const filter of filters) {
+    const first = byName.get(filter.name);
+    if (!first) byName.set(filter.name, filter);
+    else if (first.type !== filter.type) mixed.add(filter.name);
+  }
   return {
     type: "object",
     properties: {
@@ -846,8 +852,12 @@ function searchToolInputJsonSchema(
                   filter.name,
                   {
                     type: "string",
-                    ...(filter.type === "date" ? { format: "date" } : {}),
-                    description: filter.description
+                    ...(filter.type === "date" && !mixed.has(filter.name)
+                      ? { format: "date" }
+                      : {}),
+                    description: mixed.has(filter.name)
+                      ? "Knowledge Bases declare this filter with different types; each one's line in the description says what it takes. One whose type the value does not fit is skipped."
+                      : filter.description
                   }
                 ])
               ),

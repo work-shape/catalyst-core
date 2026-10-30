@@ -69,7 +69,7 @@ function searchFiltersOf(
   values: Readonly<Record<string, string | undefined>> | undefined
 ): KnowledgeSearchFilter[] {
   return declared.flatMap((filter) => {
-    const value = values?.[filter.name];
+    const value = values && Object.hasOwn(values, filter.name) ? values[filter.name] : undefined;
     return value === undefined ? [] : [{ field: filter.field, op: filter.op ?? "eq", value }];
   });
 }

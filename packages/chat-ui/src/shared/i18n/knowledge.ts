@@ -238,10 +238,10 @@ export const knowledge = defineTranslations({
     "knowledge.originLinkEditLabel": "Link {name} to its original",
     "knowledge.originLinkTitle": "Where the original of {name} lives",
     "knowledge.originLinkDescription":
-      "A citation of this document then offers the original beside the stored copy. Only readers of this knowledge base see the link.",
+      "A citation of this document then offers the original beside the stored copy. The link appears in its citations to everyone who can read the chat, and a citation keeps the link it was given.",
     "knowledge.originLinkField": "Address of the original",
     "knowledge.originLinkHint":
-      "An https address of the file in its own system, such as your document management. Not a share link that opens it for anyone.",
+      "An https address of the file in its own system, such as your document management. Not a share link that opens it for anyone: links with a token are refused where they can be recognized, which is best effort, since share links can't be detected reliably.",
     "knowledge.originLinkInvalid":
       "Enter an http or https address, without a user name, a password or a token.",
     "knowledge.originLinkSave": "Save link",
@@ -552,10 +552,10 @@ export const knowledge = defineTranslations({
     "knowledge.originLinkEditLabel": "{name} mit dem Original verknüpfen",
     "knowledge.originLinkTitle": "Wo das Original von {name} liegt",
     "knowledge.originLinkDescription":
-      "Ein Zitat dieses Dokuments bietet dann neben der gespeicherten Kopie auch das Original an. Den Link sieht nur, wer diese Wissensbasis nutzen darf.",
+      "Ein Zitat dieses Dokuments bietet dann neben der gespeicherten Kopie auch das Original an. Den Link sieht in den Zitaten jede Person, die den Chat lesen kann, und ein Zitat behält den Link, den es bekommen hat.",
     "knowledge.originLinkField": "Adresse des Originals",
     "knowledge.originLinkHint":
-      "Eine https-Adresse der Datei in ihrem eigenen System, etwa deiner Dokumentenverwaltung. Kein Freigabelink, der sie für alle öffnet.",
+      "Eine https-Adresse der Datei in ihrem eigenen System, etwa deiner Dokumentenverwaltung. Kein Freigabelink, der sie für alle öffnet: Links mit einem Token werden abgelehnt, wo sie erkennbar sind. Das gelingt nicht immer, denn Freigabelinks lassen sich nicht zuverlässig erkennen.",
     "knowledge.originLinkInvalid":
       "Gib eine http- oder https-Adresse ein, ohne Benutzernamen, Passwort oder Token.",
     "knowledge.originLinkSave": "Link speichern",

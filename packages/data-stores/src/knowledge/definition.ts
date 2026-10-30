@@ -137,10 +137,15 @@ const FILTER_OPERATORS = [
 const filterSchema = z
   .strictObject({
     /** What a caller passes the value under, such as `stand_nach`. */
-    name: z.string().regex(/^[a-z][a-z0-9_]{0,62}$/u, {
-      error:
-        "A filter name is lowercase letters, digits and '_', starting with a letter, at most 63 characters"
-    }),
+    name: z
+      .string()
+      .regex(/^[a-z][a-z0-9_]{0,62}$/u, {
+        error:
+          "A filter name is lowercase letters, digits and '_', starting with a letter, at most 63 characters"
+      })
+      .refine((name) => !(name in Object.prototype), {
+        error: (issue) => `A filter cannot be named '${String(issue.input)}'`
+      }),
     type: z.enum(KNOWLEDGE_FILTER_TYPES, {
       error: `A filter is of type ${KNOWLEDGE_FILTER_TYPES.map((type) => `'${type}'`).join(" or ")}`
     }),

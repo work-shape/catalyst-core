@@ -23,7 +23,9 @@ export const KNOWLEDGE_ORIGIN_LINK_CHANGES = ["set", "cleared"] as const;
 
 /**
  * Query or fragment parameters that carry a credential: a link holding one would let whoever
- * reads it reach the original without the source's own sign-in. Compared in lower case.
+ * reads it reach the original without the source's own sign-in. Compared in lower case. Best
+ * effort: a token in the path, in a hash route or under another name passes, since share links
+ * can't be detected reliably.
  */
 const CREDENTIAL_PARAMETERS = new Set([
   "access_token",

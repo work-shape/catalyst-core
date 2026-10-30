@@ -67,7 +67,12 @@ type Passage = z.infer<typeof passageSchema>;
 interface Skipped {
   knowledgeBase: string;
   reason:
-    "permission_missing" | "not_searchable" | "unavailable" | "filter_not_declared" | "failed";
+    | "permission_missing"
+    | "not_searchable"
+    | "unavailable"
+    | "filter_not_declared"
+    | "filter_value_invalid"
+    | "failed";
   message: string;
 }
 
@@ -163,6 +168,8 @@ export async function runKnowledgeSearch(
   );
   const skipped: Skipped[] = [];
   const searched: string[] = [];
+  /** Why a filter value fits no Knowledge Base, where it fits none that declares the filter. */
+  let unfit: string | undefined;
   for (const name of wanted) {
     const search = operations.get(knowledgeSearchOperationName(name));
     const undeclared = search
@@ -176,13 +183,14 @@ export async function runKnowledgeSearch(
       });
     } else if (search) {
       const fits = search.inputSchema.safeParse({ query, limit, ...(filters ? { filters } : {}) });
-      if (!fits.success) {
-        return failed(
-          "validation_failed",
-          `A filter value does not fit the Knowledge Base '${name}': ${fits.error.issues.map((issue) => issue.message).join("; ")}`
-        );
+      if (fits.success) {
+        searched.push(name);
+      } else {
+        // Two Knowledge Bases may declare one name with different types: the value is skipped
+        // where it does not fit and searched where it does.
+        unfit = `A filter value does not fit the Knowledge Base '${name}': ${fits.error.issues.map((issue) => issue.message).join("; ")}`;
+        skipped.push({ knowledgeBase: name, reason: "filter_value_invalid", message: unfit });
       }
-      searched.push(name);
     } else if (!operations.has(knowledgeQueryOperationName(name))) {
       skipped.push({
         knowledgeBase: name,
@@ -197,6 +205,9 @@ export async function runKnowledgeSearch(
         message: "It holds tables and is read with knowledge.query, not searched."
       });
     }
+  }
+  if (searched.length === 0 && unfit !== undefined) {
+    return failed("validation_failed", unfit);
   }
   if (searched.length === 0 && skipped.length === 0) {
     return failed(

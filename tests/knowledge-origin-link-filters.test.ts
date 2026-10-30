@@ -478,6 +478,13 @@ describe("the origin link and declared filters of a Knowledge Base (DS-6b)", () 
           },
           "declared once"
         ],
+        // A name every object has would read a value no caller passed.
+        [
+          {
+            filters: [{ name: "constructor", type: "string", description: "C", field: "title" }]
+          },
+          "cannot be named 'constructor'"
+        ],
         [
           {
             methods: ["structured"],
@@ -540,6 +547,11 @@ describe("the origin link and declared filters of a Knowledge Base (DS-6b)", () 
       expect(
         (await search(world, "objekte", { query: "Kaution", filters: { objekt: "7" } })).statusCode
       ).toBe(422);
+      // A name every object has is no declared filter either.
+      expect(
+        (await search(world, "objekte", { query: "Kaution", filters: { constructor: "x" } }))
+          .statusCode
+      ).toBe(422);
       expect(
         (await search(world, "objekte", { query: "Kaution", filters: { stand_nach: "gestern" } }))
           .statusCode
@@ -560,7 +572,18 @@ describe("the origin link and declared filters of a Knowledge Base (DS-6b)", () 
     it("lists each Knowledge Base's filters in the generated tool description and searches only those that declare a filter passed", async () => {
       const world = await instance();
       const record = await publishKnowledgeBase(world, "objekte", { filters: FILTERS });
-      await publishKnowledgeBase(world, "glossar");
+      // The same name as a filter of `objekte`, of another type: a text, not a date.
+      await publishKnowledgeBase(world, "glossar", {
+        filters: [
+          {
+            name: "stand_nach",
+            type: "string",
+            description: "Only entries whose title starts so",
+            field: "title",
+            op: "prefix"
+          }
+        ]
+      });
       const [objekt] = await addFiles(world, "objekte", [
         { filename: "Objekt.txt", content: "Die Kaution des Objekts liegt beim Verwalter." }
       ]);
@@ -606,7 +629,11 @@ describe("the origin link and declared filters of a Knowledge Base (DS-6b)", () 
             type: "object",
             additionalProperties: false,
             properties: {
-              stand_nach: { type: "string", format: "date" },
+              // Declared as a date by one and as a text by the other: no format claimed.
+              stand_nach: {
+                type: "string",
+                description: expect.stringContaining("different types")
+              },
               datei: { type: "string" }
             }
           }
@@ -630,7 +657,21 @@ describe("the origin link and declared filters of a Knowledge Base (DS-6b)", () 
           message: "It declares no filter 'ordner', so it was not searched."
         }
       ]);
-      // A value the declared filter refuses fails the call with the reason.
+      // A value that fits only the Knowledge Base that takes it as a text: the other, which takes
+      // a date, is skipped with the reason, and the call does not fail.
+      const text = await askTool(world, admin, "berater", {
+        query: "Kaution",
+        filters: { stand_nach: "Glos" }
+      });
+      expect(text.passages.map((passage) => passage.fileName)).toEqual(["Glossar.txt"]);
+      expect(text.skipped).toEqual([
+        {
+          knowledgeBase: "objekte",
+          reason: "filter_value_invalid",
+          message: expect.stringContaining("does not fit the Knowledge Base 'objekte'")
+        }
+      ]);
+      // A value that fits no Knowledge Base that declares its filter fails the call.
       const wrong = await world.execution.localAgentRuntimeOptions.runTool(
         {
           toolName: KNOWLEDGE_SEARCH_TOOL_NAME,
@@ -653,7 +694,7 @@ describe("the origin link and declared filters of a Knowledge Base (DS-6b)", () 
             })
           ).id,
           agentName: "berater",
-          input: { query: "Kaution", filters: { stand_nach: "gestern" } }
+          input: { query: "Kaution", filters: { stand_nach: "gestern", datei: "Objekt.txt" } }
         },
         { clientInstanceId, user: admin, locale: "en", correlationId: "corr_wrong" }
       );
