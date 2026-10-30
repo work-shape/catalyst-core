@@ -128,6 +128,12 @@ export interface WorkflowRun
    * draft whose click started it (DP-1). Names only, no value. Missing on every other run.
    */
   startedFrom?: WorkflowRunStartedFrom;
+  /**
+   * The steps of a test run of a draft that use a pinned output (EW-10): each step, and the
+   * run whose output of it the step ends with instead of running. Taken from the starter's own
+   * pins when the run opened. Missing on every other run.
+   */
+  pinnedSteps?: WorkflowPinnedStep[];
   /** Step runs created so far, the steps of every loop iteration among them. */
   stepRunCount: number;
   /**
@@ -155,6 +161,14 @@ export interface WorkflowRun
    * the run still has its values.
    */
   dataPrunedAt?: ISODateString;
+}
+
+/** A step of a test run that ends with the output it had in an earlier run (EW-10). */
+export interface WorkflowPinnedStep {
+  /** The id of the step, outside every block. */
+  step: string;
+  /** The run of the same Workflow whose output of the step is used. */
+  sourceRunId: WorkflowRunId;
 }
 
 /**
@@ -221,6 +235,7 @@ export type NewWorkflowRun = Pick<
   | "operationRunId"
   | "starterRunId"
   | "startedFrom"
+  | "pinnedSteps"
   | "runKey"
   | "labels"
   | "continuation"

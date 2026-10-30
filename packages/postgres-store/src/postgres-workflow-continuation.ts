@@ -34,6 +34,7 @@ export async function createWorkflowRun(
       operationRunId: run.operationRunId ?? null,
       starterRunId: run.starterRunId ?? null,
       startedFrom: run.startedFrom ?? null,
+      pinnedSteps: run.pinnedSteps ?? null,
       deadlineAt: new Date(run.deadlineAt),
       limits: run.limits,
       correlationId: run.correlationId,

@@ -33,6 +33,7 @@ import type { AccessAdministrationStore } from "./access-administration-store";
 import type { RoleStore } from "./roles";
 import type { JobsStore } from "./jobs";
 import type { LiveOnceSwitchStore } from "./draft-calls";
+import type { WorkflowStepPinsStore } from "./workflow-step-pins";
 import type { CapabilityRecordStore } from "./capability-records";
 import type { OperationRunStore } from "./operation-runs";
 import type { InfrastructureCheckStore } from "./infrastructure-checks";
@@ -112,6 +113,8 @@ export interface PlatformStores {
   pages: PagesStore;
   connections: ConnectionsStore;
   workflowRuns: WorkflowRunsStore;
+  /** Pinned step outputs of Workflow drafts (EW-10): names of runs, never values. */
+  workflowStepPins: WorkflowStepPinsStore;
   workflowRunDatasets: WorkflowRunDatasetsStore;
   dataStores: DataStoreRecordsStore;
   knowledgeBases: KnowledgeBaseStateStore;

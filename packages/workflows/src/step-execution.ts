@@ -81,6 +81,7 @@ import { resolveInput, resolveReference, resolveRunKey, type ReferenceScope } fr
 import { workflowRunActor } from "./run-identity";
 import type { WorkflowRunFiles } from "./run-files";
 import { WorkflowStepFailure } from "./step-failure";
+import { pinnedStepOutput } from "./step-pins";
 import { testRunCall } from "./test-run";
 
 // The work of one step, without anything of it written: the engine writes how it went and
@@ -368,6 +369,10 @@ export function createStepExecutor(options: StepExecutorOptions) {
       datasets: options.datasets
     };
     try {
+      // A step of a test run its starter pinned ends with the output of the run it was pinned
+      // on, and calls, asks a model and runs a script for nothing (EW-10).
+      const pinned = await pinnedStepOutput(stores, run, stepRun);
+      if (pinned !== undefined) return { kind: "done", output: pinned.value };
       switch (step?.type) {
         case "trigger": {
           // A definition another release stored may name a trigger no engine fires yet.

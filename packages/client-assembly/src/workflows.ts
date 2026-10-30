@@ -11,7 +11,8 @@ import {
   workflowRunAsPrincipal,
   type OperationCalls,
   type RouteRegistration,
-  type WorkflowListEntry
+  type WorkflowListEntry,
+  type WorkflowRunsPort
 } from "@work-shape/catalyst-server";
 import {
   appWorkflowRefusalError,
@@ -23,6 +24,7 @@ import {
 import {
   codeStepIssues,
   createWorkflowEngine,
+  createWorkflowStepPins,
   createDatasetDownload,
   noWorkflowStepFiles,
   workflowDefinitionStartIssues,
@@ -193,6 +195,31 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
     ...(parts.stepDataDays === undefined ? {} : { stepDataDays: parts.stepDataDays }),
     ...(parts.pruneBatch ? { pruneBatch: parts.pruneBatch } : {})
   });
+  // Pinned step outputs (EW-10): a person's own, on the draft of a Workflow asset.
+  const stepPins = createWorkflowStepPins({
+    clientInstanceId,
+    stores,
+    now: () => parts.now?.() ?? new Date()
+  });
+  /** The draft and the asset of a Workflow whose pins are asked for. */
+  async function pinnedDraft(workflow: string) {
+    const [draft, asset] = await Promise.all([assets.draft(workflow), assets.assetOf(workflow)]);
+    if (!draft || !asset) throw noWorkflowDraftError(workflow);
+    return { draft: draft.manifest, assetId: asset.id };
+  }
+  const draftPins: NonNullable<WorkflowRunsPort["pins"]> = {
+    async list({ workflow, pinnedBy }) {
+      return stepPins.list({ ...(await pinnedDraft(workflow)), pinnedBy });
+    },
+    async pin({ workflow, step, source, pinnedBy }) {
+      return stepPins.pin({ ...(await pinnedDraft(workflow)), step, source, pinnedBy });
+    },
+    async unpin({ workflow, step, pinnedBy }) {
+      const asset = await assets.assetOf(workflow);
+      if (!asset) throw noWorkflowDraftError(workflow);
+      return stepPins.unpin({ assetId: asset.id, step, pinnedBy });
+    }
+  };
   /**
    * The list of the instance: every published Workflow, with what a start by hand of it is
    * refused for now. One the engine of this release does not run is listed with the engine's
@@ -288,8 +315,23 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
                 { clientInstanceId, apiAccess: stores.apiAccess },
                 { workflow, runAs: draft.manifest.runAs }
               );
-            return engine.test({ draft, ...start });
+            // A test of the draft takes its starter's pins; the published revision takes none.
+            const asset = revision === "draft" && !given ? await assets.assetOf(workflow) : undefined;
+            const pinnedSteps =
+              asset === undefined
+                ? []
+                : await stepPins.forTestRun({
+                    assetId: asset.id,
+                    pinnedBy: start.startedBy.id,
+                    draft: draft.manifest
+                  });
+            return engine.test({
+              draft,
+              ...start,
+              ...(pinnedSteps.length > 0 ? { pinnedSteps } : {})
+            });
           },
+          ...(given ? {} : { pins: draftPins }),
           // Definitions a test hands in are no assets: a right on them is decided by name.
           assetOf: (workflow) => (given ? Promise.resolve(undefined) : assets.assetOf(workflow))
         },

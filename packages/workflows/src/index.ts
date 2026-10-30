@@ -19,6 +19,9 @@ export const WORKFLOW_OPERATION_IDS = [
   "workflows.list_step_runs",
   "workflows.get_step_transcript",
   "workflows.cancel_run",
+  "workflows.list_pins",
+  "workflows.pin_step",
+  "workflows.unpin_step",
   "workflows.principal_rights"
 ] as const;
 
@@ -129,6 +132,13 @@ export {
 } from "./engine";
 export { workflowStepJobKind } from "./step-job";
 export { WORKFLOW_TEST_RUN_ERRORS } from "./test-run";
+export {
+  WORKFLOW_PIN_ERRORS,
+  createWorkflowStepPins,
+  workflowStepHash,
+  type WorkflowStepPinView,
+  type WorkflowStepPins
+} from "./step-pins";
 export * from "./limits";
 export {
   workflowDurationText,

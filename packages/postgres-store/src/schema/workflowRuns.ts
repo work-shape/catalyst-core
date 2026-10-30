@@ -34,6 +34,7 @@ import type {
   WorkflowStagedCode,
   WorkflowStepRunLog,
   WorkflowOutputPreview,
+  WorkflowPinnedStep,
   WorkflowRunId,
   WorkflowRunMode,
   WorkflowRunStatus,
@@ -135,6 +136,9 @@ export const workflowRuns = pgTable(
     labels: jsonb("labels").$type<Record<string, string>>(),
     // The App draft action that started a test run (DP-1): names only. Null on every other run.
     startedFrom: jsonb("started_from").$type<WorkflowRunStartedFrom>(),
+    // The steps of a test run that used a pinned output, and their source runs (EW-10): names
+    // only. Null on every other run.
+    pinnedSteps: jsonb("pinned_steps").$type<WorkflowPinnedStep[]>(),
     continuation: jsonb("continuation").$type<{
       rootRunId: WorkflowRunId;
       previousRunId?: WorkflowRunId;

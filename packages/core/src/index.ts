@@ -105,6 +105,7 @@ export type { WorkflowDatasetRef } from "./workflow-datasets";
 export type { WorkflowRunDataset } from "./workflow-datasets";
 export * from "./workflow-principal-rights";
 export * from "./workflow-runs";
+export * from "./workflow-step-pins";
 export * from "./workflow-step-job";
 export * from "./workflows";
 export * from "./yaml-data";

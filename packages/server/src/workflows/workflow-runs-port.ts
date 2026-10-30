@@ -76,6 +76,23 @@ export interface WorkflowRunsPort {
     /** The action of an App's draft whose click started the test (DP-1). */
     startedFrom?: WorkflowRunStartedFrom;
   }): Promise<WorkflowRunView>;
+  /**
+   * One person's pinned step outputs on a Workflow's draft (EW-10): their test runs of the draft
+   * end a pinned step with the output it had in the run named. Missing where the Workflows are
+   * no assets, which have no draft.
+   */
+  pins?: {
+    /** Refuses a Workflow without a draft. Clears the pins that no longer hold first. */
+    list(input: { workflow: string; pinnedBy: string }): Promise<WorkflowStepPinView[]>;
+    /** Pins the step on its output in `source`, a run of the Workflow the caller may read. */
+    pin(input: {
+      workflow: string;
+      step: string;
+      source: WorkflowRunView;
+      pinnedBy: string;
+    }): Promise<WorkflowStepPinView>;
+    unpin(input: { workflow: string; step: string; pinnedBy: string }): Promise<boolean>;
+  };
   /** Ends a run as `cancelled`. A run that has ended is answered as it is; none answers nothing. */
   cancel(input: {
     runId: string;
@@ -111,6 +128,13 @@ export interface WorkflowRunsPort {
    * its Workflow and on its runs.
    */
   assetOf(workflow: string): Promise<WorkflowAssetRef | undefined>;
+}
+
+/** A pinned step output as the API answers it: names only, no value (EW-10). */
+export interface WorkflowStepPinView {
+  step: string;
+  runId: string;
+  pinnedAt: string;
 }
 
 /** The asset of a Workflow as rights are decided on it. */
