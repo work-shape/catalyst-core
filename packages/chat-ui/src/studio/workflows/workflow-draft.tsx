@@ -180,7 +180,8 @@ export function draftChangesSentence(
 /**
  * The head of a Workflow's draft (DT-1b): what a test run of it does, the stores whose test
  * copy it reaches, the live version or that none is, and what the draft changes against it,
- * with Test run, Publish and Discard for whoever may. The canvas under it marks each change.
+ * with Test run for whoever may. The canvas under it marks each change. Publish and Discard
+ * stand in the page's head.
  */
 export function WorkflowDraftBar({
   state,
@@ -188,9 +189,7 @@ export function WorkflowDraftBar({
   testCopies = [],
   changes,
   onOpenRoute,
-  onTest,
-  onPublish,
-  onDiscard
+  onTest
 }: WorkflowDraftBarState) {
   const { locale, t } = useTranslation();
   const changed = draftChangesSentence(changes, locale, t);
@@ -200,25 +199,12 @@ export function WorkflowDraftBar({
       live={draftLiveOf(state === "ahead", liveVersion, locale, t)}
       targets={draftTestTargetsOf(testCopies, onOpenRoute)}
       {...(changed === undefined ? {} : { changes: changed })}
+      // Publish and Discard stand in the page's head, Publish as its one primary button.
       action={
-        onTest === undefined && onPublish === undefined && onDiscard === undefined ? undefined : (
-          <>
-            {onTest === undefined ? null : (
-              <Button variant="outline" size="sm" onClick={onTest}>
-                {t("workflows.test.button")}
-              </Button>
-            )}
-            {onPublish === undefined ? null : (
-              <Button variant="outline" size="sm" onClick={onPublish}>
-                {t("workflows.draft.publish")}
-              </Button>
-            )}
-            {onDiscard === undefined ? null : (
-              <Button variant="ghost" size="sm" onClick={onDiscard}>
-                {t("workflows.draft.discard")}
-              </Button>
-            )}
-          </>
+        onTest === undefined ? undefined : (
+          <Button variant="outline" size="sm" onClick={onTest}>
+            {t("workflows.test.button")}
+          </Button>
         )
       }
     />

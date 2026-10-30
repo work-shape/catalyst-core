@@ -130,11 +130,9 @@ function agentPage(
 }
 
 /** The marks a page shows: the fields with a published value and the sections with a mark. */
+/** The fields the page marks as changed by the draft, in the order of the page. */
 function marks(markup: string) {
-  return {
-    fields: [...markup.matchAll(/data-published-field="([^"]+)"/gu)].map((match) => match[1]),
-    sections: [...markup.matchAll(/data-draft-section=""/gu)].length
-  };
+  return [...markup.matchAll(/data-draft-group="([^"]+)"/gu)].map((match) => match[1]);
 }
 
 const publishButton = (markup: string) => /<button[^>]*data-agent-publish[^>]*>/u.exec(markup)?.[0];
@@ -153,16 +151,20 @@ describe("the fields a draft changes", () => {
 });
 
 describe("the agent page with a draft", () => {
-  it("shows the draft in the fields and the published value under each changed one", () => {
+  it("shows the draft in the fields, a text's live version in place and a list's under it", () => {
     const markup = agentPage(source(draftOf(drafted)));
-    expect(marks(markup)).toEqual({ fields: ["instructions", "skillNames"], sections: 2 });
-    // The field shows the draft; the published text stands under it.
+    expect(marks(markup)).toEqual(["instructions", "skillNames"]);
+    // The text shows the draft, with "Draft | Live | Changes" beside its label and one line
+    // under it; the live text shows in the same box once chosen, so the page never grows.
     expect(markup).toContain(">Help the user and cite the contract.</textarea>");
-    expect(markup).toMatch(/data-published-field="instructions"[\s\S]*Help the user\./u);
+    expect(markup).toContain("data-text-version-switch");
+    expect(markup).toContain("Differs from live in one place");
+    expect(markup).not.toContain('data-published-field="instructions"');
+    expect(markup).not.toContain("data-versioned-text-live");
+    // A list's live value stands under it.
     expect(markup).toMatch(/data-published-field="skillNames"[\s\S]*?Tax review/u);
-    expect(markup).toMatch(
-      /Ana Writer saved draft version 2 on .+? 2026, .+?\. It is not live: everyone who uses “Assistant” gets the published version until the draft is published\./u
-    );
+    // No banner repeats what the head's state says.
+    expect(markup).not.toContain('data-agent-draft="pending"');
   });
 
   it("names a published tool of a Connection by the Connection's title and the operation in words", () => {
@@ -195,17 +197,12 @@ describe("the agent page with a draft", () => {
     expect(published).not.toContain(tool);
   });
 
-  it("carries a short draft badge, and the banner names the author and the time", () => {
+  it("says the draft once, in the head's state after the name", () => {
     const markup = agentPage(source(draftOf(drafted)));
-    expect(markup).toMatch(/data-agent-draft-badge="2"[^>]*>(?:<span[^>]*>)?Draft version 2</u);
-    expect(markup).toMatch(
-      /data-agent-draft="pending"[\s\S]*Ana Writer saved draft version 2 on .+? 2026/u
-    );
+    expect(markup).toMatch(/data-asset-status="draft"[^>]*data-draft-revision="2"/u);
+    expect(markup.match(/Draft · not live/gu)).toHaveLength(1);
     const german = agentPage(source(draftOf(drafted)), { locale: "de" });
-    expect(german).toMatch(/data-agent-draft-badge="2"[^>]*>(?:<span[^>]*>)?Entwurfsversion 2</u);
-    expect(german).toMatch(
-      /Ana Writer hat am .+? Entwurfsversion 2 gespeichert\. Sie ist nicht live/u
-    );
+    expect(german).toContain("Entwurf · nicht live");
   });
 
   it("offers Publish to a holder of agent.publish, and Discard in the menu", () => {
@@ -220,7 +217,7 @@ describe("the agent page with a draft", () => {
     const markup = agentPage(source(draftOf(drafted)), { frame: { draft: { canPublish: false } } });
     const publish = publishButton(markup) ?? "";
     expect(publish).toContain('disabled=""');
-    const reason = /<p id="([^"]+)">Publishing needs the right “Publish agents”\.<\/p>/u.exec(
+    const reason = /<p id="([^"]+)"[^>]*>Publishing needs the right “Publish agents”\.<\/p>/u.exec(
       markup
     );
     expect(reason).not.toBeNull();
@@ -244,7 +241,7 @@ describe("the agent page with a draft", () => {
   it("says a newer draft was read in place of the one Publish named", () => {
     const markup = agentPage(source(draftOf(drafted), { answerFor: () => ({ kind: "changed" }) }));
     expect(markup).toMatch(
-      /data-agent-draft="pending"[\s\S]*Someone saved a newer draft while you were looking at it\.[\s\S]*Ana Writer saved draft version 2 on /u
+      /data-agent-draft="changed"[\s\S]*Someone saved a newer draft while you were looking at it\./u
     );
   });
 
@@ -270,7 +267,7 @@ describe("the agent page with a draft", () => {
 describe("the agent page without a draft", () => {
   it("shows the live agent with no badge, marks or Publish", () => {
     const markup = agentPage(source(null));
-    expect(marks(markup)).toEqual({ fields: [], sections: 0 });
+    expect(marks(markup)).toEqual([]);
     expect(markup).not.toContain("data-agent-draft");
     expect(publishButton(markup)).toBeUndefined();
     expect(markup).toContain(">Help the user.</textarea>");

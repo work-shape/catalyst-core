@@ -241,9 +241,9 @@ describe("the page of a Workflow with a draft", () => {
     expect(page()).not.toContain("data-edit-refused");
   });
 
-  // DT-1b, Workflows check 6: the head of the draft says what its calls do, names the live
-  // revision and offers the publish and the discard.
-  it("says what a draft's calls do and what is live, with the publish and the discard", () => {
+  // DT-1b, Workflows check 6: the bar of the draft says what its calls do and names the live
+  // revision; the page head says the draft once and offers the publish, the discard in its menu.
+  it("says what a draft's calls do and what is live, with the publish in the head", () => {
     const markup = page({
       draft: {
         state: "ahead",
@@ -256,8 +256,12 @@ describe("the page of a Workflow with a draft", () => {
     expect(markup).toContain("Draft · reads live data · changes are simulated");
     expect(markup).toContain("Live: version 4, published by Anna Beispiel on Oct 12");
     expect(markup).toContain(`>${t("workflows.draft.publish")}</`);
-    expect(markup).toContain(`>${t("workflows.draft.discard")}</`);
+    expect(markup).toContain('data-asset-status="draft"');
+    expect(markup).toContain(t("build.headDraft"));
+    // Discard stands in the head's "…" menu, never as a button of the bar.
+    expect(markup).not.toContain(`>${t("workflows.draft.discard")}</`);
     const german = page({ draft: { state: "ahead", onPublish: noop, onDiscard: noop } }, "de");
+    expect(german).toContain(de("build.headDraft"));
     expect(german).toContain(`>${de("workflows.draft.publish")}</`);
   });
 

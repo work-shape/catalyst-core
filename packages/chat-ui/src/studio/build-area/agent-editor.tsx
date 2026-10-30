@@ -1,23 +1,31 @@
-import { Send, Star, Undo2 } from "lucide-react";
-import { useAgentTryAction } from "../../chat/dock/agent-try";
+import { RotateCcw, Send, Star, Undo2 } from "lucide-react";
+import { useOfferAgentTry } from "../../chat/dock/agent-try";
 import { useEffect, useId, useMemo, useState } from "react";
 import { assetAddressFromName } from "@work-shape/catalyst-core";
 import type { AgentDraft, ConfigAssetReferences } from "@work-shape/catalyst-api-client";
 import {
-  Badge,
   Button,
+  changedPlaces,
   ConfirmDialog,
   DropdownMenuItem,
   Field,
   FormNotice,
   Input,
   Switch,
-  Textarea
+  Textarea,
+  TextVersionSwitch,
+  VersionedText,
+  type TextVersion
 } from "@work-shape/catalyst-ui";
 import { actionLabel } from "../../admin/access/right-words";
 import { useTranslation } from "../../shared/i18n";
 import { AssetEditorShell, useAssetForm, type AssetSection } from "./asset-editor-shell";
-import { FieldRefusals, InitialPromptsEditor, LocalizedField } from "./asset-form-fields";
+import {
+  FieldRefusals,
+  InitialPromptsEditor,
+  LocalizedField,
+  type FieldVersions
+} from "./asset-form-fields";
 import {
   agentConfigToForm,
   agentMissingTranslations,
@@ -26,7 +34,8 @@ import {
   selectAgentModelBinding,
   setAgentModelReasoningEffort,
   setAgentModelUserSelectable,
-  type AgentFormState
+  type AgentFormState,
+  type LocalizedPair
 } from "./asset-form-model";
 import type { BuildAssetEditorProps } from "./build-asset-kind";
 import { refusalsOf, type BuildWriteOutcome } from "./build-refusals";
@@ -58,12 +67,12 @@ import { heldDataStores, isAgentDataStoreToolName } from "./agent-data-stores-mo
 import { AgentModels, modelBindingLabel } from "./agent-models";
 import { AgentSkills, type SkillChoice } from "./agent-skills";
 import {
-  AgentDraftBadge,
   AgentDraftNotice,
-  DraftSectionMark,
+  AgentDraftStatus,
   draftFieldsView,
   type DraftTitles
 } from "./agent-draft";
+import type { DraftAgentField } from "./agent-draft-model";
 import { useDraftFollow, type AgentDraftSource } from "./agent-draft-source";
 import type { DraftDecision } from "./build-data";
 import { PlatformInstructions } from "./platform-instructions";
@@ -242,6 +251,10 @@ export function AgentEditor({
   const named =
     form.displayName[locale].trim() || form.displayName[locale === "de" ? "en" : "de"].trim();
   const title = named || form.name || t("configNewAgent");
+  // The default agent offered in every workspace is said in one fact: "Default in all
+  // workspaces" stands in place of where a chat can choose it.
+  const defaultEverywhere =
+    isDefault && (availability?.saved ?? frame.asset?.availability)?.mode === "all";
   // The page of a new agent asks the instance about the id its name makes.
   const { onNewTitle } = frame;
   useEffect(() => {
@@ -265,6 +278,19 @@ export function AgentEditor({
     );
 
   const update = (patch: Partial<AgentFormState>) => setForm((value) => ({ ...value, ...patch }));
+  // Which version each text the draft changes shows: the draft to edit, what is live, or the
+  // changed lines. The page never grows: each shows in the field's own box.
+  const [views, setViews] = useState<Partial<Record<DraftAgentField, TextVersion>>>({});
+  const versionsOf = <Field extends DraftAgentField & keyof AgentFormState>(
+    field: Field
+  ): FieldVersions<AgentFormState[Field]> | undefined =>
+    proposed.changes(field)
+      ? {
+          live: (live ?? state.baseline)[field],
+          view: views[field] ?? "draft",
+          onViewChange: (view) => setViews((before) => ({ ...before, [field]: view }))
+        }
+      : undefined;
   // An agent the platform ships says under each field where the form differs from it.
   const shipped = shippedFieldsView({
     config: held?.config ?? frame.asset?.config,
@@ -272,12 +298,70 @@ export function AgentEditor({
     canEdit,
     onReset: update
   });
+  // A field's one line about its versions: in how many places it differs from live, and that
+  // it is the instance's own version instead of what the platform ships. Only what applies.
+  const differs = (places: number) =>
+    places === 0
+      ? undefined
+      : places === 1
+        ? t("agentDraft.differsOne")
+        : t("agentDraft.differsMany", { count: places });
+  const lineOf = (places: number | undefined, own: boolean): string | undefined => {
+    const first = places === undefined ? undefined : differs(places);
+    const parts = [
+      first,
+      own
+        ? t(first === undefined ? "agentDraft.ownVersionAlone" : "agentDraft.ownVersion")
+        : undefined
+    ].filter((part) => part !== undefined);
+    return parts.length === 0 ? undefined : parts.join(" · ");
+  };
+  const pairPlaces = (left: LocalizedPair, right: LocalizedPair) =>
+    changedPlaces(left.en, right.en) + changedPlaces(left.de, right.de);
+  const localizedLine = (field: "displayName" | "description" | "welcomeMessage") =>
+    lineOf(
+      proposed.changes(field)
+        ? pairPlaces((live ?? state.baseline)[field], form[field])
+        : undefined,
+      shipped.own(field)
+    );
+  const textLine = (field: "instructions" | "additionalInstructions") =>
+    lineOf(
+      proposed.changes(field)
+        ? changedPlaces((live ?? state.baseline)[field], form[field])
+        : undefined,
+      field === "instructions" && shipped.own(field)
+    );
+  // "View changes" in the head's state: every text the draft changes shows its changed lines,
+  // and the page goes to the first field the draft changes.
+  const showChanges =
+    proposed.fields.length === 0
+      ? undefined
+      : () => {
+          setViews(
+            Object.fromEntries(
+              proposed.fields.map((field) => [
+                field,
+                field === "instructions" || field === "additionalInstructions" ? "changes" : "live"
+              ])
+            )
+          );
+          const first = proposed.fields[0];
+          window.requestAnimationFrame(() => {
+            document
+              .querySelector(`[data-draft-group="${first ?? ""}"]`)
+              ?.scrollIntoView({ block: "center" });
+          });
+        };
   // A shipped agent's instructions keep the platform's text, which each release refreshes:
   // the instance's own goes into its additions. The text opens for a change on request, and
   // stays open where it is the instance's already.
   const [platformTextOpen, setPlatformTextOpen] = useState(false);
   const platformTextLocked =
     shipped.shipped && !platformTextOpen && shipped.asShipped("instructions");
+  const instructionsLabel = t(
+    shipped.shipped ? "agentDraft.platformInstructions" : "configSystemPrompt"
+  );
   const changedFields = countChangedFields(form, state.baseline);
   const dirty = changedFields > 0 || availabilityChanged || useEdit.changed;
   const { amend } = state;
@@ -291,7 +375,8 @@ export function AgentEditor({
     onRead: frame.draft?.onRead
   });
   // Try in the dock, for a reader who may change the agent: it runs the draft (section 4.7c).
-  const tryAction = useAgentTryAction(
+  // The head's "Chat" opens it on the draft where the agent has one: Try is no button of its own.
+  useOfferAgentTry(
     frame.asset !== undefined && draft !== undefined
       ? {
           agent: frame.asset.name,
@@ -401,6 +486,8 @@ export function AgentEditor({
                 required
                 readOnly={!canEdit("displayName")}
                 value={form.displayName}
+                versions={versionsOf("displayName")}
+                note={localizedLine("displayName")}
                 onChange={(displayName) => update({ displayName })}
               />
             )
@@ -413,6 +500,8 @@ export function AgentEditor({
                 label={t("configDescription")}
                 readOnly={!canEdit("description")}
                 value={form.description}
+                versions={versionsOf("description")}
+                note={localizedLine("description")}
                 onChange={(description) => update({ description })}
               />
             )
@@ -425,6 +514,8 @@ export function AgentEditor({
                 label={t("configWelcomeMessage")}
                 readOnly={!canEdit("welcomeMessage")}
                 value={form.welcomeMessage}
+                versions={versionsOf("welcomeMessage")}
+                note={localizedLine("welcomeMessage")}
                 onChange={(welcomeMessage) => update({ welcomeMessage })}
               />
             )
@@ -435,6 +526,15 @@ export function AgentEditor({
               label={t("configWelcomeSubtitle")}
               readOnly={!canEdit("welcomeSubtitle")}
               value={form.welcomeSubtitle}
+              versions={versionsOf("welcomeSubtitle")}
+              note={
+                proposed.changes("welcomeSubtitle")
+                  ? lineOf(
+                      pairPlaces((live ?? state.baseline).welcomeSubtitle, form.welcomeSubtitle),
+                      false
+                    )
+                  : undefined
+              }
               onChange={(welcomeSubtitle) => update({ welcomeSubtitle })}
             />
           )}
@@ -456,25 +556,47 @@ export function AgentEditor({
               "instructions",
               <div className="grid gap-2">
                 <Field
-                  label={t(
-                    shipped.shipped ? "agentDraft.platformInstructions" : "configSystemPrompt"
-                  )}
-                  hint={t(
-                    !shipped.shipped
-                      ? "configSystemPromptHint"
-                      : platformTextLocked
+                  label={instructionsLabel}
+                  // One line under the text: how it differs from live and from what the
+                  // platform ships, or what it is while it differs from neither.
+                  hint={
+                    textLine("instructions") ??
+                    t(
+                      shipped.shipped
                         ? "agentDraft.platformInstructionsHint"
-                        : "agentDraft.platformInstructionsEditHint"
-                  )}
+                        : "configSystemPromptHint"
+                    )
+                  }
                   required={canEdit("instructions")}
+                  labelEnd={
+                    proposed.changes("instructions") ? (
+                      <TextVersionSwitch
+                        label={instructionsLabel}
+                        value={views.instructions ?? "draft"}
+                        onValueChange={(view) =>
+                          setViews((before) => ({ ...before, instructions: view }))
+                        }
+                      />
+                    ) : undefined
+                  }
                 >
-                  <Textarea
-                    variant="code"
-                    className={shipped.shipped ? "min-h-40" : "min-h-72"}
-                    value={form.instructions}
-                    readOnly={!canEdit("instructions") || platformTextLocked}
-                    onChange={(event) => update({ instructions: event.target.value })}
-                  />
+                  <VersionedText
+                    label={instructionsLabel}
+                    view={
+                      proposed.changes("instructions") ? (views.instructions ?? "draft") : "draft"
+                    }
+                    live={(live ?? state.baseline).instructions}
+                    draft={form.instructions}
+                    mono
+                  >
+                    <Textarea
+                      variant="code"
+                      className={shipped.shipped ? "min-h-40" : "min-h-72"}
+                      value={form.instructions}
+                      readOnly={!canEdit("instructions") || platformTextLocked}
+                      onChange={(event) => update({ instructions: event.target.value })}
+                    />
+                  </VersionedText>
                 </Field>
                 {platformTextLocked && canEdit("instructions") ? (
                   <div>
@@ -496,16 +618,41 @@ export function AgentEditor({
                 "additionalInstructions",
                 <Field
                   label={t("agentDraft.additionalInstructions")}
-                  hint={t("agentDraft.additionalInstructionsHint")}
+                  hint={
+                    textLine("additionalInstructions") ?? t("agentDraft.additionalInstructionsHint")
+                  }
+                  labelEnd={
+                    proposed.changes("additionalInstructions") ? (
+                      <TextVersionSwitch
+                        label={t("agentDraft.additionalInstructions")}
+                        value={views.additionalInstructions ?? "draft"}
+                        onValueChange={(view) =>
+                          setViews((before) => ({ ...before, additionalInstructions: view }))
+                        }
+                      />
+                    ) : undefined
+                  }
                 >
-                  <Textarea
-                    variant="code"
-                    className="min-h-40"
-                    data-additional-instructions=""
-                    value={form.additionalInstructions}
-                    readOnly={!canEdit("instructions")}
-                    onChange={(event) => update({ additionalInstructions: event.target.value })}
-                  />
+                  <VersionedText
+                    label={t("agentDraft.additionalInstructions")}
+                    view={
+                      proposed.changes("additionalInstructions")
+                        ? (views.additionalInstructions ?? "draft")
+                        : "draft"
+                    }
+                    live={(live ?? state.baseline).additionalInstructions}
+                    draft={form.additionalInstructions}
+                    mono
+                  >
+                    <Textarea
+                      variant="code"
+                      className="min-h-40"
+                      data-additional-instructions=""
+                      value={form.additionalInstructions}
+                      readOnly={!canEdit("instructions")}
+                      onChange={(event) => update({ additionalInstructions: event.target.value })}
+                    />
+                  </VersionedText>
                 </Field>
               )
             : null}
@@ -587,7 +734,7 @@ export function AgentEditor({
                     />
                   </Field>
                 ) : null}
-                {proposed.value("model")}
+                {proposed.around("model", null)}
                 <FieldRefusals messages={refusalsOf(outcome, "model")} />
               </>
             )
@@ -607,8 +754,8 @@ export function AgentEditor({
             editable={canEdit("skillNames")}
             onChange={(skillNames) => update({ skillNames })}
           />
-          {shipped.around("skillNames", null)}
-          {proposed.value("skillNames")}
+          {shipped.note("skillNames")}
+          {proposed.around("skillNames", null)}
           <FieldRefusals messages={refusalsOf(outcome, "skills")} />
         </>
       )
@@ -629,7 +776,7 @@ export function AgentEditor({
                   editable={canEdit("knowledgeBases")}
                   onChange={(knowledgeBases) => update({ knowledgeBases })}
                 />
-                {proposed.value("knowledgeBases")}
+                {proposed.around("knowledgeBases", null)}
                 <FieldRefusals messages={refusalsOf(outcome, "knowledge")} />
               </>
             )
@@ -692,8 +839,8 @@ export function AgentEditor({
             disabled={!canEdit("toolNames")}
             onChange={(toolNames) => update({ toolNames })}
           />
-          {shipped.around("toolNames", null)}
-          {proposed.value("toolNames")}
+          {shipped.note("toolNames")}
+          {proposed.around("toolNames", null)}
           <FieldRefusals messages={refusalsOf(outcome, "tools")} />
         </>
       )
@@ -710,8 +857,8 @@ export function AgentEditor({
             disabled={!canEdit("initialPrompts")}
             onChange={(initialPrompts) => update({ initialPrompts })}
           />
-          {shipped.around("initialPrompts", null)}
-          {proposed.value("initialPrompts")}
+          {shipped.note("initialPrompts")}
+          {proposed.around("initialPrompts", null)}
         </>
       )
     },
@@ -757,6 +904,7 @@ export function AgentEditor({
       : [])
   ];
 
+  const discardable = draft !== undefined && held !== null && !frame.saveBlocked;
   const page = (
     <AssetEditorShell
       frame={{
@@ -767,20 +915,25 @@ export function AgentEditor({
           (editableAgentFields.length > 0 || canManageAgentModels || availability !== undefined)
       }}
       title={title}
-      description={
-        form.description[locale].trim() || form.description[locale === "de" ? "en" : "de"].trim()
+      status={
+        frame.asset === undefined ? undefined : (
+          <AgentDraftStatus
+            draft={held}
+            publishRight={
+              held !== null && !frame.draft?.canPublish
+                ? actionLabel("agent.publish", t)
+                : undefined
+            }
+            onShowChanges={showChanges}
+          />
+        )
       }
-      badges={
-        <>
-          {held === null ? null : <AgentDraftBadge draft={held} />}
-          {isDefault ? <Badge>{t("configDefaultAgent")}</Badge> : null}
-          {shipped.shipped ? (
-            <Badge appearance="outline" data-shipped-agent="">
-              {t("agentDraft.shippedBadge")}
-            </Badge>
-          ) : null}
-        </>
-      }
+      // Where it comes from and that it is the default, each said once, before where it sits.
+      facts={[
+        shipped.shipped && t("agentDraft.shippedBadge"),
+        isDefault && !defaultEverywhere && t("configDefaultAgent")
+      ]}
+      audience={defaultEverywhere ? t("build.headDefaultEverywhere") : undefined}
       primaryAction={
         draft !== undefined && held !== null && !stale ? (
           <Button
@@ -813,15 +966,28 @@ export function AgentEditor({
         ) : undefined
       }
       menu={
-        draft !== undefined && held !== null && !frame.saveBlocked ? (
-          <DropdownMenuItem
-            icon={<Undo2 aria-hidden="true" />}
-            disabled={busy !== undefined}
-            onSelect={() => setDeciding("discard")}
-          >
-            <span data-agent-discard="">{t("agentDraft.discard")}</span>
-          </DropdownMenuItem>
-        ) : undefined
+        shipped.reset === undefined && !discardable ? undefined : (
+          <>
+            {shipped.reset === undefined ? null : (
+              <DropdownMenuItem
+                icon={<RotateCcw aria-hidden="true" />}
+                disabled={busy !== undefined}
+                onSelect={shipped.reset}
+              >
+                <span data-shipped-reset="">{t("agentDraft.shippedReset")}</span>
+              </DropdownMenuItem>
+            )}
+            {discardable ? (
+              <DropdownMenuItem
+                icon={<Undo2 aria-hidden="true" />}
+                disabled={busy !== undefined}
+                onSelect={() => setDeciding("discard")}
+              >
+                <span data-agent-discard="">{t("agentDraft.discard")}</span>
+              </DropdownMenuItem>
+            ) : null}
+          </>
+        )
       }
       notices={
         <>
@@ -858,12 +1024,10 @@ export function AgentEditor({
                 }
               }
             ]
-          : []),
-        ...(tryAction === undefined ? [] : [tryAction])
+          : [])
       ]}
       sections={sections.map((section) => ({
         ...section,
-        ...(proposed.sections.has(section.id) ? { state: <DraftSectionMark /> } : {}),
         // While Publish or Discard is on its way nothing is typed: either reads the page again.
         body: (
           <fieldset disabled={busy !== undefined} className="contents">

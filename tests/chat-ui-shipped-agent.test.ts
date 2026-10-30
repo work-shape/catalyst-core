@@ -1,11 +1,14 @@
+// @vitest-environment happy-dom
+
 import { createElement, createRef } from "react";
 import { describe, expect, it } from "vitest";
 import { AgentEditor, agentConfigToForm } from "@work-shape/catalyst-chat-ui/build-area";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
+import { headMenuItems } from "./support/head-menu";
 
-// The page of an agent that ships with the platform, such as Workshaper (SA-1): it says so in
-// the head, and under each field the instance changed it says that the field differs from what
-// the platform ships and offers to reset it. Fails without the change: the page showed a
+// The page of an agent that ships with the platform (SA-1): the line under its name says so,
+// each field the instance changed says it is the instance's own version, and the head's "…"
+// menu resets them to what the platform ships. Fails without the change: the page showed a
 // shipped agent like any other.
 
 const noop = () => undefined;
@@ -14,43 +17,49 @@ const render = (node: ReturnType<typeof createElement>) =>
   renderToStaticMarkup(createElement(TranslationProvider, { children: null, locale: "en" }, node));
 
 function page(config: Record<string, unknown>, editable: string[]): string {
-  return render(
-    createElement(AgentEditor, {
-      frame: {
-        page: { ref: createRef<HTMLDivElement>(), above: null, shown: noop },
-        asset: {
-          id: "asset_agent",
-          kind: "agent",
-          name: String(config.name),
-          scope: { kind: "instance" },
-          revision: 2,
-          config,
-          updatedAt: "2026-10-21T10:00:00.000Z"
-        },
-        start: undefined,
-        canWrite: true,
-        instanceWrite: true,
-        back: null,
-        actions: {},
-        notice: null,
-        onUnsavedChange: noop,
-        save: async () => ({ ok: true as const })
+  return render(editor(config, editable));
+}
+
+/** The items of the head's "…" menu, on the page mounted. */
+const menuOf = (config: Record<string, unknown>, editable: string[]) =>
+  headMenuItems(editor(config, editable));
+
+function editor(config: Record<string, unknown>, editable: string[]) {
+  return createElement(AgentEditor, {
+    frame: {
+      page: { ref: createRef<HTMLDivElement>(), above: null, shown: noop },
+      asset: {
+        id: "asset_agent",
+        kind: "agent",
+        name: String(config.name),
+        scope: { kind: "instance" },
+        revision: 2,
+        config,
+        updatedAt: "2026-10-21T10:00:00.000Z"
       },
-      initialForm: agentConfigToForm(config),
-      isDefault: false,
-      references: {
-        modelProviderIds: [],
-        modelBindingIds: [],
-        modelBindings: [],
-        fastModeModelBindingIds: [],
-        reasoningEfforts: [],
-        enabledToolNames: []
-      },
-      editableAgentFields: editable,
-      canManageAgentModels: false,
-      skillChoice: { options: [], onSearch: noop }
-    })
-  );
+      start: undefined,
+      canWrite: true,
+      instanceWrite: true,
+      back: null,
+      actions: {},
+      notice: null,
+      onUnsavedChange: noop,
+      save: async () => ({ ok: true as const })
+    },
+    initialForm: agentConfigToForm(config),
+    isDefault: false,
+    references: {
+      modelProviderIds: [],
+      modelBindingIds: [],
+      modelBindings: [],
+      fastModeModelBindingIds: [],
+      reasoningEfforts: [],
+      enabledToolNames: []
+    },
+    editableAgentFields: editable,
+    canManageAgentModels: false,
+    skillChoice: { options: [], onSearch: noop }
+  });
 }
 
 const shippedFields = {
@@ -62,7 +71,7 @@ const shippedFields = {
 };
 
 describe("the page of an agent that ships with the platform", () => {
-  it("marks the fields the instance changed and offers their reset to who may change them", () => {
+  it("marks the fields the instance changed and offers their reset to who may change them", async () => {
     const config = {
       name: "workshaper",
       ...shippedFields,
@@ -72,14 +81,15 @@ describe("the page of an agent that ships with the platform", () => {
       shipped: shippedFields
     };
     const markup = page(config, ["instructions", "toolNames"]);
-    expect(markup).toContain("Ships with the platform");
-    expect(markup).toContain('data-shipped-group="instructions"');
-    expect(markup).not.toContain('data-shipped-group="toolNames"');
-    expect(markup).not.toContain('data-shipped-group="displayName"');
-    expect(markup).toContain("Differs from what the platform ships");
-    expect(markup).toContain("Reset to shipped");
-    // A reader who may not change the field reads that it differs, with no reset.
-    expect(page(config, [])).not.toContain("Reset to shipped");
+    expect(markup).toMatch(/data-asset-place="">Ships with the platform</u);
+    // The field's one line says it is the instance's own; the same tools in another order and
+    // an unchanged name say nothing.
+    expect(markup.match(/Own version instead of the shipped one/gu)).toHaveLength(1);
+    expect(markup).not.toContain("data-shipped-differs");
+    expect(markup).not.toContain("Reset to shipped");
+    // The reset stands in the head's "…" menu, for who may change the field.
+    expect(await menuOf(config, ["instructions", "toolNames"])).toContain("Reset to shipped");
+    expect(await menuOf(config, [])).not.toContain("Reset to shipped");
   });
 
   it("keeps the platform's instructions closed and takes the instance's own as additions", () => {

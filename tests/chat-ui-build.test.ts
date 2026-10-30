@@ -228,6 +228,11 @@ const skillPages: BuildAssetKind = {
 };
 const pageKinds = [agentKind, skillPages];
 
+/** The pinned head of a page: everything from `<header` to its end. */
+function headOf(markup: string): string {
+  return markup.slice(markup.indexOf("<header"), markup.indexOf("</header>"));
+}
+
 describe("Studio frame", () => {
   it("opens the page of a new agent on the list when a page outside Studio started it", () => {
     // The agent's form reads the instance's configuration from Settings: a plain body stands in.
@@ -648,9 +653,9 @@ describe("Studio asset page", () => {
     expect(markup).not.toContain("Save changes");
   });
 
-  // Fails with the copy among the secondary actions: on a phone it folded into "…" with History,
-  // and the head offered nothing while the notice under it said to copy the skill.
-  it("keeps Copy to edit of a shipped skill in the head as its leading action", () => {
+  // The notice of a shipped skill says to copy it: the copy stands beside its words, so the page
+  // offers what it says. The head keeps no button for it: every action but Publish is in "…".
+  it("offers Copy to edit of a shipped skill beside the notice that says to copy it", () => {
     const shippedSkill = asset("skill", "tax-review", {
       config: { ...taxSkill.config, origin: "release" }
     });
@@ -660,11 +665,9 @@ describe("Studio asset page", () => {
         assets: { "skill/tax-review": ready(shippedSkill) }
       })
     );
-    const unfolded = /<div[^>]*inert[^>]*>(.*?)<\/div>/u.exec(markup)?.[1] ?? "";
-
-    expect(markup).toMatch(/<button[^>]*>(?:(?!<\/button>).)*Copy to edit<\/button>/u);
-    expect(unfolded).toContain("History");
-    expect(unfolded).not.toContain("Copy to edit");
+    const notice = /<div[^>]*data-build-read-only=""[\s\S]*?Copy to edit<\/button>/u.exec(markup);
+    expect(notice?.[0]).toContain("To change it, copy it and edit the copy.");
+    expect(headOf(markup)).not.toContain("Copy to edit");
   });
 
   it("reads only an asset outside the workspaces the reader writes", () => {

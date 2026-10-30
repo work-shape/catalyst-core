@@ -205,6 +205,7 @@ export function WorkflowPageView({
         canStart={canStart}
         startOff={startOff}
         edit={edit}
+        {...(draft === undefined ? {} : { draft })}
         onStart={onStart}
         onOpenRoute={onOpenRoute}
       />

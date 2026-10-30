@@ -260,8 +260,20 @@ async function saveDraft() {
   await settle();
 }
 
-const badge = () => host.querySelector("[data-agent-draft-badge]")?.textContent ?? "";
-const pending = () => host.querySelector('[data-agent-draft="pending"]')?.textContent ?? "";
+/** The draft the head's state names, as "Draft version N", or "" while the head says none. */
+const badge = () => {
+  const status = host.querySelector('[data-asset-status="draft"]');
+  return status === null ? "" : `Draft version ${status.getAttribute("data-draft-revision") ?? ""}`;
+};
+/** The sentence of the head state's popover: which draft, by whom and when, and what is live. */
+async function pending(): Promise<string> {
+  const trigger = host.querySelector<HTMLButtonElement>('button[data-asset-status="draft"]');
+  if (trigger === null) return "";
+  await act(async () => trigger.click());
+  const sentence = document.querySelector("[data-asset-status-sentence]")?.textContent ?? "";
+  await act(async () => trigger.click());
+  return sentence;
+}
 
 describe("saving the agent page", () => {
   it("writes the draft again and again, each save fenced by the draft revision it holds", async () => {
@@ -269,18 +281,20 @@ describe("saving the agent page", () => {
     mount(world);
     await settle();
     expect(instructions().value).toBe("Help the user.");
-    expect(host.querySelector("[data-agent-draft-badge]")).toBeNull();
+    expect(host.querySelector('[data-asset-status="draft"]')).toBeNull();
 
     type("Help the user and cite the contract.");
     await saveDraft();
     expect(world.puts).toEqual([{ expectedRevision: LIVE_REVISION, expectedDraftRevision: null }]);
-    // The page shows the draft it wrote, and the badge names it.
+    // The page shows the draft it wrote, and the head's state names it.
     expect(instructions().value).toBe("Help the user and cite the contract.");
     expect(badge()).toBe("Draft version 1");
-    expect(pending()).toContain("Me saved draft version 1 on ");
-    expect(host.querySelector('[data-published-field="instructions"]')?.textContent).toContain(
-      "Help the user."
+    expect(await pending()).toContain("Draft version 1 by Me, ");
+    // The field says it differs from live, and shows the live text in its own box.
+    expect(host.querySelector('[data-draft-group="instructions"]')?.textContent).toContain(
+      "Differs from live in one place"
     );
+    expect(host.querySelector("[data-versioned-text-live]")).toBeNull();
 
     type("Help the user, cite the contract and name the clause.");
     await saveDraft();
@@ -295,7 +309,7 @@ describe("saving the agent page", () => {
     mount(world);
     await settle();
     expect(badge()).toBe("Draft version 1");
-    expect(pending()).toContain("Ana Writer saved draft version 1 on ");
+    expect(await pending()).toContain("Draft version 1 by Ana Writer, ");
 
     // Somebody else saves the draft while this page has it open.
     world.writtenBy("Ben Builder", "Only read the contract.");

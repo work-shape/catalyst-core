@@ -9,7 +9,6 @@ export const agentDraft = defineTranslations({
     "agentDraft.authorRelease": "The technical team",
     "agentDraft.authorUnknown": "A former member",
     "agentDraft.authorWithAgent": "{name} with the agent",
-    "agentDraft.badge": "Draft version {revision}",
     "agentDraft.behind":
       "{author} saved draft version {revision} on {time}, while you were editing. Your text is still here and nothing was overwritten, but it can no longer be saved. Loading the newer draft replaces your text, so copy what you want to keep first.",
     "agentDraft.behindRelease":
@@ -26,17 +25,17 @@ export const agentDraft = defineTranslations({
       "Someone published or discarded the draft while you were editing. Your text is still here, but it can no longer be saved. Load the agent to go on from what is published.",
     "agentDraft.goneSkill":
       "Someone published or discarded the draft while you were editing. Your text is still here, but it can no longer be saved. Load the skill to go on from what is published.",
-    "agentDraft.label": "Published",
+    "agentDraft.label": "Live",
+    "agentDraft.differsOne": "Differs from live in one place",
+    "agentDraft.differsMany": "Differs from live in {count} places",
+    "agentDraft.ownVersion": "own version instead of the shipped one",
+    "agentDraft.ownVersionAlone": "Own version instead of the shipped one",
     "agentDraft.loadAgent": "Load the agent",
     "agentDraft.loadSkill": "Load the skill",
     "agentDraft.loadDraft": "Load the newer draft",
     "agentDraft.none": "None",
     "agentDraft.off": "Off",
     "agentDraft.on": "On",
-    "agentDraft.pending":
-      "{author} saved draft version {revision} on {time}. It is not live: everyone who uses “{name}” gets the published version until the draft is published.",
-    "agentDraft.pendingRelease":
-      "The technical team saved draft version {revision} on {time}. It is not live: everyone who uses “{name}” gets the published version until the draft is published.",
     "agentDraft.publishDescription":
       "Draft version {revision} becomes what everyone who uses “{name}” gets, from now on.",
     "agentDraft.publishDescriptionSkill":
@@ -49,7 +48,6 @@ export const agentDraft = defineTranslations({
       "Saves a draft. Every agent that uses the skill gets the published version until the draft is published.",
     "agentDraft.sectionMark": "Changed in the draft",
     "agentDraft.shippedBadge": "Ships with the platform",
-    "agentDraft.shippedDiffers": "Differs from what the platform ships",
     "agentDraft.shippedReset": "Reset to shipped",
     "agentDraft.shippedNewer": "The platform has a new version of this field.",
     "agentDraft.shippedNewerMine": "Your version",
@@ -72,7 +70,6 @@ export const agentDraft = defineTranslations({
     "agentDraft.authorRelease": "Das technische Team",
     "agentDraft.authorUnknown": "Ein ehemaliges Mitglied",
     "agentDraft.authorWithAgent": "{name} mit dem Agenten",
-    "agentDraft.badge": "Entwurfsversion {revision}",
     "agentDraft.behind":
       "{author} hat am {time} Entwurfsversion {revision} gespeichert, während du bearbeitet hast. Dein Text ist noch da und nichts wurde überschrieben, aber er lässt sich nicht mehr speichern. Den neueren Entwurf zu laden ersetzt deinen Text. Kopiere vorher, was du behalten willst.",
     "agentDraft.behindRelease":
@@ -89,17 +86,17 @@ export const agentDraft = defineTranslations({
       "Jemand hat den Entwurf veröffentlicht oder verworfen, während du bearbeitet hast. Dein Text steht noch hier, lässt sich aber nicht mehr speichern. Lade den Agenten, um von der veröffentlichten Version aus weiterzumachen.",
     "agentDraft.goneSkill":
       "Jemand hat den Entwurf veröffentlicht oder verworfen, während du bearbeitet hast. Dein Text steht noch hier, lässt sich aber nicht mehr speichern. Lade den Skill, um von der veröffentlichten Version aus weiterzumachen.",
-    "agentDraft.label": "Veröffentlicht",
+    "agentDraft.label": "Live",
+    "agentDraft.differsOne": "Weicht an einer Stelle von Live ab",
+    "agentDraft.differsMany": "Weicht an {count} Stellen von Live ab",
+    "agentDraft.ownVersion": "eigene Fassung statt Auslieferung",
+    "agentDraft.ownVersionAlone": "Eigene Fassung statt Auslieferung",
     "agentDraft.loadAgent": "Agenten laden",
     "agentDraft.loadSkill": "Skill laden",
     "agentDraft.loadDraft": "Neueren Entwurf laden",
     "agentDraft.none": "Keine",
     "agentDraft.off": "Aus",
     "agentDraft.on": "An",
-    "agentDraft.pending":
-      "{author} hat am {time} Entwurfsversion {revision} gespeichert. Sie ist nicht live: Alle, die „{name}“ nutzen, bekommen die veröffentlichte Version, bis der Entwurf veröffentlicht ist.",
-    "agentDraft.pendingRelease":
-      "Das technische Team hat am {time} Entwurfsversion {revision} gespeichert. Sie ist nicht live: Alle, die „{name}“ nutzen, bekommen die veröffentlichte Version, bis der Entwurf veröffentlicht ist.",
     "agentDraft.publishDescription":
       "Entwurfsversion {revision} wird ab jetzt die Version, die alle bekommen, die „{name}“ nutzen.",
     "agentDraft.publishDescriptionSkill":
@@ -112,7 +109,6 @@ export const agentDraft = defineTranslations({
       "Speichert einen Entwurf. Jeder Agent, der den Skill nutzt, bekommt die veröffentlichte Version, bis der Entwurf veröffentlicht ist.",
     "agentDraft.sectionMark": "Im Entwurf geändert",
     "agentDraft.shippedBadge": "Kommt mit der Plattform",
-    "agentDraft.shippedDiffers": "Weicht von dem ab, was die Plattform mitbringt",
     "agentDraft.shippedReset": "Auf Auslieferung zurücksetzen",
     "agentDraft.shippedNewer": "Die Plattform hat eine neue Fassung dieses Felds.",
     "agentDraft.shippedNewerMine": "Deine Fassung",

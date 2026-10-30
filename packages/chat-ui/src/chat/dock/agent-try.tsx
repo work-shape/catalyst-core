@@ -7,10 +7,7 @@ import {
   useRef,
   useState
 } from "react";
-import { FlaskConical } from "lucide-react";
 import type { ApiClient } from "@work-shape/catalyst-api-client";
-import type { PageHeaderAction } from "@work-shape/catalyst-ui";
-import { useTranslation } from "../../shared/i18n";
 import type { WorkspaceDock } from "../workspace/use-workspace-dock";
 import { tryConversationGone, type DockTab } from "./dock-try";
 
@@ -83,17 +80,6 @@ export function useOfferAgentTry(target: AgentTryTarget | undefined): (() => voi
   return target === undefined ? undefined : host?.open;
 }
 
-/** "Try" in the head of the agent's page, while the dock does not show its tabs. */
-export function useAgentTryAction(
-  target: AgentTryTarget | undefined
-): PageHeaderAction | undefined {
-  const { t } = useTranslation();
-  const open = useOfferAgentTry(target);
-  return open === undefined
-    ? undefined
-    : { label: t("dock.tabTry"), icon: <FlaskConical aria-hidden="true" />, onSelect: open };
-}
-
 /** What Try runs for the next turn: the draft the page read, or the live agent without one. */
 export function tryRunsOf(draftRevision: number | null | undefined): TryRuns | undefined {
   if (draftRevision === undefined) return undefined;
@@ -125,6 +111,11 @@ export function useAgentTry({ client, dock }: { client: ApiClient; dock: Workspa
   host: AgentTryHost;
   view: AgentTryView | undefined;
   pane: AgentTryPaneState | undefined;
+  /**
+   * What the page's "Chat" opens while the page offers an agent with a draft: Try on the draft,
+   * the chat with the agent as it would be published. Absent otherwise.
+   */
+  chat: (() => void) | undefined;
 } {
   const [target, offer] = useState<AgentTryTarget>();
   const [failed, setFailed] = useState(false);
@@ -202,5 +193,6 @@ export function useAgentTry({ client, dock }: { client: ApiClient; dock: Workspa
     () => (trying && agent !== undefined ? { agent, opening, failed, retry } : undefined),
     [agent, failed, opening, retry, trying]
   );
-  return { host, view, pane };
+  const chat = typeof draftRevision === "number" && !dock.open ? open : undefined;
+  return { host, view, pane, chat };
 }

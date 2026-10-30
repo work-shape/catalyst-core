@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Badge, Field, InlineError, Switch } from "@work-shape/catalyst-ui";
+import { Field, InlineError, Switch } from "@work-shape/catalyst-ui";
 import {
   useOwnChatSkillsQuery,
   useSetOwnChatSkillMutation
@@ -13,10 +13,10 @@ import {
 import type { AssetSection } from "./asset-editor-shell";
 import type { BuildAssetEditorProps } from "./build-asset-kind";
 
-/** The section with the switch, and the badge the page head shows while it is on. */
+/** The section with the switch, and the fact the line under the name says while it is on. */
 export interface SkillMyChatsParts {
   section?: AssetSection;
-  badge?: ReactNode;
+  fact?: string;
 }
 
 type SkillFrame = {
@@ -78,9 +78,7 @@ function OwnSkillMyChats({
     setOwn.mutateAsync({ name, inMyChats }).catch(() => setFailed(true));
   };
   return children({
-    badge: own.inMyChats ? (
-      <Badge data-skill-my-chats="on">{t("skillMyChats.on")}</Badge>
-    ) : undefined,
+    fact: own.inMyChats ? t("skillMyChats.on") : undefined,
     section: {
       id: "my-chats",
       label: t("skillMyChats.section"),

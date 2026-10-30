@@ -1,9 +1,17 @@
 import { useState } from "react";
-import { Play } from "lucide-react";
-import { Button, PageHeader, PageLead, TabsLink, TabsNav } from "@work-shape/catalyst-ui";
+import { Play, Send, Undo2 } from "lucide-react";
+import {
+  Button,
+  DropdownMenuItem,
+  PageHeader,
+  PageLead,
+  TabsLink,
+  TabsNav
+} from "@work-shape/catalyst-ui";
+import { AssetStatus } from "../asset-head";
 import { CopyIdItem } from "../copy-id-item";
 import { useTranslation } from "../../shared/i18n";
-import type { WorkflowEdit } from "./workflow-draft";
+import type { WorkflowDraftBarState, WorkflowEdit } from "./workflow-draft";
 import type { WorkflowView } from "./workflow-views";
 import { workflowRightsOn } from "./workflow-model";
 import { WorkflowRemoveDialog, WorkflowRemoveItem } from "./workflow-remove";
@@ -28,6 +36,7 @@ export function WorkflowHead({
   canStart,
   startOff = false,
   edit,
+  draft,
   onStart,
   onOpenRoute
 }: {
@@ -46,6 +55,11 @@ export function WorkflowHead({
   /** The conversation in which the agent changes the Workflow, for a reader who may write it:
    * the page head's "Chat" starts it, and "Copy ID" stands only for such a reader. */
   edit?: Pick<WorkflowEdit, "busy" | "start">;
+  /**
+   * The draft the page shows, where it differs from live: the head's state says so, Publish is
+   * its one primary button and Discard stands in its "…" menu.
+   */
+  draft?: Pick<WorkflowDraftBarState, "state" | "liveVersion" | "onPublish" | "onDiscard">;
   onStart(): void;
   onOpenRoute: OpenRoute;
 }) {
@@ -56,6 +70,7 @@ export function WorkflowHead({
     workflow !== undefined && host !== undefined && workflowRightsOn(host.rights, workflow).delete;
   const share = useWorkflowShare({ workspaceId, workflowId, workflow, onOpenRoute });
   const address = { collaborationWorkspaceId: workspaceId, workflow: workflowId };
+  const publishing = draft?.onPublish !== undefined;
   const lead = [
     workflow?.description,
     workflow?.runsAs === undefined ? undefined : t("workflows.runsAs", { account: workflow.runsAs })
@@ -82,8 +97,37 @@ export function WorkflowHead({
         // Until the record arrived a placeholder stands for the name: the way back already
         // names the area, and the Workflow's id is never shown.
         title={workflow?.name ?? <TitlePlaceholder>{t("workflows.title")}</TitlePlaceholder>}
+        // One state after the name: "Draft · not live" while the draft differs from live.
+        // Members read versions of what was published, never a draft's revision.
+        status={
+          draft === undefined ? undefined : (
+            <AssetStatus
+              published={draft.state === "ahead"}
+              draft={{ live: draft.state === "ahead" ? draft.liveVersion?.number : null }}
+            />
+          )
+        }
+        // Publish is the one primary button while the draft differs; "Start now" then stands
+        // beside it.
+        secondaryActions={
+          publishing && (canStart || startOff)
+            ? [
+                {
+                  label: t("workflows.startNow"),
+                  icon: <Play aria-hidden="true" />,
+                  disabled: startOff,
+                  onSelect: onStart
+                }
+              ]
+            : undefined
+        }
         primaryAction={
-          canStart || startOff ? (
+          publishing ? (
+            <Button data-workflow-publish="" onClick={draft?.onPublish}>
+              <Send aria-hidden="true" />
+              {t("workflows.draft.publish")}
+            </Button>
+          ) : canStart || startOff ? (
             <Button disabled={startOff} onClick={onStart}>
               <Play aria-hidden="true" />
               {t("workflows.startNow")}
@@ -91,8 +135,20 @@ export function WorkflowHead({
           ) : undefined
         }
         menu={
-          edit === undefined && !mayDelete && share.item === undefined ? undefined : (
+          edit === undefined &&
+          !mayDelete &&
+          share.item === undefined &&
+          draft?.onDiscard === undefined ? undefined : (
             <>
+              {draft?.onDiscard === undefined ? null : (
+                <DropdownMenuItem
+                  icon={<Undo2 aria-hidden="true" />}
+                  data-workflow-discard=""
+                  onSelect={draft.onDiscard}
+                >
+                  {t("workflows.draft.discard")}
+                </DropdownMenuItem>
+              )}
               {share.item}
               {edit === undefined ? null : <CopyIdItem id={workflowId} />}
               {mayDelete ? (

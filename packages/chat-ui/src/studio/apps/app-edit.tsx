@@ -1,4 +1,4 @@
-import { History, PencilLine, Trash2 } from "lucide-react";
+import { History, PencilLine, Trash2, Undo2 } from "lucide-react";
 import { useId, useState, type ReactNode } from "react";
 import type {
   Asset,
@@ -22,6 +22,7 @@ import {
   TabsTrigger
 } from "@work-shape/catalyst-ui";
 import { instanceSentence, PendingApprovalError } from "../build-area/build-refusals";
+import { AssetStatus } from "../asset-head";
 import { CopyIdItem } from "../copy-id-item";
 import { useTranslation } from "../../shared/i18n";
 import { DraftHostsNotice } from "../pages/draft-hosts-notice";
@@ -35,12 +36,10 @@ import {
   AppDeleteDialog,
   AppFrame,
   AppHeader,
-  AppStateBadge,
   type AppLiveVersion
 } from "./app-header";
 import {
   APP_RIGHT_NAMES,
-  appDescription,
   appDraftRevision,
   appDraftShown,
   appPublishRefusal,
@@ -224,7 +223,6 @@ export function AppEdit({ app }: { app: string }) {
       <AppEditFrame
         name={name}
         editors={record.app?.appEditors}
-        description={appDescription(asset?.config)}
         app={app}
         workspace={workspace}
         rights={rights}
@@ -434,7 +432,6 @@ export function appDraftIsAhead(
  */
 export function AppEditFrame({
   name,
-  description,
   editors,
   app,
   workspace,
@@ -461,8 +458,6 @@ export function AppEditFrame({
   onRename
 }: {
   name: string;
-  /** What the App does, in one line after its name. */
-  description?: string;
   editors?: Asset["appEditors"];
   /** The id of the App. With it the head offers "Edit with the agent" and "Copy ID". */
   app?: string;
@@ -545,47 +540,33 @@ export function AppEditFrame({
           <AppHeader
             name={name}
             titleEditor={titleEditor}
-            description={description}
             editingLine={editWithAgent.editingLine}
-            state={
+            // One state after the name, as on every asset's page: "Draft · not live" while the
+            // draft differs from live, whose popover names the live version, or a quiet "Live".
+            // Members read versions of what was published, never a draft's revision.
+            status={
               known ? (
-                // What is live, by its version, and whether the draft changed since.
-                publishedRevision === undefined ? (
-                  <Badge tone="neutral" size="sm" dot>
-                    {t("apps.draftNotPublished")}
-                  </Badge>
-                ) : (
-                  <span className="flex flex-wrap items-center gap-2">
-                    <AppStateBadge
-                      state={{ kind: "published", revision: publishedRevision, draftAhead: ahead }}
-                      liveVersion={liveVersion}
-                    />
-                    {ahead && liveVersion ? (
-                      <Badge tone="warning" size="sm" dot>
-                        {t("apps.draftChangedSince", { number: liveVersion.number })}
-                      </Badge>
-                    ) : null}
-                  </span>
-                )
-              ) : (
-                <Badge size="sm">{t("apps.draft")}</Badge>
-              )
+                <AssetStatus
+                  published={publishedRevision !== undefined}
+                  draft={
+                    ahead || publishedRevision === undefined
+                      ? {
+                          live: publishedRevision === undefined ? null : liveVersion?.number
+                        }
+                      : undefined
+                  }
+                  onShowChanges={onRevisions}
+                />
+              ) : undefined
             }
-            // What is live and whether the draft changed since stay in view whatever the room:
-            // at a phone's width they take their own line above the tabs.
-            keepState={known}
+            state={known ? undefined : <Badge size="sm">{t("apps.draft")}</Badge>}
             backHref={workspaceRoutePath({ kind: "apps", collaborationWorkspaceId: workspace.id })}
             onBack={onBack}
-            // "Edit in chat" first: it is how a builder changes the draft. Both fold into the
-            // menu where the head has no room for them.
+            // "Edit in chat" is how a builder changes the draft; it folds into the menu where
+            // the head has no room for it.
             secondaryActions={
-              known
-                ? [
-                    ...(editWithAgent.editInChat === undefined ? [] : [editWithAgent.editInChat]),
-                    ...(ahead && publishedRevision !== undefined
-                      ? [{ label: t("apps.discard"), onSelect: () => onDiscard?.() }]
-                      : [])
-                  ]
+              known && editWithAgent.editInChat !== undefined
+                ? [editWithAgent.editInChat]
                 : undefined
             }
             tabs={tabs}
@@ -617,6 +598,14 @@ export function AppEditFrame({
                   <DropdownMenuItem icon={<History aria-hidden="true" />} onSelect={onRevisions}>
                     {t("apps.revisions")}
                   </DropdownMenuItem>
+                  {ahead && publishedRevision !== undefined ? (
+                    <DropdownMenuItem
+                      icon={<Undo2 aria-hidden="true" />}
+                      onSelect={() => onDiscard?.()}
+                    >
+                      {t("apps.discard")}
+                    </DropdownMenuItem>
+                  ) : null}
                   {rights.delete ? (
                     <>
                       <DropdownMenuSeparator />

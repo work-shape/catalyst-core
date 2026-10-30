@@ -136,6 +136,19 @@ export function offeredPlaces(
   return new Intl.ListFormat(locale, { type: "conjunction" }).format(names);
 }
 
+/**
+ * Where an asset sits as the muted line under its name says it: "for everyone", "only for
+ * you", or "for" the workspace by its name.
+ */
+export function ownerFact(owner: AssetOwner, workspaces: KnownWorkspaces, t: Translate): string {
+  const place = assetPlace(owner, workspaces, t);
+  return place.rung === "all"
+    ? t("build.headForAll")
+    : place.rung === "mine"
+      ? t("build.headForMe")
+      : t("build.headForWorkspace", { workspace: place.name });
+}
+
 /** The id of an agent page's "Available in" section, which the audience chip leads to. */
 export const AVAILABILITY_SECTION_ID = "availability";
 

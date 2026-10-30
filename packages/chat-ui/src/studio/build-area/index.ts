@@ -8,7 +8,7 @@ export {
   readDraftRefusal,
   type DraftAgentField
 } from "./agent-draft-model";
-export { AgentDraftBadge, AgentDraftNotice } from "./agent-draft";
+export { AgentDraftNotice, AgentDraftStatus } from "./agent-draft";
 export {
   answerOfRevision,
   decideDraft,
