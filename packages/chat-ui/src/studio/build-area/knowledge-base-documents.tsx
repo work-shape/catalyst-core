@@ -1,9 +1,10 @@
-import { FileText, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { ExternalLink, FileText, Link2, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useCallback, useState } from "react";
 import {
   Badge,
   Button,
   Checkbox,
+  Chip,
   ConfirmDialog,
   Dialog,
   EmptyState,
@@ -16,6 +17,7 @@ import {
   Spinner
 } from "@work-shape/catalyst-ui";
 import { formatMomentShort } from "../../shared/locale-format";
+import { openOriginLink, safeOriginLink } from "../../shared/origin-link";
 import { useTranslation } from "../../shared/i18n";
 import { ReadState } from "./data-store-read-state";
 import {
@@ -81,6 +83,8 @@ export function KnowledgeDocuments({
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeFailure, setRemoveFailure] = useState<string>();
   const [removed, setRemoved] = useState<string>();
+  const [linking, setLinking] = useState<KnowledgeDocument>();
+  const [linked, setLinked] = useState<{ name: string; cleared: boolean }>();
   const nameOf = (document: KnowledgeDocument) => document.title || document.fileName;
   const remove = async (document: KnowledgeDocument) => {
     setRemoveBusy(true);
@@ -145,6 +149,13 @@ export function KnowledgeDocuments({
       {removed === undefined ? null : (
         <FormNotice tone="success">{t("knowledge.removed", { name: removed })}</FormNotice>
       )}
+      {linked === undefined ? null : (
+        <FormNotice tone="success">
+          {t(linked.cleared ? "knowledge.originLinkCleared" : "knowledge.originLinkSaved", {
+            name: linked.name
+          })}
+        </FormNotice>
+      )}
       {failure ? <FormNotice tone="error">{failure}</FormNotice> : null}
       {state.status === "ready" && state.data.processingWaiting ? (
         <FormNotice tone="error" data-knowledge-processing-waiting="">
@@ -202,6 +213,15 @@ export function KnowledgeDocuments({
                             }
                           : undefined
                       }
+                      onLink={
+                        // A document of a source or a Workflow keeps the link they give it.
+                        canWrite && source.setOriginLink && document.sourceId === undefined
+                          ? () => {
+                              setLinked(undefined);
+                              setLinking(document);
+                            }
+                          : undefined
+                      }
                     />
                   ))}
                 </List>
@@ -240,6 +260,22 @@ export function KnowledgeDocuments({
           {removeFailure ? <FormNotice tone="error">{removeFailure}</FormNotice> : null}
         </div>
       </ConfirmDialog>
+      {linking ? (
+        <OriginLinkDialog
+          document={linking}
+          name={nameOf(linking)}
+          save={(link) =>
+            source.setOriginLink
+              ? source.setOriginLink(knowledgeBase, linking.id, link)
+              : Promise.resolve({ ok: false, refused: false, message: undefined })
+          }
+          onClose={() => setLinking(undefined)}
+          onSaved={(cleared) => {
+            setLinked({ name: nameOf(linking), cleared });
+            setLinking(undefined);
+          }}
+        />
+      ) : null}
       {adding ? (
         <KnowledgeAddDialog
           source={source}
@@ -264,7 +300,8 @@ function DocumentRow({
   document,
   retrying,
   onRetry,
-  onRemove
+  onRemove,
+  onLink
 }: {
   document: KnowledgeDocument;
   retrying: boolean;
@@ -272,6 +309,8 @@ function DocumentRow({
   onRetry: (() => void) | undefined;
   /** Present where the reader may remove the document: whoever may change, unless a connector syncs it. */
   onRemove: (() => void) | undefined;
+  /** Present where the reader may enter its origin link: whoever may change one added by hand. */
+  onLink: (() => void) | undefined;
 }) {
   const { locale, t } = useTranslation();
   const view = KNOWLEDGE_DOCUMENT_STATE_VIEWS[document.state];
@@ -302,6 +341,8 @@ function DocumentRow({
         })
       : t("knowledge.fieldsPendingMonthlyBudget");
   // A synced document whose original stays at its source keeps no copy of the file here.
+  // Only a web address is shown as a link, so opening it never runs script.
+  const origin = safeOriginLink(document.originLink);
   const description = [
     summary,
     ...(document.originalStatus === "released" ? [t("knowledge.originalReleased")] : []),
@@ -326,13 +367,41 @@ function DocumentRow({
             {t(view.label)}
           </Badge>
           {fieldsPending ? <Badge tone="neutral">{t("knowledge.fieldsPending")}</Badge> : null}
+          {origin ? (
+            <span title={t("knowledge.originLinkOpen", { name: title })}>
+              <Chip
+                size="sm"
+                leading={<ExternalLink aria-hidden="true" />}
+                href={origin.href}
+                onClick={(event) => {
+                  event.preventDefault();
+                  openOriginLink(origin.href);
+                }}
+                className="max-w-48"
+              >
+                <span data-knowledge-origin-link={document.id}>{origin.host}</span>
+              </Chip>
+            </span>
+          ) : null}
         </>
       }
       time={formatMomentShort(document.addedAt, locale)}
       actionsVisible
       actions={
-        onRetry || onRemove ? (
+        onRetry || onRemove || onLink ? (
           <>
+            {onLink ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={t("knowledge.originLinkEditLabel", { name: title })}
+                title={t("knowledge.originLinkEdit")}
+                onClick={onLink}
+                data-knowledge-origin-edit={document.id}
+              >
+                <Link2 aria-hidden="true" />
+              </Button>
+            ) : null}
             {onRetry ? (
               <Button variant="outline" size="sm" loading={retrying} onClick={onRetry}>
                 <RotateCcw aria-hidden="true" />
@@ -356,6 +425,130 @@ function DocumentRow({
       }
     />
   );
+}
+
+/**
+ * Enters, changes or clears where the original of a document added by hand lives. It takes
+ * only an http or https address without a user, a password or a token, as the server does,
+ * and says why it refuses anything else before it sends.
+ */
+function OriginLinkDialog({
+  document,
+  name,
+  save,
+  onClose,
+  onSaved
+}: {
+  document: KnowledgeDocument;
+  name: string;
+  save(
+    link: string | null
+  ): Promise<
+    { ok: true } | { ok: false; refused: boolean; message: string | undefined; reason?: string }
+  >;
+  onClose(): void;
+  onSaved(cleared: boolean): void;
+}) {
+  const { t } = useTranslation();
+  const [value, setValue] = useState(document.originLink ?? "");
+  const [busy, setBusy] = useState<"save" | "clear">();
+  const [failure, setFailure] = useState<string>();
+  const submit = async (link: string | null) => {
+    if (link !== null && !acceptableOriginLink(link)) {
+      setFailure(t("knowledge.originLinkInvalid"));
+      return;
+    }
+    setBusy(link === null ? "clear" : "save");
+    setFailure(undefined);
+    const answer = await save(link);
+    setBusy(undefined);
+    if (answer.ok) {
+      onSaved(link === null);
+      return;
+    }
+    setFailure(
+      answer.refused
+        ? t("knowledge.retryRefused")
+        : answer.reason === "knowledge_origin_link_synced"
+          ? t("knowledge.originLinkSynced")
+          : (answer.message ?? t("knowledge.originLinkFailed"))
+    );
+  };
+  const trimmed = value.trim();
+  return (
+    <Dialog
+      open
+      size="md"
+      title={t("knowledge.originLinkTitle", { name })}
+      description={t("knowledge.originLinkDescription")}
+      onClose={() => {
+        if (busy === undefined) onClose();
+      }}
+      footer={
+        <>
+          {document.originLink ? (
+            <Button
+              variant="outline"
+              loading={busy === "clear"}
+              disabled={busy === "save"}
+              onClick={() => {
+                submit(null).catch(() => undefined);
+              }}
+              data-knowledge-origin-clear=""
+            >
+              {t("knowledge.originLinkClear")}
+            </Button>
+          ) : null}
+          <Button variant="outline" disabled={busy !== undefined} onClick={onClose}>
+            {t("cancel")}
+          </Button>
+          <Button
+            disabled={trimmed === "" || trimmed === document.originLink || busy === "clear"}
+            loading={busy === "save"}
+            onClick={() => {
+              submit(trimmed).catch(() => undefined);
+            }}
+            data-knowledge-origin-save=""
+          >
+            {t("knowledge.originLinkSave")}
+          </Button>
+        </>
+      }
+    >
+      {/* No form of its own: the dialog stands inside the page's form, so Enter saves the link
+          here and never submits the page. */}
+      <div className="grid gap-3" data-knowledge-origin-dialog="">
+        <Field label={t("knowledge.originLinkField")} hint={t("knowledge.originLinkHint")}>
+          <Input
+            type="text"
+            inputMode="url"
+            autoComplete="off"
+            spellCheck={false}
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              if (trimmed !== "" && busy === undefined) submit(trimmed).catch(() => undefined);
+            }}
+            data-knowledge-origin-input=""
+          />
+        </Field>
+        {failure ? <FormNotice tone="error">{failure}</FormNotice> : null}
+      </div>
+    </Dialog>
+  );
+}
+
+/**
+ * Whether an origin link is one the server takes: an http or https address without a user or a
+ * password. The server also refuses token parameters, and says so when it does.
+ */
+function acceptableOriginLink(link: string): boolean {
+  const origin = safeOriginLink(link);
+  if (!origin) return false;
+  const url = new URL(origin.href);
+  return url.username === "" && url.password === "";
 }
 
 /** The key a chosen file is kept under: a file is named by its conversation and its id. */

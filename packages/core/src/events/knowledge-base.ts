@@ -1,3 +1,4 @@
+import { KNOWLEDGE_ORIGIN_LINK_CHANGES } from "@work-shape/catalyst-asset-schemas";
 import type { JsonObject } from "../json";
 import { LIVE_ONCE_AUDIT, type PlatformEventDefinition } from "./definition";
 
@@ -145,9 +146,30 @@ export const knowledgeBaseEvents = {
       }
     }
   },
+  // The builder set, changed or cleared the origin link of a document added by hand (DS-6b).
+  // The subject is the Knowledge Base's asset. It names the document and what changed, never
+  // the link, which may name the original's folder and file.
+  "knowledge_base.origin_link_changed": {
+    name: "knowledge_base.origin_link_changed",
+    subject: "config_asset",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["knowledgeBase", "documentId", "change"],
+      properties: {
+        knowledgeBase: { type: "string" },
+        documentId: { type: "string" },
+        change: { type: "string", enum: [...KNOWLEDGE_ORIGIN_LINK_CHANGES] }
+      }
+    }
+  },
   // One search of a Knowledge Base's documents. The subject is the Knowledge Base's asset. It
   // keeps a SHA-256 of the query, never the query, and no passage or file name: how many
-  // passages it answered, the ranked lists it fused and how long it took.
+  // passages it answered, the ranked lists it fused, the names of the filters it applied
+  // (never their values) and how long it took.
   "knowledge_base.searched": {
     name: "knowledge_base.searched",
     subject: "config_asset",
@@ -163,6 +185,7 @@ export const knowledgeBaseEvents = {
         queryHash: { type: "string" },
         results: { type: "integer", minimum: 0 },
         signals: { type: "array", items: { type: "string" } },
+        filters: { type: "array", items: { type: "string" } },
         durationMs: { type: "integer", minimum: 0 }
       }
     }

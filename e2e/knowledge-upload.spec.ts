@@ -12,7 +12,9 @@ import { expect, takeTurn, test } from "./test";
 // API runs the same instance with it on, on the same database, as knowledge-fields-pending.spec.ts
 // does. Its worker claims jobs through the same leases as the main API, with the same tools
 // and config plus knowledge indexing. Pictures of the upload section go to the
-// test's output folder, in English and German, light and dark, wide and at 390.
+// test's output folder, in English and German, light and dark, wide and at 390. A document added
+// by hand is linked to its original, which opens in a tab of its own, and the link is cleared
+// again (DS-6b).
 const host = process.env.E2E_HOST ?? "127.0.0.1";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? `http://${host}:4210`;
@@ -313,6 +315,126 @@ test.describe("uploading files from the computer into a Knowledge Base", () => {
             data: { expectedRevision: await assetRevision(page, url) }
           });
         }
+      }
+    }
+  });
+  test("links a document added by hand to its original, opens it apart, and clears it (DS-6b)", async ({
+    page
+  }) => {
+    test.setTimeout(240000);
+    const name = `e2e-origin-${randomUUID().slice(0, 8)}`;
+    const assetUrl = `${knowledgeApiUrl}/api/v1/assets/knowledge_base/${name}`;
+    const original = "https://dms.example.test/akten/4711/urlaub.txt";
+    await signIn(page, apiBaseUrl);
+    await signIn(page, knowledgeApiUrl);
+    const created = await requestWithOrigin(page, "put", assetUrl, {
+      data: {
+        expectedRevision: null,
+        config: {
+          name,
+          title: "Handbuch",
+          description: "Regeln des Teams zu Urlaub.",
+          methods: ["keyword"]
+        }
+      }
+    });
+    expect(created.ok(), await created.text()).toBe(true);
+    try {
+      const published = await requestWithOrigin(page, "post", `${assetUrl}/publish`, {
+        data: { revision: 1 }
+      });
+      expect(published.ok(), await published.text()).toBe(true);
+      await expect
+        .poll(
+          async () =>
+            (
+              await page.request.get(`${knowledgeApiUrl}/api/v1/knowledge-bases/${name}/documents`)
+            ).status(),
+          { timeout: 90000 }
+        )
+        .toBe(200);
+      await page.route(`${apiBaseUrl}/**`, (route) =>
+        route.continue({ url: route.request().url().replace(apiBaseUrl, knowledgeApiUrl) })
+      );
+      // The original's own system, which the test answers itself.
+      await page
+        .context()
+        .route("https://dms.example.test/**", (route) =>
+          route.fulfill({ contentType: "text/plain", body: "Das Original." })
+        );
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await view(page, name, "en", "light");
+      await page.locator("[data-knowledge-add]").click();
+      const [file] = FILES;
+      await page.locator("[data-knowledge-upload] input[data-file-picker]").setInputFiles({
+        name: file.name,
+        mimeType: file.mimeType,
+        buffer: Buffer.from(file.text)
+      });
+      await expect(page.locator(`[data-knowledge-upload-file="${file.name}"]`)).toHaveAttribute(
+        "data-knowledge-upload-state",
+        "added",
+        { timeout: 30000 }
+      );
+      await page.locator("[data-knowledge-add-close]").click();
+      const row = page.locator("[data-knowledge-document]").first();
+      await expect(row).toBeVisible();
+
+      // A link that is no web address is refused in the dialog, before it is sent.
+      await row.locator("[data-knowledge-origin-edit]").click();
+      const field = page.locator("[data-knowledge-origin-input]");
+      await field.fill("javascript:alert(1)");
+      const sent: string[] = [];
+      page.on("request", (request) => {
+        if (request.url().endsWith("/documents/origin-link")) sent.push(request.method());
+      });
+      await page.locator("[data-knowledge-origin-save]").click();
+      await expect(
+        page.locator('[data-knowledge-origin-dialog] [data-tone="error"]')
+      ).toContainText("Enter an http or https address");
+      expect(sent).toEqual([]);
+      await field.fill(original);
+      await picture(page, "origin-link-dialog-en-light-1280");
+      await page.locator("[data-knowledge-origin-save]").click();
+      await expect(page.getByText(/The link of .* was saved\./u)).toBeVisible();
+      const chip = row.locator("[data-knowledge-origin-link]");
+      await expect(chip).toHaveText("dms.example.test");
+      await expect(chip.locator("xpath=ancestor::a[1]")).toHaveAttribute("href", original);
+      await picture(page, "origin-link-row-en-light-1280");
+
+      // It opens in a tab of its own, which cannot reach back into the page.
+      const opened = page.context().waitForEvent("page");
+      await chip.click();
+      const tab = await opened;
+      await tab.waitForLoadState();
+      expect(tab.url()).toBe(original);
+      expect(await tab.evaluate(() => window.opener)).toBeNull();
+      await tab.close();
+
+      // The list the server answers carries it; German, dark and narrow; then cleared.
+      const listed = await page.request.get(
+        `${knowledgeApiUrl}/api/v1/knowledge-bases/${name}/documents`
+      );
+      expect(JSON.stringify(await listed.json())).toContain(original);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await view(page, name, "de", "dark");
+      await page.locator("[data-knowledge-origin-edit]").first().click();
+      await expect(page.locator("[data-knowledge-origin-input]")).toHaveValue(original);
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+      );
+      expect(overflow).toBeLessThanOrEqual(0);
+      await picture(page, "origin-link-dialog-de-dark-390");
+      await page.locator("[data-knowledge-origin-clear]").click();
+      await expect(page.getByText(/Der Link von .* wurde entfernt\./u)).toBeVisible();
+      await expect(page.locator("[data-knowledge-origin-link]")).toHaveCount(0);
+    } finally {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      await page.context().unrouteAll({ behavior: "ignoreErrors" });
+      if ((await page.request.get(assetUrl)).ok()) {
+        await requestWithOrigin(page, "post", `${assetUrl}/delete`, {
+          data: { expectedRevision: await assetRevision(page, assetUrl) }
+        });
       }
     }
   });

@@ -158,6 +158,60 @@ export interface KnowledgeSearchHit {
   originLink?: string;
 }
 
+/**
+ * The fields of a document a declared filter of a Knowledge Base on the built-in backend applies
+ * to, with the type of each (DS-6b). `source` and `path` are of a synced or Workflow-fed item, and
+ * `modified_at` is its time at the source; a document added by hand has none of them, so a filter
+ * on one leaves it out. Filters on extracted fields come later.
+ */
+export const KNOWLEDGE_FILTER_FIELD_NAMES = [
+  "title",
+  "file_name",
+  "document_type",
+  "source",
+  "path",
+  "added_at",
+  "modified_at"
+] as const;
+
+export type KnowledgeFilterField = (typeof KNOWLEDGE_FILTER_FIELD_NAMES)[number];
+
+/** The types of a declared filter's value. A `date` is `YYYY-MM-DD`, compared in UTC. */
+export const KNOWLEDGE_FILTER_TYPES = ["string", "date"] as const;
+
+export type KnowledgeFilterType = (typeof KNOWLEDGE_FILTER_TYPES)[number];
+
+/** The type of each field a declared filter applies to. */
+export const KNOWLEDGE_FILTER_FIELDS: Readonly<Record<KnowledgeFilterField, KnowledgeFilterType>> =
+  {
+    title: "string",
+    file_name: "string",
+    document_type: "string",
+    source: "string",
+    path: "string",
+    added_at: "date",
+    modified_at: "date"
+  };
+
+/** How a filter compares, by its type: `eq` where the declaration names none. */
+export const KNOWLEDGE_FILTER_OPERATORS = {
+  string: ["eq", "prefix"],
+  date: ["eq", "gt", "gte", "lt", "lte"]
+} as const satisfies Record<KnowledgeFilterType, readonly string[]>;
+
+export type KnowledgeFilterOperator =
+  (typeof KNOWLEDGE_FILTER_OPERATORS)[KnowledgeFilterType][number];
+
+/**
+ * One declared filter as a search applies it: the field, how it compares and the caller's value.
+ * The value is bound as a parameter of the store's query, never written into its text.
+ */
+export interface KnowledgeSearchFilter {
+  field: KnowledgeFilterField;
+  op: KnowledgeFilterOperator;
+  value: string;
+}
+
 /** What a search of one Knowledge Base's documents answers, and the lists it fused. */
 export interface KnowledgeSearchAnswer {
   hits: KnowledgeSearchHit[];
@@ -872,6 +926,11 @@ export interface KnowledgeDocumentEntry {
    * manual remove refuses it.
    */
   sourceId?: string;
+  /**
+   * Where the original lives (DS-6b): filled by its source for a synced document, entered by
+   * the builder for one added by hand.
+   */
+  originLink?: string;
   addedAt: ISODateString;
   /** When its content last changed state. */
   updatedAt: ISODateString;
@@ -1163,9 +1222,24 @@ export interface KnowledgeDocumentStore {
    * embedding is one of the lists fused; without, full text and titles alone.
    */
   search(
-    input: { query: string; limit: number; embed?: KnowledgeQueryEmbedding },
+    input: {
+      query: string;
+      limit: number;
+      embed?: KnowledgeQueryEmbedding;
+      /** Every one must hold for a document's passages to be found. */
+      filters?: readonly KnowledgeSearchFilter[];
+    },
     signal?: AbortSignal
   ): Promise<KnowledgeSearchAnswer>;
+  /**
+   * Sets or clears the origin link of a document added by hand (DS-6b). `synced` for a document
+   * of a source, whose source fills it, and `missing` for one not here or withdrawn: neither
+   * changes.
+   */
+  setOriginLink(
+    input: { documentId: string; originLink: string | null },
+    signal?: AbortSignal
+  ): Promise<"set" | "synced" | "missing">;
   /**
    * The keyword languages of the store (KB-12): `searched`, those whose full-text column and
    * GIN index search reads; `building`, those whose column is being filled or indexed.

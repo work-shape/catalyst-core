@@ -154,6 +154,7 @@ export const knowledgeModule = defineModule({
     "knowledge_bases.list_documents",
     "knowledge_bases.retry_documents",
     "knowledge_bases.remove_documents",
+    "knowledge_bases.set_origin_link",
     "knowledge_bases.reindex"
   ]
 });

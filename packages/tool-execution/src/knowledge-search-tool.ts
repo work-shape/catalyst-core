@@ -10,6 +10,7 @@ import {
   knowledgeSearchOperationName,
   type AgentRunId,
   type OperationCallRuntime,
+  type OperationDefinition,
   type RuntimeCallContext,
   type ToolExecutionRequest,
   type ToolExecutionResult,
@@ -30,11 +31,17 @@ import { failed } from "./tool-results";
 // agent cites `[K1]` without two passages sharing a ref. The count is held in this process; a
 // run resumed by another process starts again at K1. Spec: "Search, the agent tool and
 // citations"; checks 35 to 37.
+//
+// Filters (DS-6b) go only to the Knowledge Bases that declare every one passed: one that does
+// not is left out of the call and named under `skipped`, because its unfiltered passages would
+// ignore the restriction the agent asked for. Which filters a Knowledge Base declares is read
+// from its own search's input, which refuses any other.
 
 const searchToolInputSchema = z.strictObject({
   query: z.string().trim().min(1).max(KNOWLEDGE_SEARCH_QUERY_MAX_CHARS),
   knowledgeBases: z.array(z.string().min(1)).min(1).optional(),
-  limit: z.number().int().min(1).max(KNOWLEDGE_SEARCH_LIMIT_MAX).optional()
+  limit: z.number().int().min(1).max(KNOWLEDGE_SEARCH_LIMIT_MAX).optional(),
+  filters: z.record(z.string().min(1).max(63), z.string().max(1_000)).optional()
 });
 
 /** A passage as `knowledge.<id>.search` answers it. Read again here: it is another call's output. */
@@ -59,8 +66,24 @@ type Passage = z.infer<typeof passageSchema>;
 /** Why a Knowledge Base was not searched, as the agent reads it. */
 interface Skipped {
   knowledgeBase: string;
-  reason: "permission_missing" | "not_searchable" | "unavailable" | "failed";
+  reason:
+    "permission_missing" | "not_searchable" | "unavailable" | "filter_not_declared" | "failed";
   message: string;
+}
+
+/**
+ * Whether a Knowledge Base's search takes a filter of this name: its input refuses a name it
+ * does not declare as a key it does not know, and takes any value of one it declares, or
+ * refuses that value for its own reason.
+ */
+function declaresFilter(search: OperationDefinition, filter: string): boolean {
+  const parsed = search.inputSchema.safeParse({ query: "x", filters: { [filter]: "" } });
+  return (
+    parsed.success ||
+    !parsed.error.issues.some(
+      (issue) => issue.code === "unrecognized_keys" && issue.path.join(".") === "filters"
+    )
+  );
 }
 
 /** How many Agent Runs the count of refs is held for at once. The oldest is let go first. */
@@ -104,10 +127,16 @@ export async function runKnowledgeSearch(
   if (!parsed.success) {
     return failed(
       "validation_failed",
-      'Send the words to search for under "query", and optionally the ids under "knowledgeBases" and a "limit" up to 50.'
+      'Send the words to search for under "query", and optionally the ids under "knowledgeBases", a "limit" up to 50 and declared "filters" as values by name.'
     );
   }
-  const { query, knowledgeBases: named, limit = KNOWLEDGE_SEARCH_LIMIT_DEFAULT } = parsed.data;
+  const {
+    query,
+    knowledgeBases: named,
+    limit = KNOWLEDGE_SEARCH_LIMIT_DEFAULT,
+    filters
+  } = parsed.data;
+  const filterNames = Object.keys(filters ?? {});
   const listed = (await deps.agentToolNames?.(request.agentName, request.conversationId)) ?? [];
   const assigned = [
     ...new Set(
@@ -135,7 +164,24 @@ export async function runKnowledgeSearch(
   const skipped: Skipped[] = [];
   const searched: string[] = [];
   for (const name of wanted) {
-    if (operations.has(knowledgeSearchOperationName(name))) {
+    const search = operations.get(knowledgeSearchOperationName(name));
+    const undeclared = search
+      ? filterNames.filter((filter) => !declaresFilter(search, filter))
+      : [];
+    if (search && undeclared.length > 0) {
+      skipped.push({
+        knowledgeBase: name,
+        reason: "filter_not_declared",
+        message: `It declares no filter ${undeclared.map((filter) => `'${filter}'`).join(", ")}, so it was not searched.`
+      });
+    } else if (search) {
+      const fits = search.inputSchema.safeParse({ query, limit, ...(filters ? { filters } : {}) });
+      if (!fits.success) {
+        return failed(
+          "validation_failed",
+          `A filter value does not fit the Knowledge Base '${name}': ${fits.error.issues.map((issue) => issue.message).join("; ")}`
+        );
+      }
       searched.push(name);
     } else if (!operations.has(knowledgeQueryOperationName(name))) {
       skipped.push({
@@ -164,7 +210,7 @@ export async function runKnowledgeSearch(
         {
           ...request,
           toolName: knowledgeSearchOperationName(name),
-          input: { query, limit }
+          input: { query, limit, ...(filters ? { filters } : {}) }
         },
         context
       )

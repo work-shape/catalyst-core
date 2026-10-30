@@ -6,6 +6,8 @@ import {
   type KnowledgeKeywordLanguage,
   type KnowledgeQueryEmbedding,
   type KnowledgeSearchAnswer,
+  type KnowledgeFilterField,
+  type KnowledgeSearchFilter,
   type KnowledgeSearchHit,
   type KnowledgeSearchSignal
 } from "@work-shape/catalyst-core";
@@ -35,6 +37,11 @@ import {
 // Each list takes its first 50. Only chunks of a content that is indexed at its chunking
 // revision and held by a document that is not withdrawn are read, in the same statement, so a
 // removed document is out of the next search before its passages are deleted.
+//
+// Declared filters (DS-6b) narrow the documents of every list the same way: a passage counts
+// only where a document that holds its content matches each filter, and it names that document.
+// The column and the comparison come from the fixed tables below, chosen by the declared field
+// and operator; the caller's value is always a bound parameter, never text of the statement.
 
 /**
  * The table of one generation of embeddings and its columns: one row per chunk, keyed by the
@@ -97,7 +104,12 @@ interface QueryVector {
 export async function searchKnowledgeStore(
   run: <T>(work: (sql: PostgresChangeStatements) => Promise<T>) => Promise<T>,
   target: Pick<BuiltinKnowledgeTarget, "methods">,
-  input: { query: string; limit: number; embed?: KnowledgeQueryEmbedding }
+  input: {
+    query: string;
+    limit: number;
+    embed?: KnowledgeQueryEmbedding;
+    filters?: readonly KnowledgeSearchFilter[];
+  }
 ): Promise<KnowledgeSearchAnswer> {
   const { embed } = input;
   const semanticAsked = target.methods.includes("semantic") && embed !== undefined;
@@ -116,6 +128,7 @@ export async function searchKnowledgeStore(
       ? { generation: generation.generation, dimensions: generation.dimensions, vector: embedded }
       : undefined;
   };
+  const filters = input.filters ?? [];
   let vector = semanticAsked ? await embedFor(await run(activeGeneration)) : undefined;
   // A re-index switched generations between the embedding and the search (KB-8): the query is
   // embedded once more with the model now active, so the search still ranks by meaning.
@@ -136,10 +149,11 @@ export async function searchKnowledgeStore(
       return z
         .array(hitRow)
         .parse(
-          await sql.run(searchStatement(signals, semantic, languages), [
+          await sql.run(searchStatement(signals, semantic, languages, filters), [
             input.query,
             input.limit,
-            ...(semantic ? [`[${semantic.vector.join(",")}]`] : [])
+            ...(semantic ? [`[${semantic.vector.join(",")}]`] : []),
+            ...filters.map((filter) => filter.value)
           ])
         );
     });
@@ -179,28 +193,84 @@ function hitOf(row: z.infer<typeof hitRow>): KnowledgeSearchHit {
   };
 }
 
-/** Whether chunk `c` is of an indexed content that a document not withdrawn holds. */
-const LIVE_CHUNK = `exists (
+/**
+ * The value of a filter's field for document `d`, typed as its filter compares it. Each is fixed
+ * text: what a declaration names picks one, and nothing of a caller reaches it.
+ */
+const FILTER_FIELD_SQL: Record<KnowledgeFilterField, string> = {
+  title: "d.title",
+  file_name: "d.file_name",
+  document_type: `(select pg_catalog.coalesce(fc.document_type, 'default') from catalyst_kb.contents fc
+    where fc.sha256 = d.content_sha256)`,
+  source: `(select fi.source_id from catalyst_kb.source_items fi where fi.id = d.source_item_id)`,
+  path: `(select fi.path from catalyst_kb.source_items fi where fi.id = d.source_item_id)`,
+  added_at: `(d.added_at at time zone 'UTC')::pg_catalog.date`,
+  modified_at: `(select (fi.modified_at at time zone 'UTC')::pg_catalog.date
+    from catalyst_kb.source_items fi where fi.id = d.source_item_id)`
+};
+
+/** The fields a filter compares as dates; every other one as text. */
+const DATE_FIELDS: ReadonlySet<KnowledgeFilterField> = new Set(["added_at", "modified_at"]);
+
+/** A field's comparison with parameter `$n`, of the fixed comparisons a filter may name. */
+function filterCondition(filter: KnowledgeSearchFilter, parameter: number): string {
+  const field = FILTER_FIELD_SQL[filter.field];
+  const value = `$${parameter}`;
+  switch (filter.op) {
+    case "prefix":
+      return `pg_catalog.starts_with(${field}, ${value}::pg_catalog.text)`;
+    case "gt":
+      return `${field} > ${value}::pg_catalog.date`;
+    case "gte":
+      return `${field} >= ${value}::pg_catalog.date`;
+    case "lt":
+      return `${field} < ${value}::pg_catalog.date`;
+    case "lte":
+      return `${field} <= ${value}::pg_catalog.date`;
+    case "eq":
+      return DATE_FIELDS.has(filter.field)
+        ? `${field} = ${value}::pg_catalog.date`
+        : `${field} = ${value}::pg_catalog.text`;
+  }
+}
+
+/**
+ * The conditions on document `d` of every filter, each comparing with its own parameter from
+ * `first` on, in the order of `filters`. Empty without filters.
+ */
+function documentFilter(filters: readonly KnowledgeSearchFilter[], first: number): string {
+  return filters.map((filter, index) => ` and ${filterCondition(filter, first + index)}`).join("");
+}
+
+/**
+ * Whether chunk `c` is of an indexed content that a document not withdrawn holds, one that
+ * matches `filter` where there is one.
+ */
+const liveChunk = (filter: string) => `exists (
     select 1 from catalyst_kb.contents ct
     where ct.sha256 = c.content_sha256 and ct.state = 'extracted'
       and ct.chunking_revision = c.chunking_revision
   )
   and exists (
     select 1 from catalyst_kb.documents d
-    where d.content_sha256 = c.content_sha256 and d.withdrawn_at is null
+    where d.content_sha256 = c.content_sha256 and d.withdrawn_at is null${filter}
   )`;
 
 /**
  * The one statement of a search. `$1` is the query, `$2` the limit and `$3` the query's
- * vector as text, where it is used. Only the generation's number and dimensions, whole numbers
- * the store answered, are written into the text.
+ * vector as text, where it is used; the filters' values follow, one parameter each. Only the
+ * generation's number and dimensions, whole numbers the store answered, are written into the
+ * text.
  */
 function searchStatement(
   signals: readonly KnowledgeSearchSignal[],
   semantic: Pick<QueryVector, "generation" | "dimensions"> | undefined,
-  languages: readonly KnowledgeKeywordLanguage[]
+  languages: readonly KnowledgeKeywordLanguage[],
+  filters: readonly KnowledgeSearchFilter[]
 ): string {
   const depth = KNOWLEDGE_SEARCH_LIST_DEPTH;
+  const filter = documentFilter(filters, semantic ? 4 : 3);
+  const LIVE_CHUNK = liveChunk(filter);
   const lists: string[] = [];
   // Only the codes of `KNOWLEDGE_KEYWORD_LANGUAGES` the store answered are written into the text.
   const keywords = signals.includes("keyword") ? languages : [];
@@ -275,7 +345,7 @@ function searchStatement(
       select d.content_sha256,
         pg_catalog.max(pg_catalog.ts_rank(d.title_search, q.words)) as score
       from catalyst_kb.documents d, q
-      where d.withdrawn_at is null and d.title_search @@ q.words
+      where d.withdrawn_at is null and d.title_search @@ q.words${filter}
       group by d.content_sha256
       order by score desc, d.content_sha256 limit ${depth}
     )`,
@@ -297,11 +367,12 @@ function searchStatement(
       c.page, c.heading, c.text, f.score::pg_catalog.float8 as score
     from fused f
     join catalyst_kb.chunks c on c.id = f.id
-    -- The document each passage names: the first added that holds its content.
+    -- The document each passage names: the first added that holds its content and matches.
     join lateral (
-      select id, managed_file_id, file_name, title, origin_link from catalyst_kb.documents
-      where content_sha256 = c.content_sha256 and withdrawn_at is null
-      order by added_at, id limit 1
+      select d.id, d.managed_file_id, d.file_name, d.title, d.origin_link
+      from catalyst_kb.documents d
+      where d.content_sha256 = c.content_sha256 and d.withdrawn_at is null${filter}
+      order by d.added_at, d.id limit 1
     ) d on true
     order by f.score desc, c.id
     limit $2::pg_catalog.int4`;

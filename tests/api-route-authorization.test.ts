@@ -55,6 +55,7 @@ const acceptedBodies: Partial<Record<ApiOperationName, unknown>> = {
   "knowledge_bases.sync": { source: "missing", mode: "full" },
   "knowledge_bases.retry_documents": { source: "missing", all: true },
   "knowledge_bases.remove_documents": { documentIds: ["missing"] },
+  "knowledge_bases.set_origin_link": { documentId: "missing", originLink: null },
   "data_stores.query": { sql: "select 1" },
   "data_stores.insert": { table: "missing", rows: [{ id: 1 }] },
   "data_stores.update": { table: "missing", rows: [{ key: { id: 1 }, set: { value: "test" } }] },

@@ -637,6 +637,174 @@ describe("the Documents section", () => {
     expect(document.body.textContent).not.toContain("cannot be removed locally");
   });
 
+  describe("the origin link (DS-6b)", () => {
+    /** Types into a field as React hears it. */
+    async function type(field: HTMLInputElement, value: string) {
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+          field,
+          value
+        );
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+    const editButton = (id: string) =>
+      document.querySelector<HTMLButtonElement>(`[data-knowledge-origin-edit="${id}"]`);
+    const originDialog = () => {
+      const dialog = document.querySelector("[data-knowledge-origin-dialog]")?.closest("dialog");
+      return dialog?.open ? dialog : null;
+    };
+    const input = () =>
+      document.querySelector<HTMLInputElement>("[data-knowledge-origin-input]") ??
+      (() => {
+        throw new Error("no link field");
+      })();
+    const save = () => document.querySelector<HTMLButtonElement>("[data-knowledge-origin-save]");
+
+    it("shows the original's host as a link out that opens apart, and leaves out any address that is no web address", async () => {
+      const open = vi.spyOn(window, "open").mockImplementation(() => null);
+      const linked = [
+        document_("vertrag", "indexed", { originLink: "https://dms.example.test/akte/7" }),
+        document_("skript", "indexed", { originLink: "javascript:alert(1)" })
+      ];
+      show(
+        createElement(KnowledgeDocuments, {
+          source: plantedSource({ useDocuments: () => ready({ documents: linked }) }),
+          knowledgeBase: "objektunterlagen",
+          publishedRevision: 1,
+          canWrite: false
+        })
+      );
+      const origin = row("vertrag").querySelector("[data-knowledge-origin-link]");
+      expect(origin?.textContent).toBe("dms.example.test");
+      const anchor = origin?.closest("a");
+      expect(anchor?.getAttribute("href")).toBe("https://dms.example.test/akte/7");
+      await act(async () => anchor?.click());
+      expect(open).toHaveBeenCalledWith(
+        "https://dms.example.test/akte/7",
+        "_blank",
+        "noopener,noreferrer"
+      );
+      expect(row("skript").querySelector("[data-knowledge-origin-link]")).toBeNull();
+      expect(row("skript").querySelector("a")).toBeNull();
+      // A reader who may only use the Knowledge Base sees the link and cannot change it.
+      expect(editButton("vertrag")).toBeNull();
+      open.mockRestore();
+    });
+
+    it("lets whoever may change it enter, change and clear the link of a file added by hand, never of a synced one", async () => {
+      let shown: KnowledgeDocument[] = [
+        document_("vertrag", "indexed"),
+        document_("preisliste", "indexed", { sourceId: "sharepoint" }),
+        document_("nachtimport", "indexed", { sourceId: "workflow:nightly-import" })
+      ];
+      const setOriginLink = vi.fn<NonNullable<KnowledgeBaseSource["setOriginLink"]>>(
+        async (_knowledgeBase, documentId, originLink) => {
+          shown = shown.map((entry) =>
+            entry.id === documentId
+              ? { ...entry, ...(originLink === null ? { originLink: undefined } : { originLink }) }
+              : entry
+          );
+          return { ok: true, data: {} };
+        }
+      );
+      const source = plantedSource({
+        useDocuments: () => ready({ documents: shown }),
+        setOriginLink
+      });
+      const shownProps = {
+        source,
+        knowledgeBase: "objektunterlagen",
+        publishedRevision: 1,
+        canWrite: true
+      };
+      show(createElement(KnowledgeDocuments, shownProps));
+      expect(editButton("preisliste")).toBeNull();
+      expect(editButton("nachtimport")).toBeNull();
+      expect(editButton("vertrag")?.getAttribute("aria-label")).toBe(
+        "Link vertrag to its original"
+      );
+
+      // Refused before it is sent: no web address, or one with a password.
+      await act(async () => editButton("vertrag")?.click());
+      expect(originDialog()?.textContent).toContain("Where the original of vertrag lives");
+      for (const refused of ["javascript:alert(1)", "https://user:pw@dms.example.test/a"]) {
+        await type(input(), refused);
+        await act(async () => save()?.click());
+        expect(originDialog()?.querySelector('[data-tone="error"]')?.textContent).toBe(
+          "Enter an http or https address, without a user name, a password or a token."
+        );
+      }
+      expect(setOriginLink).not.toHaveBeenCalled();
+
+      // Enter in the field saves it, and nothing else.
+      await type(input(), "https://dms.example.test/akte/7");
+      await act(async () =>
+        input().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))
+      );
+      expect(setOriginLink).toHaveBeenLastCalledWith(
+        "objektunterlagen",
+        "vertrag",
+        "https://dms.example.test/akte/7"
+      );
+      expect(originDialog()).toBeNull();
+      expect(document.body.textContent).toContain("The link of vertrag was saved.");
+      show(createElement(KnowledgeDocuments, shownProps));
+      expect(row("vertrag").querySelector("[data-knowledge-origin-link]")?.textContent).toBe(
+        "dms.example.test"
+      );
+
+      // Cleared from the same dialog.
+      await act(async () => editButton("vertrag")?.click());
+      expect(input().value).toBe("https://dms.example.test/akte/7");
+      await act(async () =>
+        document.querySelector<HTMLButtonElement>("[data-knowledge-origin-clear]")?.click()
+      );
+      expect(setOriginLink).toHaveBeenLastCalledWith("objektunterlagen", "vertrag", null);
+      expect(document.body.textContent).toContain("The link of vertrag was removed.");
+    });
+
+    it("says in German why the server refused a link of a synced document", async () => {
+      const source = plantedSource({
+        useDocuments: () => ready({ documents: [document_("vertrag", "indexed")] }),
+        setOriginLink: async () => ({
+          ok: false,
+          refused: false,
+          message: "The source keeps the link of a synced document.",
+          reason: "knowledge_origin_link_synced"
+        })
+      });
+      show(
+        createElement(KnowledgeDocuments, {
+          source,
+          knowledgeBase: "objektunterlagen",
+          publishedRevision: 1,
+          canWrite: true
+        }),
+        "de"
+      );
+      await act(async () => editButton("vertrag")?.click());
+      await type(input(), "https://dms.example.test/akte/7");
+      await act(async () => save()?.click());
+      expect(originDialog()?.textContent).toContain("kommt aus einer Quelle");
+      expect(document.body.textContent).not.toContain("keeps the link of a synced");
+    });
+
+    it("offers no editing where the page gives no way to save it", () => {
+      const source = plantedSource();
+      delete (source as Partial<KnowledgeBaseSource>).setOriginLink;
+      show(
+        createElement(KnowledgeDocuments, {
+          source,
+          knowledgeBase: "objektunterlagen",
+          publishedRevision: 1,
+          canWrite: true
+        })
+      );
+      expect(document.querySelector("[data-knowledge-origin-edit]")).toBeNull();
+    });
+  });
+
   it("shows whoever may only use the Knowledge Base the list, without Add, Retry or Remove", () => {
     show(
       createElement(KnowledgeDocuments, {

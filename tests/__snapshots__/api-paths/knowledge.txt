@@ -10,6 +10,7 @@ knowledge_bases.reindex  POST /api/v1/knowledge-bases/:knowledgeBase/reindex
 knowledge_bases.remove_documents  POST /api/v1/knowledge-bases/:knowledgeBase/documents/remove
 knowledge_bases.retry_documents  POST /api/v1/knowledge-bases/:knowledgeBase/documents/retry
 knowledge_bases.search  POST /api/v1/knowledge-bases/:knowledgeBase/search
+knowledge_bases.set_origin_link  POST /api/v1/knowledge-bases/:knowledgeBase/documents/origin-link
 knowledge_bases.source_items  GET /api/v1/knowledge-bases/:knowledgeBase/sources/:source/items
 knowledge_bases.sources  GET /api/v1/knowledge-bases/:knowledgeBase/sources
 knowledge_bases.sync  POST /api/v1/knowledge-bases/:knowledgeBase/sync

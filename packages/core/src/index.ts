@@ -187,6 +187,7 @@ export { KNOWLEDGE_DOCUMENT_FAILURE_CODES } from "@work-shape/catalyst-asset-sch
 export { KNOWLEDGE_DOCUMENT_STATES } from "@work-shape/catalyst-asset-schemas";
 export { KNOWLEDGE_DOCUMENT_WAIT_CODES } from "@work-shape/catalyst-asset-schemas";
 export { KNOWLEDGE_EMBEDDING_STATES } from "@work-shape/catalyst-asset-schemas";
+export { KNOWLEDGE_ORIGIN_LINK_CHANGES } from "@work-shape/catalyst-asset-schemas";
 export { KNOWLEDGE_SEARCH_SIGNALS } from "@work-shape/catalyst-asset-schemas";
 export { KNOWLEDGE_SOURCE_FAILURE_CODES } from "@work-shape/catalyst-asset-schemas";
 export { KNOWLEDGE_SOURCE_ITEM_FAILURE_CODES } from "@work-shape/catalyst-asset-schemas";
@@ -194,6 +195,7 @@ export { KNOWLEDGE_SOURCE_ITEM_STATES } from "@work-shape/catalyst-asset-schemas
 export { KNOWLEDGE_SYNC_COUNTS } from "@work-shape/catalyst-asset-schemas";
 export { KNOWLEDGE_SYNC_MODES } from "@work-shape/catalyst-asset-schemas";
 export { KNOWLEDGE_SYNC_RUN_STATES } from "@work-shape/catalyst-asset-schemas";
+export { knowledgeOriginLinkSchema } from "@work-shape/catalyst-asset-schemas";
 export { LISTED_DATA_STORE_STATUSES } from "@work-shape/catalyst-asset-schemas";
 export { LIVE_JOB_STATUSES } from "@work-shape/catalyst-asset-schemas";
 export { localeCodes } from "@work-shape/catalyst-asset-schemas";
