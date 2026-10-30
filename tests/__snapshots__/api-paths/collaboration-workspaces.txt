@@ -11,6 +11,10 @@ workspaces.ensure_personal  POST /api/v1/workspaces/personal
 workspaces.files.list  GET /api/v1/workspaces/:collaborationWorkspaceId/files
 workspaces.get  GET /api/v1/workspaces/:collaborationWorkspaceId
 workspaces.list  GET /api/v1/workspaces
+workspaces.member_bundles.grant  PUT /api/v1/workspaces/:collaborationWorkspaceId/members/:userId/bundles/:bundle
+workspaces.member_bundles.list  GET /api/v1/workspaces/:collaborationWorkspaceId/member-bundles
+workspaces.member_bundles.request  POST /api/v1/workspaces/:collaborationWorkspaceId/members/:userId/bundles/:bundle/request
+workspaces.member_bundles.revoke  DELETE /api/v1/workspaces/:collaborationWorkspaceId/members/:userId/bundles/:bundle
 workspaces.member_candidates.list  GET /api/v1/workspaces/:collaborationWorkspaceId/member-candidates
 workspaces.member_usage.list  GET /api/v1/workspaces/:collaborationWorkspaceId/usage/members
 workspaces.members.add  POST /api/v1/workspaces/:collaborationWorkspaceId/members

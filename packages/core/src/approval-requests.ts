@@ -51,7 +51,10 @@ export interface ApprovalTransactionStores {
   agentProposals?: import("./agent-proposals").AgentProposalStore;
   /** What a move writes beside the owner: its audit record and the grants that go with it. */
   audit?: Pick<AuditEventStore, "appendAuditEvent">;
-  access?: Pick<AccessAdministrationStore, "listGrants" | "deleteGrant">;
+  access?: Pick<
+    AccessAdministrationStore,
+    "listGrants" | "deleteGrant" | "createGrant" | "lockRights"
+  >;
   apiAccess?: Pick<ApiAccessStore, "findServicePrincipalByOwner">;
   workspaces?: Pick<CollaborationWorkspaceStore, "getMembership">;
   /** The comment a `feedback_review` item marks handled, in the same transaction. */

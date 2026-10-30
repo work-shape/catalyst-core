@@ -7,6 +7,7 @@ import {
   isAppError,
   isSuperadmin,
   listAccessEntries,
+  WORKSPACE_BUNDLES,
   type AuthenticatedUser,
   type CollaborationWorkspace,
   type CollaborationWorkspaceId,
@@ -56,9 +57,6 @@ export async function requireWorkspaceAccess(
   }
   return { userId, role, membershipRole };
 }
-
-/** The bundles whose holder works in a Shared Workspace without being its member. */
-const WORKSPACE_BUNDLES = ["builder", "publisher"] as const;
 
 /**
  * Whether the user works in a workspace, and as what. A member does as `requireWorkspaceAccess`

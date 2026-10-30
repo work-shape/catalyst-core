@@ -2,6 +2,7 @@ import { DEFAULT_LIST_LIMIT, apiOperations } from "@work-shape/catalyst-api-cont
 import { createSafeConfigView } from "@work-shape/catalyst-config-schema";
 import {
   AppError,
+  WORKSPACE_BUNDLES,
   WORKSPACE_SECTIONS,
   asCollaborationWorkspaceId,
   asUserId,
@@ -29,6 +30,14 @@ import {
 } from "../workspaces/collaboration-workspace-service";
 import { agentWriter, ownAgents } from "../workspaces/agent-availability";
 import { requireWorkspaceAccess } from "../workspaces/workspace-access";
+import {
+  authorizeBundleRequest,
+  authorizeBundleRevoke,
+  grantMemberBundle,
+  listMemberBundles,
+  requestMemberBundle,
+  revokeMemberBundle
+} from "../workspaces/workspace-bundles";
 import { findWorkspaceFiles } from "../workspaces/workspace-files";
 import { deletionState } from "./deletion-answer";
 import { requirePathParam, resolveRequestLocale } from "./request-context";
@@ -144,6 +153,9 @@ export function registerCollaborationWorkspaceRoutes(
   const requestAccess = apiOperations["workspaces.access_requests.create"];
   const approveRequest = apiOperations["workspaces.access_requests.approve"];
   const declineRequest = apiOperations["workspaces.access_requests.decline"];
+  const requestBundle = apiOperations["workspaces.member_bundles.request"];
+  const grantBundle = apiOperations["workspaces.member_bundles.grant"];
+  const revokeBundle = apiOperations["workspaces.member_bundles.revoke"];
 
   route(apiOperations["workspaces.ensure_personal"], async ({ user }) => {
     const workspace = await options.stores.workspaces.ensurePersonalWorkspace({
@@ -303,6 +315,54 @@ export function registerCollaborationWorkspaceRoutes(
 
   route(apiOperations["workspaces.members.list"], async ({ user, params }) => {
     return workspaces.listMembers(user, collaborationWorkspaceId(params));
+  });
+
+  route(apiOperations["workspaces.member_bundles.list"], async ({ user, access, params }) =>
+    listMemberBundles(options, { user, access }, collaborationWorkspaceId(params))
+  );
+
+  // AP-3: asking for a bundle changes nothing until an instance admin approves it.
+  route.operation(requestBundle, {
+    changeClass: "reversible",
+    authorize: (input, { actor }) =>
+      authorizeBundleRequest(
+        options,
+        requestBundle.id,
+        personOf(actor),
+        collaborationWorkspaceId(input),
+        workspaceUserParams(input).userId
+      ),
+    resource: workspaceResource,
+    execute: (input, context) =>
+      requestMemberBundle(
+        options,
+        changeCall(requestBundle.id, context),
+        bundleParams(input),
+        input.reason
+      )
+  });
+
+  // `users.manage` is asked before; the grant itself asks that the caller holds the bundle.
+  route.operation(grantBundle, {
+    changeClass: "reversible",
+    resource: workspaceResource,
+    execute: (input, context) =>
+      grantMemberBundle(options, changeCall(grantBundle.id, context), bundleParams(input))
+  });
+
+  route.operation(revokeBundle, {
+    changeClass: "reversible",
+    authorize: (input, { actor, access }) =>
+      authorizeBundleRevoke(
+        options,
+        revokeBundle.id,
+        personOf(actor),
+        access,
+        collaborationWorkspaceId(input)
+      ),
+    resource: workspaceResource,
+    execute: (input, context) =>
+      revokeMemberBundle(options, changeCall(revokeBundle.id, context), bundleParams(input))
   });
 
   route(apiOperations["workspaces.member_candidates.list"], async ({ user, params, query }) => {
@@ -472,6 +532,18 @@ function collaborationWorkspaceId(params: { collaborationWorkspaceId: string }) 
   return asCollaborationWorkspaceId(
     requirePathParam(params.collaborationWorkspaceId, "Missing Collaboration Workspace id")
   );
+}
+
+/** The member and the bundle a call names. */
+function bundleParams(params: {
+  collaborationWorkspaceId: string;
+  userId: string;
+  bundle: string;
+}) {
+  const bundle = WORKSPACE_BUNDLES.find((candidate) => candidate === params.bundle);
+  if (!bundle) throw new AppError("NOT_FOUND", "No such bundle of a workspace");
+  const { collaborationWorkspaceId: workspaceId, userId } = workspaceUserParams(params);
+  return { workspaceId, userId, bundle };
 }
 
 function workspaceUserParams(params: { collaborationWorkspaceId: string; userId: string }) {

@@ -835,7 +835,7 @@ function originView(entry: AccessEntry, place: PlaceNames) {
  * key its other audit events carry, and the asset as the scope id. No name of another user
  * leaves through the audit log.
  */
-function grantAuditMetadata(grant: PermissionGrant): JsonObject {
+export function grantAuditMetadata(grant: PermissionGrant): JsonObject {
   return {
     grantId: grant.id,
     holderKind: grant.holderKind,

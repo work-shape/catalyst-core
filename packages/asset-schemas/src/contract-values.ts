@@ -503,6 +503,29 @@ export type CollaborationWorkspaceKind = (typeof COLLABORATION_WORKSPACE_KINDS)[
 export const WORKSPACE_ACCESS_STATES = ["member", "request_pending", "can_request"] as const;
 export type WorkspaceAccessState = (typeof WORKSPACE_ACCESS_STATES)[number];
 
+/** The two bundles a member of a Shared Workspace holds one by one (AP-3). */
+export const WORKSPACE_BUNDLES = ["builder", "publisher"] as const;
+export type WorkspaceBundle = (typeof WORKSPACE_BUNDLES)[number];
+
+/**
+ * Where a member stands with one bundle on the Members screen: held through a row in this
+ * workspace, held some other way (a role, a group or the whole instance), asked for, or not.
+ */
+export const MEMBER_BUNDLE_STATES = ["none", "requested", "held", "inherited"] as const;
+export type MemberBundleState = (typeof MEMBER_BUNDLE_STATES)[number];
+
+/** What the caller's switch does to one bundle of one member. */
+export const MEMBER_BUNDLE_CHANGES = ["grant", "request", "revoke", "withdraw"] as const;
+export type MemberBundleChange = (typeof MEMBER_BUNDLE_CHANGES)[number];
+
+/** Why a request for Builder or Publisher can no longer give what it asked. */
+export const GRANT_REQUEST_STALE_REASONS = [
+  "member_left",
+  "member_inactive",
+  "already_held"
+] as const;
+export type GrantRequestStaleReason = (typeof GRANT_REQUEST_STALE_REASONS)[number];
+
 export const DELETION_STATES = ["deleting", "deleted"] as const;
 export type DeletionState = (typeof DELETION_STATES)[number];
 
