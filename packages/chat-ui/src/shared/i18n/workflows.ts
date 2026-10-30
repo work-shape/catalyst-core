@@ -22,6 +22,23 @@ export const workflows = defineTranslations({
       "This workflow runs as the technical account “{name}”, which is switched off. An administrator switches it on under {place}.",
     "workflows.notRunnable.accountUnavailable":
       "This workflow runs as a technical account that is missing or switched off. An administrator manages the accounts under {place}.",
+    "workflows.pin.button": "Use this output in test runs",
+    "workflows.pin.instead": "Use this output instead",
+    "workflows.pin.hint":
+      "Your next test runs of the draft end this step with this output and call nothing for it, until the step changes.",
+    "workflows.pin.fromThisRun": "Your test runs use this step's output from this run.",
+    "workflows.pin.fromRun": "Your test runs use this step's output from a run of {time}.",
+    "workflows.pin.unpin": "Unpin",
+    "workflows.pin.openRun": "Open that run",
+    "workflows.pin.used":
+      "This test run took the step's output from an earlier run and did not run it.",
+    "workflows.pin.failed": "The output could not be pinned.",
+    "workflows.pin.unpinFailed": "The pin could not be removed.",
+    "workflows.pin.changed":
+      "The draft has changed this step since that run. Run a test of the draft and pin the output from there.",
+    "workflows.pin.gone": "The data of that run was removed, so its output cannot be used.",
+    "workflows.pin.notPortable":
+      "This output names a dataset or file of its run, which no other run can read.",
     "workflows.liveOnce.again": "Run live once again",
     "workflows.liveOnce.used": "Ran live in your test run of {time}.",
     "workflows.simulated.wouldAskConfirmation":
@@ -762,6 +779,26 @@ export const workflows = defineTranslations({
       "Dieser Workflow läuft als Technisches Konto „{name}“, das ausgeschaltet ist. Ein Administrator schaltet es unter {place} ein.",
     "workflows.notRunnable.accountUnavailable":
       "Dieser Workflow läuft als Technisches Konto, das fehlt oder ausgeschaltet ist. Die Konten verwaltet ein Administrator unter {place}.",
+    "workflows.pin.button": "Diese Ausgabe in Testläufen verwenden",
+    "workflows.pin.instead": "Stattdessen diese Ausgabe verwenden",
+    "workflows.pin.hint":
+      "Deine nächsten Testläufe des Entwurfs beenden diesen Schritt mit dieser Ausgabe und rufen nichts dafür auf, bis sich der Schritt ändert.",
+    "workflows.pin.fromThisRun":
+      "Deine Testläufe verwenden die Ausgabe dieses Schritts aus diesem Lauf.",
+    "workflows.pin.fromRun":
+      "Deine Testläufe verwenden die Ausgabe dieses Schritts aus einem Lauf vom {time}.",
+    "workflows.pin.unpin": "Nicht mehr verwenden",
+    "workflows.pin.openRun": "Diesen Lauf öffnen",
+    "workflows.pin.used":
+      "Dieser Testlauf hat die Ausgabe des Schritts aus einem früheren Lauf übernommen und ihn nicht ausgeführt.",
+    "workflows.pin.failed": "Die Ausgabe konnte nicht festgehalten werden.",
+    "workflows.pin.unpinFailed": "Die Ausgabe konnte nicht freigegeben werden.",
+    "workflows.pin.changed":
+      "Der Entwurf hat diesen Schritt seit diesem Lauf geändert. Starte einen Testlauf des Entwurfs und übernimm die Ausgabe von dort.",
+    "workflows.pin.gone":
+      "Die Daten dieses Laufs wurden entfernt, seine Ausgabe ist nicht mehr verfügbar.",
+    "workflows.pin.notPortable":
+      "Diese Ausgabe nennt einen Datensatz oder eine Datei ihres Laufs, die kein anderer Lauf lesen kann.",
     "workflows.liveOnce.again": "Noch einmal live ausführen",
     "workflows.liveOnce.used": "Lief live in deinem Testlauf vom {time}.",
     "workflows.simulated.wouldAskConfirmation":

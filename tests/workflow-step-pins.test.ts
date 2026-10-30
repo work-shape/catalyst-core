@@ -1,13 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import {
-  WORKFLOW_ASSET_KIND,
-  type JsonValue,
-  type WorkflowRun,
-  type WorkflowStepPin
-} from "@work-shape/catalyst-core";
-import { createWorkflowStepPins } from "@work-shape/catalyst-workflows";
-import { clientInstanceId, errorSchema } from "./support/access-instance";
+import { WORKFLOW_ASSET_KIND, type JsonValue } from "@work-shape/catalyst-core";
+import { errorSchema } from "./support/access-instance";
 import { withTestSql } from "./support/test-sql";
 import { runSchema, type WorkflowFixture } from "./support/workflow-instance";
 import { CLIENTS, NOTE, notifyClients, readyWorkflows, stepRunsOf } from "./support/workflow-runs";
@@ -204,46 +198,21 @@ describe("a pinned step output", () => {
     });
     expect(reader.statusCode).toBe(403);
   });
-});
 
-describe("pinning an output that names its run's dataset", () => {
-  it("is refused, since no other run can read it", async () => {
-    const step = { id: "load", name: "Load", type: "operation", operation: "connection.crm.echo" };
-    const manifest = {
-      id: WORKFLOW,
-      name: "Notify",
-      steps: [{ id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] }, step]
-    };
-    const put: WorkflowStepPin[] = [];
-    const source = { id: "wfr_source" } as WorkflowRun;
-    const pins = createWorkflowStepPins({
-      clientInstanceId,
-      now: () => new Date("2026-10-30T10:00:00.000Z"),
-      stores: {
-        workflowRuns: {
-          readRunDefinition: () => Promise.resolve(manifest),
-          findStepOutput: () =>
-            Promise.resolve({ value: { rows: { $dataset: "wds_1", rowCount: 1, bytes: 2 } } })
-        },
-        workflowStepPins: {
-          put: ({ pin }) => {
-            put.push(pin);
-            return Promise.resolve();
-          },
-          list: () => Promise.resolve([]),
-          remove: () => Promise.resolve(0)
-        }
-      } as unknown as Parameters<typeof createWorkflowStepPins>[0]["stores"]
-    });
-    await expect(
-      pins.pin({
-        assetId: "asset",
-        pinnedBy: "user",
-        draft: manifest as never,
-        step: "load",
-        source
+  it("is refused on an output that names a dataset of its run, which no other run can read", async () => {
+    const t = await ready();
+    t.setBehaviour(() =>
+      Promise.resolve<JsonValue>({
+        clients: [],
+        rows: { $dataset: "wds_elsewhere", rowCount: 1, bytes: 2 }
       })
-    ).rejects.toMatchObject({ details: { reason: "pin_output_not_portable" } });
-    expect(put).toEqual([]);
+    );
+    const first = await testRun(t);
+    const refused = await pin(t, "clients", first.run.id);
+    expect(refused.statusCode).toBe(409);
+    expect(errorSchema.parse(refused.json()).error.details).toMatchObject({
+      reason: "pin_output_not_portable"
+    });
+    expect(await pins(t)).toEqual([]);
   });
 });

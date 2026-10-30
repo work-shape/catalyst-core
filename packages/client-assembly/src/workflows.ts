@@ -316,7 +316,8 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
                 { workflow, runAs: draft.manifest.runAs }
               );
             // A test of the draft takes its starter's pins; the published revision takes none.
-            const asset = revision === "draft" && !given ? await assets.assetOf(workflow) : undefined;
+            const asset =
+              revision === "draft" && !given ? await assets.assetOf(workflow) : undefined;
             const pinnedSteps =
               asset === undefined
                 ? []

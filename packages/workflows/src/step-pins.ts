@@ -10,7 +10,9 @@ import {
   type WorkflowRun,
   type WorkflowRunId,
   type WorkflowStep,
-  type WorkflowStepPin
+  type WorkflowStepPin,
+  unknownToJsonValue,
+  WORKFLOW_PINNABLE_STEP_TYPES
 } from "@work-shape/catalyst-core";
 import { holdsDatasetReference, fileReferences } from "./json";
 import { WorkflowStepFailure } from "./step-failure";
@@ -33,13 +35,7 @@ export const WORKFLOW_PIN_ERRORS = {
   notPortable: "pin_output_not_portable"
 } as const;
 
-/** The types of step whose output is pinned: those that call, run a model or run a script. */
-const PINNABLE_STEP_TYPES: ReadonlySet<WorkflowStep["type"]> = new Set([
-  "operation",
-  "agent",
-  "code",
-  "workflow"
-]);
+const PINNABLE_STEP_TYPES: ReadonlySet<string> = new Set(WORKFLOW_PINNABLE_STEP_TYPES);
 
 /** A pin as a reader is shown it: the step, the run it came from, and when. */
 export interface WorkflowStepPinView {
@@ -50,7 +46,7 @@ export interface WorkflowStepPinView {
 
 /** The hash of a step's definition: the same step in two revisions has the same one. */
 export function workflowStepHash(step: WorkflowStep): string {
-  return sha256Hex(canonicalJson(step as unknown as JsonValue));
+  return sha256Hex(canonicalJson(unknownToJsonValue(step)));
 }
 
 /** The step of this id outside every block, of a type whose output is pinned. */
@@ -71,7 +67,10 @@ const toView = (pin: WorkflowStepPin): WorkflowStepPinView => ({
 
 export function createWorkflowStepPins(options: {
   clientInstanceId: ClientInstanceId;
-  stores: Pick<PlatformStores, "workflowRuns" | "workflowStepPins">;
+  stores: {
+    workflowRuns: Pick<PlatformStores["workflowRuns"], "findStepOutput" | "readRunDefinition">;
+    workflowStepPins: PlatformStores["workflowStepPins"];
+  };
   now(): Date;
 }) {
   const { clientInstanceId, stores } = options;
@@ -128,7 +127,7 @@ export function createWorkflowStepPins(options: {
       pinnedBy: string;
       draft: WorkflowManifest;
       step: string;
-      source: WorkflowRun;
+      source: Pick<WorkflowRun, "id">;
     }): Promise<WorkflowStepPinView> {
       const { assetId, pinnedBy, draft, step: stepId, source } = input;
       const step = pinnableStep(draft, stepId);

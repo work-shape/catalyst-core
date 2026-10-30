@@ -131,7 +131,7 @@ export interface WorkflowRunsPort {
 }
 
 /** A pinned step output as the API answers it: names only, no value (EW-10). */
-export interface WorkflowStepPinView {
+interface WorkflowStepPinView {
   step: string;
   runId: string;
   pinnedAt: string;

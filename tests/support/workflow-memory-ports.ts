@@ -205,6 +205,9 @@ export const unusedPlatformStores: PlatformStores = {
   get workflowRuns() {
     return unsupported();
   },
+  get workflowStepPins() {
+    return unsupported();
+  },
   get workflowRunDatasets() {
     return unsupported();
   },

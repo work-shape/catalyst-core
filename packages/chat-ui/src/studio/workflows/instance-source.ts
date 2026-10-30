@@ -582,6 +582,18 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
             ? {}
             : { used: { runId: item.usedByRunId, at: item.usedAt } })
         })),
+      listPins: async (workflow, signal) =>
+        (await client.workflows.list_pins({ params: { workflow }, signal })).items.map((pin) => ({
+          step: pin.step,
+          runId: pin.runId,
+          pinnedAt: pin.pinnedAt
+        })),
+      pinStep: async (workflow, step, runId) => {
+        done(await client.workflows.pin_step({ params: { workflow, step }, body: { runId } }));
+      },
+      unpinStep: async (workflow, step) => {
+        done(await client.workflows.unpin_step({ params: { workflow, step } }));
+      },
       readRevision: async (workflow, revision, signal) =>
         definitionOf(await readAsset(workflow, "", signal, revision)),
       validate: async (workflow, config) =>

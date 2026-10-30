@@ -5,6 +5,7 @@ import type {
   WorkflowDefinitionView,
   WorkflowListItem,
   WorkflowRunView,
+  WorkflowStepPinView,
   WorkflowStepRunView,
   WorkflowStepTranscriptView,
   WorkflowView
@@ -189,6 +190,12 @@ interface WorkflowDraftsSource {
   runLiveOnce(workflow: string, step: string, expectedRevision: number): Promise<void>;
   /** The reader's own switches on the draft, and the test run that used each. */
   listLiveOnce(workflow: string, signal: AbortSignal): Promise<LiveOnceSwitchView[]>;
+  /** The reader's pinned step outputs on the draft (EW-10). Absent where the source has none. */
+  listPins?(workflow: string, signal: AbortSignal): Promise<WorkflowStepPinView[]>;
+  /** Pins the output the step had in this run for the reader's next test runs of the draft. */
+  pinStep?(workflow: string, step: string, runId: string): Promise<void>;
+  /** Drops the reader's pin on the step. */
+  unpinStep?(workflow: string, step: string): Promise<void>;
   /** One revision as it is stored, such as the published one a draft is compared with. */
   readRevision(
     workflow: string,

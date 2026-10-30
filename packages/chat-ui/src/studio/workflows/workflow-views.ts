@@ -337,6 +337,13 @@ export interface LiveOnceSwitchView {
   used?: { runId: string; at: string };
 }
 
+/** One of the reader's pinned step outputs on the draft: the step and the run it is from. */
+export interface WorkflowStepPinView {
+  step: string;
+  runId: string;
+  pinnedAt: string;
+}
+
 /** Where the call of a step went: the live asset, its test target, or nowhere (simulated). */
 export type WorkflowStepTarget = (typeof OPERATION_TARGETS)[number];
 
@@ -484,6 +491,11 @@ export interface WorkflowRunView {
   test: boolean;
   /** On a test run a click in an App's draft started: the App, by name (DP-1). */
   fromApp?: string;
+  /**
+   * In a test run: the steps that ended with the output a pin of its starter's named, each with
+   * the run that output is from (EW-10).
+   */
+  pinnedSteps?: readonly { step: string; sourceRunId: string }[];
   /** The run whose step started this one, where it is a child run. */
   parent?: { runId: string; workflowId: string };
   /**

@@ -7,6 +7,9 @@ import type { ISODateString } from "./time";
 // retention and readers. It belongs to the draft and its owner, one per step, and is cleared
 // once the draft's step is no longer the one it was pinned on.
 
+/** The types of step whose output is pinned: those that call, run a model or run a script. */
+export const WORKFLOW_PINNABLE_STEP_TYPES = ["operation", "agent", "code", "workflow"] as const;
+
 /** One pin: the step, the run whose output of it is used, and the step it was pinned on. */
 export interface WorkflowStepPin {
   /** The id of the step, outside every block. */

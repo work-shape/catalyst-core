@@ -16,6 +16,7 @@ import type {
   CallableOperationOption,
   ChildWorkflowOption,
   LiveOnceSwitchView,
+  WorkflowStepPinView,
   WorkflowDefinitionView,
   WorkflowListItem,
   WorkflowRunView,
@@ -59,7 +60,8 @@ function useWorkflowKeys() {
       ] as const,
       runs: ["workflow-runs", source.key] as const,
       choices: ["workflow-step-choices", source.key] as const,
-      liveOnce: ["workflow-live-once", source.key] as const
+      liveOnce: ["workflow-live-once", source.key] as const,
+      pins: ["workflow-step-pins", source.key] as const
     }),
     [apiBaseUrl, source.key]
   );
@@ -479,6 +481,51 @@ export function useLiveOnceSwitches(
     enabled: enabled && drafts !== undefined
   });
   return query.data;
+}
+
+/**
+ * The reader's pinned step outputs on the draft of one Workflow (EW-10). The instance drops a
+ * pin whose step changed when it is read, so they are read again with every change of the draft
+ * (`revision` is part of the key). Nothing is read where `enabled` is false or the source holds
+ * no pins.
+ */
+export function useStepPinList(
+  workflow: string,
+  enabled: boolean,
+  revision: number | undefined
+): readonly WorkflowStepPinView[] | undefined {
+  const { drafts } = useWorkflowsSource();
+  const keys = useWorkflowKeys();
+  const query = useQuery({
+    queryKey: [...keys.pins, workflow, revision ?? 0],
+    queryFn: ({ signal }) => drafts?.listPins?.(workflow, signal) ?? Promise.resolve([]),
+    enabled: enabled && drafts?.listPins !== undefined
+  });
+  return query.data;
+}
+
+/** Pinning a step's output and dropping the pin, where the source holds pins. */
+export interface StepPinWrites {
+  pin(workflow: string, step: string, runId: string): Promise<void>;
+  unpin(workflow: string, step: string): Promise<void>;
+}
+
+export function useStepPinWrites(): StepPinWrites | undefined {
+  const { drafts } = useWorkflowsSource();
+  const queryClient = useQueryClient();
+  const keys = useWorkflowKeys();
+  return useMemo(() => {
+    const pinStep = drafts?.pinStep?.bind(drafts);
+    const unpinStep = drafts?.unpinStep?.bind(drafts);
+    if (pinStep === undefined || unpinStep === undefined) {
+      return undefined;
+    }
+    const changed = () => queryClient.invalidateQueries({ queryKey: keys.pins });
+    return {
+      pin: async (workflow, step, runId) => pinStep(workflow, step, runId).finally(changed),
+      unpin: async (workflow, step) => unpinStep(workflow, step).finally(changed)
+    };
+  }, [drafts, keys, queryClient]);
 }
 
 /** What a person does to the draft of a Workflow from its page and from a test run. */

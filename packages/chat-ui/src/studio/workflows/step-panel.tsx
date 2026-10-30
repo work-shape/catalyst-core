@@ -27,6 +27,7 @@ import { useTranslation } from "../../shared/i18n";
 import { FailureBanner } from "./failure-banner";
 import { recipientsLine } from "./recipient-names";
 import type { LiveOnceControl } from "./test-run";
+import { StepPin, type StepPinControl } from "./step-pin";
 import { StepDatasets } from "./step-datasets";
 import { MailStepDescription, MailStepRun } from "./step-mail";
 import { simulatedCall, stepDatasets, stepOutputRows } from "./step-output";
@@ -63,6 +64,8 @@ export interface StepPanelRun {
   passesOn?: { count: number; step: string };
   /** In a test run, on a step that changes something: "Run live once" for the next test run. */
   liveOnce?: LiveOnceControl;
+  /** In a test run, on a step that ended with a pinned output: the run that output is from. */
+  pinnedFrom?: { runId: string; open(): void };
   /** The run's datasets: what an output names that an earlier step wrote. */
   runDatasets?: readonly WorkflowDatasetView[];
   now: Date;
@@ -203,6 +206,7 @@ export function StepPanel({
   onOpenChild,
   settings,
   actions,
+  pin,
   onClose
 }: {
   step: WorkflowStepView;
@@ -226,6 +230,8 @@ export function StepPanel({
   settings?: { content: ReactNode; footer: ReactNode; editing: boolean };
   /** What can be done to the step, such as its "…" menu, for a reader who may write it. */
   actions?: ReactNode;
+  /** The reader's pin on the step's output for their test runs, where it is offered (EW-10). */
+  pin?: StepPinControl | undefined;
   onClose(): void;
 }) {
   const { t } = useTranslation();
@@ -269,16 +275,20 @@ export function StepPanel({
       {shown === "settings" && settings !== undefined ? (
         settings.content
       ) : shown === "what" ? (
-        step.mail === undefined ? (
-          <StepDescription step={step} summary={part.summary} onOpenChild={onOpenChild} />
-        ) : (
-          <MailStepDescription stepId={step.id} mail={step.mail} draft={settings !== undefined} />
-        )
+        <>
+          {step.mail === undefined ? (
+            <StepDescription step={step} summary={part.summary} onOpenChild={onOpenChild} />
+          ) : (
+            <MailStepDescription stepId={step.id} mail={step.mail} draft={settings !== undefined} />
+          )}
+          {run === undefined && pin !== undefined ? <StepPin control={pin} /> : null}
+        </>
       ) : shown === "run" && run !== undefined ? (
         <StepRunDetails
           step={step}
           account={account}
           run={run}
+          pin={pin}
           transcript={transcript}
           onOpenChild={onOpenChild}
         />
@@ -429,12 +439,14 @@ function StepRunDetails({
   step,
   account,
   run,
+  pin,
   transcript,
   onOpenChild
 }: {
   step: WorkflowStepView;
   account: string | undefined;
   run: StepPanelRun;
+  pin: StepPinControl | undefined;
   transcript: ReactNode;
   onOpenChild: (() => void) | undefined;
 }) {
@@ -520,6 +532,13 @@ function StepRunDetails({
       ) : null}
       {stepRun.publishedWouldAsk === "approval" ? <PublishedAsksApproval /> : null}
       {run.liveOnce === undefined ? null : <LiveOnce control={run.liveOnce} />}
+      {run.pinnedFrom === undefined ? null : <PinnedFrom from={run.pinnedFrom} />}
+      {pin === undefined ? null : (
+        <StepPin
+          control={pin}
+          sameAsRun={pin.pinned !== undefined && pin.pinned.runId === run.pinnedFrom?.runId}
+        />
+      )}
       {step.mail !== undefined ? (
         <MailStepRun mail={step.mail} stepRun={stepRun} />
       ) : stepRun.target === "dry_run" ? (
@@ -642,6 +661,25 @@ function SimulatedOutput({ output }: { output: WorkflowOutputPreview | undefined
         </KeyValueList>
       )}
     </section>
+  );
+}
+
+/** On a step a test run ended with a pinned output: that it did, and the run it is from. */
+function PinnedFrom({ from }: { from: { runId: string; open(): void } }) {
+  const { t } = useTranslation();
+  return (
+    <Banner
+      tone="info"
+      layout="inline"
+      data-pinned-from={from.runId}
+      action={
+        <Button variant="outline" size="sm" onClick={from.open}>
+          {t("workflows.pin.openRun")}
+        </Button>
+      }
+    >
+      {t("workflows.pin.used")}
+    </Banner>
   );
 }
 
