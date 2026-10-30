@@ -219,11 +219,43 @@ export function AssetEditorShell({
   // Every action of the page but Publish stands in the "…" menu, which is absent while it is empty.
   const menuActions = [...(headActions ?? []), ...(actions.secondaryActions ?? [])];
   // One muted line under the name: where the asset comes from, then who uses it and whose it is.
+  // Where nobody can use the asset, its audience leads to the section that changes that.
+  const audienceTo = audience === undefined ? frame.place?.audienceTo : undefined;
+  const shownAudience = audience ?? frame.place?.audience;
   const metaLine = headFacts([
     ...(facts ?? []),
-    audience ?? frame.place?.audience,
+    audienceTo === undefined ? shownAudience : undefined,
     frame.place?.owner
   ]);
+  const audienceLink =
+    audienceTo === undefined || shownAudience === undefined ? undefined : (
+      <a
+        href={`#${audienceTo}`}
+        className="underline-offset-2 hover:underline"
+        onClick={(event) => {
+          event.preventDefault();
+          document
+            .getElementById(audienceTo)
+            ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }}
+      >
+        {shownAudience}
+      </a>
+    );
+  const factsBefore = headFacts(facts ?? []);
+  const owner = frame.place?.owner;
+  const meta =
+    audienceLink === undefined ? (
+      metaLine === "" ? undefined : (
+        <span data-asset-place="">{metaLine}</span>
+      )
+    ) : (
+      <span data-asset-place="">
+        {factsBefore === "" ? null : `${factsBefore} · `}
+        {audienceLink}
+        {owner === undefined || owner === "" ? null : ` · ${owner}`}
+      </span>
+    );
 
   return (
     <Page
@@ -235,7 +267,7 @@ export function AssetEditorShell({
           back={back}
           title={title}
           status={status ?? frame.draft?.status}
-          meta={metaLine === "" ? undefined : <span data-asset-place="">{metaLine}</span>}
+          meta={meta}
           // Publish is the one button beside "Chat": every other action of the page stands in
           // the "…" menu, the kind's first.
           primaryAction={primaryAction ?? actions.primaryAction}

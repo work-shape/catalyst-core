@@ -123,6 +123,11 @@ export interface BuildAssetEditorProps {
 interface AssetPlaceFacts {
   /** Who uses it, where its record says so: "Can be chosen in: …". */
   audience?: string | undefined;
+  /**
+   * Where nobody can use it, the anchor of the section that changes that, for a reader who may:
+   * the audience then leads there.
+   */
+  audienceTo?: string | undefined;
   /** Where it sits: "for everyone", "only for you", "for <workspace>". */
   owner: string;
 }

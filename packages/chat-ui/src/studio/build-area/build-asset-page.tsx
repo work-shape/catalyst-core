@@ -53,6 +53,7 @@ import { AGENT_ASSET_KIND, type BuildRights } from "../../shared/build-rights";
 import { AssetStatus } from "../asset-head";
 import {
   assetAudience,
+  AVAILABILITY_SECTION_ID,
   assetPlace,
   ownerFact,
   refusalPlaceOf,
@@ -635,8 +636,13 @@ function LoadedAssetPage({
   // Where the asset sits and who uses it, facts of the line under the name: for an agent where
   // a chat can choose it, for a Knowledge Base where agents may use it.
   const audience = assetAudience(entry.kind, stored, workspaces, t, locale);
+  // Where nobody can use it, the audience leads a reader who may change that to its section.
+  const maySetAvailability = stored.canSetAvailability ?? source.rights.instanceWrite;
   const placeFacts = {
     audience: audience?.text,
+    ...(audience?.nowhere && maySetAvailability && !shipped
+      ? { audienceTo: AVAILABILITY_SECTION_ID }
+      : {}),
     owner: ownerFact(stored.scope, workspaces, t)
   };
   const refusalPlace = refusalPlaceOf(workspaces);
