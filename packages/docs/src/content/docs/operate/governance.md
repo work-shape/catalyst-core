@@ -127,6 +127,12 @@ workspace command, since a command is never run a second time, and none for a ki
 capability names no way to retry it. Every retry is written to the audit log as
 `job.retried`.
 
+## Policies
+
+Settings > Instance > Policies lists every operation of the instance in plain words: whether it reads or changes, whether a change can be undone, and whether it runs, asks the person first, needs an approval or is off, with where that value comes from. Whoever holds `policy.manage` (admins by default) sets a central setting per operation or per pattern such as `connection.crm.*`, optionally narrowed to one Shared Workspace and one asset kind. A setting holds from the next call wherever the operation is called: in chat, in apps, in workflows and from the CLI. Where several settings match one call, the strictest wins, and a reading operation only runs or is off.
+
+The same page locks "Always allow" per operation or pattern, so everyone is asked each time. A lock of the release config (`policy.alwaysAllow.locked`) is listed and cannot be lifted there or through the API. The screen's own operations keep their default, so the policy can always be changed again. Each change is recorded as `governance.policy_setting_changed` or `governance.always_allow_lock_changed`, with the operation, its narrowing and the old and new value only. The operations are `policies.get`, `policies.set` and `policies.set_always_allow_lock`.
+
 ## Admin Access
 
 Admin and superadmin access should be explicit, permissioned, and audited.
