@@ -2,6 +2,8 @@ import { useState } from "react";
 import {
   ApiError,
   POLICY_OPERATION_KINDS,
+  POLICY_VALUES,
+  READING_POLICY_VALUES,
   type AlwaysAllowLock,
   type Policies,
   type PolicyOperation,
@@ -35,8 +37,8 @@ import { useSettingsPage } from "../../../shared/settings-page-context";
 type PolicyValue = Policies["defaults"]["changing"];
 type Translate = ReturnType<typeof useTranslation>["t"];
 
-const VALUES: readonly PolicyValue[] = ["allow", "confirm", "approval", "deny"];
-const READING_VALUES: readonly PolicyValue[] = ["allow", "deny"];
+const VALUES: readonly PolicyValue[] = POLICY_VALUES;
+const READING_VALUES: readonly PolicyValue[] = READING_POLICY_VALUES;
 /** The choice of an action's own row that removes its setting. */
 const DEFAULT = "default";
 

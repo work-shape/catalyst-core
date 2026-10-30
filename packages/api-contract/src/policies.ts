@@ -2,6 +2,7 @@ import {
   OPERATION_CHANGE_CLASSES,
   OPERATION_EFFECTS,
   POLICY_VALUES,
+  ALWAYS_ALLOW_LOCK_SOURCES,
   READING_POLICY_VALUES
 } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
@@ -32,8 +33,8 @@ export const POLICY_VALUE_SOURCES = [
   "policy_floor"
 ] as const;
 
-/** Who locked "Always allow": release config, which the screen cannot change, or an admin here. */
-export const ALWAYS_ALLOW_LOCK_SOURCES = ["release", "instance"] as const;
+/** For the screen: the values a setting takes, the two of a reading operation, and who locked. */
+export { ALWAYS_ALLOW_LOCK_SOURCES, POLICY_VALUES, READING_POLICY_VALUES };
 
 /**
  * An operation or every operation under a prefix: `connection.crm.send`, `connection.crm.*`. A

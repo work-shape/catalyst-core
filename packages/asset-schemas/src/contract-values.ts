@@ -1072,6 +1072,9 @@ export type AssetOwnerKind = (typeof ASSET_OWNER_KINDS)[number];
 export const READING_POLICY_VALUES = ["allow", "deny"] as const satisfies readonly PolicyValue[];
 export type ReadingPolicyValue = (typeof READING_POLICY_VALUES)[number];
 
+/** Who locked "Always allow": the release config, which no screen lifts, or an instance admin. */
+export const ALWAYS_ALLOW_LOCK_SOURCES = ["release", "instance"] as const;
+
 export const CONNECTION_OPERATION_POLICIES = [
   "deny",
   "approval"

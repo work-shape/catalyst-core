@@ -52,7 +52,7 @@ type DraftHostOptions = Pick<
 >;
 
 /** The operation of the click, and the switch an admin sets on Instance > Policies. */
-export const ALLOW_DRAFT_HOST_OPERATION = "apps.allow_draft_host";
+const ALLOW_DRAFT_HOST_OPERATION = "apps.allow_draft_host";
 
 /** Off until an admin switches it on: the release's own policy of the operation. */
 export const DRAFT_HOSTS_DEFAULT_POLICY = "deny" as const;
@@ -62,7 +62,7 @@ export const DRAFT_HOSTS_DEFAULT_POLICY = "deny" as const;
  * targets: the admin's central setting of the operation, narrowed as it is, over the release's
  * `deny`. Read anew each time, so a switch set a moment ago holds at once.
  */
-export async function draftHostsSwitchedOn(
+async function draftHostsSwitchedOn(
   options: Pick<DraftHostOptions, "clientInstanceId" | "stores" | "config" | "operations">,
   targets: readonly PolicyTarget[]
 ): Promise<boolean> {
