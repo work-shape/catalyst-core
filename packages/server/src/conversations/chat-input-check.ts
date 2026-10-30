@@ -28,14 +28,29 @@ import type { ChatServerOptions } from "../types";
 type Options = Pick<ChatServerOptions, "attachments" | "operationCalls">;
 
 /**
- * Attachments whose text is read as it is, by their format. Every other file's text is not
- * extracted when it is sent, and the person is told it was not checked.
+ * Attachments whose text is read as it is, by their format. Of every other file the text its
+ * handler prepared is read, such as a PDF's: the handler holds the message back until it is
+ * ready. A file without prepared text is not checked, and the person is told.
  */
-const TEXT_FORMATS = new Set(["txt", "markdown", "csv", "json", "html", "xml", "css", "js", "svg"]);
+const TEXT_FORMATS = new Set([
+  "txt",
+  "md",
+  "markdown",
+  "csv",
+  "json",
+  "html",
+  "xml",
+  "css",
+  "js",
+  "svg"
+]);
 const IMAGE_FORMATS = new Set(["png", "jpg", "jpeg", "gif", "webp"]);
 
-/** The most bytes of one attachment that are read for the check: larger ones are not checked. */
-const ATTACHMENT_TEXT_MAX_BYTES = GUARDRAIL_CHECKED_FIELD_MAX_CHARS;
+/**
+ * The most text of all attachments together that is read for the check, as one field: a file
+ * whose text would go beyond it is not checked.
+ */
+const ATTACHMENT_TEXT_MAX_CHARS = GUARDRAIL_CHECKED_FIELD_MAX_CHARS;
 
 export interface ChatInputCheckInput {
   /** Absent for the first message of a conversation not created yet, which has no files. */
@@ -50,6 +65,12 @@ export interface ChatInputCheckInput {
   correlationId: string;
   /** The person saw the warnings and sends anyway. A block still refuses. */
   acceptWarnings: boolean;
+  /**
+   * Whether the hits of these warnings were kept already, when the person was first told. By
+   * default where the warnings are accepted; a scheduled prompt that fires accepts them and
+   * keeps them, as nobody is there to be told.
+   */
+  repeated?: boolean;
 }
 
 /**
@@ -80,7 +101,7 @@ export async function checkChatInput(
         ...(read.texts.length > 0 ? { attachments: read.texts.join("\n") } : {})
       }),
       // Asked again after the person accepted the warnings: those hits were kept already.
-      ...(input.acceptWarnings ? { repeated: true as const } : {})
+      ...((input.repeated ?? input.acceptWarnings) ? { repeated: true as const } : {})
     }
   );
   const notChecked = notCheckedOf(answer.guardrails, read);
@@ -148,8 +169,9 @@ interface ReadAttachments {
 
 /**
  * The text of the message's attachments as far as it can be read when it is sent: a text file
- * as it is, up to the size a check reads. A picture, a document whose text is extracted later
- * and anything that cannot be read are not checked, and the answer says which.
+ * as it is, any other file as its handler prepared it, up to the size a check reads. A picture,
+ * a file without prepared text and anything that cannot be read are not checked, and the answer
+ * says which.
  */
 async function readAttachmentTexts(
   options: Options,
@@ -158,6 +180,7 @@ async function readAttachmentTexts(
   const result: ReadAttachments = { texts: [], read: [], notChecked: [] };
   const { conversationId } = input;
   if (!conversationId) return result;
+  let chars = 0;
   for (const attachment of input.attachments) {
     const format = (attachment.format ?? formatOfMimeType(attachment.mimeType))?.toLowerCase();
     const named = { attachmentId: String(attachment.id), filename: attachment.filename };
@@ -165,31 +188,46 @@ async function readAttachmentTexts(
       result.notChecked.push({ ...named, cause: "image" });
       continue;
     }
-    if (format === undefined || !TEXT_FORMATS.has(format)) {
-      result.notChecked.push({ ...named, cause: "not_extracted" });
-      continue;
-    }
-    if (attachment.byteSize > ATTACHMENT_TEXT_MAX_BYTES) {
-      result.notChecked.push({ ...named, cause: "too_large" });
-      continue;
-    }
+    const file = { conversationId, fileId: String(attachment.fileId) };
+    let read: { text: string; truncated: boolean } | undefined;
     try {
-      const file = await options.attachments?.readConversationFile({
-        conversationId,
-        fileId: String(attachment.fileId)
-      });
-      if (!file) {
-        result.notChecked.push({ ...named, cause: "unreadable" });
-        continue;
-      }
-      result.texts.push(new TextDecoder("utf-8").decode(file.bytes));
-      result.read.push(named);
+      read =
+        format !== undefined && TEXT_FORMATS.has(format)
+          ? attachment.byteSize > ATTACHMENT_TEXT_MAX_CHARS
+            ? undefined
+            : await readText(options, file)
+          : await options.attachments?.readPreparedText?.(file);
     } catch {
       // Why it could not be read is not said: the error may name the file's place in storage.
       result.notChecked.push({ ...named, cause: "unreadable" });
+      continue;
     }
+    if (!read) {
+      const textFile = format !== undefined && TEXT_FORMATS.has(format);
+      result.notChecked.push({ ...named, cause: textFile ? "too_large" : "not_extracted" });
+      continue;
+    }
+    // The texts are joined by a line end each.
+    if (chars + read.text.length + 1 > ATTACHMENT_TEXT_MAX_CHARS) {
+      result.notChecked.push({ ...named, cause: "too_large" });
+      continue;
+    }
+    chars += read.text.length + 1;
+    result.texts.push(read.text);
+    result.read.push(named);
+    // What the handler cut off of a long document was not prepared, so not checked either.
+    if (read.truncated) result.notChecked.push({ ...named, cause: "too_large" });
   }
   return result;
+}
+
+async function readText(
+  options: Options,
+  file: { conversationId: ConversationId; fileId: string }
+): Promise<{ text: string; truncated: boolean }> {
+  const read = await options.attachments?.readConversationFile(file);
+  if (!read) throw new Error("No attachment handler");
+  return { text: new TextDecoder("utf-8").decode(read.bytes), truncated: false };
 }
 
 function formatOfMimeType(mimeType: string | undefined): string | undefined {

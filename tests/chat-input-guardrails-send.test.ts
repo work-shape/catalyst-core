@@ -24,11 +24,11 @@ afterEach(async () => {
   app = undefined;
 });
 
-async function instance() {
+async function instance(attachments: Parameters<typeof createTestAttachmentCapability>[0] = {}) {
   app = await createTestInstance({
     config: createTestConfig(),
     env: {},
-    capabilities: [createTestAttachmentCapability()],
+    capabilities: [createTestAttachmentCapability(attachments)],
     tools: []
   });
   const created = await app.call("conversations.create", { payload: { title: "Chat input" } });
@@ -221,10 +221,57 @@ describe("a chat message under the guardrails on chat input", () => {
     });
   });
 
-  it("says a document's text is read only after sending, also where it refuses the message", async () => {
-    const { app: server, conversationId } = await instance();
+  // Fails without the change: a PDF's prepared text was never checked, though the message
+  // waits until it is ready.
+  it("checks the text a document capability prepared of a PDF", async () => {
+    const { app: server, conversationId } = await instance({
+      preparedTexts: { "vertrag.pdf": { text: `Zahlung per Karte ${CARD}` } }
+    });
     await upload(server, conversationId, {
       filename: "vertrag.pdf",
+      contentType: "application/pdf",
+      content: Buffer.from("%PDF-1.4\n%")
+    });
+    const blocked = await send(server, conversationId, "Bitte prüfe den Vertrag.");
+    expect(errorOf(blocked)).toMatchObject({
+      code: "GUARDRAIL_BLOCKED",
+      details: { guardrailId: "chat-card-numbers" }
+    });
+    expect(errorOf(blocked).details).not.toHaveProperty("attachmentsNotChecked");
+    const [hit] = await withTestSql(
+      (sql) => sql`SELECT field FROM guardrail_hits WHERE guardrail_name = 'chat-card-numbers'`
+    );
+    expect(hit).toEqual({ field: "attachments" });
+    expect(await everyStoredRow()).not.toContain("4111 1111 1111 1111");
+  });
+
+  // Fails without the change: a Markdown file, which the document capability tags `md`, came
+  // back as not checked.
+  it("checks a Markdown file tagged md as text", async () => {
+    const { app: server, conversationId } = await instance({ formats: { "notiz.md": "md" } });
+    await upload(server, conversationId, {
+      filename: "notiz.md",
+      contentType: "text/markdown",
+      content: `# Zugang\n\nToken: ${SECRET}`
+    });
+    const blocked = await send(server, conversationId, "Siehe Notiz.");
+    expect(errorOf(blocked)).toMatchObject({
+      code: "GUARDRAIL_BLOCKED",
+      details: { guardrailId: "chat-secrets" }
+    });
+  });
+
+  it("says what of a document was not checked: no prepared text, or text cut short", async () => {
+    const { app: server, conversationId } = await instance({
+      preparedTexts: { "lang.pdf": { text: "Ein langer Bericht.", truncated: true } }
+    });
+    await upload(server, conversationId, {
+      filename: "vertrag.pdf",
+      contentType: "application/pdf",
+      content: Buffer.from("%PDF-1.4\n%")
+    });
+    await upload(server, conversationId, {
+      filename: "lang.pdf",
       contentType: "application/pdf",
       content: Buffer.from("%PDF-1.4\n%")
     });
@@ -233,7 +280,8 @@ describe("a chat message under the guardrails on chat input", () => {
       code: "CONFLICT",
       details: {
         attachmentsNotChecked: [
-          expect.objectContaining({ filename: "vertrag.pdf", cause: "not_extracted" })
+          expect.objectContaining({ filename: "vertrag.pdf", cause: "not_extracted" }),
+          expect.objectContaining({ filename: "lang.pdf", cause: "too_large" })
         ]
       }
     });

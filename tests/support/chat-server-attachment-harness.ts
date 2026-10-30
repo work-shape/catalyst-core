@@ -5,6 +5,7 @@ import type {
   ClientInstanceCapability
 } from "@work-shape/catalyst-client-assembly";
 import {
+  AppError,
   createPlatformId,
   type AttachmentManifestEntry,
   type ClientInstanceId,
@@ -178,6 +179,10 @@ interface TestAttachmentOptions {
     fileObjectKeys: string[];
     artifactObjectKeys: string[];
   }): void;
+  /** The format an upload of this file name gets, where its media type gives none. */
+  formats?: Readonly<Record<string, FileAttachmentFormat>>;
+  /** The text the capability prepared of a file, by its name, as a document capability does. */
+  preparedTexts?: Readonly<Record<string, { text: string; truncated?: boolean }>>;
 }
 
 interface TestAttachmentState {
@@ -237,7 +242,7 @@ export function createTestAttachmentService(
         byteSize: bytes.byteLength,
         checksum: "test-checksum",
         status: "ready",
-        format: formatForMimeType(input.mimeType),
+        format: options.formats?.[input.filename] ?? formatForMimeType(input.mimeType),
         artifactRefs: {},
         processingMetadata: {},
         warnings: [],
@@ -305,6 +310,12 @@ export function createTestAttachmentService(
         byteSize: file.bytes.byteLength,
         bytes: file.bytes
       };
+    },
+    async readPreparedText(input) {
+      const file = files.get(input.fileId);
+      if (!file) throw new AppError("NOT_FOUND", "File is not available");
+      const prepared = options.preparedTexts?.[file.filename];
+      return prepared && { text: prepared.text, truncated: prepared.truncated ?? false };
     },
     blockingDraftAttachmentMessage() {
       return undefined;

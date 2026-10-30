@@ -220,6 +220,7 @@ function weekdaysInWords(
 const WAITING_FOR_DECISION = "waiting_for_decision";
 const CONNECTION_NOT_CONNECTED = "connection_not_connected";
 const CONNECTION_NEEDS_RECONNECT = "connection_needs_reconnect";
+const GUARDRAIL_BLOCKED = "guardrail_blocked";
 
 /** How a run's state reads in its badge. */
 export interface RunStatePresentation {
@@ -282,6 +283,8 @@ export function runReasonKey(
       return "scheduled.reason.previousRunActive";
     case "agent_unavailable":
       return "scheduled.reason.agentUnavailable";
+    case GUARDRAIL_BLOCKED:
+      return "scheduled.reason.guardrailBlocked";
     default:
       return "scheduled.reason.other";
   }
@@ -290,12 +293,13 @@ export function runReasonKey(
 /** What the page says above the runs of a scheduled start, from its latest run. */
 export type StartNotice =
   | { kind: "waiting"; conversationId: string | null }
-  | { kind: "connection"; message: TranslationKey };
+  | { kind: "connection"; message: TranslationKey }
+  | { kind: "guardrail" };
 
 /**
  * The notice a scheduled start stands under while its latest run says something the owner has
- * to act on: a run waits for their decision, so the next times are skipped; or a personal
- * connection is missing. The run that waits is the newest one with a conversation.
+ * to act on: a run waits for their decision, so the next times are skipped; a personal
+ * connection is missing; or a guardrail on chat input blocked the prompt. The run that waits is the newest one with a conversation.
  */
 export function startNotice(runs: readonly ScheduledRun[]): StartNotice | undefined {
   const latest = runs[0];
@@ -310,6 +314,7 @@ export function startNotice(runs: readonly ScheduledRun[]): StartNotice | undefi
   if (latest.reason === CONNECTION_NEEDS_RECONNECT) {
     return { kind: "connection", message: "scheduled.connectionNeedsReconnect" };
   }
+  if (latest.reason === GUARDRAIL_BLOCKED) return { kind: "guardrail" };
   return undefined;
 }
 

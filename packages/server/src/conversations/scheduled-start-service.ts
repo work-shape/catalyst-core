@@ -28,6 +28,7 @@ import {
   requireAgentUse
 } from "../workspaces/agent-availability";
 import { scheduledOwner, scheduledPromptJob, schedulePromptJob } from "./scheduled-start-job";
+import { checkChatInput } from "./chat-input-check";
 
 type Fields = { agentName: string; prompt: string; cron: string; timeZone?: string };
 
@@ -138,6 +139,28 @@ export class ScheduledStartsWorkflow {
     }
   }
 
+  /**
+   * The guardrails on chat input read a prompt when it is saved, as when it is sent: a block
+   * refuses it (GR-4). A warning lets it be saved, as nobody sees the run it starts until it
+   * ends; each run checks it again when it fires.
+   */
+  private async checkPrompt(
+    context: OperationExecutionContext,
+    user: AuthenticatedUser,
+    fields: { prompt: string; agentName: string; collaborationWorkspaceId: string }
+  ) {
+    await checkChatInput(this.options, {
+      messageId: createPlatformId<"MessageId">("msg"),
+      text: fields.prompt,
+      attachments: [],
+      agentName: fields.agentName,
+      workspaceId: asCollaborationWorkspaceId(fields.collaborationWorkspaceId),
+      user,
+      correlationId: context.correlationId,
+      acceptWarnings: true
+    });
+  }
+
   async list(
     context: OperationExecutionContext,
     query: { collaborationWorkspaceId?: string; ownerUserId?: string },
@@ -200,6 +223,7 @@ export class ScheduledStartsWorkflow {
       fields.collaborationWorkspaceId,
       fields.agentName
     );
+    await this.checkPrompt(context, user, fields);
     const now = new Date();
     const timeZone = fields.timeZone ?? this.options.config.clientInstance.timeZone ?? "UTC";
     const start: ScheduledStart = {
@@ -232,6 +256,10 @@ export class ScheduledStartsWorkflow {
       before.collaborationWorkspaceId,
       fields.agentName
     );
+    await this.checkPrompt(context, user, {
+      ...fields,
+      collaborationWorkspaceId: before.collaborationWorkspaceId
+    });
     const timeZone = fields.timeZone ?? before.timeZone;
     nextScheduledPrompt(fields.cron, timeZone, new Date());
     const consent = await this.personalConsent(context, user);

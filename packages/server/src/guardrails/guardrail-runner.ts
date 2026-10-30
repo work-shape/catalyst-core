@@ -677,9 +677,10 @@ function matchPattern(
 
 /**
  * What a pattern answers on a chat message (GR-4): which field it matched first and how often,
- * never the text. A field it cannot read, such as text longer than the pattern reads, is not
- * checked: the answer names it and the person is told, and it is not stopped for it, so that a
- * long message or file still goes. Undefined where it had nothing to read.
+ * never the text. A field longer than the pattern reads at once is read in overlapping pieces,
+ * so a long message is checked whole. A field it cannot read at all, longer than any check
+ * reads, is not checked: the answer names it and the person is told, and a rule that blocks
+ * blocks it. Undefined where it had nothing to read.
  */
 function matchChatInput(
   entry: CheckedBound,
@@ -691,7 +692,7 @@ function matchChatInput(
   const notChecked: string[] = [];
   let hit: { field: string; count: number } | undefined;
   for (const read of content) {
-    if (read[1] === null || read[1].length > pattern.maxChars) {
+    if (read[1] === null) {
       notChecked.push(read[0]);
       continue;
     }
@@ -701,6 +702,16 @@ function matchChatInput(
     if (count > 0) hit = { field, count };
   }
   const unread = notChecked.length > 0 ? { notChecked } : {};
+  // Unread text does not pass a rule that blocks, as everywhere else; the composer cannot send
+  // that much text in any case.
+  const [unreadField] = notChecked;
+  if (
+    !hit &&
+    unreadField !== undefined &&
+    ["block", "require_approval"].includes(guardrail.outcome)
+  ) {
+    return { ...unchecked(entry, TOO_LARGE_CAUSE), field: unreadField, ...unread };
+  }
   if (!hit) return { ...answerOf(entry, "allow", ""), ...unread };
   return {
     ...answerOf(

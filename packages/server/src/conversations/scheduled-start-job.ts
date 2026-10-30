@@ -12,6 +12,7 @@ import {
   SCHEDULED_PROMPT_JOB_KIND,
   scheduledPromptDedupeKey,
   type AuthenticatedUser,
+  type MessageId,
   type PlatformStores,
   type UserRecord,
   type ScheduledStart,
@@ -24,6 +25,7 @@ import {
   callerAccess,
   getWorkspaceAssetSnapshot
 } from "../workspaces/agent-availability";
+import { checkChatInput } from "./chat-input-check";
 
 /** One saved start's due time. The subject lock and run row make a retried tick idempotent. */
 export const scheduledPromptJob = defineJobKind({
@@ -117,6 +119,22 @@ export function createScheduledPromptHandler(options: ChatServerOptions, now: ()
           entry: "schedule",
           correlationId: job.correlationId
         });
+      // The guardrails on chat input read the prompt again before each run it starts (GR-4).
+      // A block stops this run, and the owner reads why in its history; the next time is still
+      // due. A warning lets it run and is kept, as nobody is there to send it anyway.
+      const messageId = createPlatformId<"MessageId">("msg");
+      const blocked =
+        ownerBefore?.status === "active" &&
+        workspaceBefore &&
+        (job.payload.manual || previous.state === "active") &&
+        assets?.agents.some((agent) => agent.name === previous.agentName)
+          ? await promptBlocked(options, {
+              messageId,
+              start: previous,
+              owner: scheduledOwner(ownerBefore),
+              correlationId: job.correlationId
+            })
+          : false;
       await control.transaction(async (tx) => {
         const start = await tx.scheduledStarts.get({
           clientInstanceId: options.clientInstanceId,
@@ -143,6 +161,9 @@ export function createScheduledPromptHandler(options: ChatServerOptions, now: ()
           scheduledFor
         });
         if (existing) return;
+        // The prompt was read before this transaction: an edit since is read on a retry.
+        if (start.prompt !== previous.prompt || start.agentName !== previous.agentName)
+          throw new AppError("CONFLICT", "The scheduled prompt changed while it was checked");
         const history: ScheduledStartRun = {
           id: createPlatformId<"ScheduledStartRunId">("scheduled_run"),
           scheduledStartId: start.id,
@@ -180,6 +201,7 @@ export function createScheduledPromptHandler(options: ChatServerOptions, now: ()
           else {
             if (!assets?.agents.some((agent) => agent.name === start.agentName))
               history.reason = "agent_unavailable";
+            else if (blocked) history.reason = "guardrail_blocked";
             else {
               const user = scheduledOwner(owner);
               const conversation = await tx.conversations.createConversation({
@@ -193,7 +215,6 @@ export function createScheduledPromptHandler(options: ChatServerOptions, now: ()
                   moment.getTime() + options.config.retention.conversationDays * 86_400_000
                 ).toISOString()
               });
-              const messageId = createPlatformId<"MessageId">("msg");
               const prepared = await tx.agentRuns.prepareConversationRunStart({
                 clientInstanceId: options.clientInstanceId,
                 conversationId: conversation.id,
@@ -308,6 +329,35 @@ export function createScheduledPromptHandler(options: ChatServerOptions, now: ()
         );
     }
   });
+}
+
+/** Whether a guardrail on chat input blocks the prompt. Nothing of it is kept for the check. */
+async function promptBlocked(
+  options: ChatServerOptions,
+  input: {
+    messageId: MessageId;
+    start: ScheduledStart;
+    owner: AuthenticatedUser;
+    correlationId: string;
+  }
+): Promise<boolean> {
+  try {
+    await checkChatInput(options, {
+      messageId: input.messageId,
+      text: input.start.prompt,
+      attachments: [],
+      agentName: input.start.agentName,
+      workspaceId: input.start.collaborationWorkspaceId,
+      user: input.owner,
+      correlationId: input.correlationId,
+      acceptWarnings: true,
+      repeated: false
+    });
+    return false;
+  } catch (error) {
+    if (error instanceof AppError && error.code === "GUARDRAIL_BLOCKED") return true;
+    throw error;
+  }
 }
 
 async function advance(tx: PlatformStores, start: ScheduledStart, moment: Date) {

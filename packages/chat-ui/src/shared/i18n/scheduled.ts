@@ -58,7 +58,10 @@ export const scheduled = defineTranslations({
     "scheduled.reason.previousRunActive": "Skipped: the run before was still going.",
     "scheduled.reason.agentUnavailable":
       "Not started: the agent is no longer offered in this workspace.",
+    "scheduled.reason.guardrailBlocked": "Not started: a guardrail blocked the prompt.",
     "scheduled.reason.other": "It did not start.",
+    "scheduled.guardrailNotice":
+      "The last run did not start: a guardrail blocked the prompt, for example because it holds a password, a key or a card number. Edit the prompt so that the next run starts.",
     "scheduled.dialogNew": "Schedule a prompt",
     "scheduled.dialogEdit": "Edit scheduled prompt",
     "scheduled.save": "Save",
@@ -185,7 +188,11 @@ export const scheduled = defineTranslations({
     "scheduled.reason.previousRunActive": "Übersprungen: Der Lauf davor lief noch.",
     "scheduled.reason.agentUnavailable":
       "Nicht gestartet: Der Agent wird in diesem Workspace nicht mehr angeboten.",
+    "scheduled.reason.guardrailBlocked":
+      "Nicht gestartet: Eine Leitplanke hat den Prompt angehalten.",
     "scheduled.reason.other": "Er ist nicht gestartet.",
+    "scheduled.guardrailNotice":
+      "Der letzte Lauf ist nicht gestartet: Eine Leitplanke hat den Prompt angehalten, etwa weil er ein Passwort, einen Schlüssel oder eine Kartennummer enthält. Bearbeite den Prompt, damit der nächste Lauf startet.",
     "scheduled.dialogNew": "Prompt planen",
     "scheduled.dialogEdit": "Geplanten Prompt bearbeiten",
     "scheduled.save": "Speichern",

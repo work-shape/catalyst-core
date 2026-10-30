@@ -56,7 +56,9 @@ An IBAN or a tax ID is not stopped.
 
 - **Blocked**: the composer says "Nicht gesendet." with the guardrail's answer. The message stays in the composer; nothing was sent or stored.
 - **Warned**: the composer says "Noch nicht gesendet." with the guardrail's answer and **Send anyway** ("Trotzdem senden"). Change the message or send it as it is.
-- **Not checked** ("Nicht geprüft"): a picture, a PDF or Word file, whose text is read only after it is sent, or a file that could not be read is not checked, and the composer names it.
+- **Not checked** ("Nicht geprüft"): a picture, a file whose text could not be prepared or read, or the end of a very long document the instance cut off is not checked, and the composer names it. The text of a PDF or Word file is checked as the agent reads it.
+
+A scheduled prompt is checked when you save it and each time it runs. If a rule blocks it, it is not saved, or that run does not start and the scheduled prompt says so ("Eine Leitplanke hat den Prompt angehalten"); edit the prompt for the next run to start.
 
 A hit keeps the rule, the message and how many matches there were, never the text. Chat hits are only counted, on the guardrail's page and on Rules in force.
 

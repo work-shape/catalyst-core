@@ -7,6 +7,7 @@ import {
 import {
   CHAT_INPUT_FLOOR_GUARDRAILS,
   compileGuardrailPattern,
+  GUARDRAIL_CHECKED_FIELD_MAX_CHARS,
   parseClientInstanceConfig,
   passesLuhn,
   releaseGuardrailFloor
@@ -170,17 +171,51 @@ describe("the guardrails at message.before_send", () => {
     });
   });
 
-  it("say what they could not read, and do not block for it", async () => {
+  // Fails without the change: a field longer than the pattern reads at once went unread, and a
+  // key at the end of a long message passed the rule that blocks it.
+  it("read a long message in overlapping pieces, so a key anywhere in it is blocked", async () => {
     const f = await floor();
-    // The secrets rule is the largest program, so it reads the fewest characters.
+    // The secrets rule is the largest program, so it reads the fewest characters at once.
     const secrets = CHAT_INPUT_FLOOR_GUARDRAILS["chat-secrets"].check.pattern;
     const { maxChars } = compileGuardrailPattern(secrets);
-    const answers = await f.runner.answer(
-      message(`${"a ".repeat(maxChars / 2)}${GITHUB_TOKEN}`),
-      context
-    );
+    const filler = (chars: number) => "a ".repeat(Math.ceil(chars / 2)).slice(0, chars);
+    // About 100 KB with the key at the end.
+    const long = `${filler(100_000)} ${GITHUB_TOKEN}`;
+    expect(long.length).toBeGreaterThan(maxChars);
+    const answers = await f.runner.answer(message(long), context);
     expect(answers.find((answer) => answer.guardrailName === "chat-secrets")).toMatchObject({
+      outcome: "block",
+      field: "text",
+      matchCount: 1
+    });
+    // A key across the border of two pieces is found whole, and counted once.
+    const own = maxChars - 2 * 4096;
+    const across = `${filler(own - 10)} ${GITHUB_TOKEN} ${filler(own)} ${GITHUB_TOKEN}`;
+    const pattern = compileGuardrailPattern(secrets);
+    expect(pattern.count(across, 10)).toBe(2);
+    expect(pattern.count(`${filler(3 * maxChars)} ${GITHUB_TOKEN}`, 10)).toBe(1);
+    expect(pattern.test(`${filler(3 * maxChars)} ${GITHUB_TOKEN}`)).toBe(true);
+    // A card number read in pieces keeps its Luhn check and the digits around it.
+    const card = compileGuardrailPattern(cardPattern.pattern, cardPattern.checksum);
+    expect(card.count(`${filler(card.maxChars)} ${CARD}`, 10)).toBe(1);
+    // Digits that start a piece's own part, after more digits before it, are no card number.
+    const ownCard = card.maxChars - 2 * 4096;
+    const atBorder = `${filler(ownCard - 6)}12345 ${CARD.replaceAll(" ", "")} ${filler(card.maxChars)}`;
+    expect(atBorder.indexOf("4111")).toBe(ownCard);
+    expect(card.count(atBorder, 10)).toBe(0);
+  });
+
+  it("say what they could not read, and block it only where a rule blocks", async () => {
+    const f = await floor();
+    const tooLong = "a ".repeat(GUARDRAIL_CHECKED_FIELD_MAX_CHARS / 2 + 1);
+    const answers = await f.runner.answer(message(tooLong), context);
+    expect(answers.find((answer) => answer.guardrailName === "chat-passwords")).toMatchObject({
       outcome: "allow",
+      notChecked: ["text"]
+    });
+    expect(answers.find((answer) => answer.guardrailName === "chat-secrets")).toMatchObject({
+      outcome: "block",
+      field: "text",
       notChecked: ["text"]
     });
   });
@@ -192,7 +227,9 @@ describe("the guardrails at message.before_send", () => {
       `${"a".repeat(60_000)}!`,
       `${"1 ".repeat(30_000)}x`,
       `password${" ".repeat(60_000)}`,
-      `eyJ${"a".repeat(30_000)}.eyJ${"a".repeat(30_000)}`
+      `eyJ${"a".repeat(30_000)}.eyJ${"a".repeat(30_000)}`,
+      // The most a message can carry, read in pieces by every rule.
+      `${"Passwort a1 ".repeat(90_000)}`
     ];
     const started = performance.now();
     for (const text of attacks) await f.runner.answer(message(text), context);
