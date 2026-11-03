@@ -1,5 +1,5 @@
 # The check every pull request runs before it merges, on GitHub-hosted runners (free for a public
-# repository). It never runs on a Blacksmith runner: those bill per minute and are for releases.
+# repository). No workflow of this repository runs on a paid runner.
 # The full browser suite, images, compatibility and scale tests run in nightly.yml instead.
 name: PR
 on:
