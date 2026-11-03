@@ -158,7 +158,8 @@ async function openTaken(
     }[],
     removed: [] as { name: string; expectedRevision: number }[],
     opened: [] as string[],
-    order: [] as string[]
+    order: [] as string[],
+    read: [] as string[]
   };
   let freed = false;
   await mount(
@@ -172,7 +173,10 @@ async function openTaken(
               reason: "name_taken" as const,
               message: "The connection id 'workmail' is taken on this instance"
             },
-      existing: async () => found,
+      existing: async (name) => {
+        record.read.push(name);
+        return found;
+      },
       put: async (input) => {
         record.puts.push(input);
         record.order.push("put");
@@ -284,9 +288,18 @@ describe("A new Connection whose id an earlier one holds", () => {
   });
 
   it("takes an id only a deleted Connection held: the connect writes over that delete", async () => {
-    await openTaken(undefined, { deletedRevision: async () => 6 });
+    const history: string[] = [];
+    const record = await openTaken(undefined, {
+      deletedRevision: async (name) => {
+        history.push(name);
+        return 6;
+      }
+    });
+    await vi.waitFor(() => expect(history).toContain("workmail"), WAIT);
     await vi.waitFor(() => expect(connectButton().disabled).toBe(false), WAIT);
     expect(document.body.textContent).not.toContain("vergeben");
+    // The deleted Connection is not read: the instance would answer 404 for it.
+    expect(record.read).toEqual([]);
   });
 });
 
