@@ -287,16 +287,15 @@ export function ConnectionCreateFlow({
   /**
    * The check of the id, which reads the Connection that holds a taken one, so the dialog
    * names it and offers what the reader may do with it. An id only a deleted Connection held
-   * is free: the connect writes over that delete.
+   * is free: the connect writes over that delete. The history is asked first, so a deleted
+   * Connection's id is not read as an asset that is not there, which the instance answers 404.
    */
   const askName: CheckName = async (asked) => {
     const answer = await checkName(asked);
     if (answer.available || answer.reason !== "name_taken") return answer;
+    const deleted = await source.deletedRevision?.(asked).catch(() => undefined);
+    if (deleted !== undefined) return { available: true };
     const holder = await existing?.(asked).catch(() => undefined);
-    if (holder === undefined) {
-      const deleted = await source.deletedRevision?.(asked).catch(() => undefined);
-      if (deleted !== undefined) return { available: true };
-    }
     setTaken({ name: asked, ...(holder ? { holder } : {}) });
     return answer;
   };
