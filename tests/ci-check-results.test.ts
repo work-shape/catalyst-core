@@ -65,18 +65,18 @@ for (const name of ["check.yml", "pr.yml"]) {
   });
 }
 
-it("every workflow uses hosted runners and never names the private runner labels", () => {
+it("every workflow uses free GitHub-hosted runners and never names the private runner labels", () => {
   const files = readdirSync(".github/workflows").filter((file) => /\.ya?ml$/u.test(file));
   expect(files.length).toBeGreaterThan(0);
   for (const file of files) {
     const text = readFileSync(`.github/workflows/${file}`, "utf8");
-    expect(text, file).not.toMatch(/self-hosted|catalyst-mini|catalyst-check/iu);
+    expect(text, file).not.toMatch(/self-hosted|catalyst-mini|catalyst-check|blacksmith/iu);
     for (const [name, job] of Object.entries(workflow(file).jobs)) {
       // Reusable workflow calls have no runner. Require literal hosted labels for other jobs,
       // so a group or expression cannot hide a private runner selection.
       if (job["runs-on"] === undefined) continue;
       expect(job["runs-on"], `${file}: ${name}`).toBeTypeOf("string");
-      expect(job["runs-on"], `${file}: ${name}`).toMatch(/^(ubuntu|windows|macos|blacksmith)-/u);
+      expect(job["runs-on"], `${file}: ${name}`).toMatch(/^(ubuntu|windows|macos)-/u);
     }
   }
 });

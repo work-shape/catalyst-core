@@ -29,8 +29,9 @@ jobs:
   image:
     # Preparation branches may be pushed before the transfer; only the new owner publishes.
     if: github.repository == 'work-shape/catalyst-core'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    # arm64 builds under emulation on a 4 vCPU runner.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:

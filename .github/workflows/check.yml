@@ -1,5 +1,6 @@
-# Hosted Check on Blacksmith, for releases only: release/** pushes and release dispatches.
-# Pull requests are checked by pr.yml on the Mac mini; the full suite runs in nightly.yml.
+# Hosted Check on GitHub-hosted runners (free for this public repository), for releases only:
+# release/** pushes and release dispatches.
+# Pull requests are checked by pr.yml; the full suite runs in nightly.yml.
 name: Check
 on:
   workflow_dispatch:
@@ -15,7 +16,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/release/') }}
 jobs:
   policy:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
       - name: Enforce hosted Check policy
@@ -31,7 +32,7 @@ jobs:
           esac
   changes:
     needs: policy
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -49,8 +50,8 @@ jobs:
         run: pnpm format:check
   build:
     needs: policy
-    runs-on: blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 8
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -63,8 +64,8 @@ jobs:
         run: pnpm build
   static:
     needs: build
-    runs-on: blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 22
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -85,7 +86,7 @@ jobs:
         run: pnpm check:migrations
   docs:
     needs: build
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 14
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -100,8 +101,8 @@ jobs:
   tests:
     name: tests ${{ matrix.shard }}/4
     needs: build
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 22
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -132,7 +133,7 @@ jobs:
         run: pnpm test:deployment-kit
   upgrade:
     needs: build
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 17
     env:
       POSTGRES_STORE_TEST_DATABASE_URL: postgresql://catalyst:local-check@localhost:5432/catalyst_test
@@ -155,7 +156,7 @@ jobs:
         run: pnpm test:compatibility
   release:
     needs: build
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 18
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -180,8 +181,8 @@ jobs:
   # gives the workspace to the runner's fixed user and commands run as that user.
   images:
     needs: policy
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       POSTGRES_STORE_TEST_DATABASE_URL: postgresql://catalyst:local-check@localhost:5432/catalyst_test
       RUNNER_IMAGE_TAG: catalyst-runner-under-test:${{ github.run_id }}
@@ -196,12 +197,8 @@ jobs:
       - name: Database
         timeout-minutes: 5
         run: .github/scripts/start-postgres.sh catalyst local-check catalyst_test 5432
-      # A BuildKit builder whose layer cache stays on Blacksmith between runs. It falls back to
-      # the local builder when Blacksmith cannot set it up.
-      - uses: useblacksmith/setup-docker-builder@19215110ab936351210feebdfa5b440b4493e184 # v2.2.0
-        with:
-          # Every image of the job is a target of this one Dockerfile.
-          cache-key: vivd-client.Dockerfile
+      # The runner's own Docker builder, as in the nightly images job. A cross-run layer cache
+      # saved little: the job took about 12 minutes with it, the nightly images job about 13 without.
       - name: Images
         run: bash scripts/check-image-build.sh
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
@@ -236,7 +233,7 @@ jobs:
     needs: build
     # Six isolated databases amortize setup; one worker per database keeps shared accounts
     # and fixed-port beforeAll servers sequential.
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 28
     # Must match @playwright/test in pnpm-lock.yaml (check-policy.test.mjs).
     container: mcr.microsoft.com/playwright:v1.60.0-noble
@@ -297,7 +294,7 @@ jobs:
   browser:
     needs: browser-shard
     if: ${{ always() }}
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Every browser shard passed
@@ -307,7 +304,7 @@ jobs:
   check:
     needs: [policy, changes, build, static, docs, tests, upgrade, release, images, browser-shard]
     if: ${{ always() }}
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Every check passed
