@@ -919,18 +919,27 @@ function composePageScript(storedHtml: string, storage?: AppStorageBootstrap): s
   return `${storage ? appStorageBootstrap(storage) : ""}${PAGE_GUARD_SOURCE}(${JSON.stringify(storedHtml).replaceAll("<", "\\u003c")});`;
 }
 
-// The document the frame is given holds the platform's script and nothing else. The stored
-// HTML is never searched for a place to put anything: a tag name in a comment or an attribute
-// would be found too. What the script writes follows it in the head, and the parser merges a
-// later `<html>`, `<head>` or `<body>` of the stored HTML.
+// The document the frame is given holds the platform's frame style and script and nothing else.
+// The stored HTML is never searched for a place to put anything: a tag name in a comment or an
+// attribute would be found too. What the script writes follows it in the head, and the parser
+// merges a later `<html>`, `<head>` or `<body>` of the stored HTML.
 function composePageDocument(pageScript: string): string {
   return [
     "<!doctype html><html><head>",
     '<meta charset="utf-8">',
     '<meta http-equiv="x-dns-prefetch-control" content="off">',
+    `<style>${PAGE_FRAME_STYLE}</style>`,
     `<script>${pageScript}</script>`
   ].join("");
 }
+
+/**
+ * The one rule the platform holds against a Page's own CSS: no margin on `html` and `body`. A
+ * page that fills its frame with `height: 100%` would otherwise scroll by the browser's default
+ * body margin, which `all: revert`, `unset` or `initial` on `body` brings back. Only an
+ * `!important` rule outlasts those; everything else stays the Page's to style.
+ */
+const PAGE_FRAME_STYLE = "html,body{margin:0!important}";
 
 const SHELL_STYLE =
   "html, body { height: 100%; margin: 0; overflow: hidden; } iframe { display: block; width: 100%; height: 100%; border: 0; }";

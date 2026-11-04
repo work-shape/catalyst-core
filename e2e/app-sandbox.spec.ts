@@ -321,3 +321,28 @@ test(TITLE, async ({ page }, testInfo) => {
     await page.unrouteAll({ behavior: "ignoreErrors" });
   }
 });
+
+test("an App that resets html and body with all: and fills its frame at 100% does not scroll", async ({
+  page
+}) => {
+  test.setTimeout(120_000);
+  await signIn(page, admin);
+  // `all: revert` brings back the browser's 8px body margin; the platform's frame style holds it at 0.
+  const app = await saveApp(
+    page,
+    `<style>
+html { all: unset; display: block; height: 100%; }
+body { all: revert; height: 100%; padding: 12px; box-sizing: border-box; }
+#fill { height: 100%; }
+</style><main id="fill">Full height</main>`,
+    'document.querySelector("#fill").dataset.ready = "yes";'
+  );
+  await page.goto(app.path);
+  const fill = appFrame(page).locator("#fill");
+  await expect(fill).toHaveAttribute("data-ready", "yes");
+  const layout = await fill.evaluate(() => ({
+    margin: getComputedStyle(document.body).marginTop,
+    overflow: document.documentElement.scrollHeight - document.documentElement.clientHeight
+  }));
+  expect(layout).toEqual({ margin: "0px", overflow: 0 });
+});

@@ -134,7 +134,7 @@ function heldBy(shellBody: string) {
     );
   const pageDocument = (frame?.[3] ?? "").replaceAll("&quot;", '"').replaceAll("&amp;", "&");
   const script =
-    /^<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="x-dns-prefetch-control" content="off"><script>(.*)<\/script>$/su.exec(
+    /^<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="x-dns-prefetch-control" content="off"><style>html,body\{margin:0!important\}<\/style><script>(.*)<\/script>$/su.exec(
       pageDocument
     );
   return { sandbox: frame?.[1], allow: frame?.[2], pageDocument, script: script?.[1] };
@@ -299,7 +299,7 @@ describe("the content route of a Page", () => {
       expect(held.pageDocument.split("<script").length).toBe(2);
       // Around the script there is no address, so none that resolves below a folder.
       expect(held.pageDocument.replace(script, "")).toBe(
-        '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="x-dns-prefetch-control" content="off"><script></script>'
+        '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="x-dns-prefetch-control" content="off"><style>html,body{margin:0!important}</style><script></script>'
       );
       expect(held.pageDocument).not.toContain("__catalyst");
       expect(script).not.toMatch(/<\/script|<!--|\r/iu);
