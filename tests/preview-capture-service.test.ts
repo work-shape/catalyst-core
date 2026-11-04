@@ -5,9 +5,13 @@ import {
   captureInputSchema,
   forwardedPath
 } from "@work-shape/catalyst-preview-capture";
-import { createInstancePreviewCaptureClient } from "@work-shape/catalyst-client-assembly";
+import {
+  createInstanceHtmlPdfClient,
+  createInstancePreviewCaptureClient
+} from "@work-shape/catalyst-client-assembly";
 import { createEnvironmentSecretResolver } from "@work-shape/catalyst-core";
 import { readFileSync } from "node:fs";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { parse } from "yaml";
 
 const token = "fixture-service-token-".repeat(3);
@@ -86,7 +90,16 @@ describe("server capture boundaries", () => {
     expect(service.profiles).toEqual(["preview-capture"]);
     expect(service.networks).toEqual(["preview-capture"]);
     expect(compose.networks["preview-capture"].internal).toBe(true);
-    expect(Object.keys(compose.services)).toEqual(["api", "preview-capture"]);
+    // The API prints and captures for Apps; the agent-run worker prints for agents (PDF-1).
+    expect(Object.keys(compose.services)).toEqual(["api", "agent-run-worker", "preview-capture"]);
+    for (const name of ["api", "agent-run-worker"]) {
+      expect(Object.keys(compose.services[name].networks)).toEqual(["default", "preview-capture"]);
+      expect(Object.keys(compose.services[name].environment).sort()).toEqual([
+        "PREVIEW_CAPTURE_ENABLED",
+        "PREVIEW_CAPTURE_SERVICE_ORIGIN",
+        "PREVIEW_CAPTURE_SERVICE_TOKEN"
+      ]);
+    }
     expect(Object.keys(service.environment).sort()).toEqual([
       "PREVIEW_CAPTURE_API_ORIGIN",
       "PREVIEW_CAPTURE_CONCURRENCY",
@@ -104,5 +117,154 @@ describe("server capture boundaries", () => {
     expect(service.security_opt[0]).toBe("no-new-privileges:true");
     expect(service.volumes).toBeUndefined();
     expect(service.env_file).toBeUndefined();
+  });
+});
+
+// HTML to PDF (PDF-1): the client of the API and the agent-run worker. The renderer itself is
+// proven in the Linux container suite; here a fake service answers as the renderer would.
+describe("HTML to PDF client", () => {
+  const pdfBytes = new TextEncoder().encode("%PDF-1.7 fixture");
+  async function withService(
+    answer: (request: IncomingMessage, body: Buffer, response: ServerResponse) => void,
+    run: (
+      client: NonNullable<Awaited<ReturnType<typeof createInstanceHtmlPdfClient>>>
+    ) => Promise<void>
+  ) {
+    const server = createServer((request, response) => {
+      const parts: Buffer[] = [];
+      request.on("data", (part: Buffer) => parts.push(part));
+      request.on("end", () => answer(request, Buffer.concat(parts), response));
+    });
+    await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("No port");
+    const { port } = address;
+    const secrets = createEnvironmentSecretResolver({
+      env: { PREVIEW_CAPTURE_SERVICE_TOKEN: token },
+      readSecretFile: async () => {
+        throw new Error("No secret file");
+      }
+    });
+    try {
+      const client = await createInstanceHtmlPdfClient(
+        {
+          PREVIEW_CAPTURE_ENABLED: "true",
+          PREVIEW_CAPTURE_SERVICE_ORIGIN: `http://127.0.0.1:${port}`
+        },
+        secrets
+      );
+      if (!client) throw new Error("No client");
+      await run(client);
+    } finally {
+      await new Promise((done) => server.close(done));
+    }
+  }
+
+  it("is off while the renderer is off", async () => {
+    const secrets = createEnvironmentSecretResolver({
+      env: {},
+      readSecretFile: async () => {
+        throw new Error("No secret file");
+      }
+    });
+    expect(await createInstanceHtmlPdfClient({}, secrets)).toBeUndefined();
+    await expect(
+      createInstanceHtmlPdfClient({ PREVIEW_CAPTURE_ENABLED: "true" }, secrets)
+    ).rejects.toThrow();
+  });
+
+  it("sends the HTML as the body with the token and the layout, and answers the PDF", async () => {
+    const seen: Record<string, unknown> = {};
+    await withService(
+      (request, body, response) => {
+        Object.assign(seen, {
+          auth: request.headers.authorization,
+          type: request.headers["content-type"],
+          options: request.headers["x-pdf-options"],
+          body: body.toString("utf8"),
+          path: request.url
+        });
+        response.writeHead(200, { "content-type": "application/pdf", "x-pdf-pages": "3" });
+        response.end(pdfBytes);
+      },
+      async (client) => {
+        const outcome = await client.render({
+          html: "<h1>Prüfbericht</h1>",
+          options: { format: "A4", margin: { top: "15mm" } }
+        });
+        expect(outcome).toEqual({ status: "done", pdf: pdfBytes, pages: 3 });
+      }
+    );
+    expect(seen).toMatchObject({
+      auth: `Bearer ${token}`,
+      type: "text/html; charset=utf-8",
+      options: JSON.stringify({ format: "A4", margin: { top: "15mm" } }),
+      body: "<h1>Prüfbericht</h1>",
+      path: "/pdf"
+    });
+  });
+
+  it("passes the renderer's refusal on and turns every other answer into a failure", async () => {
+    const answers: Array<(response: ServerResponse) => void> = [
+      (response) => {
+        response.writeHead(422, { "content-type": "application/json" });
+        response.end('{"code":"pdf_too_many_pages"}');
+      },
+      (response) => {
+        response.writeHead(422, { "content-type": "application/json" });
+        response.end('{"code":"something_else"}');
+      },
+      (response) => {
+        response.writeHead(200, { "content-type": "text/html", "x-pdf-pages": "1" });
+        response.end("<p>not a PDF</p>");
+      },
+      (response) => {
+        response.writeHead(200, { "content-type": "application/pdf" });
+        response.end(pdfBytes);
+      },
+      (response) => {
+        response.writeHead(500);
+        response.end();
+      },
+      (response) => {
+        response.writeHead(200, { "content-type": "application/pdf", "x-pdf-pages": "1" });
+        response.end(Buffer.alloc(10 * 1024 * 1024 + 1));
+      }
+    ];
+    let next = 0;
+    await withService(
+      (_request, _body, response) => answers[next++]?.(response),
+      async (client) => {
+        const codes = [];
+        for (const _ of answers) {
+          const outcome = await client.render({ html: "<p>x</p>", options: {} });
+          codes.push(outcome.status === "refused" ? outcome.code : outcome.status);
+        }
+        expect(codes).toEqual([
+          "pdf_too_many_pages",
+          "pdf_failed",
+          "pdf_failed",
+          "pdf_failed",
+          "pdf_failed",
+          "pdf_too_large"
+        ]);
+      }
+    );
+  });
+
+  it("refuses an HTML beyond its bound before it sends it", async () => {
+    let asked = 0;
+    await withService(
+      (_request, _body, response) => {
+        asked++;
+        response.end();
+      },
+      async (client) => {
+        expect(await client.render({ html: "ä".repeat(2 * 1024 * 1024 + 1), options: {} })).toEqual(
+          { status: "refused", code: "pdf_too_large" }
+        );
+      }
+    );
+    expect(asked).toBe(0);
   });
 });

@@ -34,6 +34,7 @@ export const appsModule = defineModule({
     "apps.sessions.get_workflow_run",
     "apps.sessions.report",
     "apps.sessions.capture",
+    "apps.sessions.render_pdf",
     "apps.preview_captures.pending",
     "apps.try_action",
     "apps.publish_review"

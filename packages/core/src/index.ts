@@ -38,6 +38,7 @@ export * from "./follow-up-jobs";
 export * from "./follow-up-store";
 export * from "./follow-ups";
 export * from "./guardrails";
+export * from "./html-pdf";
 export type { HttpListenInput } from "./http-runtime";
 export type { HttpRuntime } from "./http-runtime";
 export * from "./ids";

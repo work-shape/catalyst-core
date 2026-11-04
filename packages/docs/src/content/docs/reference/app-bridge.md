@@ -13,7 +13,7 @@ The bridge protocol is version 1. Every message of either side carries `catalyst
 - Changes to version 1 are additive only: a new message type, a new call of the kit, or a new optional field. An App written against version 1 keeps working.
 - A new call needs a named App that cannot be built without it. It is added as a new member, never by renaming one.
 - A breaking change, such as removing or renaming a message, a field or a call, or changing what one means, is version 2. Version 2 runs beside version 1, and the interface keeps answering version 1.
-- A kit version is frozen too. An App names the exact kit version it was built with (`kit` in `app.yaml`) and keeps loading those files. A new Page or App names kit 1.9.0.
+- A kit version is frozen too. An App names the exact kit version it was built with (`kit` in `app.yaml`) and keeps loading those files. A new Page or App names kit 1.10.0.
 
 ## Calls of the kit
 
@@ -29,6 +29,8 @@ The bridge protocol is version 1. Every message of either side carries `catalyst
 | `storage.get(key)` / `storage.set(key, value)`    | Kit 1.6.0 and later. Small JSON state private to the current App and person (64 KiB). A save waits for persistence; shared records belong in a Data Store.                                                                                                  |
 | `feedback.send(text)`                             | Kit 1.9.0 and later. Sends the viewer's written comment on the published App to its reviewers (at most 4000 characters). Rejects with an `AppCallError` where the frame is no published App or the instance has feedback off. |
 | `<AppFeedback />`                                 | Kit 1.9.0 and later. A field and a send button built from the shared UI library. It shows nothing unless the context says `feedback: true`.                                                                                                                 |
+| `pdf.fromHtml(html, options?)`                    | Kit 1.10.0 and later. Prints a whole HTML document to a PDF in the instance's own renderer, without network, and answers it as a `Blob`. Rejects with an `AppCallError` such as `pdf_too_large`. See [PDFs from an App](/apps/pdf/). |
+| `pdf.download(html, filename, options?)`          | Kit 1.10.0 and later. Prints as `pdf.fromHtml` does and offers the PDF to the viewer as a download.                                                                                                                                                       |
 | `mountApp({ routeTree, element? })`               | Renders a React App with its routes and the look of the interface.                                                                                                                                                                                          |
 
 An App reaches a Connection, a Data Store or a Workflow only through a named action in its folder: `actions/<name>.action.yaml` for an operation of a Connection or a Workflow, `actions/<name>.sql` for a statement on a Data Store. Each call goes through the policy, the audit and the viewer's rights.
@@ -44,6 +46,7 @@ An App reaches a Connection, a Data Store or a Workflow only through a named act
 | `storage_write` | `session`, `requestId`, `mutation` (`set` with string key/value, `remove` with key, or `clear`) | `storage_result`      |
 | `workflow_run`  | `session`, `requestId`, `runId`                                                                 | `workflow_run_result` |
 | `feedback`      | `session`, `requestId`, `text` (1 to 4000 characters)                                           | `feedback_result`     |
+| `pdf`           | `session`, `requestId`, `html` (at most 4 MiB), optional `options` (`format`, `landscape`, `margin`) | `pdf_result`     |
 | `report`        | `report`: the platform's guard reports what the page did (`settled`, optional `empty`, at most 10 `entries`, `more`) | nothing |
 | `capture_result` | `requestId`, and `image` (WebP bytes, at most 400 KB), `width` (at most 1280) and `height` (at most 1600), or `unavailable: true` | nothing |
 
@@ -67,6 +70,7 @@ Kits 1.1.0 to 1.3.0 have `connections.call(connection, operation, input)`, which
 | `storage_result`      | `session`, `requestId`, `ok`                          |
 | `workflow_run_result` | `session`, `requestId`, `ok`, and `run` or `error`    |
 | `feedback_result`     | `session`, `requestId`, `ok`, and `error` where not ok |
+| `pdf_result`          | `session`, `requestId`, `ok`, and `pdf` (the PDF's bytes, an `ArrayBuffer` of at most 10 MiB) or `error` |
 | `capture`             | `requestId`                                           |
 
 `capture` asks the platform's guard, not the kit, for a picture of the page; the interface sends it only when an agent's run that serves the viewer asks to look at the preview.

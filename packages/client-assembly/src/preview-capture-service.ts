@@ -1,5 +1,5 @@
 import type { ClientInstanceEnv } from "./env";
-export { createInstancePreviewCaptureClient } from "./registration";
+export { createInstanceHtmlPdfClient, createInstancePreviewCaptureClient } from "./registration";
 
 /** No dotenv or database assembly: this process must receive only its isolated environment. */
 export async function runClientInstancePreviewCaptureService(

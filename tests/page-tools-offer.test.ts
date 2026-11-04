@@ -111,4 +111,21 @@ describe("the tools a conversation is offered to build an App", () => {
     expect(names).not.toContain("page.save");
     expect(names).not.toContain("page.save_as_app");
   });
+
+  // PDF-1: every agent that writes files prints HTML to PDF in the instance, without the release
+  // naming the tool. Fails before PDF-1: no such tool, so an agent reached for an outside service.
+  it("offer HTML to PDF where files are written and the renderer runs, and nowhere else", async () => {
+    const files = ["workspace.open", "workspace.write_file", "workspace.read_file"];
+    const withRenderer = [...files, "workspace.html_to_pdf"];
+    expect(
+      await offered({ apps: true, release: ["workspace.write_file"], registered: withRenderer })
+    ).toContain("workspace.html_to_pdf");
+    // The tool is registered only where the renderer runs.
+    expect(
+      await offered({ apps: true, release: ["workspace.write_file"], registered: files })
+    ).not.toContain("workspace.html_to_pdf");
+    expect(await offered({ apps: true, release: [], registered: withRenderer })).not.toContain(
+      "workspace.html_to_pdf"
+    );
+  });
 });

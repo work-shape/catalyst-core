@@ -14,6 +14,7 @@ This guide is what an agent follows. [Apps for people](/automate/apps/) says wha
 | Read or change a connected system                                     | [Actions on a Connection](/apps/connection-actions/)     |
 | Keep records in a Data Store                                          | [Actions on a Data Store](/apps/data-store-actions/)     |
 | Start a Workflow                                                      | [Actions that start a Workflow](/apps/workflow-actions/) |
+| Make a PDF of a report or a form                                      | [PDFs from an App](/apps/pdf/)                           |
 | A whole App to start from                                             | [App examples](/apps/examples/)                          |
 | A save, a call or the preview fails                                   | [When an App fails](/apps/troubleshooting/)              |
 
@@ -61,7 +62,7 @@ A React App imports only its own files, `react`, `react-dom`, `@tanstack/react-r
 | `id`                  | Lowercase letters, digits and `-`, at most 63 characters.                                                                                |
 | `name`                | The name people read.                                                                                                                    |
 | `description`, `icon` | Optional.                                                                                                                                |
-| `kit`                 | The exact kit version. Use `1.9.0` for a new App; actions on a Connection need `1.1.0` or later and `workflow` actions `1.3.0` or later. |
+| `kit`                 | The exact kit version. Use `1.10.0` for a new App; actions on a Connection need `1.1.0` or later and `workflow` actions `1.3.0` or later. |
 | `entry`               | `index.html` for a plain HTML App. A React App leaves it out.                                                                            |
 | `connections`         | The Connections the App's actions call, by name.                                                                                         |
 | `dataStores`          | The Data Store the App's `sql` actions use: `{ name, minSchema }`. One at most while the App has `sql` actions.                          |

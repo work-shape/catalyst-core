@@ -4,6 +4,7 @@ import {
   type AppCallFailure,
   type AppCallResult,
   type AppContext,
+  type AppPdfOptions,
   type AppThemeChange,
   type AppWorkflowRun,
   type HostMessage,
@@ -210,17 +211,36 @@ export interface AppClient {
      */
     send(text: string): Promise<void>;
   };
+  pdf: {
+    /**
+     * Prints `html` to a PDF in the instance's own renderer and resolves with it as a
+     * `application/pdf` Blob. Use it for every PDF an App makes: never an outside service or a
+     * PDF library in the Page. The renderer has no network: hand it a whole document whose
+     * styles, images and fonts are inline or `data:` addresses; anything it would fetch stays
+     * empty. Scripts in it do not run, so draw charts as inline SVG. At most 4 MiB of HTML,
+     * 50 pages and 10 MiB of PDF; a larger one rejects with an `AppCallError`
+     * (`pdf_too_large`, `pdf_too_many_pages`), as does an instance without a renderer
+     * (`pdf_unavailable`).
+     */
+    fromHtml(html: string, options?: AppPdfOptions): Promise<Blob>;
+    /** Prints `html` as `fromHtml` does and offers the PDF to the viewer as a download. */
+    download(html: string, filename: string, options?: AppPdfOptions): Promise<void>;
+  };
 }
 
-type RequestMessage = Extract<PageMessage, { type: "action" | "workflow_run" | "feedback" }>;
+type RequestMessage = Extract<
+  PageMessage,
+  { type: "action" | "workflow_run" | "feedback" | "pdf" }
+>;
 /** A call or a read before the session and the id of its answer are known. */
 type NewRequest =
   | Omit<Extract<RequestMessage, { type: "action" }>, "session" | "requestId">
   | Omit<Extract<RequestMessage, { type: "workflow_run" }>, "session" | "requestId">
-  | Omit<Extract<RequestMessage, { type: "feedback" }>, "session" | "requestId">;
+  | Omit<Extract<RequestMessage, { type: "feedback" }>, "session" | "requestId">
+  | Omit<Extract<RequestMessage, { type: "pdf" }>, "session" | "requestId">;
 type Answer = Extract<
   HostMessage,
-  { type: "action_result" | "workflow_run_result" | "feedback_result" }
+  { type: "action_result" | "workflow_run_result" | "feedback_result" | "pdf_result" }
 >;
 
 /** A client on a transport. A Page uses the one below; a test brings its own transport. */
@@ -265,7 +285,8 @@ export function createAppClient(
         if (
           incoming.type === "action_result" ||
           incoming.type === "workflow_run_result" ||
-          incoming.type === "feedback_result"
+          incoming.type === "feedback_result" ||
+          incoming.type === "pdf_result"
         ) {
           const waiting = incoming.session === session ? calls.get(incoming.requestId) : undefined;
           if (!waiting) {
@@ -320,6 +341,18 @@ export function createAppClient(
     });
   }
 
+  async function printPdf(html: string, pdfOptions?: AppPdfOptions): Promise<Blob> {
+    const answer = await request({
+      type: "pdf",
+      html,
+      ...(pdfOptions === undefined ? {} : { options: pdfOptions })
+    });
+    if (answer.type === "pdf_result" && answer.ok) {
+      return new Blob([answer.pdf], { type: "application/pdf" });
+    }
+    throw new AppCallError(answer.ok ? MISMATCHED_ANSWER : answer.error);
+  }
+
   async function call(message: Extract<NewRequest, { type: "action" }>): Promise<AppCallResult> {
     const answer = await request(message);
     if (answer.type === "action_result" && answer.ok) return answer.result;
@@ -351,6 +384,22 @@ export function createAppClient(
         const answer = await request({ type: "feedback", text });
         if (answer.type === "feedback_result" && answer.ok) return;
         throw new AppCallError(answer.ok ? MISMATCHED_ANSWER : answer.error);
+      }
+    },
+    pdf: {
+      fromHtml: printPdf,
+      async download(html, filename, pdfOptions) {
+        const blob = await printPdf(html, pdfOptions);
+        const address = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = address;
+        link.download = filename.toLowerCase().endsWith(".pdf") ? filename : `${filename}.pdf`;
+        link.rel = "noopener";
+        document.body.append(link);
+        link.click();
+        link.remove();
+        // The download has taken the bytes by the next turn; the address is no longer needed.
+        setTimeout(() => URL.revokeObjectURL(address), 1000);
       }
     },
     onThemeChange(callback) {
@@ -389,6 +438,14 @@ export const actions: AppClient["actions"] = {
 /** The Workflow Runs the actions of the manifest started. `workflowRuns.get(run.id)`. */
 export const workflowRuns: AppClient["workflowRuns"] = {
   get: (runId) => client().workflowRuns.get(runId)
+};
+/**
+ * PDFs made in the instance's own renderer, without network: `pdf.download(html, "report.pdf")`
+ * or `pdf.fromHtml(html)` for the Blob. Never an outside PDF service or a PDF library.
+ */
+export const pdf: AppClient["pdf"] = {
+  fromHtml: (html, options) => client().pdf.fromHtml(html, options),
+  download: (html, filename, options) => client().pdf.download(html, filename, options)
 };
 /** Written feedback on this App for the people who build it. `feedback.send(text)`. */
 export const feedback: AppClient["feedback"] = {

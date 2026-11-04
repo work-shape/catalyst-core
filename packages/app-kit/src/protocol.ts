@@ -137,7 +137,8 @@ export type PageMessage =
       idempotencyKey?: string;
     }
   | { type: "workflow_run"; session: string; requestId: string; runId: string }
-  | { type: "feedback"; session: string; requestId: string; text: string };
+  | { type: "feedback"; session: string; requestId: string; text: string }
+  | { type: "pdf"; session: string; requestId: string; html: string; options?: AppPdfOptions };
 
 /** What the interface sends. */
 export type HostMessage =
@@ -151,7 +152,21 @@ export type HostMessage =
     ))
   | ({ type: "feedback_result"; session: string; requestId: string } & (
       { ok: true } | { ok: false; error: AppCallFailure }
+    ))
+  | ({ type: "pdf_result"; session: string; requestId: string } & (
+      { ok: true; pdf: ArrayBuffer } | { ok: false; error: AppCallFailure }
     ));
+
+/**
+ * How the pages of a PDF are laid out. Without `format` a size the HTML names in its own
+ * `@page` rule holds, otherwise A4. A margin is a CSS length such as `12mm`, `1in` or `0`;
+ * each defaults to `12mm`. Backgrounds and colours always print.
+ */
+export interface AppPdfOptions {
+  format?: "A3" | "A4" | "A5" | "Letter" | "Legal";
+  landscape?: boolean;
+  margin?: { top?: string; right?: string; bottom?: string; left?: string };
+}
 
 const THEME_KEYS = [
   "surfaceColor",
@@ -400,6 +415,20 @@ export function readHostMessage(data: unknown): HostMessage | undefined {
     if (data.ok === true) return { type: "feedback_result", session, requestId, ok: true };
     const error = readCallFailure(data.error);
     return error ? { type: "feedback_result", session, requestId, ok: false, error } : undefined;
+  }
+  if (
+    data.type === "pdf_result" &&
+    typeof data.session === "string" &&
+    typeof data.requestId === "string"
+  ) {
+    const { session, requestId } = data;
+    if (data.ok === true) {
+      return data.pdf instanceof ArrayBuffer
+        ? { type: "pdf_result", session, requestId, ok: true, pdf: data.pdf }
+        : undefined;
+    }
+    const error = readCallFailure(data.error);
+    return error ? { type: "pdf_result", session, requestId, ok: false, error } : undefined;
   }
   return undefined;
 }

@@ -72,7 +72,9 @@ outside network, and a published App reaches only reviewed hosts declared in its
 Where the release turns on [outside hosts in a draft](/configure/release-config/#outside-hosts-in-a-draft),
 the builder can allow a declared host for their own preview with one click.
 Use named actions for Connections and Data Stores, never fetch the instance API directly.
-Bundle fonts and libraries or use the kit; public CDNs do not load. When diagnosing a failure,
+Bundle fonts and libraries or use the kit; public CDNs do not load. Make a PDF with the kit's
+`pdf.download` (see [PDFs from an App](/apps/pdf/)), never through an outside PDF service:
+the person's data stays in the instance. When diagnosing a failure,
 check form handlers, storage availability and the declared network policy before blaming the data.
 
 ## Light and dark
@@ -113,6 +115,6 @@ A PDF or another file an App makes is generated in the browser with a bundled li
 
 Put fonts and libraries in the App's folder or use the kit's; an outside address (Google Fonts, Adobe Fonts or a CDN) will not load.
 
-Kit 1.6.0 and later supply Inter (400, 600, 700), Lora (400, 700 and 400 italic), IBM Plex Mono (400, 600) and Bungee (400), with Latin coverage including German: link `/app-runtime/kit/1.9.0/fonts/fonts.css` and use the family name in CSS. The font sources and licences are in `/app-runtime/kit/1.9.0/fonts/README.md`.
+Kit 1.6.0 and later supply Inter (400, 600, 700), Lora (400, 700 and 400 italic), IBM Plex Mono (400, 600) and Bungee (400), with Latin coverage including German: link `/app-runtime/kit/1.10.0/fonts/fonts.css` and use the family name in CSS. The font sources and licences are in `/app-runtime/kit/1.10.0/fonts/README.md`.
 
-A React App imports its CSS from a route (for example, `import "../fonts.css"`); in that CSS, write `@import url("/app-runtime/kit/1.9.0/fonts/fonts.css");` and `body { font-family: Lora; }`.
+A React App imports its CSS from a route (for example, `import "../fonts.css"`); in that CSS, write `@import url("/app-runtime/kit/1.10.0/fonts/fonts.css");` and `body { font-family: Lora; }`.

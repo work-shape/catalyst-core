@@ -126,6 +126,7 @@ import { createKnowledgeFiles } from "./knowledge-files";
 import { createInfrastructureWorkflow } from "./infrastructure";
 import { createInProcessAgentRunWorker, type AgentRunWorkerPlacement } from "./agent-run-jobs";
 import { createInstancePages, createInstanceWorkspaceOpen } from "./pages";
+import { createInstanceHtmlPdfClient } from "./registration";
 import { createPreviewCaptureObjectReader } from "./preview-capture-objects";
 import type { KnowledgeWorkerPlacement } from "./knowledge";
 import { createJobWorker } from "./job-worker";
@@ -397,12 +398,15 @@ export async function createClientInstanceExecutionAssembly(
   const workspaceObjectStore = config.executionWorkspaces.enabled
     ? await createWorkspacesStore(config, infrastructure.context)
     : undefined;
+  // HTML to PDF (PDF-1): the API serves it to frames, the process that runs tools to agents.
+  const htmlPdfService = await createInstanceHtmlPdfClient(env, infrastructure.secrets);
   const pages = await createInstancePages({
     config,
     modules,
     infrastructure,
     env,
-    servesContent: processOptions.process === "api"
+    servesContent: processOptions.process === "api",
+    ...(htmlPdfService ? { htmlPdfService } : {})
   });
   const modelProviders = getModelProviderConfigs(config);
   // Before the capabilities: one of them may call a model, and asks at startup what the model
@@ -698,6 +702,7 @@ export async function createClientInstanceExecutionAssembly(
         telemetry: createConsoleWorkspaceCommandTelemetry(logger),
         limits: config.executionWorkspaces.command,
         projectFolder: projectFiles,
+        ...(htmlPdfService ? { htmlPdf: htmlPdfService } : {}),
         // The skills an agent run may read, which its commands mount read-only at /skills.
         skills: { assetSource, conversationOffer, conversations: store.conversations },
         sourceFileReader: attachments

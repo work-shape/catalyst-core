@@ -52,6 +52,7 @@ import {
   APP_TRY_TOOL_NAMES,
   PREVIEW_CAPTURE_TOOL_NAME,
   WORKSPACE_OPEN_TOOL_NAME,
+  HTML_TO_PDF_TOOL_NAME,
   createAppSaveTool,
   createAskQuestionTool,
   createAppEditTool,
@@ -471,6 +472,9 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
           ? [CONNECTION_DRAFT_TOOL_NAME, CONNECTION_OFFER_TOOL_NAME]
           : []),
         ...appToolNames(input.hasTool),
+        // Every agent that writes files prints HTML to PDF in the instance (PDF-1), never
+        // through an outside service; the tool exists only where the renderer runs.
+        ...(input.hasTool(WRITE_FILE_TOOL) ? [HTML_TO_PDF_TOOL_NAME] : []),
         ...(folder ? PROJECT_FOLDER_TOOLS : []),
         ASK_QUESTION_TOOL_NAME,
         ...(skillNames.length > 0 || ownSkillNames.length > 0 ? [READ_SKILL_TOOL] : [])

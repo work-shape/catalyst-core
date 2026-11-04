@@ -4,6 +4,12 @@ import { chromium, type Browser, type BrowserContext } from "playwright";
 import sharp from "sharp";
 import { rendererSandboxEvidence, type SandboxEvidence } from "./sandbox";
 import {
+  HTML_PDF_RENDER_MS,
+  type HtmlPdfInput,
+  type HtmlPdfOutcome
+} from "@work-shape/catalyst-asset-schemas";
+import { renderPdf } from "./pdf";
+import {
   CAPTURE_MS,
   IDLE_MS,
   MAX_IMAGE_BYTES,
@@ -342,18 +348,67 @@ class CaptureSlot {
       await shutdown;
       // Normal cleanup closes only this slot's context.
       await context?.close().catch(() => undefined);
-      this.active--;
-      this.captures++;
-      if (this.active === 0) {
-        if (this.captures >= RECYCLE_AFTER) {
-          this.captures = 0;
-          await this.close();
-        } else {
-          this.idle = setTimeout(() => {
-            this.close().catch(() => undefined);
-          }, IDLE_MS);
-          this.idle.unref();
-        }
+      await this.release();
+    }
+  }
+
+  /**
+   * Prints one document to PDF (PDF-1) in this slot's sandboxed browser, under the same
+   * deadline, memory watchdog and recycling as a capture. See `renderPdf` for what it reaches.
+   */
+  async pdf(input: HtmlPdfInput, deadline: number): Promise<HtmlPdfOutcome> {
+    const remaining = Math.min(HTML_PDF_RENDER_MS, deadline - Date.now());
+    if (remaining <= 0) return { status: "refused", code: "pdf_busy" };
+    this.active++;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let stopMonitor: (() => void) | undefined;
+    let memoryExceeded = false;
+    let shutdown: Promise<void> | undefined;
+    try {
+      const timedOut = new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => {
+          shutdown = this.close().catch(() => undefined);
+          reject(new Error("deadline"));
+        }, remaining);
+      });
+      const outcome = await Promise.race([
+        timedOut,
+        (async () => {
+          const browser = await this.start();
+          stopMonitor = watchRendererMemory(
+            async () =>
+              (await this.processes(browser)).filter((p) => p.type === "renderer").map((p) => p.id),
+            () => {
+              memoryExceeded = true;
+            }
+          );
+          return renderPdf(browser, input, Math.max(1, deadline - Date.now()));
+        })()
+      ]);
+      return memoryExceeded ? { status: "refused", code: "pdf_failed" } : outcome;
+    } catch {
+      return { status: "refused", code: "pdf_failed" };
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      stopMonitor?.();
+      await shutdown;
+      await this.release();
+    }
+  }
+
+  /** Ends one use of the slot: the browser is recycled after many, or closed when idle. */
+  private async release(): Promise<void> {
+    this.active--;
+    this.captures++;
+    if (this.active === 0) {
+      if (this.captures >= RECYCLE_AFTER) {
+        this.captures = 0;
+        await this.close();
+      } else {
+        this.idle = setTimeout(() => {
+          this.close().catch(() => undefined);
+        }, IDLE_MS);
+        this.idle.unref();
       }
     }
   }
@@ -371,6 +426,14 @@ export class CaptureRenderer {
   }
 
   async capture(input: CaptureInput): Promise<CaptureOutcome> {
+    return this.inFreeSlot((slot) => slot.capture(input));
+  }
+
+  async pdf(input: HtmlPdfInput, deadline: number): Promise<HtmlPdfOutcome> {
+    return this.inFreeSlot((slot) => slot.pdf(input, deadline));
+  }
+
+  private async inFreeSlot<T>(work: (slot: CaptureSlot) => Promise<T>): Promise<T> {
     let slot = this.slots.find((slot) => !slot.busy);
     if (!slot) {
       slot = { renderer: new CaptureSlot(this.options), busy: false };
@@ -378,7 +441,7 @@ export class CaptureRenderer {
     }
     slot.busy = true;
     try {
-      return await slot.renderer.capture(input);
+      return await work(slot.renderer);
     } finally {
       slot.busy = false;
     }

@@ -1,6 +1,7 @@
 import { APP_ASSET_KIND, apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
+  HTML_PDF_MAX_HTML_BYTES,
   PAGE_FILE_SET_HELD_KEY,
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
@@ -14,6 +15,7 @@ import { AppWorkflow } from "../apps/app-service";
 import { AppDraftTries } from "../apps/app-tries";
 import { DRAFT_HOSTS_DEFAULT_POLICY, DraftHosts } from "../apps/draft-hosts";
 import { PreviewCaptures } from "../apps/preview-captures";
+import { AppPdfRenders } from "../apps/pdf-renders";
 import { PreviewReports } from "../apps/preview-reports";
 import type { Route } from "../http/route";
 import type { ResolvedChatServerOptions } from "../types";
@@ -40,6 +42,7 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
   const tries = new AppDraftTries(options, { apps: workflow, actions });
   const previewReports = new PreviewReports(options, actions);
   const previewCaptures = new PreviewCaptures(options, actions);
+  const pdfRenders = new AppPdfRenders(options, actions);
 
   route.operation(apiOperations["apps.create_from_page"], {
     authorize: (input, { actor, access }) => workflow.authorizeCreate(actor, access, input),
@@ -251,6 +254,32 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
         header: (name, value) => void reply.header(name, value)
       });
     }
+  );
+
+  // HTML to PDF (PDF-1). A plain route: the document and the PDF are in no Operation Run,
+  // audit event or log line. The body holds the HTML as JSON, which escapes some characters.
+  route(
+    apiOperations["apps.sessions.render_pdf"],
+    async ({ user, access, params, body, reply }) => {
+      const { pdf } = await pdfRenders.render(
+        { user, access },
+        {
+          pageSessionId: params.pageSessionId,
+          fileSetId: body.fileSetId,
+          token: body.token,
+          html: body.html,
+          ...(body.options ? { options: body.options } : {})
+        }
+      );
+      return reply
+        .header("content-type", "application/pdf")
+        .header("content-length", String(pdf.byteLength))
+        .header("cache-control", "no-store")
+        .header("x-content-type-options", "nosniff")
+        .header("content-disposition", 'attachment; filename="document.pdf"')
+        .send(Buffer.from(pdf));
+    },
+    { bodyLimitBytes: 2 * HTML_PDF_MAX_HTML_BYTES + 64 * 1024 }
   );
 
   route(

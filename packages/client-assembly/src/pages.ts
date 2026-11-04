@@ -29,6 +29,7 @@ import type {
   WorkspaceOpenToolOptions
 } from "@work-shape/catalyst-tool-execution";
 import type { ClientInstanceEnv } from "./env";
+import type { HtmlPdfService } from "@work-shape/catalyst-core";
 import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   createFilesStore,
@@ -64,6 +65,8 @@ export async function createInstancePages(input: {
   infrastructure: InstanceInfrastructure;
   servesContent: boolean;
   env?: ClientInstanceEnv;
+  /** The renderer of HTML to PDF (PDF-1), which the frames of Apps call through the API. */
+  htmlPdfService?: HtmlPdfService;
 }): Promise<ChatServerOptions["pages"]> {
   const hasFilesStore = input.config.infrastructure.objectStorage.files !== undefined;
   if (!input.modules.isEnabled("apps")) {
@@ -100,7 +103,8 @@ export async function createInstancePages(input: {
     previewCaptureService: await createInstancePreviewCaptureClient(
       input.env ?? {},
       input.infrastructure.secrets
-    )
+    ),
+    ...(input.htmlPdfService ? { htmlPdfService: input.htmlPdfService } : {})
   };
 }
 

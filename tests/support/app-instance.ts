@@ -21,6 +21,7 @@ import {
   asConversationId,
   assetObjectPrefix,
   type CollaborationWorkspaceId,
+  type HtmlPdfService,
   type JobWorker,
   type ObjectStorage,
   type Logger
@@ -137,6 +138,8 @@ export interface AppInstanceOptions {
   ) => Partial<TestServerOptions>;
   /** Registers the operations of a further module, such as the routes of `workflows`. */
   register?: AccessInstanceOptions["register"];
+  /** The renderer of HTML to PDF (PDF-1). The instance has none when absent. */
+  htmlPdfService?: HtmlPdfService;
 }
 
 export interface AppInstance extends AccessInstance {
@@ -198,6 +201,7 @@ export async function setupAppInstance(options: AppInstanceOptions = {}): Promis
           pollIntervalMs: 20,
           ...(options.assetWaitMs === undefined ? {} : { assetWaitMs: options.assetWaitMs })
         }),
+        ...(options.htmlPdfService ? { htmlPdfService: options.htmlPdfService } : {}),
         assetRepo: createAssetRepoCommitClient({
           stores,
           pollIntervalMs: 20,
