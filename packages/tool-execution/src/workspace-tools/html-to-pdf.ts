@@ -1,4 +1,3 @@
-import { posix as path } from "node:path";
 import { z } from "zod";
 import {
   HTML_PDF_MAX_HTML_BYTES,
@@ -12,7 +11,6 @@ import {
   type ToolHandlerResult
 } from "@work-shape/catalyst-core";
 import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
-import { promoteWorkspaceFile } from "../workspace-artifact-promotion";
 import { failed, normalizeWorkspaceFilePath } from "../workspace-tool-results";
 import type { WorkspaceToolDependencies } from "./dependencies";
 import {
@@ -24,8 +22,9 @@ import {
 import { findWorkspaceFile } from "./workspace";
 
 // HTML to PDF for an agent (PDF-1): an HTML file of the workspace goes to the instance's own
-// renderer, which reaches no network, and the PDF comes back as a workspace file and a download
-// card. The document and the PDF are in no audit event or Operation Run; the trace names sizes.
+// renderer, which reaches no network, and the PDF comes back as a workspace file only. The agent
+// checks its pages and hands the final file over once with workspace.promote_artifact, so a
+// draft never becomes a download card. The trace names the path, the pages and the size.
 
 export const HTML_TO_PDF_TOOL_NAME = "workspace.html_to_pdf";
 
@@ -43,12 +42,6 @@ const htmlToPdfInputSchema = z
       .min(1)
       .max(1024)
       .describe("Where the PDF is written in /workspace. Omit it for the HTML's path with .pdf.")
-      .optional(),
-    filename: z
-      .string()
-      .min(1)
-      .max(255)
-      .describe("The name the person downloads the PDF under. Omit it for the output's name.")
       .optional()
   })
   .extend(htmlPdfOptionsSchema.shape)
@@ -56,8 +49,6 @@ const htmlToPdfInputSchema = z
 
 const htmlToPdfOutputSchema = z.object({
   path: z.string(),
-  artifactId: z.string(),
-  filename: z.string(),
   pages: z.number().int(),
   byteSize: z.number().int()
 });
@@ -79,8 +70,8 @@ export function workspaceHtmlToPdfTool(
     name: HTML_TO_PDF_TOOL_NAME,
     title: { en: "Make a PDF from HTML", de: "PDF aus HTML erstellen" },
     summary: {
-      en: "Prints an HTML file of the conversation to a PDF the person can download.",
-      de: "Druckt eine HTML-Datei der Unterhaltung als PDF, das die Person herunterladen kann."
+      en: "Prints an HTML file of the conversation to a PDF in its files.",
+      de: "Druckt eine HTML-Datei der Unterhaltung als PDF in ihre Dateien."
     },
     group: "files",
     icon: "file",
@@ -88,9 +79,10 @@ export function workspaceHtmlToPdfTool(
     // Runs on the agent's own call, like workspace.write_file and workspace.promote_artifact.
     permission: { mode: "allow" },
     description: [
-      "Print an HTML file of /workspace to a PDF in the instance's own renderer, write it to /workspace and hand it to the person as a download card. Use it for every PDF made from HTML: never an outside PDF service and no PDF library.",
-      "The renderer has no network: every style, image and font must be in the file itself or a data: address; a link to anything else stays empty. Scripts do not run, so draw charts as inline SVG and put the finished content in the HTML. Page breaks follow CSS (break-before: page).",
-      `Without format the file's own @page size holds, otherwise A4; margins default to 12mm. At most ${HTML_PDF_MAX_HTML_BYTES / MIB} MiB of HTML, ${HTML_PDF_MAX_PAGES} pages and ${HTML_PDF_MAX_PDF_BYTES / MIB} MiB of PDF.`
+      "Print an HTML file of /workspace to a PDF in the instance's own renderer and write it to /workspace. Make every new PDF this way, as HTML and CSS: never an outside PDF service. It makes no download card: render the pages to PNG under /workspace/previews (pdf_render_pages, or pdftoppm), look at every page with workspace.preview_images, fix the HTML and print again, then hand the final PDF over once with workspace.promote_artifact.",
+      "The renderer has no network: every style, image and font must be in the file itself or a data: address; a link to anything else stays empty. Scripts do not run, so draw charts as inline SVG and put the finished content in the HTML. Page breaks and page numbers follow print CSS (break-before, @page margin boxes with counter(page)).",
+      `Without format the file's own @page size holds, otherwise A4; margins default to 12mm. At most ${HTML_PDF_MAX_HTML_BYTES / MIB} MiB of HTML, ${HTML_PDF_MAX_PAGES} pages and ${HTML_PDF_MAX_PDF_BYTES / MIB} MiB of PDF.`,
+      `Use the pdf_* helpers to fill forms, merge, split or edit an existing PDF and to check one; use reportlab only to draw on an existing PDF, for a document over ${HTML_PDF_MAX_PAGES} pages, or where this tool is not offered.`
     ].join(" "),
     inputSchema: htmlToPdfInputSchema,
     outputSchema: htmlToPdfOutputSchema,
@@ -157,42 +149,13 @@ async function htmlToPdf(
     existing: files.find((file) => file.path === target.value),
     mimeType: "application/pdf"
   });
-  const filename = input.filename ?? path.basename(stored.path);
-  const artifact = await promoteWorkspaceFile(deps.store, {
-    file: stored,
-    kind: "workspace.file",
-    filename,
-    mimeType: "application/pdf",
-    now: deps.now
-  });
   return toolSuccess(
+    { path: stored.path, pages: outcome.pages, byteSize: stored.byteSize },
     {
-      path: stored.path,
-      artifactId: artifact.id,
-      filename,
-      pages: outcome.pages,
-      byteSize: stored.byteSize
-    },
-    {
-      artifacts: [
-        {
-          artifactId: artifact.id,
-          kind: artifact.kind,
-          filename,
-          mimeType: "application/pdf",
-          metadata: {
-            source: "execution_workspace",
-            workspaceId: found.value.handle.id,
-            workspacePath: stored.path,
-            byteSize: stored.byteSize,
-            checksum: stored.checksum
-          }
-        }
-      ],
-      // Paths, sizes and the page count. Never the document or the PDF.
+      // The path, the pages and the size. Never the document or the PDF.
       auditSummary: {
         action: HTML_TO_PDF_TOOL_NAME,
-        subject: artifact.id,
+        subject: stored.path,
         metadata: { path: stored.path, pages: outcome.pages, byteSize: stored.byteSize }
       }
     }
