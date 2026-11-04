@@ -403,9 +403,10 @@ const silentLogger: Logger = {
 };
 
 /**
- * The commits of an instance whose Workflow saves are commits (WF-GIT-1): a deployment makes
- * them on its workspace command worker, and the test instance beside its API, with the git of
- * this machine. Nothing for an instance without Workflows or without a `files` store.
+ * The commits of an instance whose App and Workflow saves are commits (WF-GIT-1): a deployment
+ * makes them on its workspace command worker, and the test instance beside its API, with the
+ * git of this machine. Nothing for an instance without Apps and Workflows or without a `files`
+ * store.
  */
 async function startWorkflowCommits(
   app: Awaited<ReturnType<typeof createClientInstanceApp>>,
@@ -414,7 +415,8 @@ async function startWorkflowCommits(
   const files = app.config.infrastructure.objectStorage.files;
   const modules = resolveInstanceModules(app.config, capabilities).snapshot;
   const root = files?.provider === "filesystem" ? files.root : undefined;
-  if (typeof root !== "string" || !modules.isEnabled("workflows")) return undefined;
+  if (typeof root !== "string" || !(modules.isEnabled("apps") || modules.isEnabled("workflows")))
+    return undefined;
   const tempRoot = await mkdtemp(join(tmpdir(), "test-instance-commits-"));
   const worker = createJobWorker({
     stores: app.store,
