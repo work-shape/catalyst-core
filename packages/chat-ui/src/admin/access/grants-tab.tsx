@@ -38,7 +38,7 @@ import { grantSentences, scopeLabel, type ScopeNames } from "./grant-sentences";
 import { actionLabel } from "./right-words";
 
 import { GrantDialog } from "./grant-dialog";
-import { grantOptions, type GrantChoices } from "./grant-options";
+import { grantChoiceAssets, grantOptions, type GrantChoices } from "./grant-options";
 
 /**
  * The columns of the grant list once the list itself is wide enough for them. Narrower, a row
@@ -119,28 +119,7 @@ export function GrantsTab({
         .find((asset) => asset.id === assetId)?.name
   };
 
-  const choiceAssets: Partial<Record<GrantKind, GrantChoices>> = {
-    ...Object.fromEntries(
-      (["agent", "skill"] as const).map((kind) => [
-        kind,
-        {
-          items: assets?.flatMap((asset) =>
-            asset.kind === kind && asset.id !== undefined
-              ? [
-                  {
-                    id: asset.id,
-                    name: asset.name,
-                    resource: { kind, name: asset.name, assetId: asset.id }
-                  }
-                ]
-              : []
-          ),
-          failed: assetsFailure !== undefined
-        }
-      ])
-    ),
-    ...kindAssets
-  };
+  const choiceAssets = grantChoiceAssets(assets, assetsFailure, kindAssets);
   const options = grantOptions(giver, choiceAssets, workspaces);
   const newGrant = (
     <Button size="sm" disabled={options.kinds.length === 0} onClick={() => setGranting(true)}>

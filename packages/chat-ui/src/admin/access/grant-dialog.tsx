@@ -99,6 +99,15 @@ export interface GrantDialogProps {
   workspaces?: GrantChoices;
   /** An active instance admin, whom a refusal names as the one who can help. */
   instanceAdminName?: string;
+  /**
+   * The role the rows are for, in place of a person picked in the dialog. A role's rights across
+   * all workspaces are ticked on its page, so the dialog offers it one workspace or one asset.
+   */
+  role?: { id: string; name: string };
+  /** The one kind the dialog offers; absent, every kind the giver can give. */
+  kind?: GrantKind;
+  /** The sentence for a refusal the caller words itself; nothing leaves it to the dialog. */
+  failureText?(error: unknown): string | undefined;
   /** Writes the rows; see `GrantsTabProps.onGrant`. */
   onGrant(requests: readonly CreatePermissionGrantRequest[]): Promise<GrantWriteResult>;
   onClose(): void;
@@ -106,7 +115,8 @@ export interface GrantDialogProps {
 
 /**
  * The New right dialog: a person, a level of one kind and a place, each picked by name. Further
- * rights that are no level are ticked one by one; a deny waits behind its own control.
+ * rights that are no level are ticked one by one; a deny waits behind its own control. For a
+ * role, the holder and the kind are given and the place is one workspace or one asset.
  */
 export function GrantDialog({
   users,
@@ -117,13 +127,19 @@ export function GrantDialog({
   options,
   workspaces,
   instanceAdminName,
+  role,
+  kind: onlyKind,
+  failureText,
   onGrant,
   onClose
 }: GrantDialogProps) {
   const { t, locale } = useTranslation();
   const docsLinkShown = useDocsLinkShown();
   const formId = useId();
-  const [form, setForm] = useState<GrantForm>(emptyGrantForm);
+  const [form, setForm] = useState<GrantForm>(() => {
+    const start = onlyKind === undefined ? emptyGrantForm : withGrantKind(emptyGrantForm, onlyKind);
+    return role === undefined ? start : { ...start, holderId: role.id };
+  });
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | undefined>();
@@ -131,12 +147,16 @@ export function GrantDialog({
 
   const holders = grantableUsers(users ?? []);
   const holder = holders.find((user) => user.id === form.holderId);
-  const kinds = options.kinds;
+  const kinds = options.kinds.filter(
+    (candidate) => onlyKind === undefined || candidate === onlyKind
+  );
   const kind = kinds.includes(form.kind) ? form.kind : (kinds[0] ?? form.kind);
   const requestedVerbs = grantFormVerbs({ ...form, kind }).filter(
     (verb) => options.places(kind, [verb]).length > 0
   );
-  const scopeKinds = options.places(kind, requestedVerbs);
+  const scopeKinds = options
+    .places(kind, requestedVerbs)
+    .filter((place) => role === undefined || place !== "instance");
   const scopeKind = scopeKinds.find((scope) => scope === form.scopeKind) ?? scopeKinds[0];
   const allowedWorkspaces = options.choices(kind, "workspace", requestedVerbs);
   const words = grantKinds[kind].words;
@@ -207,15 +227,18 @@ export function GrantDialog({
   const level = levels.find((candidate) => candidate === form.level);
   const extras = grantExtras(kind).filter((verb) => verbs.includes(verb));
   const selectedExtras = form.extras.filter((verb) => extras.includes(verb));
-  const requests = grantRequests({
-    ...form,
-    kind,
-    level,
-    extras: selectedExtras,
-    scopeKind,
-    assetId: asset?.id,
-    workspaceId: workspace?.id
-  });
+  const requests = grantRequests(
+    {
+      ...form,
+      kind,
+      level,
+      extras: selectedExtras,
+      scopeKind,
+      assetId: asset?.id,
+      workspaceId: workspace?.id
+    },
+    role === undefined ? "user" : "role"
+  );
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -227,20 +250,29 @@ export function GrantDialog({
     setSaving(true);
     onGrant(requests)
       .then(onClose)
-      .catch((error: unknown) => setFailure(grantFailureText(error, t, instanceAdminName)))
+      .catch((error: unknown) =>
+        setFailure(failureText?.(error) ?? grantFailureText(error, t, instanceAdminName))
+      )
       .finally(() => setSaving(false));
   };
 
   return (
     <Dialog
       open
-      title={t("access.grantDialogTitle")}
-      description={t("access.grantDialogDescription")}
+      title={
+        role === undefined
+          ? t("access.grantDialogTitle")
+          : t("access.roleGrantDialogTitle", { role: role.name })
+      }
+      description={t(
+        role === undefined ? "access.grantDialogDescription" : "access.roleGrantDialogDescription"
+      )}
       footer={
         <>
           {failure !== undefined || (submitted && !requests) ? (
             <FormNotice tone="error" className="mr-auto">
-              {failure ?? t("access.grantIncomplete")}
+              {failure ??
+                t(role === undefined ? "access.grantIncomplete" : "access.roleGrantIncomplete")}
             </FormNotice>
           ) : null}
           <Button variant="outline" disabled={saving} onClick={onClose}>
@@ -254,40 +286,44 @@ export function GrantDialog({
       onClose={onClose}
     >
       <form id={formId} className="grid gap-5" noValidate onSubmit={submit}>
-        <Field
-          label={t("access.grantHolder")}
-          required
-          error={usersFailed ? t("access.usersLoadFailed") : undefined}
-        >
-          <Picker
-            search={holders.length >= PICKER_SEARCH_FROM_COUNT}
-            options={holders.map((user) => ({
-              value: user.id,
-              label: user.displayLabel,
-              description: user.email
-            }))}
-            value={form.holderId}
-            onValueChange={(holderId) => change({ holderId })}
+        {role === undefined ? (
+          <Field
+            label={t("access.grantHolder")}
+            required
+            error={usersFailed ? t("access.usersLoadFailed") : undefined}
           >
-            <PickerButton
-              label={t("access.grantHolder")}
-              placeholder={t("access.choosePerson")}
-              value={holder?.displayLabel}
-              disabled={users === undefined}
-            />
-          </Picker>
-        </Field>
-        <RadioGroup
-          variant="plain"
-          label={t("access.grantKind")}
-          options={kinds.map((kind) => ({
-            value: kind,
-            label: t(grantKinds[kind].label)
-          }))}
-          value={kind}
-          // An asset belongs to its kind, and a kind has its own actions and places.
-          onValueChange={(kind) => setForm((current) => withGrantKind(current, kind))}
-        />
+            <Picker
+              search={holders.length >= PICKER_SEARCH_FROM_COUNT}
+              options={holders.map((user) => ({
+                value: user.id,
+                label: user.displayLabel,
+                description: user.email
+              }))}
+              value={form.holderId}
+              onValueChange={(holderId) => change({ holderId })}
+            >
+              <PickerButton
+                label={t("access.grantHolder")}
+                placeholder={t("access.choosePerson")}
+                value={holder?.displayLabel}
+                disabled={users === undefined}
+              />
+            </Picker>
+          </Field>
+        ) : null}
+        {onlyKind === undefined ? (
+          <RadioGroup
+            variant="plain"
+            label={t("access.grantKind")}
+            options={kinds.map((kind) => ({
+              value: kind,
+              label: t(grantKinds[kind].label)
+            }))}
+            value={kind}
+            // An asset belongs to its kind, and a kind has its own actions and places.
+            onValueChange={(kind) => setForm((current) => withGrantKind(current, kind))}
+          />
+        ) : null}
         {levels.length > 0 ? (
           <RadioGroup<string>
             label={t("access.grantLevel")}

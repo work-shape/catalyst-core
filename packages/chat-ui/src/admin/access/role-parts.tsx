@@ -47,6 +47,15 @@ export function roleFailureText(
   t: Translate,
   instanceAdminName: string | undefined
 ): string {
+  return roleRefusalText(error, t, instanceAdminName) ?? t("access.roleWriteFailed");
+}
+
+/** `roleFailureText` where the page has a sentence of its own, and nothing where it has none. */
+export function roleRefusalText(
+  error: unknown,
+  t: Translate,
+  instanceAdminName: string | undefined
+): string | undefined {
   const failure = roleWriteFailure(error);
   switch (failure.kind) {
     case "nameTaken":
@@ -64,7 +73,7 @@ export function roleFailureText(
     case "other":
       return error instanceof Error && error.message === t("access.roleWaitsForApproval")
         ? error.message
-        : t("access.roleWriteFailed");
+        : undefined;
   }
 }
 

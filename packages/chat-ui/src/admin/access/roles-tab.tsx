@@ -19,7 +19,7 @@ import {
 import { useTranslation } from "../../shared/i18n";
 import type { ScopeNames } from "./grant-sentences";
 import { canEditRole, copiedGrants, editorHolds, type RoleEditor } from "./role-model";
-import { RolePage } from "./role-page";
+import { RolePage, type RoleGrantSource } from "./role-page";
 import type { RolePeopleSource } from "./role-people";
 import {
   RoleMenu,
@@ -44,6 +44,8 @@ export interface RolesTabProps extends RoleWrites {
   instanceAdminName?: string;
   /** The people of the instance, for who holds a custom role. */
   people?: RolePeopleSource;
+  /** What a role's right in one workspace or on one asset is picked from. */
+  grantSource?: RoleGrantSource;
 }
 
 /**
@@ -76,6 +78,7 @@ export function RolesTab(props: RolesTabProps) {
         onReset={props.onReset}
         onDecide={props.onDecide}
         people={props.people}
+        grantSource={props.grantSource}
         dialogs={
           <RoleDialogs
             {...props}

@@ -355,8 +355,14 @@ function grantScope(
   }
 }
 
-/** One request per chosen action, in the page's order; nothing while the form is incomplete. */
-export function grantRequests(form: GrantForm): CreatePermissionGrantRequest[] | undefined {
+/**
+ * One request per chosen action, in the page's order; nothing while the form is incomplete. The
+ * holder is a person, or the role whose page adds the rows to the role's grants.
+ */
+export function grantRequests(
+  form: GrantForm,
+  holderKind: "user" | "role" = "user"
+): CreatePermissionGrantRequest[] | undefined {
   const verbs = grantFormVerbs(form);
   if (form.scopeKind === undefined || !grantScopeKinds(form.kind, verbs).includes(form.scopeKind)) {
     return undefined;
@@ -370,7 +376,7 @@ export function grantRequests(form: GrantForm): CreatePermissionGrantRequest[] |
     return undefined;
   }
   return actions.map((action) => ({
-    holderKind: "user",
+    holderKind,
     holderId,
     action,
     effect: form.effect,

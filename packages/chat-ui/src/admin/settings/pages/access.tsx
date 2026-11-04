@@ -191,6 +191,17 @@ export function AccessPage() {
     retry: false
   });
   const mutations = useAccessMutations(api);
+  const grantWorkspaces = namesWorkspaces
+    ? {
+        items: contextQuery.data?.workspaces
+          .filter((workspace) => workspace.kind === "shared")
+          .map((workspace) => ({
+            id: workspace.id,
+            name: workspace.name
+          })),
+        failed: Boolean(contextQuery.error)
+      }
+    : undefined;
   // Most instances declare no dimension to separate data by, and then show no tab for it.
   const dataScope = declaresDataScope(useDataScopeOverview(api).data);
   const overview = overviewQuery.data;
@@ -287,19 +298,7 @@ export function AccessPage() {
             assets={overview?.assets}
             assetsFailure={overviewFailure}
             kindAssets={kindAssets}
-            workspaces={
-              namesWorkspaces
-                ? {
-                    items: contextQuery.data?.workspaces
-                      .filter((workspace) => workspace.kind === "shared")
-                      .map((workspace) => ({
-                        id: workspace.id,
-                        name: workspace.name
-                      })),
-                    failed: Boolean(contextQuery.error)
-                  }
-                : undefined
-            }
+            workspaces={grantWorkspaces}
             instanceAdminName={user.instanceAdminName}
             onGrant={(requests) => mutations.grant.mutateAsync(requests)}
             onRevoke={(grantId) => mutations.revoke.mutateAsync(grantId)}
@@ -325,6 +324,12 @@ export function AccessPage() {
             onDecide={(roleId, action, decision) =>
               roleMutations.decide.mutateAsync({ roleId, action, decision })
             }
+            grantSource={{
+              assets: overview?.assets,
+              assetsFailure: overviewFailure,
+              kindAssets,
+              workspaces: grantWorkspaces
+            }}
             people={{
               users: usersQuery.data,
               failed: Boolean(usersQuery.error),

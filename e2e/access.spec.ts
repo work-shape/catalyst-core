@@ -613,6 +613,72 @@ test("a custom role given to a person adds its rights to theirs, and taking it a
   }
 });
 
+test("a custom role gets the right to edit and publish one agent, added on its page", async ({
+  page,
+  // The test stores an agent of the instance and writes a role: the turn on the grants.
+  instanceAgentsChange: _instanceAgentsChange
+}) => {
+  test.setTimeout(90_000);
+  await signInViaApi(page, adminUser);
+  const roleName = `E2E editorial ${Date.now()}`;
+  const rolesPath = `${apiBaseUrl}/api/v1/instance/access/roles`;
+  const agentPath = `${apiBaseUrl}/api/v1/assets/agent/e2e-newsroom`;
+  const planted = await requestWithOrigin(page, "put", agentPath, {
+    data: {
+      expectedRevision: await assetBaseRevision(page, agentPath),
+      config: {
+        name: "e2e-newsroom",
+        displayName: "E2E Newsroom",
+        modelProviderId: "local",
+        instructions: "You write the news.",
+        toolNames: []
+      }
+    }
+  });
+  expect(planted.ok(), await planted.text()).toBe(true);
+  const created = await requestWithOrigin(page, "post", rolesPath, {
+    data: { name: roleName, grants: [] }
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const role: { id: string } = await created.json();
+  const rolePage = page.getByTestId("role-page");
+  const agents = rolePage.locator('[data-area="agent"]');
+  const dialog = page.getByRole("dialog", { name: `New right in ${roleName}` });
+  try {
+    await page.setViewportSize(WIDE);
+    await page.goto(`${accessPath}?role=${role.id}`);
+    await expect(rolePage.getByRole("heading", { name: roleName })).toBeVisible();
+    await expect(agents.getByText("No right in this area.")).toBeVisible();
+
+    // The role is the holder and Agents the kind; the level and the agent are picked as for a person.
+    await agents.getByRole("button", { name: /^Add a right for Agents/u }).click();
+    await expect(dialog.getByRole("button", { name: /^Person: / })).toHaveCount(0);
+    await dialog.getByRole("radio", { name: "Publish", exact: true }).check();
+    await pick(page, dialog.getByRole("button", { name: /^Asset: / }), /E2E Newsroom/u);
+    await dialog.getByRole("button", { name: "Create right" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(agents).toContainText("E2E Newsroom");
+
+    const stored = await page.request.get(`${rolesPath}/${role.id}`);
+    expect(stored.ok()).toBe(true);
+    const { grants }: { grants: { action: string; scopeKind: string; scopeId?: string }[] } =
+      await stored.json();
+    expect(grants.map((grant) => [grant.action, grant.scopeKind]).sort()).toEqual(
+      [
+        ["agent.publish", "asset"],
+        ["agent.read", "asset"],
+        ["agent.use", "asset"],
+        ["agent.write", "asset"]
+      ].sort()
+    );
+  } finally {
+    await requestWithOrigin(page, "delete", `${rolesPath}/${role.id}`);
+    await requestWithOrigin(page, "post", `${agentPath}/delete`, {
+      data: { expectedRevision: await assetRevision(page, agentPath) }
+    });
+  }
+});
+
 // CONN-WHO-1: the Connection page says who may use it, the roles first, then each person with
 // their verbs, and to a reader who manages no users only the roles and how many more there are.
 test("a Connection says who may use it: the roles first, then each person with their verbs", async ({

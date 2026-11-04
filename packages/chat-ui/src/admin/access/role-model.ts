@@ -198,12 +198,35 @@ export function withAreaAllows(
   return [...kept, ...added].map(grantInput);
 }
 
+type GrantFields = Pick<RoleGrant, "action" | "effect" | "scopeKind" | "scopeId">;
+
+/**
+ * The role's grants with the rows the New right dialog wrote for it. A row the role already
+ * holds stays and is counted; a row that names an action and place the role allows or refuses
+ * the other way replaces it, since the role holds one answer per action and place.
+ */
+export function withPlaceGrants(
+  grants: readonly RoleGrant[],
+  rows: readonly GrantFields[]
+): { grants: RoleGrantInput[]; added: number; existing: number } {
+  const place = (grant: GrantFields) =>
+    [grant.action, grant.scopeKind, grant.scopeId ?? ""].join("|");
+  const existing = rows.filter((row) => grants.some((grant) => sameGrant(grant, row)));
+  const added = rows.filter((row) => !existing.includes(row));
+  const replaced = new Set(added.map(place));
+  return {
+    grants: [...grants.filter((grant) => !replaced.has(place(grant))), ...added].map(grantInput),
+    added: added.length,
+    existing: existing.length
+  };
+}
+
 /** The role's grants without one of them. */
 export function withoutGrant(grants: readonly RoleGrant[], removed: RoleGrant): RoleGrantInput[] {
   return grants.filter((grant) => !sameGrant(grant, removed)).map(grantInput);
 }
 
-function sameGrant(a: RoleGrant, b: RoleGrant): boolean {
+function sameGrant(a: GrantFields, b: GrantFields): boolean {
   return (
     a.action === b.action &&
     a.effect === b.effect &&
@@ -212,7 +235,7 @@ function sameGrant(a: RoleGrant, b: RoleGrant): boolean {
   );
 }
 
-function grantInput(grant: RoleGrant): RoleGrantInput {
+function grantInput(grant: GrantFields): RoleGrantInput {
   return {
     action: grant.action,
     effect: grant.effect,
