@@ -191,6 +191,8 @@ The name of a shipped skill is reserved for new writes. If an upgrade finds an e
 
 ## A skill as a folder of files
 
+A skill folder is for instructions, small fixed reference files and offline calculators. A large or changing corpus, shared records and anything that calls a system with credentials belong elsewhere: see [Where data belongs](/configure/where-data-belongs/).
+
 A skill follows the public Agent Skills convention, so a folder taken unchanged from a public skill library saves, reads and round-trips byte for byte: `SKILL.md` with YAML frontmatter and Markdown, and whatever lies beside it, commonly below `scripts/`, `references/` and `assets/`, and also files at the root such as `LICENSE.txt` or `reference.md`. The asset API writes and reads the whole folder: `assets.put` with `files` (each `{ path, text }` or `{ path, base64 }`, `SKILL.md` among them) and `assets.get` with `files=true`, which answers every file with its hash and its content as it was written.
 
 **Frontmatter.** `name` and `description` are required; a file without a `name` takes the name of the asset. `title` is optional: where it is absent the skill is shown under the first Markdown heading of its content, or else under its name with spaces for hyphens and a capital first letter. `summary` and `starters` are read as fields of the skill, as before. Every other key (`license`, `metadata`, `allowed-tools`, `compatibility`, anything else) is kept as it is, returned as `frontmatter` of the config, and read by nothing; a `frontmatter` of a config that holds one of the skill's own fields is refused. The file is stored as its bytes, so nothing reorders or reformats it.

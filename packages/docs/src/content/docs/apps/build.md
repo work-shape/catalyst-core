@@ -7,6 +7,7 @@ This guide is what an agent follows. [Apps for people](/automate/apps/) says wha
 
 | Task                                                                  | Page                                                     |
 | --------------------------------------------------------------------- | -------------------------------------------------------- |
+| Decide where data, files and credentials belong                       | [Where data belongs](/configure/where-data-belongs/)     |
 | Write the folder and `app.yaml`, open it, save it                     | This page                                                |
 | Forms, personal storage, network, light and dark, fonts and libraries | [Sandbox and storage](/apps/sandbox/)                    |
 | Live data: the kinds of action, drafts and publishing, `actions.call` | [Actions](/apps/actions/)                                |
