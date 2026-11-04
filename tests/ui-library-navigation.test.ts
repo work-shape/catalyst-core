@@ -766,6 +766,25 @@ describe("a page with a head across its width", () => {
     expect(markup).toMatch(/data-sub-rail="" class="[^"]*\bsticky\b/u);
   });
 
+  it("scrolls a long sub-rail's entries under its title, to a group's step above the edge", () => {
+    const markup = render(
+      createElement(SubRail, {
+        label: "Pages",
+        title: "Settings",
+        value: "a",
+        onValueChange: () => undefined,
+        groups: [{ id: "g", items: [{ id: "a", label: "A" }] }]
+      })
+    );
+    const railClasses = markup.match(/data-sub-rail="" class="([^"]*)"/u)?.[1]?.split(" ");
+    expect(railClasses).toEqual(
+      expect.arrayContaining(["@subrail/page:flex", "@subrail/page:flex-col"])
+    );
+    expect(railClasses?.some((name) => name.includes("overflow-y"))).toBe(false);
+    const navClasses = markup.match(/<nav aria-label="Pages" class="([^"]*)"/u)?.[1]?.split(" ");
+    expect(navClasses).toEqual(expect.arrayContaining(["min-h-0", "overflow-y-auto", "pb-4"]));
+  });
+
   it("links into the documentation from the instance's docs address, in a new tab", () => {
     const link = createElement(DocsLink, {
       path: "/operate/how-rights-work/#building-and-using",

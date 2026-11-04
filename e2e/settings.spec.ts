@@ -1,5 +1,5 @@
 import { requestWithOrigin } from "./request-with-origin";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./test";
 import { z } from "zod";
 
@@ -82,6 +82,60 @@ test("an instance admin opens every group of the Settings rail", async ({ page }
   await expect(page.getByPlaceholder("Message")).toBeVisible();
   await expect(rail).toHaveCount(0);
 });
+
+// On a short laptop window the rail's entries scroll under its title to their true end: System
+// shows whole above the lower edge, also folded open, and nothing is cut at the top edge.
+test("the Settings rail scrolls to its last entry on a short window", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await signInViaApi(page, superadminUser);
+  await page.goto("/settings/instance/users");
+  const rail = settingsPages(page);
+  const title = page.locator("[data-subrail-title]");
+  await expect(title).toBeVisible();
+  const titleAtRest = await box(title);
+  // The entries are longer than the window here, so they scroll on their own.
+  expect(await rail.evaluate((nav) => nav.scrollHeight > nav.clientHeight)).toBe(true);
+
+  const system = rail
+    .getByRole("group", { name: "System", exact: true })
+    .getByRole("button", { name: "System", exact: true });
+  await system.scrollIntoViewIfNeeded();
+  await expectWhollyInRail(page, system);
+  await system.click();
+  const lastSystemPage = rail.getByRole("button", { name: "Infrastructure", exact: true });
+  await expect(lastSystemPage).toBeVisible();
+
+  // Scrolled to its very end, the last entry stands clear of the lower edge.
+  await rail.evaluate((nav) => {
+    nav.scrollTop = nav.scrollHeight;
+  });
+  await expectWhollyInRail(page, lastSystemPage);
+  const end = await box(lastSystemPage);
+  expect(720 - (end.y + end.height)).toBeGreaterThanOrEqual(12);
+
+  // The title stays on its line; the entries leave under it, not at the window's top edge.
+  expect(await box(title)).toEqual(titleAtRest);
+  expect((await box(rail)).y).toBeGreaterThanOrEqual(titleAtRest.y + titleAtRest.height);
+
+  await lastSystemPage.click();
+  await expect(page).toHaveURL(/\/settings\/instance\/infrastructure$/u);
+});
+
+async function box(
+  locator: Locator
+): Promise<{ x: number; y: number; width: number; height: number }> {
+  const found = await locator.boundingBox();
+  if (!found) throw new Error("The element has no box: it is not shown.");
+  return found;
+}
+
+/** The entry shows whole: inside what the rail's entries scroll in, and inside the window. */
+async function expectWhollyInRail(page: Page, entry: Locator): Promise<void> {
+  const [entryBox, railBox] = [await box(entry), await box(settingsPages(page))];
+  expect(entryBox.y).toBeGreaterThanOrEqual(railBox.y);
+  expect(entryBox.y + entryBox.height).toBeLessThanOrEqual(railBox.y + railBox.height);
+  expect(entryBox.y + entryBox.height).toBeLessThanOrEqual(page.viewportSize()?.height ?? 0);
+}
 
 // Check 40 (RIGHTS-1e): a customer's admin keeps the audit log and sees no System page, neither
 // in the rail nor by address, and the server refuses the reads behind them.
