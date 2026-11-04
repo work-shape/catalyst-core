@@ -153,6 +153,7 @@ export {
 export { capabilityStoresOf, createCapabilityBrand } from "./capability-ports";
 
 export {
+  createInstanceHtmlPdfClient,
   createInstancePreviewCaptureClient,
   runClientInstancePreviewCaptureService
 } from "./preview-capture-service";

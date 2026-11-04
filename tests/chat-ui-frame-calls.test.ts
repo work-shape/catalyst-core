@@ -18,6 +18,7 @@ import {
   createPageBridge,
   feedbackResultMessage,
   frameCallFailure,
+  pdfResultMessage,
   workflowRunResultMessage,
   frameSessionProof,
   FrameTestRunView,
@@ -457,6 +458,86 @@ describe("a call a Page asks the interface to make", () => {
     ]);
   });
 
+  // Fails before PDF-1: the bridge read no print of a Page.
+  it("prints a Page's HTML once and answers the PDF's bytes under the id the Page gave", async () => {
+    const asked: unknown[] = [];
+    const bytes = new TextEncoder().encode("%PDF-1.7 fixture").buffer;
+    const failed: [string, string][] = [];
+    const windows = frames();
+    const made = createPageBridge({
+      frame: () => windows.holder,
+      session: "s-1",
+      context: () => context,
+      onNavigate: () => undefined,
+      onResize: () => undefined,
+      onCallFailed: (name, code) => failed.push([name, code]),
+      calls: () => ({
+        writeStorage: () => Promise.resolve(),
+        can: () => Promise.resolve(undefined),
+        run: () => Promise.reject(new Error("not asked")),
+        workflowRun: () => Promise.reject(new Error("not asked")),
+        renderPdf: (request) => {
+          asked.push(request);
+          return Promise.resolve(
+            asked.length === 1
+              ? { ok: true, pdf: bytes }
+              : { ok: false, error: { code: "pdf_too_many_pages", message: "Too long." } }
+          );
+        }
+      })
+    });
+    const { page, from, message, posted } = windows;
+    const print = {
+      type: "pdf",
+      session: "s-1",
+      requestId: "r-1",
+      html: "<h1>Bericht</h1>",
+      options: { format: "A4", landscape: true, margin: { top: "15mm" } }
+    };
+    made.receive(from(page, message(print)));
+    // A print that names an address, or a margin that is no length, is no message of the bridge.
+    made.receive(from(page, message({ ...print, requestId: "r-2", url: "https://pdf.example" })));
+    made.receive(
+      from(page, message({ ...print, requestId: "r-3", options: { margin: { top: "1;x" } } }))
+    );
+    made.receive(from(page, message({ ...print, requestId: "r-4" })));
+    await settled();
+    expect(asked).toEqual([
+      { html: print.html, options: print.options },
+      { html: print.html, options: print.options }
+    ]);
+    expect(posted).toEqual([
+      { message: pdfResultMessage("s-1", "r-1", { ok: true, pdf: bytes }), targetOrigin: "*" },
+      {
+        message: pdfResultMessage("s-1", "r-4", {
+          ok: false,
+          error: { code: "pdf_too_many_pages", message: "Too long." }
+        }),
+        targetOrigin: "*"
+      }
+    ]);
+    expect(failed).toEqual([["pdf", "pdf_too_many_pages"]]);
+
+    // Calls that bring no renderer, such as a server capture's, refuse at once.
+    const without = bridge({
+      writeStorage: () => Promise.resolve(),
+      can: () => Promise.resolve(undefined),
+      run: () => Promise.reject(new Error("not asked")),
+      workflowRun: () => Promise.reject(new Error("not asked"))
+    });
+    without.made.receive(without.from(without.page, without.message(print)));
+    await settled();
+    expect(without.posted).toEqual([
+      {
+        message: pdfResultMessage("s-1", "r-1", {
+          ok: false,
+          error: { code: "not_available", message: "This frame cannot make calls." }
+        }),
+        targetOrigin: "*"
+      }
+    ]);
+  });
+
   it("is refused where the frame has no way to the instance, and the context names no action", async () => {
     const { made, posted, page, from, message } = bridge(undefined);
 
@@ -532,7 +613,8 @@ describe("the calls of a frame", () => {
             get_workflow_run: (request: unknown) => {
               sent.push({ operation: "get_workflow_run", request });
               return Promise.resolve(run);
-            }
+            },
+            render_pdf: () => Promise.reject(new Error("not asked"))
           }
         }
       },
@@ -575,7 +657,8 @@ describe("the calls of a frame", () => {
       write_storage: () => Promise.reject(new Error("not asked")),
       context: () => Promise.reject(new Error("not asked")),
       call_action: () => Promise.reject(new Error("not asked")),
-      get_workflow_run: () => Promise.reject(new Error("not asked"))
+      get_workflow_run: () => Promise.reject(new Error("not asked")),
+      render_pdf: () => Promise.reject(new Error("not asked"))
     };
     const own = {
       id: "fb-1",
@@ -630,6 +713,58 @@ describe("the calls of a frame", () => {
       ok: false,
       error: { code: "not_available" }
     });
+  });
+
+  // Fails before PDF-1: a frame had no way to print its HTML to a PDF.
+  it("print with the frame's proof, the HTML and the layout only, and tell the Page what refused it", async () => {
+    const sent: unknown[] = [];
+    const calls = createFrameCalls(
+      {
+        apps: {
+          sessions: {
+            write_storage: () => Promise.reject(new Error("not asked")),
+            context: () => Promise.reject(new Error("not asked")),
+            call_action: () => Promise.reject(new Error("not asked")),
+            get_workflow_run: () => Promise.reject(new Error("not asked")),
+            render_pdf: (request: unknown) => {
+              sent.push(request);
+              return sent.length === 1
+                ? Promise.resolve(new Blob(["%PDF-1.7"], { type: "application/pdf" }))
+                : Promise.reject(
+                    refusal(422, "VALIDATION_FAILED", "The document is too large.", {
+                      reason: "pdf_too_large"
+                    })
+                  );
+            }
+          }
+        }
+      },
+      address
+    );
+    if (!calls?.renderPdf) throw new Error("The address names a frame that prints");
+
+    const printed = await calls.renderPdf({ html: "<p>x</p>", options: { landscape: true } });
+    if (!printed.ok) throw new Error("The first print succeeds");
+    expect(new TextDecoder().decode(printed.pdf)).toBe("%PDF-1.7");
+    expect(await calls.renderPdf({ html: "<p>y</p>" })).toEqual({
+      ok: false,
+      error: { code: "pdf_too_large", message: "The document is too large.", retryable: false }
+    });
+    expect(sent).toEqual([
+      {
+        params: { pageSessionId: "session-1" },
+        body: {
+          fileSetId: "set-2",
+          token: "token-3",
+          html: "<p>x</p>",
+          options: { landscape: true }
+        }
+      },
+      {
+        params: { pageSessionId: "session-1" },
+        body: { fileSetId: "set-2", token: "token-3", html: "<p>y</p>" }
+      }
+    ]);
   });
 
   it("tell a Page a fixed word for what refused it, the right where one is missing, and that trying again will not help", () => {
@@ -724,7 +859,8 @@ describe("the calls of a frame", () => {
             write_storage: () => Promise.reject(new Error("not asked")),
             context: () => Promise.resolve({ can: {} }),
             call_action: () => Promise.reject(refusals.shift()),
-            get_workflow_run: () => Promise.reject(new Error("not asked"))
+            get_workflow_run: () => Promise.reject(new Error("not asked")),
+            render_pdf: () => Promise.reject(new Error("not asked"))
           }
         }
       },
@@ -767,7 +903,8 @@ describe("the calls of a frame", () => {
             write_storage: () => Promise.reject(new Error("not asked")),
             context: () => Promise.resolve({ can: {} }),
             call_action: () => Promise.reject(refusals.shift()),
-            get_workflow_run: () => Promise.reject(new Error("not asked"))
+            get_workflow_run: () => Promise.reject(new Error("not asked")),
+            render_pdf: () => Promise.reject(new Error("not asked"))
           }
         }
       },

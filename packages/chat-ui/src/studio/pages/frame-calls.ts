@@ -79,7 +79,16 @@ export interface FrameCalls {
   workflowRun(runId: string): Promise<FrameWorkflowRunAnswer>;
   /** Sends the viewer's written feedback on the App the frame shows (LU-6). Absent, none is sent. */
   sendFeedback?(text: string): Promise<FrameFeedbackAnswer>;
+  /** Prints HTML of the frame to a PDF in the instance's renderer (PDF-1). */
+  renderPdf?(request: FramePdfRequest): Promise<FramePdfAnswer>;
 }
+
+/** What a frame asks to print, as its message says. */
+type FramePdfRequest = Pick<Extract<AppBridgePageMessage, { type: "pdf" }>, "html" | "options">;
+
+/** How one print of a frame came out, as the frame is told. */
+export type FramePdfAnswer =
+  { ok: true; pdf: ArrayBuffer } | { ok: false; error: NonNullable<CallAnswer["error"]> };
 
 /** How one comment of a frame came out, as the frame is told. */
 export type FrameFeedbackAnswer =
@@ -124,7 +133,11 @@ const FINAL_REFUSALS: readonly string[] = [
   "data_store_needs_app",
   // Only a published App takes feedback; its draft never does.
   "feedback_app_unpublished",
-  "input_invalid"
+  "input_invalid",
+  // The same document is as large or as long again; an instance without a renderer stays so.
+  "pdf_unavailable",
+  "pdf_too_large",
+  "pdf_too_many_pages"
 ];
 
 /**
@@ -200,7 +213,7 @@ export interface FrameCallClient {
   apps: {
     sessions: Pick<
       ApiClient["apps"]["sessions"],
-      "call_action" | "context" | "get_workflow_run" | "write_storage"
+      "call_action" | "context" | "get_workflow_run" | "write_storage" | "render_pdf"
     >;
   };
   /** Absent where the client reaches no feedback: a frame is then told it cannot send any. */
@@ -268,6 +281,22 @@ export function createFrameCalls(
           body: { fileSetId, token }
         });
         return { ok: true, run };
+      } catch (error) {
+        return { ok: false, error: frameCallFailure(error, texts) };
+      }
+    },
+    async renderPdf(request) {
+      try {
+        const pdf = await client.apps.sessions.render_pdf({
+          params: { pageSessionId },
+          body: {
+            fileSetId,
+            token,
+            html: request.html,
+            ...(request.options ? { options: request.options } : {})
+          }
+        });
+        return { ok: true, pdf: await pdf.arrayBuffer() };
       } catch (error) {
         return { ok: false, error: frameCallFailure(error, texts) };
       }

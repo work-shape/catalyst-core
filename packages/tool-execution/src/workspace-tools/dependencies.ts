@@ -1,5 +1,6 @@
 import type {
   AuditRecorder,
+  HtmlPdfService,
   ClientInstanceId,
   ConversationId,
   ManagedFileId,
@@ -66,6 +67,11 @@ export interface WorkspaceCommandServiceOptions {
    */
   projectFolder?: ProjectFolderPort;
   limits?: Partial<WorkspaceCommandServiceLimits>;
+  /**
+   * The instance's renderer of HTML to PDF (PDF-1). With it the workspace tools include
+   * `workspace.html_to_pdf`; without it they do not.
+   */
+  htmlPdf?: HtmlPdfService;
   execResultWaitMs?: number;
   execResultPollIntervalMs?: number;
   now?: () => string;
@@ -84,6 +90,7 @@ export interface WorkspaceToolDependencies {
   readonly auditRecorder?: AuditRecorder;
   readonly telemetry?: WorkspaceCommandTelemetry;
   readonly projectFolder?: ProjectFolderPort;
+  readonly htmlPdf?: HtmlPdfService;
   readonly limits: WorkspaceCommandServiceLimits;
   readonly now: () => string;
 }
@@ -112,6 +119,7 @@ export function resolveWorkspaceToolDependencies(
     auditRecorder: options.auditRecorder,
     telemetry: options.telemetry,
     projectFolder: options.projectFolder,
+    htmlPdf: options.htmlPdf,
     limits: {
       ...DEFAULT_LIMITS,
       ...options.limits

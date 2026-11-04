@@ -13,6 +13,7 @@ import type {
   FrameCallAnswer,
   FrameCalls,
   FrameFeedbackAnswer,
+  FramePdfAnswer,
   FrameTestRun,
   FrameWorkflowRunAnswer
 } from "./frame-calls";
@@ -128,6 +129,21 @@ export function feedbackResultMessage(
   return appBridgeHostMessageSchema.parse({
     [APP_BRIDGE_MARK]: APP_BRIDGE_VERSION,
     type: "feedback_result",
+    session,
+    requestId,
+    ...answer
+  });
+}
+
+/** The answer to one print of a Page (PDF-1), named by the id the Page gave it. */
+export function pdfResultMessage(
+  session: string,
+  requestId: string,
+  answer: FramePdfAnswer
+): AppBridgeHostMessage {
+  return appBridgeHostMessageSchema.parse({
+    [APP_BRIDGE_MARK]: APP_BRIDGE_VERSION,
+    type: "pdf_result",
     session,
     requestId,
     ...answer
@@ -337,6 +353,23 @@ export function createPageBridge(input: {
           .catch((): FrameFeedbackAnswer => ({ ok: false, error: NOT_MADE }))
           .then((result) => {
             post(source, feedbackResultMessage(input.session, requestId, result));
+          })
+          .catch(() => undefined);
+      } else if (message.type === "pdf") {
+        const { requestId } = message;
+        const calls = input.calls?.();
+        const answer: Promise<FramePdfAnswer> = calls?.renderPdf
+          ? calls.renderPdf({
+              html: message.html,
+              ...(message.options ? { options: message.options } : {})
+            })
+          : Promise.resolve({ ok: false, error: NOT_AVAILABLE });
+        answer
+          // The Page always gets an answer, so that it never waits for nothing.
+          .catch((): FramePdfAnswer => ({ ok: false, error: NOT_MADE }))
+          .then((result) => {
+            if (!result.ok) input.onCallFailed?.("pdf", result.error.code);
+            post(source, pdfResultMessage(input.session, requestId, result));
           })
           .catch(() => undefined);
       } else if (message.type === "connection_call") {

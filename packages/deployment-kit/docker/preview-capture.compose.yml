@@ -9,6 +9,15 @@ services:
       PREVIEW_CAPTURE_ENABLED: ${PREVIEW_CAPTURE_ENABLED:-false}
       PREVIEW_CAPTURE_SERVICE_ORIGIN: http://preview-capture:4120
       PREVIEW_CAPTURE_SERVICE_TOKEN: ${PREVIEW_CAPTURE_SERVICE_TOKEN:?capture service token required}
+  # HTML to PDF for agents (PDF-1): the workspace.html_to_pdf tool runs where agent runs run.
+  agent-run-worker:
+    networks:
+      default: {}
+      preview-capture: {}
+    environment:
+      PREVIEW_CAPTURE_ENABLED: ${PREVIEW_CAPTURE_ENABLED:-false}
+      PREVIEW_CAPTURE_SERVICE_ORIGIN: http://preview-capture:4120
+      PREVIEW_CAPTURE_SERVICE_TOKEN: ${PREVIEW_CAPTURE_SERVICE_TOKEN:?capture service token required}
   preview-capture:
     profiles: [preview-capture]
     image: ${PREVIEW_CAPTURE_IMAGE:?capture image required}

@@ -104,6 +104,7 @@ describe("the two halves of the bridge", () => {
     void client.actions.call("load", { limit: 20 }, { idempotencyKey: "key-1" }).catch(() => 0);
     void client.workflowRuns.get("wfr-1").catch(() => 0);
     void client.feedback.send("  Die Summe fehlt.  ").catch(() => 0);
+    void client.pdf.fromHtml("<h1>Bericht</h1>", { format: "A4" }).catch(() => 0);
     await sentCalls();
 
     expect(sent.map((message) => message.type)).toEqual([
@@ -112,7 +113,8 @@ describe("the two halves of the bridge", () => {
       "resize",
       "action",
       "workflow_run",
-      "feedback"
+      "feedback",
+      "pdf"
     ]);
     for (const message of sent) {
       expect(appBridgePageMessageSchema.safeParse(envelope(message)).success).toBe(true);
@@ -128,6 +130,7 @@ describe("the two halves of the bridge", () => {
       "getContext",
       "navigate",
       "onThemeChange",
+      "pdf",
       "resize",
       "workflowRuns"
     ]);
@@ -139,10 +142,11 @@ describe("the two halves of the bridge", () => {
   // answer.", and an agent added retries to the App for a fault of the host.
   // Fails before kit 1.8.0: a Page could not tell a test run its draft started (DP-1).
   // Fails before kit 1.9.0: a published App could not send feedback to its builders (LU-6).
-  it("ship kit 1.9.0 with personal JSON storage, without a free call of a Connection, naming the host's fault, test runs and feedback", () => {
-    expect(RELEASED_KIT_VERSIONS.at(-1)).toBe("1.9.0");
+  // Fails before kit 1.10.0: an App made its PDFs with an outside service or a library (PDF-1).
+  it("ship kit 1.10.0 with personal JSON storage, without a free call of a Connection, naming the host's fault, test runs, feedback and PDFs", () => {
+    expect(RELEASED_KIT_VERSIONS.at(-1)).toBe("1.10.0");
     const files = loadAppKitFiles();
-    const kit = files.get("1.9.0")?.get("kit.js")?.bytes.toString("utf8");
+    const kit = files.get("1.10.0")?.get("kit.js")?.bytes.toString("utf8");
     expect(kit).not.toMatch(/connection/u);
     expect(kit).toMatch(/\bas actions\b/u);
     expect(kit).toMatch(/\bas storage\b/u);
@@ -150,9 +154,13 @@ describe("the two halves of the bridge", () => {
     expect(kit).toMatch(/simulatedSteps/u);
     expect(kit).toMatch(/\bas AppFeedback\b/u);
     expect(kit).toMatch(/feedback_result/u);
-    // A released version stays as it was: 1.8.0 knows no feedback.
-    const previous = files.get("1.8.0")?.get("kit.js")?.bytes.toString("utf8");
-    expect(previous).not.toMatch(/feedback_result/u);
+    expect(kit).toMatch(/pdf_result/u);
+    // A released version stays as it was: 1.9.0 knows no PDF, 1.8.0 no feedback.
+    const previous = files.get("1.9.0")?.get("kit.js")?.bytes.toString("utf8");
+    expect(previous).toMatch(/feedback_result/u);
+    expect(previous).not.toMatch(/pdf_result/u);
+    const older = files.get("1.8.0")?.get("kit.js")?.bytes.toString("utf8");
+    expect(older).not.toMatch(/feedback_result/u);
   });
 
   it("agree on what the interface sends: the client reads what the schema allows", () => {
@@ -207,6 +215,32 @@ describe("the two halves of the bridge", () => {
       error: { code: "feedback_app_unpublished", message: "Only a published App takes feedback." }
     } as const;
     expect(readHostMessage(hostMessage(unpublished))).toEqual(unpublished);
+    const printed = {
+      type: "pdf_result",
+      session: "s",
+      requestId: "5",
+      ok: true,
+      pdf: new Uint8Array([37, 80, 68, 70]).buffer
+    } as const;
+    expect(readHostMessage(hostMessage(printed))).toEqual(printed);
+    const tooLong = {
+      type: "pdf_result",
+      session: "s",
+      requestId: "6",
+      ok: false,
+      error: { code: "pdf_too_many_pages", message: "The PDF would have more than 50 pages." }
+    } as const;
+    expect(readHostMessage(hostMessage(tooLong))).toEqual(tooLong);
+    // A PDF answer without the bytes is no answer the client reads.
+    expect(
+      readHostMessage({
+        [APP_BRIDGE_MARK]: APP_BRIDGE_VERSION,
+        type: "pdf_result",
+        session: "s",
+        requestId: "7",
+        ok: true
+      })
+    ).toBeUndefined();
     // The context says feedback is offered only where the interface says so.
     expect(
       readHostMessage(
@@ -504,6 +538,87 @@ describe("the kit client", () => {
       name: "AppCallError",
       code: "feedback_app_unpublished"
     });
+  });
+
+  // Fails before PDF-1: an App had no PDF of its own and sent its report to an outside service.
+  it("prints HTML in the instance and answers the PDF as a Blob, or refuses with the reason", async () => {
+    const { transport, sent, deliver } = recordingTransport();
+    const client = createAppClient(transport);
+    const asked = client.getContext();
+    deliver(hostMessage({ type: "context", session: "session-1", context }));
+    await asked;
+
+    const printed = client.pdf.fromHtml("<h1>Bericht</h1>", {
+      format: "A4",
+      landscape: true,
+      margin: { top: "15mm" }
+    });
+    const refused = client.pdf.fromHtml("<p>lang</p>");
+    await sentCalls();
+    const [first, second] = sent.slice(1);
+    if (first?.type !== "pdf" || second?.type !== "pdf") throw new Error("Two PDFs were asked for");
+    expect(first).toEqual({
+      type: "pdf",
+      session: "session-1",
+      requestId: expect.any(String),
+      html: "<h1>Bericht</h1>",
+      options: { format: "A4", landscape: true, margin: { top: "15mm" } }
+    });
+    expect(second).not.toHaveProperty("options");
+    expect(appBridgePageMessageSchema.safeParse(envelope(first)).success).toBe(true);
+    expect(appBridgePageMessageSchema.safeParse(envelope(second)).success).toBe(true);
+    const bytes = new TextEncoder().encode("%PDF-1.7");
+    deliver(
+      hostMessage({
+        type: "pdf_result",
+        session: "session-1",
+        requestId: first.requestId,
+        ok: true,
+        pdf: bytes.slice().buffer
+      })
+    );
+    deliver(
+      hostMessage({
+        type: "pdf_result",
+        session: "session-1",
+        requestId: second.requestId,
+        ok: false,
+        error: { code: "pdf_too_many_pages", message: "The PDF would have more than 50 pages." }
+      })
+    );
+    const blob = await printed;
+    expect(blob.type).toBe("application/pdf");
+    expect(new Uint8Array(await blob.arrayBuffer())).toEqual(bytes);
+    await expect(refused).rejects.toMatchObject({
+      name: "AppCallError",
+      code: "pdf_too_many_pages"
+    });
+  });
+
+  it("refuses a PDF request the interface would not print before it reads it", () => {
+    const message = (html: string, options?: unknown) =>
+      envelope({
+        type: "pdf",
+        session: "s",
+        requestId: "1",
+        html,
+        ...(options ? { options } : {})
+      });
+    expect(appBridgePageMessageSchema.safeParse(message("")).success).toBe(false);
+    expect(
+      appBridgePageMessageSchema.safeParse(message("x".repeat(4 * 1024 * 1024 + 1))).success
+    ).toBe(false);
+    expect(appBridgePageMessageSchema.safeParse(message("<p/>", { format: "B5" })).success).toBe(
+      false
+    );
+    expect(
+      appBridgePageMessageSchema.safeParse(message("<p/>", { margin: { top: "calc(1px)" } }))
+        .success
+    ).toBe(false);
+    expect(
+      appBridgePageMessageSchema.safeParse(message("<p/>", { format: "Letter", landscape: true }))
+        .success
+    ).toBe(true);
   });
 
   it("refuses an empty comment and one beyond the limit before the interface reads it", () => {

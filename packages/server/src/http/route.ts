@@ -260,7 +260,11 @@ export interface ModuleRoutes {
 }
 
 export interface Route {
-  <const Op extends Operation>(operation: Op, handler: RouteHandler<Op>): void;
+  <const Op extends Operation>(
+    operation: Op,
+    handler: RouteHandler<Op>,
+    options?: PlainRouteOptions
+  ): void;
   /**
    * Registers an operation of the registry, defined with `defineRegisteredOperation`. Every
    * call of it runs through `runOperation`: the right in `requires`, the policy and the
@@ -281,6 +285,12 @@ export interface Route {
   receive<const Op extends Operation>(operation: Op, binding: ReceiveBinding): void;
   /** Every operation registered on this server so far, through whichever helper. */
   readonly registered: readonly Operation[];
+}
+
+/** What a plain route may set beside its handler. */
+interface PlainRouteOptions {
+  /** The most bytes the body may have, where the server's default of 1 MiB is too small. */
+  bodyLimitBytes?: number;
 }
 
 /** Registers the operations of one module through `routes.operation`. */
@@ -352,12 +362,23 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
   // The overload is what a route module sees: its handler is typed from its operation. The
   // implementation serves every operation with one body, and what it hands the handler is
   // what the operation's schemas parsed at run time.
-  function route<const Op extends Operation>(operation: Op, handler: RouteHandler<Op>): void;
-  function route(operation: Operation, handler: (call: AssembledCall) => unknown): void {
+  function route<const Op extends Operation>(
+    operation: Op,
+    handler: RouteHandler<Op>,
+    routeOptions?: PlainRouteOptions
+  ): void;
+  function route(
+    operation: Operation,
+    handler: (call: AssembledCall) => unknown,
+    routeOptions: PlainRouteOptions = {}
+  ): void {
     registered.push(operation);
     app.route({
       method: operation.method,
       url: operation.path,
+      ...(routeOptions.bodyLimitBytes === undefined
+        ? {}
+        : { bodyLimit: routeOptions.bodyLimitBytes }),
       handler: async (request, reply) => {
         const { caller, query, body, params, takesCredential } = await admit(
           operation,

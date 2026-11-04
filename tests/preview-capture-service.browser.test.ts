@@ -41,6 +41,40 @@ function capture(extra: Record<string, unknown> = {}): CaptureOutcome {
     )
   );
 }
+interface Printed {
+  status: number;
+  type: string | null;
+  pages: string | null;
+  size: number;
+  head: string;
+  mediaBox: string | null;
+  code?: string;
+}
+/** HTML to PDF (PDF-1) through the service, as the API asks for it. */
+function print(
+  html: string,
+  options: Record<string, unknown> = {},
+  // A JavaScript expression for the body, for a document larger than a command line takes.
+  body = JSON.stringify(html)
+): Printed {
+  return JSON.parse(
+    peer(
+      `const r=await fetch('http://${service}:4120/pdf',{method:'POST',headers:{authorization:'Bearer ${token}','content-type':'text/html; charset=utf-8','x-pdf-options':${JSON.stringify(JSON.stringify(options))}},body:${body}});
+      const bytes=Buffer.from(await r.arrayBuffer());
+      const text=bytes.toString('latin1');
+      const json=r.headers.get('content-type')?.includes('json')?JSON.parse(text):{};
+      console.log(JSON.stringify({status:r.status,type:r.headers.get('content-type'),pages:r.headers.get('x-pdf-pages'),size:bytes.length,head:text.slice(0,5),mediaBox:text.match(/\\/MediaBox\\s*\\[([^\\]]+)\\]/)?.[1]?.trim()??null,...json}));`
+    )
+  );
+}
+/** A MediaBox is the page size in points, to within Chromium's rounding of millimetres. */
+function expectPageSize(mediaBox: string | null, [width, height]: [number, number]) {
+  const [, , w = 0, h = 0] = (mediaBox ?? "").split(/\s+/u).map(Number);
+  expect(Math.abs(w - width)).toBeLessThan(2);
+  expect(Math.abs(h - height)).toBeLessThan(2);
+}
+const served = () =>
+  peer("console.log(await (await fetch('http://127.0.0.1:4100/served')).text())");
 suite("isolated Linux capture service", () => {
   beforeAll(async () => {
     docker(
@@ -356,6 +390,54 @@ suite("isolated Linux capture service", () => {
       "refused"
     );
     expect(docker("logs", service)).not.toContain("proof.mac");
+  });
+  it("prints HTML to a PDF with data: images, its own @page size and the asked format", () => {
+    const pixel =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const a4 = print(
+      `<!doctype html><style>body{font-family:sans-serif}</style><h1>Bericht</h1><img src="${pixel}" width="40"><div style="break-before:page">Seite zwei</div>`
+    );
+    expect(a4).toMatchObject({ status: 200, type: "application/pdf", pages: "2", head: "%PDF-" });
+    expectPageSize(a4.mediaBox, [595, 842]);
+    const ownSize = print(`<style>@page{size:A5}</style><p>A5</p>`);
+    expect(ownSize).toMatchObject({ status: 200, pages: "1" });
+    expectPageSize(ownSize.mediaBox, [420, 595]);
+    // A format the caller names wins over the document's own size.
+    expectPageSize(
+      print(`<style>@page{size:A5}</style><p>x</p>`, { format: "Letter" }).mediaBox,
+      [612, 792]
+    );
+    const turned = print(`<p>Letter</p>`, {
+      format: "Letter",
+      landscape: true,
+      margin: { top: "1in", left: "0" }
+    });
+    expect(turned).toMatchObject({ status: 200, pages: "1" });
+    expectPageSize(turned.mediaBox, [792, 612]);
+  });
+  it("prints with no network and no scripts: every outside request stays empty", () => {
+    fixture("<p>reset</p>");
+    const result = print(
+      `<link rel="stylesheet" href="http://api:4100/pdf-style.css"><img src="http://api:4100/pdf-pixel.png"><img src="https://outside.example/pdf-pixel.png"><style>@font-face{font-family:x;src:url(http://api:4100/pdf-font.woff2)}body{font-family:x;background:url(http://api:4100/pdf-background.png)}</style><iframe src="http://api:4100/pdf-frame"></iframe><script>fetch('http://api:4100/pdf-script');for(let i=0;i<60;i++)document.body.insertAdjacentHTML('beforeend','<div style="break-after:page">x</div>')</script><p>Offline</p>`
+    );
+    // A script that ran would have added 60 pages, which the service refuses.
+    expect(result).toMatchObject({ status: 200, pages: "1" });
+    expect(served()).not.toContain("pdf-");
+  });
+  it("refuses a PDF beyond its page bound and an HTML beyond its size, and then prints again", () => {
+    const long = print(`${'<div style="break-after:page">x</div>'.repeat(60)}`);
+    expect(long).toMatchObject({ status: 422, code: "pdf_too_many_pages" });
+    const large = print("", {}, "'<p>'+'x'.repeat(4*1024*1024)+'</p>'");
+    expect(large).toMatchObject({ status: 422, code: "pdf_too_large" });
+    const unknown = print("<p>x</p>", { format: "B5" });
+    expect(unknown).toMatchObject({ status: 422, code: "pdf_failed" });
+    expect(print("<p>Again</p>")).toMatchObject({ status: 200, pages: "1" });
+    expect(docker("logs", service)).not.toContain("Again");
+    expect(
+      peer(
+        `console.log((await fetch('http://${service}:4120/pdf',{method:'POST',body:'<p>x</p>'})).status)`
+      )
+    ).toContain("403");
   });
   it("refuses a request without the service token", () => {
     expect(

@@ -180,6 +180,11 @@ export interface ChatServerOptions {
   pages?: {
     /** Dark SRV-1; absent unless the API explicitly enables its service. */
     previewCaptureService?: import("@work-shape/catalyst-core").PreviewCaptureService;
+    /**
+     * The renderer of HTML to PDF (PDF-1) a frame calls through `apps.sessions.render_pdf`.
+     * Absent while the instance runs none; a call is then refused as `pdf_unavailable`.
+     */
+    htmlPdfService?: import("@work-shape/catalyst-core").HtmlPdfService;
     /** The `files` object store. File sets live below `pages/`. */
     objects: ObjectStorage;
     /**

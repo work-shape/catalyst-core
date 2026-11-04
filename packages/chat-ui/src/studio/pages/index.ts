@@ -5,6 +5,7 @@ export {
   contextMessage,
   createPageBridge,
   feedbackResultMessage,
+  pdfResultMessage,
   FRAME_CAPTURE_TIMEOUT_MS,
   readPageMessage,
   themeMessage,

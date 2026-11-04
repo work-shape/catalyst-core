@@ -2,6 +2,7 @@ import type { AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
 import type { WorkspaceCommandServiceOptions } from "./dependencies";
 import { workspaceEditFileTool } from "./edit-file";
 import { workspaceExecTool } from "./exec";
+import { workspaceHtmlToPdfTool } from "./html-to-pdf";
 import { workspaceImportFilesTool } from "./import-files";
 import { workspaceListFilesTool } from "./list-files";
 import { workspacePreviewImagesTool } from "./preview-images";
@@ -27,12 +28,14 @@ export {
   isWorkspaceInspectionArtifact
 } from "./preview-images";
 export { WorkspaceCommandService } from "./service";
+export { HTML_TO_PDF_TOOL_NAME } from "./html-to-pdf";
 
 export function createWorkspaceToolDefinitions(
   options: WorkspaceCommandServiceOptions | { service: WorkspaceCommandService }
 ): AnyToolDefinition[] {
   const service = "service" in options ? options.service : new WorkspaceCommandService(options);
   const deps = service.dependencies;
+  const { htmlPdf } = deps;
 
   return [
     workspaceExecTool(deps),
@@ -42,6 +45,7 @@ export function createWorkspaceToolDefinitions(
     workspaceWriteFileTool(deps),
     workspaceEditFileTool(deps),
     workspacePromoteArtifactTool(deps),
-    workspacePreviewImagesTool(deps)
+    workspacePreviewImagesTool(deps),
+    ...(htmlPdf ? [workspaceHtmlToPdfTool({ ...deps, htmlPdf })] : [])
   ];
 }

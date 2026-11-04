@@ -16,6 +16,16 @@ diagnostics expire with existing capture pruning after 24 hours. No payload, pic
 address or report goes into audit, Operation Runs or service logs. Reports are untrusted page
 output. The service has no store, database, auth, session, content or model credentials.
 
+HTML to PDF (PDF-1): `POST /pdf` with the same token takes a whole HTML document as the body
+(at most 4 MiB) and its page layout as JSON in `x-pdf-options`, and answers the PDF with its page
+count in `x-pdf-pages`, or 422 with a refusal code. The document is served from
+`https://document.invalid/` with JavaScript off and a content policy that admits only inline
+styles and `data:` images, fonts and media; every other request, WebSocket included, is aborted
+before it leaves the browser. A render shares the slots, queue, memory watchdog and recycling of
+captures, ends after 20 seconds and is refused above 50 pages or 10 MiB, never cut. Only the API
+(for Apps) and the agent-run worker (for `workspace.html_to_pdf`) call it. No document, PDF or
+size is logged.
+
 Build with `pnpm --filter @work-shape/catalyst-preview-capture build`. The deployment kit
 ships an opt-in Compose overlay, `docker/preview-capture.compose.yml`, and image target
 `preview-capture`. No deployment repository is changed in SRV-1. Supply only the service
