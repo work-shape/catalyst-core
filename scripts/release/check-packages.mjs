@@ -29,8 +29,8 @@ const MAX_TARBALL_BYTES_BY_DIR = {
   "api-contract": 480_000,
   // Standalone helper bundles, shipped skills and the Python file tools; the file helpers took it to 8.2 MB.
   "artifact-helpers": 9_000_000,
-  // Compiled components, stylesheet and Vite helpers.
-  "chat-ui": 960_000,
+  // Compiled components, stylesheet and Vite helpers; the rc.25 cut took it to 961,544.
+  "chat-ui": 1_150_000,
   // Bundled server assembly: routes, workers and built-in capabilities.
   "client-assembly": 440_000,
   // The command line client: config push, validate and the skill draft commands.

@@ -46,7 +46,8 @@ test("an instance admin opens every group of the Settings rail", async ({ page }
     "Modules",
     "Infrastructure"
   ]);
-  await expect(rail.getByRole("button", { name: "Users", exact: true })).toHaveAttribute(
+  // The gear opened the person's own Profile, so that page is the current one.
+  await expect(rail.getByRole("button", { name: "Profile", exact: true })).toHaveAttribute(
     "aria-current",
     "true"
   );
