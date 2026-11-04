@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import {
   completedOutput,
@@ -101,30 +101,52 @@ export function useProjectConversationsQuery(project: ProjectView | undefined) {
   });
 }
 
+/** The newest chats of a project as the rail read them, and whether the project has more. */
+export interface ProjectRailChatsPage {
+  items: ConversationListItem[];
+  more: boolean;
+}
+
 /**
- * The newest chats of a project the person reads, as many as the rail shows under its row. The
- * same list as the project page's, so the same audience decides.
+ * The newest chats of each project that stands open in the rail, as many as its row shows. The
+ * same list as the project page's, so the same audience decides. While a row asks for more, it
+ * keeps the chats it has. `refresh` reads every one again.
  */
-export function useProjectRailChatsQuery(
-  project: Pick<ProjectView, "id" | "collaborationWorkspaceId"> | undefined,
-  limit: number
+export function useProjectRailChatsQueries(
+  folds: readonly { project: Pick<ProjectView, "id" | "collaborationWorkspaceId">; limit: number }[]
 ) {
   const { apiBaseUrl, client } = useWorkspaceApiClient();
-  return useQuery({
-    queryKey: projectQueryKeys.railChats(apiBaseUrl, project?.id ?? ""),
-    queryFn: async ({ signal }): Promise<ConversationListItem[]> =>
-      (
-        await requireClient(client).conversations.list({
+  const queryClient = useQueryClient();
+  const results = useQueries({
+    queries: folds.map(({ project, limit }) => ({
+      queryKey: [...projectQueryKeys.railChats(apiBaseUrl, project.id), limit] as const,
+      queryFn: async ({ signal }: { signal: AbortSignal }): Promise<ProjectRailChatsPage> => {
+        const page = await requireClient(client).conversations.list({
           query: {
-            collaborationWorkspaceId: project?.collaborationWorkspaceId ?? "",
-            projectId: project?.id ?? "",
+            collaborationWorkspaceId: project.collaborationWorkspaceId,
+            projectId: project.id,
             limit
           },
           signal
-        })
-      ).items,
-    enabled: client !== undefined && project !== undefined
+        });
+        return { items: page.items, more: page.nextCursor !== undefined };
+      },
+      enabled: client !== undefined,
+      // Only the same project's chats stand in while more are read: the list of open rows shifts.
+      placeholderData: (
+        previous: ProjectRailChatsPage | undefined,
+        previousQuery: { queryKey: readonly unknown[] } | undefined
+      ) => (previousQuery?.queryKey[3] === project.id ? previous : undefined)
+    }))
   });
+  const refresh = useCallback(
+    () =>
+      queryClient.invalidateQueries({
+        queryKey: ["projects", apiBaseUrl, "rail-chats"]
+      }),
+    [apiBaseUrl, queryClient]
+  );
+  return { results, refresh };
 }
 
 interface NewProject {

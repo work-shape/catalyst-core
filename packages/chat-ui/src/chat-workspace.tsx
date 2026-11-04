@@ -60,7 +60,7 @@ import { NewProjectDialog, ProjectsArea } from "./chat/projects/projects-area";
 import { ProjectChatStart } from "./chat/projects/project-chat-start";
 import { AddFromProjectProvider } from "./chat/projects/add-from-project";
 import { useProjectsQuery } from "./shared/api/projects";
-import { useRailProjectChats } from "./chat/projects/rail-project-chats";
+import { useRailProjectFolds } from "./chat/projects/rail-project-chats";
 import { ProjectChangeDialogs, type ProjectChange } from "./chat/projects/project-move-dialog";
 import { LoginPanel } from "./chat/login-panel";
 import { TwoFactorSetupScreen } from "./chat/two-factor-setup-screen";
@@ -278,8 +278,8 @@ function ChatWorkspaceContent({
   });
   // The projects of the open workspace used last, in their group of the rail (PRJ-5).
   const railProjects = useProjectsQuery(model.projects.enabled ? (railAppsWorkspaceId ?? "") : "");
-  // The project whose page or chat is open unfolds to its newest chats in the rail.
-  const railActiveProject = useRailProjectChats({
+  // Each project of the rail folds on its own; the one whose page or chat is open opens.
+  const railProjectFolds = useRailProjectFolds({
     projects: model.conversationRail.projects ? railProjects.data : undefined,
     openProjectName: projectStartRoute?.project,
     openConversation: onChatRoute ? model.conversationRail.openConversation : undefined,
@@ -780,9 +780,18 @@ function ChatWorkspaceContent({
             }
             recentProjects={rail.projects ? railProjects.data : undefined}
             openProjectName={projectStartRoute?.project}
-            activeProject={
-              railActiveProject
-                ? { id: railActiveProject.project.id, chats: railActiveProject.chats }
+            activeProjectId={railProjectFolds.activeProjectId}
+            openProjects={railProjectFolds.openProjects}
+            onToggleProject={railProjectFolds.toggle}
+            onShowMoreProjectChats={railProjectFolds.showMore}
+            projectHref={
+              railAppsWorkspaceId
+                ? (project) =>
+                    workspaceRoutePath({
+                      kind: "project",
+                      collaborationWorkspaceId: railAppsWorkspaceId,
+                      project
+                    })
                 : undefined
             }
             onOpenProject={(project) => {

@@ -90,7 +90,8 @@ test("the Apps and the projects in the rail keep their alphabetical order when o
   const rail = page.getByRole("navigation", { name: /^(?:Main navigation|Hauptnavigation)$/u });
   await rail.getByTestId("rail-apps-toggle").click();
   const apps = rail.getByTestId("rail-apps").getByRole("button");
-  const projects = rail.getByTestId("rail-projects").getByTestId("rail-project");
+  // Each project's label is the link to its page.
+  const projects = rail.getByTestId("rail-projects").getByTestId("rail-project").getByRole("link");
   await expect(apps).toHaveCount(3);
   await expect(projects).toHaveCount(3);
   expect(await titlesIn(apps)).toEqual(alphabetical);
@@ -114,7 +115,7 @@ test("the Apps and the projects in the rail keep their alphabetical order when o
     const project = projects.filter({ hasText: title });
     await project.click();
     await expect(page).toHaveURL(new RegExp(`/p/${projectNames.get(title) ?? ""}$`, "u"));
-    await expect(project).toHaveAttribute("aria-current", "true");
+    await expect(project).toHaveAttribute("aria-current", "page");
     expect(await titlesIn(projects)).toEqual(alphabetical);
   }
 });

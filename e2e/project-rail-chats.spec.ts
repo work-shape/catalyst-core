@@ -7,10 +7,11 @@ import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
 
-// PRJ-5: the project whose page or chat is open unfolds in the rail to its five newest chats,
-// with "Alle Chats" to its page; "Zuletzt" lists none of them again. A member reads the shared
-// project's chats there and never the owner's private project. The drawer at phone width
-// unfolds alike. In German.
+// PRJ-5: the project whose page or chat is open opens in the rail to its five newest chats, and
+// "Mehr anzeigen" shows the next ones in place; "Zuletzt" lists none of them again. The caret
+// after a project's label folds it, and the label leads to its page (Felix, 2026-11-04). A
+// member reads the shared project's chats there and never the owner's private project. The
+// drawer at phone width opens alike. In German.
 
 const owner = { email: "e2e-project-rail@example.test", password: "e2e-project-rail-password" };
 const member = {
@@ -144,14 +145,20 @@ test("a project's chats in the rail: the open project unfolds, Zuletzt leaves it
   const privateChatTitle = `Eigene Notiz ${suffix}`;
   await startChat(page, workspaceId, privateChatTitle, privateProject.id);
 
-  // The project page open: its row unfolds to its five newest chats and "Alle Chats".
+  // The project page open: it opens to its five newest chats, and "Mehr anzeigen" follows them.
   await page.goto(`/w/${workspaceId}/p/${shared.name}`);
   const rail = page.getByRole("navigation", { name: "Hauptnavigation" });
-  const unfolded = rail.getByTestId("rail-project-chats");
-  await expect(unfolded).toHaveCount(1);
-  await expect(unfolded).toHaveAttribute("aria-label", `Chats in ${sharedTitle}`);
+  const projectGroup = (title: string) =>
+    rail
+      .getByTestId("rail-project")
+      .filter({ has: page.getByRole("link", { name: title, exact: true }) });
+  const sharedGroup = projectGroup(sharedTitle);
+  const caret = sharedGroup.getByRole("button", { name: `Chats in ${sharedTitle}` });
+  const unfolded = sharedGroup.getByTestId("rail-project-chats");
+  await expect(caret).toHaveAttribute("aria-expanded", "true");
   await expect(unfolded.getByTestId("conversation-row")).toHaveCount(5);
-  await expect(unfolded.getByTestId("rail-project-chats-all")).toHaveText("Alle Chats");
+  await expect(unfolded.getByTestId("rail-project-chats-more")).toHaveText("Mehr anzeigen");
+  await expect(rail.getByText("Alle Chats")).toHaveCount(0);
   // Zuletzt keeps the project's older chats and the rest, and none of the five again.
   await expect(recentRows(page).filter({ hasText: `Ohne Projekt ${suffix}` })).toHaveCount(1);
   const underProject = await rowTitles(unfolded);
@@ -162,7 +169,7 @@ test("a project's chats in the rail: the open project unfolds, Zuletzt leaves it
   ).toEqual([]);
   await shot(page, "rail-project-page");
 
-  // A chat opened from under the row: the project stays unfolded and the chat is the current row.
+  // A chat opened from under the label: the project stays open and the chat is the current row.
   const opened = underProject[1] ?? "";
   await unfolded
     .getByTestId("conversation-row")
@@ -177,14 +184,25 @@ test("a project's chats in the rail: the open project unfolds, Zuletzt leaves it
   await expect(recentRows(page).filter({ hasText: opened })).toHaveCount(0);
   await shot(page, "rail-project-chat");
 
-  // "Alle Chats" leads to the project's page.
-  await unfolded.getByTestId("rail-project-chats-all").click();
+  // "Mehr anzeigen" shows the next ones in place, and nothing follows the last.
+  await unfolded.getByTestId("rail-project-chats-more").click();
+  await expect(unfolded.getByTestId("conversation-row")).toHaveCount(sharedTitles.length);
+  await expect(unfolded.getByTestId("rail-project-chats-more")).toHaveCount(0);
+
+  // The caret folds it; the label leads to the project's page.
+  await caret.click();
+  await expect(caret).toHaveAttribute("aria-expanded", "false");
+  await expect(unfolded).toHaveCount(0);
+  await sharedGroup.getByRole("link", { name: sharedTitle, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/p/${shared.name}$`, "u"));
 
-  // The private project unfolds to its creator's chat alone.
-  await rail.getByTestId("rail-project").filter({ hasText: privateTitle }).click();
-  await expect(unfolded.getByTestId("conversation-row")).toHaveCount(1);
-  await expect(unfolded.getByTestId("conversation-row")).toHaveText(privateChatTitle);
+  // The private project opens to its creator's chat alone; the folded one stays folded.
+  await projectGroup(privateTitle).getByRole("link", { name: privateTitle, exact: true }).click();
+  const privateChats = projectGroup(privateTitle).getByTestId("rail-project-chats");
+  await expect(privateChats.getByTestId("conversation-row")).toHaveCount(1);
+  await expect(privateChats.getByTestId("conversation-row")).toHaveText(privateChatTitle);
+  await expect(privateChats.getByTestId("rail-project-chats-more")).toHaveCount(0);
+  await expect(unfolded).toHaveCount(0);
 
   // The member, in a chat of the shared project, reads its chats there; the private one is none.
   await memberPage.goto(`/w/${workspaceId}/c/${sharedIds[0] ?? ""}`);

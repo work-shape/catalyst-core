@@ -1087,18 +1087,34 @@ describe("the active project of the rail", () => {
   });
 });
 
-describe("the chats under the active project's row", () => {
+describe("the chats under an open project", () => {
+  const ids = (fold: { chats: readonly ConversationListItem[] }) => fold.chats.map(({ id }) => id);
+
   it("are its five newest, newest first", () => {
     const fetched = [1, 2, 3, 4, 5, 6].map((minute) =>
       projectChat(`n${minute}`, minute, "prj_nord")
     );
-    expect(railProjectChats("prj_nord", fetched, [], undefined).map(({ id }) => id)).toEqual([
+    expect(ids(railProjectChats("prj_nord", fetched, [], undefined))).toEqual([
       "n6",
       "n5",
       "n4",
       "n3",
       "n2"
     ]);
+  });
+
+  it("offer Show more only where the project has more, and show the next ones in place", () => {
+    const chats = (count: number) =>
+      Array.from({ length: count }, (_, minute) => projectChat(`n${minute}`, minute, "prj_nord"));
+    // Five and no more: nothing follows them.
+    expect(railProjectChats("prj_nord", chats(5), [], undefined).more).toBe(false);
+    // A sixth known, or a read that says more wait: Show more follows the five.
+    expect(railProjectChats("prj_nord", chats(6), [], undefined).more).toBe(true);
+    expect(railProjectChats("prj_nord", chats(5), [], undefined, 5, true).more).toBe(true);
+    // Show more shows the next five under the first, and nothing follows the last.
+    const shown = railProjectChats("prj_nord", chats(8), [], undefined, 10);
+    expect(ids(shown)).toEqual(["n7", "n6", "n5", "n4", "n3", "n2", "n1", "n0"]);
+    expect(shown.more).toBe(false);
   });
 
   it("take a chat just started, and leave out one moved out or of another project", () => {
@@ -1110,16 +1126,13 @@ describe("the chats under the active project's row", () => {
       projectChat("s1", 7, "prj_sued"),
       projectChat("free", 6)
     ];
-    expect(railProjectChats("prj_nord", fetched, loaded, undefined).map(({ id }) => id)).toEqual([
-      "new",
-      "n1"
-    ]);
+    expect(ids(railProjectChats("prj_nord", fetched, loaded, undefined))).toEqual(["new", "n1"]);
   });
 
   it("show a chat as the rail has it now", () => {
     const renamed = { ...projectChat("n1", 1, "prj_nord"), title: "Neu benannt", unread: true };
     expect(
-      railProjectChats("prj_nord", [projectChat("n1", 1, "prj_nord")], [renamed], undefined)
+      railProjectChats("prj_nord", [projectChat("n1", 1, "prj_nord")], [renamed], undefined).chats
     ).toEqual([renamed]);
   });
 
@@ -1128,7 +1141,7 @@ describe("the chats under the active project's row", () => {
       projectChat(`n${minute}`, minute + 10, "prj_nord")
     );
     const open = projectChat("old", 0, "prj_nord");
-    expect(railProjectChats("prj_nord", fetched, [], open).map(({ id }) => id)).toEqual([
+    expect(ids(railProjectChats("prj_nord", fetched, [], open))).toEqual([
       "n6",
       "n5",
       "n4",
@@ -1157,13 +1170,22 @@ function rows(html: string): string[] {
   );
 }
 
-/** The part of the markup from one test id to the next one given. */
-function between(html: string, from: string, to: string): string {
-  const start = html.indexOf(`data-testid="${from}"`);
-  const end = html.indexOf(`data-testid="${to}"`, start);
-  expect(start).toBeGreaterThan(-1);
-  expect(end).toBeGreaterThan(start);
-  return html.slice(start, end);
+/** The names of the projects' labels in the markup, in order. */
+function projectNames(html: string): string[] {
+  return [...html.matchAll(/<a [^>]*title="([^"]+)"[^>]*>/gu)].map((match) => match[1] ?? "");
+}
+
+/** The markup of one project's group: its label and what stands under it. */
+function projectGroup(html: string, title: string): string {
+  const groups = html.split('data-testid="rail-project"').slice(1);
+  const group = groups.find((part) => part.includes(`title="${title}"`));
+  expect(group).toBeDefined();
+  const end = group?.indexOf("Zuletzt") ?? -1;
+  return end === -1 ? (group ?? "") : (group ?? "").slice(0, end);
+}
+
+function fold(chats: readonly ConversationListItem[], more = false) {
+  return { chats, more };
 }
 
 describe("the Projects group", () => {
@@ -1196,20 +1218,16 @@ describe("the Projects group", () => {
     const used = ["Zeta", "Äpfel", "Mitte", "Beta", "Omega", "Alt"].map((title) =>
       railProject(`prj_${title}`, title)
     );
-    const names = (html: string) =>
-      [...html.matchAll(/<[^>]*data-testid="rail-project"[^>]*>/gu)].map(
-        (match) => /title="([^"]+)"/u.exec(match[0])?.[1] ?? ""
-      );
     const html = renderProjectRail({ recentProjects: used });
     // The sixth, least recently used, is left out; the five are in German alphabetical order.
-    expect(names(html)).toEqual(["Äpfel", "Beta", "Mitte", "Omega", "Zeta"]);
+    expect(projectNames(html)).toEqual(["Äpfel", "Beta", "Mitte", "Omega", "Zeta"]);
     // Using a shown one last moves it first in the order of use, not in the rail.
     const [, , , beta = nord, , alt = nord] = used;
     const reused = [beta, ...used.filter((project) => project !== beta)];
-    expect(names(renderProjectRail({ recentProjects: reused }))).toEqual(names(html));
+    expect(projectNames(renderProjectRail({ recentProjects: reused }))).toEqual(projectNames(html));
     // Using the sixth brings it in, at its alphabetical place.
     const brought = [alt, ...used.slice(0, 5)];
-    expect(names(renderProjectRail({ recentProjects: brought }))).toEqual([
+    expect(projectNames(renderProjectRail({ recentProjects: brought }))).toEqual([
       "Alt",
       "Äpfel",
       "Beta",
@@ -1218,13 +1236,28 @@ describe("the Projects group", () => {
     ]);
     // The open project used earlier stands among them in its alphabetical place.
     expect(
-      names(
-        renderProjectRail({
-          recentProjects: used,
-          activeProject: { id: "prj_Alt", chats: [] }
-        })
-      )
+      projectNames(renderProjectRail({ recentProjects: used, activeProjectId: "prj_Alt" }))
     ).toEqual(["Alt", "Äpfel", "Beta", "Mitte", "Omega", "Zeta"]);
+  });
+
+  it("gives each project a label with its folder that links to its page, and a caret", () => {
+    const html = renderProjectRail({
+      recentProjects: [nord, railProject("prj_notiz", "Notizen", "private")],
+      openProjectName: "prj_nord",
+      projectHref: (project) => `/w/ws_1/p/${project}`
+    });
+    const label = projectGroup(html, "Projekt Nord");
+    expect(label).toMatch(/<a [^>]*href="\/w\/ws_1\/p\/prj_nord"[^>]*>Projekt Nord<\/a>/u);
+    expect(label).toContain("lucide-folder");
+    // The project on screen is the current label; there is no box around it.
+    expect(label).toMatch(/<a [^>]*aria-current="page"[^>]*>Projekt Nord<\/a>/u);
+    expect(label).not.toContain("bg-state-selected");
+    // The caret right after the name folds it, and says what it folds.
+    expect(label).toMatch(
+      /<\/a><button [^>]*aria-expanded="false"[^>]*aria-label="Chats in Projekt Nord"/u
+    );
+    expect(projectGroup(html, "Notizen")).toContain('data-testid="rail-project-private"');
+    expect(projectGroup(html, "Notizen")).not.toContain("aria-current");
   });
 
   it("shows its label and plus without a project", () => {
@@ -1242,53 +1275,73 @@ describe("the Projects group", () => {
   });
 });
 
-describe("the rail with an active project", () => {
+describe("the rail with open projects", () => {
   const inNord = [projectChat("n2", 5, "prj_nord"), projectChat("n1", 4, "prj_nord")];
-  const conversations = [projectChat("free", 6), ...inNord, projectChat("s1", 3, "prj_sued")];
+  const inSued = [projectChat("s1", 3, "prj_sued")];
+  const conversations = [projectChat("free", 6), ...inNord, ...inSued];
 
-  it("unfolds the active project's row to its chats and All chats, and no other", () => {
+  it("opens several projects at once, each with its chats under its label", () => {
     const html = renderProjectRail({
       recentProjects: [nord, sued],
-      activeProject: { id: "prj_nord", chats: inNord },
+      openProjects: new Map([
+        ["prj_nord", fold(inNord)],
+        ["prj_sued", fold(inSued)]
+      ]),
       conversations,
       selectedConversationId: "n1"
     });
-    expect(html.match(/data-testid="rail-project-chats"/gu)).toHaveLength(1);
-    expect(html).toContain('aria-label="Chats in Projekt Nord"');
-    const group = between(html, "rail-project-chats", "rail-project-chats-all");
-    expect(rows(group)).toEqual(["Chat n2", "Chat n1"]);
-    expect(between(html, "rail-project-chats", "rail-project-chats-all")).not.toContain(
-      "Projekt Süd"
-    );
-    expect(between(html, "rail-project-chats-all", "rail-project")).toContain("Alle Chats");
-    // The rows under the project carry no project mark: the row above says it.
-    expect(group).not.toContain('data-testid="conversation-project-marker"');
-    expect(group).toMatch(/data-selected="true"[^]*Chat n1/u);
-    // The chats stand right under their project's row, before the next project.
-    expect(html.indexOf("Projekt Nord")).toBeLessThan(
-      html.indexOf('data-testid="rail-project-chats"')
-    );
-    expect(html.indexOf('data-testid="rail-project-chats"')).toBeLessThan(
-      html.indexOf("Projekt Süd")
-    );
+    expect(html.match(/data-testid="rail-project-chats"/gu)).toHaveLength(2);
+    expect(html.match(/aria-expanded="true"[^>]*aria-label="Chats in/gu)).toHaveLength(2);
+    const north = projectGroup(html, "Projekt Nord");
+    expect(rows(north)).toEqual(["Chat n2", "Chat n1"]);
+    expect(rows(projectGroup(html, "Projekt Süd"))).toEqual(["Chat s1"]);
+    // No row to all chats: the label is the way to the project's page.
+    expect(html).not.toContain("Alle Chats");
+    expect(html).not.toContain("rail-project-chats-all");
+    // The rows under a project carry no project mark and stand at its label's edge.
+    expect(north).not.toContain('data-testid="conversation-project-marker"');
+    expect(north).not.toContain("pl-8");
+    expect(north).toMatch(/data-selected="true"[^]*Chat n1/u);
   });
 
-  it("leaves those chats out of Recent, and keeps the rest there", () => {
+  it("follows the chats with a muted Show more only where the project has more", () => {
     const html = renderProjectRail({
       recentProjects: [nord, sued],
-      activeProject: { id: "prj_nord", chats: inNord },
+      openProjects: new Map([
+        ["prj_nord", fold(inNord, true)],
+        ["prj_sued", fold(inSued)]
+      ]),
+      conversations
+    });
+    expect(html.match(/data-testid="rail-project-chats-more"/gu)).toHaveLength(1);
+    const north = projectGroup(html, "Projekt Nord");
+    expect(north).toMatch(/text-muted-foreground[^>]*data-testid="rail-project-chats-more"/u);
+    expect(north).toContain("Mehr anzeigen");
+    expect(north.indexOf("Chat n1")).toBeLessThan(north.indexOf("Mehr anzeigen"));
+    expect(projectGroup(html, "Projekt Süd")).not.toContain("Mehr anzeigen");
+    expect(
+      renderProjectRail(
+        { recentProjects: [nord], openProjects: new Map([["prj_nord", fold(inNord, true)]]) },
+        "en"
+      )
+    ).toContain("Show more");
+  });
+
+  it("leaves the chats under open projects out of Recent, and keeps the rest there", () => {
+    const html = renderProjectRail({
+      recentProjects: [nord, sued],
+      openProjects: new Map([["prj_nord", fold(inNord)]]),
       conversations
     });
     const recent = html.slice(html.indexOf("Zuletzt"));
-    expect(recent).toContain("Zuletzt");
     expect(rows(recent)).toEqual(["Chat free", "Chat s1"]);
     expect(rows(html)).toEqual(["Chat n2", "Chat n1", "Chat free", "Chat s1"]);
   });
 
-  it("says nothing is there when Recent holds only the project's chats", () => {
+  it("says nothing is there when Recent holds only the open projects' chats", () => {
     const html = renderProjectRail({
       recentProjects: [nord],
-      activeProject: { id: "prj_nord", chats: inNord },
+      openProjects: new Map([["prj_nord", fold(inNord)]]),
       conversations: inNord
     });
     expect(html).toContain("Zuletzt");
@@ -1301,16 +1354,17 @@ describe("the rail with an active project", () => {
     const older = railProject("prj_alt", "Projekt Alt");
     const html = renderProjectRail({
       recentProjects: [...projects, older],
-      activeProject: { id: "prj_alt", chats: [projectChat("a1", 1, "prj_alt")] }
+      activeProjectId: "prj_alt",
+      openProjects: new Map([["prj_alt", fold([projectChat("a1", 1, "prj_alt")])]])
     });
     expect(html.match(/data-testid="rail-project"/gu)).toHaveLength(6);
-    expect(html).toContain("Projekt Alt");
-    expect(html.slice(html.indexOf('data-testid="rail-project-chats"'))).toContain("Chat a1");
+    expect(rows(projectGroup(html, "Projekt Alt"))).toEqual(["Chat a1"]);
   });
 
-  it("unfolds nothing without an active project", () => {
+  it("folds every project that is not open", () => {
     const html = renderProjectRail({ recentProjects: [nord, sued], conversations }, "en");
     expect(html).not.toContain('data-testid="rail-project-chats"');
+    expect(html.match(/aria-expanded="false"[^>]*aria-label="Chats in/gu)).toHaveLength(2);
     expect(rows(html)).toEqual(["Chat free", "Chat n2", "Chat n1", "Chat s1"]);
   });
 });

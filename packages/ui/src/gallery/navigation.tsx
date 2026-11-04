@@ -307,6 +307,16 @@ function NavItemSamples({ text }: { text: GalleryText }) {
         <NavGroup label={text.navGroupFolding} collapsible defaultOpen={false}>
           <NavItem>{text.navConversationLease}</NavItem>
         </NavGroup>
+        {/* The label opens the folder's page; the caret right after it folds the items. */}
+        <NavGroup
+          label={text.navGroupFoldingLink}
+          labelLink={{ href: "#", onClick: (event) => event.preventDefault() }}
+          labelIcon={<Folder aria-hidden="true" />}
+          collapsible
+        >
+          <NavItem>{text.navConversationTax}</NavItem>
+          <NavItem>{text.navConversationLease}</NavItem>
+        </NavGroup>
       </div>
       {/* In the scrolling body of a sidebar the label of a group stays at the top. */}
       <div
