@@ -1,3 +1,4 @@
+import { APP_ASSET_KIND } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   asUserId,
@@ -18,6 +19,7 @@ import {
   type PlatformAssetCalls
 } from "@work-shape/catalyst-tool-execution";
 import { assetTitle } from "../../assets/asset-reference-labels";
+import { adoptAssetRepository } from "../../assets/asset-repo-adoption";
 import {
   requireOwnTranscript,
   subjectUnavailable
@@ -96,14 +98,19 @@ export async function checkoutApp(
 ): Promise<AppEdited> {
   const { conversation, context } = input;
   await requireOwnTranscript(options, conversation);
-  const row = await requireAppToCheckOut(options, input.access, {
-    name: input.name,
-    workspaceId: conversation.collaborationWorkspaceId
-  });
+  const checkedOut = { name: input.name, workspaceId: conversation.collaborationWorkspaceId };
+  let row = await requireAppToCheckOut(options, input.access, checkedOut);
   if (!workspaceObjects || !options.pages)
     throw new AppError("CONFLICT", "App editing needs storage for workspace files", {
       reason: "files_unavailable"
     });
+  const kind = options.configAssets.kinds.get(APP_ASSET_KIND);
+  if (!row.commit && kind) {
+    // An App whose revisions were written without a commit, such as by `assets.put` before its
+    // writes committed, gets its repository from those revisions here, oldest first.
+    await adoptAssetRepository(options, { kind, asset: row, actor: context.user });
+    row = await requireAppToCheckOut(options, input.access, checkedOut);
+  }
   if (!row.fileSetId || !row.commit)
     throw new AppError("CONFLICT", "This App has no draft repository to check out", {
       reason: "repository_unavailable"
