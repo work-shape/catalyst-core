@@ -8,7 +8,7 @@ import { appFiles, expectStatus, previewSchema, setupAppInstance } from "./suppo
 // without acquiring membership or access to its members' conversations.
 describe("an App draft for a Builder outside its workspace", () => {
   it("opens the workspace's draft without membership and reveals no member's conversation or other workspace's draft", async () => {
-    const t = await setupAppInstance({ commits: false });
+    const t = await setupAppInstance();
     try {
       const other = await t.sharedWorkspace("Another team");
       for (const [name, workspaceId] of [

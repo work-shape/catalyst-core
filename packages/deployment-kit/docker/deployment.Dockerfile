@@ -138,6 +138,7 @@ RUN --mount=type=cache,id=vivd-runner-apt-lists,target=/var/lib/apt/lists,sharin
     pypdf==4.3.1 \
     python-docx==1.1.2 \
     python-pptx==0.6.23 \
+    pydantic==2.14.2 \
     PyYAML==6.0.2 \
     reportlab==4.2.2 \
   && mkdir -p /usr/local/share/catalyst \
@@ -311,6 +312,7 @@ RUN while IFS="$(printf '\t')" read -r command file; do \
   && python -c "from pptx import Presentation; prs=Presentation(); prs.slides.add_slide(prs.slide_layouts[0]); print('python-pptx ok')" \
   && python -c "import numpy, openpyxl, pandas; print('python-tabular ok')" \
   && python -c "import yaml; yaml.safe_load('ok: true'); print('pyyaml ok')" \
+  && python -c "import pydantic; print('pydantic ok')" \
   && python -c "import pdfplumber, pypdf, reportlab; print('python-pdf ok')" \
   && python -c "from PIL import Image; Image.new('RGB', (1, 1)); print('pillow ok')" \
   && python -c "import extract_msg, tnefparse, numbers_parser, pillow_heif; from PIL import Image; import io; pillow_heif.register_heif_opener(); b=io.BytesIO(); Image.new('RGB', (2, 2)).save(b, format='HEIF'); b.seek(0); assert Image.open(b).load() is not None" \

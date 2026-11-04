@@ -419,6 +419,114 @@ describe("app.save in a conversation", () => {
     expect(await checkoutOf(chat, edited.path)).toMatchObject({ baseRevision: 3 });
   });
 
+  /** The text of a file the checkout in `conversationId` holds. */
+  async function checkedOutText(conversationId: string, path: string) {
+    const file = (await filesOf(conversationId)).find((candidate) => candidate.path === path);
+    if (!file) throw new Error(`No file ${path} in the checkout`);
+    return new TextDecoder().decode(await readObjectBytes(workspaceObjects, file.objectKey));
+  }
+
+  // Fails without the commit of assets.put: an App the CLI made had no repository, and app.edit
+  // answered "This App has no draft repository to check out".
+  it("edits an App written by assets.put alone, as the CLI writes one, on one history with the CLI", async () => {
+    expectStatus(await t.putApp(t.admin.id, "cli-app", appFiles("first from the CLI")), 200);
+    expectStatus(await t.putApp(t.admin.id, "cli-app", appFiles("second from the CLI")), 200);
+    const put = await stored("cli-app");
+    expect(put).toMatchObject({ revision: 2, commit: expect.any(String) });
+    const chat = await conversationOf(t.admin, "private");
+    const edited = await calls.editApp(await contextOf(t.admin, chat, "app.edit"), {
+      name: "cli-app"
+    });
+    expect(edited).toMatchObject({ path: "apps/cli-app", revision: 2 });
+    expect(await checkedOutText(chat, `${edited.path}/index.html`)).toContain(
+      "second from the CLI"
+    );
+    expect(await checkoutOf(chat, edited.path)).toMatchObject({
+      baseRevision: 2,
+      baseCommit: put?.commit
+    });
+    await changeAndOpen(chat, edited.path, "changed in chat");
+    expect(
+      await calls.saveApp(await contextOf(t.admin, chat), {
+        page: edited.path,
+        name: "cli-app",
+        title: "CLI app"
+      })
+    ).toMatchObject({ saved: true, revision: 3 });
+    expectStatus(await t.putApp(t.admin.id, "cli-app", appFiles("third from the CLI")), 200);
+    const revisions = await t.stores.configAssets.listConfigAssetRevisions({
+      clientInstanceId,
+      kind: "app",
+      name: "cli-app"
+    });
+    expect(revisions.map((revision) => revision.revision)).toEqual([1, 2, 3, 4]);
+    expect(revisions.every((revision) => revision.commit !== undefined)).toBe(true);
+  });
+
+  /** Makes `name` an App as an earlier release left one: revisions with file sets, no commits. */
+  async function withoutRepository(name: string) {
+    const app = await stored(name);
+    if (!app) throw new Error(`No App ${name}`);
+    await withTestSql(async (sql) => {
+      await sql`update config_asset_revisions set commit = null, tree = null where asset_id = ${app.id}`;
+      await sql`delete from asset_repo_bundles where asset_id = ${app.id}`;
+    });
+    expect((await stored(name))?.commit).toBeUndefined();
+    return app;
+  }
+
+  // Fails without the adoption on app.edit: the App stayed without a repository and could not
+  // be checked out.
+  it("gives an App whose revisions name no commit its repository on the first app.edit", async () => {
+    expectStatus(await t.putApp(t.admin.id, "legacy-app", appFiles("first, no commit")), 200);
+    expectStatus(await t.putApp(t.admin.id, "legacy-app", appFiles("second, no commit")), 200);
+    const app = await withoutRepository("legacy-app");
+    const chat = await conversationOf(t.admin, "private");
+    const edited = await calls.editApp(await contextOf(t.admin, chat, "app.edit"), {
+      name: "legacy-app"
+    });
+    expect(edited).toMatchObject({ path: "apps/legacy-app", revision: 2 });
+    expect(await checkedOutText(chat, `${edited.path}/index.html`)).toContain("second, no commit");
+    const healed = await stored("legacy-app");
+    expect(healed).toMatchObject({
+      id: app.id,
+      revision: 2,
+      fileSetId: app.fileSetId,
+      commit: expect.any(String)
+    });
+    const revisions = await t.stores.configAssets.listConfigAssetRevisions({
+      clientInstanceId,
+      kind: "app",
+      name: "legacy-app"
+    });
+    expect(revisions.every((revision) => revision.commit !== undefined)).toBe(true);
+    expect(await checkoutOf(chat, edited.path)).toMatchObject({
+      baseRevision: 2,
+      baseCommit: healed?.commit
+    });
+    await changeAndOpen(chat, edited.path, "changed after the repair");
+    expect(
+      await calls.saveApp(await contextOf(t.admin, chat), {
+        page: edited.path,
+        name: "legacy-app",
+        title: "Legacy app"
+      })
+    ).toMatchObject({ saved: true, revision: 3 });
+  });
+
+  it("gives an App whose revisions name no commit its repository on the next assets.put", async () => {
+    expectStatus(await t.putApp(t.admin.id, "legacy-put", appFiles("before the repair")), 200);
+    await withoutRepository("legacy-put");
+    expectStatus(await t.putApp(t.admin.id, "legacy-put", appFiles("after the repair")), 200);
+    const revisions = await t.stores.configAssets.listConfigAssetRevisions({
+      clientInstanceId,
+      kind: "app",
+      name: "legacy-put"
+    });
+    expect(revisions.map((revision) => revision.revision)).toEqual([1, 2]);
+    expect(revisions.every((revision) => revision.commit !== undefined)).toBe(true);
+  });
+
   it("refuses app.edit without app.write, across workspaces, and in a shared transcript before copying files or changing the subject", async () => {
     expectStatus(await t.putApp(t.admin.id, "edit-rights", appFiles("private source")), 200);
     for (const [user, where, code] of [

@@ -35,6 +35,7 @@ import {
   type AssetFileInput
 } from "./asset-files";
 import type { WorkflowAssetKind } from "../asset-kinds/shared";
+import { adoptAssetRepository } from "./asset-repo-adoption";
 import { commitAssetFileSet, reasonOf } from "./asset-repo-save";
 import { requirePrecondition, revisionConflictOf } from "./asset-revision";
 import { validateAssetSet, withDefinition, withoutDefinition } from "./asset-set";
@@ -99,6 +100,11 @@ export class AssetDraftWorkflow {
    * set stored for the asset, and the revision that names it becomes the draft. `null` as the
    * expected revision creates the asset. A set that does not build, a build that did
    * not end in time and a refused revision each leave no revision and no file set.
+   *
+   * Where the files of the kind are a repository, as an App's, the write is a commit as a save
+   * in a conversation is: a new asset starts its repository, and one written before its writes
+   * committed gets the commits of its earlier revisions first, so the CLI and a conversation
+   * write one history.
    */
   async putFiles(
     call: AssetCall,
@@ -121,6 +127,9 @@ export class AssetDraftWorkflow {
     }
     requireOwnScope(target, call.access);
     await requireExpectedRevision(this.options, call, target, input.expectedRevision);
+    if (kind.content === "repository" && target.asset && target.asset.commit === undefined) {
+      await adoptAssetRepository(this.options, { kind, asset: target.asset, actor: call.actor });
+    }
     const files = decodeAssetFiles(input.files);
     // A new asset's id is made here: its files are stored under it before its row exists.
     const assetId = target.asset?.id ?? createPlatformId("cfga");
@@ -141,7 +150,8 @@ export class AssetDraftWorkflow {
         manifest: fileSet.manifest,
         ...(current ? { current: current.config ?? undefined } : {})
       }),
-      expectedRevision: input.expectedRevision
+      expectedRevision: input.expectedRevision,
+      ...(target.asset === undefined ? { firstCommit: `Create ${kind.kind} '${name}'` } : {})
     });
     return written;
   }

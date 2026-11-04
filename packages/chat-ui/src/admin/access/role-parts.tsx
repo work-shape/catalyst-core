@@ -12,7 +12,12 @@ import {
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { refusalAskingInstanceAdmin } from "../settings/ask-instance-admin";
 import { actionLabel } from "./right-words";
-import { roleDescriptionKey, roleLabelKey, roleWriteFailure } from "./role-model";
+import {
+  roleAssignmentFailure,
+  roleDescriptionKey,
+  roleLabelKey,
+  roleWriteFailure
+} from "./role-model";
 
 // The words and the menu the role list and a role's page share.
 
@@ -60,6 +65,29 @@ export function roleFailureText(
       return error instanceof Error && error.message === t("access.roleWaitsForApproval")
         ? error.message
         : t("access.roleWriteFailed");
+  }
+}
+
+/** The sentence for giving a role to a person or taking it from them that failed. */
+export function roleAssignmentFailureText(
+  error: unknown,
+  t: Translate,
+  instanceAdminName: string | undefined
+): string {
+  const failure = roleAssignmentFailure(error);
+  switch (failure.kind) {
+    case "self":
+      return t("access.roleHolderSelf");
+    case "superadminOnly":
+      return refusalAskingInstanceAdmin(t("access.roleHolderSuperadminOnly"), t, instanceAdminName);
+    case "needsRight":
+      return refusalAskingInstanceAdmin(
+        t("access.roleNeedsRight", { right: actionLabel(failure.action, t) }),
+        t,
+        instanceAdminName
+      );
+    case "other":
+      return roleFailureText(error, t, instanceAdminName);
   }
 }
 

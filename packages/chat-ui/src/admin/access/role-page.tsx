@@ -52,6 +52,7 @@ import {
   roleName,
   type RoleWrites
 } from "./role-parts";
+import { RolePeople, type RolePeopleSource } from "./role-people";
 
 type Translate = TranslationContextValue["t"];
 
@@ -76,6 +77,8 @@ export interface RolePageProps extends Pick<RoleWrites, "onUpdate" | "onReset" |
   onDelete(): void;
   /** The rename and delete dialogs of the tab, shown over this page. */
   dialogs?: ReactNode;
+  /** The people of the instance, for who holds a custom role. */
+  people?: RolePeopleSource;
   /** A write of the tab that failed, such as a delete. */
   failure?: string;
   onDismissFailure?(): void;
@@ -99,6 +102,7 @@ export function RolePage({
   onReset,
   onDecide,
   dialogs,
+  people,
   failure,
   onDismissFailure
 }: RolePageProps) {
@@ -276,6 +280,15 @@ export function RolePage({
           </Section>
         );
       })}
+      {!role.builtIn && people !== undefined ? (
+        <RolePeople
+          role={role}
+          name={name}
+          editor={editor}
+          people={people}
+          instanceAdminName={instanceAdminName}
+        />
+      ) : null}
       {editingArea !== undefined ? (
         <AreaDialog
           role={role}

@@ -5,6 +5,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { CLI_VERSION_FILE, setPublishedCliVersion } from "./cli-version.mjs";
 import {
   foldChanges,
   main as changelog,
@@ -97,6 +98,9 @@ export function cut(args, coreRoot = repoRoot) {
         throw new Error(`${root}: changelog fold failed.`);
       }
     }
+    // The release publishes the CLI of this version before any deployment uses it, so the
+    // constant that Connect a local agent installs moves with the cut.
+    setPublishedCliVersion(roots[0], version);
     run("pnpm", ["generate:openapi"], roots[0], "inherit");
     run("pnpm", ["release:check"], roots[0], "inherit");
     for (const { root, packages, changes } of repositories) {
@@ -105,7 +109,8 @@ export function cut(args, coreRoot = repoRoot) {
         join(root, "CHANGELOG.md"),
         ...changes.map(({ file }) => join(root, file))
       ];
-      if (root === roots[0]) paths.push(join(root, "packages/api-contract/openapi.json"));
+      if (root === roots[0])
+        paths.push(join(root, "packages/api-contract/openapi.json"), join(root, CLI_VERSION_FILE));
       run("git", ["add", "--", ...paths], root);
       run("git", ["diff", "--cached", "--check"], root);
     }

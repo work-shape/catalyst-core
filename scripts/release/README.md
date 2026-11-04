@@ -28,9 +28,10 @@ pushes or publishes; CI publication on a release tag is a separate step.
 `pnpm changelog --release <version> --date YYYY-MM-DD` folds change files alone. Entries in the
 Unreleased section of `CHANGELOG.md` are the ones written before change files existed.
 
-A release that offers the Connect a local agent command publishes the CLI of its version to npm
-before it names that version in `PUBLISHED_CLI_VERSION` and before the instance switches on
-`personalApiKeys`. The order is in `packages/docs/src/content/docs/configure/cli.md`, For
+The cut sets `PUBLISHED_CLI_VERSION` to the version it cuts, and `release:check` fails when it
+differs from the CLI package's version. A release that offers the Connect a local agent command
+publishes the CLI of its version to npm before any deployment uses that commit and before the
+instance switches on `personalApiKeys`. The order is in `packages/docs/src/content/docs/configure/cli.md`, For
 maintainers.
 
 ## Validation and publication

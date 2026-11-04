@@ -70,6 +70,11 @@ writeFileSync('.git/gate-passed', version);
     );
   }
   write(root, "packages/api-contract/openapi.json", JSON.stringify({ info: { version } }));
+  write(
+    root,
+    "packages/api-contract/src/public-cli.ts",
+    `/** Doc. */\nexport const PUBLISHED_CLI_VERSION: string | undefined = "${version}";\n`
+  );
   write(root, "CHANGELOG.md", "# Changelog\n\n## 0.6.0 — 2026-01-01\n\n- Old entry.\n");
   write(root, "changes/unreleased/.gitkeep", "");
   if (change)
@@ -111,6 +116,12 @@ describe("release:cut", () => {
       expect(git(root, "status", "--porcelain")).toBe("");
       expect(git(root, "tag")).toBe("");
     }
+    expect(read(core, "packages/api-contract/src/public-cli.ts")).toContain(
+      'PUBLISHED_CLI_VERSION: string | undefined = "0.8.0";'
+    );
+    expect(git(core, "show", "--name-only", "--format=", "HEAD")).toContain(
+      "packages/api-contract/src/public-cli.ts"
+    );
     expect(read(core, ".git/gate-passed")).toBe("0.8.0");
     expect(JSON.parse(read(core, "packages/api-contract/openapi.json"))).toEqual({
       info: { version: "0.8.0" }
