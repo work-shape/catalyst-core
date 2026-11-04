@@ -26,10 +26,7 @@ import {
 import { usePlatformContextQuery } from "../../../shared/api/workspace-queries";
 import type { RevealedSecret } from "../../control-plane/api-access-secret-fields";
 import { formatMomentShort } from "../../../shared/locale-format";
-import {
-  PersonalKeyFields,
-  type PersonalKeyWorkspace
-} from "../../control-plane/personal-api-key-fields";
+import { PersonalKeyFields } from "../../control-plane/personal-api-key-fields";
 import {
   KeyProblemNotice,
   PersonalApiKeysTable,
@@ -37,36 +34,42 @@ import {
   type KeyProblem
 } from "../../control-plane/personal-api-keys-list";
 import {
-  connectCodeAsksUseLevel,
   connectCodeOfSearch,
+  connectKeyActions,
   formatConnectCode,
   initialPersonalKeyDraft,
   instanceUrl,
   isCompleteConnectCode,
   personalKeyAccountOffer,
-  personalKeyActionOffer,
+  personalKeyHeldActionOffer,
   personalKeyInstanceOffer,
   personalKeyRequest,
   personalKeyUseOffer,
-  setupKeyActions,
-  type PersonalKeyDraft
+  personalKeyWorkspaceOffer,
+  type PersonalKeyDraft,
+  type PersonalKeyPlaceOffer,
+  type PersonalKeyWorkspace
 } from "../../control-plane/personal-api-keys-model";
 import { useTranslation, type TranslationKey } from "../../../shared/i18n";
 import { apiErrorMessage } from "../../../shared/workspace-utils";
 import { useOptionalSettingsPage, useSettingsPage } from "../../../shared/settings-page-context";
 import { isRefusal, refusalAskingInstanceAdmin } from "../ask-instance-admin";
 
-/** What the key fields offer: the actions, the use level and the workspaces. */
+/**
+ * What the key fields offer: only what the person holds, over everywhere and in each
+ * workspace, so a key is never refused a right the screen offered.
+ */
 interface KeyOffer {
-  actions: string[];
-  useActions: string[];
+  /** The authoring actions and the use level the person holds somewhere. */
+  everywhere: PersonalKeyPlaceOffer;
   /** The instance level: `system.view` where the person holds it, never ticked in advance. */
   instanceActions: string[];
   /** The account and workspaces level, offered to everyone and never ticked in advance. */
   accountActions: string[];
-  /** What the key `catalyst setup` asks for starts with ticked (`setupKeyActions`). */
-  setupActions: string[];
-  /** The workspaces whose own assets the person holds a right on: a key can be limited to one. */
+  /**
+   * The workspaces whose own assets the person holds a right on, each with what they hold
+   * there: a key can be limited to one.
+   */
   workspaces: PersonalKeyWorkspace[];
   /** The instance has answered what it offers, or failed to. */
   settled: boolean;
@@ -89,20 +92,16 @@ export function ApiKeysPage() {
   });
   const context = contextQuery.data;
   const offer: KeyOffer = {
-    actions: personalKeyActionOffer(context),
-    useActions: personalKeyUseOffer(context),
+    everywhere: {
+      actions: personalKeyHeldActionOffer(context),
+      useActions: personalKeyUseOffer(context)
+    },
     instanceActions: personalKeyInstanceOffer(context),
     accountActions: personalKeyAccountOffer(context),
-    setupActions: setupKeyActions(context),
-    workspaces: (context?.workspaces ?? []).map((workspace) =>
-      workspace.kind === "personal"
-        ? { id: workspace.id }
-        : { id: workspace.id, name: workspace.name }
-    ),
+    workspaces: personalKeyWorkspaceOffer(context),
     settled: !contextQuery.isPending
   };
   const [initialCode] = useState(() => connectCodeOfSearch(window.location.search));
-  const [asksUseLevel] = useState(() => connectCodeAsksUseLevel(window.location.search));
   const [newKeyOpen, setNewKeyOpen] = useState(false);
   // The key of this person, shown once; another session's person never sees it.
   const [revealed, setRevealed] = useState<RevealedSecret & { ownerUserId: string }>();
@@ -143,7 +142,6 @@ export function ApiKeysPage() {
       >
         <ConnectCli
           initialCode={initialCode}
-          asksUseLevel={asksUseLevel}
           offer={offer}
           onConfirm={(userCode, body) =>
             mutations.confirmConnectCode.mutateAsync({ userCode, body })
@@ -227,8 +225,7 @@ function NewKeyDialog({
       <form id={formId} className="grid gap-4" onSubmit={submit}>
         <PersonalKeyFields
           draft={draft}
-          actions={offer.actions}
-          useActions={offer.useActions}
+          everywhere={offer.everywhere}
           instanceActions={offer.instanceActions}
           accountActions={offer.accountActions}
           workspaces={offer.workspaces}
@@ -245,14 +242,11 @@ function NewKeyDialog({
 /** The connect code field, what the code asks for once it is whole, and its confirmation. */
 function ConnectCli({
   initialCode,
-  asksUseLevel,
   offer,
   confirming,
   onConfirm
 }: {
   initialCode: string;
-  /** The CLI's `setup` sent the person here: its key starts as `setupKeyActions` says. */
-  asksUseLevel: boolean;
   offer: KeyOffer;
   confirming: boolean;
   onConfirm(userCode: string, body: ConfirmConnectCodeRequest): Promise<unknown>;
@@ -293,8 +287,6 @@ function ConnectCli({
           code={code}
           request={lookup.data}
           offer={offer}
-          // Only the code the CLI sent the person with asks for the level; a typed one does not.
-          asksUseLevel={asksUseLevel && code === initialCode}
           pending={confirming}
           onConfirm={async (body) => {
             await onConfirm(code, body);
@@ -342,24 +334,20 @@ function connectCodeProblem(
 
 /**
  * What a connect code asks for, the warning that only one's own terminal's code is confirmed,
- * and the fields of the key the CLI will collect.
+ * and the fields of the key the CLI will collect. The key starts with every right offered
+ * ticked but `connection.use` (`connectKeyActions`): the person holds each, so confirming as it
+ * stands is never refused.
  */
 export function ConnectCodeConfirm({
   code,
   request,
   offer,
-  asksUseLevel = false,
   pending,
   onConfirm
 }: {
   code: string;
   request: ConnectCode;
   offer: KeyOffer;
-  /**
-   * Start as `catalyst setup` asks: the person's reading, writing and publishing rights and
-   * the use level ticked, except `connection.use` (`setupKeyActions`).
-   */
-  asksUseLevel?: boolean;
   pending: boolean;
   /** A refusal is thrown and said under the fields. */
   onConfirm(body: ConfirmConnectCodeRequest): Promise<void>;
@@ -369,7 +357,7 @@ export function ConnectCodeConfirm({
   const [draft, setDraft] = useState<PersonalKeyDraft>(() =>
     initialPersonalKeyDraft(
       request.clientLabel ?? t("personalApiKeys.cliName"),
-      asksUseLevel ? offer.setupActions : []
+      connectKeyActions(offer.everywhere)
     )
   );
   const [problem, setProblem] = useState<KeyProblem>();
@@ -403,8 +391,7 @@ export function ConnectCodeConfirm({
       </Banner>
       <PersonalKeyFields
         draft={draft}
-        actions={offer.actions}
-        useActions={offer.useActions}
+        everywhere={offer.everywhere}
         // The key a connect code makes (`catalyst setup`, `catalyst login`) never carries the
         // instance level or the account and workspaces level: they are ticked on a key issued
         // above, by hand.

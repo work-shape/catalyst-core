@@ -14,8 +14,8 @@ import { administration } from "@work-shape/catalyst-chat-ui/admin";
 import {
   PersonalApiKeysTable,
   buildPersonalKeyScopes,
-  connectCodeAsksUseLevel,
   connectCodeOfSearch,
+  connectKeyActions,
   formatConnectCode,
   initialPersonalKeyDraft,
   instanceUrl,
@@ -23,14 +23,17 @@ import {
   keysSharingAName,
   personalKeyAccountOffer,
   personalKeyActionOffer,
+  personalKeyActionsKeptIn,
   personalKeyDraftProblem,
   personalKeyExpiryOf,
+  personalKeyHeldActionOffer,
   personalKeyInstanceOffer,
+  personalKeyOfferIn,
   personalKeyRequest,
   personalKeyUseOffer,
   personalKeyScopeParts,
   personalKeyState,
-  setupKeyActions,
+  personalKeyWorkspaceOffer,
   settingsCatalog,
   visibleSettingsPages,
   ApiKeysPage,
@@ -56,14 +59,30 @@ import {
 const now = new Date("2026-10-13T12:00:00.000Z");
 /** What the key fields of a connect code offer in these tests. */
 const cliOffer = {
-  actions: ["agent.read", "agent.write"],
-  useActions: [],
-  instanceActions: [],
-  accountActions: [],
-  setupActions: [],
-  workspaces: [],
+  everywhere: { actions: ["agent.read", "agent.write"], useActions: [] as string[] },
+  instanceActions: [] as string[],
+  accountActions: [] as string[],
+  workspaces: [] as {
+    id: string;
+    name?: string;
+    actions: string[];
+    useActions: string[];
+  }[],
   settled: true
 };
+
+/** What the instance answers a person who reads and edits agents and skills somewhere. */
+function editorContext(): PlatformContext {
+  return {
+    ...platformContext(),
+    authoringActions: ["agent.read", "agent.write", "skill.read", "skill.write"]
+  };
+}
+
+/** A held right of a Shared Workspace, as the key offer lists it. */
+function sharedWorkspace(id: string, name: string, actions: string[], useActions: string[] = []) {
+  return { id, name, actions, useActions };
+}
 
 function key(overrides: Partial<PersonalApiKey> = {}): PersonalApiKey {
   return {
@@ -125,15 +144,98 @@ describe("personal API key model", () => {
     ).toEqual(["connection.use", "workflow.use"]);
   });
 
-  it("starts the key `catalyst setup` asks for with the held authoring rights the screen offers and the use level but connection.use", () => {
-    expect(setupKeyActions(undefined)).toEqual([]);
+  it("offers only the authoring rights the person holds, everywhere and in each workspace", () => {
+    expect(personalKeyHeldActionOffer(undefined)).toEqual([]);
+    expect(personalKeyHeldActionOffer(platformContext())).toEqual([]);
+    // A Builder and Publisher of one Shared Workspace holds no delete, so none is offered.
+    const builder: PlatformContext = {
+      ...platformContext(),
+      authoringActions: ["agent.read", "agent.write", "agent.publish", "skill.read", "skill.write"],
+      useActions: ["connection.use", "workflow.use"],
+      workspaces: [
+        {
+          id: "ws-tax",
+          name: "Tax",
+          kind: "shared",
+          member: true,
+          actions: ["agent.read", "agent.write", "agent.publish", "skill.read", "skill.write"],
+          useActions: ["workflow.use"]
+        },
+        {
+          id: "ws-own",
+          name: "Personal",
+          kind: "personal",
+          member: true,
+          actions: ["skill.read", "skill.delete"]
+        }
+      ]
+    };
+    const everywhere = {
+      actions: personalKeyHeldActionOffer(builder),
+      useActions: personalKeyUseOffer(builder)
+    };
+    expect(everywhere.actions).toEqual([
+      "agent.read",
+      "agent.write",
+      "skill.read",
+      "skill.write",
+      "agent.publish"
+    ]);
+    const workspaces = personalKeyWorkspaceOffer(builder);
+    expect(workspaces).toEqual([
+      sharedWorkspace(
+        "ws-tax",
+        "Tax",
+        ["agent.read", "agent.write", "skill.read", "skill.write", "agent.publish"],
+        ["workflow.use"]
+      ),
+      // An instance before the workspace's use level offers none there.
+      { id: "ws-own", actions: ["skill.read", "skill.delete"], useActions: [] }
+    ]);
+    expect(personalKeyOfferIn(everywhere, workspaces, "")).toBe(everywhere);
+    expect(personalKeyOfferIn(everywhere, workspaces, "ws-own")).toEqual({
+      actions: ["skill.read", "skill.delete"],
+      useActions: []
+    });
+    expect(personalKeyOfferIn(everywhere, workspaces, "ws-gone")).toEqual({
+      actions: [],
+      useActions: []
+    });
+  });
+
+  it("starts a connect code's key with every right offered but connection.use", () => {
+    expect(connectKeyActions({ actions: [], useActions: [] })).toEqual([]);
     expect(
-      setupKeyActions({
-        ...platformContext(),
-        authoringActions: ["agent.read", "agent.write", "workflow.publish"],
+      connectKeyActions({
+        actions: ["agent.read", "agent.write", "agent.delete", "workflow.publish"],
         useActions: ["connection.use", "workflow.use"]
       })
-    ).toEqual(["agent.read", "agent.write", "workflow.use"]);
+    ).toEqual(["agent.read", "agent.write", "agent.delete", "workflow.publish", "workflow.use"]);
+  });
+
+  it("keeps ticked only what the person holds where the key is limited", () => {
+    const offer = {
+      everywhere: {
+        actions: ["agent.read", "agent.write", "agent.delete"],
+        useActions: ["connection.use", "workflow.use"]
+      },
+      workspaces: [sharedWorkspace("ws-tax", "Tax", ["agent.read", "agent.write"])],
+      instanceActions: ["system.view"],
+      accountActions: ["account.manage", "collaboration_workspace.manage"]
+    };
+    const ticked = [
+      "agent.read",
+      "agent.delete",
+      "workflow.use",
+      "system.view",
+      "account.manage",
+      "collaboration_workspace.manage"
+    ];
+    expect(personalKeyActionsKeptIn(ticked, offer, "")).toEqual(ticked);
+    expect(personalKeyActionsKeptIn(ticked, offer, "ws-tax")).toEqual([
+      "agent.read",
+      "collaboration_workspace.manage"
+    ]);
   });
 
   it("offers system.view as the instance level only to a person who holds it, and never ticks it for `catalyst setup`", () => {
@@ -145,9 +247,9 @@ describe("personal API key model", () => {
       authoringActions: ["agent.read", "system.view"]
     };
     expect(personalKeyInstanceOffer(holder)).toEqual(["system.view"]);
-    // It is a level of its own, not an authoring action, and setup starts without it.
+    // It is a level of its own, not an authoring action.
     expect(personalKeyActionOffer(holder)).not.toContain("system.view");
-    expect(setupKeyActions(holder)).toEqual(["agent.read"]);
+    expect(personalKeyHeldActionOffer(holder)).toEqual(["agent.read"]);
   });
 
   it("offers usage.view, audit.view and system.view as the instance level, each only to a person who holds it, and never in the key `catalyst setup` asks for", () => {
@@ -163,9 +265,7 @@ describe("personal API key model", () => {
       personalKeyInstanceOffer({ ...all, instanceActions: ["audit.view", "jobs.retry"] })
     ).toEqual(["audit.view"]);
     expect(personalKeyInstanceOffer({ ...all, instanceActions: ["usage.view_users"] })).toEqual([]);
-    expect(setupKeyActions(all)).toEqual(["agent.read", "agent.write", "workflow.use"]);
     for (const action of ["usage.view", "audit.view", "system.view"]) {
-      expect(setupKeyActions(all)).not.toContain(action);
       // An instance right is no scope of a key limited to a workspace.
       expect(buildPersonalKeyScopes([action], { workspaceId: "ws-tax", assetName: "" })).toEqual(
         []
@@ -207,7 +307,6 @@ describe("personal API key model", () => {
       "collaboration_workspace.manage"
     ]);
     expect(personalKeyActionOffer(context)).not.toContain("account.manage");
-    expect(setupKeyActions(context)).toEqual(["agent.read", "workflow.use"]);
   });
 
   it("sends account.manage only over the whole account and collaboration_workspace.manage at most narrowed to a workspace", () => {
@@ -226,10 +325,7 @@ describe("personal API key model", () => {
     expect(personalKeyRequest({ ...draft, workspaceId: "ws-tax" }, now)).toBeUndefined();
   });
 
-  it("reads whether the CLI's setup asked for the use level", () => {
-    expect(connectCodeAsksUseLevel("?code=bcdf-ghjk&level=use")).toBe(true);
-    expect(connectCodeAsksUseLevel("?code=bcdf-ghjk")).toBe(false);
-    expect(connectCodeAsksUseLevel("?code=bcdf-ghjk&level=admin")).toBe(false);
+  it("starts a draft with the actions it is given", () => {
     expect(initialPersonalKeyDraft("x", ["connection.use"]).actions).toEqual(["connection.use"]);
   });
 
@@ -352,7 +448,7 @@ describe("You > API keys", () => {
     expect(ids({ personalApiKeys: { enabled: true } })).toContain("you/api-keys");
   });
 
-  const renderConfirm = (locale: "en" | "de", asksUseLevel?: boolean) =>
+  const renderConfirm = (locale: "en" | "de") =>
     renderToStaticMarkup(
       createElement(
         TranslationProvider,
@@ -366,23 +462,25 @@ describe("You > API keys", () => {
           },
           offer: {
             ...cliOffer,
-            actions: ["agent.read", "agent.write"],
-            useActions: ["connection.use", "workflow.use"],
-            setupActions: ["agent.read", "agent.write", "workflow.use"]
+            everywhere: {
+              actions: ["agent.read", "agent.write"],
+              useActions: ["connection.use", "workflow.use"]
+            }
           },
-          ...(asksUseLevel === undefined ? {} : { asksUseLevel }),
           pending: false,
           onConfirm: async () => undefined
         })
       )
     );
 
-  it("ticks the authoring rights and the use level but connection.use for the key `catalyst setup` asks for, and nothing for any other", () => {
-    const setup = renderConfirm("en", true);
+  it("ticks every right offered but connection.use for a connect code's key", () => {
+    const setup = renderConfirm("en");
     expect(setup).toContain("Use");
     expect(setup.match(/aria-checked="true"/gu)?.length).toBe(3);
-    expect(renderConfirm("de", true)).toContain("Verwenden");
-    expect(renderConfirm("en").match(/aria-checked="true"/gu)).toBeNull();
+    expect(setup.match(/aria-checked="false"/gu)?.length).toBe(1);
+    expect(setup).toContain("Select all");
+    expect(renderConfirm("de")).toContain("Verwenden");
+    expect(renderConfirm("de")).toContain("Alle auswählen");
   });
 
   it("leaves the account and workspaces level off the page that confirms a connect code", () => {
@@ -400,10 +498,8 @@ describe("You > API keys", () => {
             },
             offer: {
               ...cliOffer,
-              accountActions: ["account.manage", "collaboration_workspace.manage"],
-              setupActions: ["agent.read", "agent.write"]
+              accountActions: ["account.manage", "collaboration_workspace.manage"]
             },
-            asksUseLevel: true,
             pending: false,
             onConfirm: async () => undefined
           })
@@ -418,7 +514,7 @@ describe("You > API keys", () => {
   });
 
   it("says beside connection.use alone that its results are copied to the computer that holds the key", () => {
-    const english = renderConfirm("en", true);
+    const english = renderConfirm("en");
     const copies = "The results of these calls are copied to the computer that holds the key.";
     expect(english.split(copies).length - 1).toBe(1);
     // The sentence describes the connection.use box, which stays off for `catalyst setup`.
@@ -619,8 +715,11 @@ describe("You > API keys in plain words", () => {
             },
             offer: {
               ...cliOffer,
-              actions: ["agent.write", "workflow.publish"],
-              workspaces: [{ id: "ws-tax", name: "Tax" }, { id: "ws-own" }]
+              everywhere: { actions: ["agent.write", "workflow.publish"], useActions: [] },
+              workspaces: [
+                sharedWorkspace("ws-tax", "Tax", ["agent.write"]),
+                { id: "ws-own", actions: ["agent.write"], useActions: [] }
+              ]
             },
             pending: false,
             onConfirm: async () => undefined
@@ -636,7 +735,9 @@ describe("You > API keys in plain words", () => {
     // One right under the other at every width.
     expect(english).not.toContain("sm:grid-cols-2");
     expect(english).toContain("Where you use the key, such as your laptop or a script.");
-    expect(english).toContain("If you lose a right later, the key loses it too.");
+    expect(english).toContain(
+      "Only the rights you hold here are listed. If you lose one later, the key loses it too."
+    );
     // The key is limited by choosing a workspace, everywhere until one is chosen; the asset
     // field waits for a workspace.
     expect(english).toContain("Limit to a workspace");
@@ -649,7 +750,9 @@ describe("You > API keys in plain words", () => {
     expect(german).toContain(
       "Wo du den Schlüssel verwendest, etwa auf dem Laptop oder in einem Skript</"
     );
-    expect(german).toContain("Verlierst du später ein Recht, verliert es auch der Schlüssel.");
+    expect(german).toContain(
+      "Hier stehen nur die Rechte, die du hier hast. Verlierst du später eins, verliert es auch der Schlüssel."
+    );
   });
 });
 
@@ -764,7 +867,7 @@ describe("You > API keys, for a person and an admin alike", () => {
       const request = new Request(input, init);
       const path = new URL(request.url).pathname;
       if (path !== apiOperations["me.api_keys.list"].buildPath({})) {
-        return Response.json(platformContext());
+        return Response.json(editorContext());
       }
       if (request.method !== "POST") return Response.json({ items: [] });
       posts.push(await request.text());
@@ -954,7 +1057,7 @@ describe("You > API keys, for a person and an admin alike", () => {
       const request = new Request(input, init);
       const path = new URL(request.url).pathname;
       if (path !== apiOperations["me.api_keys.list"].buildPath({})) {
-        return Response.json(platformContext());
+        return Response.json(editorContext());
       }
       if (request.method !== "POST") return Response.json({ items: [] });
       posted.push(await request.json());
@@ -995,8 +1098,9 @@ describe("You > API keys, for a person and an admin alike", () => {
   });
 
   // Replaces e2e/personal-api-keys.spec.ts "a CLI's connect code starts with no scope ticked
-  // and gets exactly the scopes ticked".
-  it("a CLI's connect code starts with no scope ticked and confirms exactly the scopes ticked", async () => {
+  // and gets exactly the scopes ticked": it starts with every right offered, None unticks them
+  // and Select all ticks them again.
+  it("a CLI's connect code starts with every right offered ticked and confirms exactly the scopes ticked", async () => {
     const confirmed: ConfirmConnectCodeRequest[] = [];
     const mounted = await mountPage(
       settingsPageContext(createApiClient({ baseUrl: SETTINGS_INSTANCE_URL, fetchImpl: fetch })),
@@ -1008,7 +1112,10 @@ describe("You > API keys, for a person and an admin alike", () => {
           createdAt: "2026-10-13T11:58:00.000Z",
           expiresAt: "2026-10-13T12:13:00.000Z"
         },
-        offer: { ...cliOffer, actions: personalKeyActionOffer(platformContext()) },
+        offer: {
+          ...cliOffer,
+          everywhere: { actions: personalKeyActionOffer(platformContext()), useActions: [] }
+        },
         pending: false,
         onConfirm: async (body) => {
           confirmed.push(body);
@@ -1016,6 +1123,22 @@ describe("You > API keys, for a person and an admin alike", () => {
       })
     );
     try {
+      const boxes = () => [...mounted.container.querySelectorAll('[role="checkbox"]')];
+      const ticked = () => boxes().filter((box) => box.getAttribute("aria-checked") === "true");
+      expect(ticked().length).toBe(boxes().length);
+      expect(buttonNamed("Select all", mounted.container).disabled).toBe(true);
+      await act(async () => {
+        buttonNamed("None", mounted.container).click();
+      });
+      expect(ticked()).toEqual([]);
+      expect(buttonNamed("None", mounted.container).disabled).toBe(true);
+      await act(async () => {
+        buttonNamed("Select all", mounted.container).click();
+      });
+      expect(ticked().length).toBe(boxes().length);
+      await act(async () => {
+        buttonNamed("None", mounted.container).click();
+      });
       await chooseScopes(mounted.container);
       await act(async () => {
         required(
@@ -1098,13 +1221,11 @@ describe("You > API keys, for a person and an admin alike", () => {
         },
         offer: {
           ...cliOffer,
-          actions: personalKeyActionOffer(holder),
+          everywhere: { actions: personalKeyHeldActionOffer(holder), useActions: [] },
           instanceActions: personalKeyInstanceOffer(holder),
           accountActions: personalKeyAccountOffer(holder),
-          setupActions: setupKeyActions(holder),
-          workspaces: [{ id: "ws-tax", name: "Tax" }]
+          workspaces: [sharedWorkspace("ws-tax", "Tax", ["agent.read"])]
         },
-        asksUseLevel: true,
         pending: false,
         onConfirm: async (body) => {
           confirmed.push(body);
