@@ -173,7 +173,7 @@ function AssistantRuntimePane({
   } = chatInputGuard;
   const runStartedWithChatInput = useCallback(
     (response: Parameters<typeof onRunStarted>[0]) => {
-      chatInputDelivered(response.conversation.id, response.chatInput);
+      chatInputDelivered();
       onRunStarted(response);
     },
     [chatInputDelivered, onRunStarted]
