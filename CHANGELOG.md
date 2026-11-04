@@ -7,6 +7,37 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.25 — 2026-11-04
+
+### Added
+
+- **Apps can copy to the clipboard:** A Copy button in an App, published or in draft, now works. The App's frame has the permissions policy `clipboard-write`, so `navigator.clipboard.writeText` succeeds on a user click. Reading the clipboard is still blocked, and the frame is sandboxed as before, without `allow-same-origin`.
+- **Custom roles reach people:** A person's page under Users has "More roles" ("Weitere Rollen"), a multi-select of the custom roles beside the built-in role, and a custom role's page under Access > Roles lists "People" ("Personen") who hold it, with Add person and a way to take it from each. Both go through `users.update` and its rules: the giver holds every right the role carries, nobody gives themselves a role, and only a Superadmin gives a role that carries a right only a Superadmin hands out. The holder gets the role's rights in every check and in their effective rights at once.
+- **Audit:** Giving and taking a custom role are the events `user.role_assigned` and `user.role_removed`, with the person and the role id only.
+- **Workspace default agent:** A Shared Workspace can name its own default agent, any agent available there, under Settings > Workspace > General ("Default agent"). New chats in the workspace start with it. Its owner or admin sets it, and so can an instance admin, also with `catalyst agent set-default <name> --workspace <id>` or `assets.set_default` with `workspaceId`. The instance's default agent then no longer has to be available in that workspace: it stays available in every workspace that names no default of its own and in every Personal Workspace, and a workspace created later gets it. Taking an agent away from a workspace that names it as its default, or deleting it, is refused with the workspace's name. The agent page's "Available in" says where a default has to stay. The change is audited as `config_asset.workspace_default_agent_set` with the workspace's and the agent's ids.
+- The runner images (the release's `runner` and the platform's `workspace-command-runner`) carry pydantic 2.14.2, so an agent's workspace command can validate structured data in Python.
+
+### Changed
+
+- **Release:** The packed size limit of chat-ui grows to 1,150,000 bytes; the rc.25 cut took it to 961,544, over the 960,000 limit.
+- **Docs:** A new guide page, "Where data belongs", says which part of the platform holds which data: a skill folder for instructions, small fixed reference files and offline calculators (with its limits and the libraries of the runner image), a Knowledge Base for a large or changing corpus, a Data Store for records, a Connection for outside systems and credentials, and the browser for a file an App makes. It says what to do instead of fetching with curl in a skill script. The Studio, config assets, Apps and index pages link to it.
+- **Agents:** The `platform-docs` skill, the Catalyst skill the CLI ships and the skill-change proposal tool carry the same decision in short form.
+- **Apps:** An App's page head has one chat button. "Edit in chat" is gone: for a person who may edit the App, "Chat" opens the agent that builds beside the draft with the App as subject, or brings back the dock's chat about this App. The agent loads the draft when it changes the App, so opening Chat shows nobody as editing it. For a person who may only use the App, "Chat" opens their last chat. The running dot stays on "Chat".
+
+### Fixed
+
+- **Settings gear:** The gear beside the account name in the sidebar footer always opens the person's own Settings, for every role and from every area. It led a Builder without administration rights to Studio, so "Connect a local agent" could not be found. The gear is shown to everyone now; instance and workspace pages stay in the Settings rail for those who hold the rights.
+- **Apps written through the CLI:** An App created or changed with `catalyst app put` (`assets.put` with files) is now saved as a commit of the App's repository, as a save in chat is. Such an App could not be opened for editing in chat: `app.edit` answered "This App has no draft repository to check out" and the preview stayed empty. An App written that way before this release gets its repository from its existing revisions, oldest first, on its next `app.edit` or `assets.put`; no migration is needed. `assets.adopt_repository` now also adopts Apps.
+- **Apps:** An open App gets the window. Its head is one slim row: a lower bar, a smaller name, small buttons and no description (Details still shows it). At phone width the row holds: Edit is its icon, Edit in chat folds into the menu, and the sidebar button stands level with the row. The App's frame fills everything under the head edge to edge, in light and dark; a browser test checks this at 1280 and 390 px.
+- **UI:** `PageHeader` takes `compact` for a `detail` head over content that needs the height, and `usePageHeaderControlSize()` tells a button placed into a head which size to take.
+- **Connect a local agent:** The page names the CLI released with this platform version, not an older one that no longer works against the instance. `PUBLISHED_CLI_VERSION` is set by `pnpm release:cut` to the version it cuts, and `pnpm release:check` and a unit test fail when it differs from the CLI package's version, so the two cannot drift. The release still publishes the CLI first.
+- **API keys:** Confirming a CLI's connect code and the New key form offer only the rights the person holds, everywhere or in the chosen workspace, and no longer list every action of the instance. A connect code's key starts with all of them ticked except deleting, `connection.use`, the instance level and the account level: a local agent holds that key, so deleting stays a deliberate tick. A Builder and Publisher of one workspace confirms as it stands and gets a key instead of a refusal. "Select all" and "None" tick or untick the list at once. `platform.context.get` now names deleting rights among `authoringActions` and the use level a key may carry per workspace (`workspaces[].useActions`).
+- **Settings navigation:** On a short window the Settings rail now scrolls its entries to their true end, so the last one, System, shows whole above the lower edge, also folded open. The title stays on its line while the entries scroll under it and fade out at the edges, instead of being cut off at a hard line.
+
+### Database
+
+- `0193_workspace_default_agent` adds the nullable column `collaboration_workspaces.default_agent_name`. Every workspace starts without one and follows the instance default as before.
+
 ## 0.8.0-rc.24 — 2026-11-04
 
 ### Changed
