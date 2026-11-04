@@ -5,8 +5,9 @@ import { jsonObject } from "./support/assertions";
 import { createWorkspaceHarness } from "./support/workspace-tools-harness";
 
 // HTML to PDF for an agent (PDF-1): the agent prints an HTML file of its workspace in the
-// instance's own renderer and hands the person the PDF as a download. Every test here fails
-// before PDF-1: an agent had no tool for a PDF and reached for an outside service or a library.
+// instance's own renderer, checks the pages and hands the final PDF over once with
+// workspace.promote_artifact. Before PDF-1 an agent had no tool for a PDF and reached for an
+// outside service or a library.
 
 const REPORT = "<h1>Monthly report 4711</h1>";
 const PDF = new TextEncoder().encode("%PDF-1.7 fixture");
@@ -34,13 +35,12 @@ async function withReport(htmlPdf?: HtmlPdfService) {
 }
 
 describe("workspace.html_to_pdf", () => {
-  it("prints a workspace HTML file to a PDF in the workspace and hands it over as a download", async () => {
+  it("prints a workspace HTML file to a PDF in the workspace", async () => {
     const { service, asked } = renderer();
     const harness = await withReport(service);
 
     const result = await harness.runTool(HTML_TO_PDF_TOOL_NAME, {
       path: "report/index.html",
-      filename: "Monthly report.pdf",
       format: "A4",
       landscape: true,
       margin: { top: "15mm" }
@@ -49,20 +49,11 @@ describe("workspace.html_to_pdf", () => {
     expect(asked).toEqual([
       { html: REPORT, options: { format: "A4", landscape: true, margin: { top: "15mm" } } }
     ]);
-    const output = jsonObject(result.output);
-    expect(output).toMatchObject({
+    expect(jsonObject(result.output)).toEqual({
       path: "report/index.pdf",
-      filename: "Monthly report.pdf",
       pages: 3,
       byteSize: PDF.byteLength
     });
-    expect(result.artifacts).toEqual([
-      expect.objectContaining({
-        artifactId: output.artifactId,
-        filename: "Monthly report.pdf",
-        mimeType: "application/pdf"
-      })
-    ]);
     // The trace names the path, the pages and the size, never the document or the PDF.
     expect(JSON.stringify(result.auditSummary)).not.toContain("Monthly report 4711");
     expect(result.auditSummary?.metadata).toEqual({
@@ -83,6 +74,45 @@ describe("workspace.html_to_pdf", () => {
     const stored = files.find((file) => file.path === "report/index.pdf");
     expect(stored).toMatchObject({ mimeType: "application/pdf", byteSize: PDF.byteLength });
     expect(harness.objectStore.bytes(stored?.objectKey ?? "")).toEqual(PDF);
+  });
+
+  it("makes no download card, so only the promoted final PDF reaches the person", async () => {
+    const harness = await withReport(renderer().service);
+
+    const draft = await harness.runTool(HTML_TO_PDF_TOOL_NAME, {
+      path: "report/index.html",
+      output: "out/report.pdf"
+    });
+    if (draft.status !== "success") throw new Error(JSON.stringify(draft));
+    expect(draft.artifacts ?? []).toEqual([]);
+    expect(jsonObject(draft.output)).not.toHaveProperty("artifactId");
+    const again = await harness.runTool(HTML_TO_PDF_TOOL_NAME, {
+      path: "report/index.html",
+      output: "out/report.pdf"
+    });
+    if (again.status !== "success") throw new Error(JSON.stringify(again));
+    expect(again.artifacts ?? []).toEqual([]);
+
+    const promoted = await harness.runTool("workspace.promote_artifact", {
+      path: "out/report.pdf",
+      kind: "document.pdf",
+      filename: "Monthly report.pdf"
+    });
+    if (promoted.status !== "success") throw new Error(JSON.stringify(promoted));
+    expect(promoted.artifacts).toEqual([
+      expect.objectContaining({ filename: "Monthly report.pdf", mimeType: "application/pdf" })
+    ]);
+  });
+
+  it("refuses the download name, which belongs to workspace.promote_artifact", async () => {
+    const { service, asked } = renderer();
+    const harness = await withReport(service);
+    const result = await harness.runTool(HTML_TO_PDF_TOOL_NAME, {
+      path: "report/index.html",
+      filename: "Monthly report.pdf"
+    });
+    expect(result.status).toBe("failed");
+    expect(asked).toEqual([]);
   });
 
   it("is offered only where the instance runs a renderer", async () => {
