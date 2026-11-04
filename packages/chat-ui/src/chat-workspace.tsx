@@ -221,7 +221,15 @@ function ChatWorkspaceContent({
   // publish of the draft it is still writing.
   const [dockAgentWork, setDockAgentWork] = useState<DockAgentWork>();
   // Build and Try in the dock on an agent's page.
-  const agentTry = useAgentTry({ client: model.selectedChat.client, dock });
+  const agentTry = useAgentTry({
+    client: model.selectedChat.client,
+    dock,
+    startBuild: model.dockChat.startPageChat
+  });
+  // Build on an agent's page holds only an agent that builds: with none offered, an empty Build
+  // says so in place of a chat with an agent that cannot.
+  const buildUnoffered =
+    agentTry.view?.tab === "build" && dock.conversationId === undefined && !model.dockChat.builds;
   // "Chat" beside an agent's page with a draft opens Try on the draft: the two are one.
   const openDockChat = agentTry.chat ?? model.dockChat.open;
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -989,6 +997,7 @@ function ChatWorkspaceContent({
                                                 <DockConversationPane
                                                   chat={chat}
                                                   agentTry={agentTry.pane}
+                                                  buildUnoffered={buildUnoffered}
                                                 />
                                                 {chatDrop?.draggingFiles ? (
                                                   <ChatDropOverlay />

@@ -8,6 +8,7 @@ import {
   dockKindOfRoute,
   ThreadStartBlock,
   ThreadWelcomeHeading,
+  BuildUnoffered,
   TRY_DOCK_KIND,
   type ConversationStart
 } from "./support/chat-ui";
@@ -73,17 +74,16 @@ function startPage(start: ConversationStart | undefined, locale: "en" | "de" = "
   );
 }
 
+type WorkspaceRoute = Parameters<typeof dockKindOfRoute>[0];
+
 const DEMO_WORDS = ["demo workflow", "Check weather", "Oslo", "Review a workflow", "Demo subtitle"];
 
 describe("the start page of a dock that builds", () => {
-  it("knows the kind of asset from the page beside the dock", () => {
+  it("knows the kind a new asset of which the list beside the dock builds", () => {
     const workspace = { collaborationWorkspaceId: "ws" };
     expect(dockKindOfRoute({ kind: "workflows", ...workspace })).toBe("workflow");
-    expect(dockKindOfRoute({ kind: "workflow", workflow: "w", ...workspace })).toBe("workflow");
     expect(dockKindOfRoute({ kind: "apps", ...workspace })).toBe("app");
-    expect(dockKindOfRoute({ kind: "app-edit", app: "a", ...workspace })).toBe("app");
     expect(dockKindOfRoute({ kind: "build-kind", assetKind: "data_store" })).toBe("data_store");
-    expect(dockKindOfRoute({ kind: "build-asset", assetKind: "skill", name: "s" })).toBe("skill");
     expect(dockKindOfRoute({ kind: "inbox" })).toBeUndefined();
     // A subject wins over the page beside the dock.
     expect(conversationStart({ kind: "app", title: "Rate card" }, "workflow")).toEqual({
@@ -145,9 +145,43 @@ describe("the start page of a dock that builds", () => {
     );
   });
 
+  // An existing agent's page greeted an empty dock with "What should the new agent do?" and
+  // new-agent examples: the page of an asset was read as its kind's list.
+  it.each<WorkspaceRoute>([
+    { kind: "build-asset", assetKind: "agents", name: "quote_bot" },
+    { kind: "build-asset", assetKind: "skills", name: "check_invoice" },
+    { kind: "app-edit", collaborationWorkspaceId: "ws", app: "rates" },
+    { kind: "app", collaborationWorkspaceId: "ws", app: "rates" },
+    { kind: "workflow", collaborationWorkspaceId: "ws", workflow: "summary" },
+    { kind: "workflow-runs", collaborationWorkspaceId: "ws", workflow: "summary" }
+  ])("never greets a new asset beside the page of an existing one: $kind", (route) => {
+    const dockKind = dockKindOfRoute(route);
+    expect(dockKind).toBeUndefined();
+    expect(conversationStart(undefined, dockKind)).toBeUndefined();
+    // Its conversation about the asset speaks of that asset.
+    const start = conversationStart({ kind: "agent", title: "Quote bot" }, dockKind);
+    const html = startPage(start, "de");
+    expect(html).toContain("Was soll sich an „Quote bot“ ändern?");
+    expect(html).not.toContain("Was soll der neue Agent tun?");
+    expect(html).not.toContain("Kundenfragen beantworten");
+  });
+
   it("keeps the agent's own welcome and prompts in a chat of its own", () => {
     const html = startPage(undefined);
     expect(html).toContain("How can I help with the demo workflow?");
     expect(html).toContain("Check weather");
+  });
+});
+
+describe("Build on an agent's page where no agent that builds is offered", () => {
+  it.each([
+    ["en", "No agent that builds is offered here; an admin can offer one."],
+    ["de", "Hier wird kein Agent zum Bauen angeboten; ein Admin kann einen anbieten."]
+  ] as const)("says so in one sentence in %s, with no chat to start", (locale, sentence) => {
+    const html = renderToStaticMarkup(
+      createElement(TranslationProvider, { children: null, locale }, createElement(BuildUnoffered))
+    );
+    expect(html).toContain(sentence);
+    expect(html).not.toContain("textarea");
   });
 });

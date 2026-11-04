@@ -105,9 +105,19 @@ async function openTryConversation(
  * Build and Try in the dock on an agent's page (section 4.7c). The page offers its agent; Try
  * shows the reader's own Try conversation with it, which the instance opens on the first show.
  * A Publish or a Discard of the draft deletes it: Try then opens a fresh one in its place and
- * never shows the old messages.
+ * never shows the old messages. Build without a conversation of its own starts the page's, about
+ * the agent with the agent that builds, where the page offers one.
  */
-export function useAgentTry({ client, dock }: { client: ApiClient; dock: WorkspaceDock }): {
+export function useAgentTry({
+  client,
+  dock,
+  startBuild
+}: {
+  client: ApiClient;
+  dock: WorkspaceDock;
+  /** Starts the page's conversation about its agent; absent where none is offered. */
+  startBuild?: (() => void) | undefined;
+}): {
   host: AgentTryHost;
   view: AgentTryView | undefined;
   pane: AgentTryPaneState | undefined;
@@ -122,7 +132,7 @@ export function useAgentTry({ client, dock }: { client: ApiClient; dock: Workspa
   const [attempt, setAttempt] = useState(0);
   // The Try conversation opened last, so going back to Try does not open it again.
   const opened = useRef<{ agent: string; conversationId: string } | undefined>(undefined);
-  const { showTry, showBuild, tryAgent, tab } = dock;
+  const { showTry, showBuild, tryAgent, tab, buildConversationId } = dock;
   const agent = target?.agent;
   const workspaceId = target?.workspaceId;
   const trying = tab === "try" && agent !== undefined && tryAgent === agent;
@@ -165,14 +175,16 @@ export function useAgentTry({ client, dock }: { client: ApiClient; dock: Workspa
   const select = useCallback(
     (next: DockTab) => {
       if (next === "build") {
-        showBuild();
+        // Try stays in front until the conversation about the agent is there to take its place.
+        if (buildConversationId === undefined && startBuild !== undefined) startBuild();
+        else showBuild();
         return;
       }
       if (agent === undefined) return;
       const known = opened.current?.agent === agent ? opened.current.conversationId : undefined;
       showTry(agent, known);
     },
-    [agent, showBuild, showTry]
+    [agent, buildConversationId, showBuild, showTry, startBuild]
   );
   const open = useCallback(() => select("try"), [select]);
   const retry = useCallback(() => setAttempt((count) => count + 1), []);

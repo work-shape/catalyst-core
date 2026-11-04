@@ -33,6 +33,11 @@ export interface WorkspaceDock {
   conversationId: string | undefined;
   /** Build, the dock as on every page, or Try on an agent's page. */
   tab: DockTab;
+  /**
+   * The conversation Build shows, also while Try is in front: the address's, or the one of a
+   * dock the person closed. Undefined where Build would open empty.
+   */
+  buildConversationId: string | undefined;
   /** The agent Try runs, while the dock shows Try. */
   tryAgent: string | undefined;
   /** The dock is shown beside or over the page. */
@@ -45,8 +50,9 @@ export interface WorkspaceDock {
   /** Where the dock lies over the page: whether it is in front of it. */
   inFront: boolean;
   /**
-   * Goes to a page with this conversation in the dock. `replace` takes the place of the current
-   * entry of the history, as a later open of the same run does.
+   * Goes to a page with this conversation in the dock, in place of Try's where it is another.
+   * `replace` takes the place of the current entry of the history, as a later open of the same
+   * run does.
    */
   openPage(route: WorkspaceRoute, conversationId: string, options?: { replace?: boolean }): void;
   /** Puts a conversation into the open dock of this page; without one, the dock is empty. */
@@ -148,7 +154,14 @@ export function useWorkspaceDock({
 
   const openPage = useCallback(
     (target: WorkspaceRoute, conversationId: string, options?: { replace?: boolean }) => {
-      setMemory((current) => (current.inFront ? current : { ...current, inFront: true }));
+      setMemory((current) => {
+        // Another conversation than Try's is Build's: the dock shows it, as `show` does.
+        const trying =
+          current.trying?.conversationId === conversationId ? current.trying : undefined;
+        return current.inFront && trying === current.trying
+          ? current
+          : { ...current, inFront: true, trying };
+      });
       go(target, conversationId, options);
     },
     [go]
@@ -249,6 +262,7 @@ export function useWorkspaceDock({
     () => ({
       conversationId: trying ? trying.conversationId : (addressChat ?? memory.closed),
       tab: trying ? "try" : "build",
+      buildConversationId: addressChat ?? memory.closed,
       tryAgent: trying?.agent,
       open: trying !== undefined || addressChat !== undefined || memory.emptyOpen,
       last: closedConversation,

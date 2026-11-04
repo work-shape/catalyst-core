@@ -369,6 +369,7 @@ describe("workspace rail conversation titles", () => {
     const dock = {
       conversationId: "conv_new",
       tab: "build" as const,
+      buildConversationId: "conv_new",
       tryAgent: undefined,
       open: true,
       inFront: false,

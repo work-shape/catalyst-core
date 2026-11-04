@@ -1070,6 +1070,13 @@ export function useWorkspaceChatModel({
     dockChat: {
       open: openChat,
       newChat,
+      builds: buildingAgentName !== undefined,
+      startPageChat:
+        pageChat === undefined
+          ? undefined
+          : () => {
+              pageChat.start({ fresh: true }).catch(() => undefined);
+            },
       offerPageChat,
       offerCreationScope
     },
