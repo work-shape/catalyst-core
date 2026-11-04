@@ -57591,6 +57591,12 @@
             "items": {
               "type": "string"
             }
+          },
+          "useActions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [

@@ -44,9 +44,8 @@ const BASE_KEY_ACTIONS = [
 const KEY_ACTION = /\.(read|write|delete|publish)$/u;
 
 /**
- * The actions a new key offers: the authoring actions of agents and skills and of every kind
- * the instance lists. Which of them the person holds, the instance checks when the key is
- * issued.
+ * The authoring actions a new key may name, in the order the screen lists them: those of
+ * agents and skills and of every kind the instance lists.
  */
 export function personalKeyActionOffer(context: PlatformContext | undefined): string[] {
   const fromKinds = (context?.kinds ?? []).flatMap(({ actions }) => [
@@ -58,6 +57,16 @@ export function personalKeyActionOffer(context: PlatformContext | undefined): st
   return [...new Set([...BASE_KEY_ACTIONS, ...fromKinds])].filter((action) =>
     KEY_ACTION.test(action)
   );
+}
+
+/**
+ * The authoring actions a new key offers over everywhere the person holds them: the ones of
+ * `personalKeyActionOffer` the instance says the person holds somewhere. A right the person
+ * lacks is not offered, so a key is never refused one the screen offered.
+ */
+export function personalKeyHeldActionOffer(context: PlatformContext | undefined): string[] {
+  const held = new Set(context?.authoringActions ?? []);
+  return personalKeyActionOffer(context).filter((action) => held.has(action));
 }
 
 /**
@@ -85,7 +94,7 @@ export function personalKeyInstanceOffer(context: PlatformContext | undefined): 
 }
 
 /** Whether an action is of the whole instance, which no workspace or asset narrows. */
-export function isPersonalKeyInstanceAction(action: string): boolean {
+function isPersonalKeyInstanceAction(action: string): boolean {
   return PERSONAL_KEY_INSTANCE_ACTIONS.some((instanceAction) => instanceAction === action);
 }
 
@@ -100,28 +109,93 @@ export function personalKeyAccountOffer(context: PlatformContext | undefined): s
   return context === undefined ? [] : [...PERSONAL_API_KEY_ACCOUNT_LEVEL_ACTIONS];
 }
 
-/**
- * What the key `catalyst setup` asks for starts with: the reading, writing and publishing
- * rights the person holds among the ones offered, and the use level without `connection.use`.
- * Deleting is ticked by hand, and so are the instance level and `connection.use`: with it the results of a
- * Connection's calls exposed to outside clients are copied to the computer that holds the key,
- * a choice of its own that starts off (connections-and-secrets.md, Exposure to outside
- * clients).
- */
-export function setupKeyActions(context: PlatformContext | undefined): string[] {
-  const offered = new Set(personalKeyActionOffer(context));
-  return [
-    ...(context?.authoringActions ?? []).filter((action) => offered.has(action)),
-    ...personalKeyUseOffer(context).filter((action) => action !== CONNECTION_ACTIONS.use)
-  ];
+/** A workspace a key can be limited to, with what the person holds there. */
+export interface PersonalKeyWorkspace {
+  id: string;
+  /** Absent for the person's Personal Workspace, which is named "Personal". */
+  name?: string;
+  /** The authoring actions the person holds on what the workspace owns, in the screen's order. */
+  actions: string[];
+  /** The use level the person may hand on in the workspace. */
+  useActions: string[];
 }
 
 /**
- * Whether the address the CLI opened asks for the use level: `catalyst setup` adds
- * `level=use`, so the key a local agent gets can publish what its person may publish.
+ * The workspaces a key can be limited to, each with the authoring actions and the use level
+ * the person holds there: a key limited to one offers those and no others.
  */
-export function connectCodeAsksUseLevel(search: string): boolean {
-  return new URLSearchParams(search).getAll("level").includes("use");
+export function personalKeyWorkspaceOffer(
+  context: PlatformContext | undefined
+): PersonalKeyWorkspace[] {
+  const order = personalKeyActionOffer(context);
+  return (context?.workspaces ?? []).map((workspace) => ({
+    id: workspace.id,
+    ...(workspace.kind === "personal" ? {} : { name: workspace.name }),
+    actions: order.filter((action) => workspace.actions.includes(action)),
+    useActions: [...(workspace.useActions ?? [])]
+  }));
+}
+
+/** What a key offers where it is limited: everywhere, or in one workspace. */
+export interface PersonalKeyPlaceOffer {
+  actions: readonly string[];
+  useActions: readonly string[];
+}
+
+/**
+ * What a key limited to the workspace offers, or over everywhere for none: only what the
+ * person holds there.
+ */
+export function personalKeyOfferIn(
+  everywhere: PersonalKeyPlaceOffer,
+  workspaces: readonly PersonalKeyWorkspace[],
+  workspaceId: string
+): PersonalKeyPlaceOffer {
+  if (!workspaceId) return everywhere;
+  const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
+  return { actions: workspace?.actions ?? [], useActions: workspace?.useActions ?? [] };
+}
+
+/**
+ * What stays ticked when the key is limited to the workspace, or to none: what the person holds
+ * there. A workspace narrows the key, so the instance level and the account do not go with it.
+ */
+export function personalKeyActionsKeptIn(
+  ticked: readonly string[],
+  offer: {
+    everywhere: PersonalKeyPlaceOffer;
+    workspaces: readonly PersonalKeyWorkspace[];
+    instanceActions: readonly string[];
+    accountActions: readonly string[];
+  },
+  workspaceId: string
+): string[] {
+  const place = personalKeyOfferIn(offer.everywhere, offer.workspaces, workspaceId);
+  const kept = new Set([
+    ...place.actions,
+    ...place.useActions,
+    ...(workspaceId ? [] : offer.instanceActions),
+    ...offer.accountActions.filter(
+      (action) => !workspaceId || action !== PERSONAL_API_KEY_ACCOUNT_ACTION
+    )
+  ]);
+  return ticked.filter((action) => kept.has(action));
+}
+
+/**
+ * What a key confirmed for a connect code (`catalyst setup`, `catalyst login`) starts with:
+ * every authoring action and every use right offered, which the person all holds, but deleting
+ * and `connection.use`. A local agent holds the key, so a deletion stays a deliberate tick. With
+ * `connection.use` the results of a Connection's calls exposed to outside clients are
+ * copied to the computer that holds the key, a choice of its own that starts off
+ * (connections-and-secrets.md, Exposure to outside clients). The instance level and the
+ * account and workspaces level are no part of such a key.
+ */
+export function connectKeyActions(offer: PersonalKeyPlaceOffer): string[] {
+  return [
+    ...offer.actions.filter((action) => !action.endsWith(".delete")),
+    ...offer.useActions.filter((action) => action !== CONNECTION_ACTIONS.use)
+  ];
 }
 
 /** An asset's id as a key's scope may name it: the characters any kind's names are made of. */
@@ -260,10 +334,8 @@ export interface PersonalKeyDraft {
 }
 
 /**
- * A new key starts with no scope ticked: it gets only what the person ticks. Ticked in advance,
- * every right the person holds went into the key unless they found and unticked each one, and
- * a click on the scope they wanted took it away. The one exception is the use level a CLI's
- * `setup` asks for, which its confirmation starts with (`actions`).
+ * A new key starts with no scope ticked: it gets only what the person ticks, and "Select all"
+ * ticks every one offered. A connect code's key starts with `connectKeyActions` (`actions`).
  */
 export function initialPersonalKeyDraft(
   name = "",
