@@ -527,11 +527,10 @@ describe("app.save in a conversation", () => {
     expect(revisions.every((revision) => revision.commit !== undefined)).toBe(true);
   });
 
-  it("refuses app.edit without app.write, across workspaces, and in a shared transcript before copying files or changing the subject", async () => {
+  it("refuses app.edit without app.write and in a shared transcript before copying files or changing the subject", async () => {
     expectStatus(await t.putApp(t.admin.id, "edit-rights", appFiles("private source")), 200);
     for (const [user, where, code] of [
       [t.kai, "private", "FORBIDDEN"],
-      [t.admin, "personal", "NOT_FOUND"],
       [t.admin, "shared", "CONFLICT"]
     ] as const) {
       const chat = await conversationOf(user, where);
@@ -548,6 +547,25 @@ describe("app.save in a conversation", () => {
         })
       ).toBeUndefined();
     }
+  });
+
+  it("loads an App of another workspace into a conversation of the person's own, under the App's rights", async () => {
+    // An App owned by one workspace and offered in another, such as one a person shares from
+    // their personal workspace: who may write it changes it from a chat of their own elsewhere.
+    expectStatus(await t.putApp(t.admin.id, "edit-elsewhere", appFiles("owned elsewhere")), 200);
+    const chat = await conversationOf(t.admin, "personal");
+    const edited = await calls.editApp(await contextOf(t.admin, chat, "app.edit"), {
+      name: "edit-elsewhere"
+    });
+    expect(edited).toMatchObject({ path: "apps/edit-elsewhere" });
+    expect(await subjectOf(chat)).toEqual({ kind: "app", name: "edit-elsewhere" });
+    await changeAndOpen(chat, "apps/edit-elsewhere", "changed elsewhere");
+    expect(
+      await calls.saveApp(await contextOf(t.admin, chat), {
+        ...later,
+        page: "apps/edit-elsewhere"
+      })
+    ).toMatchObject({ saved: true, name: "edit-elsewhere" });
   });
 
   it("starts a conversation of the person's own that holds the App's checkout (the App page's Chat, CHECKOUT-2)", async () => {

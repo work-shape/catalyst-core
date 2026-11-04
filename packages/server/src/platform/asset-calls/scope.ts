@@ -23,6 +23,7 @@ import {
   accessOf,
   notOfConversation,
   ownerOf,
+  requireOwnTranscript,
   subjectUnavailable
 } from "../../conversations/platform-asset-subject";
 import { kindPreviewOf } from "../../pages/asset-preview";
@@ -120,8 +121,11 @@ export function createAssetCallScope(options: AssetWorkflowOptions) {
   }
 
   /**
-   * Where the operations find an asset. An asset of a workspace, such as an App, is read and
-   * saved in a conversation of that workspace, and is missing from every other one.
+   * Where the operations find an asset: in the workspace that owns it, whose rights the read
+   * and the save then ask. An asset of another workspace than the conversation's, such as an
+   * App another person owns and shares with this workspace, is reached only in a conversation
+   * of the person's own, as a conversation about an asset always is; in a transcript others
+   * read it is missing.
    */
   async function addressOf(
     conversation: Conversation,
@@ -134,7 +138,9 @@ export function createAssetCallScope(options: AssetWorkflowOptions) {
     });
     if (row?.scope.kind !== "workspace") return subject;
     if (row.scope.workspaceId !== conversation.collaborationWorkspaceId) {
-      throw subjectUnavailable();
+      await requireOwnTranscript(options, conversation).catch(() => {
+        throw subjectUnavailable();
+      });
     }
     return { ...subject, workspaceId: row.scope.workspaceId };
   }

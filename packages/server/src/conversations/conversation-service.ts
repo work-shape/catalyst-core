@@ -342,10 +342,7 @@ export class ConversationWorkflow {
       throw new AppError("VALIDATION_FAILED", "A checkout names an App as the subject");
     }
     const { workspace } = await this.workspaceToWorkIn(user, command.collaborationWorkspaceId);
-    await requireAppToCheckOut(this.options, access, {
-      name: subject.name,
-      workspaceId: workspace.id
-    });
+    await requireAppToCheckOut(this.options, access, { name: subject.name });
     const conversation = await this.createConversation(user, context, {
       ...command,
       collaborationWorkspaceId: workspace.id,
