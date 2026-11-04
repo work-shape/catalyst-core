@@ -18,6 +18,7 @@ import {
   PopoverContent,
   PopoverTrigger,
   SkeletonList,
+  usePageHeaderControlSize,
   type PageHeaderAction
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
@@ -83,9 +84,10 @@ export function CopyAppLinkItem({ workspaceId, app }: { workspaceId: string; app
 export function CopyAppLinkButton({ workspaceId, app }: { workspaceId: string; app: string }) {
   const { t } = useTranslation();
   const { copied, copy } = useCopyAppLink(workspaceId, app);
+  const size = usePageHeaderControlSize();
   return (
     <>
-      <Button variant="outline" onClick={copy}>
+      <Button variant="outline" size={size} onClick={copy}>
         {copied ? <Check aria-hidden="true" /> : <Link aria-hidden="true" />}
         {copied ? t("apps.linkCopied") : t("apps.copyLink")}
       </Button>
@@ -150,6 +152,7 @@ export function AppHeader({
   primaryAction,
   menu,
   tabs,
+  compact = false,
   backHref,
   onBack
 }: {
@@ -175,6 +178,8 @@ export function AppHeader({
   menu?: ReactNode;
   /** The views of the App, as a `TabsList`: a row under the head, whose line ends the head. */
   tabs?: ReactNode;
+  /** The slim head of an open App, which leaves the App the height. */
+  compact?: boolean;
   backHref: string;
   onBack(): void;
 }) {
@@ -200,6 +205,7 @@ export function AppHeader({
           </PageHeaderBack>
         }
         title={name}
+        compact={compact}
         titleEditor={titleEditor}
         description={description}
         status={status}

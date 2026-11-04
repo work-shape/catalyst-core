@@ -19,7 +19,6 @@ import {
 import {
   APP_START_ROUTE,
   appBuilder,
-  appDescription,
   appDraftShown,
   appRightsOn,
   appTitle,
@@ -88,7 +87,6 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
         name={name}
         unassignedScopes={shown?.unassignedScopes}
         editors={record.app?.appEditors}
-        description={appDescription(record.app?.config)}
         workspace={workspace}
         rights={rights}
         publishedRevision={published}
@@ -139,7 +137,6 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
 /** Layout 2 for given facts: the head with what this reader may do, and the App under it. */
 export function AppViewFrame({
   name,
-  description,
   editors,
   app,
   draftShown,
@@ -158,8 +155,6 @@ export function AppViewFrame({
   onRename
 }: {
   name: string;
-  /** What the App does, in one line after its name. */
-  description?: string;
   editors?: Asset["appEditors"];
   /** The id of the App, which its link carries. */
   app: string;
@@ -195,7 +190,7 @@ export function AppViewFrame({
   // right is offered: a menu of one item would hide it behind a second press.
   const lead =
     rights.write && draftShown ? (
-      <Button variant="outline" onClick={onEdit}>
+      <Button variant="outline" size="sm" onClick={onEdit}>
         <Pencil aria-hidden="true" />
         {t("apps.edit")}
       </Button>
@@ -209,8 +204,8 @@ export function AppViewFrame({
       header={
         <AppHeader
           name={name}
+          compact
           titleEditor={titleEditor}
-          description={description}
           editingLine={editWithAgent.editingLine}
           // The number of a revision is a builder's: whoever uses the App is shown the App.
           state={

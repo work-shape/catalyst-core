@@ -23,7 +23,9 @@ export {
   PageHeader,
   PageHeaderBack,
   PageHeaderShellAction,
+  usePageHeaderControlSize,
   type PageHeaderAction,
+  type PageHeaderControlSize,
   type PageHeaderBackProps,
   type PageHeaderProps,
   type PageHeaderVariant

@@ -12,7 +12,8 @@ import {
   TabsTrigger,
   Tooltip,
   TooltipContent,
-  TooltipTrigger
+  TooltipTrigger,
+  usePageHeaderControlSize
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import type { DockTab } from "./dock-try";
@@ -282,6 +283,8 @@ export function DockPageAction({
   onClick(): void;
 }) {
   const { t } = useTranslation();
+  // A compact head holds small buttons: "Chat" takes their height.
+  const size = usePageHeaderControlSize();
   const label = kind === "open" ? t("dock.chat") : t("dock.showChat");
   const dot = running ? (
     <>
@@ -304,7 +307,7 @@ export function DockPageAction({
     );
   }
   const button = (
-    <Button variant="secondary" onClick={onClick} data-testid="dock-page-action">
+    <Button variant="secondary" size={size} onClick={onClick} data-testid="dock-page-action">
       <MessageSquare aria-hidden="true" />
       {label}
       {dot}
