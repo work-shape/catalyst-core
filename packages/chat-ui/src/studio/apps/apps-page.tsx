@@ -173,9 +173,8 @@ export function AppsPage() {
         {...(rename.app === undefined
           ? {}
           : { renaming: { app: rename.app, field: rename.field } })}
-        // The agent opens in the dock, as a New button opens it. Where the dock creates nothing,
-        // in a workspace whose conversations its members read, a new chat opens instead.
-        onBuild={host.startNew ?? host.startChat}
+        // The empty list and New open the agent that builds Apps, never the workspace's default:
+        // where none is offered here or the reader may build none, neither offers building.
         {...(host.startNew ? { onNew: host.startNew } : {})}
       />
       {detailsOf ? (
@@ -211,7 +210,6 @@ export function AppsPageView({
   now,
   onOpenRoute,
   onAction,
-  onBuild,
   onNew,
   renaming
 }: {
@@ -223,12 +221,11 @@ export function AppsPageView({
   renaming?: { app: string; field: ReactNode };
   onOpenRoute(route: WorkspaceRoute): void;
   onAction(action: AppMenuAction, app: AssetSummary): void;
-  /** Opens the agent with this text in its composer: offered to a reader who may build Apps. */
-  onBuild(prompt: string): void;
   /**
-   * "New app" asks what the App should do, then opens the dock with a conversation whose first
-   * save creates the App, the answer in its composer. Absent where nobody here builds one with
-   * an agent.
+   * Opens the dock with a conversation with the agent that builds Apps, this text in its
+   * composer; its first save creates the App. "New app" asks what the App should do first, the
+   * empty list starts it with its own sentence or an example. Absent where no agent here builds
+   * Apps or the reader may build none: the empty list then only says there are none yet.
    */
   onNew?(prompt: string): void;
 }) {
@@ -289,7 +286,7 @@ export function AppsPageView({
               icon={<LayoutGrid aria-hidden="true" />}
               readerText="apps.emptyReadOnly"
               copy={APP_BUILD}
-              {...(rights.write ? { onBuild } : {})}
+              {...(onNew && rights.write ? { onBuild: onNew } : {})}
             />
           ) : (
             <div className="grid min-w-0 gap-4">

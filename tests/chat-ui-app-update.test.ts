@@ -33,7 +33,6 @@ describe("Save to draft", () => {
     rights: WRITER,
     workspace,
     showRoute() {},
-    startChat() {},
     ...overrides
   });
   const app = {

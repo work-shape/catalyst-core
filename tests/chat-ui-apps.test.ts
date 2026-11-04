@@ -1015,7 +1015,6 @@ describe("Save as app", () => {
     rights: WRITER,
     workspace,
     showRoute() {},
-    startChat() {},
     ...overrides
   });
   const action = (value: AppsHost | undefined) => {

@@ -342,15 +342,6 @@ export function createWorkspaceConversationActions({
     chrome.requestComposerFocus();
   }
 
-  /** A new conversation of the open workspace, with this text in its composer. */
-  function startNewConversationWith(prompt: string) {
-    draftController.setDraft(
-      { authScope: WORKSPACE_AUTH_SCOPE, conversationId: undefined },
-      prompt
-    );
-    startNewConversation();
-  }
-
   /** The dock beside the open page, with a new conversation and this text in its composer. */
   function startDockedChat(prompt: string) {
     draftController.setDraft(
@@ -422,7 +413,6 @@ export function createWorkspaceConversationActions({
     continuePrivatelyWith,
     returnToStartPageAfterDraftEmptied,
     startNewConversation,
-    startNewConversationWith,
     startDockedChat,
     selectConversation,
     startRevisionRun,

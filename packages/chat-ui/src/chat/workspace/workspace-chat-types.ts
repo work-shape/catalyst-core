@@ -126,8 +126,6 @@ interface AppsModel {
   rights: AppRights;
   /** The workspaces the reader knows, as Studio names them: where "Teilen…" of an App leads. */
   places?: readonly BuildWorkspace[];
-  /** Opens a new conversation of the open workspace with this text in its composer. */
-  startChat(prompt: string): void;
   /**
    * Starts a conversation of the open workspace about this App and opens it, with the App's
    * draft beside it: with the agent that builds, where one is offered. Rejects where the
