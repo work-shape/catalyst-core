@@ -28,6 +28,7 @@ export type {
   ResourceOperationTarget,
   RouteRegistration
 } from "./http/route";
+export { resolveDefaultAgentName } from "./workspaces/agent-availability";
 export {
   createWorkflowLiveCheck,
   requireWorkflowRunAs,

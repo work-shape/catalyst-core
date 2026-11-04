@@ -107,8 +107,10 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   });
 
   route.operation(apiOperations["assets.set_default"], {
-    authorize: (input, { access }) => authorizeAssetPlacement(options, access, input),
-    resource: ({ kind, name }) => assetResource({ kind, name: name ?? undefined }),
+    authorize: (input, { actor, access }) =>
+      authorizeAssetPlacement(options, { actor, access }, input),
+    resource: ({ kind, name, workspaceId }) =>
+      assetResource({ kind, name: name ?? undefined, workspaceId }),
     policyTargets: (input) => workflow.policyTargets({ ...input, name: input.name ?? undefined }),
     changeClass: "reversible",
     module: ASSET_WRITE_MODULE,
@@ -276,7 +278,11 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   const availabilityHandover = new DataHandoverGate(options, availabilityChanges(options));
   route.operation(apiOperations["assets.set_availability"], {
     authorize: async (input, caller) => {
-      const right = await authorizeAssetPlacement(options, caller.access, input);
+      // Only a default is decided per workspace; an availability is the instance's.
+      const right = await authorizeAssetPlacement(options, caller, {
+        kind: input.kind,
+        name: input.name
+      });
       if (right.allowed) await availabilityHandover.authorize(caller, input);
       return right;
     },
@@ -337,8 +343,8 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   });
 
   route.operation(apiOperations["agents.use.set"], {
-    authorize: (input, { access }) =>
-      authorizeAssetPlacement(options, access, { kind: "agent", name: input.name }),
+    authorize: (input, caller) =>
+      authorizeAssetPlacement(options, caller, { kind: "agent", name: input.name }),
     resource: (input) => assetResource({ kind: "agent", name: input.name }),
     policyTargets: (input) => workflow.policyTargets({ ...input, kind: "agent" }),
     changeClass: "reversible",

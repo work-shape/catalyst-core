@@ -56,6 +56,7 @@ export const audit = defineTranslations({
     "audit.event.collaboration_workspace.updated": "Changed a workspace",
     "audit.event.config_asset.availability_set": "Changed who can use an asset",
     "audit.event.config_asset.default_agent_set": "Chose the default agent",
+    "audit.event.config_asset.workspace_default_agent_set": "Chose a workspace's default agent",
     "audit.event.config_asset.deleted": "Deleted an asset",
     "audit.event.config_asset.draft_discarded": "Discarded a draft",
     "audit.event.config_asset.published": "Published an asset",
@@ -375,6 +376,8 @@ export const audit = defineTranslations({
     "audit.event.collaboration_workspace.updated": "Arbeitsbereich geändert",
     "audit.event.config_asset.availability_set": "Geändert, wer ein Asset nutzen kann",
     "audit.event.config_asset.default_agent_set": "Standard-Agenten festgelegt",
+    "audit.event.config_asset.workspace_default_agent_set":
+      "Standardagenten eines Arbeitsbereichs festgelegt",
     "audit.event.config_asset.deleted": "Asset gelöscht",
     "audit.event.config_asset.draft_discarded": "Entwurf verworfen",
     "audit.event.config_asset.published": "Asset veröffentlicht",

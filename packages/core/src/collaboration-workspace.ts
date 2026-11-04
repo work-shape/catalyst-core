@@ -41,6 +41,11 @@ export interface CollaborationWorkspace {
    */
   allowedToolNames?: string[];
   allowedModelBindingIds?: string[];
+  /**
+   * The agent new chats start with in this Shared Workspace. Left out, the instance default is
+   * the default here, and stays available here.
+   */
+  defaultAgentName?: string;
   createdAt: ISODateString;
   updatedAt: ISODateString;
 }

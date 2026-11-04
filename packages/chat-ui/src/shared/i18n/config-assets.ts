@@ -24,8 +24,10 @@ export const configAssets = defineTranslations({
       "With nothing selected, agents cannot use it in any workspace.",
     configAvailabilityConnectionDescription:
       "The workspaces where agents can use this connection. Members there can use it, but not see its settings or key or change it.",
-    configAvailabilityDefaultLocked:
-      "The default agent is always available in all workspaces. Make another agent the default to restrict this one.",
+    configAvailabilityInstanceDefault:
+      "The default agent stays available in every workspace that names no default agent of its own. To take it out of a shared workspace, choose another default agent in that workspace's settings.",
+    configAvailabilityWorkspaceDefault:
+      "Default agent of {names}: it stays available there until the workspace chooses another one.",
     configAvailabilityDescription: "The workspaces in which this agent can be chosen.",
     configAvailabilityHidden: "Hidden",
     configAvailabilityHiddenHint:
@@ -213,8 +215,10 @@ export const configAssets = defineTranslations({
       "Ohne Auswahl können Agenten sie in keinem Arbeitsbereich verwenden.",
     configAvailabilityConnectionDescription:
       "Die Arbeitsbereiche, in denen Agenten diese Verbindung verwenden können. Mitglieder dort können sie verwenden, aber weder Einstellungen noch Schlüssel sehen oder sie ändern.",
-    configAvailabilityDefaultLocked:
-      "Der Standardagent ist immer in allen Arbeitsbereichen verfügbar. Lege einen anderen Agenten als Standard fest, um diesen einzuschränken.",
+    configAvailabilityInstanceDefault:
+      "Der Standardagent bleibt in jedem Arbeitsbereich verfügbar, der keinen eigenen Standardagenten festlegt. Um ihn aus einem geteilten Arbeitsbereich zu nehmen, lege in dessen Einstellungen einen anderen Standardagenten fest.",
+    configAvailabilityWorkspaceDefault:
+      "Standardagent von {names}: Er bleibt dort verfügbar, bis der Arbeitsbereich einen anderen festlegt.",
     configAvailabilityDescription:
       "Die Arbeitsbereiche, in denen dieser Agent ausgewählt werden kann.",
     configAvailabilityHidden: "Ausgeblendet",

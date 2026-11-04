@@ -107,13 +107,19 @@ export function useAvailabilityEdit(
   };
 }
 
+/** Where an agent is a default: the sentence that says so, and where it has to stay. */
+export interface AvailabilityDefaults {
+  note: string;
+  required: { personalWorkspaces: boolean; collaborationWorkspaceIds: string[] };
+}
+
 /**
  * Where an asset is available, as the fields of its section. The section's heading names it.
  * Under the fields stands what a changed availability leaves the agent's members unable to use.
  */
 export function AvailabilityFields({
   edit,
-  locked = false,
+  defaults,
   fixedReason,
   disabled,
   workspaces,
@@ -123,8 +129,11 @@ export function AvailabilityFields({
   refusals
 }: {
   edit: AvailabilityEdit;
-  /** The default agent is offered everywhere, and stays so until another agent is the default. */
-  locked?: boolean;
+  /**
+   * Where an agent is a default and has to stay available: why, and the workspaces it keeps.
+   * Choosing selected workspaces starts from them; taking one away is refused on save.
+   */
+  defaults?: AvailabilityDefaults;
   /** Why the availability cannot be changed at all: the fields grey, with this as their hint. */
   fixedReason?: string;
   disabled: boolean;
@@ -138,7 +147,11 @@ export function AvailabilityFields({
 }) {
   const { t } = useTranslation();
   const { form } = edit;
-  const fixed = locked || disabled || fixedReason !== undefined;
+  const fixed = disabled || fixedReason !== undefined;
+  const required = defaults?.required ?? {
+    personalWorkspaces: false,
+    collaborationWorkspaceIds: []
+  };
   const workspaceNames = new Map(workspaces.map((workspace) => [workspace.id, workspace.name]));
   // Ids the list no longer returns stay visible, so saving never drops them unseen.
   const workspaceIds = [
@@ -157,10 +170,25 @@ export function AvailabilityFields({
         variant="plain"
         label={t("configAvailability")}
         labelHidden
-        hint={fixedReason ?? (locked ? t("configAvailabilityDefaultLocked") : undefined)}
+        hint={fixedReason ?? defaults?.note}
         disabled={fixed}
         value={form.mode}
-        onValueChange={(mode) => update({ mode })}
+        onValueChange={(mode) =>
+          update(
+            mode === "selected"
+              ? {
+                  mode,
+                  personalWorkspaces: form.personalWorkspaces || required.personalWorkspaces,
+                  collaborationWorkspaceIds: [
+                    ...new Set([
+                      ...form.collaborationWorkspaceIds,
+                      ...required.collaborationWorkspaceIds
+                    ])
+                  ]
+                }
+              : { mode }
+          )
+        }
         options={[
           {
             value: "all",
@@ -175,7 +203,8 @@ export function AvailabilityFields({
         <>
           <Checkbox
             checked={form.personalWorkspaces}
-            disabled={fixed}
+            // The instance default stays in every Personal Workspace: none names another.
+            disabled={fixed || (required.personalWorkspaces && form.personalWorkspaces)}
             label={t("configAvailabilityPersonal")}
             description={t("configAvailabilityPersonalHint")}
             onCheckedChange={(personalWorkspaces) => update({ personalWorkspaces })}

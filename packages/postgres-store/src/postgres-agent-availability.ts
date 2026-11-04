@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { AppError, type AgentAvailability, type ConfigAssetStore } from "@work-shape/catalyst-core";
 import { findConfigAssetRow } from "./postgres-config-asset-operations";
+import { requireDefaultsKept } from "./postgres-default-agents";
 import type { PostgresConnection } from "./postgres-database";
 import {
   configAssetAvailability,
@@ -184,15 +185,13 @@ export async function setAgentAvailability(
         };
       }
     }
-    if (
-      (input.kind ?? "agent") === "agent" &&
-      input.availability.mode !== "all" &&
-      state?.defaultAgentName === input.agentName
-    ) {
-      throw new AppError(
-        "VALIDATION_FAILED",
-        `Default agent '${input.agentName}' must be available in all workspaces`
-      );
+    if ((input.kind ?? "agent") === "agent") {
+      await requireDefaultsKept(tx, {
+        clientInstanceId: input.clientInstanceId,
+        agentName: input.agentName,
+        availability: input.availability,
+        instanceDefault: state?.defaultAgentName === input.agentName
+      });
     }
     const now = new Date();
     const collaborationWorkspaceIds = [

@@ -71,6 +71,9 @@ export class ConfigAssetWorkflow {
     return workspaces.map((workspace) => ({
       id: workspace.id,
       name: workspace.name,
+      ...(workspace.defaultAgentName === undefined
+        ? {}
+        : { defaultAgentName: workspace.defaultAgentName }),
       createdAt: workspace.createdAt
     }));
   }

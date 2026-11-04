@@ -33,6 +33,10 @@ export const collaborationWorkspace = defineTranslations({
     collaborationWorkspaceConversationVisibilityHelp:
       "A change applies to new conversations only. Existing ones keep their visibility.",
     collaborationWorkspaceConversationVisibilityLabel: "New conversations are",
+    collaborationWorkspaceDefaultAgentHint:
+      "New chats in this workspace start with this agent. With a default of its own, the instance's default agent no longer has to be available here.",
+    collaborationWorkspaceDefaultAgentInstance: "The instance's default agent",
+    collaborationWorkspaceDefaultAgentLabel: "Default agent",
     collaborationWorkspaceConversationVisibilityPrivate: "Private to their author",
     collaborationWorkspaceConversationVisibilityPrivateHint:
       "Only the person who starts a conversation can open it.",
@@ -202,6 +206,10 @@ export const collaborationWorkspace = defineTranslations({
     collaborationWorkspaceConversationVisibilityHelp:
       "Eine Änderung gilt nur für neue Unterhaltungen. Bestehende behalten ihre Sichtbarkeit.",
     collaborationWorkspaceConversationVisibilityLabel: "Neue Unterhaltungen sind",
+    collaborationWorkspaceDefaultAgentHint:
+      "Neue Chats in diesem Arbeitsbereich beginnen mit diesem Agenten. Mit einem eigenen Standardagenten muss der Standardagent der Instanz hier nicht mehr verfügbar sein.",
+    collaborationWorkspaceDefaultAgentInstance: "Standardagent der Instanz",
+    collaborationWorkspaceDefaultAgentLabel: "Standardagent",
     collaborationWorkspaceConversationVisibilityPrivate:
       "Nur für die Person sichtbar, die sie beginnt",
     collaborationWorkspaceConversationVisibilityPrivateHint:

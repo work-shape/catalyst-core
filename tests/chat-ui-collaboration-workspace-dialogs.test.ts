@@ -281,7 +281,13 @@ describe("Workspace pages of Settings", () => {
     const markup = generalView(sharedCollaborationWorkspace);
     const headings = [...markup.matchAll(/<h2[^>]*>([^<]*)<\/h2>/gu)].map((match) => match[1]);
 
-    expect(headings).toEqual(["Angaben", "Zugriff", "Darstellung", "Verlassen oder löschen"]);
+    expect(headings).toEqual([
+      "Angaben",
+      "Zugriff",
+      "Agenten",
+      "Darstellung",
+      "Verlassen oder löschen"
+    ]);
     expect(markup.indexOf("Arbeitsbereich löschen")).toBeGreaterThan(
       markup.indexOf("Verlassen oder löschen")
     );

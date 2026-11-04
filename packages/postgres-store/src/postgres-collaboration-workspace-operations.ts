@@ -24,6 +24,7 @@ import {
 import { lockRights } from "./rights-lock";
 import { containsPattern } from "./like-pattern";
 import { deleteWorkspaceOwnedAssets } from "./postgres-config-asset-operations";
+import { offerInstanceDefaultIn } from "./postgres-default-agents";
 import { type PostgresConnection, type PostgresTransaction } from "./postgres-database";
 import { requireNoPendingConversationCleanup } from "./postgres-pending-cleanup";
 import {
@@ -721,6 +722,12 @@ async function createWorkspaceRecords(
     createdAt: now,
     updatedAt: now
   });
+  if (row.kind === "shared") {
+    await offerInstanceDefaultIn(db, {
+      clientInstanceId: row.clientInstanceId,
+      collaborationWorkspaceId: row.id
+    });
+  }
   return mapCollaborationWorkspace(row);
 }
 

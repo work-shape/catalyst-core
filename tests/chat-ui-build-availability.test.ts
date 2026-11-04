@@ -21,10 +21,9 @@ const config = {
   skillNames: [],
   initialPrompts: []
 };
-const workspaces = [
-  { id: "ws_sales", name: "Sales", createdAt: "2026-06-27T00:00:00.000Z" },
-  { id: "ws_legal", name: "Legal", createdAt: "2026-06-27T00:00:00.000Z" }
-];
+const sales = { id: "ws_sales", name: "Sales", createdAt: "2026-06-27T00:00:00.000Z" };
+const legal = { id: "ws_legal", name: "Legal", createdAt: "2026-06-27T00:00:00.000Z" };
+const workspaces = [sales, legal];
 
 function frame(): BuildAssetEditorProps {
   return {
@@ -90,13 +89,30 @@ describe("agent availability", () => {
     expect(section).not.toContain("not available in any workspace");
   });
 
-  it("locks the default agent to all workspaces and explains why", () => {
+  it("lets the default agent be restricted and says where it has to stay", () => {
     const section = availabilitySection(
       { saved: { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] } },
       true
     );
-    expect(section).toMatch(/<div role="radiogroup"[^>]*data-disabled=""/u);
-    expect(section).toContain("The default agent is always available in all workspaces.");
+    expect(section).not.toMatch(/<div role="radiogroup"[^>]*data-disabled=""/u);
+    expect(section).toContain(
+      "The default agent stays available in every workspace that names no default agent of its own."
+    );
+  });
+
+  it("names the workspaces whose own default the agent is", () => {
+    const section = availabilitySection({
+      saved: {
+        mode: "selected",
+        personalWorkspaces: false,
+        collaborationWorkspaceIds: ["ws_legal"]
+      },
+      workspaces: [sales, { ...legal, defaultAgentName: "assistant" }]
+    });
+    expect(section).toContain(
+      "Default agent of Legal: it stays available there until the workspace chooses another one."
+    );
+    expect(section).not.toContain("The default agent stays available");
   });
 
   it("warns that an agent without any selection is hidden", () => {

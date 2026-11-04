@@ -28,8 +28,8 @@ export type CreateCollaborationWorkspaceInput = OperationInput<"workspaces.creat
 export type UpdateCollaborationWorkspaceInput = OperationInput<"workspaces.update">["body"];
 
 /**
- * The ten changes of workspaces, members and access requests. Each is an Operation Run and
- * answers its output once it ran.
+ * The changes of workspaces, their default agent, members and access requests. Each is an
+ * Operation Run and answers its output once it ran.
  */
 export function useCollaborationWorkspaceMutations(input: CollaborationWorkspaceMutationInput) {
   const queryClient = useQueryClient();
@@ -97,6 +97,33 @@ export function useCollaborationWorkspaceMutations(input: CollaborationWorkspace
     onSuccess: () => {
       invalidateCollaborationWorkspaces();
       invalidateDirectory();
+    }
+  });
+  // The agent new chats start with in a Shared Workspace; `null` follows the instance default.
+  const setCollaborationWorkspaceDefaultAgent = useMutation({
+    mutationFn: async (mutationInput: {
+      collaborationWorkspaceId: string;
+      agentName: string | null;
+    }) =>
+      workspaceChangeOutput(
+        await client.assets.set_default({
+          params: { kind: "agent" },
+          body: {
+            name: mutationInput.agentName,
+            workspaceId: mutationInput.collaborationWorkspaceId
+          }
+        })
+      ),
+    onSuccess: async () => {
+      invalidateCollaborationWorkspaces();
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: workspaceQueryKeys.collaborationWorkspaceAgentsScope(apiBaseUrl, authScope)
+        }),
+        queryClient.invalidateQueries({
+          queryKey: workspaceQueryKeys.administeredCollaborationWorkspaces(apiBaseUrl, authScope)
+        })
+      ]);
     }
   });
   const deleteCollaborationWorkspace = useMutation({
@@ -200,6 +227,7 @@ export function useCollaborationWorkspaceMutations(input: CollaborationWorkspace
   return {
     createCollaborationWorkspace,
     updateCollaborationWorkspace,
+    setCollaborationWorkspaceDefaultAgent,
     deleteCollaborationWorkspace,
     addCollaborationWorkspaceMember,
     changeCollaborationWorkspaceMemberRole,

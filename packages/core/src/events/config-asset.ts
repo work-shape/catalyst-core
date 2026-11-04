@@ -19,6 +19,14 @@ export const configAssetEvents = {
     name: "config_asset.default_agent_set",
     subject: "config_asset"
   },
+  // The agent new chats start with in one Shared Workspace: its id and the workspace's.
+  "config_asset.workspace_default_agent_set": {
+    name: "config_asset.workspace_default_agent_set",
+    subject: "config_asset",
+    legacy: false,
+    audited: true,
+    phases: ["after"]
+  },
   "config_asset.deleted": {
     ...LEGACY_AUDIT,
     name: "config_asset.deleted",

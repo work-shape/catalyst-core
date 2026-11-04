@@ -171,6 +171,7 @@ export function mapCollaborationWorkspace(
     ...(row.allowedModelBindingIds === null
       ? {}
       : { allowedModelBindingIds: row.allowedModelBindingIds }),
+    ...(row.defaultAgentName === null ? {} : { defaultAgentName: row.defaultAgentName }),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
   };
