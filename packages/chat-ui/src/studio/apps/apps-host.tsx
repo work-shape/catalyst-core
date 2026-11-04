@@ -33,19 +33,13 @@ export interface AppsHost {
    */
   startNew?(prompt: string): void;
   /**
-   * Starts a conversation of the open workspace about this App and opens it: its agent reads
-   * and saves the App's draft, which is shown beside it. Rejects where the instance refuses
-   * the conversation. Absent where no conversation can be started. `fresh` starts a new one
-   * where the dock's is already about the App: the dock's "New chat".
+   * The page head's "Chat" for a reader who may change the App: a conversation of the open
+   * workspace about this App, in the dock beside its draft, with the agent that builds where
+   * one is offered here; the dock's conversation about the App opens again first. Rejects where
+   * the instance refuses the conversation. Absent where no conversation can be started.
+   * `fresh` starts a new one where the dock's is already about the App: the dock's "New chat".
    */
   editWithAgent?(app: string, options?: { fresh: boolean }): Promise<void>;
-  /**
-   * "Edit in chat": a new conversation of the reader's own with the agent that builds, which
-   * the instance makes holding the App's current draft with all its files, opened in the dock
-   * beside the App's draft. Rejects where the instance refuses it, such as for a reader who may
-   * not change the App. Absent where no agent here builds Apps.
-   */
-  editInChat?(app: string): Promise<void>;
   /**
    * Sends the person's message to the conversation on screen, queued behind a run that goes
    * (CHAT-CONN-1): an App published from its card there tells the agent, which carries on

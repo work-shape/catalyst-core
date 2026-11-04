@@ -562,13 +562,6 @@ export function AppEditFrame({
             state={known ? undefined : <Badge size="sm">{t("apps.draft")}</Badge>}
             backHref={workspaceRoutePath({ kind: "apps", collaborationWorkspaceId: workspace.id })}
             onBack={onBack}
-            // "Edit in chat" is how a builder changes the draft; it folds into the menu where
-            // the head has no room for it.
-            secondaryActions={
-              known && editWithAgent.editInChat !== undefined
-                ? [editWithAgent.editInChat]
-                : undefined
-            }
             tabs={tabs}
             primaryAction={
               known ? (

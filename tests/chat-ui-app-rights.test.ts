@@ -90,7 +90,6 @@ interface Instance {
   /** The address the instance names for the published App's frame, in this workspace's path. */
   previewIn?: string;
   editWithAgent?: AppsHost["editWithAgent"];
-  editInChat?: AppsHost["editInChat"];
   showRoute?: AppsHost["showRoute"];
 }
 
@@ -145,8 +144,7 @@ async function mount(
     workspace: { id: OPEN, name: "Office" },
     showRoute: instance.showRoute ?? (() => undefined),
     startChat: () => undefined,
-    ...(instance.editWithAgent === undefined ? {} : { editWithAgent: instance.editWithAgent }),
-    ...(instance.editInChat === undefined ? {} : { editInChat: instance.editInChat })
+    ...(instance.editWithAgent === undefined ? {} : { editWithAgent: instance.editWithAgent })
   };
   await act(async () => {
     root.render(
@@ -338,53 +336,50 @@ describe("one App", () => {
     });
   });
 
-  it("offers Edit in chat on the App and its draft to a reader who may write it, and starts it for that App (CHECKOUT-2)", async () => {
+  it("gives a reader who may write the App one chat in its head, the page head's Chat about the App", async () => {
     const context = contextWith({ [OPEN]: ["app.read"] });
-    const editInChat = vi.fn<NonNullable<AppsHost["editInChat"]>>(() => Promise.resolve());
-    const instance = { allowed: ["read", "write"] as const, editInChat };
+    const editWithAgent = vi.fn<NonNullable<AppsHost["editWithAgent"]>>(() => Promise.resolve());
+    const instance = { allowed: ["read", "write"] as const, editWithAgent };
     for (const node of [
       createElement(AppView, { app: "fees" }),
       createElement(AppEdit, { app: "fees" })
     ]) {
-      editInChat.mockClear();
+      editWithAgent.mockClear();
       const page = await mount(node, context, instance);
-      await vi.waitFor(() => expect(controlNamed(page, t("apps.editInChat"))).toBeDefined(), {
-        timeout: CONDITION_WAIT_MS
-      });
-      await act(async () => controlNamed(page, t("apps.editInChat"))?.click());
-      expect(editInChat).toHaveBeenCalledExactlyOnceWith("fees");
+      await shows(page, "Fees");
+      await chatOnThePage();
+      expect(editWithAgent).toHaveBeenCalledExactlyOnceWith("fees", { fresh: false });
+      // No second chat control beside the shell's "Chat".
+      expect(page.textContent).not.toMatch(/Edit in chat|Im Chat bearbeiten/u);
     }
   });
 
-  it("says a refused Edit in chat in a dialog", async () => {
+  it("says a refused Chat about the App in a dialog", async () => {
     const context = contextWith({ [OPEN]: ["app.read"] });
-    const view = await mount(createElement(AppView, { app: "fees" }), context, {
+    await mount(createElement(AppView, { app: "fees" }), context, {
       allowed: ["read", "write"],
-      editInChat: () => Promise.reject(new Error("down"))
+      editWithAgent: () => Promise.reject(new Error("down"))
     });
-    await vi.waitFor(() => expect(controlNamed(view, t("apps.editInChat"))).toBeDefined(), {
-      timeout: CONDITION_WAIT_MS
-    });
-    await act(async () => controlNamed(view, t("apps.editInChat"))?.click());
+    await chatOnThePage();
     await vi.waitFor(
       () => expect(document.body.textContent).toContain(t("apps.editWithAgentFailed")),
       { timeout: CONDITION_WAIT_MS }
     );
   });
 
-  it("offers no Edit in chat to a reader who may only read the App, whatever the workspace grants", async () => {
+  it("offers no chat about the App to a reader who may only read it, whatever the workspace grants", async () => {
     const context = contextWith({ [OPEN]: ALL_APP_RIGHTS });
-    const editInChat = vi.fn<NonNullable<AppsHost["editInChat"]>>(() => Promise.resolve());
+    const editWithAgent = vi.fn<NonNullable<AppsHost["editWithAgent"]>>(() => Promise.resolve());
     for (const node of [
       createElement(AppView, { app: "fees" }),
       createElement(AppEdit, { app: "fees" })
     ]) {
-      const page = await mount(node, context, { allowed: ["read"], editInChat });
+      const page = await mount(node, context, { allowed: ["read"], editWithAgent });
       await shows(page, "Fees");
-      expect(controlNamed(page, t("apps.editInChat"))).toBeUndefined();
-      expect(page.textContent).not.toContain(t("apps.editInChat"));
+      // The page head's "Chat" then opens the plain chat.
+      expect(pageChat).toBeUndefined();
     }
-    expect(editInChat).not.toHaveBeenCalled();
+    expect(editWithAgent).not.toHaveBeenCalled();
   });
 
   it("offers a reader who may change nothing of the App neither Edit nor its draft", async () => {

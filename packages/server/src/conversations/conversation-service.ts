@@ -326,7 +326,7 @@ export class ConversationWorkflow {
   }
 
   /**
-   * "Edit in chat" on an App's page: a new conversation of the person's own about the App,
+   * `conversations.create` with `checkout`: a new conversation of the person's own about the App,
    * holding the App's current draft in `apps/<name>` as the agent's `app.edit` loads it. The
    * right to change the App is checked before anything is made; where the files then cannot be
    * loaded, the empty conversation is discarded again.

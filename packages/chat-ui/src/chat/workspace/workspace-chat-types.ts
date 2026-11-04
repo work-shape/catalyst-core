@@ -130,14 +130,10 @@ interface AppsModel {
   startChat(prompt: string): void;
   /**
    * Starts a conversation of the open workspace about this App and opens it, with the App's
-   * draft beside it. Rejects where the instance refuses the conversation.
+   * draft beside it: with the agent that builds, where one is offered. Rejects where the
+   * instance refuses the conversation.
    */
   editWithAgent(app: string, options?: { fresh: boolean }): Promise<void>;
-  /**
-   * "Edit in chat": a new conversation with the agent that builds, holding the App's current
-   * draft and its files, in the dock beside the App's draft. Absent where no agent here builds.
-   */
-  editInChat?(app: string): Promise<void>;
   /**
    * Opens the dock on the list with a new conversation with an agent that builds assets and
    * `prompt` in its composer: its first save creates the App. Absent where no agent here builds

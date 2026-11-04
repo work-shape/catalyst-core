@@ -550,7 +550,7 @@ describe("app.save in a conversation", () => {
     }
   });
 
-  it("starts a conversation of the person's own that holds the App's checkout (Edit in chat, CHECKOUT-2)", async () => {
+  it("starts a conversation of the person's own that holds the App's checkout (the App page's Chat, CHECKOUT-2)", async () => {
     const buildChat = await conversationOf(t.admin, "private");
     await t.storePage("draft for the chat", {}, { conversationId: buildChat });
     await calls.saveApp(await contextOf(t.admin, buildChat), {
@@ -696,7 +696,7 @@ describe("app.save in a conversation", () => {
     expect(published.json()).not.toHaveProperty("appEditors");
   });
 
-  it("makes no conversation for Edit in chat where the person may not change the App", async () => {
+  it("makes no conversation for the App page's Chat where the person may not change the App", async () => {
     expectStatus(await t.putApp(t.admin.id, "edit-in-chat-rights", appFiles("kept")), 200);
     const count = async (userId: string) =>
       z.object({ items: z.array(z.unknown()) }).parse(

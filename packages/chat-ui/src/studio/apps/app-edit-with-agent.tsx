@@ -1,21 +1,19 @@
-import { MessageSquarePlus } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { ApiError, type Asset } from "@work-shape/catalyst-api-client";
-import { Button, Dialog, type PageHeaderAction } from "@work-shape/catalyst-ui";
+import { Button, Dialog } from "@work-shape/catalyst-ui";
 import { instanceSentence } from "../build-area/build-refusals";
 import { useOfferDockPageChat } from "../../shared/dock-page-chat";
 import { useTranslation } from "../../shared/i18n";
-import { formatMomentShort, formatTimeOfDay } from "../../shared/locale-format";
+import { formatMomentShort } from "../../shared/locale-format";
 import type { AppRights } from "./app-model";
 import { useAppsHost } from "./apps-host";
 
 /**
- * The conversation the page head's "Chat" starts on an App's page, for a reader who may write
- * it by the `rights` on that App (`appRightsOn`), not the workspace's: a conversation about the
- * App in the dock beside its draft, which stays the page. Without `app` the page offers none.
- * Beside it, "Edit in chat" (`editInChat`, a head action for the same reader): a new
- * conversation with the agent that builds, which holds the App's current draft with all its
- * files (CHECKOUT-2). A refusal of either is said in a dialog, which the page draws outside its
+ * The conversation the page head's one "Chat" starts on an App's page, for a reader who may
+ * write it by the `rights` on that App (`appRightsOn`), not the workspace's: the agent that
+ * builds, about the App, in the dock beside its draft, which stays the page. The agent loads the
+ * draft when it changes the App, so opening the chat marks nobody as editing it. Without `app`
+ * the page offers none, and "Chat" opens the plain chat. A refusal is said in a dialog, which the page draws outside its
  * head, so the answer stays readable whatever the head shows by the time it comes.
  */
 export function useAppEditWithAgent(
@@ -24,7 +22,6 @@ export function useAppEditWithAgent(
   editors?: Asset["appEditors"]
 ): {
   dialog: ReactNode;
-  editInChat: PageHeaderAction | undefined;
   editingLine: string | undefined;
 } {
   const { t, locale } = useTranslation();
@@ -39,24 +36,9 @@ export function useAppEditWithAgent(
           )
           .join(" · ")
       : undefined;
-  const actionEditors =
-    editingLine &&
-    editors
-      ?.map((editor) =>
-        t("apps.editorSince", {
-          name: editor.displayLabel,
-          since:
-            new Date(editor.since).toDateString() === new Date().toDateString()
-              ? formatTimeOfDay(editor.since, locale)
-              : formatMomentShort(editor.since, locale)
-        })
-      )
-      .join(" · ");
   const host = useAppsHost();
   const [error, setError] = useState<string>();
-  const [starting, setStarting] = useState(false);
   const editWithAgent = host?.editWithAgent;
-  const startInChat = host?.editInChat;
   const refused = (failure: unknown) => {
     setError(
       // An App the reader may not read and one that is gone are refused alike.
@@ -71,25 +53,7 @@ export function useAppEditWithAgent(
       ? undefined
       : (options) => editWithAgent(app, options).catch(refused)
   );
-  const editInChat =
-    !offered || startInChat === undefined
-      ? undefined
-      : {
-          label: actionEditors
-            ? `${t("apps.editInChat")} · ${actionEditors}`
-            : t("apps.editInChat"),
-          icon: <MessageSquarePlus aria-hidden="true" />,
-          loading: starting,
-          disabled: starting,
-          onSelect: () => {
-            setStarting(true);
-            startInChat(app)
-              .catch(refused)
-              .finally(() => setStarting(false));
-          }
-        };
   return {
-    editInChat,
     editingLine,
     dialog: (
       <Dialog

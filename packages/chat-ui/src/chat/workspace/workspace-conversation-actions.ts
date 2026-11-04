@@ -197,14 +197,12 @@ export function createWorkspaceConversationActions({
    * What a conversation is about is set when it is made, so it is made before its first turn;
    * it opens in the dock of the asset's page, with `prompt` in its composer where one is given.
    * Every caller names its prompt, also none, so a prompt is never dropped on the way.
-   * With `checkout` ("Edit in chat" on an App's page) the conversation is always a new one,
-   * which the instance makes holding the App's draft with all its files.
    */
   async function startConversationAbout(
     subject: { kind: string; name: string },
     prompt: string | undefined,
     workspaceId: string | undefined = activeCollaborationWorkspaceId,
-    options?: { fresh: boolean; checkout?: true }
+    options?: { fresh: boolean }
   ): Promise<void> {
     if (!workspaceId) {
       throw new Error("A conversation about an asset belongs to a workspace");
@@ -212,8 +210,7 @@ export function createWorkspaceConversationActions({
     // The dock already holds a conversation about this asset: it opens again, also where the
     // person closed it or it lies behind the page, and keeps what was said there. The dock's
     // "New chat" asks for a fresh one.
-    const dockConversationId =
-      options?.fresh || options?.checkout ? undefined : dock.conversationId;
+    const dockConversationId = options?.fresh ? undefined : dock.conversationId;
     const reused = dockConversationToReuse({
       dockConversationId,
       dock:
@@ -248,8 +245,7 @@ export function createWorkspaceConversationActions({
       body: {
         locale: activeLocale,
         collaborationWorkspaceId: workspaceId,
-        subject,
-        ...(options?.checkout ? { checkout: true as const } : {})
+        subject
       }
     });
     openConversationAbout(conversation, subject, prompt, { routeState, dock, draftController });
