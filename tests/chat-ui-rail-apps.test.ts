@@ -47,7 +47,6 @@ function rail(overrides: Partial<RailProps> = {}, locale: LocaleCode = "en") {
       conversations: [],
       conversationsStatus: "ready",
       selectedConversationId: undefined,
-      canViewAdministration: false,
       view: "chat",
       deletingConversation: false,
       canMoveConversation: false,

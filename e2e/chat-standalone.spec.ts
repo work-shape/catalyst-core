@@ -70,7 +70,7 @@ test.describe("login", () => {
     await expect(page.getByRole("button", { name: "New chat", exact: true }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Language" })).toHaveCount(0);
     await expect(page.locator("header").getByText("Ready", { exact: true })).toHaveCount(0);
-    await expect(settingsGear(page)).toHaveCount(0);
+    await expect(settingsGear(page)).toBeVisible();
 
     await page.getByRole("button", { name: "E2E User account" }).click();
     await page.getByRole("menuitem", { name: "Profile" }).click();

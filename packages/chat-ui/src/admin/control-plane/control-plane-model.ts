@@ -21,7 +21,6 @@ import {
   type BuildNavigation
 } from "../../shared/build-route";
 import {
-  firstAdministrationRoute,
   managedWorkspaces,
   resolveSettingsRoute,
   settingsCatalog,
@@ -84,8 +83,6 @@ export interface ControlPlaneModelInput {
 }
 
 export interface ControlPlaneModel {
-  /** The viewer has an administration page: the rail shows the Settings gear. */
-  canViewAdministration: boolean;
   /** The viewer may open Build: the rail shows its row. */
   canViewBuild: boolean;
   /** The viewer may open agents in Build: the Agents page links each agent to its page there. */
@@ -274,7 +271,6 @@ export function useControlPlaneModel({
   const buildRights = resolveBuildRights(user, platformContext);
 
   return {
-    canViewAdministration: firstAdministrationRoute(catalog, build, viewer) !== undefined,
     canViewBuild,
     canOpenAgentsInBuild: canViewBuild && buildRights.reads(AGENT_ASSET_KIND),
     canOpenDataStoresInBuild: canViewBuild && buildRights.reads(DATA_STORE_ASSET_KIND),

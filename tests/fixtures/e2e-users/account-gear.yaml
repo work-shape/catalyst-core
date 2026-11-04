@@ -1,0 +1,10 @@
+# A plain user the settings spec makes Builder of one workspace, without the admin role: from
+# Studio the gear in the rail's footer still opens this person's own Settings.
+- email: e2e-account-gear@example.test
+  displayLabel: E2E Zz Account Gear
+  passwordEnvName: E2E_ACCOUNT_GEAR_PASSWORD
+  developmentPassword: e2e-account-gear-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
