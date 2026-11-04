@@ -9,7 +9,6 @@ import {
   type AgentRunId,
   type ClientInstanceId,
   type Conversation,
-  type HtmlPdfService,
   type JsonObject,
   type ToolExecutionContext
 } from "@work-shape/catalyst-core";
@@ -37,8 +36,6 @@ interface WorkspaceHarnessInput {
   ) => ConstructorParameters<typeof WorkspaceCommandService>[0]["store"];
   telemetry?: WorkspaceCommandTelemetry;
   withAuditRecorder?: boolean;
-  /** The renderer of HTML to PDF; without it `workspace.html_to_pdf` is not offered. */
-  htmlPdf?: HtmlPdfService;
   sourceFiles?: Record<
     string,
     {
@@ -106,7 +103,6 @@ export async function createWorkspaceHarness(input: WorkspaceHarnessInput = {}) 
     ...(input.commandResults ? { commandResults: input.commandResults } : {}),
     ...(auditRecorder ? { auditRecorder } : {}),
     ...(input.telemetry ? { telemetry: input.telemetry } : {}),
-    ...(input.htmlPdf ? { htmlPdf: input.htmlPdf } : {}),
     limits: input.limits,
     ...(input.execResultWaitMs === null ? {} : { execResultWaitMs: input.execResultWaitMs ?? 0 }),
     execResultPollIntervalMs: input.execResultPollIntervalMs,

@@ -315,14 +315,14 @@ the Terraform roots.
 The `preview-capture` image target and `docker/preview-capture.compose.yml` are opt-in.
 No deployment or tool switches to server captures in this slice. The API defaults to
 `PREVIEW_CAPTURE_ENABLED=false`; enabling the Compose profile alone does not change it.
-The overlay puts only the API, the agent-run worker and the capture service on its internal
-network. Do not attach Postgres, object storage or another worker, mount an env file, or give
-the service any credential except `PREVIEW_CAPTURE_SERVICE_TOKEN` (32+ characters).
+The overlay puts only the API and capture service on its internal network. Do not attach
+Postgres, object storage or a worker, mount an env file, or give the service any credential
+except `PREVIEW_CAPTURE_SERVICE_TOKEN` (32+ characters).
 
-The same service prints HTML to PDF (PDF-1): Apps call it through the API with the kit's
-`pdf.download`, agents through the `workspace.html_to_pdf` tool in the agent-run worker. Both
-callers need `PREVIEW_CAPTURE_ENABLED=true`; without it an App's call is refused as
-`pdf_unavailable` and agents have no such tool. The renderer serves the document from an
+The same service prints HTML to PDF (PDF-1) for Apps, which call it through the API with the
+kit's `pdf.download`. It needs `PREVIEW_CAPTURE_ENABLED=true`; without it an App's call is
+refused as `pdf_unavailable`. Agents do not use it: they make PDFs with the PDF skill in their
+workspace. The renderer serves the document from an
 address without network, runs no script and aborts every other request; it takes at most
 4 MiB of HTML, writes at most 50 pages and 10 MiB, and stops after 20 seconds. No document or
 PDF is logged or kept. Turning the flag on for PDFs does not switch on server captures.

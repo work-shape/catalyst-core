@@ -90,16 +90,14 @@ describe("server capture boundaries", () => {
     expect(service.profiles).toEqual(["preview-capture"]);
     expect(service.networks).toEqual(["preview-capture"]);
     expect(compose.networks["preview-capture"].internal).toBe(true);
-    // The API prints and captures for Apps; the agent-run worker prints for agents (PDF-1).
-    expect(Object.keys(compose.services)).toEqual(["api", "agent-run-worker", "preview-capture"]);
-    for (const name of ["api", "agent-run-worker"]) {
-      expect(Object.keys(compose.services[name].networks)).toEqual(["default", "preview-capture"]);
-      expect(Object.keys(compose.services[name].environment).sort()).toEqual([
-        "PREVIEW_CAPTURE_ENABLED",
-        "PREVIEW_CAPTURE_SERVICE_ORIGIN",
-        "PREVIEW_CAPTURE_SERVICE_TOKEN"
-      ]);
-    }
+    // Only the API reaches the renderer: it captures and prints PDFs for Apps (PDF-1).
+    expect(Object.keys(compose.services)).toEqual(["api", "preview-capture"]);
+    expect(Object.keys(compose.services.api.networks)).toEqual(["default", "preview-capture"]);
+    expect(Object.keys(compose.services.api.environment).sort()).toEqual([
+      "PREVIEW_CAPTURE_ENABLED",
+      "PREVIEW_CAPTURE_SERVICE_ORIGIN",
+      "PREVIEW_CAPTURE_SERVICE_TOKEN"
+    ]);
     expect(Object.keys(service.environment).sort()).toEqual([
       "PREVIEW_CAPTURE_API_ORIGIN",
       "PREVIEW_CAPTURE_CONCURRENCY",
@@ -120,7 +118,7 @@ describe("server capture boundaries", () => {
   });
 });
 
-// HTML to PDF (PDF-1): the client of the API and the agent-run worker. The renderer itself is
+// HTML to PDF (PDF-1): the API's client of the renderer for Apps. The renderer itself is
 // proven in the Linux container suite; here a fake service answers as the renderer would.
 describe("HTML to PDF client", () => {
   const pdfBytes = new TextEncoder().encode("%PDF-1.7 fixture");

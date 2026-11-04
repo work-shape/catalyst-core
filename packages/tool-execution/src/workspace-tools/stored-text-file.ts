@@ -116,16 +116,13 @@ export async function storeTextFile(
     path: string;
     bytes: Uint8Array;
     existing: WorkspaceFile | undefined;
-    /** The type of a file that is no text, such as the PDF `workspace.html_to_pdf` writes. */
-    mimeType?: string;
   }
 ): Promise<WorkspaceFile> {
   const { existing, workspace } = input;
   const checksum = createWorkspaceChecksum(input.bytes);
   // A file that was text keeps its type. Anything else becomes text, because it is text now.
   const mimeType =
-    input.mimeType ??
-    (existing?.mimeType && isTextMimeType(existing.mimeType) ? existing.mimeType : "text/plain");
+    existing?.mimeType && isTextMimeType(existing.mimeType) ? existing.mimeType : "text/plain";
   // No command is queued. The id only keeps the object keys of this write apart from others.
   const objectKeyId = createPlatformId<"WorkspaceCommandId">("wcmd_file");
   const stored = await putWorkspaceFile(deps.fileStore, {

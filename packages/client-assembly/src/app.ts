@@ -398,8 +398,11 @@ export async function createClientInstanceExecutionAssembly(
   const workspaceObjectStore = config.executionWorkspaces.enabled
     ? await createWorkspacesStore(config, infrastructure.context)
     : undefined;
-  // HTML to PDF (PDF-1): the API serves it to frames, the process that runs tools to agents.
-  const htmlPdfService = await createInstanceHtmlPdfClient(env, infrastructure.secrets);
+  // HTML to PDF (PDF-1): only the API calls the renderer, for the frames of Apps.
+  const htmlPdfService =
+    processOptions.process === "api"
+      ? await createInstanceHtmlPdfClient(env, infrastructure.secrets)
+      : undefined;
   const pages = await createInstancePages({
     config,
     modules,
@@ -702,7 +705,6 @@ export async function createClientInstanceExecutionAssembly(
         telemetry: createConsoleWorkspaceCommandTelemetry(logger),
         limits: config.executionWorkspaces.command,
         projectFolder: projectFiles,
-        ...(htmlPdfService ? { htmlPdf: htmlPdfService } : {}),
         // The skills an agent run may read, which its commands mount read-only at /skills.
         skills: { assetSource, conversationOffer, conversations: store.conversations },
         sourceFileReader: attachments

@@ -23,7 +23,7 @@ count in `x-pdf-pages`, or 422 with a refusal code. The document is served from
 styles and `data:` images, fonts and media; every other request, WebSocket included, is aborted
 before it leaves the browser. A render shares the slots, queue, memory watchdog and recycling of
 captures, ends after 20 seconds and is refused above 50 pages or 10 MiB, never cut. Only the API
-(for Apps) and the agent-run worker (for `workspace.html_to_pdf`) call it. No document, PDF or
+calls it, for Apps; agents make PDFs with the PDF skill in their workspace. No document, PDF or
 size is logged.
 
 Build with `pnpm --filter @work-shape/catalyst-preview-capture build`. The deployment kit

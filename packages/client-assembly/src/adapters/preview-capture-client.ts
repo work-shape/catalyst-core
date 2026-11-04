@@ -71,7 +71,7 @@ async function captureServiceOf(
 const PDF_FAILED: HtmlPdfOutcome = { status: "refused", code: "pdf_failed" };
 
 /**
- * HTML to PDF (PDF-1) through the same isolated renderer, for the API and the agent-run worker.
+ * HTML to PDF (PDF-1) through the same isolated renderer, for the API, which serves it to Apps.
  * Off with the renderer. The document goes as the body and comes back as PDF bytes; neither is
  * logged, and a failure is a refusal that names no payload.
  */

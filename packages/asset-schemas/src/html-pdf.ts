@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-// HTML to PDF (PDF-1): an App or an agent hands the instance HTML and gets a PDF back. The
-// instance's own renderer prints it with no network: the document reaches only what it holds
-// inline and `data:` addresses. These bounds are shared by the service, the API and the tool.
+// HTML to PDF (PDF-1): an App hands the instance HTML and gets a PDF back. The instance's own
+// renderer prints it with no network: the document reaches only what it holds inline and
+// `data:` addresses. These bounds are shared by the service and the API.
 
 /** The most bytes of HTML one render takes, as UTF-8, `data:` images and fonts included. */
 export const HTML_PDF_MAX_HTML_BYTES = 4 * 1024 * 1024;

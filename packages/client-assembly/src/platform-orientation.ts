@@ -15,7 +15,6 @@ import {
   APP_EDIT_TOOL_NAME,
   APP_SAVE_TOOL_NAME,
   WORKSPACE_OPEN_TOOL_NAME,
-  HTML_TO_PDF_TOOL_NAME,
   APP_PUBLISH_TOOL_NAME,
   PREVIEW_CAPTURE_TOOL_NAME,
   APP_TRY_TOOL_NAMES,
@@ -111,8 +110,6 @@ export function agentListableToolNames(enabledByRelease: Iterable<string>): stri
       "read_skill",
       ASK_QUESTION_TOOL_NAME,
       WORKSPACE_OPEN_TOOL_NAME,
-      // HTML to PDF (PDF-1): present only where the instance runs the renderer.
-      HTML_TO_PDF_TOOL_NAME,
       APP_SAVE_TOOL_NAME,
       APP_EDIT_TOOL_NAME,
       RUN_AGENT_TOOL_NAME
