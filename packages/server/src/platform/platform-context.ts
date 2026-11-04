@@ -106,7 +106,10 @@ async function usableWorkspaces(
   return [...workspaces.values()].flatMap((workspace) => {
     const actions = actionsOn(options, caller, { workspaceId: workspace.id });
     const { id, name, kind } = workspace;
-    return actions.length > 0 ? [{ id, name, kind, member: memberOf.has(id), actions }] : [];
+    const useActions = heldUseActionsIn(options, caller, id);
+    return actions.length > 0
+      ? [{ id, name, kind, member: memberOf.has(id), actions, useActions }]
+      : [];
   });
 }
 
@@ -155,12 +158,30 @@ function heldUseActions(options: ContextOptions, caller: Caller): string[] {
 }
 
 /**
- * Issuance choices, not this credential's rights: reading, writing and publishing rights held
- * anywhere, as `heldUseActions`. Deleting is left out: the key `catalyst setup` asks for
- * starts with these, and a deletion is ticked by hand.
+ * Issuance choices, not this credential's rights: reading, writing, deleting and publishing
+ * rights held anywhere, as `heldUseActions`. The key screen offers these and no others, so a
+ * key it starts with every offered right ticked is never refused one.
  */
 function heldAuthoringActions(options: ContextOptions, caller: Caller): string[] {
-  return heldKeyActions(options, caller, (action) => /\.(read|write|publish)$/u.test(action));
+  return heldKeyActions(options, caller, (action) =>
+    /\.(read|write|delete|publish)$/u.test(action)
+  );
+}
+
+/**
+ * Issuance choices for a key limited to one workspace: the use rights of enabled kinds the
+ * caller may hand on there, asked as the issuance asks a scope limited to the workspace.
+ */
+function heldUseActionsIn(options: ContextOptions, caller: Caller, workspaceId: string): string[] {
+  const enabled = new Set(
+    options.configAssets.kinds.kinds
+      .filter((kind) => options.modules.offModuleOf("kind", kind.kind) === undefined)
+      .flatMap((kind) => Object.values(kind.actions))
+  );
+  return PERSONAL_API_KEY_USE_ACTIONS.filter(
+    (action) =>
+      enabled.has(action) && caller.access.authorizeTransfer(action, { workspaceId }).allowed
+  );
 }
 
 /** The actions of kinds whose module is on that pass `pick` and the caller holds anywhere. */

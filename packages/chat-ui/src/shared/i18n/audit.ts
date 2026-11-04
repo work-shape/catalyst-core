@@ -223,6 +223,8 @@ export const audit = defineTranslations({
     "audit.event.user.two_factor_locked": "Sign-in locked after wrong codes",
     "audit.event.user.two_factor_reset": "Reset a user's two-factor sign-in",
     "audit.event.user.updated": "Changed a user",
+    "audit.event.user.role_assigned": "Gave a person a role",
+    "audit.event.user.role_removed": "Took a role from a person",
     "audit.event.workflow.unpublished": "Took a workflow offline",
     "audit.event.workflow.event_dropped": "A workflow did not start on a platform event",
     "audit.event.workflow.webhook_refused": "A workflow's webhook refused a request",
@@ -556,6 +558,8 @@ export const audit = defineTranslations({
     "audit.event.user.two_factor_locked": "Anmeldung nach falschen Codes gesperrt",
     "audit.event.user.two_factor_reset": "Zwei-Faktor-Anmeldung eines Benutzers zurückgesetzt",
     "audit.event.user.updated": "Benutzer geändert",
+    "audit.event.user.role_assigned": "Einer Person eine Rolle gegeben",
+    "audit.event.user.role_removed": "Einer Person eine Rolle genommen",
     "audit.event.workflow.unpublished": "Workflow zurückgezogen",
     "audit.event.workflow.event_dropped":
       "Ein Workflow ist bei einem Plattformereignis nicht gestartet",

@@ -110,7 +110,14 @@ describe("an App written from files and built as a Page is built", () => {
       expect(sha256(t.objects.bytes(`${prefix}src/${file.path}`)), file.path).toBe(file.sha256);
     }
     expect(fileSet?.builtFiles.map((file) => file.path)).toContain("index.html");
-    expect(t.objectKeys(asset?.id ?? "").every((key) => key.startsWith(prefix))).toBe(true);
+    // Beside the file set, the App's repository: the put is its first commit.
+    expect(asset?.commit).toEqual(expect.any(String));
+    const repository = `assets/${asset?.id}/repo/`;
+    expect(
+      t
+        .objectKeys(asset?.id ?? "")
+        .every((key) => key.startsWith(prefix) || key.startsWith(repository))
+    ).toBe(true);
 
     // What was built is what a writer is shown.
     const preview = await t.expectOk(t.admin.id, "apps.preview", {

@@ -478,6 +478,10 @@ export function useSuperadminUserMutations(
     onSuccess: () => {
       invalidateSuperadminUsers();
       invalidateAuditEvents();
+      // A person's roles and rights are what the rights screens read: read them again too.
+      queryClient
+        .invalidateQueries({ queryKey: ["access", input.apiBaseUrl, input.authScope] })
+        .catch(() => undefined);
     }
   });
   const deleteUser = useMutation({

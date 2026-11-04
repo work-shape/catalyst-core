@@ -25,8 +25,8 @@ export interface PreviewPaneProps {
 
 /**
  * The frame a Page is shown in, and what stands in its place while there is none. The frame
- * allows scripts, form events and downloads, without an origin or permission to open
- * popups or navigate the window around it. The document it loads says the same about itself in its own headers.
+ * allows scripts, form events and downloads, and writing to the clipboard (never reading it),
+ * without an origin or permission to open popups or navigate the window around it. The document it loads says the same about itself in its own headers.
  */
 export function PreviewPane({ source, state, message, title, action, frameRef }: PreviewPaneProps) {
   if (state === "ready" && source) {
@@ -38,6 +38,7 @@ export function PreviewPane({ source, state, message, title, action, frameRef }:
         title={title}
         src={source.url}
         sandbox="allow-scripts allow-forms allow-downloads"
+        allow="clipboard-write"
         referrerPolicy="no-referrer"
         data-testid="page-preview-frame"
         className="block size-full border-0 bg-background"

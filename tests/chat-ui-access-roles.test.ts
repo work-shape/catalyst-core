@@ -1,7 +1,13 @@
 import { createElement } from "react";
-import { ApiError, type EffectivePermissions, type Role } from "@work-shape/catalyst-api-client";
+import {
+  ApiError,
+  type AdministeredUser,
+  type EffectivePermissions,
+  type Role
+} from "@work-shape/catalyst-api-client";
 import {
   areaRightChoices,
+  canAssignRole,
   canEditRole,
   pendingApplyBlock,
   resetBlock,
@@ -11,7 +17,9 @@ import {
   roleAreaOf,
   roleGrantsByArea,
   rolesWithPending,
+  roleAssignmentFailure,
   roleWriteFailure,
+  UserRolesCard,
   ROLE_AREAS,
   withAreaAllows,
   withoutGrant,
@@ -388,5 +396,109 @@ describe("a role's page", () => {
     expect(html).toContain('data-effect="deny"');
     expect(html).toContain("Actions for Reviewers");
     expect(html).not.toContain("Reset to default");
+  });
+});
+
+// P30: an instance admin gives a custom role to a person, on the person's page and on the role's.
+describe("who holds a custom role", () => {
+  const person = (
+    id: string,
+    roles: string[],
+    extra: Partial<AdministeredUser> = {}
+  ): AdministeredUser => ({
+    id,
+    clientInstanceId: "instance",
+    displayLabel: `Person ${id}`,
+    email: `${id}@example.test`,
+    roles,
+    permissionRefs: [],
+    permissions: [],
+    status: "active",
+    identities: [],
+    createdAt: "2026-11-01T00:00:00.000Z",
+    updatedAt: "2026-11-01T00:00:00.000Z",
+    ...extra
+  });
+  const keys: Role = {
+    ...reviewers,
+    id: "role_keys",
+    name: "Keys",
+    grants: [allow("api_access.manage")]
+  };
+
+  it("is given by a holder of users.manage, and a role with a Superadmin's right only by one", () => {
+    expect(canAssignRole(reviewers, admin)).toBe(true);
+    expect(canAssignRole(keys, admin)).toBe(false);
+    expect(canAssignRole(keys, root)).toBe(true);
+    expect(canAssignRole(builtIn("admin"), root)).toBe(false);
+    expect(canAssignRole(reviewers, { superadmin: false, rights: rights([]) })).toBe(false);
+  });
+
+  it("reads a refusal to give a role for its sentence", () => {
+    const refusal = (details: Record<string, string>) =>
+      new ApiError(403, "refused", {
+        error: { code: "FORBIDDEN", message: "refused", details }
+      });
+    expect(
+      roleAssignmentFailure(refusal({ action: "users.update", reason: "holder_not_administrable" }))
+    ).toEqual({ kind: "self" });
+    expect(roleAssignmentFailure(refusal({ action: "users.update", reason: "no_grant" }))).toEqual({
+      kind: "superadminOnly"
+    });
+    expect(roleAssignmentFailure(refusal({ action: "audit.view", reason: "no_grant" }))).toEqual({
+      kind: "needsRight",
+      action: "audit.view"
+    });
+  });
+
+  it("lists the people who hold a custom role on its page, each to take it from, and none on a built-in one", () => {
+    const people = {
+      users: [person("kai", ["user", reviewers.id]), person("lena", ["user"])],
+      failed: false,
+      onSetRoles: never
+    };
+    const page = (role: Role, editor: RoleEditor) =>
+      render(
+        createElement(RolePage, {
+          role,
+          editor,
+          names,
+          people,
+          onBack: nothing,
+          onRename: nothing,
+          onDelete: nothing,
+          onUpdate: never,
+          onReset: never,
+          onDecide: never
+        }),
+        "de"
+      );
+    const html = page(reviewers, admin);
+    expect(html).toContain('data-testid="role-people"');
+    expect(html).toContain('data-user="kai"');
+    expect(html).not.toContain('data-user="lena"');
+    expect(html).toContain("Reviewers von Person kai entfernen");
+    expect(html).toContain("Person hinzufügen");
+    expect(page(keys, admin)).not.toContain("Person hinzufügen");
+    expect(page(builtIn("admin"), adminWithEdit)).not.toContain('data-testid="role-people"');
+  });
+
+  it("shows a person's custom roles beside the built-in one", () => {
+    const card = (user: AdministeredUser, roles: Role[] | undefined) =>
+      render(
+        createElement(UserRolesCard, {
+          user,
+          roles,
+          rolesFailed: false,
+          editor: admin,
+          onSetRoles: never
+        })
+      );
+    const roles = [builtIn("user"), builtIn("admin"), reviewers];
+    expect(card(person("kai", ["user", reviewers.id]), roles)).toContain("More roles: Reviewers");
+    expect(card(person("lena", ["user"]), roles)).toContain("No further role");
+    expect(card(person("lena", ["user"]), [builtIn("user")])).toContain(
+      "There is no custom role yet."
+    );
   });
 });

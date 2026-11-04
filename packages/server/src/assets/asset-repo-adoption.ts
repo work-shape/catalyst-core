@@ -6,6 +6,7 @@ import {
   isAppError,
   isOperationRunId,
   type AuditActor,
+  type AuthenticatedIdentity,
   type ConfigAssetRevisionRecord,
   type FileSetId,
   type JsonObject,
@@ -68,7 +69,7 @@ export async function adoptAssetRepositories(
   input: { kind: string; name?: string; after?: string }
 ): Promise<AdoptAssetRepositoryResponse> {
   const kind = options.configAssets.kinds.get(input.kind);
-  if (!kind || kind.content !== "repository" || !kind.revisionFiles || !options.pages) {
+  if (!kind || kind.content !== "repository" || !options.pages) {
     throw new AppError(
       "VALIDATION_FAILED",
       `The content of a ${input.kind} is no repository on this instance: there is nothing to adopt`,
@@ -97,7 +98,7 @@ export async function adoptAssetRepositories(
     });
     if (!asset) return { ...answer, done: true, ...(after === undefined ? {} : { after }) };
     if (Date.now() >= deadline) return { ...answer, ...(after === undefined ? {} : { after }) };
-    const outcome = await adoptAsset(options, call, kind, asset, deadline);
+    const outcome = await adoptAsset(options, call.actor, kind, asset, deadline);
     answer.revisions += outcome.revisions;
     answer.commits += outcome.commits;
     if (outcome.status === "unfinished") {
@@ -127,6 +128,51 @@ export async function adoptAssetRepositories(
   }
 }
 
+/**
+ * Gives one asset the commits its revisions lack, oldest first: the repair of an App whose
+ * revisions were written without a commit, such as by `assets.put` before its writes committed,
+ * on its next write or checkout. A call that runs out of time ends retryable, and the next one
+ * goes on where it stopped; an asset that cannot be adopted is refused.
+ */
+export async function adoptAssetRepository(
+  options: AssetWorkflowOptions,
+  input: {
+    kind: WorkflowAssetKind;
+    asset: { id: string; name: string };
+    actor: AuthenticatedIdentity;
+  }
+): Promise<void> {
+  const { kind, asset } = input;
+  const outcome = await adoptAsset(
+    options,
+    input.actor,
+    kind,
+    asset,
+    Date.now() + ADOPTION_CALL_BUDGET_MS
+  );
+  if (outcome.status === "adopted") {
+    options.logger.info(
+      { assetId: asset.id, revisions: outcome.revisions, commits: outcome.commits },
+      "An asset's revisions were adopted into its repository"
+    );
+    return;
+  }
+  if (outcome.status === "unfinished") {
+    throw new AppError(
+      "CONFLICT",
+      `The history of ${kind.kind} '${asset.name}' is still being prepared. Nothing was changed. Try again.`,
+      { reason: "repository_preparing", retryable: true },
+      { exposeMessage: true }
+    );
+  }
+  throw new AppError(
+    "CONFLICT",
+    `The ${kind.kind} '${asset.name}' has no repository, and its earlier revisions could not be committed to one`,
+    { reason: "repository_unavailable" },
+    { exposeMessage: true }
+  );
+}
+
 /** The revisions of the asset, oldest first. A name used again by another asset is not its. */
 async function revisionsOf(
   options: AssetWorkflowOptions,
@@ -148,13 +194,14 @@ async function revisionsOf(
  */
 async function adoptAsset(
   options: AssetWorkflowOptions,
-  call: AssetCall,
+  actor: AuthenticatedIdentity,
   kind: WorkflowAssetKind,
   asset: { id: string; name: string },
   deadline: number
 ): Promise<AssetOutcome> {
+  // A kind written as its files, as an App, names a file set on every revision, and has no
+  // folder to make from a config.
   const hook = kind.revisionFiles;
-  if (!hook) throw new AppError("INTERNAL", `A ${kind.kind} holds no files`);
   const store = options.stores.configAssets;
   const address = { clientInstanceId: options.clientInstanceId, assetId: asset.id };
   let revisions = 0;
@@ -183,7 +230,7 @@ async function adoptAsset(
         revision.commit === undefined &&
         revision.config !== null &&
         revision.fileSetId === undefined &&
-        hook.filesOfConfig(revision.config).length === 0
+        (!hook || hook.filesOfConfig(revision.config).length === 0)
     );
     if (empty) return refuse(empty.revision, "no_folder");
     if (Date.now() >= deadline) return { status: "unfinished", revisions, commits };
@@ -229,7 +276,7 @@ async function adoptAsset(
         operationRunId: adoptionRunId(next),
         fileSet,
         baseCommit: before?.commit ?? null,
-        actor: call.actor,
+        actor,
         recorded: {
           author: authorOfRevision(next.actor),
           time: Math.floor(Date.parse(next.createdAt) / 1000)

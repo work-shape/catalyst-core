@@ -7,7 +7,6 @@ import { clientInstanceId } from "./support/access-instance";
 describe("an App viewer without a data assignment", () => {
   it("gets the missing-scope label, while assigned and all viewers do not", async () => {
     const t = await setupAppInstance({
-      commits: false,
       server: (_stores, config) => ({
         config: { ...config, scopes: { mandant: { label: "Mandant", valueType: "text" } } }
       }),

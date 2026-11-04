@@ -24,6 +24,10 @@ The frame has no modals, popups, top navigation, browser storage or direct netwo
 ## Sandbox, forms and personal state
 
 Apps run with `allow-scripts allow-forms allow-downloads`, without `allow-same-origin`.
+The frame also carries the permissions policy `clipboard-write`, so a Copy button can call
+`navigator.clipboard.writeText(text)` from a user click, such as a button's click handler.
+Only writing is allowed: an App cannot read the clipboard, and the browser refuses a write
+that no click or key press started.
 A form's validation and `submit` event work. Handle `submit` with `event.preventDefault()`
 and call a named action; `form-action 'none'` blocks navigation to every form target.
 Inline `onclick` and `onsubmit` attributes are refused: use `addEventListener` or React handlers.

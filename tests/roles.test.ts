@@ -809,6 +809,20 @@ describe("custom roles", () => {
     expect((await auditOf(t, "role.deleted")).map((event) => event.metadata?.roleId)).toEqual([
       created.id
     ]);
+    // Giving and taking the role are events of their own, with the person and the role only.
+    for (const type of ["user.role_assigned", "user.role_removed"]) {
+      expect(
+        (await auditOf(t, type)).map((event) => ({
+          subject: event.subject,
+          metadata: event.metadata
+        }))
+      ).toEqual([
+        {
+          subject: t.kai.id,
+          metadata: { roleId: created.id, operationRunId: expect.any(String) }
+        }
+      ]);
+    }
   });
 
   it("gives the use of two Apps to a holder outside their workspace", async () => {

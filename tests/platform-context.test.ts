@@ -76,7 +76,14 @@ describe("platform.context.get", () => {
     });
     expect(context.kinds).toEqual(kinds);
     expect(context.workspaces).toEqual([
-      { id: team, name: "Kai's team", kind: "shared", member: false, actions: ["agent.write"] }
+      {
+        id: team,
+        name: "Kai's team",
+        kind: "shared",
+        member: false,
+        actions: ["agent.write"],
+        useActions: []
+      }
     ]);
     // A right in one workspace is no right on the instance's assets as a whole.
     expect(context.actions).toEqual([]);
@@ -138,14 +145,16 @@ describe("platform.context.get", () => {
     ]);
     // Agents and skills are used through no right of their own: no use level is offered.
     expect(admin.useActions).toEqual([]);
-    // What the key `catalyst setup` asks for: authoring and publishing, never deleting.
+    // What a key may carry of reading, writing, deleting and publishing: what the person holds.
     expect(admin.authoringActions).toEqual([
       "agent.read",
       "agent.write",
       "agent.publish",
+      "agent.delete",
       "skill.read",
       "skill.write",
-      "skill.publish"
+      "skill.publish",
+      "skill.delete"
     ]);
     // On the instance's assets as a whole the role holds every action: the deny names one
     // workspace.
@@ -198,7 +207,8 @@ describe("platform.context.get", () => {
         name: "Team",
         kind: "shared",
         member: false,
-        actions: ["agent.write", "skill.read"]
+        actions: ["agent.write", "skill.read"],
+        useActions: []
       }
     ]);
     // A right in a workspace is no right on the instance's own assets.
@@ -544,7 +554,8 @@ describe("credential discovery (ADISC-1 check 70)", () => {
         name: workspace.name,
         kind: "shared",
         member: false,
-        actions: ["skill.read"]
+        actions: ["skill.read"],
+        useActions: []
       }
     ]);
     for (const action of workspaceContext.workspaces.flatMap((row) => row.actions)) {

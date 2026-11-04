@@ -4,15 +4,26 @@ import {
   PERSONAL_API_KEY_ACCOUNT_ACTION,
   PERSONAL_API_KEY_WORKSPACES_ACTION
 } from "@work-shape/catalyst-core";
-import { Checkbox, Field, Input, Picker, PickerButton, Select } from "@work-shape/catalyst-ui";
+import {
+  Button,
+  Checkbox,
+  Field,
+  Input,
+  Picker,
+  PickerButton,
+  Select
+} from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { actionLabel } from "../access/right-words";
 import {
   PERSONAL_KEY_EXPIRY_DAYS,
-  isPersonalKeyInstanceAction,
+  personalKeyActionsKeptIn,
   personalKeyDraftProblem,
   personalKeyExpiryOf,
-  type PersonalKeyDraft
+  personalKeyOfferIn,
+  type PersonalKeyDraft,
+  type PersonalKeyPlaceOffer,
+  type PersonalKeyWorkspace
 } from "./personal-api-keys-model";
 
 /**
@@ -29,40 +40,32 @@ export function personalKeyActionLabel(action: string, t: TranslationContextValu
 /** From this many workspaces on, the workspace picker shows its search field. */
 const WORKSPACE_SEARCH_FROM_COUNT = 8;
 
-/** A workspace a key can be limited to: one whose own assets the person holds a right on. */
-export interface PersonalKeyWorkspace {
-  id: string;
-  /** Absent for the person's Personal Workspace, which is named "Personal". */
-  name?: string;
-}
-
 /**
  * The name, the scopes and the end of a personal key: the same fields for a new key and for a
- * CLI's connect code. The scopes are actions, each named as the rights screens name it, all
- * limited to what one workspace owns where one is chosen, and within it to one asset where its
- * id is given. The instance level is offered only while no workspace is chosen, and choosing one
- * unticks it. The account and workspaces level goes the same way, but for the workspaces,
- * which a key limited to a workspace manages there only, and one limited to an asset not at all.
+ * CLI's connect code. The scopes are actions the person holds, each named as the rights screens
+ * name it, all limited to what one workspace owns where one is chosen, and within it to one
+ * asset where its id is given. Only what the person holds where the key reaches is offered:
+ * choosing a workspace offers what they hold there and unticks the rest. The instance level is
+ * offered only while no workspace is chosen. The account and workspaces level goes the same
+ * way, but for the workspaces, which a key limited to a workspace manages there only, and one
+ * limited to an asset not at all.
  */
 export function PersonalKeyFields({
   draft,
-  actions,
-  useActions,
+  everywhere,
   instanceActions = [],
   accountActions = [],
   workspaces,
   onChange
 }: {
   draft: PersonalKeyDraft;
-  /** The actions offered, in order, by their ids. */
-  actions: readonly string[];
-  /** The use level offered, in order: the use rights the person holds. */
-  useActions: readonly string[];
+  /** The authoring actions and the use level offered over everywhere, in order, by their ids. */
+  everywhere: PersonalKeyPlaceOffer;
   /** The instance level offered: `system.view` where the person holds it. */
   instanceActions?: readonly string[];
   /** The account and workspaces level offered: `account.manage` and the workspaces. */
   accountActions?: readonly string[];
-  /** The workspaces the key can be limited to. */
+  /** The workspaces the key can be limited to, each with what the person holds there. */
   workspaces: readonly PersonalKeyWorkspace[];
   onChange(draft: PersonalKeyDraft): void;
 }) {
@@ -73,7 +76,17 @@ export function PersonalKeyFields({
   const workspaceLabel = (workspace: PersonalKeyWorkspace) =>
     workspace.name ?? t("personalApiKeys.workspacePersonal");
   const chosenWorkspace = workspaces.find((workspace) => workspace.id === draft.workspaceId);
+  const { actions, useActions } = personalKeyOfferIn(everywhere, workspaces, draft.workspaceId);
   const offered = [...actions, ...useActions, ...instanceActions, ...accountActions];
+  const allTicked = actions.every((action) => draft.actions.includes(action));
+  const noneTicked = !actions.some((action) => draft.actions.includes(action));
+  const tickAll = (checked: boolean) =>
+    onChange({
+      ...draft,
+      actions: checked
+        ? offered.filter((item) => actions.includes(item) || draft.actions.includes(item))
+        : draft.actions.filter((item) => !actions.includes(item))
+    });
   // The account level is of the whole account, and a workspace is the narrowest limit of the
   // workspaces level: an asset limit leaves it out.
   const accountShown = accountActions.filter((action) =>
@@ -118,7 +131,33 @@ export function PersonalKeyFields({
       <fieldset className="grid gap-2">
         <legend className="text-label">{t("personalApiKeys.actions")}</legend>
         <p className="text-caption text-muted-foreground">{t("personalApiKeys.actionsHint")}</p>
-        {boxes(actions)}
+        {actions.length > 0 ? (
+          <>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                disabled={allTicked}
+                onClick={() => tickAll(true)}
+              >
+                {t("personalApiKeys.selectAll")}
+              </Button>
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                disabled={noneTicked}
+                onClick={() => tickAll(false)}
+              >
+                {t("personalApiKeys.selectNone")}
+              </Button>
+            </div>
+            {boxes(actions)}
+          </>
+        ) : (
+          <p className="text-caption text-muted-foreground">{t("personalApiKeys.actionsNone")}</p>
+        )}
       </fieldset>
       {useActions.length > 0 ? (
         <fieldset className="grid gap-2">
@@ -160,17 +199,12 @@ export function PersonalKeyFields({
             onChange({
               ...draft,
               workspaceId,
-              ...(workspaceId
-                ? {
-                    // A workspace narrows the key: the instance level and the account do not
-                    // go with it.
-                    actions: draft.actions.filter(
-                      (action) =>
-                        !isPersonalKeyInstanceAction(action) &&
-                        action !== PERSONAL_API_KEY_ACCOUNT_ACTION
-                    )
-                  }
-                : { assetName: "" })
+              actions: personalKeyActionsKeptIn(
+                draft.actions,
+                { everywhere, workspaces, instanceActions, accountActions },
+                workspaceId
+              ),
+              ...(workspaceId ? {} : { assetName: "" })
             })
           }
         >

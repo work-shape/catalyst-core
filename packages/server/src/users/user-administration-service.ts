@@ -9,6 +9,7 @@ import {
   auditActorFromIdentity,
   auditActorFromUser,
   isAuthenticatedServicePrincipal,
+  isBuiltInRole,
   type AuthenticatedIdentity,
   type OperationExecutionContext,
   type AuthenticatedUser,
@@ -169,6 +170,7 @@ export class UserAdministrationWorkflow {
       return passwordSignIn ? held.attachPasswordSignIn(now, user, passwordSignIn.password) : user;
     });
     await this.recordUserMutation(context, "user.created", created);
+    await this.recordCustomRoleChanges(context, created, []);
     if (passwordSignIn)
       await this.recordPassword(context, created, "user.password_sign_in_created");
     return created;
@@ -185,6 +187,7 @@ export class UserAdministrationWorkflow {
       permissionRefs: command.permissionRefs,
       permissions: command.permissions
     };
+    let rolesBefore: readonly UserRole[] = [];
     const updated = await this.whileRightsHeld(context, command.userId, async (held, now) => {
       await requireUserAdministration(held.options, operationId, now, {
         userId: command.userId,
@@ -200,6 +203,7 @@ export class UserAdministrationWorkflow {
         roles: command.roles ?? existing.roles,
         status: command.status ?? existing.status
       });
+      rolesBefore = existing.roles;
       return held.options.stores.users.updateUser({
         clientInstanceId: this.options.clientInstanceId,
         userId: command.userId,
@@ -213,6 +217,7 @@ export class UserAdministrationWorkflow {
       });
     });
     await this.recordUserMutation(context, "user.updated", updated);
+    await this.recordCustomRoleChanges(context, updated, rolesBefore);
     return updated;
   }
 
@@ -710,6 +715,36 @@ export class UserAdministrationWorkflow {
     auditType: string
   ): Promise<void> {
     await recordGovernanceAccess({ options: this.options, user, context, auditType });
+  }
+
+  /**
+   * One event for each custom role the call gave the person or took from them, with the ids of
+   * the person and the role only. A built-in role is the user's access level, which
+   * `user.updated` records.
+   */
+  private async recordCustomRoleChanges(
+    context: ChangeContext,
+    user: UserRecord,
+    before: readonly UserRole[]
+  ): Promise<void> {
+    const changes = [
+      ...user.roles
+        .filter((role) => !before.includes(role))
+        .map((roleId) => ({ type: "user.role_assigned", roleId })),
+      ...before
+        .filter((role) => !user.roles.includes(role))
+        .map((roleId) => ({ type: "user.role_removed", roleId }))
+    ].filter((change) => !isBuiltInRole(change.roleId));
+    for (const change of changes) {
+      await context.audit.record({
+        type: change.type,
+        status: "success",
+        actor: auditActorFromIdentity(context.actor),
+        subject: user.id,
+        correlationId: context.correlationId,
+        metadata: { roleId: change.roleId }
+      });
+    }
   }
 
   private async recordUserMutation(
