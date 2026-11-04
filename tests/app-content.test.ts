@@ -128,9 +128,10 @@ async function startInstance(appsEnabled = true) {
 
 /** The Page document a shell holds in its frame, and the one script of that document. */
 function heldBy(shellBody: string) {
-  const frame = /<iframe sandbox="([^"]*)" allow="([^"]*)" title="Page" srcdoc="([^"]*)"><\/iframe>/u.exec(
-    shellBody
-  );
+  const frame =
+    /<iframe sandbox="([^"]*)" allow="([^"]*)" title="Page" srcdoc="([^"]*)"><\/iframe>/u.exec(
+      shellBody
+    );
   const pageDocument = (frame?.[3] ?? "").replaceAll("&quot;", '"').replaceAll("&amp;", "&");
   const script =
     /^<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="x-dns-prefetch-control" content="off"><script>(.*)<\/script>$/su.exec(
