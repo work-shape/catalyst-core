@@ -71,8 +71,8 @@ describe("an outside host a person allows for their own view of a draft", () => 
     await t.close();
   });
 
-  const write = async (name: string, hosts: string[]) => {
-    const response = await t.putApp(t.admin.id, name, appFiles(name, { externalHosts: hosts }));
+  const write = async (name: string, hosts: string[], marker = name) => {
+    const response = await t.putApp(t.admin.id, name, appFiles(marker, { externalHosts: hosts }));
     expectStatus(response, 200);
     return fileWriteSchema.parse(response.json()).revision;
   };
@@ -266,7 +266,9 @@ describe("an outside host a person allows for their own view of a draft", () => 
     );
     expect(await stored(owner, t.admin.id)).toEqual([]);
 
-    const again = await write("rates", ["api.example.com"]);
+    // Other files than the discarded draft's: the same files on the same base by the same
+    // author in the same second are the same commit, which a save may not name twice.
+    const again = await write("rates", ["api.example.com"], "rates again");
     expect((await shown(t.admin.id, "rates")).heldBackHosts).toEqual(["api.example.com"]);
     await allowNow();
     expectStatus(await t.publish(t.admin.id, "rates", again), 200);
