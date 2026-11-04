@@ -11,7 +11,8 @@ Decide where data goes before you build. Each kind of data has one home, and the
 | A large or changing body of documents: statutes, manuals, a collection of files          | A [Knowledge Base](#a-large-or-changing-corpus)          | It is searched, not read whole, and it can be refreshed without a new skill revision.        |
 | Records that people or Apps write: orders, entries, statuses                             | A [Data Store](#records-people-or-apps-write)            | It has tables and rights; a skill folder is read-only.                              |
 | An outside system, or anything that needs a credential                                   | A [Connection](#an-outside-system-and-credentials)       | Only the platform holds the key, and it checks who may use it.                               |
-| A PDF or other file an App makes                                                         | The [App's own code](#a-file-an-app-makes), in the browser | Nothing leaves the frame, and the download needs no server.                                |
+| A PDF an App makes                                                                       | The kit's [`pdf.download`](#a-file-an-app-makes), printed in the instance | The document stays in the instance, and the App bundles no PDF library.      |
+| Another file an App makes, such as a spreadsheet                                         | The [App's own code](#a-file-an-app-makes), in the browser | Nothing leaves the frame, and the download needs no server.                                |
 
 ## A skill folder
 
@@ -60,4 +61,8 @@ If you cannot tell which applies, ask the person which of these the data is, rat
 
 ## A file an App makes
 
-An App's frame allows downloads (`allow-downloads`), so an App makes a PDF, a spreadsheet or another file in the browser and offers it as a download. Bundle the library in the App's folder ([Fonts and libraries](/apps/sandbox/#fonts-and-libraries)), such as `pdf-lib` or `jsPDF` for a PDF; a CDN does not load. The data for the file comes through a named action. The platform does not provide a server-side PDF action for Apps.
+An App's frame allows downloads (`allow-downloads`), so an App offers a file it makes as a download. The data for the file comes through a named action.
+
+An App makes a PDF with the kit's `pdf.download(html, filename)` or `pdf.fromHtml(html)` (kit 1.10.0): the instance prints the HTML in its own renderer, without network, so the App bundles no PDF library such as `pdf-lib` or `jsPDF`. [PDFs from an App](/apps/pdf/) has what the document may contain and the limits.
+
+Another file, such as a spreadsheet, the App makes in the browser. Bundle the library in the App's folder ([Fonts and libraries](/apps/sandbox/#fonts-and-libraries)); a CDN does not load.
