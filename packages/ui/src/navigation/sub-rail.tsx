@@ -1,6 +1,7 @@
 import { cloneElement, useState, type ReactElement, type ReactNode } from "react";
 import { cn } from "../cn";
 import { Select } from "../forms/select";
+import { useScrollEdgeFade } from "../scroll-edge-fade";
 import type { CountBadgeTone } from "../status/count-badge";
 import { NavGroup, NavItem } from "./nav-item";
 
@@ -64,7 +65,9 @@ export interface SubRailProps {
  * `Select` above the content. It measures the page, not the window, so an open sidebar counts.
  *
  * Beside the content it is pinned where it starts, so it stands still while the content scrolls.
- * A rail longer than the scroll area scrolls on its own.
+ * A rail longer than the scroll area scrolls its entries on their own: the title stays on its
+ * line, the entries fade out at the edges that hide more, and the last one ends a group's step
+ * above the lower edge.
  *
  * Its first line is on the page's title line. Above the content it keeps the page's top room
  * over itself, less what a floating control already takes; once the page scrolls, the select
@@ -83,6 +86,8 @@ export function SubRail({
   const openGroupScope = groups.find((group) =>
     group.items.some((item) => item.id === value)
   )?.scope;
+  // It watches the box of the groups, so a group that folds open re-measures the edges.
+  const entries = useScrollEdgeFade<HTMLElement>();
 
   return (
     <div
@@ -90,10 +95,10 @@ export function SubRail({
       className={cn(
         // The select that names the routes stays in view while the page scrolls.
         "sticky grid w-full shrink-0 gap-3 self-start bg-background py-2",
-        // Beside the content the rail scrolls on its own when it is longer than the scroll area.
-        // That clips what leaves its box, so the box is a step larger on each side than the
-        // rail it shows and a focus ring keeps its room.
-        "@subrail/page:-mx-1 @subrail/page:w-[calc(var(--layout-subrail)+var(--spacing)*2)] @subrail/page:overflow-y-auto @subrail/page:px-1 @subrail/page:pb-1",
+        // Beside the content the rail is a column no taller than the scroll area: its title and
+        // scope keep their place and the entries under them scroll when they are longer. The
+        // box is a step larger on each side than the rail it shows, as is the entries' own.
+        "@subrail/page:-mx-1 @subrail/page:flex @subrail/page:w-[calc(var(--layout-subrail)+var(--spacing)*2)] @subrail/page:flex-col @subrail/page:px-1 @subrail/page:pb-1",
         // Under a head the rail keeps a step of room, at rest and while it is pinned: its first
         // item would otherwise touch the head's line.
         // A head with a second line is taller than the offset: the rail then goes under it.
@@ -154,22 +159,33 @@ export function SubRail({
           )
         )}
       </Select>
-      <nav aria-label={label} className="hidden gap-4 @subrail/page:grid">
-        {groups.map((group) => (
-          <SubRailNavGroup key={group.id} group={group} value={value}>
-            {group.scope === undefined ? null : (
-              <div className="min-w-0 px-2 pb-1">{group.scope}</div>
-            )}
-            {group.items.map((item) => (
-              <SubRailNavItem
-                key={item.id}
-                item={item}
-                selected={item.id === value}
-                onChoose={choose}
-              />
-            ))}
-          </SubRailNavGroup>
-        ))}
+      <nav
+        ref={entries.ref}
+        aria-label={label}
+        style={entries.style}
+        onScroll={entries.onScroll}
+        // What scrolls clips what leaves its box, so the box is a step larger on each side than
+        // the entries and a focus ring keeps its room. The room under the last entry is that
+        // between two groups: scrolled to the end it stands clear of the lower edge.
+        className="-mx-1 -mt-1 hidden min-h-0 overflow-x-hidden overflow-y-auto px-1 pt-1 pb-4 @subrail/page:block"
+      >
+        <div className="grid gap-4">
+          {groups.map((group) => (
+            <SubRailNavGroup key={group.id} group={group} value={value}>
+              {group.scope === undefined ? null : (
+                <div className="min-w-0 px-2 pb-1">{group.scope}</div>
+              )}
+              {group.items.map((item) => (
+                <SubRailNavItem
+                  key={item.id}
+                  item={item}
+                  selected={item.id === value}
+                  onChoose={choose}
+                />
+              ))}
+            </SubRailNavGroup>
+          ))}
+        </div>
       </nav>
     </div>
   );
