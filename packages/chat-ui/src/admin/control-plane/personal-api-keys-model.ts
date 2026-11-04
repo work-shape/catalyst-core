@@ -94,7 +94,7 @@ export function personalKeyInstanceOffer(context: PlatformContext | undefined): 
 }
 
 /** Whether an action is of the whole instance, which no workspace or asset narrows. */
-export function isPersonalKeyInstanceAction(action: string): boolean {
+function isPersonalKeyInstanceAction(action: string): boolean {
   return PERSONAL_KEY_INSTANCE_ACTIONS.some((instanceAction) => instanceAction === action);
 }
 
