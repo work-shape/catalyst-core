@@ -11,14 +11,6 @@ export const chatInputGuardrails = defineTranslations({
     "chatInput.unavailable":
       "Not sent. The checks of this message could not run. Try again in a moment.",
     "chatInput.sendAnyway": "Send anyway",
-    "chatInput.notCheckedTitle": "Not checked",
-    "chatInput.notCheckedBefore": "The guardrails could not check these parts of the message:",
-    "chatInput.notCheckedSent": "Sent. The guardrails could not check these parts of the message:",
-    "chatInput.textNotChecked": "Its text, which is longer than the checks read",
-    "chatInput.cause.image": "{name}: a picture, whose content is not read",
-    "chatInput.cause.not_extracted": "{name}: its text is read only after sending",
-    "chatInput.cause.too_large": "{name}: too large to check",
-    "chatInput.cause.unreadable": "{name}: could not be read",
     "chatInput.rule.secretsTitle": "Secrets in chat",
     "chatInput.rule.secretsReason":
       "The message contains what looks like an API key, an access token or a private key. Remove it before you send the message, and change the secret if it was shared.",
@@ -44,15 +36,6 @@ export const chatInputGuardrails = defineTranslations({
     "chatInput.unavailable":
       "Nicht gesendet. Die Prüfungen dieser Nachricht konnten nicht laufen. Versuche es gleich noch einmal.",
     "chatInput.sendAnyway": "Trotzdem senden",
-    "chatInput.notCheckedTitle": "Nicht geprüft",
-    "chatInput.notCheckedBefore": "Diese Teile der Nachricht konnten die Leitplanken nicht prüfen:",
-    "chatInput.notCheckedSent":
-      "Gesendet. Diese Teile der Nachricht konnten die Leitplanken nicht prüfen:",
-    "chatInput.textNotChecked": "Ihr Text, der länger ist, als die Prüfungen lesen",
-    "chatInput.cause.image": "{name}: ein Bild, dessen Inhalt nicht gelesen wird",
-    "chatInput.cause.not_extracted": "{name}: der Text wird erst nach dem Senden gelesen",
-    "chatInput.cause.too_large": "{name}: zu groß für die Prüfung",
-    "chatInput.cause.unreadable": "{name}: konnte nicht gelesen werden",
     "chatInput.rule.secretsTitle": "Geheimnisse im Chat",
     "chatInput.rule.secretsReason":
       "Die Nachricht enthält offenbar einen API-Schlüssel, ein Zugangstoken oder einen privaten Schlüssel. Entferne ihn vor dem Senden und ändere das Geheimnis, falls es schon geteilt wurde.",

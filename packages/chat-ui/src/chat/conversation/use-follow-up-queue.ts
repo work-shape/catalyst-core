@@ -185,7 +185,7 @@ export function useFollowUpQueueModel(input: {
         });
         messageSubmitted(conversationId);
         if ("followUp" in response) {
-          chatInput?.delivered(conversationId, response.chatInput);
+          chatInput?.delivered();
           setEcho({ followUp: response.followUp, seenWith: source.followUps });
         } else {
           // The run ended meanwhile: the message started at once.

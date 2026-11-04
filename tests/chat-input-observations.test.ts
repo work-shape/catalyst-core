@@ -192,7 +192,6 @@ function guardWith(overrides: Partial<ChatInputGuard>): ChatInputGuard {
   return {
     conversationId: "conv_1",
     refusal: undefined,
-    sent: undefined,
     acceptsWarnings: () => false,
     refused: () => false,
     delivered: () => undefined,
@@ -242,7 +241,9 @@ describe("the guardrails on a message, in the composer", () => {
     expect(text(markup)).toContain("Noch nicht gesendet.");
   });
 
-  it("offer no way past a block, and say what they could not check", () => {
+  // Fails without the change: a block, and a sent message, listed the parts the guardrails could
+  // not check, which only confused the person. That fact stays in the results admins read.
+  it("offer no way past a block, and say nothing of what they could not check", () => {
     const markup = notice(
       guardWith({
         refusal: {
@@ -251,6 +252,7 @@ describe("the guardrails on a message, in the composer", () => {
           details: {
             reason: "chat_input_blocked",
             guardrails: [],
+            textNotChecked: true,
             attachmentsNotChecked: [
               { attachmentId: "att_1", filename: "vertrag.pdf", cause: "not_extracted" }
             ]
@@ -260,22 +262,10 @@ describe("the guardrails on a message, in the composer", () => {
     );
     expect(markup).toContain('data-outcome="block"');
     expect(markup).not.toContain("chat-input-send-anyway");
-    expect(text(markup)).toContain("vertrag.pdf: der Text wird erst nach dem Senden gelesen");
-  });
-
-  it("say after sending what they could not check, only in the conversation it was sent in", () => {
-    const sent = {
-      conversationId: "conv_1",
-      view: {
-        attachmentsNotChecked: [
-          { attachmentId: "att_2", filename: "foto.png", cause: "image" as const }
-        ]
-      }
-    };
-    expect(text(notice(guardWith({ sent }), "en"))).toContain(
-      "Sent. The guardrails could not check these parts of the message:"
-    );
-    expect(notice(guardWith({ sent, conversationId: "conv_other" }))).toBe("");
+    expect(markup).not.toContain("vertrag.pdf");
+    expect(text(markup)).not.toContain("Nicht geprüft");
+    // Without a refusal the composer has nothing above it.
+    expect(notice(guardWith({}))).toBe("");
   });
 
   it("name every default rule in German, and in English as release config says it", () => {

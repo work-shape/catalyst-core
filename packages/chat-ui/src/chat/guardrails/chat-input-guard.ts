@@ -1,16 +1,15 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import {
   chatInputRefusalDetailsSchema,
-  type ChatInputCheckView,
   type ChatInputRefusalDetails
 } from "@work-shape/catalyst-api-client";
 import { apiErrorCode } from "../../shared/workspace-utils";
 
 // The guardrails on a person's chat message, as the composer shows them (GR-4). The instance
 // checks each message before it stores it. A block refuses it and the draft stays; a warning
-// refuses it until the person sends it anyway. What the instance did not check is said beside
-// the message. Nothing of the text leaves this page for it: the text the person accepted
-// warnings for stays in memory, to send it once more.
+// refuses it until the person sends it anyway. What the instance did not check is not said to
+// the person: it stands in the guardrail results admins read. Nothing of the text leaves this
+// page for it: the text the person accepted warnings for stays in memory, to send it once more.
 
 /** A message the guardrails refused, in the conversation it was written for. */
 export interface ChatInputRefusal {
@@ -19,17 +18,10 @@ export interface ChatInputRefusal {
   details: ChatInputRefusalDetails;
 }
 
-/** What the instance says about a message it took: warnings accepted, parts not checked. */
-interface ChatInputSent {
-  conversationId: string;
-  view: ChatInputCheckView;
-}
-
 export interface ChatInputGuard {
   /** The conversation open in the pane; undefined on the start page. */
   conversationId: string | undefined;
   refusal: ChatInputRefusal | undefined;
-  sent: ChatInputSent | undefined;
   /** Whether the person sends this text despite the warnings it had. */
   acceptsWarnings(text: string): boolean;
   /**
@@ -37,8 +29,8 @@ export interface ChatInputGuard {
    * composer; false for any other failure, which the caller shows as before.
    */
   refused(error: unknown, text: string, conversationId: string | undefined): boolean;
-  /** A message went out: what the instance said about it is shown, the refusal goes. */
-  delivered(conversationId: string, view: ChatInputCheckView | undefined): void;
+  /** A message went out: the refusal goes, and the warnings accepted for it. */
+  delivered(): void;
   /** The person sends the refused text anyway: its warnings are accepted. */
   acceptWarnings(): void;
   dismiss(): void;
@@ -61,7 +53,6 @@ export function canSendAnyway(refusal: ChatInputRefusal | undefined): boolean {
 /** The guard of one chat pane. */
 export function useChatInputGuardModel(conversationId: string | undefined): ChatInputGuard {
   const [refusal, setRefusal] = useState<ChatInputRefusal>();
-  const [sent, setSent] = useState<ChatInputSent>();
   const acceptedRef = useRef<string | undefined>(undefined);
   const refusalRef = useRef<ChatInputRefusal | undefined>(undefined);
 
@@ -76,18 +67,16 @@ export function useChatInputGuardModel(conversationId: string | undefined): Chat
       const next = { conversationId, text: text.trim(), details };
       refusalRef.current = next;
       setRefusal(next);
-      setSent(undefined);
       // A block refuses an accepted text as well: accepting it again would change nothing.
       if (details.reason === "chat_input_blocked") acceptedRef.current = undefined;
       return true;
     },
     []
   );
-  const delivered = useCallback((conversationId: string, view: ChatInputCheckView | undefined) => {
+  const delivered = useCallback(() => {
     acceptedRef.current = undefined;
     refusalRef.current = undefined;
     setRefusal(undefined);
-    setSent(view && hasSomethingToSay(view) ? { conversationId, view } : undefined);
   }, []);
   const acceptWarnings = useCallback(() => {
     if (refusalRef.current) acceptedRef.current = refusalRef.current.text;
@@ -95,27 +84,20 @@ export function useChatInputGuardModel(conversationId: string | undefined): Chat
   const dismiss = useCallback(() => {
     refusalRef.current = undefined;
     setRefusal(undefined);
-    setSent(undefined);
   }, []);
 
   return useMemo(
     () => ({
       conversationId,
       refusal,
-      sent,
       acceptsWarnings,
       refused,
       delivered,
       acceptWarnings,
       dismiss
     }),
-    [acceptWarnings, acceptsWarnings, conversationId, delivered, dismiss, refusal, refused, sent]
+    [acceptWarnings, acceptsWarnings, conversationId, delivered, dismiss, refusal, refused]
   );
-}
-
-/** The warnings the person accepted were said already; what was not checked is said now. */
-function hasSomethingToSay(view: ChatInputCheckView): boolean {
-  return view.textNotChecked === true || (view.attachmentsNotChecked?.length ?? 0) > 0;
 }
 
 function errorDetails(error: unknown): unknown {
