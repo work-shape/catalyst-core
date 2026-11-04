@@ -79,11 +79,9 @@ export function appSaveCalls(
       kind: APP_ASSET_KIND,
       name
     });
-    if (
-      row?.status !== "active" ||
-      row.scope.kind !== "workspace" ||
-      row.scope.workspaceId !== conversation.collaborationWorkspaceId
-    ) {
+    // The App may be owned by another workspace than the conversation's, such as one it is
+    // shared from: its own workspace's rights decide, in a conversation of the person's own.
+    if (row?.status !== "active" || row.scope.kind !== "workspace") {
       throw subjectUnavailable();
     }
     // A name a person gave stands: the save keeps it, and says so to the agent.
@@ -268,12 +266,18 @@ export function appSaveCalls(
       );
       if (!conversation) return undefined;
       const workspaceId = conversation.collaborationWorkspaceId;
-      // A save in a conversation about an App writes its draft; any other save creates one.
+      // A save in a conversation about an App writes its draft, in the workspace that owns the
+      // App; any other save creates one in the conversation's.
       const subject = conversation.subject;
       if (subject?.kind === APP_ASSET_KIND) {
+        const row = await options.configAssets.store.getConfigAsset({
+          clientInstanceId: options.clientInstanceId,
+          kind: APP_ASSET_KIND,
+          name: subject.name
+        });
         return centralFloor([APP_FROM_PAGE_OPERATIONS.draft, ASSET_WRITE_OPERATION], {
           ...subject,
-          workspaceId
+          workspaceId: row?.scope.kind === "workspace" ? row.scope.workspaceId : workspaceId
         });
       }
       return centralFloor([APP_FROM_PAGE_OPERATIONS.create, ASSET_WRITE_OPERATION], {

@@ -57,7 +57,7 @@ export function createGetAssetTool(calls: PlatformAssetGetCalls): AnyToolDefinit
     description: [
       `Read an asset's definition: its config and revision. Without 'kind' and 'name' it reads the asset the conversation is about; with them it reads that asset and changes nothing, and the person sees nothing. To work on it, open it with ${open.name}.`,
       "It reads with the person's rights: an asset they may not read is answered as one that does not exist. A conversation shared with a workspace reads only the asset it is about.",
-      "Answers the draft where one differs from the published revision, and says which it shows; 'publishedRevision' is the one that runs. For an agent, 'draftRevision' names its shared pending draft, null when none. When 'saveApproval' is present, a save files a request and changes nothing until one of its approverNames approves; name them. Without it an authorized save applies at once.",
+      "Answers the draft where one differs from the published revision, and says which it shows; 'publishedRevision' is the one that runs. An App's files are not in its definition: to change an App, load its draft with app.edit, change the files there and app.save them. For an agent, 'draftRevision' names its shared pending draft, null when none. When 'saveApproval' is present, a save files a request and changes nothing until one of its approverNames approves; name them. Without it an authorized save applies at once.",
       LINK_THE_PAGE
     ].join(" "),
     inputSchema: readInputSchema,

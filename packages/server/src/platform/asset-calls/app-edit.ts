@@ -49,14 +49,15 @@ export function appEditCalls(
 }
 
 /**
- * The App a person may change, in the workspace of `workspaceId`: its active row, where the
- * module is on and `access` holds `app.write` on it. Refuses before any file or author is read,
- * and an App that is not there or not in that workspace alike.
+ * The App a person may change: its active row, owned by a workspace, where the module is on and
+ * `access` holds `app.write` on it in that workspace. The conversation it is loaded into is the
+ * person's own, which the callers ask, and may stand in another workspace, such as one the App
+ * is shared with. Refuses before any file or author is read, and an App that is not there alike.
  */
 export async function requireAppToCheckOut(
   options: AssetWorkflowOptions,
   access: Pick<ActorAccess, "require">,
-  input: { name: string; workspaceId: string }
+  input: { name: string }
 ) {
   const row = await options.configAssets.store.getConfigAsset({
     clientInstanceId: options.clientInstanceId,
@@ -66,7 +67,6 @@ export async function requireAppToCheckOut(
   if (
     row?.status !== "active" ||
     row.scope.kind !== "workspace" ||
-    row.scope.workspaceId !== input.workspaceId ||
     options.modules.offModuleOf("kind", "app") !== undefined
   )
     throw subjectUnavailable();
@@ -98,7 +98,7 @@ export async function checkoutApp(
 ): Promise<AppEdited> {
   const { conversation, context } = input;
   await requireOwnTranscript(options, conversation);
-  const checkedOut = { name: input.name, workspaceId: conversation.collaborationWorkspaceId };
+  const checkedOut = { name: input.name };
   let row = await requireAppToCheckOut(options, input.access, checkedOut);
   if (!workspaceObjects || !options.pages)
     throw new AppError("CONFLICT", "App editing needs storage for workspace files", {
