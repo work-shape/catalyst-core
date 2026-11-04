@@ -943,7 +943,8 @@ export interface PageShell {
 
 /**
  * The shell document for one HTML file of a file set. The Page's frame is written here, by the
- * server, with scripts, form events and downloads, but without an origin. The Page document is the
+ * server, with scripts, form events and downloads, but without an origin. It may write to the
+ * clipboard (`allow="clipboard-write"`) and read nothing from it. The Page document is the
  * value of an attribute, so only the two characters that end or change an attribute value are
  * escaped. The answer that carries the shell names `pageScriptHash` in its policy.
  */
@@ -955,7 +956,7 @@ export function composePageShell(storedHtml: string, storage?: AppStorageBootstr
     '<html><head><meta charset="utf-8"><title>Page</title>',
     `<style>${SHELL_STYLE}</style>`,
     "</head><body>",
-    `<iframe sandbox="allow-scripts allow-forms allow-downloads" title="Page" srcdoc="${escapeAttribute(pageDocument)}"></iframe>`,
+    `<iframe sandbox="allow-scripts allow-forms allow-downloads" allow="clipboard-write" title="Page" srcdoc="${escapeAttribute(pageDocument)}"></iframe>`,
     "</body></html>",
     ""
   ].join("\n");

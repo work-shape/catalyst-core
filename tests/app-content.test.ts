@@ -128,15 +128,16 @@ async function startInstance(appsEnabled = true) {
 
 /** The Page document a shell holds in its frame, and the one script of that document. */
 function heldBy(shellBody: string) {
-  const frame = /<iframe sandbox="([^"]*)" title="Page" srcdoc="([^"]*)"><\/iframe>/u.exec(
-    shellBody
-  );
-  const pageDocument = (frame?.[2] ?? "").replaceAll("&quot;", '"').replaceAll("&amp;", "&");
+  const frame =
+    /<iframe sandbox="([^"]*)" allow="([^"]*)" title="Page" srcdoc="([^"]*)"><\/iframe>/u.exec(
+      shellBody
+    );
+  const pageDocument = (frame?.[3] ?? "").replaceAll("&quot;", '"').replaceAll("&amp;", "&");
   const script =
     /^<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="x-dns-prefetch-control" content="off"><script>(.*)<\/script>$/su.exec(
       pageDocument
     );
-  return { sandbox: frame?.[1], pageDocument, script: script?.[1] };
+  return { sandbox: frame?.[1], allow: frame?.[2], pageDocument, script: script?.[1] };
 }
 
 /**
@@ -283,6 +284,10 @@ describe("the content route of a Page", () => {
       // The frame the server writes allows scripts and nothing else.
       const held = heldBy(shell.body);
       expect(held.sandbox).toBe("allow-scripts allow-forms allow-downloads");
+      // The one permission the frame is given is writing to the clipboard: no read, and no
+      // header of the answer widens or narrows it.
+      expect(held.allow).toBe("clipboard-write");
+      expect(shell.headers).not.toHaveProperty("permissions-policy");
       expect(shell.body.split("<iframe").length).toBe(2);
       // The Page document is one script and nothing after it. The stored HTML is a text in
       // that script: no element of it is in the document before the script has run.

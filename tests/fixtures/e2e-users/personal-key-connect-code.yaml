@@ -1,0 +1,11 @@
+# The Builder and Publisher of one Shared Workspace who confirms a CLI's connect code in the
+# personal key connect code spec. No other spec uses this person: a right another spec gave
+# would show up among the key's offered rights.
+- email: e2e-key-connect@example.test
+  displayLabel: E2E Zz Key Connect
+  passwordEnvName: E2E_KEY_CONNECT_PASSWORD
+  developmentPassword: e2e-key-connect-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

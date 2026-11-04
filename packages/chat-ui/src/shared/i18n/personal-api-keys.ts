@@ -23,7 +23,11 @@ export const personalApiKeys = defineTranslations({
     "personalApiKeys.name": "Name",
     "personalApiKeys.nameHint": "Where you use the key, such as your laptop or a script.",
     "personalApiKeys.actions": "What the key may do",
-    "personalApiKeys.actionsHint": "If you lose a right later, the key loses it too.",
+    "personalApiKeys.actionsHint":
+      "Only the rights you hold here are listed. If you lose one later, the key loses it too.",
+    "personalApiKeys.actionsNone": "You hold no right here that a key can carry.",
+    "personalApiKeys.selectAll": "Select all",
+    "personalApiKeys.selectNone": "None",
     "personalApiKeys.scopeLimited": "{right} in {workspace}",
     "personalApiKeys.scopeLimitedAsset": "{right}: {asset} in {workspace}",
     "personalApiKeys.startsWith": "Starts with {prefix}",
@@ -100,7 +104,11 @@ export const personalApiKeys = defineTranslations({
     "personalApiKeys.nameHint":
       "Wo du den Schlüssel verwendest, etwa auf dem Laptop oder in einem Skript",
     "personalApiKeys.actions": "Was der Schlüssel darf",
-    "personalApiKeys.actionsHint": "Verlierst du später ein Recht, verliert es auch der Schlüssel.",
+    "personalApiKeys.actionsHint":
+      "Hier stehen nur die Rechte, die du hier hast. Verlierst du später eins, verliert es auch der Schlüssel.",
+    "personalApiKeys.actionsNone": "Du hast hier kein Recht, das ein Schlüssel tragen kann.",
+    "personalApiKeys.selectAll": "Alle auswählen",
+    "personalApiKeys.selectNone": "Keine",
     "personalApiKeys.scopeLimited": "{right} in {workspace}",
     "personalApiKeys.scopeLimitedAsset": "{right}: {asset} in {workspace}",
     "personalApiKeys.startsWith": "Beginnt mit {prefix}",

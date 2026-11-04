@@ -536,7 +536,9 @@ describe("the frame of a Page", () => {
     expect(markup).toContain('src="https://api.example.test/app-content/set-2/token/"');
     expect(markup).toContain('title="Preview of Offers"');
     expect(markup).not.toMatch(/allow-same-origin|allow-popups|allow-top-navigation/u);
-    expect(markup).not.toMatch(/\ballow="/u);
+    // Writing to the clipboard is the one permission the frame is given; reading it is not.
+    expect(markup).toContain('allow="clipboard-write"');
+    expect(markup.match(/\ballow="[^"]*"/gu)).toEqual(['allow="clipboard-write"']);
   });
 
   it("is addressed on the API's origin, wherever the interface is served from", () => {

@@ -15,8 +15,8 @@ export {
 export { PersonalApiKeysTable } from "../../../packages/chat-ui/src/admin/control-plane/personal-api-keys-list";
 export {
   buildPersonalKeyScopes,
-  connectCodeAsksUseLevel,
   connectCodeOfSearch,
+  connectKeyActions,
   formatConnectCode,
   initialPersonalKeyDraft,
   instanceUrl,
@@ -24,14 +24,17 @@ export {
   keysSharingAName,
   personalKeyAccountOffer,
   personalKeyActionOffer,
+  personalKeyActionsKeptIn,
   personalKeyDraftProblem,
   personalKeyExpiryOf,
+  personalKeyHeldActionOffer,
   personalKeyInstanceOffer,
+  personalKeyOfferIn,
   personalKeyRequest,
   personalKeyScopeParts,
   personalKeyState,
   personalKeyUseOffer,
-  setupKeyActions
+  personalKeyWorkspaceOffer
 } from "../../../packages/chat-ui/src/admin/control-plane/personal-api-keys-model";
 export {
   authSourceLabel,

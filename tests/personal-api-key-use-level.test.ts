@@ -202,4 +202,56 @@ describe("the use level of a personal key", () => {
       reason: "no_outside_trigger"
     });
   });
+  // The key screen offers only what the instance names here, and starts a connect code's key
+  // with all of it ticked but connection.use: each offer must be issuable as it stands.
+  it("names per workspace the use level its person may hand on there, and issues every right it offers", async () => {
+    const { t } = await ready();
+    const builder = await t.stores.users.createUser({
+      clientInstanceId,
+      displayLabel: "Builder",
+      roles: ["user"],
+      permissions: []
+    });
+    const team = await t.stores.workspaces.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Team",
+      creatorUserId: t.root.id
+    });
+    for (const action of ["builder", "publisher", "workflow.use"]) {
+      await t.stores.access.createGrant({
+        clientInstanceId,
+        holderKind: "user",
+        holderId: builder.id,
+        action,
+        effect: "allow",
+        scopeKind: "workspace",
+        scopeId: team.id,
+        grantedBy: t.root.id
+      });
+    }
+    const context = platformContextSchema.parse(
+      (await t.expectOk(builder.id, "platform.context.get")).json()
+    );
+    const offered = context.workspaces.find((workspace) => workspace.id === team.id);
+    expect(offered?.useActions).toEqual(["workflow.use"]);
+    // Builder and Publisher carry no delete, so the instance offers none.
+    expect(offered?.actions.some((action) => action.endsWith(".delete"))).toBe(false);
+    expect(context.authoringActions.some((action) => action.endsWith(".delete"))).toBe(false);
+    // Over everywhere and limited to the workspace, the key with every offered right is issued.
+    const everywhere = await issuePersonalKey(
+      t,
+      [...context.authoringActions, ...context.useActions],
+      builder.id
+    );
+    expect(everywhere.key.scopes).toContain("workflow.use");
+    const limited = await issuePersonalKey(
+      t,
+      [...(offered?.actions ?? []), ...(offered?.useActions ?? [])].map(
+        (action) => `${action}:${team.id}`
+      ),
+      builder.id
+    );
+    expect(limited.key.scopes).toContain(`workflow.use:${team.id}`);
+  });
 });
