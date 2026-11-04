@@ -7,6 +7,23 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.24 — 2026-11-04
+
+### Changed
+
+- **Projects in the sidebar:** Each project folds on its own. A project is a small label with its folder, which opens the project's page, and a caret right after it, which opens and folds its chats. Several can be open at once, the browser keeps the choice, and the project on screen opens. An open project shows its five chats used last at the label's edge, and only where it has more a muted "Show more" ("Mehr anzeigen") follows and shows the next ones in place. The "All chats" row is gone.
+- **UI library:** `NavGroup` takes `collapsible` together with `labelLink`: the label stays the link and a caret right after it folds the group, with `labelIcon`, `labelMark`, `labelCurrent` and `foldLabel`. A group within a labelled group no longer pins its label.
+- **An agent knows its own name:** Every agent is told the name people see it by (its display name, in the person's language) at the start of a run; a Workflow step's agent is not. Workshaper's shipped instructions name no fixed name, so an admin who renames it on its agent page gets an agent that calls itself by that name, and its instructions stay as shipped so each release still updates them. A rename survives a release.
+- **Connections:** The REST API choice "Draft with Workshaper" is now "Draft with the agent" ("Mit dem Agenten entwerfen"), since the chat beside the page may hold any agent.
+
+### Fixed
+
+- **Add from project:** The composer's "Add from project" now shows only in a conversation that belongs to a project, and picks from that project's files. The project picker is gone, so a conversation can no longer attach files of another project.
+- **Build in the dock:** On an agent's page, Build offers only an agent that holds the platform's building tools. Without a Build conversation it starts the page's conversation about the agent with that agent; where none is offered, it says so in one sentence and that an admin can offer one, instead of opening a chat with an agent that cannot build. The dock beside an existing asset's page no longer greets it as a new asset ("What should the new agent do?") with new-asset examples.
+- **Chat:** From 768 px up a conversation alone scrolls to the window's top again, with the agent picker floating over it on its own opaque backdrop; a browser test now fails if a band covers the top again.
+- **Guardrails:** The composer no longer says which parts of a message the guardrails could not check ("Not checked"). Warnings and blocks still show; what went unchecked stays in the guardrail results admins read (GR-4).
+- **New connection:** An id that only a deleted Connection held no longer makes the dialog read that Connection, which the instance answered with 404 and the browser logged as an error. The dialog now asks the id's history first and reads the holder only where the id is not a deleted Connection's.
+
 ## 0.8.0-rc.23 — 2026-10-30
 
 ### Added
