@@ -31,7 +31,7 @@ const content = [
   "",
   "The product documentation of this platform's release, one reference file per page. Read the page that answers the question with read_skill, naming this skill and the page's path as `resourcePath`. Read a reference once per conversation while its contents remain in context; return to the relevant page only when you need information no longer available. A link in a page such as `/configure/build/` is the reference `references/configure/build.md`.",
   "",
-  "The App guide has one page per task under references/apps/: read only the page the task needs, as the index below describes. Sandbox rules: allow-scripts allow-forms allow-downloads without allow-same-origin; preventDefault in submit handlers and form-action 'none' blocks form targets. Use awaited kit storage.get/set for small JSON state and Data Stores for shared records. Credentials and platform calls go through named actions; bundle fonts and libraries instead of loading CDNs.",
+  "The App guide has one page per task under references/apps/: read only the page the task needs, as the index below describes. Sandbox rules: allow-scripts allow-forms allow-downloads without allow-same-origin; clipboard: write only, through navigator.clipboard.writeText on a user click; preventDefault in submit handlers and form-action 'none' blocks form targets. Use awaited kit storage.get/set for small JSON state and Data Stores for shared records. Credentials and platform calls go through named actions; bundle fonts and libraries instead of loading CDNs.",
   renderRuntimeRules(),
   "The docs describe the product. What exists on this instance and what the user may do here, ask the platform's tools.",
   ...[
