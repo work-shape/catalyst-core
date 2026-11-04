@@ -111,7 +111,7 @@ Which stylesheet an HTML file gets is decided per file by what its scripts impor
 
 ## Fonts and libraries
 
-A PDF or another file an App makes is generated in the browser with a bundled library and offered as a download: see [Where data belongs](/configure/where-data-belongs/#a-file-an-app-makes).
+An App makes a PDF with the kit's `pdf.download` or `pdf.fromHtml` ([PDFs from an App](/apps/pdf/)), never with a bundled PDF library. Another file, such as a spreadsheet, is generated in the browser with a bundled library and offered as a download: see [Where data belongs](/configure/where-data-belongs/#a-file-an-app-makes).
 
 Put fonts and libraries in the App's folder or use the kit's; an outside address (Google Fonts, Adobe Fonts or a CDN) will not load.
 
