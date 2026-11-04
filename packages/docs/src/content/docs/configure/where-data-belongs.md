@@ -11,8 +11,8 @@ Decide where data goes before you build. Each kind of data has one home, and the
 | A large or changing body of documents: statutes, manuals, a collection of files          | A [Knowledge Base](#a-large-or-changing-corpus)          | It is searched, not read whole, and it can be refreshed without a new skill revision.        |
 | Records that people or Apps write: orders, entries, statuses                             | A [Data Store](#records-people-or-apps-write)            | It has tables and rights; a skill folder is read-only.                              |
 | An outside system, or anything that needs a credential                                   | A [Connection](#an-outside-system-and-credentials)       | Only the platform holds the key, and it checks who may use it.                               |
-| A PDF an App makes                                                                       | The kit's [`pdf.download`](#a-file-an-app-makes), printed in the instance | The document stays in the instance, and the App bundles no PDF library.      |
-| Another file an App makes, such as a spreadsheet                                         | The [App's own code](#a-file-an-app-makes), in the browser | Nothing leaves the frame, and the download needs no server.                                |
+| A PDF or other file an App makes | The [App's own code](#a-file-an-app-makes), with the kit's `pdf.download` for a PDF | The instance prints the PDF; nothing goes to an outside service. |
+| A new PDF an agent makes | [HTML printed by `workspace.html_to_pdf`](#a-pdf-an-agent-makes) | The instance prints it without network, and the agent checks every page before it hands the file over. |
 
 ## A skill folder
 
@@ -61,8 +61,10 @@ If you cannot tell which applies, ask the person which of these the data is, rat
 
 ## A file an App makes
 
-An App's frame allows downloads (`allow-downloads`), so an App offers a file it makes as a download. The data for the file comes through a named action.
+An App's frame allows downloads (`allow-downloads`), so an App makes a spreadsheet or another file in the browser and offers it as a download. Bundle the library in the App's folder ([Fonts and libraries](/apps/sandbox/#fonts-and-libraries)); a CDN does not load. The data for the file comes through a named action. A PDF is the exception: the App makes it with the kit's `pdf.download` or `pdf.fromHtml` ([PDFs from an App](/apps/pdf/)), which the instance prints, and bundles no PDF library.
 
-An App makes a PDF with the kit's `pdf.download(html, filename)` or `pdf.fromHtml(html)` (kit 1.10.0): the instance prints the HTML in its own renderer, without network, so the App bundles no PDF library such as `pdf-lib` or `jsPDF`. [PDFs from an App](/apps/pdf/) has what the document may contain and the limits.
+## A PDF an agent makes
 
-Another file, such as a spreadsheet, the App makes in the browser. Bundle the library in the App's folder ([Fonts and libraries](/apps/sandbox/#fonts-and-libraries)); a CDN does not load.
+An agent makes a new PDF as HTML and CSS in its workspace and prints it with `workspace.html_to_pdf`, in the instance's own renderer: no network, no scripts, only inline styles and `data:` images and fonts. The tool writes the PDF into the workspace and makes no download card. The agent renders the pages to images, looks at every page with `workspace.preview_images`, fixes the HTML and prints again, then hands the final file over once with `workspace.promote_artifact`. Never an outside PDF service.
+
+The PDF helpers stay for filling forms, merging, splitting, editing and checking an existing PDF. `reportlab` is for drawing on an existing PDF, for a document over 50 pages, and for an instance that runs no renderer, where the tool is not offered.
