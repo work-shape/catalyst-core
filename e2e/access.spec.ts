@@ -530,6 +530,89 @@ test("the roles of the instance: built-in first, superadmin read-only, a custom 
   }
 });
 
+// P30: an instance admin gives a custom role to a person on the person's page, sees its rights
+// in theirs, and takes it away on the role's page.
+test("a custom role given to a person adds its rights to theirs, and taking it away removes them", async ({
+  page,
+  // The test writes a role and gives it to the rights holder: the turn on the grants.
+  accessState: _accessState
+}) => {
+  test.setTimeout(90_000);
+  // A seeded user is listed once the user has signed in and made a first call.
+  await signInViaApi(page, rightsHolder);
+  const me = await page.request.get(`${apiBaseUrl}/api/v1/me`);
+  expect(me.ok()).toBe(true);
+  const { id: holderId }: { id: string } = await me.json();
+  await signInViaApi(page, adminUser);
+  const roleName = `E2E skill editors ${Date.now()}`;
+  const rolesPath = `${apiBaseUrl}/api/v1/instance/access/roles`;
+  const holderPath = `${apiBaseUrl}/api/v1/instance/users/${holderId}`;
+  const created = await requestWithOrigin(page, "post", rolesPath, {
+    data: {
+      name: roleName,
+      grants: [{ action: "skill.write", effect: "allow", scopeKind: "instance" }]
+    }
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const role: { id: string } = await created.json();
+  const throughRole = async () => {
+    const response = await page.request.get(
+      `${apiBaseUrl}/api/v1/instance/access/effective?holderKind=user&holderId=${holderId}`
+    );
+    expect(response.ok()).toBe(true);
+    const { items }: { items: { action: string; roleId?: string }[] } = await response.json();
+    return items.filter((item) => item.roleId === role.id).map((item) => item.action);
+  };
+  const skillRight = page
+    .locator('[data-testid="effective-right"][data-area="skill"]')
+    .filter({ hasText: `Role ${roleName}` });
+  try {
+    await page.setViewportSize(WIDE);
+    await page.goto("/settings/instance/users");
+    await page.getByLabel("Search users").fill("Access Rights");
+    await page.getByRole("button", { name: /E2E Zz Access Rights/u }).click();
+
+    // On the person's page, More roles offers the custom role beside the built-in one.
+    const moreRoles = page.getByTestId("user-roles");
+    await expect(moreRoles.getByRole("button", { name: /^More roles/u })).toHaveAccessibleName(
+      "More roles: No further role"
+    );
+    await expect(skillRight).toHaveCount(0);
+    await moreRoles.getByRole("button", { name: /^More roles/u }).click();
+    await page.getByRole("option", { name: roleName }).click();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("listbox")).toHaveCount(0);
+    await expect(moreRoles.getByRole("button", { name: /^More roles/u })).toHaveAccessibleName(
+      `More roles: ${roleName}`
+    );
+
+    // The person holds the role's right at once, and their rights say where it comes from.
+    await expect.poll(throughRole).toEqual(["skill.write"]);
+    await expect(skillRight).toBeVisible();
+
+    // The role's page lists who holds it; taking it from them there takes the right away.
+    await page.goto(`${accessPath}?role=${role.id}`);
+    const people = page.getByTestId("role-people");
+    const holder = people.getByTestId("role-holder");
+    await expect(holder).toHaveAttribute("data-user", holderId);
+    await people
+      .getByRole("button", { name: `Take ${roleName} from E2E Zz Access Rights` })
+      .click();
+    await expect(people.getByText("Nobody holds this role yet.")).toBeVisible();
+    await expect.poll(throughRole).toEqual([]);
+    await page.goto("/settings/instance/users");
+    await page.getByLabel("Search users").fill("Access Rights");
+    await page.getByRole("button", { name: /E2E Zz Access Rights/u }).click();
+    await expect(
+      page.getByTestId("user-roles").getByRole("button", { name: /^More roles/u })
+    ).toHaveAccessibleName("More roles: No further role");
+    await expect(skillRight).toHaveCount(0);
+  } finally {
+    await requestWithOrigin(page, "patch", holderPath, { data: { roles: ["user"] } });
+    await requestWithOrigin(page, "delete", `${rolesPath}/${role.id}`);
+  }
+});
+
 // CONN-WHO-1: the Connection page says who may use it, the roles first, then each person with
 // their verbs, and to a reader who manages no users only the roles and how many more there are.
 test("a Connection says who may use it: the roles first, then each person with their verbs", async ({
