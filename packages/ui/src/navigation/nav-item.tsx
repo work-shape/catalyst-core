@@ -191,9 +191,19 @@ export interface NavGroupProps extends HTMLAttributes<HTMLDivElement> {
   /**
    * The label is a link to the page that holds all of the group's items. It reads as a label,
    * underlines on the pointer and takes the keyboard. `onClick` may route in place of the
-   * browser. Needs a `label`; a group that folds takes none.
+   * browser. Needs a `label`. In a group that folds, the caret right after the label folds it
+   * and the label stays the link.
    */
   labelLink?: { href: string; onClick?: MouseEventHandler<HTMLAnchorElement> };
+  /**
+   * For a group that folds and whose label links: a 14 px icon before the label, a mark after
+   * it (such as a lock), the caret's name for assistive technology, and whether the label's
+   * page is the one on screen, which reads the label in the foreground.
+   */
+  labelIcon?: ReactNode;
+  labelMark?: ReactNode;
+  foldLabel?: string;
+  labelCurrent?: boolean;
   /** The label folds the group away and shows a caret. */
   collapsible?: boolean;
   open?: boolean;
@@ -213,13 +223,18 @@ const pinnedGroupLabelClassName =
 
 /**
  * A run of navigation items under an optional label. Groups are set apart by space, not by a
- * rule. In the scrolling body of a `Sidebar` the label stays in view while its items scroll.
+ * rule. In the scrolling body of a `Sidebar` the label stays in view while its items scroll;
+ * a group within a labelled group keeps its own label in the flow.
  */
 export function NavGroup({
   className,
   label,
   labelAction,
   labelLink,
+  labelIcon,
+  labelMark,
+  foldLabel,
+  labelCurrent = false,
   collapsible = false,
   open,
   defaultOpen = true,
@@ -291,8 +306,54 @@ export function NavGroup({
             </span>
           </div>
         )}
-        {children}
+        <NavGroupLabelPinnedContext value={false}>{children}</NavGroupLabelPinnedContext>
       </div>
+    );
+  }
+  if (labelLink) {
+    return (
+      <Collapsible.Root
+        role="group"
+        aria-labelledby={labelId}
+        className={groupClassName}
+        open={open}
+        defaultOpen={defaultOpen}
+        onOpenChange={onOpenChange}
+        {...props}
+      >
+        <div data-nav-group-label="" className={cn(labelClassName, "gap-1")}>
+          {labelIcon === undefined ? null : (
+            <span className="flex shrink-0 [&_svg]:size-3.5">{labelIcon}</span>
+          )}
+          <a
+            id={labelId}
+            href={labelLink.href}
+            onClick={labelLink.onClick}
+            aria-current={labelCurrent ? "page" : undefined}
+            // The label is cut at the sidebar's edge; the whole of it shows on the pointer.
+            title={label}
+            className={cn(
+              "min-w-0 truncate rounded-sm underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+              labelCurrent && "text-foreground"
+            )}
+          >
+            {label}
+          </a>
+          {labelMark}
+          <Collapsible.Trigger
+            aria-label={foldLabel ?? label}
+            className="group/nav-group-caret grid size-5 shrink-0 place-items-center rounded-sm transition-colors hover:text-foreground focus-visible:focus-ring"
+          >
+            <ChevronRight
+              aria-hidden="true"
+              className="size-3 group-data-[state=open]/nav-group-caret:rotate-90"
+            />
+          </Collapsible.Trigger>
+        </div>
+        <Collapsible.Content className="grid min-w-0 gap-0.5">
+          <NavGroupLabelPinnedContext value={false}>{children}</NavGroupLabelPinnedContext>
+        </Collapsible.Content>
+      </Collapsible.Root>
     );
   }
   return (
@@ -319,7 +380,9 @@ export function NavGroup({
           className="size-3 shrink-0 group-data-[state=open]/nav-group-label:rotate-90"
         />
       </Collapsible.Trigger>
-      <Collapsible.Content className="grid min-w-0 gap-0.5">{children}</Collapsible.Content>
+      <Collapsible.Content className="grid min-w-0 gap-0.5">
+        <NavGroupLabelPinnedContext value={false}>{children}</NavGroupLabelPinnedContext>
+      </Collapsible.Content>
     </Collapsible.Root>
   );
 }

@@ -170,7 +170,7 @@ test("all projects: the rail group, the scope filter with workspace chips, and a
   await expect(page.getByTestId("collaboration-workspace-selector-trigger")).toContainText(finance);
   const switchedRail = page.getByTestId("rail-projects").getByTestId("rail-project");
   await expect(switchedRail).toHaveCount(1);
-  await expect(switchedRail).toHaveAttribute("aria-current", "true");
+  await expect(switchedRail.getByRole("link")).toHaveAttribute("aria-current", "page");
   await shot(page, "project-opened-in-other-workspace");
 
   // The scope stays when the person comes back; the member sees the shared project only.

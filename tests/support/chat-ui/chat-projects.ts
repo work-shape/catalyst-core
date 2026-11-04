@@ -21,6 +21,9 @@ export {
 export { readProjectFileChange } from "../../../packages/chat-ui/src/chat/projects/project-file-change-line";
 export {
   activeRailProject,
+  parseRailProjectsOpen,
   railProjectChats,
+  railProjectsToggled,
+  useRailProjectsOpen,
   type RailProject
 } from "../../../packages/chat-ui/src/chat/projects/rail-project-chats";
