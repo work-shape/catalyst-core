@@ -161,8 +161,8 @@ export interface ChatServerOptions {
     }>;
   };
   /**
-   * The object store of the conversations' Execution Workspaces, where a builder's "Chat" on an
-   * App's page writes the App's files into a new conversation. Without it that start is refused.
+   * The object store of the conversations' Execution Workspaces, where `conversations.create`
+   * with `checkout` writes the App's files into a new conversation. Without it that start is refused.
    */
   workspaceObjects?: ObjectStorage;
   executionWorkspaceCleanup?: {

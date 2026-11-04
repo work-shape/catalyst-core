@@ -11,9 +11,9 @@ import { useAppsHost } from "./apps-host";
 /**
  * The conversation the page head's one "Chat" starts on an App's page, for a reader who may
  * write it by the `rights` on that App (`appRightsOn`), not the workspace's: the agent that
- * builds, about the App, in the dock beside its draft, which stays the page; a new one holds the
- * App's current draft with all its files (CHECKOUT-2). Without `app` the page offers none, and
- * "Chat" opens the plain chat. A refusal is said in a dialog, which the page draws outside its
+ * builds, about the App, in the dock beside its draft, which stays the page. The agent loads the
+ * draft when it changes the App, so opening the chat marks nobody as editing it. Without `app`
+ * the page offers none, and "Chat" opens the plain chat. A refusal is said in a dialog, which the page draws outside its
  * head, so the answer stays readable whatever the head shows by the time it comes.
  */
 export function useAppEditWithAgent(

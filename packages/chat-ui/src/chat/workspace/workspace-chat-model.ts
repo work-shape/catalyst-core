@@ -1223,8 +1223,9 @@ export function useWorkspaceChatModel({
       rights: appRights,
       places: sharePlaces,
       startChat: startNewConversationWith,
-      // The page head's one "Chat" for a builder: the agent that builds, about the App, in a
-      // new conversation that holds the App's draft with all its files.
+      // The page head's one "Chat" for a builder: the agent that builds, about the App. It
+      // loads the draft itself when it changes the App, so opening the chat marks no one as
+      // editing it.
       editWithAgent: (app, options) =>
         editWithAgent === undefined
           ? startConversationAbout(
@@ -1233,10 +1234,7 @@ export function useWorkspaceChatModel({
               undefined,
               options
             )
-          : editWithAgent({ kind: APP_ASSET_KIND, name: app }, undefined, {
-              fresh: options?.fresh ?? false,
-              checkout: true
-            }),
+          : editWithAgent({ kind: APP_ASSET_KIND, name: app }, undefined, options),
       ...(buildWithAgent !== undefined && appRights.write ? { startNew: buildWithAgent } : {})
     },
     workflows: {

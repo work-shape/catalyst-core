@@ -7,10 +7,10 @@ import { sendToolCall } from "./page-surface-fixtures";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
-// CHECKOUT-2: the one "Chat" in an App draft's head opens, for a builder, a new conversation of
-// their own with the agent that builds, about the App, which already holds the App's draft in
-// apps/<name>: a save of that folder there is the App's next draft, with no app.edit and no
-// build chat. There is no second chat button ("Edit in chat") beside it.
+// The one "Chat" in an App draft's head opens, for a builder, a conversation of their own with
+// the agent that builds, about the App. It holds nothing yet: the agent loads the draft with
+// app.edit into apps/<name> when it changes the App, and a save of that folder is the App's next
+// draft, with no build chat. There is no second chat button ("Edit in chat") beside it.
 
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
 /** Every button of a head that names a chat, "Chat" and any "Edit in chat" alike. */
@@ -56,7 +56,7 @@ async function shootGerman(page: Page, label: string, ready: () => Promise<void>
   await page.reload();
 }
 
-test("a builder's one Chat on the draft opens the agent that builds with the App's draft, and saves it", async ({
+test("a builder's one Chat on the draft opens the agent that builds about the App, which saves it", async ({
   page
 }) => {
   test.setTimeout(240_000);
@@ -93,8 +93,9 @@ test("a builder's one Chat on the draft opens the agent that builds with the App
   const dockHead = page.getByTestId("dock-head");
   await expect(dockHead).toHaveAttribute("data-subject-kind", "app");
   await expect(dockHead).toContainText(`Working on: ${title}`);
-  // The App's files are already in this conversation: changing and saving its folder writes
-  // the App's next draft, which the page in front shows.
+  // The agent loads the App's files when it changes the App: changing and saving its folder
+  // writes the App's next draft, which the page in front shows.
+  await sendToolCall(page, "app.edit", { name });
   const path = `apps/${name}`;
   await sendToolCall(page, "workspace.write_file", {
     path: `${path}/index.html`,
@@ -102,14 +103,13 @@ test("a builder's one Chat on the draft opens the agent that builds with the App
   });
   await sendToolCall(page, "workspace.open", { path });
   await sendToolCall(page, "app.save", { path, name: title });
-  await expect(page.locator('[data-role="assistant"]').last()).not.toContainText("app.edit");
   await page.goto(`${workspace}/app-drafts/${name}`);
   await expect(
     draftApp(page).getByRole("heading", { name: "Changed in the edit chat" })
   ).toBeVisible();
 });
 
-test("another builder sees who checked out the draft until a save or 24 hours idle", async ({
+test("another builder sees who checked out the draft, not who only opened Chat, until a save or 24 hours idle", async ({
   page,
   browser,
   baseURL,
@@ -154,13 +154,19 @@ test("another builder sees who checked out the draft until a save or 24 hours id
     await page.goto(draft);
     await page.getByTestId("app-edit").getByTestId("dock-page-action").click();
     await expect(page.locator("[data-dock-chat]")).toBeVisible();
-    await viewer.goto(draft);
     const hint = () =>
       viewer
         .getByTestId("app-edit")
         .getByText(/^(?:Being edited by|Wird bearbeitet von) E2E Superadmin (?:since|seit) /u, {
           exact: false
         });
+    // Opening Chat checks nothing out: the other builder reads no one editing the draft.
+    await viewer.goto(draft);
+    await expect(viewer.getByTestId("app-edit").getByTestId("dock-page-action")).toBeVisible();
+    await expect(hint()).toHaveCount(0);
+    // The agent loads the draft to change it: from then on the draft is being edited.
+    await sendToolCall(page, "app.edit", { name });
+    await viewer.reload();
     // The head names who edits the draft, also at phone width.
     for (const locale of ["en", "de"]) {
       for (const width of [1280, 390]) {

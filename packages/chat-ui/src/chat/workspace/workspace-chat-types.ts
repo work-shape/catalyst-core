@@ -130,9 +130,8 @@ interface AppsModel {
   startChat(prompt: string): void;
   /**
    * Starts a conversation of the open workspace about this App and opens it, with the App's
-   * draft beside it: with the agent that builds, where one is offered, in a new conversation
-   * that holds the App's current draft and its files. Rejects where the instance refuses the
-   * conversation.
+   * draft beside it: with the agent that builds, where one is offered. Rejects where the
+   * instance refuses the conversation.
    */
   editWithAgent(app: string, options?: { fresh: boolean }): Promise<void>;
   /**

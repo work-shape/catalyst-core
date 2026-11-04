@@ -80,7 +80,7 @@ export async function requireAppToCheckOut(
 /**
  * Loads an App's current draft with all its files into `apps/<name>` of a conversation of the
  * person's own, binds that folder in `asset_checkouts` and makes the App the conversation's
- * subject: the agent's `app.edit`, and a builder's "Chat" on the App's page.
+ * subject: the agent's `app.edit`, and `conversations.create` with `checkout`.
  * Working files inherit conversation retention; immutable App files keep the App's lifetime.
  * App write is checked before any file or author is read. No new right, region or payload audit.
  */

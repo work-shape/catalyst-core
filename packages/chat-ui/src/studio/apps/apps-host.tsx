@@ -34,9 +34,8 @@ export interface AppsHost {
   startNew?(prompt: string): void;
   /**
    * The page head's "Chat" for a reader who may change the App: a conversation of the open
-   * workspace about this App, in the dock beside its draft. Where an agent builds here, it is
-   * that agent in a new conversation of the reader's own that holds the App's current draft
-   * with all its files; the dock's conversation about the App opens again first. Rejects where
+   * workspace about this App, in the dock beside its draft, with the agent that builds where
+   * one is offered here; the dock's conversation about the App opens again first. Rejects where
    * the instance refuses the conversation. Absent where no conversation can be started.
    * `fresh` starts a new one where the dock's is already about the App: the dock's "New chat".
    */
