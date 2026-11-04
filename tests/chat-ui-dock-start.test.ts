@@ -5,6 +5,7 @@ import type { SafeConfig } from "@work-shape/catalyst-api-client";
 import {
   agentChipDisplayFor,
   conversationStart,
+  dockBuildKind,
   dockKindOfRoute,
   ThreadStartBlock,
   ThreadWelcomeHeading,
@@ -92,6 +93,16 @@ describe("the start page of a dock that builds", () => {
       title: "Rate card"
     });
     expect(conversationStart(undefined, undefined)).toBeUndefined();
+  });
+
+  it("greets no new asset where the dock's agent builds none", () => {
+    const apps = { kind: "apps" as const, collaborationWorkspaceId: "ws" };
+    expect(dockBuildKind(apps, true)).toBe("app");
+    expect(dockBuildKind({ kind: "workflows", collaborationWorkspaceId: "ws" }, false)).toBe(
+      undefined
+    );
+    // Its start page is then the agent's own, never "What should the new app do?".
+    expect(conversationStart(undefined, dockBuildKind(apps, false))).toBeUndefined();
   });
 
   it.each([

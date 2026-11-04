@@ -226,6 +226,18 @@ export function dockKindOfRoute(route: WorkspaceRoute): string | undefined {
   }
 }
 
+/**
+ * The kind a new conversation in the dock builds beside the page on screen: none where its
+ * agent builds no assets. Its start page then greets with the agent's own welcome, never with a
+ * new App or Workflow that agent cannot make.
+ */
+export function dockBuildKind(
+  route: WorkspaceRoute,
+  agentBuildsAssets: boolean
+): string | undefined {
+  return agentBuildsAssets ? dockKindOfRoute(route) : undefined;
+}
+
 /** The start of a conversation: its subject where it has one, else the kind beside the dock. */
 export function conversationStart(
   subject: { kind: string; title: string | undefined } | undefined,

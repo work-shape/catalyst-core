@@ -95,8 +95,7 @@ async function mountDraft(publishedRevision: number | undefined, cached = false)
       WORKSPACE
     ),
     workspace: { id: WORKSPACE, name: "Office" },
-    showRoute: () => undefined,
-    startChat: () => undefined
+    showRoute: () => undefined
   };
   await act(async () => {
     root.render(

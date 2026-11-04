@@ -230,8 +230,7 @@ describe("the App's card", () => {
       enabled: false,
       rights: { read: true, write: true, publish: true, delete: false },
       workspace,
-      showRoute: noop,
-      startChat: noop
+      showRoute: noop
     };
     const markup = renderToStaticMarkup(
       createElement(TranslationProvider, {

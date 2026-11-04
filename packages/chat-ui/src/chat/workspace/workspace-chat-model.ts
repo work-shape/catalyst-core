@@ -16,7 +16,7 @@ import {
 } from "../assistant/product-run-transport";
 import { openConnectionDraftIn } from "../../studio/build-area/connection-draft-card";
 import type { ConnectionDraft } from "../../studio/build-area/connection-draft";
-import { dockKindOfRoute } from "../dock/subject-starters";
+import { dockBuildKind } from "../dock/subject-starters";
 import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useControlPlaneModel } from "../../admin/control-plane/control-plane-model";
@@ -508,7 +508,6 @@ export function useWorkspaceChatModel({
     continuePrivatelyWith,
     returnToStartPageAfterDraftEmptied,
     startNewConversation,
-    startNewConversationWith,
     startDockedChat,
     selectConversation,
     startRevisionRun,
@@ -666,7 +665,12 @@ export function useWorkspaceChatModel({
   );
   // The kind a new conversation in the dock builds, and where what it creates will belong: the
   // workspace Studio is set to, else the open one.
-  const dockKind = docked ? dockKindOfRoute(route) : undefined;
+  const dockKind = docked
+    ? dockBuildKind(
+        route,
+        config?.agents.find((agent) => agent.name === activeAgentName)?.buildsAssets === true
+      )
+    : undefined;
   const dockTarget =
     dockKind === undefined || (openWorkspace === undefined && buildWorkspace === undefined)
       ? undefined
@@ -1222,7 +1226,6 @@ export function useWorkspaceChatModel({
       enabled: appsEnabled,
       rights: appRights,
       places: sharePlaces,
-      startChat: startNewConversationWith,
       // The page head's one "Chat" for a builder: the agent that builds, about the App. It
       // loads the draft itself when it changes the App, so opening the chat marks no one as
       // editing it.

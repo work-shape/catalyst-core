@@ -47,7 +47,13 @@ function list(rows: readonly AssetSummary[] | undefined, overrides = {}) {
   };
 }
 
-function appsPage(rows: readonly AssetSummary[] | undefined, rights: AppRights, extra = {}) {
+/** `building`: an agent here builds Apps, so the host can start one with it. */
+function appsPage(
+  rows: readonly AssetSummary[] | undefined,
+  rights: AppRights,
+  extra = {},
+  building = true
+) {
   return createElement(AppsPageView, {
     workspace,
     rights,
@@ -55,7 +61,7 @@ function appsPage(rows: readonly AssetSummary[] | undefined, rights: AppRights, 
     now,
     onOpenRoute() {},
     onAction() {},
-    onBuild() {}
+    ...(building ? { onNew() {} } : {})
   });
 }
 
@@ -76,7 +82,7 @@ describe("the Apps page", () => {
     expect(render(withNew(ALL, []))).not.toMatch(newButton);
     // A reader who may not write Apps, or a host that builds none with an agent, gets no New.
     expect(render(withNew(READER))).not.toContain("New app");
-    expect(render(appsPage([summary()], ALL))).not.toContain("New app");
+    expect(render(appsPage([summary()], ALL, {}, false))).not.toContain("New app");
   });
 
   it("shows name, description, workspace, state and the menu of each App", () => {
@@ -220,6 +226,21 @@ describe("the Apps page", () => {
     expect(markup).not.toContain("builder");
     expect(markup).not.toContain("Build one with the agent");
     expect(markup).not.toContain(">Fee calculator<");
+  });
+
+  it("offers no building where no agent here builds Apps, and says only that there are none", () => {
+    const markup = render(appsPage([], ALL, {}, false));
+
+    expect(markup).toContain(
+      "No apps yet. An app is a small tool for this workspace, such as a fee calculator or a leave request."
+    );
+    expect(markup).not.toContain("Describe a tool to the agent");
+    expect(markup).not.toContain("Build one with the agent");
+    expect(markup).not.toContain('aria-label="Examples to start with"');
+    expect(markup).not.toContain("<button");
+    const german = render(appsPage([], ALL, {}, false), "de");
+    expect(german).toContain(de("apps.emptyReadOnly"));
+    expect(german).not.toContain(de("apps.buildWithAgent"));
   });
 
   it("offers the next page while the instance holds more, and the way to ask again", () => {

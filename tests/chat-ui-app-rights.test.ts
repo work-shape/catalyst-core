@@ -143,7 +143,8 @@ async function mount(
     rights: resolveAppRights(context, OPEN),
     workspace: { id: OPEN, name: "Office" },
     showRoute: instance.showRoute ?? (() => undefined),
-    startChat: () => undefined,
+    // An agent here builds Apps: whether building is offered is the reader's right alone.
+    startNew: () => undefined,
     ...(instance.editWithAgent === undefined ? {} : { editWithAgent: instance.editWithAgent })
   };
   await act(async () => {

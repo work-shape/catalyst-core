@@ -24,12 +24,10 @@ export interface AppsHost {
   /** The open workspace. Absent while none is open. */
   workspace: AppsWorkspace | undefined;
   showRoute(route: WorkspaceRoute, options?: WorkspaceRouteChangeOptions): void;
-  /** Opens a new conversation of the workspace with this text in its composer. */
-  startChat(prompt: string): void;
   /**
    * Opens the dock on the list with a new conversation with an agent that builds assets and
    * `prompt` in its composer; nothing is created until its first save. Absent where no such
-   * agent is offered or the reader may write no App: the empty list then opens the chat.
+   * agent is offered or the reader may write no App: nothing then offers building one.
    */
   startNew?(prompt: string): void;
   /**

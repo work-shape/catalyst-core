@@ -21,6 +21,7 @@ export {
 export { tryRunLines, TryRunsLine } from "../../../packages/chat-ui/src/chat/dock/try-run-lines";
 export {
   conversationStart,
+  dockBuildKind,
   dockKindOfRoute,
   TRY_DOCK_KIND,
   type ConversationStart
