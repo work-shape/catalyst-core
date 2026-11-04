@@ -219,10 +219,6 @@ export function AppViewFrame({
           }
           backHref={workspaceRoutePath({ kind: "apps", collaborationWorkspaceId: workspace.id })}
           onBack={onBack}
-          // "Edit in chat" stands beside Edit while there is room, and folds into the menu.
-          secondaryActions={
-            editWithAgent.editInChat === undefined ? undefined : [editWithAgent.editInChat]
-          }
           menu={
             rights.read || rights.write ? (
               <>

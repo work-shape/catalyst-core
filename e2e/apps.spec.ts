@@ -599,7 +599,15 @@ test("a Page is saved as an App, published, opened by a second member and deep l
       expect(head && frame && area).toBeTruthy();
       if (!head || !frame || !area) continue;
       expect(head.height).toBeLessThanOrEqual(48);
-      expect(Math.abs(frame.y - (head.y + head.height))).toBeLessThanOrEqual(1);
+      // The member's Chat above holds the draft, so the line naming who edits it stands
+      // between the head and the frame.
+      const editing = view.getByText(/^(?:Being edited by|Wird bearbeitet von) /u);
+      await expect(editing).toBeVisible();
+      const line = await editing.boundingBox();
+      expect(line).toBeTruthy();
+      if (!line) continue;
+      expect(Math.abs(line.y - (head.y + head.height))).toBeLessThanOrEqual(1);
+      expect(Math.abs(frame.y - (line.y + line.height))).toBeLessThanOrEqual(1);
       expect(Math.abs(frame.x - area.x)).toBeLessThanOrEqual(1);
       expect(Math.abs(frame.width - area.width)).toBeLessThanOrEqual(1);
       expect(Math.abs(frame.y + frame.height - height)).toBeLessThanOrEqual(1);

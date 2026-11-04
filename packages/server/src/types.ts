@@ -161,7 +161,7 @@ export interface ChatServerOptions {
     }>;
   };
   /**
-   * The object store of the conversations' Execution Workspaces, where "Edit in chat" on an
+   * The object store of the conversations' Execution Workspaces, where a builder's "Chat" on an
    * App's page writes the App's files into a new conversation. Without it that start is refused.
    */
   workspaceObjects?: ObjectStorage;

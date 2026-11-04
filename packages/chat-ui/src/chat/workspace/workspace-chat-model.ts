@@ -1223,17 +1223,20 @@ export function useWorkspaceChatModel({
       rights: appRights,
       places: sharePlaces,
       startChat: startNewConversationWith,
+      // The page head's one "Chat" for a builder: the agent that builds, about the App, in a
+      // new conversation that holds the App's draft with all its files.
       editWithAgent: (app, options) =>
-        startConversationAbout({ kind: APP_ASSET_KIND, name: app }, undefined, undefined, options),
-      ...(editWithAgent === undefined
-        ? {}
-        : {
-            editInChat: (app: string) =>
-              editWithAgent({ kind: APP_ASSET_KIND, name: app }, undefined, {
-                fresh: true,
-                checkout: true
-              })
-          }),
+        editWithAgent === undefined
+          ? startConversationAbout(
+              { kind: APP_ASSET_KIND, name: app },
+              undefined,
+              undefined,
+              options
+            )
+          : editWithAgent({ kind: APP_ASSET_KIND, name: app }, undefined, {
+              fresh: options?.fresh ?? false,
+              checkout: true
+            }),
       ...(buildWithAgent !== undefined && appRights.write ? { startNew: buildWithAgent } : {})
     },
     workflows: {

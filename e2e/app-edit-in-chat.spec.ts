@@ -7,12 +7,14 @@ import { sendToolCall } from "./page-surface-fixtures";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
-// CHECKOUT-2: "Edit in chat" on an App's draft opens a new conversation of the builder's own
-// with the agent that builds, which already holds the App's draft in apps/<name>: a save of
-// that folder there is the App's next draft, with no app.edit and no build chat.
+// CHECKOUT-2: the one "Chat" in an App draft's head opens, for a builder, a new conversation of
+// their own with the agent that builds, about the App, which already holds the App's draft in
+// apps/<name>: a save of that folder there is the App's next draft, with no app.edit and no
+// build chat. There is no second chat button ("Edit in chat") beside it.
 
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
-const EDIT_IN_CHAT = /^(?:Edit in chat|Im Chat bearbeiten)$/u;
+/** Every button of a head that names a chat, "Chat" and any "Edit in chat" alike. */
+const ANY_CHAT = /chat/iu;
 test.describe.configure({ retries: 0 });
 
 const html = (title: string, text: string) =>
@@ -26,7 +28,10 @@ const draftApp = (page: Page) =>
     .contentFrame()
     .frameLocator("iframe");
 
-/** The German head at 1280 and 390 px; at 390 the action stands in the open "…" menu. */
+/**
+ * The German head at 1280 and 390 px: one chat button, "Chat", and none in the "…" menu, where
+ * the head folds its actions at 390.
+ */
 async function shootGerman(page: Page, label: string, ready: () => Promise<void>) {
   await page.evaluate(() => localStorage.setItem("vivd-catalyst:locale", "de"));
   await page.reload();
@@ -34,13 +39,11 @@ async function shootGerman(page: Page, label: string, ready: () => Promise<void>
     await page.setViewportSize({ width, height: 760 });
     await ready();
     const head = page.getByTestId("app-edit");
-    const inHead = head.getByRole("button", { name: EDIT_IN_CHAT });
-    if (!(await inHead.isVisible())) {
-      await head.getByRole("button", { name: "Weitere Aktionen" }).click();
-      await expect(page.getByRole("menuitem", { name: EDIT_IN_CHAT })).toBeVisible();
-      // The menu fades in: the picture waits until it is fully there.
-      await expect(page.getByRole("menu")).toHaveCSS("opacity", "1");
-    }
+    await expect(head.getByRole("button", { name: ANY_CHAT })).toHaveCount(1);
+    await expect(head.getByTestId("dock-page-action")).toBeVisible();
+    await head.getByRole("button", { name: "Weitere Aktionen" }).click();
+    await expect(page.getByRole("menu")).toHaveCSS("opacity", "1");
+    await expect(page.getByRole("menuitem", { name: ANY_CHAT })).toHaveCount(0);
     const screenshot = test.info().outputPath(`${label}-de-${width}.png`);
     await page.screenshot({ path: screenshot });
     await test
@@ -53,7 +56,9 @@ async function shootGerman(page: Page, label: string, ready: () => Promise<void>
   await page.reload();
 }
 
-test("Edit in chat opens a new chat that holds the App's draft and saves it", async ({ page }) => {
+test("a builder's one Chat on the draft opens the agent that builds with the App's draft, and saves it", async ({
+  page
+}) => {
   test.setTimeout(240_000);
   const tag = randomUUID().slice(0, 8);
   const name = `edit-chat-${tag}`;
@@ -77,11 +82,17 @@ test("Edit in chat opens a new chat that holds the App's draft and saves it", as
   await shootGerman(page, "app-draft-after", built);
 
   await built();
-  await page.getByTestId("app-edit").getByRole("button", { name: EDIT_IN_CHAT }).click();
-  // A new conversation in the dock beside the draft.
+  // One chat button in the head, and it opens the dock building this App.
+  const head = page.getByTestId("app-edit");
+  await expect(head.getByRole("button", { name: ANY_CHAT })).toHaveCount(1);
+  await head.getByTestId("dock-page-action").click();
+  // A new conversation in the dock beside the draft, about the App.
   const dock = page.locator("[data-dock-chat]");
   await expect(dock).toBeVisible();
   await expect(page).not.toHaveURL(buildChat);
+  const dockHead = page.getByTestId("dock-head");
+  await expect(dockHead).toHaveAttribute("data-subject-kind", "app");
+  await expect(dockHead).toContainText(`Working on: ${title}`);
   // The App's files are already in this conversation: changing and saving its folder writes
   // the App's next draft, which the page in front shows.
   const path = `apps/${name}`;
@@ -141,7 +152,7 @@ test("another builder sees who checked out the draft until a save or 24 hours id
     await expect(page.getByTestId("app-card")).toContainText(title);
     const draft = `/w/${workspace}/app-drafts/${name}`;
     await page.goto(draft);
-    await page.getByTestId("app-edit").getByRole("button", { name: EDIT_IN_CHAT }).click();
+    await page.getByTestId("app-edit").getByTestId("dock-page-action").click();
     await expect(page.locator("[data-dock-chat]")).toBeVisible();
     await viewer.goto(draft);
     const hint = () =>
@@ -150,7 +161,7 @@ test("another builder sees who checked out the draft until a save or 24 hours id
         .getByText(/^(?:Being edited by|Wird bearbeitet von) E2E Superadmin (?:since|seit) /u, {
           exact: false
         });
-    // Head text and the action both carry the warning, including in the phone menu.
+    // The head names who edits the draft, also at phone width.
     for (const locale of ["en", "de"]) {
       for (const width of [1280, 390]) {
         for (const theme of ["light", "dark"]) {
@@ -164,31 +175,6 @@ test("another builder sees who checked out the draft until a save or 24 hours id
           await viewer.setViewportSize({ width, height: 760 });
           await viewer.reload();
           await expect(hint().first()).toBeVisible();
-          const head = viewer.getByTestId("app-edit");
-          const button = head.getByRole("button", {
-            name: /(?:Edit in chat|Im Chat bearbeiten) · E2E Superadmin/u
-          });
-          if (!(await button.isVisible())) {
-            await head.getByRole("button", { name: /More actions|Weitere Aktionen/u }).click();
-            await expect(
-              viewer.getByRole("menuitem", { name: /(?:Edit in chat|Im Chat bearbeiten) · /u })
-            ).toBeVisible();
-            await expect(viewer.getByRole("menu")).toHaveCSS("opacity", "1");
-            const menu = viewer.getByRole("menu");
-            await expect
-              .poll(async () => (await menu.boundingBox())?.x ?? -1)
-              .toBeGreaterThanOrEqual(0);
-            await expect
-              .poll(async () => {
-                const bounds = await menu.boundingBox();
-                return bounds ? bounds.x + bounds.width : Infinity;
-              })
-              .toBeLessThanOrEqual(width);
-            await viewer.keyboard.press("Escape");
-            await expect(viewer.getByRole("menu")).toBeHidden();
-          } else {
-            await expect(button).toBeVisible();
-          }
           const screenshot = test.info().outputPath(`presence-${locale}-${width}-${theme}.png`);
           await viewer.screenshot({ path: screenshot });
           await test.info().attach(`presence-${locale}-${width}-${theme}`, {
