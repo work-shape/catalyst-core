@@ -317,3 +317,30 @@ export function roleWriteFailure(error: unknown): RoleWriteFailure {
   if (action !== undefined && isPlatformAction(action)) return { kind: "needsRight", action };
   return action?.startsWith("roles.") ? { kind: "superadminOnly" } : { kind: "other" };
 }
+
+/**
+ * Whether the editor may give the custom role to a person or take it from them: with
+ * `users.manage`, and a role that carries a right only a Superadmin hands out only as one. The
+ * server also asks that the editor holds every right the role gives.
+ */
+export function canAssignRole(role: Pick<Role, "id" | "grants">, editor: RoleEditor): boolean {
+  if (isBuiltInRole(role.id) || !editorHolds(editor, MANAGE_USERS_ACTION)) return false;
+  return editor.superadmin || !role.grants.some((grant) => isSuperadminGrantedAction(grant.action));
+}
+
+/** How giving or taking a role failed, as far as the page has its own sentence for it. */
+export type RoleAssignmentFailure =
+  | { kind: "self" }
+  | { kind: "superadminOnly" }
+  | { kind: "needsRight"; action: PlatformAction }
+  | { kind: "other" };
+
+/** The refusal of `users.update` that gave or took a role, read for its sentence. */
+export function roleAssignmentFailure(error: unknown): RoleAssignmentFailure {
+  if (!(error instanceof ApiError) || error.status !== 403) return { kind: "other" };
+  if (refusalReason(error) === "holder_not_administrable") return { kind: "self" };
+  // A refusal names the right the caller lacks, or the operation where only a superadmin may.
+  const action = refusalDetail(error, "action");
+  if (action !== undefined && isPlatformAction(action)) return { kind: "needsRight", action };
+  return action === "users.update" ? { kind: "superadminOnly" } : { kind: "other" };
+}

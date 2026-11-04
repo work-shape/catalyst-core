@@ -32,6 +32,7 @@ import {
 } from "../../access/access-queries";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { listAll } from "@work-shape/catalyst-api-client";
+import { useSuperadminUserMutations } from "../../../shared/api/workspace-mutations";
 import {
   useConfigAssetsOverviewQuery,
   usePlatformContextQuery,
@@ -68,6 +69,10 @@ export function AccessPage() {
   const [checkedName, setCheckedName] = useState("");
   const grantsQuery = usePermissionGrantsQuery(api);
   const usersQuery = useWorkspaceUsersQuery({ ...api, enabled: true });
+  const userMutations = useSuperadminUserMutations({
+    ...api,
+    heldMessage: t("settings.userChangeWaitsForApproval")
+  });
   // Assets come with the agent configuration, which has its own right. A
   // reader without it still sees and revokes rows; the pickers say what could not be loaded.
   const overviewQuery = useConfigAssetsOverviewQuery({ ...api, enabled: true });
@@ -320,6 +325,12 @@ export function AccessPage() {
             onDecide={(roleId, action, decision) =>
               roleMutations.decide.mutateAsync({ roleId, action, decision })
             }
+            people={{
+              users: usersQuery.data,
+              failed: Boolean(usersQuery.error),
+              onSetRoles: (userId, roles) =>
+                userMutations.updateUser.mutateAsync({ userId, update: { roles } })
+            }}
           />
         </TabsContent>
         {dataScope ? (

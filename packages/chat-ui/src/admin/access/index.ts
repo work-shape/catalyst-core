@@ -46,9 +46,12 @@ export { DataScopes } from "./data-scopes";
 
 export { RolesTab, type RolesTabProps } from "./roles-tab";
 export { RolePage, type RolePageProps } from "./role-page";
-export { roleName, roleFailureText } from "./role-parts";
+export { roleName, roleFailureText, roleAssignmentFailureText } from "./role-parts";
+export { RolePeople, type RolePeopleSource } from "./role-people";
+export { UserRolesCard } from "./user-roles-card";
 export {
   areaRightChoices,
+  canAssignRole,
   canEditRole,
   pendingApplyBlock,
   resetBlock,
@@ -56,6 +59,7 @@ export {
   roleAreaOf,
   roleGrantsByArea,
   rolesWithPending,
+  roleAssignmentFailure,
   roleWriteFailure,
   withAreaAllows,
   withoutGrant,
