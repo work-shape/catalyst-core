@@ -948,13 +948,9 @@ function ChatWorkspaceContent({
                                   <section className="relative h-full min-h-0 min-w-0">
                                     <AddFromProjectProvider
                                       target={
-                                        model.projects.enabled &&
-                                        chat.selectedConversationId &&
-                                        chat.selectedConversationWorkspaceId
+                                        model.projects.enabled && chat.selectedConversationId
                                           ? {
                                               conversationId: chat.selectedConversationId,
-                                              collaborationWorkspaceId:
-                                                chat.selectedConversationWorkspaceId,
                                               projectId: model.projects.selectedProjectId,
                                               agentName: model.config.activeAgentName
                                             }
