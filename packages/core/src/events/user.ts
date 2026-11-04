@@ -1,4 +1,12 @@
+import type { JsonObject } from "../json";
 import { LEGACY_AUDIT, type PlatformEventDefinition } from "./definition";
+
+const ROLE_CHANGE_PAYLOAD: JsonObject = {
+  type: "object",
+  additionalProperties: false,
+  required: ["roleId"],
+  properties: { roleId: { type: "string" }, operationRunId: { type: "string" } }
+};
 
 export const userEvents = {
   "user.created": { ...LEGACY_AUDIT, name: "user.created", subject: "user" },
@@ -87,5 +95,22 @@ export const userEvents = {
     phases: ["after"]
   },
   "user.profile_updated": { ...LEGACY_AUDIT, name: "user.profile_updated", subject: "user" },
-  "user.updated": { ...LEGACY_AUDIT, name: "user.updated", subject: "user" }
+  "user.updated": { ...LEGACY_AUDIT, name: "user.updated", subject: "user" },
+  // A custom role given to a person or taken from them (P30). The person and the role: ids only.
+  "user.role_assigned": {
+    name: "user.role_assigned",
+    subject: "user",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: ROLE_CHANGE_PAYLOAD
+  },
+  "user.role_removed": {
+    name: "user.role_removed",
+    subject: "user",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: ROLE_CHANGE_PAYLOAD
+  }
 } as const satisfies Record<string, PlatformEventDefinition>;
