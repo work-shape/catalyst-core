@@ -189,6 +189,10 @@ export class TurnLoop {
         context.locale,
         {
           currentDate: this.options.clock?.now() ?? systemClock.now(),
+          // A Workflow step's agent has no name people see.
+          ...(input.workflowAgent
+            ? {}
+            : { agentDisplayName: displayNameIn(agent.displayName, context.locale) }),
           skills: getSnapshotSkillMetadata(assets, agent, [
             ...(offer?.skillNames ?? []),
             ...(offer?.personalSkillNames ?? [])
@@ -1157,4 +1161,13 @@ function removePreCompactionMessages(messages: ModelMessage[]): void {
  */
 function completedWithoutTextFallback(locale: LocaleCode | undefined): string {
   return locale === "de" ? "Ich habe die Anfrage abgeschlossen." : "I completed the request.";
+}
+
+/** The name an agent is shown by in the person's language, else in the other one. */
+function displayNameIn(
+  name: AgentConfig["displayName"],
+  locale: LocaleCode | undefined
+): string | undefined {
+  if (typeof name === "string") return name;
+  return (locale ? name[locale] : undefined) ?? name.en ?? name.de;
 }

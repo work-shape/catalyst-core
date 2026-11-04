@@ -25,6 +25,7 @@ const agentSchema = z.object({
     toolNames: z.array(z.string()),
     skillNames: z.array(z.string()),
     welcomeMessage: z.unknown().optional(),
+    displayName: z.unknown().optional(),
     additionalInstructions: z.string().optional(),
     shipped: z.record(z.string(), z.unknown()).optional(),
     shippedNewer: z.array(z.string()).optional()
@@ -198,6 +199,39 @@ describe("the agent that ships with the platform", () => {
     expect(
       await seedShippedAgents({ clientInstanceId, stores: app.stores, agents: [next] })
     ).toEqual({ retained: [], created: [], updated: [] });
+  });
+
+  it("keeps the name an admin gave it through a release, and the release's instructions with it", async () => {
+    const app = await start(true);
+    const before = await read(app);
+    // The instructions it ships name no fixed name: the runtime tells the agent its own.
+    expect(before.config.instructions).not.toMatch(/Workshaper/u);
+    const release = (instructions: string): ShippedAgent => ({
+      name: NAME,
+      displayName: { en: "Workshaper", de: "Workshaper" },
+      instructions,
+      toolNames: before.config.toolNames,
+      skillNames: [],
+      initialPrompts: []
+    });
+    // Instructions that name no tool this test instance lacks, so the page's save validates.
+    await seedShippedAgents({
+      clientInstanceId,
+      stores: app.stores,
+      agents: [release("This release's instructions.")]
+    });
+    await change(app, { ...(await read(app)).config, displayName: { en: "Shapy", de: "Shapy" } });
+    const renamed = await read(app);
+    expect(renamed.config.displayName).toEqual({ en: "Shapy", de: "Shapy" });
+    // A rename leaves the instructions as shipped, so the next release still updates them.
+    expect(renamed.config.instructions).toBe(renamed.config.shipped?.instructions);
+
+    const next = release("The next release's instructions.");
+    await seedShippedAgents({ clientInstanceId, stores: app.stores, agents: [next] });
+    const after = await read(app);
+    expect(after.config.displayName).toEqual({ en: "Shapy", de: "Shapy" });
+    expect(after.config.instructions).toBe(next.instructions);
+    expect(after.config.shippedNewer ?? []).toEqual([]);
   });
 
   it("names a field the instance changed and the release changed too, until a person decides", async () => {

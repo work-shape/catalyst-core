@@ -55,6 +55,14 @@ describe("system instructions", () => {
     expect(PLATFORM_ORIENTATION).toContain("never infer it from your own tools");
     expect(PLATFORM_ORIENTATION).toContain("read the page getting-started/local-agent");
   });
+  it("tells the agent the name people see it by, and nothing where it has none", () => {
+    const content = createSystemInstructions("Help.", "de", { agentDisplayName: " Shapy\n" });
+    const runtime = content.slice(content.indexOf("Runtime context:"));
+    expect(runtime).toContain(
+      'Your name, as people see it in the interface: "Shapy". When you speak of yourself, use this name.'
+    );
+    expect(createSystemInstructions("Help.", "de")).not.toContain("Your name");
+  });
   it("keeps technical ids in agent handoffs and out of replies the person reads", () => {
     const content = createSystemInstructions("Help.", "en");
     expect(content).toContain("In text the person reads, never repeat");

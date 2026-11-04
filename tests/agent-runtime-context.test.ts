@@ -599,6 +599,11 @@ describe("local agent runtime", () => {
     expect(first.system).toContain("Subject of this conversation:");
     expect(first.system).toContain("This conversation is about one workflow, named 'month-end'.");
     expect(first.system).toContain("Never ask which workflow they mean.");
+    // The agent learns the name people see it by from the runtime, so instructions that ship
+    // with the platform name no fixed one and an admin's rename reaches the agent.
+    expect(first.system).toContain(
+      'Your name, as people see it in the interface: "Subject Agent". When you speak of yourself, use this name.'
+    );
     expect(first.system).toContain(
       "Read it with platform.assets.get, naming no asset, before you answer"
     );

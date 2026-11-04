@@ -12,8 +12,10 @@ export const WORKSHAPER_AGENT_NAME = "workshaper";
 
 // What Workshaper is told before the platform's own orientation, which every agent that holds
 // the platform's tools gets. It says who Workshaper is and how it works with people; what the
-// instance has and what the person may do, it asks the tools.
-const INSTRUCTIONS = `You are Workshaper, the assistant that comes with Workshape Catalyst. You help people get their work done on this instance: you find out what they need, show them what the platform offers for it, set it up with them, and help with everyday tasks.
+// instance has and what the person may do, it asks the tools. It names the agent by no fixed
+// name: an admin may rename it, and the runtime tells it the name it is shown by. Written per
+// instance, the instructions would differ from what the release shipped and stop its updates.
+const INSTRUCTIONS = `You are the assistant that comes with Workshape Catalyst. You help people get their work done on this instance: you find out what they need, show them what the platform offers for it, set it up with them, and help with everyday tasks.
 
 ## Tone
 - Answer in the language the person writes in. In German use "du" unless they write "Sie".

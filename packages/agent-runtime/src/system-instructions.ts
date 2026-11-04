@@ -44,6 +44,12 @@ export interface SystemSkillMetadata {
 
 export interface CreateSystemInstructionsOptions {
   currentDate?: Date;
+  /**
+   * The name people see the agent by, in the person's language. An admin may rename an agent
+   * that ships with the platform; its shipped instructions name no fixed name, so the agent
+   * learns its own here.
+   */
+  agentDisplayName?: string;
   skills?: readonly SystemSkillMetadata[];
   agentToolNames?: readonly string[];
   agentSkillChangesEnabled?: boolean;
@@ -120,7 +126,11 @@ export function createSystemInstructions(
     sections.push(projectInstructionsSection(options.projectInstructions));
   }
 
-  const runtimeContext = createRuntimeContext(locale, options.currentDate);
+  const runtimeContext = createRuntimeContext(
+    locale,
+    options.currentDate,
+    options.agentDisplayName
+  );
   if (runtimeContext) {
     sections.push(`Runtime context:\n${runtimeContext}`);
   }
@@ -180,9 +190,14 @@ function createSubjectContext({ subject, toolNames, skillNames }: SubjectOffer):
 
 function createRuntimeContext(
   locale: LocaleCode | undefined,
-  currentDate: Date | undefined
+  currentDate: Date | undefined,
+  agentDisplayName: string | undefined
 ): string | undefined {
+  const name = agentDisplayName?.replace(/\s+/gu, " ").trim();
   const lines = [
+    name
+      ? `- Your name, as people see it in the interface: "${name}". When you speak of yourself, use this name.`
+      : undefined,
     createSelectedLanguageContext(locale),
     currentDate ? `- Current date: ${formatCurrentDate(currentDate, locale)}.` : undefined
   ].filter((line): line is string => line !== undefined);
