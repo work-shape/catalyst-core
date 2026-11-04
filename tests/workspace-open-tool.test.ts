@@ -320,6 +320,7 @@ describe("workspace.open", () => {
     for (const rule of [
       "allow-scripts allow-forms allow-downloads",
       "without allow-same-origin",
+      "clipboard: write only, through navigator.clipboard.writeText on a user click",
       "form-action 'none'",
       "localStorage",
       "storage.get/set",
