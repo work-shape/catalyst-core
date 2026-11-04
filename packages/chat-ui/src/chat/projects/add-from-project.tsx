@@ -1,18 +1,15 @@
 import { FolderOpen } from "lucide-react";
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import {
   Button,
   Dialog,
   EmptyState,
-  Field,
   FormNotice,
   IconButton,
   InlineError,
-  Select,
   SkeletonList
 } from "@work-shape/catalyst-ui";
 import { useAddFromProjectMutation, useProjectFilesQuery } from "../../shared/api/project-files";
-import { useProjectsQuery } from "../../shared/api/projects";
 import { useTranslation } from "../../shared/i18n";
 import { apiErrorCode, apiErrorReason } from "../../shared/workspace-utils";
 import { ProjectFileTree } from "./project-file-tree";
@@ -20,8 +17,7 @@ import { ProjectFileTree } from "./project-file-tree";
 /** The open conversation a project file is attached to, while the projects module is on. */
 interface AddFromProjectTarget {
   conversationId: string;
-  collaborationWorkspaceId: string;
-  /** The conversation's own project, chosen first. */
+  /** The project the conversation belongs to; absent in a conversation outside any project. */
   projectId?: string;
   agentName?: string;
 }
@@ -48,12 +44,15 @@ export function useOpenConversationProject(): AddFromProjectTarget | undefined {
   return useContext(AddFromProjectContext);
 }
 
-/** The composer's "Add from project", beside the paperclip; nothing without a target. */
+/**
+ * The composer's "Add from project", beside the paperclip. It shows only in a conversation that
+ * belongs to a project, and picks from that project's files only.
+ */
 export function AddFromProjectButton({ className }: { className?: string }) {
   const { t } = useTranslation();
   const target = useContext(AddFromProjectContext);
   const [open, setOpen] = useState(false);
-  if (!target) return null;
+  if (!target?.projectId) return null;
   return (
     <>
       <IconButton
@@ -65,27 +64,33 @@ export function AddFromProjectButton({ className }: { className?: string }) {
       >
         <FolderOpen size={16} aria-hidden="true" />
       </IconButton>
-      {open ? <AddFromProjectDialog target={target} onClose={() => setOpen(false)} /> : null}
+      {open ? (
+        <AddFromProjectDialog
+          conversationId={target.conversationId}
+          projectId={target.projectId}
+          agentName={target.agentName}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
     </>
   );
 }
 
 function AddFromProjectDialog({
-  target,
+  conversationId,
+  projectId,
+  agentName,
   onClose
 }: {
-  target: AddFromProjectTarget;
+  conversationId: string;
+  projectId: string;
+  agentName?: string;
   onClose(): void;
 }) {
   const { t } = useTranslation();
-  const projects = useProjectsQuery(target.collaborationWorkspaceId);
-  const [projectId, setProjectId] = useState(target.projectId ?? "");
   const [path, setPath] = useState<string>();
-  const files = useProjectFilesQuery(projectId || undefined);
-  const add = useAddFromProjectMutation(target.conversationId, t("projectFiles.held"));
-  useEffect(() => {
-    if (projectId === "" && projects.data?.[0]) setProjectId(projects.data[0].id);
-  }, [projectId, projects.data]);
+  const files = useProjectFilesQuery(projectId);
+  const add = useAddFromProjectMutation(conversationId, t("projectFiles.held"));
 
   const error = add.error
     ? apiErrorCode(add.error) === "VALIDATION_FAILED" &&
@@ -111,11 +116,11 @@ function AddFromProjectDialog({
           <Button
             data-testid="add-from-project-confirm"
             loading={add.isPending}
-            disabled={!path || projectId === ""}
+            disabled={!path}
             onClick={() => {
               if (!path) return;
               add.mutate(
-                { projectId, path, ...(target.agentName ? { agentName: target.agentName } : {}) },
+                { projectId, path, ...(agentName ? { agentName } : {}) },
                 { onSuccess: onClose }
               );
             }}
@@ -126,34 +131,9 @@ function AddFromProjectDialog({
       }
     >
       <div className="grid gap-4" data-testid="add-from-project-dialog">
-        <Field label={t("projectFiles.fieldProject")}>
-          <Select
-            value={projectId}
-            disabled={!projects.data}
-            onChange={(event) => {
-              // Another project starts a fresh pick.
-              setProjectId(event.currentTarget.value);
-              setPath(undefined);
-              add.reset();
-            }}
-          >
-            {projectId === "" ? <option value="" /> : null}
-            {(projects.data ?? []).map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.title}
-              </option>
-            ))}
-          </Select>
-        </Field>
         <div className="grid gap-2">
           <span className="text-label font-medium">{t("projectFiles.fieldFile")}</span>
-          {projectId === "" ? (
-            projects.isPending ? (
-              <SkeletonList rows={3} />
-            ) : (
-              <EmptyState>{t("projectFiles.noFiles")}</EmptyState>
-            )
-          ) : files.isPending ? (
+          {files.isPending ? (
             <SkeletonList rows={3} />
           ) : files.isError ? (
             <InlineError>{t("projectFiles.listFailed")}</InlineError>

@@ -240,6 +240,14 @@ test("a .zip in the composer of a project's chat lands as a folder of the projec
   await shot(page, "composer-zip-unpacked", unpacked);
   await expect(unpacked).toHaveCount(0, { timeout: 15_000 });
 
+  // "Add from project" in this chat picks from this project's files only: there is no project picker.
+  await page.getByTestId("add-from-project").click();
+  const picker = page.getByTestId("add-from-project-dialog");
+  await expect(picker.getByRole("combobox")).toHaveCount(0);
+  await expect(picker.getByRole("button", { name: "angebote", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Abbrechen" }).click();
+  await expect(picker).toHaveCount(0);
+
   // One that climbs out of its folder is refused with a sentence, and puts nothing in.
   const unsafe = new JSZip();
   unsafe.file("ok.txt", "ok");
