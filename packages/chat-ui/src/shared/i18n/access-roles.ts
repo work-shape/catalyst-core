@@ -38,7 +38,7 @@ export const accessRoles = defineTranslations({
     "access.roleSave": "Save",
     "access.roleNameMissing": "Give the role a name.",
     "access.roleNameTaken": "Another role already has this name.",
-    "access.roleInUse": "People still hold this role. Take it from them on the Users page first.",
+    "access.roleInUse": "People still hold this role. Take it from them under People first.",
     "access.roleNeedsRight": "This change needs the right “{right}”, which you do not hold.",
     "access.roleSuperadminOnly": "Only a Superadmin gives or takes this right.",
     "access.roleWriteFailed": "The role could not be saved.",
@@ -81,7 +81,24 @@ export const accessRoles = defineTranslations({
     "access.pendingKeep": "Keep",
     "access.pendingDecideFailed": "The decision could not be saved.",
     "access.pendingNotice": "A release brought rights that are not decided yet for: {roles}.",
-    "access.pendingNoticeOpen": "Open roles"
+    "access.pendingNoticeOpen": "Open roles",
+
+    "access.rolePeople": "People",
+    "access.rolePeopleNone": "Nobody holds this role yet.",
+    "access.rolePeopleAdd": "Add person",
+    "access.rolePeoplePick": "Choose a person",
+    "access.rolePeopleRemove": "Take {role} from {name}",
+    "access.rolePeopleLoadFailed": "The people could not be loaded.",
+    "access.roleHolderSelf":
+      "Nobody gives themselves a role or takes one from themselves: another administrator does.",
+    "access.roleHolderSuperadminOnly":
+      "Only a Superadmin gives or takes this role, or changes the roles of a Superadmin.",
+    "access.userMoreRoles": "More roles",
+    "access.userMoreRolesDescription":
+      "Each role adds its rights to the built-in role. A change applies at once.",
+    "access.userMoreRolesPlaceholder": "No further role",
+    "access.userMoreRolesNone": "There is no custom role yet. Create one under Access > Roles.",
+    "access.userMoreRolesRemove": "Take {role} away"
   },
   de: {
     "access.tabRoles": "Rollen",
@@ -118,8 +135,7 @@ export const accessRoles = defineTranslations({
     "access.roleSave": "Speichern",
     "access.roleNameMissing": "Gib der Rolle einen Namen.",
     "access.roleNameTaken": "Eine andere Rolle hat schon diesen Namen.",
-    "access.roleInUse":
-      "Personen haben diese Rolle noch. Nimm sie ihnen zuerst auf der Seite Benutzer.",
+    "access.roleInUse": "Personen haben diese Rolle noch. Nimm sie ihnen zuerst unter Personen.",
     "access.roleNeedsRight": "Dafür brauchst du das Recht „{right}“, das du nicht hast.",
     "access.roleSuperadminOnly": "Nur Superadmins vergeben oder entziehen dieses Recht.",
     "access.roleWriteFailed": "Die Rolle konnte nicht gespeichert werden.",
@@ -168,6 +184,24 @@ export const accessRoles = defineTranslations({
     "access.pendingDecideFailed": "Die Entscheidung konnte nicht gespeichert werden.",
     "access.pendingNotice":
       "Ein Release hat Rechte gebracht, die noch nicht entschieden sind für: {roles}.",
-    "access.pendingNoticeOpen": "Rollen öffnen"
+    "access.pendingNoticeOpen": "Rollen öffnen",
+
+    "access.rolePeople": "Personen",
+    "access.rolePeopleNone": "Noch niemand hat diese Rolle.",
+    "access.rolePeopleAdd": "Person hinzufügen",
+    "access.rolePeoplePick": "Person wählen",
+    "access.rolePeopleRemove": "{role} von {name} entfernen",
+    "access.rolePeopleLoadFailed": "Die Personen konnten nicht geladen werden.",
+    "access.roleHolderSelf":
+      "Niemand gibt sich selbst eine Rolle oder nimmt sie sich: Das macht ein anderer Admin.",
+    "access.roleHolderSuperadminOnly":
+      "Nur Superadmins vergeben oder entziehen diese Rolle oder ändern die Rollen eines Superadmins.",
+    "access.userMoreRoles": "Weitere Rollen",
+    "access.userMoreRolesDescription":
+      "Jede Rolle ergänzt die eingebaute Rolle um ihre Rechte. Eine Änderung gilt sofort.",
+    "access.userMoreRolesPlaceholder": "Keine weitere Rolle",
+    "access.userMoreRolesNone":
+      "Es gibt noch keine eigene Rolle. Lege eine unter Zugriff > Rollen an.",
+    "access.userMoreRolesRemove": "{role} entfernen"
   }
 });

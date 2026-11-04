@@ -8,6 +8,8 @@ import { useSettingsPage } from "../../../shared/settings-page-context";
 import { UserEffectiveRightsCard } from "../../access/effective-rights";
 import { useEffectivePermissionsQuery } from "../../access/access-queries";
 import { giverAccess } from "../../access/grant-options";
+import { useRolesQuery } from "../../access/role-queries";
+import { UserRolesCard } from "../../access/user-roles-card";
 
 /** Instance > Users: the accounts of this instance, with its own data. */
 export function UsersPage() {
@@ -24,6 +26,11 @@ export function UsersPage() {
   });
   const canDeleteUsers =
     ownRights.error === null && giverAccess(ownRights.data).authorize("users.delete").allowed;
+  const rolesQuery = useRolesQuery({ apiBaseUrl, authScope, client });
+  const customRoleNames = new Map(
+    (rolesQuery.data ?? []).filter((role) => !role.builtIn).map((role) => [role.id, role.name])
+  );
+  const viewerIsSuperadmin = user.roles.includes("superadmin");
   const userMutations = useSuperadminUserMutations({
     apiBaseUrl,
     authScope,
@@ -37,7 +44,7 @@ export function UsersPage() {
       loading={usersQuery.isLoading}
       error={usersQuery.error ? apiErrorMessage(usersQuery.error, undefined) : undefined}
       // Changing a superadmin and giving the role stay a superadmin's (the named list, D8).
-      canManageSuperadminAccess={user.roles.includes("superadmin")}
+      canManageSuperadminAccess={viewerIsSuperadmin}
       canDeleteUsers={canDeleteUsers}
       mutating={userMutations.isPending}
       onCreateUser={(input) => userMutations.createUser.mutateAsync(input)}
@@ -60,6 +67,24 @@ export function UsersPage() {
           : undefined
       }
       userRights={(userId) => <UserEffectiveRightsCard key={userId} holderId={userId} />}
+      customRoleNames={customRoleNames}
+      userRoles={(person, disabledReason) => (
+        <UserRolesCard
+          key={`roles-${person.id}`}
+          user={person}
+          roles={rolesQuery.data}
+          rolesFailed={Boolean(rolesQuery.error)}
+          editor={{
+            superadmin: viewerIsSuperadmin,
+            rights: ownRights.error === null ? ownRights.data : undefined
+          }}
+          disabledReason={disabledReason}
+          instanceAdminName={user.instanceAdminName}
+          onSetRoles={(userId, roles) =>
+            userMutations.updateUser.mutateAsync({ userId, update: { roles } })
+          }
+        />
+      )}
       ownedScheduledStarts={(owner) => (
         <OwnerScheduledStartsCard
           key={`scheduled-${owner.id}`}
