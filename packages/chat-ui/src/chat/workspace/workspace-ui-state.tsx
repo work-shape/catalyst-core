@@ -211,9 +211,9 @@ export function WorkspaceUiStateProvider({
 
   const selectWorkspaceView = useCallback(
     (nextView: WorkspaceRouteView) => {
-      // The rail opens Settings on the first administration page the viewer may see.
+      // The gear opens the person's own Settings, for every role and from every area.
       if (nextView === "settings") {
-        onRouteChange({ kind: "administration" });
+        showSettings();
         return;
       }
       if (nextView === "build") {
@@ -226,7 +226,7 @@ export function WorkspaceUiStateProvider({
       }
       onRouteChange(lastChatRouteRef.current);
     },
-    [onRouteChange]
+    [onRouteChange, showSettings]
   );
 
   const isConversationVisible = useCallback(

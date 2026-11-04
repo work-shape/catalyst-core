@@ -767,7 +767,6 @@ function ChatWorkspaceContent({
             onLoadMoreConversations={rail.loadMoreConversations}
             conversationsStatus={rail.conversationsStatus}
             selectedConversationId={rail.selectedConversationId}
-            canViewAdministration={rail.canViewAdministration}
             canViewBuild={model.controlPlane.canViewBuild}
             inbox={rail.inbox}
             agents={rail.agents}

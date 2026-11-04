@@ -64,7 +64,6 @@ function renderRail(
         conversations,
         conversationsStatus: "ready",
         selectedConversationId: undefined,
-        canViewAdministration: false,
         view: "chat",
         deletingConversation: false,
         canMoveConversation: false,

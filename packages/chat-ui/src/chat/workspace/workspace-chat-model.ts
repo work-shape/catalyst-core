@@ -776,7 +776,6 @@ export function useWorkspaceChatModel({
       tellConversation
     }
   });
-  const canViewAdministration = controlPlane.canViewAdministration;
   const approvalPendingCountQuery = useApprovalPendingCountQuery({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
@@ -1121,7 +1120,6 @@ export function useWorkspaceChatModel({
       view,
       selectedConversationId,
       dock,
-      canViewAdministration,
       showRoute: routeState.showRoute
     },
     chrome: {
@@ -1155,7 +1153,6 @@ export function useWorkspaceChatModel({
       // The rail marks the conversation of the chat route; beside a page, the page's row is the
       // current one, and the dock's conversation is only in the dock.
       selectedConversationId: docked ? undefined : selectedConversationId,
-      canViewAdministration,
       inbox,
       agents: agentsRowShown(collaborationWorkspacesAvailable, workspaceAgentsQuery.data),
       apps: appsRowShown(appsEnabled, workspaceAgentsQuery.data),

@@ -71,7 +71,6 @@ interface WorkspaceRailProps {
   onLoadMoreConversations?: () => void;
   conversationsStatus: "loading" | "failed" | "ready";
   selectedConversationId: string | undefined;
-  canViewAdministration: boolean;
   /** The viewer may open Build: the rail shows its row above the account row. */
   canViewBuild?: boolean;
   /** Present for a person who may decide requests or has made one: the Inbox row shows. */
@@ -726,17 +725,11 @@ function RecentSkeleton() {
   );
 }
 
-function RailFooter({
-  canViewAdministration,
-  canViewBuild = false,
-  view,
-  accountMenu,
-  onViewChange
-}: WorkspaceRailProps) {
+function RailFooter({ canViewBuild = false, view, accountMenu, onViewChange }: WorkspaceRailProps) {
   const { t } = useTranslation();
   const iconsOnly = useSidebarCollapsed();
   const activeClassName = "bg-state-selected text-foreground hover:bg-state-selected";
-  const settingsButton = canViewAdministration ? (
+  const settingsButton = (
     <IconButton
       className={view === "settings" ? activeClassName : undefined}
       label={view === "settings" ? t("returnToChat") : t("nav.settings")}
@@ -745,7 +738,7 @@ function RailFooter({
     >
       <Settings aria-hidden="true" />
     </IconButton>
-  ) : null;
+  );
 
   const buildRow = canViewBuild ? (
     <NavItem

@@ -200,7 +200,6 @@ export interface WorkspaceRouteModel {
   selectedConversationId: string | undefined;
   /** The chat dock beside every page but the chat route. */
   dock: WorkspaceDock;
-  canViewAdministration: boolean;
   /** Opens a route by its value, as the command palette's "Go to" group does. */
   showRoute(route: WorkspaceRoute): void;
 }
@@ -230,7 +229,6 @@ export interface ConversationRailModel {
   conversationsStatus: "loading" | "failed" | "ready";
   reloadConversations(): void;
   selectedConversationId: string | undefined;
-  canViewAdministration: boolean;
   /** Present for a person who may decide requests or has made one: the Inbox row shows. */
   inbox: { toDecide: number } | undefined;
   /**

@@ -18,7 +18,8 @@ test("an instance admin opens every group of the Settings rail", async ({ page }
   await page.goto("/");
   await settingsGear(page).click();
   const rail = settingsPages(page);
-  await expect(page).toHaveURL(/\/settings\/instance\/users$/u);
+  // The gear opens the person's own Settings, whatever the role; the instance pages stand below.
+  await expect(page).toHaveURL(/\/settings\/you\/profile$/u);
   for (const group of ["You", "Workspace", "All workspaces"]) {
     await expect(rail.getByRole("group", { name: group, exact: true })).toBeVisible();
   }
@@ -188,6 +189,71 @@ test("a plain user finds only their own pages in the Settings rail", async ({
   await expect(page).toHaveURL(/\/settings\/you\/profile$/u);
 });
 
+test("the gear opens a builder's own Settings from Studio, with the local agent page", async ({
+  page,
+  browser
+}) => {
+  test.setTimeout(90_000);
+  const gearUser = {
+    email: "e2e-account-gear@example.test",
+    password: "e2e-account-gear-password"
+  };
+  await signInViaApi(page, gearUser);
+  await page.addInitScript(() => {
+    window.localStorage.setItem("vivd-catalyst:locale", "de");
+  });
+  const me = await page.request.get(`${apiBaseUrl}/api/v1/me`);
+  expect(me.ok()).toBe(true);
+  const { id: userId } = z.object({ id: z.string() }).parse(await me.json());
+
+  // A plain user with Builder in one workspace: Studio opens for them, the admin role does not.
+  const rootContext = await browser.newContext({ baseURL: test.info().project.use.baseURL });
+  const root = await rootContext.newPage();
+  await signInViaApi(root, superadminUser);
+  const workspace = await createWorkspace(root, { name: `E2E Gear ${Date.now()}` });
+  const granted = await requestWithOrigin(
+    root,
+    "post",
+    `${apiBaseUrl}/api/v1/instance/access/grants`,
+    {
+      data: {
+        holderKind: "user",
+        holderId: userId,
+        action: "builder",
+        effect: "allow",
+        scopeKind: "workspace",
+        scopeId: workspace.id
+      }
+    }
+  );
+  expect(granted.ok(), await granted.text()).toBe(true);
+  const grant = z.object({ id: z.string() }).parse(await granted.json());
+  try {
+    await page.goto("/build/skills");
+    await expect(page).toHaveURL(/\/build\/skills$/u);
+    await expect(page.getByRole("button", { name: "Studio", exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: "Einstellungen", exact: true }).click();
+    await expect(page).toHaveURL(/\/settings\/you\/profile$/u);
+    const connect = page
+      .getByRole("navigation", { name: "Einstellungsseiten" })
+      .getByRole("button", { name: "Lokalen Agenten verbinden", exact: true });
+    await expect(connect).toBeVisible();
+    await connect.click();
+    await expect(page).toHaveURL(/\/settings\/you\/connect$/u);
+    await expect(
+      page.getByRole("heading", { name: "Lokalen Agenten verbinden", level: 1 })
+    ).toBeVisible();
+  } finally {
+    await requestWithOrigin(
+      root,
+      "delete",
+      `${apiBaseUrl}/api/v1/instance/access/grants/${grant.id}`
+    );
+    await rootContext.close();
+  }
+});
+
 test("the account menu names the account and holds the settings, the theme and sign out", async ({
   page
 }) => {
@@ -307,7 +373,7 @@ test("superadmin creates a user with a password from the users panel", async ({ 
   await expect(
     page.getByRole("button", { name: `${createdUser.displayLabel} account` })
   ).toBeVisible();
-  await expect(settingsGear(page)).toHaveCount(0);
+  await expect(settingsGear(page)).toBeVisible();
 });
 
 async function createWorkspace(

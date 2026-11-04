@@ -193,7 +193,6 @@ function renderRail(
         conversations,
         conversationsStatus: "ready",
         selectedConversationId: undefined,
-        canViewAdministration: false,
         inbox,
         view: "chat",
         deletingConversation: false,
@@ -319,15 +318,10 @@ describe("workspace rail Studio row and Settings gear", () => {
     expect(markup).toMatch(/<button[^>]*aria-current="true"[^>]*>(?:(?!<\/button>).)*Studio/u);
   });
 
-  it("offers the gear to a viewer with an administration page and marks it on Settings", () => {
-    expect(renderRail()).not.toContain('aria-label="Settings"');
-
-    const markup = renderRail(undefined, undefined, [], { canViewAdministration: true });
+  it("offers the gear to every viewer and marks it on Settings", () => {
+    const markup = renderRail();
     expect(markup).toMatch(/<button[^>]*aria-label="Settings"[^>]*aria-pressed="false"/u);
-    const onSettings = renderRail(undefined, undefined, [], {
-      canViewAdministration: true,
-      view: "settings"
-    });
+    const onSettings = renderRail(undefined, undefined, [], { view: "settings" });
     expect(onSettings).toMatch(/<button[^>]*aria-label="Return to chat"[^>]*aria-pressed="true"/u);
   });
 });
@@ -839,7 +833,6 @@ describe("workspace rail conversation rows", () => {
           conversations,
           conversationsStatus: "ready",
           selectedConversationId: undefined,
-          canViewAdministration: false,
           view: "chat",
           deletingConversation: false,
           canMoveConversation: false,
