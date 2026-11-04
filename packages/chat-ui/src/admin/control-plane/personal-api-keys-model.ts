@@ -184,15 +184,16 @@ export function personalKeyActionsKeptIn(
 
 /**
  * What a key confirmed for a connect code (`catalyst setup`, `catalyst login`) starts with:
- * every authoring action and every use right offered, which the person all holds, but
- * `connection.use`. With it the results of a Connection's calls exposed to outside clients are
+ * every authoring action and every use right offered, which the person all holds, but deleting
+ * and `connection.use`. A local agent holds the key, so a deletion stays a deliberate tick. With
+ * `connection.use` the results of a Connection's calls exposed to outside clients are
  * copied to the computer that holds the key, a choice of its own that starts off
  * (connections-and-secrets.md, Exposure to outside clients). The instance level and the
  * account and workspaces level are no part of such a key.
  */
 export function connectKeyActions(offer: PersonalKeyPlaceOffer): string[] {
   return [
-    ...offer.actions,
+    ...offer.actions.filter((action) => !action.endsWith(".delete")),
     ...offer.useActions.filter((action) => action !== CONNECTION_ACTIONS.use)
   ];
 }

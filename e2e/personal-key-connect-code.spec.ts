@@ -6,8 +6,8 @@ import { expect, test } from "./test";
 
 // A Builder and Publisher of one Shared Workspace confirms the connect code `catalyst setup`
 // starts without touching a box. The page offers only the rights the person holds, every one
-// ticked but `connection.use`, so the confirmation is never refused for a right the screen
-// ticked, and the key the CLI collects carries no deletion: neither bundle deletes.
+// ticked but deleting and `connection.use`, so the confirmation is never refused for a right
+// the screen ticked, and the key the CLI collects carries no deletion: neither bundle deletes.
 //
 // The key is read from the collection answer into memory only: it is never printed, attached or
 // shot, and it is revoked through the signed-in session at the end. A trace would record the

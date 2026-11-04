@@ -203,14 +203,14 @@ describe("personal API key model", () => {
     });
   });
 
-  it("starts a connect code's key with every right offered but connection.use", () => {
+  it("starts a connect code's key with every right offered but deleting and connection.use", () => {
     expect(connectKeyActions({ actions: [], useActions: [] })).toEqual([]);
     expect(
       connectKeyActions({
         actions: ["agent.read", "agent.write", "agent.delete", "workflow.publish"],
         useActions: ["connection.use", "workflow.use"]
       })
-    ).toEqual(["agent.read", "agent.write", "agent.delete", "workflow.publish", "workflow.use"]);
+    ).toEqual(["agent.read", "agent.write", "workflow.publish", "workflow.use"]);
   });
 
   it("keeps ticked only what the person holds where the key is limited", () => {
@@ -1098,9 +1098,9 @@ describe("You > API keys, for a person and an admin alike", () => {
   });
 
   // Replaces e2e/personal-api-keys.spec.ts "a CLI's connect code starts with no scope ticked
-  // and gets exactly the scopes ticked": it starts with every right offered, None unticks them
-  // and Select all ticks them again.
-  it("a CLI's connect code starts with every right offered ticked and confirms exactly the scopes ticked", async () => {
+  // and gets exactly the scopes ticked": it starts with every right offered but deleting, None
+  // unticks them and Select all ticks every one, deleting too.
+  it("a CLI's connect code starts with every right offered but deleting ticked and confirms exactly the scopes ticked", async () => {
     const confirmed: ConfirmConnectCodeRequest[] = [];
     const mounted = await mountPage(
       settingsPageContext(createApiClient({ baseUrl: SETTINGS_INSTANCE_URL, fetchImpl: fetch })),
@@ -1125,8 +1125,12 @@ describe("You > API keys, for a person and an admin alike", () => {
     try {
       const boxes = () => [...mounted.container.querySelectorAll('[role="checkbox"]')];
       const ticked = () => boxes().filter((box) => box.getAttribute("aria-checked") === "true");
-      expect(ticked().length).toBe(boxes().length);
-      expect(buttonNamed("Select all", mounted.container).disabled).toBe(true);
+      const deletes = ["Delete agents", "Delete skills"];
+      for (const label of deletes) {
+        expect(scopeBox(mounted.container, label).getAttribute("aria-checked")).toBe("false");
+      }
+      expect(ticked().length).toBe(boxes().length - deletes.length);
+      expect(buttonNamed("Select all", mounted.container).disabled).toBe(false);
       await act(async () => {
         buttonNamed("None", mounted.container).click();
       });
