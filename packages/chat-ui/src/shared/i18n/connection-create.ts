@@ -156,7 +156,7 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.addHeading": "Add tools",
     "connectionCreate.addText":
       "A REST API does not name its tools. Decide what this connection reads.",
-    "connectionCreate.draftTitle": "Draft with Workshaper",
+    "connectionCreate.draftTitle": "Draft with the agent",
     "connectionCreate.draftText":
       "It reads the API description and proposes tools. You review them.",
     "connectionCreate.draftRequest":
@@ -381,7 +381,7 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.addHeading": "Tools hinzufügen",
     "connectionCreate.addText":
       "Eine REST-API nennt ihre Tools nicht selbst. Leg fest, was diese Verbindung liest.",
-    "connectionCreate.draftTitle": "Mit Workshaper entwerfen",
+    "connectionCreate.draftTitle": "Mit dem Agenten entwerfen",
     "connectionCreate.draftText":
       "Liest die API-Beschreibung und schlägt Tools vor. Du prüfst sie.",
     "connectionCreate.draftRequest":

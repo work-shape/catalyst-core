@@ -323,7 +323,7 @@ async function removeConnection(page: Page, id: string): Promise<void> {
         "POST /api/v1/connections/:name/test",
         "PUT /api/v1/assets/connection/:name"
       ]);
-      // "Draft with Workshaper" opens the chat beside the page with the request typed.
+      // "Draft with the agent" opens the chat beside the page with the request typed.
       await main.locator("[data-connection-draft]").getByRole("button").click();
       await expect
         .poll(() =>
@@ -483,7 +483,7 @@ async function shootModes(page: Page, locale: Locale, name: string): Promise<voi
     try {
       await page.goto(`/build/connections/${existing}`);
       const main = page.getByRole("region", { name: "Studio" });
-      // "Draft with Workshaper" opens the chat beside the page; the agent answers a card.
+      // "Draft with the agent" opens the chat beside the page; the agent answers a card.
       await main.locator("[data-connection-draft]").getByRole("button").click();
       await expect
         .poll(() =>
