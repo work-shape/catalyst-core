@@ -521,14 +521,17 @@ export function PageHeader({
       <PageHeaderControlSizeContext.Provider value={compact ? "sm" : "md"}>
         <header
           data-variant={variant}
+          data-compact={compact ? "" : undefined}
           // A `PageOutline` measures the pinned head: what it scrolls to rests below it.
           data-page-head=""
           ref={fold.head}
           className={cn(
             "sticky top-0 z-(--layer-sticky-header) flex min-h-(--layout-header) min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b bg-background px-(--layout-gutter) py-1",
             // Beside a name that keeps its least width the actions stay on its line in a wide
-            // window; where they would cut the name to a few letters, they go under it.
-            fold.crowded ? undefined : "md:flex-nowrap",
+            // window; where they would cut the name to a few letters, they go under it. A
+            // compact head stays one row at any width: the secondary actions fold into the
+            // menu and the name is cut.
+            compact ? "flex-nowrap" : fold.crowded ? undefined : "md:flex-nowrap",
             // The compact head's row is lower; what is measured against the head's height
             // inside it follows.
             compact && "[--layout-header:var(--layout-header-compact)]",

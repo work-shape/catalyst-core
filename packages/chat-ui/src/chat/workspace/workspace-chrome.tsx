@@ -295,6 +295,9 @@ export function WorkspaceChrome({
         // bands of their own.
         !conversation &&
           "group-has-[[data-page-head][data-variant=detail]]/workspace-content:bg-transparent group-has-[[data-page-head][data-variant=detail]]/workspace-content:after:hidden",
+        // Over a compact head the button stays level with the head's lower row.
+        !conversation &&
+          "group-has-[[data-page-head][data-compact]]/workspace-content:h-(--layout-header-compact)",
         !conversation &&
           "group-has-[[data-subrail-title]]/workspace-content:bg-transparent group-has-[[data-subrail-title]]/workspace-content:after:hidden",
         // Beside a surface the header is a band like the surface's own: one line runs across

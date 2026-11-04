@@ -578,6 +578,43 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   };
   await viewReady();
   await shoot(page, "app-view", MAIN, viewReady);
+  // The App takes the window: a slim head, and the frame from under it to the bottom edge with
+  // nothing around it, so only the App scrolls.
+  for (const [width, height] of [
+    [1280, 800],
+    [390, 844]
+  ] as const) {
+    for (const theme of ["light", "dark"] as const) {
+      await page.evaluate(
+        (value) => window.localStorage.setItem("vivd-catalyst:theme", value),
+        theme
+      );
+      await page.setViewportSize({ width, height });
+      await page.reload();
+      await viewReady();
+      const view = page.getByTestId("app-view");
+      const head = await view.locator("header[data-page-head]").boundingBox();
+      const frame = await view.getByTestId("page-preview-frame").boundingBox();
+      const area = await view.boundingBox();
+      expect(head && frame && area).toBeTruthy();
+      if (!head || !frame || !area) continue;
+      expect(head.height).toBeLessThanOrEqual(48);
+      expect(Math.abs(frame.y - (head.y + head.height))).toBeLessThanOrEqual(1);
+      expect(Math.abs(frame.x - area.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(frame.width - area.width)).toBeLessThanOrEqual(1);
+      expect(Math.abs(frame.y + frame.height - height)).toBeLessThanOrEqual(1);
+      if (shotsDir) {
+        await page.screenshot({
+          path: join(shotsDir, `app-view-fill-${theme}-${width}.png`),
+          animations: "disabled"
+        });
+      }
+    }
+  }
+  await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:theme", "light"));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.reload();
+  await viewReady();
   // Copy link puts the App's address on the clipboard and says so in place for a moment.
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.getByTestId("app-view").getByRole("button", { name: "More actions" }).click();

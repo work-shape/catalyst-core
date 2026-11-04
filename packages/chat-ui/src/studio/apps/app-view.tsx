@@ -192,7 +192,8 @@ export function AppViewFrame({
     rights.write && draftShown ? (
       <Button variant="outline" size="sm" onClick={onEdit}>
         <Pencil aria-hidden="true" />
-        {t("apps.edit")}
+        {/* In a narrow frame Edit is its icon, so the App's name keeps its room. */}
+        <span className="@max-md/app-frame:sr-only">{t("apps.edit")}</span>
       </Button>
     ) : rights.read ? null : (
       <CopyAppLinkButton workspaceId={workspace.id} app={app} />
