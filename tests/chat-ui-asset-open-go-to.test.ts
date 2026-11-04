@@ -61,6 +61,7 @@ async function mountChip() {
     showChat: vi.fn(),
     conversationId: "conv_1",
     tab: "build" as const,
+    buildConversationId: "conv_1",
     tryAgent: undefined,
     showTry: vi.fn(),
     showBuild: vi.fn(),

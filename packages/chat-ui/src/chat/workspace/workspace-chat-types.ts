@@ -76,6 +76,10 @@ interface DockChatModel {
   open(): void;
   /** Starts a new conversation for the page in the dock. */
   newChat(): void;
+  /** An agent that holds the platform's building tools is offered to the person here. */
+  builds: boolean;
+  /** Starts the page's own conversation, such as about its asset; absent where it offers none. */
+  startPageChat: (() => void) | undefined;
   /** Where the page on screen offers its own conversation, such as about its asset. */
   offerPageChat(chat: DockPageChat | undefined): void;
   /** Where the page on screen builds: the owner Studio is set to. */

@@ -7,6 +7,7 @@ import { defineTranslations } from "./translation-area";
 export const dock = defineTranslations({
   en: {
     "dock.answerRunning": "an answer is running",
+    "dock.buildUnoffered": "No agent that builds is offered here; an admin can offer one.",
     "dock.chat": "Chat",
     "dock.chatHint": "Open the chat",
     "dock.close": "Close chat",
@@ -88,6 +89,8 @@ export const dock = defineTranslations({
   },
   de: {
     "dock.answerRunning": "eine Antwort läuft",
+    "dock.buildUnoffered":
+      "Hier wird kein Agent zum Bauen angeboten; ein Admin kann einen anbieten.",
     "dock.chat": "Chat",
     "dock.chatHint": "Chat öffnen",
     "dock.close": "Chat schließen",

@@ -188,8 +188,9 @@ function mountShell(input: {
   route: WorkspaceRoute;
   chat: string | undefined;
   target: AgentTryTarget | undefined;
+  startBuild?: () => void;
 }) {
-  const seen: { dock?: Dock; agentTry?: Try; open?: () => void } = {};
+  const seen: { dock?: Dock; agentTry?: Try; open?: () => void; openPage?: Dock["openPage"] } = {};
   const routeChanges: Array<{ route: WorkspaceRoute; chat?: string }> = [];
   function Shell({ route, chat, target }: Omit<typeof input, "client">): ReactNode {
     const { dock } = useWorkspaceDock({
@@ -197,7 +198,8 @@ function mountShell(input: {
       chat,
       onRouteChange: (next, options) => routeChanges.push({ route: next, chat: options?.chat })
     });
-    const agentTry = useAgentTry({ client: input.client, dock });
+    seen.openPage = dock.openPage;
+    const agentTry = useAgentTry({ client: input.client, dock, startBuild: input.startBuild });
     seen.dock = dock;
     seen.agentTry = agentTry;
     return createElement(
@@ -293,6 +295,42 @@ describe("Build and Try in the dock on an agent's page", () => {
     // Build without a conversation is the empty dock, open for one to start.
     act(() => shell.seen.agentTry?.view?.select("build"));
     expect(shell.seen.dock).toMatchObject({ open: true, tab: "build", conversationId: undefined });
+  });
+
+  it("starts the page's conversation about the agent where Build has none, Try in front till then", async () => {
+    // The conversation about the agent, with the agent that builds: the page's own "Chat".
+    const startBuild = vi.fn();
+    const { client } = tryClient(["conv_try"]);
+    const shell = mountShell({
+      client,
+      route: AGENT_PAGE,
+      chat: undefined,
+      target: target(3),
+      startBuild
+    });
+    act(() => shell.seen.open?.());
+    await settle();
+    expect(shell.seen.dock).toMatchObject({ tab: "try", buildConversationId: undefined });
+
+    act(() => shell.seen.agentTry?.view?.select("build"));
+    expect(startBuild).toHaveBeenCalledTimes(1);
+    // Never an empty Build with whatever agent is picked: Try stays until the conversation is there.
+    expect(shell.seen.dock).toMatchObject({ tab: "try", conversationId: "conv_try" });
+
+    // The conversation started puts itself into the dock on the page: Build shows it.
+    act(() => shell.seen.openPage?.(AGENT_PAGE, "conv_about"));
+    shell.render({ route: AGENT_PAGE, chat: "conv_about", target: target(3) });
+    expect(shell.seen.dock).toMatchObject({
+      tab: "build",
+      conversationId: "conv_about",
+      buildConversationId: "conv_about"
+    });
+
+    // With a Build conversation, Build shows it and starts none.
+    act(() => shell.seen.agentTry?.view?.select("try"));
+    act(() => shell.seen.agentTry?.view?.select("build"));
+    expect(shell.seen.dock?.conversationId).toBe("conv_about");
+    expect(startBuild).toHaveBeenCalledTimes(1);
   });
 
   it("shows Build on another page and offers nothing without the write right", async () => {
@@ -526,6 +564,7 @@ describe("Try's conversation outside the lists", () => {
         dock: {
           conversationId: "conv_try",
           tab: tryAgent === undefined ? "build" : "try",
+          buildConversationId: undefined,
           tryAgent,
           open: true,
           inFront: true,
@@ -658,6 +697,7 @@ describe.each<{
   const dock = (tab: Dock["tab"]): Dock => ({
     conversationId: tab === "try" ? "conv_try" : "conv_build",
     tab,
+    buildConversationId: "conv_build",
     tryAgent: tab === "try" ? "quote_bot" : undefined,
     open: true,
     inFront: true,

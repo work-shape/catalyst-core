@@ -205,23 +205,21 @@ const BUILD_PATH_KINDS: Readonly<Record<string, string>> = {
   "knowledge-bases": KNOWLEDGE_BASE_ASSET_KIND
 };
 
-/** The kind of asset a page is about, where the dock beside it builds or changes one. */
+/**
+ * The kind a new asset of which the dock builds: the kind of a list page, where the page of a
+ * new asset stands too, as it has no address before its first save. The page of an existing
+ * asset has none: a conversation about that asset says so by its subject, and a conversation
+ * without one there builds nothing new.
+ */
 export function dockKindOfRoute(route: WorkspaceRoute): string | undefined {
   switch (route.kind) {
     case "apps":
-    case "app":
-    case "app-edit":
       return APP_ASSET_KIND;
     case "workflows":
-    case "workflow":
-    case "workflow-runs":
-    case "workflow-run":
-    case "workflow-settings":
       return WORKFLOW_ASSET_KIND;
     case "agents":
       return "agent";
     case "build-kind":
-    case "build-asset":
       return BUILD_PATH_KINDS[route.assetKind] ?? route.assetKind;
     default:
       return undefined;

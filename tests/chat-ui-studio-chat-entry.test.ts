@@ -242,7 +242,7 @@ describe("where the empty dock says a new asset is created", () => {
   it("reads the kind from Studio's list address", () => {
     expect(dockKindOfRoute({ kind: "build-kind", assetKind: "agents" })).toBe("agent");
     expect(dockKindOfRoute({ kind: "build-kind", assetKind: "data-stores" })).toBe("data_store");
-    expect(dockKindOfRoute({ kind: "build-asset", assetKind: "skills", name: "s" })).toBe("skill");
+    expect(dockKindOfRoute({ kind: "build-kind", assetKind: "skills" })).toBe("skill");
   });
 });
 
