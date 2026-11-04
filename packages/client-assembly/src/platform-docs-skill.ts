@@ -22,6 +22,10 @@ const SECTION_HEADINGS: ReadonlyMap<string, string> = new Map([
 
 const referencePath = (page: string) => `references/${page}.md`;
 
+/** The decision an agent follows before it puts data anywhere; the page is "Where data belongs". */
+const WHERE_DATA_BELONGS =
+  "Where data belongs, before you build: a skill folder holds instructions, small fixed reference files (2 MiB a file, 8 MiB and 500 files a skill) and offline calculators; its scripts run in the sandbox with no network, no secrets and no tools, so never fetch with curl in a script and never put a corpus in a skill. A larger or changing corpus (statutes, manuals, document collections) is a Knowledge Base, filled by upload, a synced document source such as Dropbox, or a Workflow that calls its ingest operation; cite with dates. Records people or Apps write are a Data Store. An outside system or anything with a credential is a Connection, used by the agent or a Workflow and never by a skill script; an App reaches it only through a named action. A PDF or file from an App is generated in the browser with a bundled library and downloaded. Details: references/configure/where-data-belongs.md.";
+
 /** The section of a page: its first folder, or "Pages" for one at the top. */
 const sectionOf = (page: string) =>
   page.includes("/") ? page.slice(0, page.indexOf("/")) : "Pages";
@@ -32,6 +36,7 @@ const content = [
   "The product documentation of this platform's release, one reference file per page. Read the page that answers the question with read_skill, naming this skill and the page's path as `resourcePath`. Read a reference once per conversation while its contents remain in context; return to the relevant page only when you need information no longer available. A link in a page such as `/configure/build/` is the reference `references/configure/build.md`.",
   "",
   "The App guide has one page per task under references/apps/: read only the page the task needs, as the index below describes. Sandbox rules: allow-scripts allow-forms allow-downloads without allow-same-origin; preventDefault in submit handlers and form-action 'none' blocks form targets. Use awaited kit storage.get/set for small JSON state and Data Stores for shared records. Credentials and platform calls go through named actions; bundle fonts and libraries instead of loading CDNs.",
+  WHERE_DATA_BELONGS,
   renderRuntimeRules(),
   "The docs describe the product. What exists on this instance and what the user may do here, ask the platform's tools.",
   ...[

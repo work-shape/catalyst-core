@@ -105,6 +105,8 @@ Which stylesheet an HTML file gets is decided per file by what its scripts impor
 
 ## Fonts and libraries
 
+A PDF or another file an App makes is generated in the browser with a bundled library and offered as a download: see [Where data belongs](/configure/where-data-belongs/#a-file-an-app-makes).
+
 Put fonts and libraries in the App's folder or use the kit's; an outside address (Google Fonts, Adobe Fonts or a CDN) will not load.
 
 Kit 1.6.0 and later supply Inter (400, 600, 700), Lora (400, 700 and 400 italic), IBM Plex Mono (400, 600) and Bungee (400), with Latin coverage including German: link `/app-runtime/kit/1.9.0/fonts/fonts.css` and use the family name in CSS. The font sources and licences are in `/app-runtime/kit/1.9.0/fonts/README.md`.

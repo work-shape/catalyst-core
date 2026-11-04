@@ -166,6 +166,8 @@ A Knowledge Base of documents made on its page with **New knowledge base** (**Ne
 
 ### The files of a skill
 
+Keep instructions, small fixed reference files and offline calculators in the folder. A corpus such as statutes or manuals goes into a Knowledge Base, records into a Data Store, and a call with a credential into a Connection: [Where data belongs](/configure/where-data-belongs/).
+
 A skill's page shows the skill as a folder under **Files**: `SKILL.md`, which holds the instructions, and the files below `references/`, `scripts/` and `assets/`. The **+** of a folder uploads a file into it or starts a new, empty one; the type of a file is read from its name. A text file, such as a reference or a script, is edited in place. Any file can be renamed, replaced with a new version, downloaded and deleted, and the page shows its size and, once saved, its SHA-256 hash. A file that is not text is not shown, only replaced.
 
 The changes are saved with the save bar like any other field. Where a file beside the instructions changed, the save writes the whole folder; otherwise it writes the text alone and the other files stay. The instance holds the limits and says which one a save broke, with the path of the file: a file of more than 2 MiB, more than 500 files or 8 MiB in a skill, a compiled program, or a file under `scripts/` that is not UTF-8 text. See [A skill as a folder of files](/configure/config-assets/#a-skill-as-a-folder-of-files).

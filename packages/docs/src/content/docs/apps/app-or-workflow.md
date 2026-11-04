@@ -22,6 +22,8 @@ Not in this release: the `decision` action and the `code` action. The build refu
 
 ## Outside data
 
+Where data, files and credentials belong at all is on [Where data belongs](/configure/where-data-belongs/).
+
 An API that needs a key, has no CORS or is also used by a Workflow is an `http_api` Connection, called through a `connection` action ([connect a system](/configure/build/#connecting-an-outside-system)). A public API only the App calls is a host in the App's `externalHosts`. In this release such a host takes effect when the App is published: its draft and the preview cannot reach it yet.
 
 ## The order to build in
