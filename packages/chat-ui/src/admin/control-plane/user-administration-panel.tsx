@@ -79,8 +79,11 @@ interface UserAdministrationPanelProps {
   onSendInvitation?(userId: string): Promise<unknown>;
   /** The effective rights of one person, shown read-only on the person's page. */
   userRights?(userId: string): ReactNode;
-  /** The custom roles of one person, given and taken on the person's page. */
-  userRoles?(user: AdministeredUser): ReactNode;
+  /**
+   * The custom roles of one person, given and taken on the person's page; `disabledReason` says
+   * why the viewer changes nothing of this person.
+   */
+  userRoles?(user: AdministeredUser, disabledReason: string | undefined): ReactNode;
   /** The names of the custom roles, by id, for the role filter. */
   customRoleNames?: ReadonlyMap<string, string>;
   /** A deactivated person's scheduled prompts, to hand over or delete; shown on their page. */
@@ -149,7 +152,11 @@ export function UserAdministrationPanel({
         onResetTwoFactor={selectedUser.id === viewerId ? undefined : onResetTwoFactor}
         onSendInvitation={onSendInvitation}
         rights={userRights?.(selectedUser.id)}
-        roles={userRoles?.(selectedUser)}
+        roles={
+          userRoles === undefined
+            ? undefined
+            : (disabledReason) => userRoles(selectedUser, disabledReason)
+        }
         scheduledStarts={
           selectedUser.status === "disabled" ? ownedScheduledStarts?.(selectedUser) : undefined
         }

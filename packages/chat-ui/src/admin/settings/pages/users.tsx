@@ -68,7 +68,7 @@ export function UsersPage() {
       }
       userRights={(userId) => <UserEffectiveRightsCard key={userId} holderId={userId} />}
       customRoleNames={customRoleNames}
-      userRoles={(person) => (
+      userRoles={(person, disabledReason) => (
         <UserRolesCard
           key={`roles-${person.id}`}
           user={person}
@@ -78,11 +78,7 @@ export function UsersPage() {
             superadmin: viewerIsSuperadmin,
             rights: ownRights.error === null ? ownRights.data : undefined
           }}
-          disabledReason={
-            !viewerIsSuperadmin && person.roles.includes("superadmin")
-              ? t("settings.userSuperadminOnly")
-              : undefined
-          }
+          disabledReason={disabledReason}
           instanceAdminName={user.instanceAdminName}
           onSetRoles={(userId, roles) =>
             userMutations.updateUser.mutateAsync({ userId, update: { roles } })

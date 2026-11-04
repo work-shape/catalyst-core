@@ -64,7 +64,7 @@ export function UserDetail({
   /** The person's effective rights with where each comes from; read-only. */
   rights?: ReactNode;
   /** The custom roles the person holds beside the built-in one, to give and take. */
-  roles?: ReactNode;
+  roles?(disabledReason: string | undefined): ReactNode;
   /** A deactivated person's scheduled prompts, to hand over or delete. */
   scheduledStarts?: ReactNode;
   mutating: boolean;
@@ -123,7 +123,7 @@ export function UserDetail({
             mutating={mutating}
             onUpdateUser={onUpdateUser}
           />
-          {roles}
+          {roles?.(managementDisabledReason)}
           <UserPermissionsCard
             user={user}
             canManageSuperadminAccess={canManageSuperadminAccess}

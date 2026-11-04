@@ -30,8 +30,8 @@ export interface RolePeopleSource {
 
 /**
  * Who holds a custom role (P30): each person with a way to take it from them, and a picker of
- * the active people who do not hold it yet. Only a Superadmin's own account is out of reach of
- * an editor who is none.
+ * the active people who do not hold it yet. The server refuses what the editor may not do, such
+ * as changing a Superadmin's roles, and the page says its refusal.
  */
 export function RolePeople({
   role,
@@ -53,10 +53,7 @@ export function RolePeople({
   const users = people.users;
   const holders = (users ?? []).filter((user) => user.roles.includes(role.id));
   const candidates = (users ?? []).filter(
-    (user) =>
-      user.status === "active" &&
-      !user.roles.includes(role.id) &&
-      (editor.superadmin || !user.roles.includes("superadmin"))
+    (user) => user.status === "active" && !user.roles.includes(role.id)
   );
 
   const change = (user: AdministeredUser, roles: string[]) => {
@@ -122,7 +119,7 @@ export function RolePeople({
                 description={user.email}
                 actionsVisible
                 actions={
-                  assignable && (editor.superadmin || !user.roles.includes("superadmin")) ? (
+                  assignable ? (
                     <IconButton
                       size="sm"
                       label={t("access.rolePeopleRemove", { role: name, name: user.displayLabel })}
