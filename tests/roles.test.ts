@@ -10,7 +10,9 @@ import { ROLE_DEFAULT_ACTIONS } from "@work-shape/catalyst-core";
 import { migrateDatabase } from "@work-shape/catalyst-postgres-store";
 import {
   clientInstanceId,
+  errorSchema,
   setupAccessInstance,
+  skill,
   type AccessInstance
 } from "./support/access-instance";
 import { appFiles, expectStatus, setupAppInstance } from "./support/app-instance";
@@ -822,6 +824,108 @@ describe("custom roles", () => {
           metadata: { roleId: created.id, operationRunId: expect.any(String) }
         }
       ]);
+    }
+  });
+
+  it("lets every holder edit and publish the one agent and skill it names, and no other", async () => {
+    const t = await setup();
+    for (const name of ["newsroom", "other"]) await t.putAgent(t.admin.id, name);
+    for (const name of ["newsroom-style", "other-style"]) {
+      await t.expectOk(t.admin.id, "assets.put", {
+        params: { kind: "skill", name },
+        payload: { config: skill(name) }
+      });
+    }
+    const onAsset = async (kind: string, name: string) => {
+      const scopeId = await t.assetId(kind, name);
+      return ["read", "write", "publish"].map((verb) => ({
+        action: `${kind}.${verb}`,
+        effect: "allow",
+        scopeKind: "asset",
+        scopeId
+      }));
+    };
+    const grants = [
+      ...(await onAsset("agent", "newsroom")),
+      ...(await onAsset("skill", "newsroom-style"))
+    ];
+    const created = roleSchema.parse(
+      (
+        await t.expectOk(t.admin.id, "roles.create", {
+          payload: { name: "Editorial", grants }
+        })
+      ).json()
+    );
+    expect(created.grants).toEqual(grants);
+    // The event names the role and each grant by its ids, never an asset's content.
+    const [event] = await auditOf(t, "role.created");
+    expect(event?.metadata).toMatchObject({ roleId: created.id, added: grants, removed: [] });
+    for (const holder of [t.kai, t.lena]) {
+      await t.expectOk(t.admin.id, "users.update", {
+        params: { userId: holder.id },
+        payload: { roles: ["user", created.id] }
+      });
+    }
+
+    const live = async (kind: string, name: string) => {
+      const asset = await t.stores.configAssets.getConfigAsset({ clientInstanceId, kind, name });
+      if (!asset) throw new Error(`No ${kind} '${name}'`);
+      return asset;
+    };
+    const edit = async (userId: string, kind: string, name: string, change: string) => {
+      const asset = await live(kind, name);
+      return t.call(userId, "assets.put", {
+        params: { kind, name },
+        payload: {
+          config:
+            kind === "agent"
+              ? { ...asset.config, instructions: change }
+              : { ...asset.config, content: change },
+          expectedRevision: asset.revision
+        }
+      });
+    };
+    const publish = async (userId: string, kind: string, name: string, revision: number) =>
+      t.call(userId, "assets.publish", { params: { kind, name }, payload: { revision } });
+    const revisionSchema = z
+      .object({ revision: z.number(), draftRevision: z.number().optional() })
+      .loose();
+
+    for (const [holder, change] of [
+      [t.kai, "Kai's change"],
+      [t.lena, "Lena's change"]
+    ] as const) {
+      for (const [kind, name] of [
+        ["agent", "newsroom"],
+        ["skill", "newsroom-style"]
+      ] as const) {
+        const edited = await edit(holder.id, kind, name, change);
+        expect(edited.statusCode, edited.body).toBe(200);
+        const written = revisionSchema.parse(edited.json());
+        const published = await publish(
+          holder.id,
+          kind,
+          name,
+          written.draftRevision ?? written.revision
+        );
+        expect(published.statusCode, published.body).toBe(200);
+        const { config } = await live(kind, name);
+        expect(kind === "agent" ? config?.instructions : config?.content).toBe(change);
+      }
+      for (const [kind, name] of [
+        ["agent", "other"],
+        ["skill", "other-style"]
+      ] as const) {
+        const before = await live(kind, name);
+        const refused = await edit(holder.id, kind, name, "Not theirs");
+        expect(refused.statusCode, refused.body).toBe(403);
+        expect(errorSchema.parse(refused.json()).error.details).toMatchObject({
+          action: `${kind}.write`
+        });
+        const notPublished = await publish(holder.id, kind, name, before.revision);
+        expect(notPublished.statusCode, notPublished.body).toBe(403);
+        expect(await live(kind, name)).toEqual(before);
+      }
     }
   });
 

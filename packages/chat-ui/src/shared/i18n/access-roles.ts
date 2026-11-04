@@ -60,6 +60,12 @@ export const accessRoles = defineTranslations({
     "access.areaEdit": "Edit",
     "access.areaEditLabel": "Edit the rights for {area}",
     "access.areaRemoveLabel": "Remove a right for {area}",
+    "access.areaAdd": "Add",
+    "access.areaAddLabel": "Add a right for {area} in one workspace or on one asset",
+    "access.roleGrantDialogTitle": "New right in {role}",
+    "access.roleGrantDialogDescription":
+      "Gives everybody who holds the role a level of rights in one workspace or on one asset.",
+    "access.roleGrantIncomplete": "Choose a level and where it applies.",
     "access.areaDialogTitle": "{area} in {role}",
     "access.areaDialogDescription":
       "Each right you tick applies across all workspaces. Rights in one workspace or on one asset, and refusals, stay as they are.",
@@ -159,6 +165,13 @@ export const accessRoles = defineTranslations({
     "access.areaEdit": "Bearbeiten",
     "access.areaEditLabel": "Rechte für {area} bearbeiten",
     "access.areaRemoveLabel": "Ein Recht für {area} entfernen",
+    "access.areaAdd": "Hinzufügen",
+    "access.areaAddLabel":
+      "Ein Recht für {area} in einem Arbeitsbereich oder für ein Asset hinzufügen",
+    "access.roleGrantDialogTitle": "Neues Recht in {role}",
+    "access.roleGrantDialogDescription":
+      "Gibt allen mit der Rolle eine Stufe von Rechten in einem Arbeitsbereich oder für ein Asset.",
+    "access.roleGrantIncomplete": "Wähle eine Stufe und wo sie gilt.",
     "access.areaDialogTitle": "{area} in {role}",
     "access.areaDialogDescription":
       "Jedes Recht, das du ankreuzt, gilt für alle Arbeitsbereiche. Rechte in einem Arbeitsbereich oder für ein Asset und Verweigerungen bleiben, wie sie sind.",

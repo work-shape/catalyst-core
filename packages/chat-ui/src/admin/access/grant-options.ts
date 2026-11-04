@@ -1,4 +1,4 @@
-import type { EffectivePermissions } from "@work-shape/catalyst-api-client";
+import type { ConfigAssetSummary, EffectivePermissions } from "@work-shape/catalyst-api-client";
 import {
   authorizeHeldRights,
   explainAccessEntries,
@@ -14,7 +14,8 @@ import {
   grantVerbs,
   type GrantKind,
   type GrantScopeKind,
-  type GrantVerb
+  type GrantVerb,
+  type LoadFailure
 } from "./access-model";
 
 /** One existing place a right may name, with the resource the resolver checks. */
@@ -28,6 +29,39 @@ export interface GrantChoice {
 export interface GrantChoices {
   items: readonly GrantChoice[] | undefined;
   failed: boolean;
+}
+
+/**
+ * What the New right dialog picks from, by kind: the agents and skills of the agent
+ * configuration, and the assets of every further kind, which win where both name a kind.
+ */
+export function grantChoiceAssets(
+  assets: readonly ConfigAssetSummary[] | undefined,
+  assetsFailure: LoadFailure | undefined,
+  kindAssets: Partial<Record<GrantKind, GrantChoices>> | undefined
+): Partial<Record<GrantKind, GrantChoices>> {
+  return {
+    ...Object.fromEntries(
+      (["agent", "skill"] as const).map((kind) => [
+        kind,
+        {
+          items: assets?.flatMap((asset) =>
+            asset.kind === kind && asset.id !== undefined
+              ? [
+                  {
+                    id: asset.id,
+                    name: asset.name,
+                    resource: { kind, name: asset.name, assetId: asset.id }
+                  }
+                ]
+              : []
+          ),
+          failed: assetsFailure !== undefined
+        }
+      ])
+    ),
+    ...kindAssets
+  };
 }
 
 /**

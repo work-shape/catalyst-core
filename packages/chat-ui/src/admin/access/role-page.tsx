@@ -1,7 +1,7 @@
 // @rights-screen: included in the rights wording guard.
-import { ArrowLeft, Ban, Ellipsis, PencilLine, RotateCcw, Undo2 } from "lucide-react";
+import { ArrowLeft, Ban, Ellipsis, PencilLine, Plus, RotateCcw, Undo2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import type { Role } from "@work-shape/catalyst-api-client";
+import type { ConfigAssetSummary, Role } from "@work-shape/catalyst-api-client";
 import type { RolePendingDecision } from "@work-shape/catalyst-core";
 import {
   Badge,
@@ -25,6 +25,9 @@ import {
 } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { refusalAskingInstanceAdmin } from "../settings/ask-instance-admin";
+import type { GrantKind, LoadFailure } from "./access-model";
+import { GrantDialog } from "./grant-dialog";
+import { grantChoiceAssets, grantOptions, type GrantChoices } from "./grant-options";
 import { rightSentenceKey } from "./grant-words";
 import { rightAreaLabelKey } from "./effective-rights-model";
 import { grantSentences, scopeLabel, type ScopeNames } from "./grant-sentences";
@@ -38,6 +41,7 @@ import {
   roleAreaOf,
   roleGrantsByArea,
   withAreaAllows,
+  withPlaceGrants,
   withoutGrant,
   type RightLock,
   type RoleArea,
@@ -50,6 +54,7 @@ import {
   roleDescription,
   roleFailureText,
   roleName,
+  roleRefusalText,
   type RoleWrites
 } from "./role-parts";
 import { RolePeople, type RolePeopleSource } from "./role-people";
@@ -67,6 +72,17 @@ function sentenceStart(text: string): string {
   return text.charAt(0).toLocaleUpperCase() + text.slice(1);
 }
 
+/** What a right in one workspace or on one asset is picked from, as on the Rights tab. */
+export interface RoleGrantSource {
+  /** The active agents and skills; absent while they load or when they could not be loaded. */
+  assets: readonly ConfigAssetSummary[] | undefined;
+  assetsFailure: LoadFailure | undefined;
+  /** The assets of every kind a right can name, by kind. */
+  kindAssets: Partial<Record<GrantKind, GrantChoices>>;
+  /** The Shared Workspaces, for a right on what one workspace owns. */
+  workspaces?: GrantChoices;
+}
+
 export interface RolePageProps extends Pick<RoleWrites, "onUpdate" | "onReset" | "onDecide"> {
   role: Role;
   editor: RoleEditor;
@@ -79,6 +95,8 @@ export interface RolePageProps extends Pick<RoleWrites, "onUpdate" | "onReset" |
   dialogs?: ReactNode;
   /** The people of the instance, for who holds a custom role. */
   people?: RolePeopleSource;
+  /** What a right in one place is picked from; absent, the page adds none. */
+  grantSource?: RoleGrantSource;
   /** A write of the tab that failed, such as a delete. */
   failure?: string;
   onDismissFailure?(): void;
@@ -86,9 +104,10 @@ export interface RolePageProps extends Pick<RoleWrites, "onUpdate" | "onReset" |
 
 /**
  * One role's page: its rights by area, each area in sentences as the Rights tab says a person's
- * rows. Who may change the role edits an area's rights on the whole instance and removes any
- * grant; `user` and `admin` are reset to their default and decide what a release brought;
- * `superadmin` is read-only.
+ * rows. Who may change the role edits an area's rights on the whole instance, adds a right in
+ * one workspace or on one asset with the Rights tab's dialog, and removes any grant; `user` and
+ * `admin` are reset to their default and decide what a release brought; `superadmin` is
+ * read-only.
  */
 export function RolePage({
   role,
@@ -103,6 +122,7 @@ export function RolePage({
   onDecide,
   dialogs,
   people,
+  grantSource,
   failure,
   onDismissFailure
 }: RolePageProps) {
@@ -110,6 +130,7 @@ export function RolePage({
   const name = roleName(role, t);
   const editable = canEditRole(role, editor);
   const [editingArea, setEditingArea] = useState<RoleArea | undefined>();
+  const [addingKind, setAddingKind] = useState<GrantKind | undefined>();
   const [removing, setRemoving] = useState<RoleGrant | undefined>();
   const [resetting, setResetting] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -118,6 +139,18 @@ export function RolePage({
   const fail = (cause: unknown) => setError(roleFailureText(cause, t, instanceAdminName));
   const areas = roleGrantsByArea(role.grants);
   const editableBuiltIn = role.builtIn && role.editable;
+  const choiceAssets =
+    grantSource === undefined
+      ? {}
+      : grantChoiceAssets(grantSource.assets, grantSource.assetsFailure, grantSource.kindAssets);
+  const options = grantOptions(editor.rights, choiceAssets, grantSource?.workspaces);
+  /** The kind of an area, where the editor can give a right of it in one workspace or on one asset. */
+  const placeKind = (area: RoleArea): GrantKind | undefined =>
+    grantSource === undefined
+      ? undefined
+      : options.kinds.find(
+          (kind) => kind === area && options.places(kind, []).some((place) => place !== "instance")
+        );
 
   const decide = (action: string, decision: RolePendingDecision) => {
     setDeciding(action);
@@ -212,6 +245,17 @@ export function RolePage({
             action={
               editable ? (
                 <div className="flex items-center gap-1">
+                  {placeKind(area) !== undefined ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={t("access.areaAddLabel", { area: areaName })}
+                      onClick={() => setAddingKind(placeKind(area))}
+                    >
+                      <Plus aria-hidden="true" />
+                      {t("access.areaAdd")}
+                    </Button>
+                  ) : null}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -298,6 +342,30 @@ export function RolePage({
           instanceAdminName={instanceAdminName}
           onSave={(grants) => onUpdate(role.id, { grants })}
           onClose={() => setEditingArea(undefined)}
+        />
+      ) : null}
+      {addingKind !== undefined && grantSource !== undefined ? (
+        <GrantDialog
+          users={undefined}
+          usersFailed={false}
+          assets={grantSource.assets}
+          assetsFailure={grantSource.assetsFailure}
+          kindAssets={choiceAssets}
+          options={options}
+          workspaces={grantSource.workspaces}
+          instanceAdminName={instanceAdminName}
+          role={{ id: role.id, name }}
+          kind={addingKind}
+          failureText={(error) => roleRefusalText(error, t, instanceAdminName)}
+          onGrant={async (requests) => {
+            const next = withPlaceGrants(
+              role.grants,
+              requests.map((request) => ({ ...request, effect: request.effect ?? "allow" }))
+            );
+            if (next.added > 0) await onUpdate(role.id, { grants: next.grants });
+            return { added: next.added, existing: next.existing };
+          }}
+          onClose={() => setAddingKind(undefined)}
         />
       ) : null}
       {removing ? (
