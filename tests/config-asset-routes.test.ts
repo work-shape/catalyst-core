@@ -948,29 +948,38 @@ describe("config asset admin routes", () => {
     const invalidMode = await setKai({ mode: "some" });
     expect(invalidMode.statusCode).toBe(422);
 
-    // The instance default agent must stay available everywhere, in both directions.
+    // The instance default agent stays available in every workspace that names no default of
+    // its own, in both directions.
     const hideDefault = await setKai({ mode: "selected", personalWorkspaces: true }, "assistant");
     expect(hideDefault.statusCode).toBe(422);
     expect(hideDefault.json()).toMatchObject({
       error: {
         code: "VALIDATION_FAILED",
-        message: "Default agent 'assistant' must be available in all workspaces"
+        message:
+          "Default agent 'assistant' must stay available in every workspace that names no default agent of its own: 'KAI'"
       }
     });
+    expect(
+      (await setKai({ mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }))
+        .statusCode
+    ).toBe(200);
     const defaultToRestricted = await request(fixture.server, token, "assets.set_default", {
       params: { kind: "agent" },
       payload: { name: "kai" }
     });
     expect(defaultToRestricted.statusCode).toBe(422);
     expect(defaultToRestricted.json()).toMatchObject({
-      error: { message: "Default agent 'kai' must be available in all workspaces" }
+      error: {
+        message:
+          "Default agent 'kai' must stay available in every workspace that names no default agent of its own: 'KAI'"
+      }
     });
     const pushedDefault = await release(fixture.server, token, { defaultAgentName: "kai" });
     expect(pushedDefault.statusCode).toBe(422);
-    // The one availability change that was made moved the version; no refused call did.
+    // The availability changes that were made moved the version; no refused call did.
     expect(
       (await request(fixture.server, token, "config_assets.get_overview", {})).json()
-    ).toMatchObject({ version: 2, defaultAgentName: "assistant" });
+    ).toMatchObject({ version: 3, defaultAgentName: "assistant" });
 
     // `all` clears the selection.
     const reopened = await setKai({

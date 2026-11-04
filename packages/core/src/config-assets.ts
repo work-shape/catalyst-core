@@ -909,8 +909,10 @@ export interface ConfigAssetStore {
     agentName: string;
   }): Promise<boolean>;
   /**
-   * Rejects hiding the instance default agent, which must stay `all`. Moves the version of the
-   * asset set in the same transaction, as every other change of what a run sees of it does.
+   * Rejects taking an agent away from a Shared Workspace that names it as its default, and
+   * taking the instance default away from a workspace that names no default of its own:
+   * Personal Workspaces never do. Moves the version of the asset set in the same transaction,
+   * as every other change of what a run sees of it does.
    */
   setAgentAvailability(input: {
     clientInstanceId: ClientInstanceId;
@@ -937,6 +939,26 @@ export interface ConfigAssetStore {
      */
     keepAwaitingFirstPublish?: true;
   }): Promise<AgentAvailability>;
+  /**
+   * The default agent each Shared Workspace names for itself, keyed by workspace id. A
+   * workspace that names none is not in it; the instance default is its default.
+   */
+  listWorkspaceDefaultAgents(input: {
+    clientInstanceId: ClientInstanceId;
+    /** Only this workspace's. */
+    collaborationWorkspaceId?: CollaborationWorkspaceId;
+  }): Promise<Map<CollaborationWorkspaceId, string>>;
+  /**
+   * Names the agent new chats start with in one Shared Workspace, or `null` to follow the
+   * instance default again. The agent must be available there; following the instance default
+   * needs it to be available there. Refuses otherwise with `VALIDATION_FAILED` naming the
+   * workspace, and moves the version of the asset set.
+   */
+  setWorkspaceDefaultAgent(input: {
+    clientInstanceId: ClientInstanceId;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
+    agentName: string | null;
+  }): Promise<{ version: number; agentId?: string }>;
   /** The names of the active agents only holders of `agent.use` may use (AGENT-USE-1). */
   listAgentUseLimits(input: {
     clientInstanceId: ClientInstanceId;

@@ -4,11 +4,13 @@ import {
   asCollaborationWorkspaceId,
   asUserId,
   auditActorFromIdentity,
+  isAppError,
   isAuthenticatedServicePrincipal,
   type AccessResource,
   type ActorAccess,
   type AgentAvailability,
   type AgentUse,
+  type AuthenticatedIdentity,
   type CollaborationWorkspace,
   type InitialAgentAvailability,
   type JsonObject,
@@ -30,6 +32,7 @@ import {
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
 import { assertOwnerReach } from "./asset-owner-references";
 import type { AssetWorkflowOptions } from "../types";
+import { requireWorkspaceAccess } from "../workspaces/workspace-access";
 
 /**
  * Where an asset stands on the instance beside its content: whether it is the default of its
@@ -44,6 +47,8 @@ interface SetAssetDefaultInput {
   name: string | null;
   /** The id of the named asset as the caller read it. */
   expectedAssetId?: string;
+  /** A Shared Workspace whose own default this is, instead of the instance's. */
+  workspaceId?: string;
 }
 
 interface SetAssetAvailabilityInput {
@@ -65,13 +70,21 @@ interface SetAssetAvailabilityInput {
 
 export async function authorizeAssetPlacement(
   options: AssetWorkflowOptions,
-  access: ActorAccess,
-  input: { kind: string; name: string | null }
+  caller: { actor: AuthenticatedIdentity; access: ActorAccess },
+  input: { kind: string; name: string | null; workspaceId?: string }
 ): Promise<OperationAuthorization> {
+  const { access } = caller;
   const kind = kindOf(options, input.kind);
   // Asked without a resource, so only an entry at instance scope answers.
   const instanceWide = access.authorize(kind.actions.write);
   if (!instanceWide.allowed) {
+    // A workspace's own default is also its owner's and its admins' to set.
+    if (
+      input.workspaceId !== undefined &&
+      (await administersWorkspace(options, caller.actor, input.workspaceId))
+    ) {
+      return { allowed: true };
+    }
     return { allowed: false, action: kind.actions.write, reason: instanceWide.reason };
   }
   const named = await namedResource(options, kind, input.name);
@@ -85,6 +98,9 @@ export async function setAssetDefault(
   input: SetAssetDefaultInput
 ): Promise<{ version: number }> {
   const kind = kindOf(options, input.kind);
+  if (input.workspaceId !== undefined) {
+    return setWorkspaceDefault(options, call, kind, { ...input, workspaceId: input.workspaceId });
+  }
   await requirePlacementRight(options, call, input);
   if (!kind.holdsInstanceDefault) {
     throw new AppError("VALIDATION_FAILED", `Asset kind '${kind.kind}' keeps no default`);
@@ -113,6 +129,75 @@ export async function setAssetDefault(
     version: result.version
   });
   return { version: result.version };
+}
+
+/**
+ * Names the agent new chats start with in one Shared Workspace, or follows the instance default
+ * there again. The agent must be available there; the store refuses otherwise, and refuses
+ * following the instance default where it is not available. Decided by an instance admin, or
+ * by the workspace's owner or admin.
+ */
+async function setWorkspaceDefault(
+  options: AssetWorkflowOptions,
+  call: AssetCall,
+  kind: WorkflowAssetKind,
+  input: SetAssetDefaultInput & { workspaceId: string }
+): Promise<{ version: number }> {
+  if (!kind.holdsInstanceDefault || !kind.hasWorkspaceAvailability) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Asset kind '${kind.kind}' keeps no default per workspace`
+    );
+  }
+  // The right once more, on what the store holds when the call runs.
+  if (
+    !call.access.authorize(kind.actions.write).allowed &&
+    !(await administersWorkspace(options, call.actor, input.workspaceId))
+  ) {
+    call.access.require(kind.actions.write);
+  }
+  await authorizeInteractiveWrite(options, call.actor, call, call.audit);
+  await requireExpectedAsset(options, kind, input);
+  const collaborationWorkspaceId = asCollaborationWorkspaceId(input.workspaceId);
+  const result = await options.configAssets.store.setWorkspaceDefaultAgent({
+    clientInstanceId: options.clientInstanceId,
+    collaborationWorkspaceId,
+    agentName: input.name
+  });
+  // Ids only: the workspace and the agent, never a name a person typed.
+  await call.audit.record({
+    type: "config_asset.workspace_default_agent_set",
+    status: "success",
+    actor: auditActorFromIdentity(call.actor),
+    correlationId: call.correlationId,
+    ...(result.agentId === undefined ? {} : { subject: result.agentId }),
+    metadata: {
+      workspaceId: collaborationWorkspaceId,
+      agentId: result.agentId ?? null,
+      version: result.version
+    }
+  });
+  return { version: result.version };
+}
+
+/** Whether the caller, a person, is Owner or Admin of the Shared Workspace. */
+async function administersWorkspace(
+  options: AssetWorkflowOptions,
+  actor: AuthenticatedIdentity,
+  workspaceId: string
+): Promise<boolean> {
+  if (isAuthenticatedServicePrincipal(actor)) return false;
+  try {
+    const { role } = await requireWorkspaceAccess(
+      options,
+      actor,
+      asCollaborationWorkspaceId(workspaceId)
+    );
+    return role === "owner" || role === "admin";
+  } catch (error) {
+    if (isAppError(error) && error.code === "NOT_FOUND") return false;
+    throw error;
+  }
 }
 
 /** Sets the workspaces one asset is offered in. The next run that starts reads them. */

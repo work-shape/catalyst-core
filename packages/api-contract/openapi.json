@@ -44937,6 +44937,9 @@
           "name": {
             "type": "string"
           },
+          "defaultAgentName": {
+            "type": "string"
+          },
           "createdAt": {
             "$ref": "#/components/schemas/Timestamp"
           }
@@ -51648,6 +51651,9 @@
                 "type": "null"
               }
             ]
+          },
+          "defaultAgentName": {
+            "type": "string"
           },
           "createdAt": {
             "$ref": "#/components/schemas/Timestamp"
@@ -60695,6 +60701,10 @@
           "expectedAssetId": {
             "type": "string",
             "minLength": 1
+          },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1
           }
         },
         "required": [
@@ -60706,7 +60716,7 @@
         "properties": {
           "version": {
             "type": "integer",
-            "exclusiveMinimum": 0,
+            "minimum": 0,
             "maximum": 9007199254740991
           }
         },

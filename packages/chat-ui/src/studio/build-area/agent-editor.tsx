@@ -2,7 +2,11 @@ import { RotateCcw, Send, Star, Undo2 } from "lucide-react";
 import { useOfferAgentTry } from "../../chat/dock/agent-try";
 import { useEffect, useId, useMemo, useState } from "react";
 import { assetAddressFromName } from "@work-shape/catalyst-core";
-import type { AgentDraft, ConfigAssetReferences } from "@work-shape/catalyst-api-client";
+import type {
+  AdministeredCollaborationWorkspace,
+  AgentDraft,
+  ConfigAssetReferences
+} from "@work-shape/catalyst-api-client";
 import {
   Button,
   changedPlaces,
@@ -47,7 +51,8 @@ import { ToolPackagesSection } from "./tool-packages-section";
 import {
   AvailabilityFields,
   useAvailabilityEdit,
-  type AvailabilityChoice
+  type AvailabilityChoice,
+  type AvailabilityDefaults
 } from "./asset-availability-fields";
 import { MissingDependencies, type DependencyAvailability } from "./dependency-availability";
 import { AgentUseFields, useAgentUseEdit, type AgentUseChoice } from "./agent-use-fields";
@@ -872,7 +877,13 @@ export function AgentEditor({
             body: (
               <AvailabilityFields
                 edit={availabilityEdit}
-                locked={isDefault && availability.saved?.mode === "all"}
+                defaults={availabilityDefaults(
+                  state.baseline.name,
+                  isDefault,
+                  availability.workspaces,
+                  t,
+                  locale
+                )}
                 fixedReason={availability.fixedReason}
                 disabled={saving}
                 workspaces={availability.workspaces}
@@ -1174,3 +1185,40 @@ const NO_DATA_STORES: DataStoreChoice = { options: [], onSearch: () => undefined
 const NO_CONNECTION_TOOLS: ConnectionToolChoice = { read: { status: "unknown" } };
 /** The same for the actions of Apps. */
 const NO_APP_TOOLS: AppToolsRead = { status: "unknown" };
+
+/**
+ * Where the agent is a default and has to stay available: the instance default in every
+ * Personal Workspace and in every shared one that names no default of its own, a workspace's
+ * own default in that workspace.
+ */
+function availabilityDefaults(
+  agentName: string,
+  isDefault: boolean,
+  workspaces: readonly AdministeredCollaborationWorkspace[],
+  t: ReturnType<typeof useTranslation>["t"],
+  locale: string
+): AvailabilityDefaults | undefined {
+  const defaultOf = workspaces.filter((workspace) => workspace.defaultAgentName === agentName);
+  if (!isDefault && defaultOf.length === 0) return undefined;
+  const names = new Intl.ListFormat(locale, { type: "conjunction" }).format(
+    defaultOf.map((workspace) => workspace.name)
+  );
+  return {
+    note: [
+      isDefault ? t("configAvailabilityInstanceDefault") : undefined,
+      defaultOf.length > 0 ? t("configAvailabilityWorkspaceDefault", { names }) : undefined
+    ]
+      .filter((sentence) => sentence !== undefined)
+      .join(" "),
+    required: {
+      personalWorkspaces: isDefault,
+      collaborationWorkspaceIds: workspaces
+        .filter(
+          (workspace) =>
+            workspace.defaultAgentName === agentName ||
+            (isDefault && workspace.defaultAgentName === undefined)
+        )
+        .map((workspace) => workspace.id)
+    }
+  };
+}

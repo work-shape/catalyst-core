@@ -296,6 +296,8 @@ export const unusedConfigAssetStore: ConfigAssetStore = {
   listAgentAvailability: unsupported,
   agentAwaitsFirstPublish: unsupported,
   setAgentAvailability: unsupported,
+  listWorkspaceDefaultAgents: unsupported,
+  setWorkspaceDefaultAgent: unsupported,
   listAgentUseLimits: unsupported,
   setAgentUse: unsupported,
   listPersonalChatSkills: unsupported,

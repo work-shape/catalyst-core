@@ -9,10 +9,12 @@ import {
   PageHeader,
   SaveBar,
   Section,
+  Select,
   Textarea
 } from "@work-shape/catalyst-ui";
 import { useCollaborationWorkspaceMutations } from "../../../shared/api/collaboration-workspace-mutations";
 import {
+  useCollaborationWorkspaceAgentsQuery,
   useCollaborationWorkspaceDeletionImpactQuery,
   useCollaborationWorkspaceMembersQuery
 } from "../../../shared/api/workspace-queries";
@@ -68,7 +70,7 @@ export function WorkspaceGeneralPage() {
 }
 
 function WorkspaceGeneral({ workspace }: { workspace: CollaborationWorkspaceWithRole }) {
-  const { apiBaseUrl, authScope, client, user, onWorkspaceLeft, onWorkspaceDeleted } =
+  const { apiBaseUrl, authScope, client, user, locale, onWorkspaceLeft, onWorkspaceDeleted } =
     useSettingsPage();
   const collaborationWorkspaceId = workspace.id;
   const [saved, setSaved] = useState(false);
@@ -87,8 +89,18 @@ function WorkspaceGeneral({ workspace }: { workspace: CollaborationWorkspaceWith
     collaborationWorkspaceId,
     enabled: deleteOpen
   });
+  // The agents a new chat here can start with: the ones available in this workspace.
+  const agentsQuery = useCollaborationWorkspaceAgentsQuery({
+    apiBaseUrl,
+    authScope,
+    client,
+    collaborationWorkspaceId,
+    localePreference: locale,
+    enabled: workspace.kind === "shared"
+  });
   const {
     updateCollaborationWorkspace,
+    setCollaborationWorkspaceDefaultAgent,
     deleteCollaborationWorkspace,
     leaveCollaborationWorkspace
   } = useCollaborationWorkspaceMutations({ apiBaseUrl, authScope, client });
@@ -102,18 +114,37 @@ function WorkspaceGeneral({ workspace }: { workspace: CollaborationWorkspaceWith
         otherOwnerExists={(membersQuery.data ?? []).some(
           (member) => member.role === "owner" && member.userId !== user.id
         )}
+        agents={(agentsQuery.data?.items ?? []).map((agent) => ({
+          name: agent.name,
+          label: agent.displayName || agent.name
+        }))}
         errorMessage={errorMessage}
-        savePending={updateCollaborationWorkspace.isPending}
+        savePending={
+          updateCollaborationWorkspace.isPending || setCollaborationWorkspaceDefaultAgent.isPending
+        }
         saved={saved}
         leavePending={leaveCollaborationWorkspace.isPending}
         onEdit={() => setSaved(false)}
-        onSave={(update) => {
+        onSave={({ defaultAgentName, ...update }) => {
           clearError();
           setSaved(false);
+          // The default agent is its own change: it is refused where the agent is not
+          // available here, and the rest of the form is saved before it.
+          const setDefault = () =>
+            setCollaborationWorkspaceDefaultAgent.mutate(
+              { collaborationWorkspaceId, agentName: defaultAgentName },
+              {
+                onSuccess: () => setSaved(true),
+                onError: (error) => reportError("update", error)
+              }
+            );
           updateCollaborationWorkspace.mutate(
             { collaborationWorkspaceId, update },
             {
-              onSuccess: () => setSaved(true),
+              onSuccess: () =>
+                defaultAgentName === (workspace.defaultAgentName ?? null)
+                  ? setSaved(true)
+                  : setDefault(),
               onError: (error) => reportError("update", error)
             }
           );
@@ -169,11 +200,20 @@ export interface WorkspaceGeneralValues {
   defaultConversationVisibility: ConversationVisibility;
   emoji: string | null;
   accentColor: CollaborationWorkspaceAccentColor;
+  /** The agent new chats start with here; `null` follows the instance default. */
+  defaultAgentName: string | null;
+}
+
+/** An agent a new chat in the workspace can start with. */
+export interface WorkspaceDefaultAgentOption {
+  name: string;
+  label: string;
 }
 
 /** The General form and the leave and delete actions, without the data behind them. */
 export function WorkspaceGeneralView({
   workspace,
+  agents = [],
   otherOwnerExists,
   errorMessage,
   savePending,
@@ -185,6 +225,8 @@ export function WorkspaceGeneralView({
   onRequestDelete
 }: {
   workspace: CollaborationWorkspaceWithRole;
+  /** The agents available in the workspace, for its own default agent. */
+  agents?: readonly WorkspaceDefaultAgentOption[];
   /** Another member is an owner, so this owner may leave. */
   otherOwnerExists: boolean;
   errorMessage: string | undefined;
@@ -209,6 +251,7 @@ export function WorkspaceGeneralView({
   const [accentColor, setAccentColor] = useState<CollaborationWorkspaceAccentColor>(() =>
     resolveCollaborationWorkspaceAccentColor(workspace)
   );
+  const [defaultAgentName, setDefaultAgentName] = useState(workspace.defaultAgentName ?? "");
   const [leaveOpen, setLeaveOpen] = useState(false);
 
   // The form follows the stored workspace once a save comes back.
@@ -219,6 +262,7 @@ export function WorkspaceGeneralView({
     setVisibility(workspace.visibility);
     setDefaultConversationVisibility(workspace.defaultConversationVisibility);
     setAccentColor(resolveCollaborationWorkspaceAccentColor(workspace));
+    setDefaultAgentName(workspace.defaultAgentName ?? "");
   }, [workspace]);
 
   const trimmedName = name.trim();
@@ -244,9 +288,15 @@ export function WorkspaceGeneralView({
       visibility,
       defaultConversationVisibility,
       emoji: emoji.trim() ? emoji.trim() : null,
-      accentColor
+      accentColor,
+      defaultAgentName: defaultAgentName === "" ? null : defaultAgentName
     });
   }
+  // The stored default stays listed while the agents load, or where the reader may not use it.
+  const defaultAgentOptions =
+    defaultAgentName === "" || agents.some((agent) => agent.name === defaultAgentName)
+      ? agents
+      : [...agents, { name: defaultAgentName, label: defaultAgentName }];
 
   return (
     <>
@@ -303,6 +353,28 @@ export function WorkspaceGeneralView({
             />
           </div>
         </Section>
+        {workspace.kind === "shared" ? (
+          <Section layout="stacked" title={t("settings.workspaceAgents")}>
+            <Field
+              label={t("collaborationWorkspaceDefaultAgentLabel")}
+              hint={t("collaborationWorkspaceDefaultAgentHint")}
+            >
+              <Select
+                data-workspace-default-agent=""
+                value={defaultAgentName}
+                disabled={savePending}
+                onChange={(event) => edit(setDefaultAgentName)(event.currentTarget.value)}
+              >
+                <option value="">{t("collaborationWorkspaceDefaultAgentInstance")}</option>
+                {defaultAgentOptions.map((agent) => (
+                  <option key={agent.name} value={agent.name}>
+                    {agent.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </Section>
+        ) : null}
         <Section
           layout="stacked"
           title={t("settings.appearance")}

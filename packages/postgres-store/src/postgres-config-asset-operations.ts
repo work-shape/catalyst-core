@@ -44,6 +44,14 @@ import {
 } from "./postgres-initial-agent-availability";
 import { type PostgresConnection, type PostgresTransaction } from "./postgres-database";
 import {
+  forgetRemovedWorkspaceDefaults,
+  listWorkspaceDefaultAgents,
+  requireDefaultsKept,
+  requireNoWorkspaceDefaultAmong,
+  setWorkspaceDefaultAgent,
+  storedAvailability
+} from "./postgres-default-agents";
+import {
   mapAssetScope,
   mapConfigAsset,
   mapConfigAssetState,
@@ -487,6 +495,14 @@ async function applyConfigAssetMutations(
       `);
     }
     const deletedIds = all.filter((asset) => asset.deleted && asset.stored).map(({ id }) => id);
+    await requireNoWorkspaceDefaultAmong(tx, {
+      clientInstanceId: input.clientInstanceId,
+      agentNames: [...assets.entries()].flatMap(([key, asset]) =>
+        asset.kind === "agent" && asset.status === "deleted" && asset.written
+          ? [key.slice("agent:".length)]
+          : []
+      )
+    });
     if (deletedIds.length > 0) {
       // A deleted asset has no published revision. Whoever writes the name again makes a
       // draft, and the revision that is served is chosen anew by a publish, which asks who
@@ -536,16 +552,19 @@ async function applyConfigAssetMutations(
           `Default agent '${defaultAgentName}' is not an active config asset`
         );
       }
-      const [availability] = await tx
-        .select({ mode: configAssetAvailability.mode })
-        .from(configAssetAvailability)
-        .where(eq(configAssetAvailability.assetId, defaultAgent.id))
-        .limit(1);
+      const availability = await storedAvailability(tx, defaultAgent.id);
       if (availability?.mode !== "all") {
-        throw new AppError(
-          "VALIDATION_FAILED",
-          `Default agent '${defaultAgentName}' must be available in all workspaces`
-        );
+        await requireDefaultsKept(tx, {
+          clientInstanceId: input.clientInstanceId,
+          agentName: defaultAgentName,
+          // An agent offered nowhere is selected in nothing.
+          availability: availability ?? {
+            mode: "selected",
+            personalWorkspaces: false,
+            collaborationWorkspaceIds: []
+          },
+          instanceDefault: true
+        });
       }
     }
 
@@ -696,6 +715,10 @@ export async function deleteWorkspaceOwnedAssets(
   if (!state) {
     return;
   }
+  await forgetRemovedWorkspaceDefaults(tx, {
+    clientInstanceId: input.clientInstanceId,
+    agentNames: removed.filter((asset) => asset.kind === "agent").map((asset) => asset.name)
+  });
   // The set changed, so its version moves, and a default that named a removed agent is gone.
   const defaultRemoved = removed.some(
     (asset) => asset.kind === "agent" && asset.name === state.defaultAgentName
@@ -823,6 +846,8 @@ export function createPostgresConfigAssetsStore(
     discardConfigAssetDraft: (input) => discardPostgresConfigAssetDraft(db, input),
     unpublishConfigAsset: (input) => unpublishPostgresConfigAsset(db, input),
     removeConfigAsset: (input) => removePostgresConfigAsset(db, input),
+    listWorkspaceDefaultAgents: (input) => listWorkspaceDefaultAgents(db, input),
+    setWorkspaceDefaultAgent: (input) => setWorkspaceDefaultAgent(db, input),
     async setConfigAssetPersonTitle(input) {
       await setPostgresConfigAssetPersonTitle(db, input);
       return getConfigAsset(db, input);

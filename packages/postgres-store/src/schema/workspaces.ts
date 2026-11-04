@@ -36,6 +36,11 @@ export const collaborationWorkspaces = pgTable(
     /** The build limits of a Shared Workspace; null adds no limit (WS-BUILD-1). */
     allowedToolNames: jsonb("allowed_tool_names").$type<string[]>(),
     allowedModelBindingIds: jsonb("allowed_model_binding_ids").$type<string[]>(),
+    /**
+     * The agent new chats start with in a Shared Workspace, by name as the instance default is.
+     * Null follows the instance default, which then stays available here.
+     */
+    defaultAgentName: text("default_agent_name"),
     /** Set when the deletion of the workspace was accepted. It is closed from then on. */
     deletionRequestedAt: timestamp("deletion_requested_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),

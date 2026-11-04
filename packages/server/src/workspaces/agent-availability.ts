@@ -50,20 +50,35 @@ type AgentUseRefusal = "no_grant" | "denied";
 
 /**
  * The agents offered in one workspace, before the caller's rights: the instance's snapshot,
- * the agents available there, and which of them only holders of `agent.use` may use.
+ * the agents available there, which of them only holders of `agent.use` may use, and the
+ * default agent a Shared Workspace names for itself.
  */
 export async function offeredAgents(options: SnapshotOptions, workspace: WorkspaceRef) {
-  const [assets, availability, limited] = await Promise.all([
+  const [assets, availability, limited, workspaceDefaultAgentName] = await Promise.all([
     options.configAssets.source.getSnapshot(),
     options.configAssets.store.listAgentAvailability({
       clientInstanceId: options.clientInstanceId
     }),
-    options.configAssets.store.listAgentUseLimits({ clientInstanceId: options.clientInstanceId })
+    options.configAssets.store.listAgentUseLimits({ clientInstanceId: options.clientInstanceId }),
+    workspaceDefaultAgent(options, workspace)
   ]);
   const available = assets.agents.filter((agent) =>
     isAgentAvailableInWorkspace(availability.get(agent.name), workspace)
   );
-  return { assets, available, limited };
+  return { assets, available, limited, workspaceDefaultAgentName };
+}
+
+/** The default agent a Shared Workspace names for itself, if it names one. */
+async function workspaceDefaultAgent(
+  options: SnapshotOptions,
+  workspace: WorkspaceRef
+): Promise<string | undefined> {
+  if (workspace.kind !== "shared" || workspace.id === undefined) return undefined;
+  const defaults = await options.configAssets.store.listWorkspaceDefaultAgents({
+    clientInstanceId: options.clientInstanceId,
+    collaborationWorkspaceId: workspace.id
+  });
+  return defaults.get(workspace.id);
 }
 
 /**
@@ -92,31 +107,50 @@ export function agentUseRefusal(
  * for a person or starts a run goes through here, so availability and `agent.use` are enforced
  * in one place: an agent is listed where it is available and the caller may use it.
  *
- * Default agent: the workspace's own default (not built yet), then the instance default if it
- * is offered to the caller here, then, where the instance names none, the agent the platform
- * ships if it is offered here, then the first offered agent.
+ * Default agent, the one a new chat here starts with: the workspace's own default if it is
+ * offered to the caller here, then the instance default if it is, then, where the instance
+ * names none, the agent the platform ships if it is offered here, then the first offered agent.
  */
 export async function getWorkspaceAssetSnapshot(
   options: SnapshotOptions,
   workspace: WorkspaceRef,
   access: ActorAccess
 ): Promise<RuntimeAssetSnapshot> {
-  const { assets, available, limited } = await offeredAgents(options, workspace);
+  const { assets, available, limited, workspaceDefaultAgentName } = await offeredAgents(
+    options,
+    workspace
+  );
   const agents = available.filter(
     (agent) => agentUseRefusal(access, assets, limited, agent.name) === undefined
   );
-  const offered = (name: string | undefined) => agents.some((agent) => agent.name === name);
   return {
     ...assets,
     agents,
-    defaultAgentName: offered(assets.defaultAgentName)
-      ? assets.defaultAgentName
-      : // Where the instance names no default, the agent the platform ships is it wherever it
-        // is offered (Felix, 2026-10-21); an instance's own default is never replaced.
-        ((assets.defaultAgentName === undefined
-          ? agents.find((agent) => agent.shipped !== undefined)?.name
-          : undefined) ?? agents[0]?.name)
+    defaultAgentName: resolveDefaultAgentName(agents, {
+      workspace: workspaceDefaultAgentName,
+      instance: assets.defaultAgentName
+    })
   };
+}
+
+/**
+ * Which of the agents a caller is offered in a workspace a new chat there starts with: the
+ * workspace's own default, then the instance's. Where the instance names none, the agent the
+ * platform ships is it wherever it is offered (Felix, 2026-10-21); an instance's own default
+ * is never replaced by it. Last, the first offered agent.
+ */
+export function resolveDefaultAgentName(
+  agents: readonly Pick<AgentConfig, "name" | "shipped">[],
+  defaults: { workspace?: string; instance?: string }
+): string | undefined {
+  const offered = (name: string | undefined) => agents.some((agent) => agent.name === name);
+  if (offered(defaults.workspace)) return defaults.workspace;
+  if (offered(defaults.instance)) return defaults.instance;
+  const shipped =
+    defaults.instance === undefined
+      ? agents.find((agent) => agent.shipped !== undefined)?.name
+      : undefined;
+  return shipped ?? agents[0]?.name;
 }
 
 /**

@@ -564,8 +564,15 @@ function runConfigAssetStoreSuite(
       ).toBe("all");
     });
 
-    it("keeps the default agent available everywhere", async () => {
+    it("keeps the default agent available where no workspace names its own", async () => {
       const clientInstanceId = createClientInstanceId();
+      const owner = await store.users.createUser({ clientInstanceId, displayLabel: "Owner" });
+      await store.workspaces.createWorkspace({
+        clientInstanceId,
+        kind: "shared",
+        name: "Team",
+        creatorUserId: owner.id
+      });
       await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [
@@ -611,7 +618,8 @@ function runConfigAssetStoreSuite(
         })
       ).rejects.toMatchObject({
         code: "VALIDATION_FAILED",
-        message: "Default agent 'restricted' must be available in all workspaces"
+        message:
+          "Default agent 'restricted' must stay available in every workspace that names no default agent of its own: 'Team'"
       });
       await expect(store.configAssets.getConfigAssetState({ clientInstanceId })).resolves.toEqual({
         version: 2,

@@ -1,0 +1,18 @@
+# The Owner of a team that names its own default agent, and a member of that team. No other
+# spec uses these people.
+- email: e2e-workspace-default-owner@example.test
+  displayLabel: E2E Zz Workspace Default Owner
+  passwordEnvName: E2E_WORKSPACE_DEFAULT_OWNER_PASSWORD
+  developmentPassword: e2e-workspace-default-owner-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
+- email: e2e-workspace-default-member@example.test
+  displayLabel: E2E Zz Workspace Default Member
+  passwordEnvName: E2E_WORKSPACE_DEFAULT_MEMBER_PASSWORD
+  developmentPassword: e2e-workspace-default-member-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
