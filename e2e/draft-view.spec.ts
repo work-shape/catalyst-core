@@ -209,6 +209,8 @@ test("an App's draft names its test copy and live version, diffs its files and l
     });
     await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   } finally {
+    // The draft's frame still reports while it is open; a report after the delete answers 404.
+    await page.goto("about:blank");
     if ((await page.request.get(`${appUrl}?workspaceId=${workspaceId}`)).ok()) {
       await requestWithOrigin(page, "post", `${appUrl}/delete`, {
         data: {
