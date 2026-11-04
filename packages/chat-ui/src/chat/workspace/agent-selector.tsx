@@ -7,7 +7,14 @@ import {
 } from "react";
 import { ChevronDown } from "lucide-react";
 import type { SafeConfig } from "@work-shape/catalyst-api-client";
-import { Avatar, Button, cn, Picker, type PickerOption } from "@work-shape/catalyst-ui";
+import {
+  Avatar,
+  Button,
+  cn,
+  Picker,
+  type PickerOption,
+  type PickerOptionGroup
+} from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 
 /**
@@ -82,7 +89,7 @@ export function AgentSelector({
     <Picker
       label={t("selectAgent")}
       options={[
-        ...agentPickerOptions(agents, display.showDescriptions),
+        ...agentPickerOptions(agents, display.showDescriptions, t("agents.forBuilding")),
         ...elsewhere.map((agent) => ({
           value: agent.name,
           label: agent.displayName,
@@ -105,16 +112,26 @@ export function AgentSelector({
   );
 }
 
-/** The agents as the options of the picker, each with its description where the instance shows them. */
+/**
+ * The agents as the options of the picker, each with its description where the instance shows
+ * them. The agents that build Apps and Workflows, offered only to whoever may build here, stand
+ * last under `buildingHeading`.
+ */
 export function agentPickerOptions(
   agents: SafeConfig["agents"],
-  showDescriptions: boolean
-): PickerOption[] {
-  return agents.map((agent) => ({
+  showDescriptions: boolean,
+  buildingHeading: string
+): (PickerOption | PickerOptionGroup)[] {
+  const option = (agent: SafeConfig["agents"][number]): PickerOption => ({
     value: agent.name,
     label: agent.displayName,
     ...(showDescriptions && agent.description ? { description: agent.description } : {})
-  }));
+  });
+  const building = agents.filter((agent) => agent.buildsAssets === true);
+  const others = agents.filter((agent) => agent.buildsAssets !== true).map(option);
+  return building.length === 0
+    ? others
+    : [...others, { heading: buildingHeading, options: building.map(option) }];
 }
 
 function chipClassName(showName: boolean): string {

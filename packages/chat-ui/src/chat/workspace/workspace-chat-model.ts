@@ -1245,13 +1245,16 @@ export function useWorkspaceChatModel({
       rights: workflowRights,
       places: sharePlaces,
       ...(instanceTimeZone === undefined ? {} : { instanceTimeZone }),
-      editWithAgent: (workflow, prompt, options) =>
-        startConversationAbout(
+      // As for an App: the agent that builds where one is offered, else the chosen agent.
+      editWithAgent: (workflow, prompt, options) => {
+        if (buildingAgentName !== undefined) setNewConversationAgentName(buildingAgentName);
+        return startConversationAbout(
           { kind: WORKFLOW_ASSET_KIND, name: workflow },
           prompt,
           undefined,
           options
-        ),
+        );
+      },
       // A new Workflow is made among the instance's own, the one owner the instance takes.
       ...(buildWithAgent !== undefined && workflowRights.instance.write
         ? { startNew: buildWithAgent }

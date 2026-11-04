@@ -16,6 +16,7 @@ import type {
   OperationRunId
 } from "./ids";
 import type { JsonObject } from "./json";
+import { SUBJECT_TOOL_PREFIX } from "./conversation";
 import type { AccessDecision } from "./permissions";
 import { assetObjectPrefix, type FileSetId } from "./pages";
 import type { StorePage } from "./paging";
@@ -93,17 +94,43 @@ export function isAgentAvailableInWorkspace(
     : workspace.id !== undefined && availability.collaborationWorkspaceIds.includes(workspace.id);
 }
 
+/** The tool that saves and creates assets: an agent that lists it builds them. */
+export const ASSET_PUT_TOOL_NAME = `${SUBJECT_TOOL_PREFIX}put`;
+
+/**
+ * Whether an agent builds assets: its definition lists the platform's tool that saves and
+ * creates them, as the shipped Workshaper's does. Such an agent builds Apps and Workflows, the
+ * chat starts a build with it, and only whoever may build where it runs uses it.
+ */
+export function agentBuildsAssets(agent: { toolNames: readonly string[] }): boolean {
+  return agent.toolNames.includes(ASSET_PUT_TOOL_NAME);
+}
+
+/** The bundle whose holder builds in a workspace; instance admins hold it everywhere. */
+export const BUILDER_BUNDLE = "builder";
+
 /**
  * Why `agent.use` refuses an agent that is available where the caller is (AGENT-USE-1), from
  * the decision of `agent.use` on it: a covering deny refuses any agent, and an agent limited to
  * the right is refused where no row allows it. An agent set to Everyone needs no row.
+ *
+ * An agent that builds assets is used only by whoever may build there: `builder` is the
+ * decision of Builder in the workspace, which instance admins hold by default. Neither Everyone
+ * nor a grant of `agent.use` offers it to anybody else; a deny of `agent.use` still refuses.
  */
 export function agentUseRefusalOf(
   decision: AccessDecision,
-  limited: boolean
+  limited: boolean,
+  builder?: AccessDecision
 ): "no_grant" | "denied" | undefined {
+  if (
+    !decision.allowed &&
+    (decision.reason === "denied" || decision.reason === "holder_inactive")
+  ) {
+    return "denied";
+  }
+  if (builder !== undefined) return builder.allowed ? undefined : "no_grant";
   if (decision.allowed) return undefined;
-  if (decision.reason === "denied" || decision.reason === "holder_inactive") return "denied";
   return limited ? "no_grant" : undefined;
 }
 

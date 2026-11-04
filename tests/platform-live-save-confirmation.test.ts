@@ -196,7 +196,9 @@ describe("live first saves from the Build Agent (ACCEPT-FIX-5)", () => {
       name: "Read-only team",
       creatorUserId: owner
     });
+    // The agent builds, so the person holds Builder where they talk to it.
     for (const [scopeId, action, effect] of [
+      [conversation.collaborationWorkspaceId, "builder", "allow"],
       [conversation.collaborationWorkspaceId, "skill.read", "allow"],
       [conversation.collaborationWorkspaceId, "skill.write", "allow"],
       [readOnly.id, "skill.read", "allow"],
@@ -241,7 +243,7 @@ describe("live first saves from the Build Agent (ACCEPT-FIX-5)", () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: conversation.collaborationWorkspaceId,
-          actions: ["skill.read", "skill.write"]
+          actions: expect.arrayContaining(["skill.read", "skill.write"])
         }),
         { id: readOnly.id, name: "Read-only team", actions: ["skill.read"] }
       ])

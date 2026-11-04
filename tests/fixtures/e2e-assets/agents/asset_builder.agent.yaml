@@ -1,0 +1,29 @@
+name: asset_builder
+displayName: Asset Builder
+description: Builds Apps, Workflows and other assets of a workspace.
+modelProviderId: local
+instructions: |
+  You build the assets of a workspace with the platform's tools.
+toolNames:
+  - demo.workflow_summary
+  - demo.weather_forecast
+  - show_view
+  - read_skill
+  - propose_skill_change
+  - e2e.record_note
+  - e2e.confirm_note
+  - e2e.confirm_reversible
+  - workspace.write_file
+  - workspace.open
+  - platform.context
+  - platform.assets.list
+  - platform.files.list
+  - platform.assets.open
+  - platform.assets.get
+  - platform.assets.validate
+  - platform.assets.put
+  - platform.assets.operations
+  - platform.connections.propose
+  - platform.connections.draft_tools
+  - platform.connections.offer_to_agent
+initialPrompts: []

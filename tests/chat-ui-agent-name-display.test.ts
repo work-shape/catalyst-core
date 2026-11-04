@@ -312,7 +312,11 @@ describe("agent chip on the start page without the name", () => {
 
 describe("agent list", () => {
   function options(showAgentDescriptions: boolean | undefined) {
-    return agentPickerOptions(severalAgents, display({ showAgentDescriptions }).showDescriptions);
+    return agentPickerOptions(
+      severalAgents,
+      display({ showAgentDescriptions }).showDescriptions,
+      "For building"
+    );
   }
 
   it("names the agents without their descriptions when the instance hides them", () => {
@@ -333,6 +337,19 @@ describe("agent list", () => {
         { value: "research_assistant", label: "Research Assistant" }
       ]);
     }
+  });
+
+  it("lists the agents that build last, under their own heading", () => {
+    const [first, research] = severalAgents;
+    if (!first || !research) throw new Error("Two agents are listed");
+    const withBuilder = [
+      { ...first, name: "workshaper", displayName: "Workshaper", buildsAssets: true },
+      research
+    ];
+    expect(agentPickerOptions(withBuilder, false, "Zum Bauen")).toEqual([
+      { value: "research_assistant", label: "Research Assistant" },
+      { heading: "Zum Bauen", options: [{ value: "workshaper", label: "Workshaper" }] }
+    ]);
   });
 });
 

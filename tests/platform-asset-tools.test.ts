@@ -293,27 +293,48 @@ describe("a conversation about a Workflow", () => {
         displayLabel: "Owned documents",
         owner: { kind: "workflow", assetId: existingAsset.id }
       });
-      const { id, createdByUserId } = z
-        .object({ id: z.string(), createdByUserId: z.string() })
-        .parse((await t.ok(t.converse(undefined, OTHER))).json());
+      // An agent that builds is offered only to whoever may build: the person holds Builder in
+      // a Shared Workspace, which carries writing its Workflows, and builds there.
+      await t.ok(t.app.call("platform.context.get", {}, OTHER));
+      const other = (
+        await t.app.stores.users.listUsers({ clientInstanceId: t.clientInstanceId })
+      ).find((user) => user.displayLabel === "Other");
+      if (!other) throw new Error("The person is missing");
+      const { id: workspaceId } = z
+        .object({ id: z.string() })
+        .parse(
+          (await t.ok(t.app.call("workspaces.create", { payload: { name: "Documents" } }))).json()
+        );
+      await t.ok(
+        t.app.call("permissions.grant", {
+          payload: {
+            holderKind: "user",
+            holderId: other.id,
+            action: "builder",
+            effect: "allow",
+            scopeKind: "workspace",
+            scopeId: workspaceId
+          }
+        })
+      );
+      const { id } = z
+        .object({ id: z.string() })
+        .parse(
+          (
+            await t.ok(
+              t.app.call(
+                "conversations.create",
+                { payload: { title: "Edit", collaborationWorkspaceId: workspaceId } },
+                OTHER
+              )
+            )
+          ).json()
+        );
       const call = async (tool: string, input: unknown = {}) => {
         const { answer } = await t.say(id, `/tool ${tool} ${JSON.stringify(input)}`, OTHER);
         const parsed: unknown = JSON.parse(answer ?? "null");
         return parsed;
       };
-      expect(await call("platform.context")).toMatchObject({ workflowPrincipals: [] });
-      for (const action of ["workflow.write", "workflow.read"])
-        await t.ok(
-          t.app.call("permissions.grant", {
-            payload: {
-              holderKind: "user",
-              holderId: createdByUserId,
-              action,
-              effect: "allow",
-              scopeKind: "instance"
-            }
-          })
-        );
       const rights = z
         .object({ instanceActions: z.array(z.string()) })
         .parse((await t.ok(t.app.call("platform.context.get", {}, OTHER))).json());
@@ -930,11 +951,48 @@ describe("a conversation about a Workflow", () => {
     }, 120_000);
 
     it("opens a hidden asset as a missing one, and none into a conversation its workspace shares", async () => {
-      // The member may not read the Workflow: the open is refused as for one that does not
-      // exist, and the conversation stays about nothing.
-      const { id: own } = z
+      // The person may not read the Workflow of the instance: the open is refused as for one
+      // that does not exist, and the conversation stays about nothing. The agent builds, so the
+      // person talks to it where they hold Builder.
+      await t.ok(t.app.call("platform.context.get", {}, OTHER));
+      const other = (
+        await t.app.stores.users.listUsers({ clientInstanceId: t.clientInstanceId })
+      ).find((user) => user.displayLabel === "Other");
+      if (!other) throw new Error("The person is missing");
+      const { id: theirs } = z
         .object({ id: z.string() })
-        .parse((await t.ok(t.converse(undefined, OTHER))).json());
+        .parse(
+          (await t.ok(t.app.call("workspaces.create", { payload: { name: "Theirs" } }))).json()
+        );
+      await t.ok(
+        t.app.call("permissions.grant", {
+          payload: {
+            holderKind: "user",
+            holderId: other.id,
+            action: "builder",
+            effect: "allow",
+            scopeKind: "workspace",
+            scopeId: theirs
+          }
+        })
+      );
+      const { id: own } = z.object({ id: z.string() }).parse(
+        (
+          await t.ok(
+            t.app.call(
+              "conversations.create",
+              {
+                payload: {
+                  title: "Edit",
+                  collaborationWorkspaceId: theirs,
+                  visibility: "private"
+                }
+              },
+              OTHER
+            )
+          )
+        ).json()
+      );
       const hidden = await t.say(
         own,
         `/tool platform.assets.open ${JSON.stringify(subject)}`,

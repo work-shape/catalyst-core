@@ -31,6 +31,25 @@ const agentsSchema = z
  * `building` false, only the agents that build none are offered. Answers the agent a build
  * starts with, the first that builds.
  */
+/**
+ * The team's own Apps alone: an App another spec publishes for the whole instance is listed in
+ * every workspace, and the team has none of its own.
+ */
+async function listNoAppsElsewhere(page: Page, teamId: string): Promise<void> {
+  await page.route(
+    (url) =>
+      url.pathname === "/api/v1/assets/app" && url.searchParams.get("workspaceId") === teamId,
+    async (route) => {
+      const response = await route.fetch();
+      const listed = z
+        .object({})
+        .passthrough()
+        .parse(await response.json());
+      await route.fulfill({ response, json: { ...listed, items: [], nextCursor: undefined } });
+    }
+  );
+}
+
 async function offerDefaultThatCannotBuild(
   page: Page,
   teamId: string,
@@ -68,6 +87,7 @@ test("the empty Apps list offers building only where an agent there builds Apps,
 
   try {
     // Without an agent that builds, the list says only that there are none.
+    await listNoAppsElsewhere(page, teamId);
     await offerDefaultThatCannotBuild(page, teamId, false);
     await page.goto(`/w/${teamId}/apps`);
     await expect(
@@ -82,6 +102,7 @@ test("the empty Apps list offers building only where an agent there builds Apps,
     // With one beside that default, the button opens the conversation with the one that builds
     // and the started sentence.
     await page.unrouteAll({ behavior: "wait" });
+    await listNoAppsElsewhere(page, teamId);
     const offered = await offerDefaultThatCannotBuild(page, teamId, true);
     await page.reload();
     await expect(build).toBeVisible();

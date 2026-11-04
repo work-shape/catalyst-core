@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  ASSET_PUT_TOOL_NAME,
   WORKFLOW_ASSET_KIND,
   asClientInstanceId,
   asCollaborationWorkspaceId,
@@ -120,7 +121,9 @@ describe("the tools that find what is on the platform", () => {
   async function fixture(
     workflows: boolean,
     pages = false,
-    toolNames: string[] = [...PLATFORM_TOOL_NAMES],
+    // The agent reads what is there and builds nothing: an agent that lists the save is offered
+    // only to whoever may build where it runs, and a member here may not.
+    toolNames: string[] = PLATFORM_TOOL_NAMES.filter((name) => name !== ASSET_PUT_TOOL_NAME),
     catalogue: CatalogueEntry[] = []
   ) {
     const config = createTestConfig({

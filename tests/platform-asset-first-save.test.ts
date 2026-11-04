@@ -251,23 +251,21 @@ describe("the agent's first save of a conversation", () => {
     const unnamed = await t.say(fresh, `/tool platform.assets.put ${JSON.stringify({ config })}`);
     expect(unnamed.answer).toContain("A save without 'expectedRevision' creates an asset");
 
-    // The person who may not write a Workflow creates none.
+    // A person who may not build is offered no agent that builds, so has none to create one
+    // with: the agent of this instance builds, and a run needs an agent.
     const { id: theirs } = z
       .object({ id: z.string() })
       .parse((await t.ok(t.converse(OTHER))).json());
-    const refused = await t.say(
-      theirs,
-      `/tool platform.assets.put ${JSON.stringify({ kind: WORKFLOW_ASSET_KIND, name: "theirs", config: { ...config, name: "theirs" } })}`,
+    const notOffered = await t.app.call(
+      "conversations.runs.start",
+      {
+        params: { conversationId: theirs },
+        payload: { idempotencyKey: "theirs", message: { text: "Build a check." } }
+      },
       OTHER
     );
-    expect(refused.answer).not.toContain('"saved":true');
-    expect(
-      await t.app.stores.configAssets.getConfigAsset({
-        clientInstanceId: t.clientInstanceId,
-        kind: WORKFLOW_ASSET_KIND,
-        name: "theirs"
-      })
-    ).toBeUndefined();
+    expect(notOffered.statusCode).toBe(422);
+    expect(notOffered.body).toContain("No default agent");
   }, 120_000);
 
   it("creates a Data Store from its files with the check of the files write the CLI uses", async () => {

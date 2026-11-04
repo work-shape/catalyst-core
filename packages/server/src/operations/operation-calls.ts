@@ -358,7 +358,14 @@ async function agentAvailableTo(
     })
   ]);
   const keys = new Map(asset ? [[asset.name, { id: asset.id, scope: asset.scope }]] : []);
-  const refusal = agentUseRefusal(access, { agentKeys: keys }, limited, input.agentName);
+  const toolNames = (await options.agentToolNames?.(input.agentName)) ?? [];
+  const refusal = agentUseRefusal(
+    access,
+    { agentKeys: keys, agents: [{ name: input.agentName, toolNames }] },
+    limited,
+    input.agentName,
+    workspace
+  );
   if (refusal !== undefined && input.correlationId !== undefined)
     await recordAgentUseRefusal(
       options,
