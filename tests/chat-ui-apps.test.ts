@@ -338,10 +338,10 @@ describe("an open App (layout 2)", () => {
   });
 
   it("offers Edit to a writer and to nobody else", () => {
-    expect(frame(WRITER)).toContain("Edit</button>");
-    expect(frame(NO_APP_RIGHTS)).not.toContain("Edit</button>");
+    expect(frame(WRITER)).toContain("Edit</span></button>");
+    expect(frame(NO_APP_RIGHTS)).not.toContain("Edit</span></button>");
     // The published view names no draft: there is none to edit, whatever the reader holds.
-    expect(frame(WRITER, { revision: 2 }, false)).not.toContain("Edit</button>");
+    expect(frame(WRITER, { revision: 2 }, false)).not.toContain("Edit</span></button>");
   });
 
   // Fails with Edit among the secondary actions: at 390 in German both folded and the head
@@ -350,7 +350,8 @@ describe("an open App (layout 2)", () => {
     const markup = frame(WRITER);
     const measured = /<div[^>]*inert[^>]*>(.*?)<\/div>/u.exec(markup)?.[1] ?? "";
 
-    expect(markup).toMatch(/<button[^>]*>(?:<svg.*?<\/svg>)?Edit<\/button>/u);
+    // In a narrow frame the label is for a screen reader only, and Edit is its icon.
+    expect(markup).toMatch(/<button[^>]*>(?:<svg.*?<\/svg>)?<span[^>]*>Edit<\/span><\/button>/u);
     expect(measured).not.toContain("Edit<");
   });
 

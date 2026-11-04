@@ -27,6 +27,19 @@ import { useUiLabels } from "../ui-root";
 
 const PageHeaderShellActionContext = createContext<ReactNode>(null);
 
+/** The size of the buttons a head holds: `sm` in a compact head, `md` in every other. */
+export type PageHeaderControlSize = "sm" | "md";
+
+const PageHeaderControlSizeContext = createContext<PageHeaderControlSize>("md");
+
+/**
+ * The size a button placed into a head takes, such as its primary action or the shell's
+ * control: `sm` inside a compact head, so every button of the head has one height.
+ */
+export function usePageHeaderControlSize(): PageHeaderControlSize {
+  return useContext(PageHeaderControlSizeContext);
+}
+
 /**
  * A control the application's shell puts into the head of every page, before the page's own
  * actions: such as the button that brings back a panel the shell holds beside every page. Only
@@ -67,6 +80,11 @@ export interface PageHeaderProps extends Omit<HTMLAttributes<HTMLElement>, "titl
   back?: ReactNode;
   /** The page's or the object's name. */
   title: ReactNode;
+  /**
+   * A `detail` head one step slimmer, for a screen whose content needs the height, such as an
+   * open App: a lower row, a smaller name and small buttons.
+   */
+  compact?: boolean;
   /**
    * Stands in the name's place while a person renames what the page shows: a `RenameField`.
    * The heading returns when it is gone.
@@ -349,9 +367,11 @@ function pixels(value: string): number {
 }
 
 function ActionButton({ action }: { action: PageHeaderAction }) {
+  const size = usePageHeaderControlSize();
   return (
     <Button
       variant="outline"
+      size={size}
       loading={action.loading}
       disabled={action.disabled}
       onClick={action.onSelect}
@@ -364,8 +384,9 @@ function ActionButton({ action }: { action: PageHeaderAction }) {
 
 /** A secondary action's button in the measuring row: its shape and width, and no button. */
 function ActionShape({ action }: { action: PageHeaderAction }) {
+  const size = usePageHeaderControlSize();
   return (
-    <Button asChild variant="outline">
+    <Button asChild variant="outline" size={size}>
       <span>
         {action.icon}
         {action.label}
@@ -427,6 +448,7 @@ export function PageHeader({
   variant = "list",
   back,
   title,
+  compact = false,
   titleEditor,
   headingLevel = 1,
   scope,
@@ -494,120 +516,135 @@ export function PageHeader({
       </div>
     );
   if (detail) {
+    const nameSize = compact ? "text-title-sm" : "text-title";
     return (
-      <header
-        data-variant={variant}
-        // A `PageOutline` measures the pinned head: what it scrolls to rests below it.
-        data-page-head=""
-        ref={fold.head}
-        className={cn(
-          "sticky top-0 z-(--layer-sticky-header) flex min-h-(--layout-header) min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b bg-background px-(--layout-gutter) py-1",
-          // Beside a name that keeps its least width the actions stay on its line in a wide
-          // window; where they would cut the name to a few letters, they go under it.
-          fold.crowded ? undefined : "md:flex-nowrap",
-          className
-        )}
-        {...props}
-      >
-        {/* Beside a floating control the row starts after it, at rest and pinned alike. Its
+      <PageHeaderControlSizeContext.Provider value={compact ? "sm" : "md"}>
+        <header
+          data-variant={variant}
+          data-compact={compact ? "" : undefined}
+          // A `PageOutline` measures the pinned head: what it scrolls to rests below it.
+          data-page-head=""
+          ref={fold.head}
+          className={cn(
+            "sticky top-0 z-(--layer-sticky-header) flex min-h-(--layout-header) min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b bg-background px-(--layout-gutter) py-1",
+            // Beside a name that keeps its least width the actions stay on its line in a wide
+            // window; where they would cut the name to a few letters, they go under it. A
+            // compact head stays one row at any width: the secondary actions fold into the
+            // menu and the name is cut.
+            compact ? "flex-nowrap" : fold.crowded ? undefined : "md:flex-nowrap",
+            // The compact head's row is lower; what is measured against the head's height
+            // inside it follows.
+            compact && "[--layout-header:var(--layout-header-compact)]",
+            className
+          )}
+          {...props}
+        >
+          {/* Beside a floating control the row starts after it, at rest and pinned alike. Its
             least width is the way back without its text and the whole name: the actions wrap
             under a narrow head only when they do not fit beside that. */}
-        <div
-          ref={row}
-          data-back-text-gone={backTextGone ? "" : undefined}
-          className="group/page-header-row flex min-w-0 flex-1 basis-[min-content] items-center gap-2 ps-(--layout-page-head-start)"
-        >
-          {back === undefined ? null : (
-            // Where the actions wrapped, the way back stays on the first row: at the middle of
-            // the head's least height, level with a control that floats beside the head. The
-            // head's line is part of that height, so this box reaches one line's width into it.
-            <div
-              className={cn(
-                "me-1 -mb-px flex h-[calc(var(--layout-header)-var(--spacing)*2)] shrink-0 items-center self-start",
-                BACK_GIVES_WAY
-              )}
-            >
-              {back}
-            </div>
-          )}
           <div
-            className={cn("min-w-0", titleEditor === undefined && !hasMeta ? undefined : "flex-1")}
+            ref={row}
+            data-back-text-gone={backTextGone ? "" : undefined}
+            className="group/page-header-row flex min-w-0 flex-1 basis-[min-content] items-center gap-2 ps-(--layout-page-head-start)"
           >
-            <div
-              className={cn(
-                "flex min-w-0 items-center gap-2",
-                titleEditor === undefined ? undefined : "w-full"
-              )}
-            >
-              {titleEditor ?? (
-                <Heading
-                  // An area puts the focus here when it opens; a title is no control and shows no
-                  // ring. Two lines of the name fit the head's height; a longer one is cut after
-                  // the second, or after the first where a line of facts stands under it.
-                  className={cn(
-                    "min-w-0 wrap-anywhere outline-none",
-                    hasMeta ? "line-clamp-1" : "line-clamp-2",
-                    "text-title"
-                  )}
-                  title={typeof title === "string" ? title : undefined}
-                >
-                  {title}
-                </Heading>
-              )}
-              {hasStatus && titleEditor === undefined ? (
-                <div data-slot="page-header-status" className="flex shrink-0 items-center">
-                  {status}
-                </div>
-              ) : null}
-            </div>
-            {hasMeta ? (
-              <p
-                data-slot="page-header-meta"
-                className="w-0 min-w-full truncate text-caption text-muted-foreground"
+            {back === undefined ? null : (
+              // Where the actions wrapped, the way back stays on the first row: at the middle of
+              // the head's least height, level with a control that floats beside the head. The
+              // head's line is part of that height, so this box reaches one line's width into it.
+              <div
+                className={cn(
+                  "me-1 -mb-px flex h-[calc(var(--layout-header)-var(--spacing)*2)] shrink-0 items-center self-start",
+                  BACK_GIVES_WAY
+                )}
               >
-                {meta}
-              </p>
-            ) : null}
-            {typeof title === "string" && titleEditor === undefined ? (
-              // The name on one line, unseen and without height: the row's least width stays the
-              // whole name, so the actions wrap before the name does.
-              <span
-                aria-hidden="true"
-                data-name={title}
-                className="invisible block h-0 overflow-hidden text-title whitespace-nowrap before:content-[attr(data-name)]"
-              />
-            ) : null}
-          </div>
-          {scope === undefined && state === undefined ? null : (
-            // A chip is shown whole or not at all: one that does not fit goes to a second line,
-            // and only the first line shows. The pseudo-element that opens the first line takes
-            // one gap, so the box starts a gap early. The chips go before the way back's text
-            // does, so they stay away while it is gone.
+                {back}
+              </div>
+            )}
             <div
               className={cn(
-                NO_LEAST_WIDTH,
-                CHIPS_GIVE_WAY,
-                "-ms-2 group-data-back-text-gone/page-header-row:hidden"
+                "min-w-0",
+                titleEditor === undefined && !hasMeta ? undefined : "flex-1"
               )}
             >
               <div
-                data-slot="page-header-chips"
-                className="flex h-control-sm min-w-0 flex-wrap items-center gap-x-2 overflow-hidden before:h-full before:w-0 before:content-['']"
+                className={cn(
+                  "flex min-w-0 items-center gap-2",
+                  titleEditor === undefined ? undefined : "w-full"
+                )}
               >
-                {scope}
-                {state}
+                {titleEditor ?? (
+                  <Heading
+                    // An area puts the focus here when it opens; a title is no control and shows no
+                    // ring. Two lines of the name fit the head's height; a longer one is cut after
+                    // the second, or after the first where a line of facts stands under it.
+                    className={cn(
+                      "min-w-0 wrap-anywhere outline-none",
+                      hasMeta || compact ? "line-clamp-1" : "line-clamp-2",
+                      nameSize
+                    )}
+                    title={typeof title === "string" ? title : undefined}
+                  >
+                    {title}
+                  </Heading>
+                )}
+                {hasStatus && titleEditor === undefined ? (
+                  <div data-slot="page-header-status" className="flex shrink-0 items-center">
+                    {status}
+                  </div>
+                ) : null}
               </div>
+              {hasMeta ? (
+                <p
+                  data-slot="page-header-meta"
+                  className="w-0 min-w-full truncate text-caption text-muted-foreground"
+                >
+                  {meta}
+                </p>
+              ) : null}
+              {typeof title === "string" && titleEditor === undefined ? (
+                // The name on one line, unseen and without height: the row's least width stays the
+                // whole name, so the actions wrap before the name does.
+                <span
+                  aria-hidden="true"
+                  data-name={title}
+                  className={cn(
+                    "invisible block h-0 overflow-hidden whitespace-nowrap before:content-[attr(data-name)]",
+                    nameSize
+                  )}
+                />
+              ) : null}
             </div>
-          )}
-          {description === undefined ? null : (
-            <InlineDescription tooltip={descriptionTooltip ?? description}>
-              {description}
-            </InlineDescription>
-          )}
-        </div>
-        {actions}
-        {unfoldedRow}
-      </header>
+            {scope === undefined && state === undefined ? null : (
+              // A chip is shown whole or not at all: one that does not fit goes to a second line,
+              // and only the first line shows. The pseudo-element that opens the first line takes
+              // one gap, so the box starts a gap early. The chips go before the way back's text
+              // does, so they stay away while it is gone.
+              <div
+                className={cn(
+                  NO_LEAST_WIDTH,
+                  CHIPS_GIVE_WAY,
+                  "-ms-2 group-data-back-text-gone/page-header-row:hidden"
+                )}
+              >
+                <div
+                  data-slot="page-header-chips"
+                  className="flex h-control-sm min-w-0 flex-wrap items-center gap-x-2 overflow-hidden before:h-full before:w-0 before:content-['']"
+                >
+                  {scope}
+                  {state}
+                </div>
+              </div>
+            )}
+            {description === undefined ? null : (
+              <InlineDescription tooltip={descriptionTooltip ?? description} nameSize={nameSize}>
+                {description}
+              </InlineDescription>
+            )}
+          </div>
+          {actions}
+          {unfoldedRow}
+        </header>
+      </PageHeaderControlSizeContext.Provider>
     );
   }
   return (
@@ -711,7 +748,16 @@ export function PageHeaderBack(props: PageHeaderBackProps) {
  * The description on the name's line. It takes the room the name leaves, so it gives way before
  * the name is cut. Where it is cut it takes the focus and a tooltip reads it in full.
  */
-function InlineDescription({ children, tooltip }: { children: ReactNode; tooltip: ReactNode }) {
+function InlineDescription({
+  children,
+  tooltip,
+  nameSize
+}: {
+  children: ReactNode;
+  tooltip: ReactNode;
+  /** The type of the name, whose baseline the description stands on. */
+  nameSize: string;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [cut, setCut] = useState(false);
   const [open, setOpen] = useState(false);
@@ -734,7 +780,7 @@ function InlineDescription({ children, tooltip }: { children: ReactNode; tooltip
       className="@container flex min-w-0 flex-1 basis-0 items-baseline"
     >
       {/* A line of the name's size and no width: the description stands on the name's baseline. */}
-      <span aria-hidden="true" className="invisible w-0 shrink-0 text-title">
+      <span aria-hidden="true" className={cn("invisible w-0 shrink-0", nameSize)}>
         &#8203;
       </span>
       <Tooltip open={cut && open} onOpenChange={setOpen}>

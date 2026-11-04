@@ -141,6 +141,8 @@
      SurfaceFrame apply. `split-min` is what each side of a split keeps: the conversation and
      the surface beside it. */
   --layout-header: 4rem;
+  /* A compact detail PageHeader, over a screen whose content needs the height. */
+  --layout-header-compact: 3rem;
   --layout-gutter: 1.5rem;
   /* The height of what floats over the top of a page's scroll area, such as the button that
      opens the sidebar in a narrow window. The page starts below it and scrolls up under it; a
