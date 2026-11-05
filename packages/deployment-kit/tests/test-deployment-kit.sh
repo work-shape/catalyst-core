@@ -714,6 +714,36 @@ CHAT_UI_ORIGIN=https://chat.example.test"
   assert_contains "$host/app.env" "PREVIEW_CAPTURE_IMAGE=$image"
   assert_contains "$host/output" "All services run the images of $release."
   assert_not_contains "$host/output" "$token"
+  # A token that is there is kept as it is.
+  [[ "$(grep -c '^PREVIEW_CAPTURE_SERVICE_TOKEN=' "$host/app.env")" == 1 ]] \
+    || fail "the deploy added a second renderer token"
+  assert_contains "$host/app.env" "PREVIEW_CAPTURE_SERVICE_TOKEN=$token"
+  assert_not_contains "$host/output" "Generated PREVIEW_CAPTURE_SERVICE_TOKEN"
+
+  # Without a token, or with an empty one, the deploy makes one and never prints it.
+  local case generated
+  for case in missing empty; do
+    host="$scratch/renderer-token-$case"
+    local env="PREVIEW_CAPTURE_ENABLED=true
+CHAT_UI_ORIGIN=https://chat.example.test"
+    [[ "$case" == empty ]] && env="$env
+PREVIEW_CAPTURE_SERVICE_TOKEN="
+    HOST_APP_ENV="$env" run_remote_deploy "$capture" "$host" \
+      || { cat "$host/output" >&2; fail "remote deploy with a $case renderer token failed"; }
+    generated="$(sed -n 's/^PREVIEW_CAPTURE_SERVICE_TOKEN=//p' "$host/app.env" | tail -n 1)"
+    [[ "$generated" =~ ^[0-9a-f]{64}$ ]] || fail "the deploy generated no 64-character token ($case)"
+    [[ "$(grep -c -E "^PREVIEW_CAPTURE_SERVICE_TOKEN=.+" "$host/app.env")" == 1 ]] \
+      || fail "the deploy wrote more than one renderer token ($case)"
+    assert_contains "$host/output" "Generated PREVIEW_CAPTURE_SERVICE_TOKEN in $host/app.env."
+    assert_contains "$host/output" "All services run the images of $release."
+    assert_not_contains "$host/output" "$generated"
+    assert_not_contains "$host/log" "$generated"
+    (( $(line_of "$host/app.env" "PREVIEW_CAPTURE_SERVICE_TOKEN=$generated") \
+      > $(line_of "$host/app.env" "CHAT_UI_ORIGIN=") )) || fail "the token was not appended ($case)"
+  done
+  # Each deploy without a token draws a new one.
+  [[ "$(sed -n 's/^PREVIEW_CAPTURE_SERVICE_TOKEN=\(.\{1,\}\)$/\1/p' "$scratch/renderer-token-missing/app.env")" \
+    != "$generated" ]] || fail "two hosts got the same renderer token"
 
   # An origin of its own in the env file is left to Compose.
   host="$scratch/renderer-own-origin"
