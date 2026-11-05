@@ -7,6 +7,16 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.28 — 2026-11-05
+
+### Changed
+
+- **API keys:** A personal API key may be issued without an expiry. The New key form and the page that confirms a CLI's connect code offer "Never expires" ("Läuft nie ab") beside 30, 90 and 365 days; 90 days stays the default. Such a key acts until it is revoked, and a revocation still stops it on its next call. The key list shows "Never" ("Nie") as its expiry. `me.api_keys.create` and `me.connect_codes.confirm` take `expiresAt: null` for it; leaving the field out is still refused. A key without an expiry is answered and listed without `expiresAt`, and its audit events carry `expiresAt: null`. `catalyst login` and `catalyst setup` say such a key is valid "until it is revoked" and save it without an expiry.
+
+### Database
+
+- Migrations 0194 and 0195 let a confirmed connect code keep `api_connect_codes.key_expires_at` null, for a personal API key that never expires (`api_credentials.expires_at` was nullable already). The approval constraint is widened, added `NOT VALID` in 0194 and validated in 0195, so the table is not scanned under the lock. Every existing row and every write of the previous release still fits it. Rolling back needs no step for the schema, but the previous release cannot read a personal key issued without an expiry: revoke such keys before a rollback.
+
 ## 0.8.0-rc.27 — 2026-11-05
 
 ### Changed
