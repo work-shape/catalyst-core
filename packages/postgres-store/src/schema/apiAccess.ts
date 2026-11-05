@@ -73,6 +73,7 @@ export const apiCredentials = pgTable(
     // the column becomes required once no supported release writes null.
     scopes: jsonb("scopes").$type<string[]>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    // Null for a key that never expires, of a service principal or a person.
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true })
@@ -111,7 +112,8 @@ export const apiCredentials = pgTable(
 /**
  * A connect code between its start by the CLI and the collection of its key. The code a
  * person types and the CLI's own code are stored as hashes. Approval fixes the owner, the
- * name, the scopes and the expiry of the key; collection issues the key and marks the row.
+ * name, the scopes and the expiry of the key, which stays null for a key that never expires;
+ * collection issues the key and marks the row.
  */
 export const apiConnectCodes = pgTable(
   "api_connect_codes",
@@ -145,7 +147,7 @@ export const apiConnectCodes = pgTable(
     }).onDelete("cascade"),
     check(
       "api_connect_codes_approval_check",
-      sql`(${table.approvedAt} is null) = (${table.ownerUserId} is null) and (${table.approvedAt} is null) = (${table.keyScopes} is null) and (${table.approvedAt} is null) = (${table.keyExpiresAt} is null) and (${table.approvedAt} is null) = (${table.keyName} is null)`
+      sql`(${table.approvedAt} is null) = (${table.ownerUserId} is null) and (${table.approvedAt} is null) = (${table.keyScopes} is null) and (${table.approvedAt} is null) = (${table.keyName} is null) and (${table.approvedAt} is not null or ${table.keyExpiresAt} is null)`
     )
   ]
 );

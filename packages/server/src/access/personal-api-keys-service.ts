@@ -38,7 +38,15 @@ const CONNECT_CODE_START_ATTEMPTS = 3;
 export interface PersonalApiKeyFields {
   name: string;
   scopes: string[];
-  expiresAt: string;
+  /** `null` for a key that never expires: it acts until it is revoked. */
+  expiresAt: string | null;
+}
+
+/** The fields of a key once checked, as the store takes them: no expiry for one that has none. */
+interface IssuableKeyFields {
+  name: string;
+  scopes: string[];
+  expiresAt?: string;
 }
 
 /** What a changing operation of this file takes from its Operation Run. */
@@ -203,7 +211,7 @@ export class PersonalApiKeysWorkflow {
           ownerUserId: asUserId(context.actor.id),
           name: issuable.name,
           scopes: issuable.scopes,
-          keyExpiresAt: issuable.expiresAt
+          ...(issuable.expiresAt === undefined ? {} : { keyExpiresAt: issuable.expiresAt })
         })
       };
     });
@@ -217,7 +225,7 @@ export class PersonalApiKeysWorkflow {
       metadata: {
         name: checked.name,
         scopes: checked.scopes,
-        expiresAt: checked.expiresAt,
+        expiresAt: checked.expiresAt ?? null,
         ...(code.clientLabel === undefined ? {} : { clientLabel: code.clientLabel })
       }
     });
@@ -276,7 +284,7 @@ export class PersonalApiKeysWorkflow {
 
   /**
    * The fields of a key the caller may issue: valid scopes, each naming a right the caller
-   * holds now somewhere it reaches, and an expiry within a year. A scope the caller holds
+   * holds now somewhere it reaches, and an expiry within a year or none. A scope the caller holds
    * nowhere would issue a key that can do nothing; it is refused with the right it names.
    */
   /**
@@ -297,9 +305,10 @@ export class PersonalApiKeysWorkflow {
   private async requireIssuable(
     access: ActorAccess,
     fields: PersonalApiKeyFields
-  ): Promise<PersonalApiKeyFields> {
+  ): Promise<IssuableKeyFields> {
     const scopes = requirePersonalApiKeyScopes(fields.scopes);
-    requirePersonalApiKeyExpiry(fields.expiresAt);
+    const expiresAt = fields.expiresAt ?? undefined;
+    requirePersonalApiKeyExpiry(expiresAt);
     const workspaceIds = new Set(scopes.flatMap((scope) => scope.workspaceId ?? []));
     for (const workspaceId of workspaceIds) {
       const workspace = await this.options.stores.workspaces.getWorkspace(
@@ -340,7 +349,11 @@ export class PersonalApiKeysWorkflow {
         );
       }
     }
-    return { name: fields.name, scopes: [...new Set(fields.scopes)], expiresAt: fields.expiresAt };
+    return {
+      name: fields.name,
+      scopes: [...new Set(fields.scopes)],
+      ...(expiresAt === undefined ? {} : { expiresAt })
+    };
   }
 
   private async userCodeHash(userCode: string): Promise<string> {
@@ -365,7 +378,10 @@ export class PersonalApiKeysWorkflow {
   }
 }
 
-/** What audit keeps of a key: who owns it, what it covers and until when. Never the key. */
+/**
+ * What audit keeps of a key: who owns it, what it covers and until when, `null` for never.
+ * Never the key.
+ */
 function keyMetadata(key: PersonalApiKeyRecord) {
   return {
     ownerUserId: key.ownerUserId,
@@ -373,7 +389,7 @@ function keyMetadata(key: PersonalApiKeyRecord) {
     keyPrefix: key.keyPrefix,
     name: key.name,
     scopes: key.scopes,
-    expiresAt: key.expiresAt
+    expiresAt: key.expiresAt ?? null
   };
 }
 

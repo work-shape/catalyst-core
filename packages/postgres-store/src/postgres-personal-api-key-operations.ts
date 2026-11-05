@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gt, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import {
   AppError,
   PERSONAL_API_KEYS_PER_USER_MAX,
@@ -87,7 +87,7 @@ async function requireBelowKeyCap(
         eq(apiCredentials.clientInstanceId, input.clientInstanceId),
         eq(apiCredentials.ownerUserId, input.ownerUserId),
         isNull(apiCredentials.revokedAt),
-        gt(apiCredentials.expiresAt, sql`now()`)
+        or(isNull(apiCredentials.expiresAt), gt(apiCredentials.expiresAt, sql`now()`))
       )
     );
   if ((usable?.count ?? 0) >= PERSONAL_API_KEYS_PER_USER_MAX) {
@@ -115,7 +115,7 @@ async function insertPersonalApiKey(
       secretHash: material.secretHash,
       scopes: input.scopes,
       createdAt: new Date(),
-      expiresAt: new Date(input.expiresAt)
+      expiresAt: input.expiresAt === undefined ? null : new Date(input.expiresAt)
     })
     .returning();
   if (!row) {
@@ -244,7 +244,7 @@ async function approveConnectCode(
         ownerUserId: input.ownerUserId,
         keyName: input.name,
         keyScopes: input.scopes,
-        keyExpiresAt: new Date(input.keyExpiresAt)
+        keyExpiresAt: input.keyExpiresAt === undefined ? null : new Date(input.keyExpiresAt)
       })
       .where(
         and(
@@ -279,7 +279,8 @@ async function redeemConnectCode(
       .limit(1);
     if (!code) return { status: "invalid" };
     if (!code.approvedAt) return { status: "pending" };
-    if (!code.ownerUserId || !code.keyName || !code.keyScopes || !code.keyExpiresAt) {
+    // A key that never expires has no expiry on its code either.
+    if (!code.ownerUserId || !code.keyName || !code.keyScopes) {
       throw new AppError("INTERNAL", "An approved connect code lacks its key's fields");
     }
     const owner = {
@@ -291,7 +292,7 @@ async function redeemConnectCode(
       ...owner,
       name: code.keyName,
       scopes: code.keyScopes,
-      expiresAt: code.keyExpiresAt.toISOString()
+      ...(code.keyExpiresAt === null ? {} : { expiresAt: code.keyExpiresAt.toISOString() })
     });
     await tx
       .update(apiConnectCodes)

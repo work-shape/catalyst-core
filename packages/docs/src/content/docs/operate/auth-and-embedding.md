@@ -135,7 +135,7 @@ The factor lives in the instance database, table `two_factor`, one row per accou
 
 An instance has two kinds of API keys. Both are exchanged at `POST /api/v1/auth/access-token` for a short-lived access token, and both need `SERVICE_ACCESS_TOKEN_SECRET` (below).
 
-- **A personal key** acts as the person who issued it, narrowed to the scopes ticked when it was made, and never does more than that person may at the moment of a call. A person issues one under **Settings > You > API keys** (German: **Einstellungen › Du › API-Schlüssel**) or with `catalyst login`, which saves it for the CLI. A key lives at most a year, and no key issues another key. This needs the module `personalApiKeys`. See [Log in](/configure/cli/#log-in).
+- **A personal key** acts as the person who issued it, narrowed to the scopes ticked when it was made, and never does more than that person may at the moment of a call. A person issues one under **Settings > You > API keys** (German: **Einstellungen › Du › API-Schlüssel**) or with `catalyst login`, which saves it for the CLI. A key expires after at most a year, or never, as its person chooses; a key that never expires acts until it is revoked. No key issues another key. This needs the module `personalApiKeys`. See [Log in](/configure/cli/#log-in).
 - **A service principal's key** is for automation such as CI or another system. It acts as the service principal and never as a person.
 
 ### Service Principals

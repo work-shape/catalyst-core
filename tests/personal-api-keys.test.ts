@@ -354,3 +354,103 @@ describe("connect codes", () => {
     }
   });
 });
+
+describe("personal API keys without an expiry", () => {
+  const lastingSchema = keySchema.extend({ expiresAt: z.string().optional() });
+
+  it("are issued, act and are listed as never expiring", async () => {
+    const t = await setup();
+    await grantKaiWorkspace(t);
+    const created = await t.expectOk(t.kai.id, "me.api_keys.create", {
+      payload: { name: "server", scopes: [`agent.read:${t.kaiTeam}`], expiresAt: null }
+    });
+    const { key, secret } = z
+      .object({ key: lastingSchema, secret: z.string() })
+      .parse(created.json());
+    expect(key.expiresAt).toBeUndefined();
+    const listed = z
+      .object({ items: z.array(lastingSchema) })
+      .parse((await t.expectOk(t.kai.id, "me.api_keys.list")).json());
+    expect(listed.items).toEqual([expect.objectContaining({ id: key.id })]);
+    expect(listed.items[0]?.expiresAt).toBeUndefined();
+    const call = await t.call(t.kai.id, "assets.list", {
+      params: { kind: "agent" },
+      query: { workspaceId: t.kaiTeam },
+      headers: await t.tokenFor(secret)
+    });
+    expect(call.statusCode, call.body).toBe(200);
+  });
+
+  it("are refused without an expiry field at all: no expiry is chosen, never assumed", async () => {
+    const t = await setup();
+    await grantKaiWorkspace(t);
+    const response = await t.call(t.kai.id, "me.api_keys.create", {
+      payload: { name: "x", scopes: [`agent.read:${t.kaiTeam}`] }
+    });
+    expect(response.statusCode).toBe(422);
+  });
+
+  it("stop at once when revoked, by their owner or by whoever administers API access", async () => {
+    const t = await setup();
+    await grantKaiWorkspace(t);
+    const issueLasting = async () =>
+      z.object({ key: lastingSchema, secret: z.string() }).parse(
+        (
+          await t.expectOk(t.kai.id, "me.api_keys.create", {
+            payload: { name: "server", scopes: [`agent.read:${t.kaiTeam}`], expiresAt: null }
+          })
+        ).json()
+      );
+    const list = (headers: { authorization: string }) =>
+      t.call(t.kai.id, "assets.list", {
+        params: { kind: "agent" },
+        query: { workspaceId: t.kaiTeam },
+        headers
+      });
+
+    const own = await issueLasting();
+    const ownHeaders = await t.tokenFor(own.secret);
+    expect((await list(ownHeaders)).statusCode).toBe(200);
+    await t.expectOk(t.kai.id, "me.api_keys.revoke", { params: { keyId: own.key.id } });
+    // The token exchanged before the revocation stops on its next call, and no new one is given.
+    expect((await list(ownHeaders)).statusCode).toBe(401);
+    const exchange = await t.instance.call("access_tokens.exchange", {
+      headers: { authorization: `Bearer ${own.secret}` }
+    });
+    expect(exchange.statusCode).toBe(401);
+
+    const other = await issueLasting();
+    const otherHeaders = await t.tokenFor(other.secret);
+    await t.expectOk(t.root.id, "personal_api_keys.revoke", { params: { keyId: other.key.id } });
+    expect((await list(otherHeaders)).statusCode).toBe(401);
+  });
+
+  it("are collected by the CLI from a connect code confirmed without an expiry", async () => {
+    const t = await setup();
+    await grantKaiWorkspace(t);
+    const started = startedSchema.parse(
+      (await t.instance.call("connect_codes.start", { payload: { clientLabel: "server" } })).json()
+    );
+    await t.expectOk(t.kai.id, "me.connect_codes.confirm", {
+      params: { userCode: started.userCode },
+      payload: { name: "Server", scopes: [`agent.read:${t.kaiTeam}`], expiresAt: null }
+    });
+    const issued = z
+      .object({ status: z.literal("issued"), key: lastingSchema, secret: z.string() })
+      .parse(
+        (
+          await t.instance.call("connect_codes.redeem", {
+            payload: { deviceCode: started.deviceCode }
+          })
+        ).json()
+      );
+    expect(issued.key).toMatchObject({ ownerUserId: t.kai.id, name: "Server" });
+    expect(issued.key.expiresAt).toBeUndefined();
+    const call = await t.call(t.kai.id, "assets.list", {
+      params: { kind: "agent" },
+      query: { workspaceId: t.kaiTeam },
+      headers: await t.tokenFor(issued.secret)
+    });
+    expect(call.statusCode, call.body).toBe(200);
+  });
+});

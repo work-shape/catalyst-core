@@ -154,7 +154,7 @@ export function PersonalApiKeysTable({
                   </span>
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-muted-foreground">
-                  {formatMomentShort(key.expiresAt, locale)}
+                  {key.expiresAt ? formatMomentShort(key.expiresAt, locale) : t("apiAccessNever")}
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-muted-foreground">
                   {key.lastUsedAt ? formatMomentShort(key.lastUsedAt, locale) : t("apiAccessNever")}

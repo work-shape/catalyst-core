@@ -98,6 +98,13 @@ function key(overrides: Partial<PersonalApiKey> = {}): PersonalApiKey {
   };
 }
 
+/** A key issued without an expiry: it acts until it is revoked. */
+function lastingKey(overrides: Partial<PersonalApiKey> = {}): PersonalApiKey {
+  const lasting = key(overrides);
+  delete lasting.expiresAt;
+  return lasting;
+}
+
 function withPublishingKind(context: PlatformContext): PlatformContext {
   return {
     ...context,
@@ -362,27 +369,34 @@ describe("personal API key model", () => {
 
   it("sends a draft once it has a name, a scope and a well-formed asset id", () => {
     const draft = { ...initialPersonalKeyDraft("laptop"), actions: ["agent.write"] };
-    expect(draft).toMatchObject({ expiryDays: 90, workspaceId: "", assetName: "" });
+    expect(draft).toMatchObject({ expiry: 90, workspaceId: "", assetName: "" });
     expect(personalKeyDraftProblem({ ...draft, name: " " })).toBe("name");
     expect(personalKeyDraftProblem({ ...draft, actions: [] })).toBe("scopes");
     const spaced = { ...draft, workspaceId: "ws-tax", assetName: "vat helper" };
     expect(personalKeyDraftProblem(spaced)).toBe("assetName");
     expect(personalKeyRequest(spaced, now)).toBeUndefined();
-    expect(personalKeyRequest({ ...draft, workspaceId: "ws-tax", expiryDays: 30 }, now)).toEqual({
+    expect(personalKeyRequest({ ...draft, workspaceId: "ws-tax", expiry: 30 }, now)).toEqual({
       name: "laptop",
       scopes: ["agent.write:ws-tax"],
       expiresAt: "2026-11-12T12:00:00.000Z"
     });
   });
 
-  it("offers 30, 90 and 365 days and nothing else", () => {
+  it("offers 30, 90 and 365 days and never, and nothing else", () => {
     expect(personalKeyExpiryOf("365")).toBe(365);
+    expect(personalKeyExpiryOf("never")).toBe("never");
     expect(personalKeyExpiryOf("400")).toBeUndefined();
     const longest = personalKeyRequest(
-      { ...initialPersonalKeyDraft("x"), actions: ["agent.read"], expiryDays: 365 },
+      { ...initialPersonalKeyDraft("x"), actions: ["agent.read"], expiry: 365 },
       now
     );
     expect(longest?.expiresAt).toBe("2027-10-13T12:00:00.000Z");
+    // A key that never expires is asked for with no expiry at all.
+    const lasting = personalKeyRequest(
+      { ...initialPersonalKeyDraft("x"), actions: ["agent.read"], expiry: "never" },
+      now
+    );
+    expect(lasting?.expiresAt).toBeNull();
   });
 
   it("writes a typed or linked connect code as the CLI shows it", () => {
@@ -423,6 +437,10 @@ describe("personal API key model", () => {
     expect(personalKeyState(key(), now)).toBe("active");
     expect(personalKeyState(key({ revokedAt: "2026-10-02T10:00:00.000Z" }), now)).toBe("revoked");
     expect(personalKeyState(key({ expiresAt: "2026-10-02T10:00:00.000Z" }), now)).toBe("expired");
+    expect(personalKeyState(lastingKey(), now)).toBe("active");
+    expect(personalKeyState(lastingKey({ revokedAt: "2026-10-02T10:00:00.000Z" }), now)).toBe(
+      "revoked"
+    );
   });
 
   it("names the instance's address for a relative or absolute API base", () => {
@@ -538,7 +556,9 @@ describe("You > API keys", () => {
     expect(english).toContain("Only confirm a code your own terminal shows you");
     expect(english).toContain("BCDF-GHJK");
     expect(english).toContain("90 days");
+    expect(english).toContain("Never expires");
     expect(render("de")).toContain("Bestätige nur einen Code, den dir dein eigenes Terminal zeigt");
+    expect(render("de")).toContain("Läuft nie ab");
   });
 
   it("lists every person's keys with their owner and no secret", () => {
@@ -685,6 +705,14 @@ describe("You > API keys in plain words", () => {
     ]);
     expect(markup).not.toMatch(/:(37|41|53)\b/u);
     expect(markup).toContain("01.10.2026");
+  });
+
+  it("shows Never as the expiry of a key that never expires, which stays active", () => {
+    const english = keysTable("en", [lastingKey()]);
+    expect(english).toContain("Never");
+    expect(english).toContain("Active");
+    const german = keysTable("de", [lastingKey()]);
+    expect(german).toContain("Nie");
   });
 
   // At 390 Status and Revoke took the room the name's details needed, which then spilled over.
@@ -1152,6 +1180,47 @@ describe("You > API keys, for a person and an admin alike", () => {
       expect(confirmed).toEqual([
         expect.objectContaining({ scopes: ["agent.write", "skill.write"] })
       ]);
+    } finally {
+      await mounted.unmount();
+    }
+  });
+
+  it("a connect code confirmed to never expire is sent with no expiry", async () => {
+    const confirmed: ConfirmConnectCodeRequest[] = [];
+    const mounted = await mountPage(
+      settingsPageContext(createApiClient({ baseUrl: SETTINGS_INSTANCE_URL, fetchImpl: fetch })),
+      "en",
+      createElement(ConnectCodeConfirm, {
+        code: "BCDF-GHJK",
+        request: {
+          clientLabel: "catalyst CLI",
+          createdAt: "2026-10-13T11:58:00.000Z",
+          expiresAt: "2026-10-13T12:13:00.000Z"
+        },
+        offer: {
+          ...cliOffer,
+          everywhere: { actions: personalKeyActionOffer(platformContext()), useActions: [] }
+        },
+        pending: false,
+        onConfirm: async (body) => {
+          confirmed.push(body);
+        }
+      })
+    );
+    try {
+      const expiry = required(mounted.container.querySelector<HTMLSelectElement>("select"));
+      // 90 days is where a key starts; never is one choice beside it.
+      expect(expiry.value).toBe("90");
+      await act(async () => {
+        expiry.value = "never";
+        expiry.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      await act(async () => {
+        required(
+          mounted.container.querySelector<HTMLButtonElement>('button[type="submit"]')
+        ).click();
+      });
+      expect(confirmed).toEqual([expect.objectContaining({ expiresAt: null })]);
     } finally {
       await mounted.unmount();
     }

@@ -1359,6 +1359,20 @@
       "when": 1793809685242,
       "tag": "0193_workspace_default_agent",
       "breakpoints": true
+    },
+    {
+      "idx": 194,
+      "version": "7",
+      "when": 1793899979225,
+      "tag": "0194_personal_api_keys_without_expiry",
+      "breakpoints": true
+    },
+    {
+      "idx": 195,
+      "version": "7",
+      "when": 1793899990096,
+      "tag": "0195_validate_personal_api_keys_without_expiry",
+      "breakpoints": true
     }
   ]
 }

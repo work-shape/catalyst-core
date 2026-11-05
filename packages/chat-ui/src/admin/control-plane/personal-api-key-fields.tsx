@@ -16,7 +16,7 @@ import {
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { actionLabel } from "../access/right-words";
 import {
-  PERSONAL_KEY_EXPIRY_DAYS,
+  PERSONAL_KEY_EXPIRIES,
   personalKeyActionsKeptIn,
   personalKeyDraftProblem,
   personalKeyExpiryOf,
@@ -237,15 +237,17 @@ export function PersonalKeyFields({
       ) : null}
       <Field label={t("personalApiKeys.expiry")}>
         <Select
-          value={String(draft.expiryDays)}
+          value={String(draft.expiry)}
           onChange={(event) => {
-            const expiryDays = personalKeyExpiryOf(event.target.value);
-            if (expiryDays) onChange({ ...draft, expiryDays });
+            const expiry = personalKeyExpiryOf(event.target.value);
+            if (expiry) onChange({ ...draft, expiry });
           }}
         >
-          {PERSONAL_KEY_EXPIRY_DAYS.map((days) => (
-            <option key={days} value={String(days)}>
-              {t("personalApiKeys.expiryDays", { days })}
+          {PERSONAL_KEY_EXPIRIES.map((expiry) => (
+            <option key={expiry} value={String(expiry)}>
+              {expiry === "never"
+                ? t("apiAccessNeverExpires")
+                : t("personalApiKeys.expiryDays", { days: expiry })}
             </option>
           ))}
         </Select>

@@ -52236,7 +52236,14 @@
             }
           },
           "expiresAt": {
-            "$ref": "#/components/schemas/Timestamp"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -57423,8 +57430,7 @@
           "name",
           "keyPrefix",
           "scopes",
-          "createdAt",
-          "expiresAt"
+          "createdAt"
         ]
       },
       "PersonalApiKeyScope": {

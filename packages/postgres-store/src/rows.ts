@@ -692,7 +692,7 @@ export function mapApiCredential(row: ApiCredentialRow | undefined): ApiCredenti
 }
 
 export function mapPersonalApiKey(row: ApiCredentialRow): PersonalApiKeyRecord {
-  if (!row.ownerUserId || !row.expiresAt || !row.scopes) {
+  if (!row.ownerUserId || !row.scopes) {
     throw new AppError("INTERNAL", "Expected the row of a personal API key");
   }
   return {
@@ -703,7 +703,8 @@ export function mapPersonalApiKey(row: ApiCredentialRow): PersonalApiKeyRecord {
     keyPrefix: row.keyPrefix,
     scopes: row.scopes,
     createdAt: row.createdAt.toISOString(),
-    expiresAt: row.expiresAt.toISOString(),
+    // Null for a key that never expires.
+    expiresAt: row.expiresAt?.toISOString(),
     revokedAt: row.revokedAt?.toISOString(),
     lastUsedAt: row.lastUsedAt?.toISOString()
   };
