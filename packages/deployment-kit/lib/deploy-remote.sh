@@ -8,16 +8,77 @@ chmod +x "$REMOTE_APP_DIR/backup-postgres.sh" "$REMOTE_APP_DIR/restore-postgres.
 export IMAGE_REPOSITORY IMAGE_TAG API_IMAGE_DIGEST UI_IMAGE_DIGEST DOC_WORKER_IMAGE_DIGEST \
   WORKSPACE_COMMAND_WORKER_IMAGE_DIGEST ARTIFACT_PREVIEW_WORKER_IMAGE_DIGEST RUNNER_IMAGE_DIGEST
 
+read_env_file_value() {
+  local key="$1"
+  awk -v key="$key" '
+    /^[[:space:]]*($|#)/ { next }
+    {
+      line = $0
+      sub(/^[[:space:]]+/, "", line)
+      if (index(line, key "=") == 1) {
+        value = substr(line, length(key) + 2)
+        sub(/^[[:space:]]+/, "", value)
+        sub(/[[:space:]]+$/, "", value)
+        first = substr(value, 1, 1)
+        last = substr(value, length(value), 1)
+        if ((first == "\"" && last == "\"") || (first == "\047" && last == "\047")) {
+          value = substr(value, 2, length(value) - 2)
+        }
+        found = value
+      }
+    }
+    END {
+      if (found != "") {
+        print found
+      }
+    }
+  ' "$REMOTE_ENV_FILE"
+}
+
 compose_profile=()
 if [[ "$EXECUTION_WORKSPACES" == "1" ]]; then
   compose_profile=(--profile execution-workspaces)
+fi
+
+# The PDF renderer (PDF-1) runs when the host env file sets PREVIEW_CAPTURE_ENABLED=true and the
+# release has its image. Its Compose overlay then joins the stack: the preview-capture service
+# and the variables that let the API and agent-run-worker call it. Checked before anything changes.
+compose_files=(-f "$REMOTE_APP_DIR/docker-compose.prod.yml")
+preview_capture_enabled="$(read_env_file_value PREVIEW_CAPTURE_ENABLED)"
+if [[ "$preview_capture_enabled" == true ]]; then
+  if [[ -z "${PREVIEW_CAPTURE_IMAGE_DIGEST:-}" ]]; then
+    echo "PREVIEW_CAPTURE_ENABLED is true in $REMOTE_ENV_FILE, but release $IMAGE_TAG has no preview-capture image. Build the preview-capture target of the deployment's bake file, or set PREVIEW_CAPTURE_ENABLED=false." >&2
+    exit 1
+  fi
+  preview_capture_token="$(read_env_file_value PREVIEW_CAPTURE_SERVICE_TOKEN)"
+  if [[ "${#preview_capture_token}" -lt 32 ]]; then
+    echo "PREVIEW_CAPTURE_SERVICE_TOKEN in $REMOTE_ENV_FILE has ${#preview_capture_token} characters; the renderer needs at least 32." >&2
+    exit 1
+  fi
+  unset preview_capture_token
+  # The address the renderer gives a captured page; the instance's interface unless set.
+  if [[ -z "$(read_env_file_value PREVIEW_CAPTURE_INTERFACE_ORIGIN)" ]]; then
+    PREVIEW_CAPTURE_INTERFACE_ORIGIN="$(read_env_file_value CHAT_UI_ORIGIN)"
+    if [[ -z "$PREVIEW_CAPTURE_INTERFACE_ORIGIN" ]]; then
+      echo "Set PREVIEW_CAPTURE_INTERFACE_ORIGIN or CHAT_UI_ORIGIN in $REMOTE_ENV_FILE for the renderer." >&2
+      exit 1
+    fi
+    export PREVIEW_CAPTURE_INTERFACE_ORIGIN
+  fi
+  PREVIEW_CAPTURE_IMAGE="$IMAGE_REPOSITORY-preview-capture:$IMAGE_TAG@$PREVIEW_CAPTURE_IMAGE_DIGEST"
+  PREVIEW_CAPTURE_SECCOMP="$REMOTE_APP_DIR/deploy/preview-capture-seccomp.json"
+  export PREVIEW_CAPTURE_IMAGE PREVIEW_CAPTURE_SECCOMP
+  compose_profile+=(--profile preview-capture)
+  # Named through a variable: the policy checks judge the stack of the deployment's own files.
+  preview_capture_compose="$REMOTE_APP_DIR/deploy/preview-capture.compose.yml"
+  compose_files+=(-f "$preview_capture_compose")
 fi
 
 compose() {
   docker compose \
     "${compose_profile[@]}" \
     --env-file "$REMOTE_ENV_FILE" \
-    -f "$REMOTE_APP_DIR/docker-compose.prod.yml" \
+    "${compose_files[@]}" \
     "$@"
 }
 
@@ -174,33 +235,6 @@ require_release_image() {
   fi
 }
 
-read_env_file_value() {
-  local key="$1"
-  awk -v key="$key" '
-    /^[[:space:]]*($|#)/ { next }
-    {
-      line = $0
-      sub(/^[[:space:]]+/, "", line)
-      if (index(line, key "=") == 1) {
-        value = substr(line, length(key) + 2)
-        sub(/^[[:space:]]+/, "", value)
-        sub(/[[:space:]]+$/, "", value)
-        first = substr(value, 1, 1)
-        last = substr(value, length(value), 1)
-        if ((first == "\"" && last == "\"") || (first == "\047" && last == "\047")) {
-          value = substr(value, 2, length(value) - 2)
-        }
-        found = value
-      }
-    }
-    END {
-      if (found != "") {
-        print found
-      }
-    }
-  ' "$REMOTE_ENV_FILE"
-}
-
 upsert_env_file_value() {
   local key="$1"
   local value="$2"
@@ -228,6 +262,11 @@ for key in IMAGE_REPOSITORY IMAGE_TAG API_IMAGE_DIGEST UI_IMAGE_DIGEST DOC_WORKE
   WORKSPACE_COMMAND_WORKER_IMAGE_DIGEST ARTIFACT_PREVIEW_WORKER_IMAGE_DIGEST RUNNER_IMAGE_DIGEST; do
   upsert_env_file_value "$key" "${!key}"
 done
+if [[ "$preview_capture_enabled" == true ]]; then
+  for key in PREVIEW_CAPTURE_IMAGE PREVIEW_CAPTURE_SECCOMP; do
+    upsert_env_file_value "$key" "${!key}"
+  done
+fi
 
 public_hostnames="$(read_env_file_value PUBLIC_HOSTNAMES)"
 if [[ "$public_hostnames" == *,* ]]; then
@@ -274,6 +313,23 @@ fi
 if [[ "$EXECUTION_WORKSPACES" == "1" ]]; then
   services+=(workspace-command-worker)
 fi
+if [[ "$preview_capture_enabled" == true ]]; then
+  services+=(preview-capture)
+else
+  # Turned off again: the renderer of an earlier deploy is no longer part of the stack.
+  # awk reads to the end: a reader that leaves early fails Compose's write under pipefail.
+  compose_project="$(compose config --format yaml | awk '/^name:/ && !found { print $2; found = 1 }')"
+  if [[ -n "$compose_project" ]]; then
+    previous_preview_capture="$(docker ps --all --quiet \
+      --filter "label=com.docker.compose.project=$compose_project" \
+      --filter label=com.docker.compose.service=preview-capture)"
+    if [[ -n "$previous_preview_capture" ]]; then
+      # shellcheck disable=SC2086
+      docker rm --force $previous_preview_capture > /dev/null
+      echo "Removed the preview-capture service: PREVIEW_CAPTURE_ENABLED is not true"
+    fi
+  fi
+fi
 compose up -d "${services[@]}"
 compose exec -T api node -e "fetch('http://127.0.0.1:4100/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" < /dev/null
 roll_agent_run_worker
@@ -290,6 +346,9 @@ require_release_image ui "$(release_image ui "$UI_IMAGE_DIGEST")"
 if [[ "$EXECUTION_WORKSPACES" == "1" ]]; then
   require_release_image workspace-command-worker \
     "$(release_image workspace-command-worker "$WORKSPACE_COMMAND_WORKER_IMAGE_DIGEST")"
+fi
+if [[ "$preview_capture_enabled" == true ]]; then
+  require_release_image preview-capture "$PREVIEW_CAPTURE_IMAGE"
 fi
 if [[ -n "$knowledge_worker_service" ]]; then
   require_release_image knowledge-worker "$(release_image api "$API_IMAGE_DIGEST")"

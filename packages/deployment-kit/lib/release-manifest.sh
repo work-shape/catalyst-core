@@ -13,6 +13,9 @@ set -euo pipefail
 
 asset_name="release-manifest.json"
 image_keys=(api ui doc-worker workspace-command-worker artifact-preview-worker runner)
+# Images a release may have. preview-capture is the PDF renderer (PDF-1), built by the
+# deployments that run it; a manifest without it stays valid.
+optional_image_keys=(preview-capture)
 
 usage() {
   cat <<'USAGE'
@@ -45,7 +48,8 @@ command -v jq >/dev/null 2>&1 || fail "jq is required"
 check_manifest() {
   local file="$1" commit="${2:-}"
   [[ -s "$file" ]] || fail "missing or empty manifest: $file"
-  jq -e --argjson keys "$(printf '%s\n' "${image_keys[@]}" | jq -R . | jq -sc .)" '
+  jq -e --argjson keys "$(printf '%s\n' "${image_keys[@]}" | jq -R . | jq -sc .)" \
+    --argjson optional "$(printf '%s\n' "${optional_image_keys[@]}" | jq -R . | jq -sc .)" '
     def sha: type == "string" and test("^[0-9a-f]{40}$");
     (if .schema == 2 then
       (.catalystVersion | type == "string"
@@ -56,7 +60,7 @@ check_manifest() {
     end)
     and (.release | type == "string" and test("^staging-[A-Za-z0-9_.-]+$"))
     and (.commits.deployment | sha)
-    and ((.images | keys) == ($keys | sort))
+    and (((.images | keys) - $optional) == ($keys | sort))
     and ([.images[] | type == "string" and test("^[a-z0-9][a-z0-9./_-]*@sha256:[0-9a-f]{64}$")] | all)
   ' "$file" >/dev/null || fail "invalid manifest: $file"
   if [[ -n "$commit" ]]; then
