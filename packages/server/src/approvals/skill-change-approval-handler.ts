@@ -17,7 +17,6 @@ import {
   auditActorFromUser,
   isJsonObject,
   unknownToJsonValue,
-  type ActorAccess,
   type ApprovalRequest,
   type ApprovalRequestContext,
   type ApprovalRequestHandler,
@@ -26,7 +25,8 @@ import {
   type ConfigAssetMutation,
   type ConfigAssetRevisionRecord,
   type SkillConfig,
-  type JsonObject
+  type JsonObject,
+  type OperationBeforeEvent
 } from "@work-shape/catalyst-core";
 import { createSkillSourceVersion } from "@work-shape/catalyst-tool-execution";
 import { z } from "zod";
@@ -35,7 +35,6 @@ import {
   type ConfigAssetWriterOptions
 } from "../assets/config-asset-writer";
 
-import { accessResource } from "../assets/asset-access";
 import { writesSharedDraft } from "../assets/shared-drafts";
 import {
   SKILL_APPROVE_ACTION,
@@ -43,11 +42,7 @@ import {
   skillApproveAssets,
   skillApproveResource
 } from "./skill-approval";
-import {
-  applySkillChangeDraft,
-  revertSkillChangeDraft,
-  skillDraftBefore
-} from "./skill-change-draft";
+import { revertSkillChangeDraft, skillDraftBefore } from "./skill-change-draft";
 
 const previewSchema = z.object({
   skillName: z.string(),
@@ -181,9 +176,8 @@ export function createSkillChangeApprovalHandler(
       if (context.status !== "pending") {
         return toJsonObject(data.preview);
       }
-      const skill = context.viewer
-        ? await currentSkill(data.skillName, context.viewer.access)
-        : await options.configAssets.source.getSkill(data.skillName);
+      // The live skill: an approval changes it, never a pending draft.
+      const skill = await currentSkill(data.skillName);
       try {
         return toJsonObject(createSkillChangePreview(skill, data.operations));
       } catch {
@@ -234,14 +228,33 @@ export function createSkillChangeApprovalHandler(
       const current = await currentSkill(data.skillName);
       // A change that no longer applies was found stale before this is asked.
       const skill = applySkillChange(current, data.operations);
+      const write: OperationBeforeEvent = {
+        name: "asset.before_write",
+        subject: { kind: "skill", name: skill.name, title: skill.title },
+        checkable: () => ({
+          name: skill.name,
+          content: guardrailFieldOf(guardrailStringsOf(skill))
+        })
+      };
+      // A team's or the instance's skill changes live only through a publish: the approval
+      // publishes it, so the guardrails on that publish read it too.
+      const live = await store.getConfigAsset({
+        clientInstanceId: options.clientInstanceId,
+        kind: "skill",
+        name: data.skillName
+      });
+      if (live?.status !== "active" || !(await writesSharedDraft(options, "skill", live.scope)))
+        return [write];
       return [
+        write,
         {
-          name: "asset.before_write",
-          subject: { kind: "skill", name: skill.name, title: skill.title },
-          checkable: () => ({
-            name: skill.name,
-            content: guardrailFieldOf(guardrailStringsOf(skill))
-          })
+          ...write,
+          name: "skill.before_publish",
+          subject: {
+            ...write.subject,
+            id: live.id,
+            ...(live.scope.kind === "workspace" ? { workspaceId: live.scope.workspaceId } : {})
+          }
         }
       ];
     },
@@ -319,26 +332,19 @@ export function createSkillChangeApprovalHandler(
         });
       }
       const skill = applySkillChange(snapshot.skill, data.operations);
-      if (
-        snapshot.live?.status === "active" &&
-        (await writesSharedDraft(options, "skill", snapshot.live.scope))
-      ) {
-        return applySkillChangeDraft(
-          options,
-          context,
-          user,
-          snapshot.live,
-          snapshot.draft,
-          toJsonObject(skill)
-        );
-      }
+      // An approved change goes live at once. A pending draft of the skill gets the same change
+      // and moves onto the new revision, so its own edits stay unpublished and its publish keeps
+      // the change; a draft the change does not apply to stays behind, and its publish is
+      // refused as stale.
+      const carried = carriedDraft(snapshot.draft, data.operations);
       const mutations: ConfigAssetMutation[] = [
         {
           type: "upsert",
           kind: "skill",
           name: skill.name,
           scope: snapshot.scopeOf("skill"),
-          config: toJsonObject(skill)
+          config: toJsonObject(skill),
+          ...(carried ? { draftCarried: carried } : {})
         }
       ];
       // An approved request is the review a deleted name needs: it names the tombstone.
@@ -478,24 +484,14 @@ export function createSkillChangeApprovalHandler(
       : undefined;
   }
 
-  async function currentSkill(name: string, access?: ActorAccess) {
+  /** The live skill whole, with its resources: what an approved change is made from. */
+  async function currentSkill(name: string) {
     const live = await store.getConfigAsset({
       clientInstanceId: options.clientInstanceId,
       kind: "skill",
       name
     });
-    if (live?.status !== "active") return undefined;
-    const mayReadDraft =
-      access === undefined ||
-      access.authorize("skill.write", accessResource("skill", name, live.scope, live.id)).allowed;
-    const draft =
-      mayReadDraft && (await writesSharedDraft(options, "skill", live.scope))
-        ? await options.stores.agentProposals.get({
-            clientInstanceId: options.clientInstanceId,
-            agentId: live.id
-          })
-        : undefined;
-    return skillConfigSchema.parse(draft?.config ?? live.config);
+    return live?.status === "active" ? skillConfigSchema.parse(live.config) : undefined;
   }
 
   /** Text operations may rebase; the workspace files the proposing agent saw must stay the same. */
@@ -562,10 +558,7 @@ export function createSkillChangeApprovalHandler(
        * The skill whole, with its resources, which the snapshot leaves out: the content of the
        * revision read above, so a change is made from what its base names.
        */
-      skill:
-        skill?.status === "active"
-          ? skillConfigSchema.parse(draft?.config ?? skill.config)
-          : undefined,
+      skill: skill?.status === "active" ? skillConfigSchema.parse(skill.config) : undefined,
       /** The last revision of the asset, a deleted one's included, or `null` for none. */
       revisionOf: (kind: (typeof CONFIG_ASSET_KINDS)[number], name: string) =>
         revisions.get(`${kind}:${name}`) ?? null,
@@ -589,6 +582,28 @@ function skillChangeResource(data: { skillName: string; subject?: SkillChangeSub
     scopeOfWorkspace(subject.workspaceId),
     subject.skillAssetId ?? undefined
   );
+}
+
+/**
+ * The pending draft with the approved change made to it, where it applies: what the write
+ * carries into the draft. Nothing without a draft or where the draft's own edits refuse it.
+ */
+function carriedDraft(
+  draft: { revision: number; config: JsonObject } | undefined,
+  operations: Parameters<typeof applySkillChange>[1]
+): { draftRevision: number; config: JsonObject } | undefined {
+  if (!draft) return undefined;
+  const parsed = skillConfigSchema.safeParse(draft.config);
+  if (!parsed.success) return undefined;
+  try {
+    return {
+      draftRevision: draft.revision,
+      config: toJsonObject(applySkillChange(parsed.data, operations))
+    };
+  } catch (error) {
+    if (error instanceof AppError && error.code === "VALIDATION_FAILED") return undefined;
+    throw error;
+  }
 }
 
 function workspaceOf(scope: AssetScope): string | null {

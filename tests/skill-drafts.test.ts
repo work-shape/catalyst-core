@@ -150,7 +150,7 @@ async function runFixture(blockPublish = false) {
 
 describe("a shared skill's draft", () => {
   it.each([false, true])(
-    "approves into the draft and publishes through the guard (blocked: %s)",
+    "publishes an approved change through the publish guard (blocked: %s)",
     async (blockPublish) => {
       const t = await runFixture(blockPublish);
       const user = (await t.app.stores.users.listUsers({ clientInstanceId: t.instance }))[0];
@@ -177,35 +177,33 @@ describe("a shared skill's draft", () => {
           preview: createSkillChangePreview(before, operations)
         })
       });
-      const approved = await t.ok(
+      const decided = await t.ok(
         t.app.call("approval_requests.decide", {
           params: { requestId: request.id },
           payload: { decision: "approve" }
         })
       );
-      expect(approved.json()).toMatchObject({
-        status: "approved",
-        applyResult: { draftRevision: 1, publishedRevision: 1 }
-      });
       const live = () =>
         t.app.stores.configAssets.getConfigAsset({ clientInstanceId: t.instance, ...SKILL });
-      expect(await live()).toMatchObject({ revision: 1, config: { content: "LIVE-RULE" } });
+      if (blockPublish) {
+        // The guardrail on the skill's publish ends the approved request unapplied.
+        expect(decided.json()).toMatchObject({
+          status: "superseded",
+          applyResult: { execution: "refused", error: { code: "GUARDRAIL_BLOCKED" } }
+        });
+        expect(decided.body).toContain("Review skill publishing");
+        expect(await live()).toMatchObject({ revision: 1, config: { content: "LIVE-RULE" } });
+      } else {
+        expect(decided.json()).toMatchObject({
+          status: "approved",
+          applyResult: { revision: 2 }
+        });
+        expect(await live()).toMatchObject({ revision: 2, config: { content: "APPROVED-RULE" } });
+      }
       const draft = draftSchema.parse(
         (await t.ok(t.app.call("skills.draft.get", { params: { name: SKILL.name } }))).json()
       ).draft;
-      expect(draft).toMatchObject({ revision: 1, config: { content: "APPROVED-RULE" } });
-      const blocked = await t.app.call("assets.publish", {
-        params: SKILL,
-        payload: { revision: 1 }
-      });
-      if (blockPublish) {
-        expect(blocked.statusCode, blocked.body).toBe(403);
-        expect(blocked.body).toContain("Review skill publishing");
-        expect(await live()).toMatchObject({ revision: 1, config: { content: "LIVE-RULE" } });
-      } else {
-        expect(blocked.statusCode, blocked.body).toBe(200);
-        expect(await live()).toMatchObject({ revision: 2, config: { content: "APPROVED-RULE" } });
-      }
+      expect(draft).toBeNull();
     }
   );
 

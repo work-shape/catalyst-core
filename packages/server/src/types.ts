@@ -93,7 +93,10 @@ export interface ChatServerOptions {
    * The approval kinds of the instance. The server adds `operation_call`, the kind a call that
    * waits for another person is decided on.
    */
-  approvalRequests?: Pick<ApprovalRequestWorkflowOptions, "store" | "handlers" | "onDecided">;
+  approvalRequests?: Pick<
+    ApprovalRequestWorkflowOptions,
+    "store" | "handlers" | "onDecided" | "checks"
+  >;
   /**
    * The call path the assembly built, where agents of this process call tools on it too.
    * Without one the server builds its own from the options below.

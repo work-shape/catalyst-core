@@ -65,6 +65,8 @@ export interface InstanceOperationCalls {
   operationCalls: OperationCalls;
   /** Files approval requests of every kind of the instance, a held call's among them. */
   approvalRequestCreator: ApprovalRequestWorkflow;
+  /** The one check of the process, which the Inbox's decisions take too. */
+  checks: BeforeActionCheck;
 }
 
 /**
@@ -150,7 +152,7 @@ export function createInstanceOperationCalls(
     onDecided: (request) => store.approvals.appendApprovalDecision(request),
     auditRecorder
   });
-  return { authorizer, operationCalls, approvalRequestCreator };
+  return { authorizer, operationCalls, approvalRequestCreator, checks };
 }
 
 /** What an agent's runs get of the instance's tools. */

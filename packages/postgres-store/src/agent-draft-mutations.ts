@@ -148,6 +148,45 @@ export async function carryAgentToolsGiven(
   );
 }
 
+/**
+ * An approved change written live goes into the pending draft too (`draftCarried`): the draft
+ * at the named revision, written on the live revision the change replaced, gets the content the
+ * change made of it and moves onto the new revision with its author and its folder. Any other
+ * draft stays as it is.
+ */
+export async function carryApprovedChange(
+  tx: PostgresTransaction,
+  input: {
+    clientInstanceId: ClientInstanceId;
+    agentId: string;
+    /** The live revision the change replaced. */
+    replacedRevision: number;
+    /** The live revision the change wrote. */
+    revision: number;
+    carried: { draftRevision: number; config: JsonObject };
+    savedAt: string;
+  }
+): Promise<void> {
+  const draft = await getAgentProposal(tx, input);
+  if (
+    draft?.revision !== input.carried.draftRevision ||
+    draft.baseRevision !== input.replacedRevision
+  )
+    return;
+  const saved = await saveAgentProposal(tx, {
+    clientInstanceId: input.clientInstanceId,
+    agentId: input.agentId,
+    savedAt: input.savedAt,
+    config: input.carried.config,
+    ...(draft.fileSetId === undefined ? {} : { fileSetId: draft.fileSetId }),
+    baseRevision: input.revision,
+    expectedDraftRevision: draft.revision,
+    author: draft.author
+  });
+  if (!saved)
+    throw new AppError("REVISION_CONFLICT", "The draft changed", { reason: "draft_changed" });
+}
+
 /** Saves the draft's new content on the live revision `revision` as its base, by its own author. */
 async function carryIntoDraft(
   tx: PostgresTransaction,
