@@ -34,6 +34,9 @@ import {
 const S3_CHECK_CONNECTION_TIMEOUT_MS = 2_000;
 const S3_CHECK_REQUEST_TIMEOUT_MS = 4_000;
 
+/** How long the store's own reads and writes may take to connect. */
+const S3_CONNECTION_TIMEOUT_MS = 10_000;
+
 /** The check of each store this adapter created. A store of another adapter has none. */
 const checksOfStores = new WeakMap<
   ObjectStorage,
@@ -46,6 +49,12 @@ const s3ConfigSchema = z.object({
   bucketRegion: z.string().min(1).default("us-east-1"),
   endpoint: z.string().url().optional(),
   forcePathStyle: z.boolean().default(true),
+  /**
+   * How long a read or write may leave its connection silent before it fails as unreachable.
+   * Silence, not duration: a large object that keeps moving takes as long as it needs, while a
+   * store that stops answering frees the request that waits on it instead of holding it.
+   */
+  idleTimeoutMs: z.number().int().positive().max(600_000).default(60_000),
   accessKeySecret: secretRef().default("AWS_ACCESS_KEY_ID"),
   secretKeySecret: secretRef().default("AWS_SECRET_ACCESS_KEY")
 });
@@ -67,7 +76,16 @@ export const s3ObjectStorageProvider = defineProvider({
       }
     };
     const storage = guardObjectStorage(
-      new S3ObjectStorage(config.bucket, new S3Client(clientConfig)),
+      new S3ObjectStorage(
+        config.bucket,
+        new S3Client({
+          ...clientConfig,
+          requestHandler: {
+            connectionTimeout: S3_CONNECTION_TIMEOUT_MS,
+            socketTimeout: config.idleTimeoutMs
+          }
+        })
+      ),
       { entryPath }
     );
     // The check has a client of its own: one attempt inside tight transport bounds, which the
@@ -78,7 +96,9 @@ export const s3ObjectStorageProvider = defineProvider({
       maxAttempts: 1,
       requestHandler: {
         connectionTimeout: S3_CHECK_CONNECTION_TIMEOUT_MS,
-        requestTimeout: S3_CHECK_REQUEST_TIMEOUT_MS
+        requestTimeout: S3_CHECK_REQUEST_TIMEOUT_MS,
+        // Without it the SDK only logs that the time is up and leaves the request open.
+        throwOnRequestTimeout: true
       }
     });
     checksOfStores.set(storage, ({ signal }) => checkBucket(checkClient, config.bucket, signal));

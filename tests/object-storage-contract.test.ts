@@ -528,6 +528,42 @@ describe("object storage failures", () => {
     }
   });
 
+  it("fails a read and a write to a store that stops answering instead of holding them", async () => {
+    let open = 0;
+    // It accepts the connection and never writes an answer, as a stalled store does.
+    const server = createServer(() => {});
+    server.on("connection", (socket) => {
+      open += 1;
+      socket.on("close", () => {
+        open -= 1;
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (address === null || typeof address === "string") throw new Error("No port was assigned");
+    try {
+      const storage = await s3Storage({
+        endpoint: `http://127.0.0.1:${address.port}`,
+        bucket: "stalled",
+        idleTimeoutMs: 300
+      });
+
+      const failures = await Promise.all([
+        storage.put("a.txt", encode("x")).catch((error: unknown) => error),
+        storage.get("a.txt").catch((error: unknown) => error)
+      ]);
+
+      for (const failure of failures) {
+        expect(failure).toBeInstanceOf(ObjectStorageUnavailable);
+        expect(failure).toMatchObject({ failure: "unreachable" });
+      }
+      await expect.poll(() => open, { timeout: 2_000 }).toBe(0);
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  }, 20_000);
+
   it("tells a missing bucket and refused credentials apart, without the vendor's text", async () => {
     const missingBucket = await vendorAnswering(404, "NoSuchBucket");
     const refused = await vendorAnswering(403, "AccessDenied");
