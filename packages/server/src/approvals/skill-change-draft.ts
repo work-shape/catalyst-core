@@ -14,8 +14,11 @@ import {
   type ConfigAssetWriterOptions
 } from "../assets/config-asset-writer";
 
-/** Draft writes and their decisions commit together: they need no live revision as a receipt. */
-export async function applySkillChangeDraft(
+/**
+ * Writes a skill draft with its decision, in one transaction. Approvals filed before an approved
+ * change went live wrote the draft; their undo writes it back through here.
+ */
+async function applySkillChangeDraft(
   options: ConfigAssetWriterOptions,
   context: ApprovalRequestContext,
   user: AuthenticatedUser,

@@ -167,6 +167,12 @@ export interface ApprovalRequestHandler<TPayload extends JsonObject = JsonObject
    */
   alsoDecidedSubjects?(access: ActorAccess): Promise<readonly JsonObject[]>;
   validate(payload: JsonObject): TPayload;
+  /**
+   * The payload as the request is filed with it, asked once after `validate`: what the kind
+   * reads of the instance when the request is made, such as the asset `resourceOf` names, so
+   * the filer need not know it.
+   */
+  filedPayload?(payload: TPayload): Promise<TPayload>;
   /** Proposed new content only; the workflow adds the request summary. */
   checkContent?(payload: TPayload): string;
   revert?(

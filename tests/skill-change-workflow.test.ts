@@ -774,8 +774,9 @@ describe("skill change tool and wiring policy", () => {
       }
     }).then(getTestExecution);
     try {
+      // Asked on the skill a request changes; `agent_skills.approve` carries it on the instance.
       expect(assembly.approvalRequestHandlers.get("skill_change")?.requiredPermission).toBe(
-        "agent_skills.approve"
+        "skill.approve"
       );
       expect(
         assembly.localAgentRuntimeOptions.toolRegistry.listDescriptorsForAgent([

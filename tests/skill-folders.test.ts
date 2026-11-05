@@ -661,27 +661,24 @@ Thirty days a year.
         decision: "approve"
       })
     ).toMatchObject({ status: "approved" });
-    // Approval saves the team's draft; its live folder stays as it was until Publish.
-    expect((await kept()).config.content).toBe(before.config.content);
-    const pending = await world.api.call("skills.draft.get", {
-      params: { name: SKILL.name },
-      query: { workspaceId, files: "true" }
-    });
-    expect(pending.statusCode, pending.body).toBe(200);
-    const draft = z.object({ draft: readSchema }).parse(pending.json()).draft;
-    expect(draft.config.content).toContain("Always run `scripts/fill_form.py`");
-    const draftPdf = required(required(draft.files).find(({ path }) => path === "assets/form.pdf"));
-    expect(bytesOf(draftPdf).equals(PDF)).toBe(true);
-    const publishedApproval = await world.api.call("assets.publish", {
-      params: SKILL,
-      payload: { revision: draft.revision, workspaceId }
-    });
-    expect(publishedApproval.statusCode, publishedApproval.body).toBe(200);
+    // Approval publishes the change: the team's live skill has it and keeps its folder.
+    expect(
+      (
+        await world.api.call("skills.draft.get", {
+          params: { name: SKILL.name },
+          query: { workspaceId }
+        })
+      ).json()
+    ).toMatchObject({ draft: null });
     const approved = await kept();
     expect(approved.config.content).toContain("Always run `scripts/fill_form.py`");
     expect(required(approved.files).find(({ path }) => path === "SKILL.md")?.text).toContain(
       "Always run"
     );
+    const approvedPdf = required(
+      required(approved.files).find(({ path }) => path === "assets/form.pdf")
+    );
+    expect(bytesOf(approvedPdf).equals(PDF)).toBe(true);
 
     // 2. A sync of the workspace's config, as today's CLI sends it: the text and no file.
     const { files: _index, frontmatter: _kept, ...text } = approved.config;

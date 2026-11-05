@@ -7,7 +7,8 @@ import {
   writeAgentDraft,
   consumeAgentDraft,
   carryAgentSkillChange,
-  carryAgentToolsGiven
+  carryAgentToolsGiven,
+  carryApprovedChange
 } from "./agent-draft-mutations";
 import { keysetFilter } from "./paging";
 import { and, asc, desc, eq, inArray, max, or, sql, type SQL } from "drizzle-orm";
@@ -450,6 +451,16 @@ async function applyConfigAssetMutations(
           agentId: asset.id,
           revision: asset.newest,
           change: mutation.agentSkillChange,
+          savedAt: now.toISOString()
+        });
+      }
+      if (mutation.draftCarried) {
+        await carryApprovedChange(tx, {
+          clientInstanceId: input.clientInstanceId,
+          agentId: asset.id,
+          replacedRevision: current.get(key)?.revision.revision ?? 0,
+          revision: asset.newest,
+          carried: mutation.draftCarried,
           savedAt: now.toISOString()
         });
       }

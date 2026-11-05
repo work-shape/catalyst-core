@@ -260,6 +260,8 @@ export async function createClientInstanceApp(
     approvalRequests: {
       store: store.approvals,
       handlers: execution.approvalRequestHandlers,
+      // An approval through the Inbox answers at the before-events the request's apply raises.
+      checks: execution.beforeActionChecks,
       onDecided: (request) => store.approvals.appendApprovalDecision(request)
     },
     configAssets: execution.configAssets,
@@ -670,25 +672,26 @@ export async function createClientInstanceExecutionAssembly(
     }
   });
   const { conversationOffer } = platformTools;
-  const { authorizer, operationCalls, approvalRequestCreator } = createInstanceOperationCalls({
-    clientInstanceId,
-    conversationOffer,
-    config,
-    logger,
-    modules,
-    store,
-    auditRecorder,
-    assetSource,
-    configAssets,
-    approvalRequestHandlers,
-    operations: input.operations,
-    capabilityChecks: capabilityContributions.flatMap((contribution) =>
-      contribution.beforeActionCheck ? [contribution.beforeActionCheck] : []
-    ),
-    ...(moduleAssembly.publishNarrativeData
-      ? { publishStoredData: moduleAssembly.publishNarrativeData }
-      : {})
-  });
+  const { authorizer, operationCalls, approvalRequestCreator, checks } =
+    createInstanceOperationCalls({
+      clientInstanceId,
+      conversationOffer,
+      config,
+      logger,
+      modules,
+      store,
+      auditRecorder,
+      assetSource,
+      configAssets,
+      approvalRequestHandlers,
+      operations: input.operations,
+      capabilityChecks: capabilityContributions.flatMap((contribution) =>
+        contribution.beforeActionCheck ? [contribution.beforeActionCheck] : []
+      ),
+      ...(moduleAssembly.publishNarrativeData
+        ? { publishStoredData: moduleAssembly.publishNarrativeData }
+        : {})
+    });
   const handlers = operationCalls.approvalRequestHandlers;
   // The agent's asset tools are carried out by the asset operations, in this process too.
   const assetOptions = { logger, config, modules, clientInstanceId, stores: store, pages };
@@ -957,6 +960,7 @@ export async function createClientInstanceExecutionAssembly(
     authorizer,
     operationCalls,
     approvalRequestHandlers: handlers,
+    beforeActionChecks: checks,
     connections,
     modulesStarted,
     noticeMail,

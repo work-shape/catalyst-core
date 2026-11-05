@@ -147,7 +147,13 @@ describe("who may write a grant, and what a grant may say", () => {
       ],
       [{ ...base, action: "users.manage" }, 422, "VALIDATION_FAILED", "action_not_grantable"],
       [{ ...base, action: "assets.release" }, 422, "VALIDATION_FAILED", "action_not_grantable"],
-      [{ ...base, action: "skill.approve" }, 422, "VALIDATION_FAILED", "action_not_grantable"],
+      // On the instance, approving skill changes stays the legacy key's.
+      [
+        { ...base, action: "skill.approve", scopeKind: "instance", scopeId: undefined },
+        422,
+        "VALIDATION_FAILED",
+        "invalid_scope"
+      ],
       [{ ...base, action: "config_assets.write" }, 422, "VALIDATION_FAILED", "unknown_action"],
       [{ ...base, action: "ref:demo-tools" }, 422, "VALIDATION_FAILED", "unknown_action"],
       [{ ...base, action: "unregistered.action" }, 422, "VALIDATION_FAILED", "unknown_action"],

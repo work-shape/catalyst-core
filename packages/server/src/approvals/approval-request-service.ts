@@ -114,7 +114,8 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
   ): Promise<ApprovalRequest> {
     this.assertClientInstance(user);
     const handler = this.handler(command.kind);
-    const payload = handler.validate(command.payload);
+    const validated = handler.validate(command.payload);
+    const payload = handler.filedPayload ? await handler.filedPayload(validated) : validated;
     if (!command.summary.trim()) {
       throw new AppError("VALIDATION_FAILED", "Approval request summary is required");
     }
@@ -841,7 +842,8 @@ function requireDecidingRight(
     access.require(handler.requiredPermission, resourceOfRequest(handler, request));
 }
 
-function alsoDecidedByOf(
+/** The narrower right that decides one request in place of the kind's, where it names one. */
+export function alsoDecidedByOf(
   handler: ApprovalRequestHandler,
   request: ApprovalRequest
 ): ApprovalFurtherRight | undefined {

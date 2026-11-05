@@ -26,6 +26,7 @@ import {
   type HeldOperationCallEnderOptions
 } from "./operation-call-approval-handler";
 import { connectionSubjectOf } from "./connection-approval";
+import { heldSkillSubjectOf } from "./skill-approval";
 import type { HeldCallApprovalKind } from "./held-call-kind";
 import { payloadSchema, toJsonObject, type OperationCallPayload } from "./operation-call-payload";
 
@@ -56,7 +57,10 @@ export interface OperationApprovalFilerOptions {
   held: readonly HeldCallApprovalKind[];
   assetPreview?: HeldAssetPreviewer;
   authorizer?: Authorizer;
-  /** Where the Connection a held call is about is read, for `connection.approve`. */
+  /**
+   * Where the Connection or the skill a held call is about is read, for `connection.approve`
+   * and `skill.approve`.
+   */
   configAssets?: Pick<ConfigAssetStore, "getConfigAsset">;
 }
 
@@ -115,16 +119,16 @@ export function createOperationApprovalFiler(
         );
       }
       const heldBy = payloadSchema.shape.heldBy.unwrap().safeParse(policySource);
-      // A call on one Connection names it, so `connection.approve` on it decides the request.
-      const connection =
+      // A call on one Connection names it, so `connection.approve` on it decides the request;
+      // a save or deletion of one skill names the skill, so `skill.approve` on it does.
+      const assetsOf =
         approval?.subject || confirmation || !options.configAssets
           ? undefined
-          : await connectionSubjectOf(
-              { clientInstanceId: options.clientInstanceId, store: options.configAssets },
-              run.operation,
-              input,
-              resource
-            );
+          : { clientInstanceId: options.clientInstanceId, store: options.configAssets };
+      const assetSubject =
+        assetsOf &&
+        ((await connectionSubjectOf(assetsOf, run.operation, input, resource)) ??
+          (await heldSkillSubjectOf(assetsOf, run.operation, input)));
       const payload: OperationCallPayload = {
         runId: run.id,
         operation: run.operation,
@@ -152,7 +156,7 @@ export function createOperationApprovalFiler(
               }
             }
           : {}),
-        ...(connection ? { subject: connection } : {}),
+        ...(assetSubject ? { subject: assetSubject } : {}),
         ...(confirmation && approval?.subject ? { subjectKind: approval.kind } : {}),
         actor: {
           id: actor.id,

@@ -465,6 +465,14 @@ export type ConfigAssetMutation =
        * a pending draft keeps its content and author, gains these tools and moves onto it.
        */
       agentToolsGiven?: readonly string[];
+      /**
+       * An approved change written to the live revision, carried into the pending draft: the
+       * draft at `draftRevision`, written on the live revision this write replaces, gets
+       * `config` in place of its own and moves onto the new revision, keeping its author and its
+       * folder. A draft that changed since, or was behind already, stays as it is, so its
+       * publish is refused as stale and cannot undo the change.
+       */
+      draftCarried?: { draftRevision: number; config: JsonObject };
       /** The file set of the revision, stored before the write, for a `files` kind. */
       fileSetId?: FileSetId;
       /** The commit of the revision and its bundle, for an asset whose content is a repository. */

@@ -56,6 +56,7 @@ import {
   type OperationCallPayload
 } from "./operation-call-payload";
 import { connectionApproveRight, connectionApproveSubjects } from "./connection-approval";
+import { heldSkillApproveRight, skillApproveAssets } from "./skill-approval";
 import { PUBLISH_APPROVAL_KINDS } from "./publish-approval";
 import { z } from "zod";
 import { heldHandoverLines } from "./held-handover-preview";
@@ -164,18 +165,25 @@ export function createOperationCallApprovalHandler(
     },
     ...onAsset(held),
     // A plain held call on one Connection is decided by `operations.approve`, or by
-    // `connection.approve` on that Connection. A confirmation is its person's alone.
+    // `connection.approve` on that Connection; a held save or deletion of one skill by
+    // `skill.approve` on that skill. A confirmation is its person's alone.
     ...(held
       ? {}
       : {
           alsoDecidedBy: (payload: JsonObject) => {
             const call = parsePayload(payload);
             return call.mode === undefined && call.subjectKind === undefined
-              ? connectionApproveRight(call.subject)
+              ? (connectionApproveRight(call.subject) ?? heldSkillApproveRight(call.subject))
               : undefined;
           },
-          alsoDecidedSubjects: (access: ActorAccess) =>
-            connectionApproveSubjects({ clientInstanceId, store: options.configAssets }, access)
+          alsoDecidedSubjects: async (access: ActorAccess) => {
+            const assets = { clientInstanceId, store: options.configAssets };
+            const [connections, skills] = await Promise.all([
+              connectionApproveSubjects(assets, access),
+              skillApproveAssets(assets, access)
+            ]);
+            return [...connections, ...skills.map((skill) => ({ skillAssetId: skill.id }))];
+          }
         }),
     validate(payload) {
       return toJsonObject(parsePayload(payload));
