@@ -1,7 +1,7 @@
 import { OPERATION_EFFECTS } from "@work-shape/catalyst-asset-schemas";
 import {
   AGENT_STARTERS_MAX,
-  SUBJECT_TOOL_PREFIX,
+  agentBuildsAssets,
   authorReasoningEffort,
   defaultReasoningEffortForAgentBinding,
   modelRouteAllowedForPersonalData,
@@ -30,9 +30,6 @@ import {
   getPersonalModelRegions,
   resolveModelBinding
 } from "./selectors";
-
-/** The tool that saves and creates assets: an agent that lists it builds them. */
-const ASSET_PUT_TOOL = `${SUBJECT_TOOL_PREFIX}put`;
 
 export interface SafeConfigViewOptions extends ConfigLocaleInput {
   /**
@@ -152,7 +149,7 @@ export function createSafeConfigView(
         agent,
         options.mayWriteAgent?.(agent.name) ?? true
       ),
-      ...(agent.toolNames.includes(ASSET_PUT_TOOL) ? { buildsAssets: true } : {}),
+      ...(agentBuildsAssets(agent) ? { buildsAssets: true } : {}),
       welcomeMessage: resolveLocalizedString(
         agent.welcomeMessage,
         locale,

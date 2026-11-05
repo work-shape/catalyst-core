@@ -65,7 +65,7 @@ test("Build beside an agent with a draft starts a conversation about that agent 
   );
   // The conversation is about this agent, with the suite's agent that builds.
   await expect(chatColumn(page)).toContainText(`Was soll sich an „${title}“ ändern?`);
-  await expect(page.getByTestId("dock-head")).toContainText("Application Assistant");
+  await expect(page.getByTestId("dock-head")).toContainText("Asset Builder");
   await expect(page.getByTestId("dock-head")).toContainText(`Arbeitet an: ${title}`);
   await expect(chatColumn(page)).not.toContainText("Was soll der neue Agent tun?");
   await expect(chatColumn(page)).not.toContainText("Kundenfragen beantworten");

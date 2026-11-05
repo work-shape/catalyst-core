@@ -21,7 +21,6 @@ toolNames:
   - platform.assets.open
   - platform.assets.get
   - platform.assets.validate
-  - platform.assets.put
   - platform.assets.operations
   - platform.connections.propose
   - platform.connections.draft_tools

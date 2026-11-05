@@ -210,21 +210,21 @@ describe("one conversation that builds what an App needs", () => {
     );
     expect(remade.answer).toContain(`did not create the workflow '${CREATED}'`);
 
-    // A person without the right to write a Workflow creates none, told the right it needs.
-    const theirs = await about(OTHER);
-    const denied = await t.say(
-      theirs,
-      `/tool platform.assets.put ${JSON.stringify({ kind: WORKFLOW_ASSET_KIND, name: "their-check", config: { ...config(), name: "their-check" } })}`,
+    // A person who may not build is offered no agent that builds, so has none to create one
+    // with: the agent of this instance builds, and a run needs an agent.
+    const { id: theirs } = z
+      .object({ id: z.string() })
+      .parse((await t.ok(t.converse(undefined, OTHER))).json());
+    const notOffered = await t.app.call(
+      "conversations.runs.start",
+      {
+        params: { conversationId: theirs },
+        payload: { idempotencyKey: "theirs", message: { text: "Build a check." } }
+      },
       OTHER
     );
-    expect(denied.answer).toContain("workflow.write");
-    expect(
-      await t.app.stores.configAssets.getConfigAsset({
-        clientInstanceId: t.clientInstanceId,
-        kind: WORKFLOW_ASSET_KIND,
-        name: "their-check"
-      })
-    ).toBeUndefined();
+    expect(notOffered.statusCode).toBe(422);
+    expect(notOffered.body).toContain("No default agent");
 
     // No tool of the conversation publishes either asset.
     expect(PLATFORM_TOOL_NAMES.filter((name) => name.includes("publish"))).toEqual([]);

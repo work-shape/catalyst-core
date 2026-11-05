@@ -2,7 +2,9 @@ import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   hasAuthScope,
   INSTANCE_ASSET_SCOPE,
+  agentBuildsAssets,
   agentUseRefusalOf,
+  BUILDER_BUNDLE,
   auditActorFromIdentity,
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
@@ -84,21 +86,32 @@ async function workspaceDefaultAgent(
 /**
  * Whether the caller may use an agent that is available where they are (AGENT-USE-1). An agent
  * set to Everyone is used by everyone who may work there, unless a covering deny of `agent.use`
- * refuses; a limited one only where a row allows `agent.use` on it.
+ * refuses; a limited one only where a row allows `agent.use` on it. An agent that builds assets
+ * only by whoever may build in the workspace (`agentUseRefusalOf`).
  */
 export function agentUseRefusal(
   access: ActorAccess,
-  assets: Pick<RuntimeAssetSnapshot, "agentKeys">,
+  assets: Pick<RuntimeAssetSnapshot, "agentKeys"> & {
+    agents: readonly { name: string; toolNames: readonly string[] }[];
+  },
   limited: ReadonlySet<string>,
-  agentName: string
+  agentName: string,
+  workspace: WorkspaceRef
 ): AgentUseRefusal | undefined {
   const key = assets.agentKeys?.get(agentName);
+  const agent = assets.agents.find((candidate) => candidate.name === agentName);
   return agentUseRefusalOf(
     access.authorize(
       AGENT_USE,
       accessResource(AGENT_KIND, agentName, key?.scope ?? INSTANCE_ASSET_SCOPE, key?.id)
     ),
-    limited.has(agentName)
+    limited.has(agentName),
+    agent !== undefined && agentBuildsAssets(agent)
+      ? access.authorize(
+          BUILDER_BUNDLE,
+          workspace.id === undefined ? {} : { workspaceId: workspace.id }
+        )
+      : undefined
   );
 }
 
@@ -121,7 +134,7 @@ export async function getWorkspaceAssetSnapshot(
     workspace
   );
   const agents = available.filter(
-    (agent) => agentUseRefusal(access, assets, limited, agent.name) === undefined
+    (agent) => agentUseRefusal(access, assets, limited, agent.name, workspace) === undefined
   );
   return {
     ...assets,
@@ -189,7 +202,8 @@ export async function ownAgents(
       owners.set(scope.workspaceId, owned);
     }
     if (!(await owned)) continue;
-    if (agentUseRefusal(caller.access, assets, limited, agent.name) !== undefined) continue;
+    const home = { kind: "personal" as const, id: scope.workspaceId };
+    if (agentUseRefusal(caller.access, assets, limited, agent.name, home) !== undefined) continue;
     own.push(agent);
   }
   return own;
@@ -234,7 +248,7 @@ export async function agentUseRefusalIn(
 ): Promise<AgentUseRefusal | undefined> {
   const { assets, available, limited } = await offeredAgents(options, input.workspace);
   if (!available.some((agent) => agent.name === input.agentName)) return undefined;
-  const refusal = agentUseRefusal(input.access, assets, limited, input.agentName);
+  const refusal = agentUseRefusal(input.access, assets, limited, input.agentName, input.workspace);
   if (refusal !== undefined)
     await recordAgentUseRefusal(
       options,

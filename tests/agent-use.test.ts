@@ -63,6 +63,8 @@ const queuedRuntime: AgentRuntime = {
 async function setup() {
   const t = await setupAccessInstance({
     storedAssetSource: true,
+    // The tool that makes an agent one that builds (`agentBuildsAssets`).
+    furtherToolNames: ["platform.assets.put"],
     server: () => ({ agentRuntime: queuedRuntime })
   });
   instances.push(t);
@@ -365,6 +367,53 @@ describe("agent.use", () => {
     });
     const refused = await start(t.kai.id, await conversation(t.kai.id, elsewhere));
     expect(refused.statusCode).toBe(404);
+  });
+
+  it("offers an agent that builds only to whoever may build in the workspace, by Builder or as an admin", async () => {
+    const { t, kai, conversation, start } = await setup();
+    const BUILDING = "site_builder";
+    await t.expectOk(t.admin.id, "assets.put", {
+      params: { kind: "agent", name: BUILDING },
+      payload: {
+        config: agent(BUILDING, { toolNames: ["platform.assets.put"] }),
+        availableIn: { workspaceId: kai }
+      }
+    });
+    const buildingAgentId = await t.assetId("agent", BUILDING);
+    const listedIn = async (userId: string) =>
+      agentsListed
+        .parse(
+          (
+            await t.expectOk(userId, "workspaces.agents.list", {
+              params: { collaborationWorkspaceId: kai }
+            })
+          ).json()
+        )
+        .items.map((listedAgent) => listedAgent.name);
+
+    // A member without Builder: not in the picker, and refused by name over the API, also with
+    // a grant of `agent.use` on it. The agent that builds nothing stays theirs.
+    await t.grant(t.kai.id, "agent.use", { assetId: buildingAgentId });
+    expect(await listedIn(t.kai.id)).toEqual(expect.arrayContaining([AGENT]));
+    expect(await listedIn(t.kai.id)).not.toContain(BUILDING);
+    const refused = await start(t.kai.id, await conversation(t.kai.id, kai), BUILDING);
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json()).toMatchObject({
+      error: { code: "FORBIDDEN", details: { action: "agent.use", reason: "no_grant" } }
+    });
+
+    // Builder in the workspace offers it there, and nowhere else.
+    await t.grant(t.lena.id, "builder", { workspaceId: kai });
+    expect(await listedIn(t.lena.id)).toContain(BUILDING);
+    expect((await start(t.lena.id, await conversation(t.lena.id, kai), BUILDING)).statusCode).toBe(
+      200
+    );
+
+    // An instance admin holds Builder everywhere.
+    expect(await listedIn(t.admin.id)).toContain(BUILDING);
+    expect(
+      (await start(t.admin.id, await conversation(t.admin.id, kai), BUILDING)).statusCode
+    ).toBe(200);
   });
 
   it("lets a deny keep one person from an agent everyone else uses", async () => {

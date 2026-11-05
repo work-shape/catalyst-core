@@ -470,6 +470,14 @@ describe("the Try conversation of an agent", () => {
         }
       })
     );
+    // The agent builds, and only whoever may build talks to it: in a Personal Workspace, where
+    // no grant of Builder is held, an admin.
+    await t.ok(
+      t.app.call("users.update", {
+        params: { userId: person?.createdByUserId ?? "" },
+        payload: { roles: ["user", "admin"] }
+      })
+    );
     // The Build conversation is the newer one, so the deletion lists it first.
     await t.say(conversation.id, "Try it.", OTHER);
     await t.say(build, "Build it.", OTHER);

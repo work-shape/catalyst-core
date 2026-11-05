@@ -16,8 +16,10 @@ import { createUploadFileContent } from "@work-shape/catalyst-capability-sdk";
 import type { WorkflowRunFiles } from "@work-shape/catalyst-workflows";
 import {
   AppError,
+  agentBuildsAssets,
   agentUseRefusalOf,
   asUserId,
+  BUILDER_BUNDLE,
   isAppError,
   PENDING_ATTACHMENT_STATUSES,
   createAuthorizer,
@@ -28,6 +30,7 @@ import {
   type AttachmentManifest,
   type AuthenticatedUser,
   type ClientInstanceId,
+  type ConfigAssetSource,
   type JobWorker,
   type Logger,
   type OperationRegistry,
@@ -74,7 +77,12 @@ export function createClientInstanceAgentRunJobs(
     stores: execution.store,
     slots: readAgentRunWorkerConcurrency(execution.env) ?? DEFAULT_AGENT_RUN_WORKER_SLOTS,
     loadCurrentUser: (run) =>
-      loadCurrentUser(execution.store, execution.operationCalls.registry, run),
+      loadCurrentUser(
+        execution.store,
+        execution.operationCalls.registry,
+        execution.localAgentRuntimeOptions.assetSource,
+        run
+      ),
     loadWorkflowAgent: (run) => workflowAgentInput(execution.store, run),
     ...withWorkflowFiles(execution),
     loadWorkflowAgentDraft: async (run) => {
@@ -123,20 +131,26 @@ export function readAgentRunWorkerConcurrency(env: ClientInstanceEnv): number | 
   return value;
 }
 
-/** Whether `agent.use` refuses the owner the agent now (AGENT-USE-1), as a new start decides. */
+/**
+ * Whether `agent.use` refuses the owner the agent now (AGENT-USE-1), as a new start decides: an
+ * agent that builds assets only for whoever may build in the workspace.
+ */
 async function scheduledAgentUseRefused(
   store: PlatformStores,
+  assetSource: ConfigAssetSource,
   owner: AuthenticatedUser,
-  agentName: string
+  agentName: string,
+  workspaceId: string
 ): Promise<boolean> {
-  const [limited, asset, access] = await Promise.all([
+  const [limited, asset, access, assets] = await Promise.all([
     store.configAssets.listAgentUseLimits({ clientInstanceId: owner.clientInstanceId, agentName }),
     store.configAssets.getConfigAsset({
       clientInstanceId: owner.clientInstanceId,
       kind: "agent",
       name: agentName
     }),
-    createAuthorizer(store.access).forActor(owner)
+    createAuthorizer(store.access).forActor(owner),
+    assetSource.getSnapshot()
   ]);
   const resource = {
     kind: "agent",
@@ -144,14 +158,22 @@ async function scheduledAgentUseRefused(
     ...(asset ? { assetId: asset.id } : {}),
     ...(asset?.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
   };
+  const agent = assets.agents.find((candidate) => candidate.name === agentName);
   return (
-    agentUseRefusalOf(access.authorize("agent.use", resource), limited.has(agentName)) !== undefined
+    agentUseRefusalOf(
+      access.authorize("agent.use", resource),
+      limited.has(agentName),
+      agent !== undefined && agentBuildsAssets(agent)
+        ? access.authorize(BUILDER_BUNDLE, { workspaceId })
+        : undefined
+    ) !== undefined
   );
 }
 
 async function loadCurrentUser(
   store: PlatformStores,
   registry: Pick<OperationRegistry, "resolveMany">,
+  assetSource: ConfigAssetSource,
   run: AgentRun
 ): Promise<AuthenticatedUser> {
   if (run.workflowStepRunId) {
@@ -242,7 +264,7 @@ async function loadCurrentUser(
       !workspace ||
       !member ||
       !isAgentAvailableInWorkspace(availability.get(run.agentName), workspace) ||
-      (await scheduledAgentUseRefused(store, current, run.agentName))
+      (await scheduledAgentUseRefused(store, assetSource, current, run.agentName, workspace.id))
     )
       throw new AppError(
         "FORBIDDEN",
