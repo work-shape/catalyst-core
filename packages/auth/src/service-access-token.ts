@@ -9,6 +9,7 @@ import {
   authScopeForPermission,
   hashApiCredentialSecret,
   isPermission,
+  isPersonalApiKeyExpired,
   operationScopesOfPersonalApiKey,
   parseApiCredentialSecret,
   permissionForAuthScope,
@@ -279,7 +280,7 @@ async function resolvePersonalKey(
   if (personal.key.revokedAt) {
     throw new AppError("UNAUTHENTICATED", "API credential is revoked");
   }
-  if (Date.parse(personal.key.expiresAt) <= Date.now()) {
+  if (isPersonalApiKeyExpired(personal.key)) {
     throw new AppError("UNAUTHENTICATED", "API credential is expired");
   }
   return personal;

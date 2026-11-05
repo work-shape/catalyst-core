@@ -28,7 +28,8 @@ export interface PersonalApiKeyRecord {
   /** `<action>`, `<action>:<workspace id>` or `<action>:<workspace id>/<asset>`, one or more. */
   scopes: string[];
   createdAt: ISODateString;
-  expiresAt: ISODateString;
+  /** Absent for a key that never expires; such a key still ends when it is revoked. */
+  expiresAt?: ISODateString;
   revokedAt?: ISODateString;
   lastUsedAt?: ISODateString;
 }
@@ -44,7 +45,8 @@ export interface CreatePersonalApiKeyInput {
   ownerUserId: UserId;
   name: string;
   scopes: string[];
-  expiresAt: ISODateString;
+  /** Absent for a key that never expires. */
+  expiresAt?: ISODateString;
 }
 
 export interface CreatedPersonalApiKey {
@@ -127,7 +129,8 @@ export interface PersonalApiKeyStore {
     ownerUserId: UserId;
     name: string;
     scopes: string[];
-    keyExpiresAt: ISODateString;
+    /** Absent for a key that never expires. */
+    keyExpiresAt?: ISODateString;
   }): Promise<ConnectCodeRecord | undefined>;
   /**
    * Issues the key of an approved code and marks the code collected, in one transaction: two
@@ -143,7 +146,10 @@ export interface PersonalApiKeyStore {
 export const CONNECT_CODE_TTL_MS = 15 * 60 * 1000;
 /** How often the CLI asks whether its code was confirmed. */
 export const CONNECT_CODE_POLL_INTERVAL_MS = 3000;
-/** The longest a personal key may live. A person who needs it longer issues a new one. */
+/**
+ * The furthest out a personal key's expiry may be set. A key may also be issued without one and
+ * then lives until it is revoked.
+ */
 export const PERSONAL_API_KEY_MAX_LIFETIME_DAYS = 365;
 /**
  * Usable keys one person may hold at once: one per machine and tool is a handful. Who reaches
@@ -478,13 +484,25 @@ export async function usablePersonalApiKey(
   return key &&
     key.ownerUserId === input.ownerUserId &&
     !key.revokedAt &&
-    Date.parse(key.expiresAt) > now
+    !isPersonalApiKeyExpired(key, now)
     ? key
     : undefined;
 }
 
-/** Refuses an expiry in the past or further out than a key may live. */
-export function requirePersonalApiKeyExpiry(expiresAt: string, now = Date.now()): void {
+/** Whether the key's expiry has passed. A key without one never expires. */
+export function isPersonalApiKeyExpired(
+  key: Pick<PersonalApiKeyRecord, "expiresAt">,
+  now = Date.now()
+): boolean {
+  return key.expiresAt !== undefined && Date.parse(key.expiresAt) <= now;
+}
+
+/**
+ * Refuses an expiry in the past or further out than `PERSONAL_API_KEY_MAX_LIFETIME_DAYS`.
+ * No expiry at all is a key that never expires, and passes.
+ */
+export function requirePersonalApiKeyExpiry(expiresAt: string | undefined, now = Date.now()): void {
+  if (expiresAt === undefined) return;
   const at = Date.parse(expiresAt);
   if (!Number.isFinite(at) || at <= now) {
     throw new AppError("VALIDATION_FAILED", "A personal API key expires in the future");

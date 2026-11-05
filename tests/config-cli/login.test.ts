@@ -115,6 +115,33 @@ describe("catalyst login", () => {
     expect(JSON.parse(await readFile(path, "utf8"))).toEqual({ version: 1, instances: {} });
   });
 
+  it("saves a key confirmed to never expire, says it lasts until revoked and uses it", async () => {
+    const t = await setupPersonalKeyInstance();
+    await grantKaiWorkspace(t);
+    const cwd = await kaiWorkingCopy(t.kaiTeam);
+    const configHome = await createTemporaryDirectory();
+    const env = { CATALYST_CONFIG_HOME: configHome };
+    const fetchImpl = createTestFetch(t.instance);
+    const output: string[] = [];
+    const stdout = (text: string) => output.push(text);
+    let confirmed = false;
+    const sleep = async () => {
+      if (confirmed) return;
+      const code = /code ([A-Z]{4}-[A-Z]{4})/u.exec(output.join(""))?.[1];
+      await t.expectOk(t.kai.id, "me.connect_codes.confirm", {
+        params: { userCode: code ?? "" },
+        payload: { name: "Server", scopes: [`agent.read:${t.kaiTeam}`], expiresAt: null }
+      });
+      confirmed = true;
+    };
+    expect(await runCli(["login"], { cwd, env, fetchImpl, stdout, sleep })).toBe(0);
+    expect(output.join("")).toContain("as far as your rights reach, until it is revoked.");
+    const saved: unknown = JSON.parse(await readFile(join(configHome, "credentials.json"), "utf8"));
+    expect(JSON.stringify(saved)).not.toContain("expiresAt");
+    output.length = 0;
+    expect(await runCli(["config", "list"], { cwd, env, fetchImpl, stdout })).toBe(0);
+  });
+
   it("refuses a saved key file that others may read", async () => {
     const cwd = await kaiWorkingCopy();
     const configHome = await createTemporaryDirectory();

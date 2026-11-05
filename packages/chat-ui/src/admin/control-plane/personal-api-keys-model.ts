@@ -7,21 +7,24 @@ import {
   PERSONAL_API_KEY_WORKSPACES_ACTION
 } from "@work-shape/catalyst-core";
 
-/** How long a new key lives, in days. The instance takes at most a year. */
-export const PERSONAL_KEY_EXPIRY_DAYS = [30, 90, 365] as const;
-export type PersonalKeyExpiryDays = (typeof PERSONAL_KEY_EXPIRY_DAYS)[number];
-const DEFAULT_PERSONAL_KEY_EXPIRY_DAYS: PersonalKeyExpiryDays = 90;
+/**
+ * How long a new key lives: a number of days, or `never` for a key that lives until it is
+ * revoked. The instance takes an expiry at most a year ahead, or none.
+ */
+export const PERSONAL_KEY_EXPIRIES = [30, 90, 365, "never"] as const;
+export type PersonalKeyExpiry = (typeof PERSONAL_KEY_EXPIRIES)[number];
+const DEFAULT_PERSONAL_KEY_EXPIRY: PersonalKeyExpiry = 90;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** The end of a key that lives `days` from `now`. */
-function personalKeyExpiresAt(days: PersonalKeyExpiryDays, now = new Date()): string {
-  return new Date(now.getTime() + days * DAY_MS).toISOString();
+/** The end of a key that lives `expiry` from `now`, or `null` for one that never expires. */
+function personalKeyExpiresAt(expiry: PersonalKeyExpiry, now = new Date()): string | null {
+  return expiry === "never" ? null : new Date(now.getTime() + expiry * DAY_MS).toISOString();
 }
 
 /** The choice a select field hands back, or nothing for a value that is none. */
-export function personalKeyExpiryOf(value: string): PersonalKeyExpiryDays | undefined {
-  return PERSONAL_KEY_EXPIRY_DAYS.find((days) => String(days) === value);
+export function personalKeyExpiryOf(value: string): PersonalKeyExpiry | undefined {
+  return PERSONAL_KEY_EXPIRIES.find((expiry) => String(expiry) === value);
 }
 
 /**
@@ -290,6 +293,7 @@ export type PersonalKeyState = "active" | "revoked" | "expired";
 
 export function personalKeyState(key: PersonalApiKey, now = new Date()): PersonalKeyState {
   if (key.revokedAt) return "revoked";
+  if (key.expiresAt === undefined) return "active";
   return new Date(key.expiresAt).getTime() > now.getTime() ? "active" : "expired";
 }
 
@@ -330,7 +334,7 @@ export interface PersonalKeyDraft {
   workspaceId: string;
   /** Empty for every asset of the workspace. */
   assetName: string;
-  expiryDays: PersonalKeyExpiryDays;
+  expiry: PersonalKeyExpiry;
 }
 
 /**
@@ -346,7 +350,7 @@ export function initialPersonalKeyDraft(
     actions: [...actions],
     workspaceId: "",
     assetName: "",
-    expiryDays: DEFAULT_PERSONAL_KEY_EXPIRY_DAYS
+    expiry: DEFAULT_PERSONAL_KEY_EXPIRY
   };
 }
 
@@ -368,11 +372,11 @@ export function personalKeyDraftProblem(
 export function personalKeyRequest(
   draft: PersonalKeyDraft,
   now = new Date()
-): { name: string; scopes: string[]; expiresAt: string } | undefined {
+): { name: string; scopes: string[]; expiresAt: string | null } | undefined {
   if (personalKeyDraftProblem(draft)) return undefined;
   return {
     name: draft.name.trim(),
     scopes: buildPersonalKeyScopes(draft.actions, draft),
-    expiresAt: personalKeyExpiresAt(draft.expiryDays, now)
+    expiresAt: personalKeyExpiresAt(draft.expiry, now)
   };
 }
