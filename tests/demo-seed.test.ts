@@ -98,7 +98,7 @@ describe("the demo seed on the fixture instance", () => {
       people: 9,
       "service principals": 1,
       "API keys": 1,
-      "the instance's own agents and skills": 2,
+      "the instance's own agents and skills": 3,
       agents: 8,
       skills: 7,
       "grant rows": 34,
@@ -198,11 +198,12 @@ describe("the demo seed on the fixture instance", () => {
 
   it("pushes the company assets and records the prepared builder draft", async () => {
     const { client, defaultAgentName } = seeded().before;
-    // The instance's own two agents are there as well, and one of them stays the default, and
+    // The instance's own three agents are there as well, and one of them stays the default, and
     // so are the skills the platform ships.
     const own = [
       "application_assistant",
       "research_assistant",
+      "asset_builder",
       "platform-docs",
       "workflow-authoring"
     ];
