@@ -324,16 +324,19 @@ No deployment or tool switches to server captures in this slice. The API default
    `${IMAGE_REPOSITORY}-preview-capture:${RELEASE_TAG}`, in the group whose digests reach
    `manifest write`. The manifest then has a `preview-capture` image, which stays optional:
    a manifest without it is valid, and rolling back to one is too.
-2. The host env file sets `PREVIEW_CAPTURE_ENABLED=true` and `PREVIEW_CAPTURE_SERVICE_TOKEN`
-   (32+ characters). `PREVIEW_CAPTURE_INTERFACE_ORIGIN` is optional and defaults to
-   `CHAT_UI_ORIGIN`.
+2. The host env file sets `PREVIEW_CAPTURE_ENABLED=true`. `PREVIEW_CAPTURE_INTERFACE_ORIGIN` is
+   optional and defaults to `CHAT_UI_ORIGIN`. Nobody sets `PREVIEW_CAPTURE_SERVICE_TOKEN`: it is
+   an internal service-to-service secret, and a deploy that finds it missing or empty appends a
+   random one (64 hex characters from `/dev/urandom`) to the env file, keeping the file's mode
+   and owner, and never prints it. A token already there is kept, never replaced.
 
 A release with the image sends the overlay and the seccomp profile to `deploy/` in the app
 directory. With the flag on, every Compose command of the deploy adds the overlay and the
 `preview-capture` profile, with the image of the release and that profile's path, which the
 deploy also writes to the env file as `PREVIEW_CAPTURE_IMAGE` and `PREVIEW_CAPTURE_SECCOMP`.
 The service starts with the others and must run the release's digest and pass the same health
-checks. The flag on without the image, or with a shorter token, stops the deploy before it pulls.
+checks. The flag on without the image, or with a token shorter than 32 characters, stops the deploy
+before it pulls.
 With the flag off nothing of this runs, and a renderer an earlier deploy started is removed.
 The overlay puts only the API, the agent-run worker and the capture service on its internal
 network. Do not attach Postgres, object storage or another worker, mount an env file, or give

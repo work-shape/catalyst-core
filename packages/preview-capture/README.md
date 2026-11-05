@@ -29,7 +29,8 @@ size is logged.
 Build with `pnpm --filter @work-shape/catalyst-preview-capture build`. The deployment kit
 ships an opt-in Compose overlay, `docker/preview-capture.compose.yml`, and image target
 `preview-capture`. No deployment repository is changed in SRV-1. Supply only the service
-token (32+ characters), the API and interface origins, and slot count. The API connects only
+token (32+ characters; `catalyst-deploy deploy` generates it on the host), the API and
+interface origins, and slot count. The API connects only
 with `PREVIEW_CAPTURE_ENABLED=true`; it defaults off. The instance assembly supplies the package; a deployment may also start its isolated process
 through `defineClientInstance().runPreviewCaptureService()`, which never loads dotenv files.
 

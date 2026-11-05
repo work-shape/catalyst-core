@@ -50,8 +50,13 @@ if [[ "$preview_capture_enabled" == true ]]; then
     echo "PREVIEW_CAPTURE_ENABLED is true in $REMOTE_ENV_FILE, but release $IMAGE_TAG has no preview-capture image. Build the preview-capture target of the deployment's bake file, or set PREVIEW_CAPTURE_ENABLED=false." >&2
     exit 1
   fi
+  # The token is a service-to-service secret nobody manages: missing or empty, the deploy makes
+  # one below. A token someone set must be long enough; it is never replaced.
   preview_capture_token="$(read_env_file_value PREVIEW_CAPTURE_SERVICE_TOKEN)"
-  if [[ "${#preview_capture_token}" -lt 32 ]]; then
+  preview_capture_token_missing=0
+  if [[ -z "$preview_capture_token" ]]; then
+    preview_capture_token_missing=1
+  elif [[ "${#preview_capture_token}" -lt 32 ]]; then
     echo "PREVIEW_CAPTURE_SERVICE_TOKEN in $REMOTE_ENV_FILE has ${#preview_capture_token} characters; the renderer needs at least 32." >&2
     exit 1
   fi
@@ -64,6 +69,24 @@ if [[ "$preview_capture_enabled" == true ]]; then
       exit 1
     fi
     export PREVIEW_CAPTURE_INTERFACE_ORIGIN
+  fi
+  # Every check passed: append a new token (256 random bits as hex) without printing it. Appending
+  # keeps the file's mode and owner; the value goes through stdin, never a command line, and a
+  # later line wins over an empty one for Compose and read_env_file_value alike.
+  if [[ "$preview_capture_token_missing" == 1 ]]; then
+    preview_capture_token="$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')"
+    if [[ "${#preview_capture_token}" -ne 64 ]]; then
+      echo "Could not generate PREVIEW_CAPTURE_SERVICE_TOKEN from /dev/urandom." >&2
+      exit 1
+    fi
+    preview_capture_separator=""
+    if [[ -s "$REMOTE_ENV_FILE" && "$(tail -c 1 "$REMOTE_ENV_FILE" | wc -l | tr -d ' ')" == 0 ]]; then
+      preview_capture_separator=$'\n'
+    fi
+    printf '%sPREVIEW_CAPTURE_SERVICE_TOKEN=%s\n' "$preview_capture_separator" "$preview_capture_token" \
+      | sudo tee -a "$REMOTE_ENV_FILE" > /dev/null
+    unset preview_capture_token preview_capture_separator
+    echo "Generated PREVIEW_CAPTURE_SERVICE_TOKEN in $REMOTE_ENV_FILE."
   fi
   PREVIEW_CAPTURE_IMAGE="$IMAGE_REPOSITORY-preview-capture:$IMAGE_TAG@$PREVIEW_CAPTURE_IMAGE_DIGEST"
   PREVIEW_CAPTURE_SECCOMP="$REMOTE_APP_DIR/deploy/preview-capture-seccomp.json"
