@@ -7,6 +7,12 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.29 — 2026-11-05
+
+### Fixed
+
+- **Object storage:** A read or write to an S3 store that stops answering now fails as `unreachable` once its connection has been silent for 60 seconds (10 seconds to connect), so the request that waits on it gets an answer. Before, a stalled store held an upload, a download or a deletion open without end. A large object that keeps moving is not cut off. `idleTimeoutMs` on an `s3` store entry changes the 60 seconds. The store check's 4-second bound now ends its request instead of only logging a warning.
+
 ## 0.8.0-rc.28 — 2026-11-05
 
 ### Changed
