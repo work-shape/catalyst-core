@@ -7,6 +7,18 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.27 — 2026-11-05
+
+### Changed
+
+- **Deployment kit:** Nobody manages `PREVIEW_CAPTURE_SERVICE_TOKEN` by hand any more. With `PREVIEW_CAPTURE_ENABLED=true` and the token missing or empty in the host env file, `catalyst-deploy deploy` appends a random token (64 hex characters) to that file, keeping its mode and owner, and never prints it. A token already there is kept; one shorter than 32 characters still stops the deploy before it pulls.
+
+### Fixed
+
+- **Deployment kit:** The PDF renderer (PDF-1) can be turned on in a deployment that deploys with `catalyst-deploy deploy`. A release manifest may have a `preview-capture` image, built from a `preview-capture` target of the deployment's bake file; manifests without it stay valid. A deploy of such a release sends the renderer's Compose overlay and seccomp profile to the host. With `PREVIEW_CAPTURE_ENABLED=true` and `PREVIEW_CAPTURE_SERVICE_TOKEN` (32+ characters) in the host env file, the deploy pulls and starts the `preview-capture` service from the release's digest and gives the API and the agent run worker its address; `PREVIEW_CAPTURE_INTERFACE_ORIGIN` defaults to `CHAT_UI_ORIGIN`. The flag on without the image or with a shorter token stops the deploy before it pulls. With the flag off a deploy runs as before, and removes a renderer an earlier deploy started.
+- **Approvals:** A proposed skill change is decided by whoever holds `skill.approve` on the skill it changes: on that skill, in the workspace that owns it, or on the instance. `operations.approve` is no longer asked for it, and holders of `agent_skills.approve` still decide every request. A request that creates a skill is decided where the new skill will be owned: in the workspace of the proposing agent, or on the instance; a right on another skill does not decide it. The request records the skill's asset id and owner when it is filed; one whose skill moved or was made again since is stale. A person's held save or deletion of a stored skill is decided by `skill.approve` on that skill too, beside `operations.approve`. The Inbox lists such requests to their holders, and the approver names a requester or an agent is told (`saveApproval.approverNames`, the request's `approverNames`) include them. `skill.approve` can be given on one skill or in a workspace, to a person or a role, in Instance > Access. Requests filed before this release name no skill asset and stay with `skill.approve` on the instance.
+- **Approvals:** An approved change to an existing shared skill goes live again when it is approved, as it did before shared skill drafts. If a draft of the skill is pending, it gets the same change and moves onto the new live revision. It keeps its author and its own edits, which stay unpublished. If the change does not apply to the draft, the draft stays on the old live revision and its publish is refused as stale, so publishing it cannot undo the approved change. The approval asks the guardrails on the skill's publish too, and a decision in the Inbox now asks the guardrails a request's change raises, as a held call's approval already did. Undo of a change approved before this release still writes the draft back.
+
 ## 0.8.0-rc.26 — 2026-11-05
 
 ### Added
