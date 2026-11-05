@@ -315,6 +315,10 @@ test_release_manifest() {
   write_fixture_manifest "$scratch/legacy-manifest.json" staging-1 "$commit"
   "$catalyst_deploy" manifest check "$scratch/legacy-manifest.json" --commit "$commit"
   "$catalyst_deploy" manifest check "$manifest" --commit "$commit"
+  # The PDF renderer's image is optional: a release has it when the deployment builds it.
+  (cd "$deployment" && "$catalyst_deploy" manifest write --release staging-2026.10.06-1 \
+    --images "$(jq -c '. + {"preview-capture": .api}' <<< "$images")") > "$scratch/with-renderer.json"
+  "$catalyst_deploy" manifest check "$scratch/with-renderer.json" --commit "$commit"
   expect_failure "$catalyst_deploy" manifest check "$manifest" --commit "$(printf '%040d' 9)"
   assert_contains "$scratch/failure-output" "another deployment commit"
 
@@ -326,6 +330,7 @@ test_release_manifest() {
     '.images.api = "ghcr.io/example/api:latest"' \
     '.release = "v2026.10.06-1"' \
     '.images.extra = .images.api' \
+    '.images["preview-capture"] = "ghcr.io/example/preview-capture:latest"' \
     '.schema = 3'
   do
     jq "$filter" "$manifest" > "$broken"
@@ -470,6 +475,9 @@ test_deploy() {
   assert_contains "$remote_command" "REMOTE_APP_DIR=$app_dir REMOTE_ENV_FILE=/etc/vivd-catalyst/fixture/app.env"
   assert_contains "$remote_command" "IMAGE_REPOSITORY=$fixture_repository IMAGE_TAG=staging-2026.10.06-1"
   assert_contains "$remote_command" "API_IMAGE_DIGEST=$digest_a UI_IMAGE_DIGEST=$digest_b"
+  # A release without the PDF renderer sends none of its files.
+  assert_contains "$remote_command" "PREVIEW_CAPTURE_IMAGE_DIGEST='' RUNNER_IMAGE_DIGEST="
+  assert_not_contains "$capture/rsync.log" "preview-capture"
   assert_contains "$remote_command" "RUNNER_IMAGE_DIGEST=$digest_b EXECUTION_WORKSPACES=1 bash -c "
   if grep -v '^[[:space:]]*#' "$kit_dir/lib/deploy.sh" | grep -E 'bash -s([[:space:]"]|$)' > /dev/null; then
     fail "deploy.sh must not feed the remote script to bash on stdin"
@@ -528,6 +536,9 @@ SH
   if [[ -n "${HOST_APP_UPLOAD_TIMEOUT:-}" ]]; then
     printf 'UPLOAD_CHECK_TIMEOUT_SECONDS=%s\n' "$HOST_APP_UPLOAD_TIMEOUT" >> "$host/app.env"
   fi
+  if [[ -n "${HOST_APP_ENV:-}" ]]; then
+    printf '%s\n' "$HOST_APP_ENV" >> "$host/app.env"
+  fi
   # The command names the real host paths; point it at the scratch host instead.
   sed -e "s#REMOTE_APP_DIR=[^ ]*#REMOTE_APP_DIR=$app_dir#" \
     -e "s#REMOTE_ENV_FILE=[^ ]*#REMOTE_ENV_FILE=$host/app.env#" \
@@ -581,6 +592,10 @@ test_remote_deploy() {
     (( current > previous )) || fail "remote deploy ran out of order: $step"
     previous="$current"
   done
+  assert_not_contains "$log" "--profile preview-capture"
+  assert_not_contains "$log" "preview-capture.compose.yml"
+  assert_not_contains "$log" "docker rm --force"
+  assert_not_contains "$host/app.env" "PREVIEW_CAPTURE"
   if grep -E 'up -d [^-].*agent-run-worker' "$log" | grep -v -e '--no-recreate' > /dev/null; then
     fail "agent-run-worker was recreated instead of rolled"
   fi
@@ -645,6 +660,104 @@ test_remote_deploy() {
   assert_not_contains "$host/log" "execution-workspaces"
   assert_not_contains "$host/log" "catalyst-runner-base"
   assert_not_contains "$host/log" "workspace-command-worker"
+}
+
+# The PDF renderer (PDF-1): a release that bakes the preview-capture image carries its overlay and
+# seccomp profile to the host, and the host env file turns it on.
+test_preview_capture_deploy() {
+  local capture="$scratch/renderer-capture" release="staging-2026.10.06-1" app_dir=/opt/vivd-catalyst/fixture
+  local deployment="$scratch/renderer-capture/workspace/deployment.fixture"
+  mkdir -p "$capture"
+  init_fixture_deployment "$capture/workspace"
+  write_fixture_manifest "$capture/plain.json" "$release" "$(git -C "$deployment" rev-parse HEAD)"
+  jq --arg image "$fixture_repository-preview-capture@$digest_b" '.images["preview-capture"] = $image' \
+    "$capture/plain.json" > "$capture/manifest.json"
+  (cd "$deployment" && PATH="$fakes:$PATH" CAPTURE_DIR="$capture" \
+    "$catalyst_deploy" deploy --host host.example.test --manifest "$capture/manifest.json") > /dev/null
+  assert_contains "$capture/ssh-2.command" "PREVIEW_CAPTURE_IMAGE_DIGEST=$digest_b RUNNER_IMAGE_DIGEST="
+  assert_contains "$capture/rsync.log" " deploy@host.example.test $app_dir/deploy/preview-capture.compose.yml "
+  assert_contains "$capture/rsync.log" " deploy@host.example.test $app_dir/deploy/preview-capture-seccomp.json "
+  cmp -s "$kit_dir/docker/preview-capture-seccomp.json" \
+    "$capture/host$app_dir/deploy/preview-capture-seccomp.json" || fail "the seccomp profile changed on its way"
+  [[ "$(wc -l < "$capture/rsync.log" | tr -d ' ')" == "9" ]] || fail "deploy sent unexpected renderer files"
+
+  jq '.images["preview-capture"] = "ghcr.io/example/other-preview-capture@\(.images.api | split("@")[1])"' \
+    "$capture/manifest.json" > "$capture/foreign.json"
+  expect_failure env "PATH=$fakes:$PATH" "CAPTURE_DIR=$capture" "DEPLOYMENT_ROOT=$deployment" \
+    "$catalyst_deploy" deploy --host host.example.test --manifest "$capture/foreign.json"
+  assert_contains "$scratch/failure-output" "Unexpected image name for preview-capture"
+
+  local token="fixture-preview-capture-token-0123456789"
+  local on="PREVIEW_CAPTURE_ENABLED=true
+PREVIEW_CAPTURE_SERVICE_TOKEN=$token
+CHAT_UI_ORIGIN=https://chat.example.test"
+
+  # Off, the default: the release's image is neither pulled nor started.
+  local host="$scratch/renderer-off"
+  run_remote_deploy "$capture" "$host" || { cat "$host/output" >&2; fail "remote deploy failed"; }
+  assert_not_contains "$host/log" "--profile preview-capture"
+  assert_not_contains "$host/log" "preview-capture env:"
+  assert_not_contains "$host/log" "docker rm --force"
+
+  # On: the overlay and its profile join every Compose command, and the service runs the release.
+  host="$scratch/renderer-on"
+  HOST_APP_ENV="$on" run_remote_deploy "$capture" "$host" \
+    || { cat "$host/output" >&2; fail "remote deploy with the renderer failed"; }
+  local compose="docker compose --profile execution-workspaces --profile preview-capture --env-file $host/app.env -f $host/app/docker-compose.prod.yml -f $host/app/deploy/preview-capture.compose.yml"
+  assert_contains "$host/log" "$compose pull"
+  assert_contains "$host/log" "$compose up -d api doc-worker artifact-preview-worker ui caddy workspace-command-worker preview-capture"
+  assert_contains "$host/log" "$compose up -d --no-deps --no-recreate --scale agent-run-worker=2 agent-run-worker"
+  local image="$fixture_repository-preview-capture:$release@$digest_b"
+  assert_contains "$host/log" \
+    "preview-capture env: image=$image seccomp=$host/app/deploy/preview-capture-seccomp.json interface=https://chat.example.test"
+  assert_contains "$host/log" "docker inspect -f {{.Config.Image}} {{.State.Running}} preview-capture-new"
+  assert_contains "$host/app.env" "PREVIEW_CAPTURE_IMAGE=$image"
+  assert_contains "$host/output" "All services run the images of $release."
+  assert_not_contains "$host/output" "$token"
+
+  # An origin of its own in the env file is left to Compose.
+  host="$scratch/renderer-own-origin"
+  HOST_APP_ENV="$on
+PREVIEW_CAPTURE_INTERFACE_ORIGIN=https://pages.example.test" run_remote_deploy "$capture" "$host" \
+    || { cat "$host/output" >&2; fail "remote deploy with the renderer's own origin failed"; }
+  grep -q 'preview-capture env: .* interface=$' "$host/log" \
+    || fail "the deploy replaced the renderer's own interface origin"
+
+  # A renderer on another image fails the deploy.
+  host="$scratch/renderer-stale"
+  if HOST_APP_ENV="$on" run_remote_deploy "$capture" "$host" HOST_STALE_SERVICE=preview-capture; then
+    fail "remote deploy passed although preview-capture runs another image"
+  fi
+  assert_contains "$host/output" "Service preview-capture is not running the release image"
+
+  # Turned on without what it needs, the deploy stops before it pulls anything.
+  host="$scratch/renderer-short-token"
+  if HOST_APP_ENV="PREVIEW_CAPTURE_ENABLED=true
+PREVIEW_CAPTURE_SERVICE_TOKEN=short" run_remote_deploy "$capture" "$host"; then
+    fail "remote deploy accepted a short renderer token"
+  fi
+  assert_contains "$host/output" "PREVIEW_CAPTURE_SERVICE_TOKEN in $host/app.env has 5 characters"
+  [[ ! -e "$host/log" ]] || fail "the deploy ran Docker before it refused a short renderer token"
+  host="$scratch/renderer-not-built"
+  local plain="$scratch/renderer-plain"
+  mkdir -p "$plain"
+  init_fixture_deployment "$plain/workspace"
+  (cd "$plain/workspace/deployment.fixture" && PATH="$fakes:$PATH" CAPTURE_DIR="$plain" \
+    "$catalyst_deploy" deploy --host host.example.test --manifest "$capture/plain.json") > /dev/null
+  if HOST_APP_ENV="$on" run_remote_deploy "$plain" "$host"; then
+    fail "remote deploy turned the renderer on for a release without its image"
+  fi
+  assert_contains "$host/output" "release $release has no preview-capture image"
+  [[ ! -e "$host/log" ]] || fail "the deploy ran Docker before it refused a release without the renderer"
+
+  # Turned off again, the renderer of the earlier deploy is removed.
+  host="$scratch/renderer-turned-off"
+  run_remote_deploy "$capture" "$host" HOST_PREVIOUS_PREVIEW_CAPTURE=1 \
+    || { cat "$host/output" >&2; fail "remote deploy that turns the renderer off failed"; }
+  assert_contains "$host/log" "docker ps --all --quiet --filter label=com.docker.compose.project=fixture --filter label=com.docker.compose.service=preview-capture"
+  assert_contains "$host/log" "docker rm --force preview-capture-old"
+  (( $(line_of "$host/log" "docker rm --force") < $(line_of "$host/log" "up -d api") )) \
+    || fail "the renderer was removed after the services started"
 }
 
 # Inspect every project service, including a healthy-looking worker that restarted and an
@@ -982,6 +1095,9 @@ SH
   expect_failure env BAKE_TARGETS="$all_targets" "${policy[@]}"
   assert_not_contains "$scratch/failure-output" "invalid manifest"
   assert_contains "$scratch/failure-output" "verify/artifact-preview-worker-compose.mjs"
+  # A deployment that runs the PDF renderer bakes its image too.
+  expect_failure env BAKE_TARGETS="$all_targets preview-capture" "${policy[@]}"
+  assert_not_contains "$scratch/failure-output" "invalid manifest"
 }
 
 # Writes the local Compose file of the guard fixture: the API and the three workers, with
@@ -1172,6 +1288,7 @@ test_release_manifest
 test_publish
 test_deploy
 test_remote_deploy
+test_preview_capture_deploy
 test_remote_deploy_without_jq
 test_remote_deploy_streaming_services
 test_remote_service_health

@@ -91,6 +91,12 @@ doc_worker_image_digest="$(image_digest doc-worker doc-worker)"
 workspace_command_worker_image_digest="$(image_digest workspace-command-worker workspace-command-worker)"
 artifact_preview_worker_image_digest="$(image_digest artifact-preview-worker artifact-preview-worker)"
 runner_image_digest="$(image_digest runner catalyst-runner-base)"
+# The PDF renderer (PDF-1) is optional in a manifest: a release has it when the deployment's
+# bake file builds the preview-capture target. The host env file decides whether it runs.
+preview_capture_image_digest=""
+if [[ "$(jq -r '.images | has("preview-capture")' "$manifest")" == true ]]; then
+  preview_capture_image_digest="$(image_digest preview-capture preview-capture)"
+fi
 
 # The files under host/ are templates. The host gets them with the instance
 # filled in, so the backup scripts and units work there without arguments.
@@ -122,6 +128,13 @@ rsync -az \
 rsync -az "$host_files/systemd/" "$ssh_target:$remote_app_dir/deploy/systemd/"
 # The upload check runs inside the api container, which reads it from this file.
 rsync -az "$kit_dir/host/check-upload.mjs" "$ssh_target:$remote_app_dir/"
+# A release with the renderer also takes its Compose overlay and seccomp profile, the kit's own.
+if [[ -n "$preview_capture_image_digest" ]]; then
+  rsync -az \
+    "$kit_dir/docker/preview-capture.compose.yml" \
+    "$kit_dir/docker/preview-capture-seccomp.json" \
+    "$ssh_target:$remote_app_dir/deploy/"
+fi
 
 # The remote script is passed as an argument, never on stdin: with "bash -s" any
 # command that reads stdin (docker compose exec does) swallows the rest of the
@@ -140,6 +153,7 @@ UI_IMAGE_DIGEST=$(printf '%q' "$ui_image_digest") \
 DOC_WORKER_IMAGE_DIGEST=$(printf '%q' "$doc_worker_image_digest") \
 WORKSPACE_COMMAND_WORKER_IMAGE_DIGEST=$(printf '%q' "$workspace_command_worker_image_digest") \
 ARTIFACT_PREVIEW_WORKER_IMAGE_DIGEST=$(printf '%q' "$artifact_preview_worker_image_digest") \
+PREVIEW_CAPTURE_IMAGE_DIGEST=$(printf '%q' "$preview_capture_image_digest") \
 RUNNER_IMAGE_DIGEST=$(printf '%q' "$runner_image_digest") \
 EXECUTION_WORKSPACES=$(printf '%q' "$EXECUTION_WORKSPACES") \
 bash -c $(printf '%q' "$remote_script")" \

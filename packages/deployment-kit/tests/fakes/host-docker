@@ -16,6 +16,7 @@ service_image() {
       suffix=artifact-preview-worker digest="$ARTIFACT_PREVIEW_WORKER_IMAGE_DIGEST" ;;
     workspace-command-worker)
       suffix=workspace-command-worker digest="$WORKSPACE_COMMAND_WORKER_IMAGE_DIGEST" ;;
+    preview-capture) suffix=preview-capture digest="$PREVIEW_CAPTURE_IMAGE_DIGEST" ;;
     *) return 1 ;;
   esac
   if [[ "${HOST_STALE_SERVICE:-}" == "$service" ]]; then
@@ -25,12 +26,16 @@ service_image() {
 }
 
 if [[ "$1" == "compose" ]]; then
+  # The renderer's overlay joins the stack with its profile (PDF-1).
+  preview_capture=0
+  [[ " $* " != *" --profile preview-capture "* ]] || preview_capture=1
   shift
   while [[ "$1" == --profile || "$1" == --env-file || "$1" == -f ]]; do shift 2; done
   case "$1" in
     config)
       if [[ "$2" == "--format" && "$3" == yaml ]]; then
         cat <<'YAML'
+name: fixture
 services:
   api:
     depends_on:
@@ -62,6 +67,7 @@ YAML
         else
           echo api-new doc-worker-new agent-run-worker-new artifact-preview-worker-new ui-new caddy-new postgres-new schema-setup-new auxiliary-new
           if [[ "$EXECUTION_WORKSPACES" == 1 ]]; then echo workspace-command-worker-new; fi
+          if [[ "$preview_capture" == 1 ]]; then echo preview-capture-new; fi
         fi
         exit 0
       fi
@@ -74,6 +80,10 @@ YAML
       fi
       ;;
     up)
+      if [[ -n "${PREVIEW_CAPTURE_IMAGE:-}" ]]; then
+        printf 'preview-capture env: image=%s seccomp=%s interface=%s\n' "$PREVIEW_CAPTURE_IMAGE" \
+          "$PREVIEW_CAPTURE_SECCOMP" "${PREVIEW_CAPTURE_INTERFACE_ORIGIN:-}" >> "$HOST_LOG"
+      fi
       [[ " $* " == *" --scale agent-run-worker=2 "* ]] && touch "$state/agent-run-worker.started"
       ;;
     exec)
@@ -105,6 +115,10 @@ YAML
 fi
 
 case "$1" in
+  ps)
+    # A renderer left from a deploy that had it on.
+    [[ "${HOST_PREVIOUS_PREVIEW_CAPTURE:-0}" != 1 ]] || echo preview-capture-old
+    ;;
   inspect)
     container="$4"
     if [[ "$3" == *".RestartCount"* ]]; then

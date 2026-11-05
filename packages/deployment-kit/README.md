@@ -53,7 +53,8 @@ start `workspace-command-worker`.
 The remote VM needs Bash 4.4+, Docker with Compose, sudo, rsync and Ubuntu base utilities.
 Node, jq and the AWS CLI run in containers or on the release machine, not on the VM.
 
-A deploy sends the Compose file, the Caddyfile and the files under `host/` to the VM, then runs
+A deploy sends the Compose file, the Caddyfile, the files under `host/` and, for a release with
+the PDF renderer, its Compose overlay and seccomp profile (below) to the VM, then runs
 `lib/deploy-remote.sh` there: pull, back up the database server under `pre-deploy/` (a failed
 backup aborts before migrations), migrate, start the services, roll `agent-run-worker` with a
 drain, and fail unless every service runs the digest of the release. It snapshots container restart
@@ -315,6 +316,25 @@ the Terraform roots.
 The `preview-capture` image target and `docker/preview-capture.compose.yml` are opt-in.
 No deployment or tool switches to server captures in this slice. The API defaults to
 `PREVIEW_CAPTURE_ENABLED=false`; enabling the Compose profile alone does not change it.
+
+`catalyst-deploy deploy` runs the service once a deployment opts in, in two steps:
+
+1. The deployment builds the image: `@work-shape/catalyst-preview-capture` at the pinned release
+   in `package.json`, and a `preview-capture` target in `deploy/docker-bake.hcl` tagged
+   `${IMAGE_REPOSITORY}-preview-capture:${RELEASE_TAG}`, in the group whose digests reach
+   `manifest write`. The manifest then has a `preview-capture` image, which stays optional:
+   a manifest without it is valid, and rolling back to one is too.
+2. The host env file sets `PREVIEW_CAPTURE_ENABLED=true` and `PREVIEW_CAPTURE_SERVICE_TOKEN`
+   (32+ characters). `PREVIEW_CAPTURE_INTERFACE_ORIGIN` is optional and defaults to
+   `CHAT_UI_ORIGIN`.
+
+A release with the image sends the overlay and the seccomp profile to `deploy/` in the app
+directory. With the flag on, every Compose command of the deploy adds the overlay and the
+`preview-capture` profile, with the image of the release and that profile's path, which the
+deploy also writes to the env file as `PREVIEW_CAPTURE_IMAGE` and `PREVIEW_CAPTURE_SECCOMP`.
+The service starts with the others and must run the release's digest and pass the same health
+checks. The flag on without the image, or with a shorter token, stops the deploy before it pulls.
+With the flag off nothing of this runs, and a renderer an earlier deploy started is removed.
 The overlay puts only the API, the agent-run worker and the capture service on its internal
 network. Do not attach Postgres, object storage or another worker, mount an env file, or give
 the service any credential except `PREVIEW_CAPTURE_SERVICE_TOKEN` (32+ characters).
