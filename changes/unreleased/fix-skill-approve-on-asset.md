@@ -1,0 +1,5 @@
+---
+section: Fixed
+---
+
+- **Approvals:** A proposed skill change is decided by whoever holds `skill.approve` on the skill it changes: on that skill, in the workspace that owns it, or on the instance. `operations.approve` is no longer asked for it, and holders of `agent_skills.approve` still decide every request. A request that creates a skill is decided where the new skill will be owned: in the workspace of the proposing agent, or on the instance; a right on another skill does not decide it. The request records the skill's asset id and owner when it is filed; one whose skill moved or was made again since is stale. A person's held save or deletion of a stored skill is decided by `skill.approve` on that skill too, beside `operations.approve`. The Inbox lists such requests to their holders, and the approver names a requester or an agent is told (`saveApproval.approverNames`, the request's `approverNames`) include them. `skill.approve` can be given on one skill or in a workspace, to a person or a role, in Instance > Access. Requests filed before this release name no skill asset and stay with `skill.approve` on the instance.

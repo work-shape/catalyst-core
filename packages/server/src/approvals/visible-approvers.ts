@@ -1,13 +1,14 @@
 import {
   asUserId,
   authenticatedUserFromRecord,
+  type ApprovalFurtherRight,
   type ApprovalRequest,
   type ApprovalRequestHandler,
   type AuthenticatedUser,
   type AccessResource
 } from "@work-shape/catalyst-core";
 import { OPERATION_CALL_APPROVAL_KIND } from "@work-shape/catalyst-tool-execution";
-import { resourceOfRequest } from "./approval-request-service";
+import { alsoDecidedByOf, resourceOfRequest } from "./approval-request-service";
 import type { ChatServerOptions } from "../types";
 
 // Help text names a few alternatives, never the whole user directory.
@@ -27,32 +28,42 @@ export async function visibleApproverNames(
   return visibleApproverNamesFor(
     options,
     user,
-    handler.requiredPermission,
-    resourceOfRequest(handler, request)
+    { permission: handler.requiredPermission, resource: resourceOfRequest(handler, request) },
+    alsoDecidedByOf(handler, request)
   );
 }
 
 /**
  * The people who may decide the request a held call files, named before it exists: the right
- * and the resource of the `operation_call` kind, as its decision checks them. That kind's
- * request names no resource, so a grant scoped to the asset's workspace decides nothing and
- * names nobody.
+ * and the resource of the `operation_call` kind, as its decision checks them, or `also`, the
+ * narrower right the request will name in its place (`skill.approve` on the skill a held save
+ * changes). That kind's request names no resource, so a grant scoped to the asset's workspace
+ * of its own right decides nothing and names nobody.
  */
 export async function heldCallApproverNames(
   options: Pick<ChatServerOptions, "authorizer" | "clientInstanceId" | "stores" | "operationCalls">,
-  user: AuthenticatedUser
+  user: AuthenticatedUser,
+  also?: ApprovalFurtherRight
 ): Promise<string[]> {
   const handler = options.operationCalls?.approvalRequestHandlers.get(OPERATION_CALL_APPROVAL_KIND);
   if (!handler || handler.resourceOf) return [];
-  return visibleApproverNamesFor(options, user, handler.requiredPermission);
+  return visibleApproverNamesFor(
+    options,
+    user,
+    { permission: handler.requiredPermission },
+    handler.alsoDecidedBy ? also : undefined
+  );
 }
 
-/** The deciding people of a right on a resource, before or after a request exists. */
+/**
+ * The deciding people of a right on a resource, or of the narrower right that decides in its
+ * place, before or after a request exists.
+ */
 async function visibleApproverNamesFor(
   options: Pick<ChatServerOptions, "authorizer" | "clientInstanceId" | "stores">,
   user: AuthenticatedUser,
-  permission: string,
-  resource?: AccessResource
+  right: { permission: string; resource?: AccessResource },
+  also?: ApprovalFurtherRight
 ): Promise<string[]> {
   if (!options.authorizer) return [];
   const clientInstanceId = options.clientInstanceId;
@@ -92,7 +103,10 @@ async function visibleApproverNamesFor(
       identity: { authSource: "approval-help", externalUserId: record.id }
     });
     const access = await options.authorizer.forActor(actor);
-    if (access.authorize(permission, resource).allowed) {
+    if (
+      access.authorize(right.permission, right.resource).allowed ||
+      (also !== undefined && access.authorize(also.permission, also.resource).allowed)
+    ) {
       if (!names.includes(record.displayLabel)) names.push(record.displayLabel);
       if (names.length === APPROVER_NAMES_MAX) break;
     }

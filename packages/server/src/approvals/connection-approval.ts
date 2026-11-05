@@ -19,8 +19,8 @@ import { z } from "zod";
 
 const CONNECTION_APPROVE_ACTION = "connection.approve";
 
-/** The calls on a Connection's configuration that a policy may hold, by their input. */
-const CONFIG_CHANGE_OPERATIONS: readonly string[] = ["assets.put", "assets.delete"];
+/** The calls on an asset's configuration that a policy may hold, by their input. */
+export const CONFIG_CHANGE_OPERATIONS: readonly string[] = ["assets.put", "assets.delete"];
 
 const subjectSchema = z.object({
   connectionAssetId: z.string().min(1),

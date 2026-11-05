@@ -57,6 +57,7 @@ import { unavailablePublishNarrative } from "../publish-narrative/publish-narrat
 import { createPlatformAssetPolicy } from "../platform/platform-asset-policy";
 import { heldCallApproverNames } from "../approvals/visible-approvers";
 import { HELD_ASSET_OPERATION } from "../approvals/held-asset-preview";
+import { SKILL_APPROVE_ACTION, skillApproveResource } from "../approvals/skill-approval";
 
 /**
  * Who is told of an agent's pending draft: a holder of `agent.write` on it, and the holder of
@@ -117,7 +118,13 @@ export class AssetReadWorkflow {
       target.address
     );
     if (floor !== "approval") return undefined;
-    return { approverNames: await heldCallApproverNames(this.options, call.actor) };
+    // A save of a stored skill files a request `skill.approve` on that skill decides too.
+    const stored = target.asset?.status === "active" ? target.asset : undefined;
+    const also = stored && {
+      permission: SKILL_APPROVE_ACTION,
+      resource: skillApproveResource(stored.name, stored.scope, stored.id)
+    };
+    return { approverNames: await heldCallApproverNames(this.options, call.actor, also) };
   }
 
   /** `saveApproval` of the asset at `address`, read for its caller. */

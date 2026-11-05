@@ -6,5 +6,8 @@ export const skillKind: GrantKindEntry<"skill"> = {
     ...configAssetWords,
     scopeAsset: "access.scopeSkill",
     object: "access.objectSkill"
+  },
+  sentences: {
+    "skill.approve": "access.actionApproveSkillDescription"
   }
 };

@@ -677,6 +677,8 @@ describe("what the dialogs send", () => {
       "allow connection.write"
     ]);
     expect(grantExtras("connection")).toEqual(["approve"]);
+    // Approving a proposed change of a skill is given on its own, on one skill or in a workspace.
+    expect(grantExtras("skill")).toEqual(["approve"]);
     // A deny of Use leaves viewing alone.
     expect(actions({ kind: "connection", level: "use", effect: "deny" })).toEqual([
       "deny connection.use",
@@ -697,7 +699,7 @@ describe("what the dialogs send", () => {
       expect(grantVerbs(kind)).toEqual(
         kind === "agent"
           ? ["read", "use", "write", "publish", "approve", "delete"]
-          : ["read", "write", "publish", "delete"]
+          : ["read", "write", "publish", "approve", "delete"]
       );
       expect(grantScopeKinds(kind)).toEqual(["workspace", "asset"]);
     }

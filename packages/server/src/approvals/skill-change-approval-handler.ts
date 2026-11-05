@@ -38,6 +38,12 @@ import {
 import { accessResource } from "../assets/asset-access";
 import { writesSharedDraft } from "../assets/shared-drafts";
 import {
+  SKILL_APPROVE_ACTION,
+  scopeOfWorkspace,
+  skillApproveAssets,
+  skillApproveResource
+} from "./skill-approval";
+import {
   applySkillChangeDraft,
   revertSkillChangeDraft,
   skillDraftBefore
@@ -60,6 +66,18 @@ const previewSchema = z.object({
     .object({ name: z.string(), title: z.string(), description: z.string(), content: z.string() })
     .optional()
 });
+/**
+ * What a request is about, as it stood when it was filed: the skill it changes, by its asset id,
+ * and the workspace that owns it, or for a new skill none and the workspace that will own it.
+ * `null` for the workspace is the instance. A request filed before it names none, and only
+ * `skill.approve` on the instance decides it.
+ */
+const subjectSchema = z.object({
+  skillAssetId: z.string().min(1).nullable(),
+  workspaceId: z.string().min(1).nullable()
+});
+type SkillChangeSubject = z.infer<typeof subjectSchema>;
+
 const payloadSchema = z
   .object({
     agentName: z.string().min(1),
@@ -70,7 +88,8 @@ const payloadSchema = z
       .string()
       .regex(/^sha256:[a-f0-9]{64}$/u)
       .nullable(),
-    preview: previewSchema
+    preview: previewSchema,
+    subject: subjectSchema.optional()
   })
   .superRefine((payload, context) => {
     const creation = payload.operations[0]?.type === "create_skill";
@@ -94,9 +113,46 @@ export function createSkillChangeApprovalHandler(
   const store = options.configAssets.store;
   return {
     kind: "skill_change",
-    requiredPermission: "agent_skills.approve",
+    // `skill.approve` on the skill a request changes: on that skill, on what its workspace owns
+    // or on the instance, which `agent_skills.approve` carries. A new skill is decided where it
+    // will be owned: in the workspace of the agent that proposes it, or on the instance.
+    requiredPermission: SKILL_APPROVE_ACTION,
+    resourceOf: (payload) => skillChangeResource(validatePayload(payload)),
+    async reviewableSubjects(access) {
+      const skills = await skillApproveAssets(
+        { clientInstanceId: options.clientInstanceId, store },
+        access
+      );
+      const agents = await store.listActiveConfigAssets({
+        clientInstanceId: options.clientInstanceId,
+        kind: "agent"
+      });
+      // The places a new skill can be owned: the instance and each workspace an agent is in.
+      const owners = new Set<string | null>([null]);
+      for (const asset of [...agents, ...skills]) {
+        if (asset.scope.kind === "workspace") owners.add(asset.scope.workspaceId);
+      }
+      return [
+        ...skills.map((skill): JsonObject => ({ skillAssetId: skill.id })),
+        ...[...owners]
+          .filter(
+            (workspaceId) =>
+              access.authorize(
+                SKILL_APPROVE_ACTION,
+                skillApproveResource("", scopeOfWorkspace(workspaceId), undefined)
+              ).allowed
+          )
+          .map((workspaceId): JsonObject => ({ skillAssetId: null, workspaceId }))
+      ];
+    },
     validate(payload) {
       return toJsonObject(validatePayload(payload));
+    },
+    // The skill as it is when the request is filed, whatever the filer said of it.
+    async filedPayload(payload) {
+      const { subject: _given, ...data } = validatePayload(payload);
+      const subject = await subjectNow(data);
+      return toJsonObject(subject ? { ...data, subject } : data);
     },
     checkContent(payload) {
       const data = validatePayload(payload);
@@ -153,6 +209,9 @@ export function createSkillChangeApprovalHandler(
       if (!agent || (!creation && !agent.skillNames.includes(data.skillName))) {
         return true;
       }
+      // The skill moved to another owner, or was made again, since the request was filed: who
+      // decides it was asked on the skill as it was.
+      if (data.subject && !sameSubject(data.subject, await subjectNow(data))) return true;
       const skill = await currentSkill(data.skillName);
       if (await workspaceFilesChanged(skill, data.baseSourceVersion)) return true;
       try {
@@ -395,6 +454,30 @@ export function createSkillChangeApprovalHandler(
     }
   };
 
+  /**
+   * What a request is about now: the active skill it changes, or for a new skill the owner the
+   * change gives it, as `scopeOf` of the snapshot does. Nothing for a skill that is gone.
+   */
+  async function subjectNow(names: {
+    skillName: string;
+    agentName: string;
+    operations: readonly { type: string }[];
+  }): Promise<SkillChangeSubject | undefined> {
+    const read = (kind: (typeof CONFIG_ASSET_KINDS)[number], name: string) =>
+      store.getConfigAsset({ clientInstanceId: options.clientInstanceId, kind, name });
+    const [skill, agent] = await Promise.all([
+      read("skill", names.skillName),
+      read("agent", names.agentName)
+    ]);
+    if (names.operations[0]?.type === "create_skill") {
+      const owner = skill?.scope ?? agent?.scope ?? INSTANCE_ASSET_SCOPE;
+      return { skillAssetId: null, workspaceId: workspaceOf(owner) };
+    }
+    return skill?.status === "active"
+      ? { skillAssetId: skill.id, workspaceId: workspaceOf(skill.scope) }
+      : undefined;
+  }
+
   async function currentSkill(name: string, access?: ActorAccess) {
     const live = await store.getConfigAsset({
       clientInstanceId: options.clientInstanceId,
@@ -495,6 +578,29 @@ export function createSkillChangeApprovalHandler(
         (kind === "skill" ? skill?.scope : undefined) ?? agent?.scope ?? INSTANCE_ASSET_SCOPE
     };
   }
+}
+
+/** The resource `skill.approve` is asked on for one request; without a subject, the instance. */
+function skillChangeResource(data: { skillName: string; subject?: SkillChangeSubject }) {
+  const subject = data.subject;
+  if (!subject) return { kind: "skill", name: data.skillName };
+  return skillApproveResource(
+    data.skillName,
+    scopeOfWorkspace(subject.workspaceId),
+    subject.skillAssetId ?? undefined
+  );
+}
+
+function workspaceOf(scope: AssetScope): string | null {
+  return scope.kind === "workspace" ? scope.workspaceId : null;
+}
+
+function sameSubject(filed: SkillChangeSubject, now: SkillChangeSubject | undefined): boolean {
+  return (
+    now !== undefined &&
+    filed.skillAssetId === now.skillAssetId &&
+    filed.workspaceId === now.workspaceId
+  );
 }
 
 function validatePayload(payload: JsonObject) {
