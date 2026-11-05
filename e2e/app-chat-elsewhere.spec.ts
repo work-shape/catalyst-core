@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Page } from "@playwright/test";
 import { apiBaseUrl, signIn } from "./inbox-fixtures";
 import { sendToolCall } from "./page-surface-fixtures";
-import { requestWithOrigin } from "./request-with-origin";
+import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
 // An App another person built in their own workspace and published for everyone is opened by
@@ -112,5 +112,16 @@ test("a builder changes another person's published App from Chat in their own wo
     ).toBeVisible();
   } finally {
     await context.close();
+    // The App is published for everyone, so it would stand in every other spec's App list.
+    await page.goto("about:blank");
+    const appUrl = `${apiBaseUrl}/api/v1/assets/app/${name}`;
+    if ((await page.request.get(`${appUrl}?workspaceId=${ownerWorkspace}`)).ok()) {
+      await requestWithOrigin(page, "post", `${appUrl}/delete`, {
+        data: {
+          workspaceId: ownerWorkspace,
+          expectedRevision: await assetRevision(page, `${appUrl}?workspaceId=${ownerWorkspace}`)
+        }
+      });
+    }
   }
 });

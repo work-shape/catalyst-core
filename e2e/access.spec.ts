@@ -654,6 +654,8 @@ test("a custom role gets the right to edit and publish one agent, added on its p
     await agents.getByRole("button", { name: /^Add a right for Agents/u }).click();
     await expect(dialog.getByRole("button", { name: /^Person: / })).toHaveCount(0);
     await dialog.getByRole("radio", { name: "Publish", exact: true }).check();
+    // A right starts in a shared workspace; this one is on one agent.
+    await dialog.getByRole("radio", { name: /^On one asset/u }).check();
     await pick(page, dialog.getByRole("button", { name: /^Asset: / }), /E2E Newsroom/u);
     await dialog.getByRole("button", { name: "Create right" }).click();
     await expect(dialog).toBeHidden();

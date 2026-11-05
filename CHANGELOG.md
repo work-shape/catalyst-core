@@ -7,6 +7,29 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.26 — 2026-11-05
+
+### Added
+
+- **HTML to PDF (PDF-1):** An App makes a PDF with the App Kit's `pdf.download(html, filename, options?)` or `pdf.fromHtml(html, options?)` (kit 1.10.0), and an agent with the `workspace.html_to_pdf` tool, offered to every agent that writes workspace files, which writes the PDF to the workspace; the agent hands the final file over with `workspace.promote_artifact`. The instance prints in the isolated preview-capture renderer (`POST /pdf`): no network, no scripts, only inline styles and `data:` addresses. At most 4 MiB of HTML, 50 pages, 10 MiB of PDF and 20 seconds per render, and 10 renders a minute per App frame. Nothing of the document or the PDF is logged or audited. The renderer is off until `PREVIEW_CAPTURE_ENABLED=true`; the Compose overlay now also attaches the agent-run worker to the renderer's network.
+- **A role's rights in one place:** each area of a role's page on Settings > Instance > Access > Roles now has **Add**, which opens the New right dialog for the role: a level of rights in one Shared Workspace or on one asset, such as Publish on one agent and on one skill. Everybody who holds the role gets the right at once; the area lists the role's rights by place and its menu removes any of them. The write is the existing `roles.update` with its no-escalation check and `role.updated` audit event, which names actions, scopes and ids only.
+
+### Changed
+
+- **Docs:** The App sandbox page and the Catalyst skill the CLI ships say an App makes a PDF with the kit's `pdf.download` or `pdf.fromHtml`, not with a bundled PDF library. Another file an App makes is still generated in the browser with a bundled library.
+- **Agents:** An agent that builds assets (it lists `platform.assets.put`, as the shipped Workshaper does) is offered to a person in a workspace only where that person may build there: Builder in the workspace, which instance admins hold everywhere; in a Personal Workspace that is an admin. Nobody else gets it in the picker or over the API, also not with a grant of `agent.use` or where the agent is set to Everyone; a start naming it is refused with `FORBIDDEN` naming `agent.use`, as are a scheduled prompt and a subagent start. A deny of `agent.use` still refuses. Its availability still says where it is offered at all.
+- **Chat:** The agent picker lists the agents that build last, under "For building" / "Zum Bauen".
+- **Workflows:** "Chat" in a Workflow's page head starts the conversation with the agent that builds where one is offered to the person, as an App's does, rather than with the chosen agent.
+- **Agent PDFs are HTML first (PDF-1):** `workspace.html_to_pdf` writes the PDF into the workspace without a download card and takes no `filename`; the agent checks the pages with `workspace.preview_images` and hands the final PDF over once with `workspace.promote_artifact`. Its description and the docs (Where data belongs) tell the agent to make every new PDF as HTML and CSS, to keep the PDF helpers for forms, merging, editing and checking, and to use `reportlab` only to draw on an existing PDF, for more than 50 pages, or where no renderer runs.
+
+### Fixed
+
+- **An App that fills its frame no longer scrolls by a few pixels:** the document the platform frames an App or Page in now holds `html, body { margin: 0 !important }`, so an App's own `all: revert` on `body` no longer brings back the browser's default margin. Existing Apps get it without a rebuild. The `workspace.open` description and the App sandbox docs tell agents to size the root with `height: 100%` (`h-full`), not `100vh` plus padding, and not to reset `html` or `body` with `all:`.
+- **Apps:** "Chat" on an App owned by another workspace, such as one another person built and published for everyone, works again. The agent reads the App, loads its draft with `app.edit` and saves the change as the next draft, from a chat of the person's own in the workspace they are in. Before, the read, `app.edit` and the save were refused with "The subject of the conversation is not available", and the dock showed a preview that could not be opened. The App's own workspace decides who may read and change it, as before; only a conversation of the person's own reaches it.
+- **Agents:** `platform.assets.get` tells the agent that an App's files are changed through `app.edit`.
+- **Apps:** The empty Apps list offers "Build one with the agent", its examples and its started sentence only where an agent offered in the workspace builds Apps and the person may build there, and the button starts the conversation with that agent. Elsewhere the list says only that there are no Apps yet. It used to offer them anyway and open a chat with the workspace's default agent, which could not build an App.
+- **Chat:** The dock beside the Apps, Workflows or a Studio list greets with "What should the new … do?" and its examples only while its agent builds assets; with any other agent it shows that agent's own start.
+
 ## 0.8.0-rc.25 — 2026-11-04
 
 ### Added
