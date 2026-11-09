@@ -7,6 +7,24 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.30 — 2026-11-09
+
+### Added
+
+- **Agent tools:** `platform.conversations.rename` lets an agent give the chat it runs in a title, such as one a skill's rule asks for. It takes only the title, acts on the current conversation with the rights of the person in the chat, and is refused in a subagent's thread. An agent holds it only where its tool list names it; it shows in the agent's Tools section as "Rename the chat" ("Chat umbenennen"), and in the chat as a row of the work history. The rail and the header of a docked chat show the new title without a reload.
+
+### Changed
+
+- **Skills:** A skill owned by a Shared Workspace or the instance goes live on save (SKILL-LIVE-1, reversing SKILL-DRAFT-1). A holder of `skill.write` and `skill.publish` writes one new live revision, with every changed file in it, through `skill.before_publish`; the page has no Publish button or draft badge. A holder of `skill.write` alone, and every service principal, a release key among them, files a `skill_change` request that `skill.approve` decides: the page's button reads "Submit for approval", and `assets.put`, `assets.revert` and `assets.sync` answer the additive field `approvalRequestId` with the live revision unchanged. `catalyst config push` and `catalyst <kind> put` print the request and exit with 3, and the working copy keeps the change as not yet written. A restore from the skill page takes one click and goes live under the same rule. Try reads the live revision. A draft from before stays readable and can be published or discarded, and no new one appears; while one is pending, a write of that skill is refused with `skill_draft_pending`.
+
+### Fixed
+
+- A title a person or their agent gives in the very words of a conversation's temporary title stays: the title job replaced it, since it could not tell the two apart.
+
+### Database
+
+- Migration 0196 adds the nullable column `conversations.title_given_at`: when a person or their agent gave the conversation its title. It needs no backfill and rolls back without a step: the previous release ignores the column.
+
 ## 0.8.0-rc.29 — 2026-11-05
 
 ### Fixed
