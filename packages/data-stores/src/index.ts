@@ -5,6 +5,13 @@ export {
 } from "./knowledge/document-types";
 export { withinSource } from "./knowledge/source-boundary";
 export { createSourceWithdrawalApproval } from "./knowledge/source-withdrawal-approval";
+export {
+  changesDueAt,
+  dueSourcePass,
+  knowledgeSourceTickSchedule,
+  scheduledPass,
+  sourceTickJob
+} from "./knowledge/builtin/source-tick";
 import type { KnowledgeSources } from "./knowledge/source-port";
 import { createKnowledgeSources } from "./knowledge/builtin/source-queries";
 import {

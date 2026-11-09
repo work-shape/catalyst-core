@@ -13,13 +13,15 @@ import type { DataStoreRuntime } from "../../runtime";
 export async function enqueueSourceSync(
   stores: PlatformStores,
   runtime: Pick<DataStoreRuntime, "clientInstanceId">,
-  payload: KnowledgeSyncJobPayload
+  payload: KnowledgeSyncJobPayload,
+  /** What the job is queued once for. Unless named, its run. */
+  dedupe: string = payload.syncRunId
 ) {
   await stores.jobs.enqueue(knowledgeSyncJob, payload, {
     clientInstanceId: runtime.clientInstanceId,
     subject: payload.knowledgeBaseId,
     concurrencyKey: knowledgeSourceKey(payload.knowledgeBaseId, payload.sourceId),
-    dedupeKey: subjectDedupeKey(knowledgeSyncJob.kind, payload.syncRunId)
+    dedupeKey: subjectDedupeKey(knowledgeSyncJob.kind, dedupe)
   });
 }
 
@@ -71,7 +73,13 @@ export async function settleSourceSync(
             output: { value: { ...result } }
           }
   });
-  if (finished)
+  // A poll that found nothing shows on the Knowledge Base page alone. This event is also what a
+  // Workflow's `platform_event` trigger starts on, and a source is polled every 15 minutes.
+  const idlePoll =
+    result.mode === "changes" &&
+    result.state === "done" &&
+    Object.values(result.counts).every((count) => count === 0);
+  if (finished && !idlePoll)
     await stores.audit.appendAuditEvent({
       clientInstanceId: runtime.clientInstanceId,
       type: "knowledge_base.sync_finished",

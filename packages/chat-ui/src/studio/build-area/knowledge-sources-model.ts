@@ -15,6 +15,8 @@ export interface KnowledgeSourceForm {
   include: string;
   /** Patterns on the path below the folders, one per line. Empty for none. */
   exclude: string;
+  /** The source's `schedule`, which this page does not edit and a save keeps. */
+  schedule?: unknown;
 }
 
 /** The longest source id the definition takes. */
@@ -39,13 +41,15 @@ export function knowledgeSourcesFromConfig(value: unknown): KnowledgeSourceForm[
     const id = member(entry, "id");
     const connection = member(entry, "connection");
     if (typeof id !== "string" || typeof connection !== "string") return [];
+    const schedule = member(entry, "schedule");
     return [
       {
         id,
         connection,
         folders: lines(member(entry, "folders"), "\n"),
         include: lines(member(entry, "include"), "\n"),
-        exclude: lines(member(entry, "exclude"), "\n")
+        exclude: lines(member(entry, "exclude"), "\n"),
+        ...(schedule === undefined ? {} : { schedule })
       }
     ];
   });
@@ -83,7 +87,8 @@ export function knowledgeSourcesToConfig(
       connection: source.connection,
       folders: sourceFolderIds(source.folders),
       ...(include.length > 0 ? { include } : {}),
-      ...(exclude.length > 0 ? { exclude } : {})
+      ...(exclude.length > 0 ? { exclude } : {}),
+      ...(source.schedule === undefined ? {} : { schedule: source.schedule })
     };
   });
 }

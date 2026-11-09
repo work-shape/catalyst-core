@@ -1,4 +1,5 @@
 import { createSourcePolicyHandler } from "./source-policy-job";
+import { createSourceTickHandler } from "./source-tick";
 import type { RegisteredJobHandler } from "@work-shape/catalyst-core";
 import type { DataStoreRuntime } from "../../runtime";
 import { createKnowledgeSyncHandler } from "./sync-job";
@@ -15,6 +16,7 @@ export function createKnowledgeSourceJobs(
     createKnowledgeSyncHandler(runtime),
     createKnowledgeFetchHandler(runtime),
     createSourcePolicyHandler(runtime),
+    createSourceTickHandler(runtime),
     createWorkflowSourceEndHandler(runtime)
   ];
 }

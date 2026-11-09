@@ -74,7 +74,8 @@ export function useKnowledgeSync({
   firstPassStop,
   fetchWindow,
   pageCacheBytes,
-  methods = ["keyword", "semantic"]
+  methods = ["keyword", "semantic"],
+  sourceTick
 }: {
   /** The bound of the page cache, smaller than the default (KB-13b). */
   pageCacheBytes?: number;
@@ -85,6 +86,12 @@ export function useKnowledgeSync({
   fetchWindow?: { items: number; bytes: number };
   /** How the Knowledge Base searches; by words and meaning unless a test says otherwise. */
   methods?: readonly string[];
+  /** The clock and the settings of the source tick (SRC-3). */
+  sourceTick?: {
+    now: () => Date;
+    sourcePollMinutes?: Readonly<Record<string, number>>;
+    timeZone?: string;
+  };
 } = {}) {
   const { start } = useDataStoreInstance();
   const cleanups: (() => Promise<unknown>)[] = [];
@@ -324,6 +331,7 @@ export function useKnowledgeSync({
       maxDocuments: 10000,
       ...(firstPassStop === undefined ? {} : { firstPassStop }),
       ...(fetchWindow === undefined ? {} : { fetchWindow }),
+      ...sourceTick,
       openSource
     });
     const worker = createJobWorker({
@@ -387,6 +395,7 @@ export function useKnowledgeSync({
         folders: string[];
         include?: string[];
         exclude?: string[];
+        schedule?: { full: string };
       }[],
       extra: { extraction?: { budget: { perMonth?: number; maxTokensPerDocument: number } } } = {}
     ) {
