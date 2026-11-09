@@ -1,5 +1,0 @@
----
-section: Changed
----
-
-- **Skills:** A skill owned by a Shared Workspace or the instance goes live on save (SKILL-LIVE-1, reversing SKILL-DRAFT-1). A holder of `skill.write` and `skill.publish` writes one new live revision, with every changed file in it, through `skill.before_publish`; the page has no Publish button or draft badge. A holder of `skill.write` alone, and every service principal, a release key among them, files a `skill_change` request that `skill.approve` decides: the page's button reads "Submit for approval", and `assets.put`, `assets.revert` and `assets.sync` answer the additive field `approvalRequestId` with the live revision unchanged. `catalyst config push` and `catalyst <kind> put` print the request and exit with 3, and the working copy keeps the change as not yet written. A restore from the skill page takes one click and goes live under the same rule. Try reads the live revision. A draft from before stays readable and can be published or discarded, and no new one appears; while one is pending, a write of that skill is refused with `skill_draft_pending`.
