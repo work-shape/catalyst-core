@@ -328,6 +328,7 @@ export function useWorkspaceChatModel({
     snapshotError: threadQuery.error,
     refreshSnapshot: workspaceCache.refreshThreadSnapshot,
     onToolCallCompleted: workspaceCache.invalidateConversationResources,
+    onConversationRenamed: workspaceCache.invalidateConversationStarted,
     onTerminalObservation: workspaceCache.invalidateTerminalRunObservation
   });
   const followUpSource = useFollowUpSource({

@@ -214,7 +214,8 @@ describe("the tools the agent page is told of", () => {
           "platform.assets.put",
           "platform.connections.propose",
           "platform.connections.draft_tools",
-          "platform.connections.offer_to_agent"
+          "platform.connections.offer_to_agent",
+          "platform.conversations.rename"
         ])
       );
       const proposal = tools.find((tool) => tool.name === "platform.connections.propose");

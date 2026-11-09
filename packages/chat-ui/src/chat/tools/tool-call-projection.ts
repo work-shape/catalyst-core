@@ -1,5 +1,6 @@
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
 import type { LocaleCode } from "@work-shape/catalyst-api-client";
+import { CONVERSATION_RENAME_TOOL_NAME } from "@work-shape/catalyst-core";
 import { type ReactNode } from "react";
 import { readToolDisplayPayloadFromToolResult } from "../../shared/domain-ui-widgets";
 import { connectionOperationOfTool } from "../../shared/connection-facts";
@@ -137,6 +138,7 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
     "platform.connections.propose": "Propose a connection",
     "platform.connections.draft_tools": "Draft access to an API",
     "platform.connections.offer_to_agent": "Offer tools to an agent",
+    [CONVERSATION_RENAME_TOOL_NAME]: "Rename the chat",
     "assets.publish": "Publish",
     "mail.send": "Send an e-mail",
     read_skill: "Read instructions",
@@ -166,6 +168,7 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
     "platform.connections.propose": "Verbindung vorschlagen",
     "platform.connections.draft_tools": "Zugriff auf eine API entwerfen",
     "platform.connections.offer_to_agent": "Tools einem Agenten anbieten",
+    [CONVERSATION_RENAME_TOOL_NAME]: "Chat umbenennen",
     "assets.publish": "Veröffentlichen",
     "mail.send": "E-Mail senden",
     read_skill: "Anleitung lesen",
@@ -245,6 +248,9 @@ function readToolSubjectLabel(input: {
 }): string | undefined {
   if (input.toolName === "read_skill") {
     return readSkillSubjectLabel(input.args, input.result);
+  }
+  if (input.toolName === CONVERSATION_RENAME_TOOL_NAME) {
+    return readRecordString(input.args, "title");
   }
   if (input.toolName === "show_view") {
     const displayTitle = readDisplayProvidedTitle(

@@ -180,6 +180,9 @@ export interface ProjectInstructions {
  */
 export const SUBJECT_TOOL_PREFIX = "platform.assets.";
 
+/** The tool that renames the conversation it is called in: `conversations.rename` for an agent. */
+export const CONVERSATION_RENAME_TOOL_NAME = "platform.conversations.rename";
+
 /**
  * Where the assets a conversation's first saves create belong, where it is not the rule of
  * WS-OWN-1a: `instance` for a conversation started under Studio's scope "Instance". Set only
@@ -428,10 +431,11 @@ export interface ConversationStore extends ConversationHistoryStore {
    * with `NOT_FOUND` a project that is not active in the Conversation's workspace.
    */
   setConversationProject(input: SetConversationProjectInput): Promise<Conversation>;
+  /** A title a person or their agent gives. The title job replaces none it has written. */
   updateConversationTitle(input: UpdateConversationTitleInput): Promise<Conversation>;
   /**
-   * Writes the title only while the conversation still carries `expectedTitle`, in one
-   * statement. False when it carries another title or is not active.
+   * Writes the title only while the conversation still carries `expectedTitle` and no person or
+   * agent has given it one, in one statement. False otherwise, or when it is not active.
    */
   replaceConversationTitle(input: ReplaceConversationTitleInput): Promise<boolean>;
   /**

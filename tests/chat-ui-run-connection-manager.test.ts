@@ -7,6 +7,8 @@ import {
   type RunCursorStorage
 } from "./support/chat-ui";
 
+const RENAME = "platform.conversations.rename";
+
 describe("chat UI run connection manager", () => {
   it("remembers cursor hints and asks for a snapshot refresh when observation application reports a gap", async () => {
     const afterSequences: Array<string | undefined> = [];
@@ -64,6 +66,41 @@ describe("chat UI run connection manager", () => {
     expect(rememberedCursors).toEqual([["conv_1", "run_1", 4]]);
     expect(signals[0]?.aborted).toBe(true);
     manager?.stop();
+  });
+
+  it("tells of a rename by the agent, and of no other tool or a rename that failed", async () => {
+    const tool = (type: "tool_call_completed" | "tool_call_failed", toolName: string) => ({
+      type,
+      toolCallId: "call_1",
+      toolName,
+      result: { status: "success", output: {} },
+      modelOutput: ""
+    });
+    const renamedIn: string[] = [];
+    await new Promise<void>((resolve, reject) => {
+      startRunConnectionManager({
+        client: {
+          conversations: {
+            runs: {
+              async *observe() {
+                yield createObservation(1, tool("tool_call_completed", "workspace.exec"));
+                yield createObservation(2, tool("tool_call_failed", RENAME));
+                yield createObservation(3, tool("tool_call_completed", RENAME));
+              }
+            }
+          }
+        },
+        connection: { conversationId: "conv_1", runId: "run_1", afterSequence: 0 },
+        markConnecting() {},
+        applyObservation: () => ({ refreshRequired: false }),
+        completeStream: () => resolve(),
+        failStream: (error) => reject(toError(error)),
+        refreshSnapshot: () => Promise.resolve(),
+        onConversationRenamed: (conversationId) => renamedIn.push(conversationId),
+        cursorStorage: createCursorStorage([])
+      });
+    });
+    expect(renamedIn).toEqual(["conv_1"]);
   });
 
   it("reports caught-up empty streams and requests a snapshot refresh", async () => {

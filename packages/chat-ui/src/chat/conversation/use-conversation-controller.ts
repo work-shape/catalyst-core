@@ -28,6 +28,7 @@ export interface UseConversationControllerInput {
   refreshSnapshot: (conversationId: string) => Promise<unknown>;
   onTerminalObservation?: (observation: RunObservation) => void;
   onToolCallCompleted?: (conversationId: string) => void;
+  onConversationRenamed?: (conversationId: string) => void;
 }
 
 export function useConversationController({
@@ -39,7 +40,8 @@ export function useConversationController({
   snapshotError,
   refreshSnapshot,
   onTerminalObservation,
-  onToolCallCompleted
+  onToolCallCompleted,
+  onConversationRenamed
 }: UseConversationControllerInput): ConversationControllerState {
   const [storedState, setState] = useState<ConversationControllerState>(() =>
     createInitialControllerState()
@@ -143,6 +145,7 @@ export function useConversationController({
       refreshSnapshot,
       onTerminalObservation,
       onToolCallCompleted,
+      onConversationRenamed,
       onPreviewCaptureAsked: (askedIn) => {
         answerPreviewCaptures(client, askedIn).catch(() => undefined);
       }
@@ -151,7 +154,14 @@ export function useConversationController({
     return () => {
       manager.stop();
     };
-  }, [activeRunConnection, client, onTerminalObservation, onToolCallCompleted, refreshSnapshot]);
+  }, [
+    activeRunConnection,
+    client,
+    onConversationRenamed,
+    onTerminalObservation,
+    onToolCallCompleted,
+    refreshSnapshot
+  ]);
 
   // A thread read before the store had recorded the end of a run stays behind the page, which
   // saw the run end. Nothing else would read it again, so the page does, a bounded few times.

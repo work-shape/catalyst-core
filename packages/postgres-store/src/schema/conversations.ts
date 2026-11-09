@@ -44,6 +44,8 @@ export const conversations = pgTable(
     createdByExternalUserId: text("created_by_external_user_id"),
     visibility: text("visibility").$type<Conversation["visibility"]>().notNull(),
     title: text("title").notNull(),
+    // When a person or their agent gave the title. The title job replaces none given.
+    titleGivenAt: timestamp("title_given_at", { withTimezone: true }),
     status: text("status").$type<Conversation["status"]>().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),

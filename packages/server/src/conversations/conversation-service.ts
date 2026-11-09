@@ -38,6 +38,7 @@ import { projectNotAvailable, requireProjectAccess } from "../projects/project-a
 import { attemptConversationDataCleanup } from "../deletion/conversation-cleanup";
 import { requireChatConversationAccess, requireConversationAccess } from "./conversation-access";
 import { assertConversationIdle } from "./conversation-idle";
+import { renameChatConversation } from "./conversation-rename";
 import {
   createTitlePrompt,
   findFirstUserMessage,
@@ -368,29 +369,7 @@ export class ConversationWorkflow {
     user: AuthenticatedUser,
     context: RuntimeCallContext
   ): Promise<Conversation> {
-    const conversation = await this.requireChatConversationAccess(conversationId, user);
-    if (conversation.title === title) {
-      return conversation;
-    }
-
-    const updated = await this.options.stores.conversations.updateConversationTitle({
-      clientInstanceId: this.options.clientInstanceId,
-      conversationId,
-      title,
-      updatedAt: new Date().toISOString()
-    });
-    await this.options.auditRecorder.record({
-      type: "conversation.renamed",
-      status: "success",
-      actor: auditActorFromUser(user),
-      subject: conversationId,
-      correlationId: context.correlationId,
-      metadata: {
-        previousTitleLength: conversation.title.length,
-        titleLength: title.length
-      }
-    });
-    return updated;
+    return renameChatConversation(this.options, conversationId, title, user, context.correlationId);
   }
 
   /**
@@ -654,8 +633,9 @@ export class ConversationWorkflow {
   /**
    * The work of the `conversation.generate_title` job. It finishes without work when the
    * conversation or the user is gone or the title is no longer the temporary one. The title is
-   * written under the job's lease and only over the title it was generated for, so a rename
-   * during the model call stands. A failure is thrown, so the job is tried again.
+   * written under the job's lease, only over the title it was generated for and only where no
+   * person or agent gave one, so a rename stands: during the model call, and one to the words
+   * of the temporary title. A failure is thrown, so the job is tried again.
    */
   async generateTitleForConversation(
     input: { conversationId: ConversationId; userId: UserId; correlationId: string },
@@ -732,8 +712,8 @@ export class ConversationWorkflow {
         return;
       }
 
-      // One statement decides: a title the user wrote since the job read the conversation
-      // is not the expected one and stays.
+      // One statement decides: a title a person or their agent gave since the job read the
+      // conversation stays, also one in the very words of the temporary title.
       const updated = await control.transaction((stores) =>
         stores.conversations.replaceConversationTitle({
           clientInstanceId: this.options.clientInstanceId,

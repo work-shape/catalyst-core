@@ -214,7 +214,7 @@ describe("the title job and a rename by the user", () => {
     /** The language the account chose. Left out, the account has none. */
     locale?: LocaleCode,
     /** The title the conversation starts with and the files its first message attached. */
-    start: { title: string; files: string[] } = {
+    start: { title: string; files: string[]; given?: string } = {
       title: "please summarize the release notes",
       files: []
     }
@@ -234,6 +234,13 @@ describe("the title job and a rename by the user", () => {
       text: "please summarize the release notes",
       ...(start.files.length === 0 ? {} : { metadata: attachedFiles(start.files) })
     });
+    if (start.given)
+      await store.conversations.updateConversationTitle({
+        clientInstanceId: titleInstance,
+        conversationId: conversation.id,
+        title: start.given,
+        updatedAt: new Date().toISOString()
+      });
     if (locale)
       await store.users.updateUser({
         clientInstanceId: titleInstance,
@@ -390,8 +397,27 @@ describe("the title job and a rename by the user", () => {
     expect(result.generatedEvents).toHaveLength(0);
   });
 
-  it("replaces a title in one statement, and only the expected one", async () => {
-    const { store, conversation } = await titledConversation("Mine");
+  // A first message of a few words is the temporary title in the very words an agent may give.
+  const firstWords = "please summarize the release notes";
+
+  it("keeps a title given in the words of the temporary one, before the job runs", async () => {
+    const result = await titledConversation(undefined, undefined, undefined, undefined, {
+      title: firstWords,
+      files: [],
+      given: firstWords
+    });
+    expect(result.title).toBe(firstWords);
+    expect(result.generatedEvents).toHaveLength(0);
+  });
+
+  it("keeps a title given in the words of the temporary one, between the job's read and its write", async () => {
+    const result = await titledConversation(firstWords);
+    expect(result.title).toBe(firstWords);
+    expect(result.generatedEvents).toHaveLength(0);
+  });
+
+  it("replaces a title in one statement, only the expected one and none that was given", async () => {
+    const { store, conversation } = await titledConversation(undefined);
     const replace = (expectedTitle: string) =>
       store.conversations.replaceConversationTitle({
         clientInstanceId: titleInstance,
@@ -404,11 +430,22 @@ describe("the title job and a rename by the user", () => {
     await expect(replace("please summarize the release notes")).resolves.toBe(false);
     await expect(
       store.conversations.getConversation(titleInstance, conversation.id)
-    ).resolves.toMatchObject({ title: "Mine" });
-    await expect(replace("Mine")).resolves.toBe(true);
+    ).resolves.toMatchObject({ title: "Release Notes Summary" });
+    await expect(replace("Release Notes Summary")).resolves.toBe(true);
     await expect(
       store.conversations.getConversation(titleInstance, conversation.id)
     ).resolves.toMatchObject({ title: "Generated" });
+
+    await store.conversations.updateConversationTitle({
+      clientInstanceId: titleInstance,
+      conversationId: conversation.id,
+      title: "Mine",
+      updatedAt: new Date().toISOString()
+    });
+    await expect(replace("Mine")).resolves.toBe(false);
+    await expect(
+      store.conversations.getConversation(titleInstance, conversation.id)
+    ).resolves.toMatchObject({ title: "Mine" });
   });
 });
 

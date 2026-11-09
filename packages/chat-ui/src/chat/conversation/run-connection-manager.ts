@@ -3,6 +3,7 @@ import {
   type ApiClient,
   type RunObservation
 } from "@work-shape/catalyst-api-client";
+import { CONVERSATION_RENAME_TOOL_NAME } from "@work-shape/catalyst-core";
 import { forgetWhenSessionEnds } from "../../shared/shell-session";
 import { isTerminalObservation, type RunConnectionTarget } from "./conversation-controller-state";
 
@@ -32,6 +33,8 @@ export interface StartRunConnectionManagerInput {
   refreshSnapshot(conversationId: string): Promise<unknown>;
   onTerminalObservation?: (observation: RunObservation) => void;
   onToolCallCompleted?: (conversationId: string) => void;
+  /** The agent gave the conversation a new title, which the rail and the header show. */
+  onConversationRenamed?: (conversationId: string) => void;
   /** The run asks the browser of the person it serves for a picture of the preview. */
   onPreviewCaptureAsked?: (conversationId: string) => void;
   cursorStorage?: RunCursorStorage;
@@ -81,6 +84,12 @@ export function startRunConnectionManager(
           observation.payload.type === "subagent_started"
         ) {
           input.onToolCallCompleted?.(observation.conversationId);
+        }
+        if (
+          observation.payload.type === "tool_call_completed" &&
+          observation.payload.toolName === CONVERSATION_RENAME_TOOL_NAME
+        ) {
+          input.onConversationRenamed?.(observation.conversationId);
         }
         if (
           observation.payload.type === "tool_call_started" &&

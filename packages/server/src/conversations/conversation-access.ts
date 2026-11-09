@@ -91,7 +91,17 @@ export async function requireChatConversationAccess(
 ): Promise<Conversation> {
   const conversation = await requireConversationAccess(options, conversationId, user);
   if (conversation.kind === "run_thread") {
-    throw new AppError("CONFLICT", "A subagent's thread is read only", { reason: "run_thread" });
+    throw runThreadIsReadOnly();
   }
   return conversation;
+}
+
+/** The refusal of a write to a run thread. An agent reads it too, so it says what it refuses. */
+export function runThreadIsReadOnly(): AppError {
+  return new AppError(
+    "CONFLICT",
+    "A subagent's thread is read only",
+    { reason: "run_thread" },
+    { exposeMessage: true }
+  );
 }

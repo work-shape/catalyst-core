@@ -164,6 +164,7 @@ export { CONNECTION_TEST_CREDENTIAL_STATES } from "@work-shape/catalyst-asset-sc
 export type { ConnectionTestCredentialState } from "@work-shape/catalyst-asset-schemas";
 export { CONNECTOR_TEST_STATUSES } from "@work-shape/catalyst-asset-schemas";
 export { CONVERSATION_ATTACHMENT_STATUSES } from "@work-shape/catalyst-asset-schemas";
+export { CONVERSATION_TITLE_MAX_CHARS } from "@work-shape/catalyst-asset-schemas";
 export { CONVERSATION_VISIBILITIES } from "@work-shape/catalyst-asset-schemas";
 export { conversationInterfacePath } from "@work-shape/catalyst-asset-schemas";
 export { DATA_STORE_CONDITIONS } from "@work-shape/catalyst-asset-schemas";

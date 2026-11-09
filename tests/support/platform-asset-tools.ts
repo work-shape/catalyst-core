@@ -151,7 +151,8 @@ export async function createAssetToolsFixture(
     skillTool = false,
     centralPolicySettings,
     allowAgentDeletion = false,
-    releaseSync = false
+    releaseSync = false,
+    agentTools = []
   }: {
     filesStore?: boolean;
     publishTool?: boolean;
@@ -160,6 +161,8 @@ export async function createAssetToolsFixture(
     centralPolicySettings?: () => CentralPolicySetting[];
     allowAgentDeletion?: boolean;
     releaseSync?: boolean;
+    /** Further tools the agent lists beside the platform's. */
+    agentTools?: string[];
   } = {}
 ): Promise<AssetToolsFixture> {
   // No release names `read_skill` here: the skill of a subject is readable all the same.
@@ -168,7 +171,8 @@ export async function createAssetToolsFixture(
     toolNames: [
       ...PLATFORM_TOOL_NAMES,
       ...(publishTool ? ["assets.publish"] : []),
-      ...(skillTool ? ["read_skill"] : [])
+      ...(skillTool ? ["read_skill"] : []),
+      ...agentTools
     ],
     ...(skillTool ? { tools: [{ name: "read_skill", enabled: true }] } : {}),
     developmentAuth: {
