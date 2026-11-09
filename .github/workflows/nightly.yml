@@ -73,7 +73,7 @@ jobs:
         if: always()
         run: docker rm --force "$CHECK_POSTGRES_NAME" >/dev/null 2>&1 || true
   browser:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
       CHECK_POSTGRES_NAME: nightly-postgres-browser
