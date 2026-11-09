@@ -4,6 +4,7 @@ import {
   asAgentRunId,
   asClientInstanceId,
   asConversationId,
+  CONVERSATION_RENAME_TOOL_NAME,
   createPlatformId,
   defineProvider,
   type AgentRun,
@@ -150,7 +151,7 @@ async function fixture(policies: CentralPolicySetting[] = [], unattended = false
   model.reset();
   const config = createTestConfig({
     tools: [{ name: change.name, enabled: true }],
-    toolNames: ["run_agent", change.name]
+    toolNames: ["run_agent", change.name, CONVERSATION_RENAME_TOOL_NAME]
   });
   config.infrastructure.models = { local: { provider: SUBAGENT_MODEL_PROVIDER, model: "local" } };
   const app: TestInstance = await createTestInstance({
@@ -326,6 +327,31 @@ describe("subagents of a chat agent", () => {
       expect(write.statusCode, write.body).toBe(409);
       expect(write.body).toContain("run_thread");
     }
+    await f.app.close();
+  });
+
+  it("refuses a rename by a subagent, and leaves its thread and the root as they are", async () => {
+    const f = await fixture();
+    const rename = `/tool ${CONVERSATION_RENAME_TOOL_NAME} ${JSON.stringify({ title: "Other" })}`;
+    const said = await f.say(runAgent({ description: "Name it", task: rename }));
+    await f.until(said.runId, "completed");
+    const child = required((await f.children(said.runId))[0]);
+    await f.until(child.subagentRunId, "completed");
+
+    const failed = (await f.events(child.subagentRunId)).filter(
+      (event) => event.type === "tool_call_failed"
+    );
+    expect(failed).toHaveLength(1);
+    expect(JSON.stringify(failed)).toContain("A subagent's thread is read only");
+    const titleOf = async (conversationId: string) =>
+      (
+        await f.app.stores.conversations.getConversation(
+          f.clientInstanceId,
+          asConversationId(conversationId)
+        )
+      )?.title;
+    expect(await titleOf(child.threadId)).toBe("Name it");
+    expect(await titleOf(said.conversationId)).toBe("Split");
     await f.app.close();
   });
 

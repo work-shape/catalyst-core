@@ -44,6 +44,11 @@ export { CONNECTION_DRAFT_TOOL_NAME, createConnectionDraftTool } from "./connect
 export { CONNECTION_OFFER_TOOL_NAME, createConnectionOfferTool } from "./connection-offer-tool";
 export { createAskQuestionTool, type AskedQuestion } from "./ask-question-tool";
 export {
+  CONVERSATION_RENAME_TOOL,
+  createConversationRenameTool,
+  type ConversationRenameCalls
+} from "./conversation-rename-tool";
+export {
   CONNECTION_PROPOSE_TOOL_NAME,
   createConnectionProposeTool,
   type ConnectionProposalCatalogue,

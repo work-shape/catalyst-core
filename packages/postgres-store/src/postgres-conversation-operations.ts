@@ -486,7 +486,8 @@ async function replaceConversationTitle(
         eq(conversations.clientInstanceId, input.clientInstanceId),
         eq(conversations.id, input.conversationId),
         eq(conversations.status, "active"),
-        eq(conversations.title, input.expectedTitle)
+        eq(conversations.title, input.expectedTitle),
+        isNull(conversations.titleGivenAt)
       )
     )
     .returning({ id: conversations.id });
@@ -506,6 +507,7 @@ async function updateConversationTitle(
     .update(conversations)
     .set({
       title: input.title,
+      titleGivenAt: new Date(input.updatedAt),
       updatedAt: new Date(input.updatedAt)
     })
     .where(

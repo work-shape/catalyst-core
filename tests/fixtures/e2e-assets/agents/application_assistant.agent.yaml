@@ -25,6 +25,7 @@ toolNames:
   - platform.connections.propose
   - platform.connections.draft_tools
   - platform.connections.offer_to_agent
+  - platform.conversations.rename
 initialPrompts:
   - title: Find review risks
     prompt: List the most important application or document review risks I should check first.
