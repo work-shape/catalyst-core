@@ -81,7 +81,8 @@ describe("embedding bindings in release config", () => {
       maxPagesPerDocument: 500,
       indexConcurrency: { perWorker: 8, total: 16 },
       withdrawShareConfirm: 0.2,
-      pageCacheBytes: 512 * 1024 * 1024
+      pageCacheBytes: 512 * 1024 * 1024,
+      sourcePollMinutes: {}
     });
   });
 
@@ -95,7 +96,8 @@ describe("embedding bindings in release config", () => {
       maxPagesPerDocument: 500,
       indexConcurrency: { perWorker: 8, total: 16 },
       withdrawShareConfirm: 0.2,
-      pageCacheBytes: 512 * 1024 * 1024
+      pageCacheBytes: 512 * 1024 * 1024,
+      sourcePollMinutes: {}
     });
   });
 

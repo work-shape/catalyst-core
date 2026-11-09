@@ -118,13 +118,15 @@ export function createSourceStore(
       if (!target) throw new AppError("CONFLICT", "The published source is unavailable");
       const definitionKey = sourceBoundaryKey(target.source);
       return change(async (sql) => {
+        // A source no pass has finished is still at its first import, with the stop that has:
+        // a feed would not name what the failed one left, however many items that is.
         // Return and lock the winner in the same statement. A finishing run cannot leave
         // a gap between a uniqueness refusal and a separate lookup of the running row.
         const [row] = z
           .array(z.object({ id: z.string(), operation_run_id: z.string(), created: z.boolean() }))
           .parse(
             await sql.run(
-              "insert into catalyst_kb.sync_runs (id,source_id,mode,operation_run_id,cursor_before,definition_key) values ($1::text,$2::text,$3::text,$4::text,(select cursor from catalyst_kb.source_cursors where source_id=$2::text and definition_key=$5::text),$5::text) on conflict (source_id) where state='running' do update set source_id=sync_runs.source_id returning id,operation_run_id,(xmax=0) as created",
+              "insert into catalyst_kb.sync_runs (id,source_id,mode,operation_run_id,cursor_before,definition_key) values ($1::text,$2::text,case when $3::text='changes' and not exists(select 1 from catalyst_kb.sync_runs where source_id=$2::text and state='done') then 'initial' else $3::text end,$4::text,(select cursor from catalyst_kb.source_cursors where source_id=$2::text and definition_key=$5::text),$5::text) on conflict (source_id) where state='running' do update set source_id=sync_runs.source_id returning id,operation_run_id,(xmax=0) as created",
               [payload.syncRunId, payload.sourceId, mode, payload.operationRunId, definitionKey]
             )
           );
@@ -329,6 +331,15 @@ export function createSourceStore(
           );
         await refreshSourceFreshness(sql, payload.sourceId, changed);
         return { queued, limited };
+      });
+    },
+    /** Lets go of the items a job of an ended pass still holds, so this pass can claim them. */
+    async releaseLeftovers(payload: KnowledgeSyncJobPayload) {
+      return change(async (sql) => {
+        await sql.run(
+          "update catalyst_kb.source_items set fetch_job_id=null where source_id=$1::text and state='discovered' and fetch_job_id is not null and enqueued_run_id is distinct from $2::text",
+          [payload.sourceId, payload.syncRunId]
+        );
       });
     },
     async pending(payload: KnowledgeSyncJobPayload, after: string, limit: number) {
@@ -756,8 +767,27 @@ export function createSourceStore(
         const [row] = await sql.run("select * from catalyst_kb.sync_runs where id=$1::text", [
           payload.syncRunId
         ]);
-        if (row)
-          await settleSourceSync(stores, runtime, payload, syncResult(row), finished.length === 1);
+        if (!row) return;
+        const result = syncResult(row);
+        // An outage fails every poll: its first failure is the event, not each one after it.
+        const failedPoll = result.mode === "changes" && result.state === "failed";
+        const failingStill =
+          failedPoll &&
+          z
+            .array(z.object({ state: z.string() }))
+            .parse(
+              await sql.run(
+                "select state from catalyst_kb.sync_runs where source_id=$1::text and state<>'running' and id<>$2::text order by started_at desc limit 1",
+                [payload.sourceId, payload.syncRunId]
+              )
+            )[0]?.state === "failed";
+        await settleSourceSync(
+          stores,
+          runtime,
+          payload,
+          result,
+          finished.length === 1 && !failingStill
+        );
       });
     }
   };

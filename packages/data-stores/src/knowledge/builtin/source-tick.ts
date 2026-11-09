@@ -78,8 +78,6 @@ export interface SourceTickState {
   imported: boolean;
   /** The source has a change feed for its boundary, or gets one from its next listing. */
   polled: boolean;
-  /** A pass that failed left items to fetch. Only a listing queues them again. */
-  unfetched: boolean;
   lastStartedAt?: Date | undefined;
   /** When the last `initial` or `full` pass ended, whether or not it succeeded. */
   lastPassEndedAt?: Date | undefined;
@@ -99,9 +97,8 @@ export function dueSourcePass(
   if (full && (!state.lastPassEndedAt || state.lastPassEndedAt < full))
     return { mode: "full", scheduledFor: full };
   // A `changes` pass of a source without a feed would be a full listing, so its only listing is
-  // at `schedule.full`. Nor can it queue what a failed pass left, and it would wait for those
-  // items for good, so it is the next full pass that takes them.
-  if (!state.polled || state.unfetched) return undefined;
+  // at `schedule.full`.
+  if (!state.polled) return undefined;
   if (state.lastStartedAt && state.lastStartedAt >= schedule.changesDueAt) return undefined;
   return { mode: "changes", scheduledFor: schedule.changesDueAt };
 }
@@ -110,7 +107,6 @@ const stateRow = z.object({
   running: z.boolean(),
   imported: z.boolean(),
   polled: z.boolean(),
-  unfetched: z.boolean(),
   last_started_at: z.coerce.date().nullable(),
   last_pass_ended_at: z.coerce.date().nullable()
 });
@@ -129,7 +125,6 @@ async function readTickState(
           exists(select 1 from catalyst_kb.sync_runs where source_id=$1::text and state='done') as imported,
           exists(select 1 from catalyst_kb.source_cursors c where c.source_id=$1::text and c.cursor<>''
             and (c.definition_key=$2::text or not exists(select 1 from catalyst_kb.sync_runs where source_id=$1::text and state='done' and definition_key=$2::text))) as polled,
-          exists(select 1 from catalyst_kb.source_items where source_id=$1::text and state='discovered') as unfetched,
           (select started_at from catalyst_kb.sync_runs where source_id=$1::text order by started_at desc limit 1) as last_started_at,
           (select ended_at from catalyst_kb.sync_runs where source_id=$1::text and mode in ('initial','full') order by started_at desc limit 1) as last_pass_ended_at`,
         [source.id, sourceBoundaryKey(source)]
@@ -140,7 +135,6 @@ async function readTickState(
     running: row?.running ?? true,
     imported: row?.imported ?? false,
     polled: row?.polled ?? false,
-    unfetched: row?.unfetched ?? false,
     lastStartedAt: row?.last_started_at ?? undefined,
     lastPassEndedAt: row?.last_pass_ended_at ?? undefined
   };
