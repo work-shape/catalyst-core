@@ -7,6 +7,18 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.31 — 2026-11-09
+
+### Added
+
+- Knowledge Bases read `.xlsx` and `.pptx`, uploaded and synced, on an instance with document processing. A spreadsheet is cut by rows under its repeated header, with one page per visible sheet, and a citation names the sheet or the slide. Opening one saves the file, as no viewer here shows it at a page. Legacy `.xls` and `.ppt` stay refused with `knowledge_file_format_unsupported`.
+- A synced source of a Knowledge Base keeps itself current: the knowledge worker asks it for its changes every `knowledge.sourcePollMinutes` (per connector type, 15 by default) and runs its full pass at the new `schedule.full` of the source (a cron expression in the instance's time zone, `0 2 * * *` unless set). After downtime one full pass runs, not one per missed night. A source without a change feed is listed only at its full pass. A source whose first import has not finished, or whose sync waits for a confirmation, is left as it is. A poll that finds nothing writes no audit event, so it starts no Workflow on `knowledge_base.sync_finished`.
+- A `changes` pass now queues what a failed pass left, so it finishes instead of staying `running` for good. A `changes` sync of a source no pass has finished runs as its first import, with that import's stop. A retry of failed documents ends when its own items have, so what a failed pass left no longer holds it `running`; those go to the next poll or sync, and a retry counts neither as a first import nor as the night's full pass. Of an outage's failed polls only the first writes `knowledge_base.sync_finished`.
+
+### Changed
+
+- **Knowledge Bases:** a source's `exclude` holds up to 500 patterns, up from 50, so a parent folder can be the source with its old folders listed once. A pattern that is a literal path ending in `/**` is now decided by a set of folders, which keeps a full pass over tens of thousands of items in milliseconds. What each pattern matches is unchanged, and `include` stays at 50.
+
 ## 0.8.0-rc.30 — 2026-11-09
 
 ### Added
