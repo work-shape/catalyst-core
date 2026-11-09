@@ -487,6 +487,23 @@ describe("the sources entry of a Knowledge Base", () => {
     expect(written.body).toContain("abgleichen");
   });
 
+  it("holds 500 patterns in exclude and 50 in include", async () => {
+    const instance = await start(true, undefined, undefined, undefined, true);
+    const patterns = (count: number) =>
+      Array.from({ length: count }, (_, index) => `Old ${index}/**`);
+
+    const tooMany: JsonObject[] = [{ exclude: patterns(501) }, { include: patterns(51) }];
+    for (const patch of tooMany) {
+      const written = await put(instance, definition({ sources: [{ ...source, ...patch }] }));
+      expect(written.statusCode, written.body).toBe(422);
+    }
+    const written = await put(
+      instance,
+      definition({ sources: [{ ...source, exclude: patterns(500), include: patterns(50) }] })
+    );
+    expect(written.statusCode, written.body).toBe(200);
+  });
+
   it("refuses a malformed source on push", async () => {
     const instance = await start(true, undefined, undefined, undefined, true);
 
