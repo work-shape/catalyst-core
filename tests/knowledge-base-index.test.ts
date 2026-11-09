@@ -8,6 +8,7 @@ import {
   defineKnowledgeExtractHandler,
   enqueueKnowledgeIndex,
   KnowledgeExtractionError,
+  readKnowledgeCitationSources,
   knowledgeExtractionKey,
   KNOWLEDGE_BASE_ASSET_KIND,
   knowledgeIndexJob,
@@ -594,6 +595,93 @@ describe("indexing the documents of a Knowledge Base", () => {
     expect((await list(instance)).documents).toMatchObject([
       { id: document.id, state: "failed", failureCode: "knowledge_file_format_unavailable" }
     ]);
+  });
+
+  it("indexes a spreadsheet by rows under its sheet's name, and a deck at its slide numbers", async () => {
+    const { instance, record } = await instanceWith({ documents: true });
+    const rows =
+      "| Art.-Nr. | Bezeichnung | Netto |\n| --- | --- | --- |\n| TB-4711 | Mischbatterie | 129.9 |";
+    const formats: string[] = [];
+    const extractor: KnowledgeExtractor = {
+      revision: 1,
+      extract: () => Promise.reject(new Error("the processor answers")),
+      process: ({ format }) => {
+        formats.push(format);
+        return Promise.resolve(
+          format === "xlsx"
+            ? {
+                documents: [{ pageFrom: 1, pageTo: 1 }],
+                pages: [{ page: 1, text: rows }],
+                sections: [{ title: "Armaturen", pageFrom: 1, pageTo: 1 }],
+                fields: {}
+              }
+            : {
+                documents: [{ pageFrom: 2, pageTo: 3 }],
+                pages: [
+                  { page: 2, text: "" },
+                  { page: 3, text: "Angebot Dachsanierung" }
+                ],
+                fields: {}
+              }
+        );
+      }
+    };
+    const extractWorker = createJobWorker({
+      stores: instance.stores,
+      clientInstanceId,
+      logger: silent,
+      handlers: [
+        defineKnowledgeExtractHandler({
+          clientInstanceId,
+          objects: createFilesystemObjectStorage(instance.filesRoot),
+          extractor,
+          maxPages: 500,
+          slots: 1
+        })
+      ]
+    });
+    await add(instance, {
+      filename: "Preisliste.xlsx",
+      contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      content: "xlsx bytes"
+    });
+    await add(instance, {
+      filename: "Angebot.pptx",
+      contentType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      content: "pptx bytes"
+    });
+    await runJobs(instance);
+    await eventually(async () => {
+      await extractWorker.runDue();
+      await runJobs(instance);
+      expect((await list(instance)).documents.map((document) => document.state)).toEqual([
+        "indexed",
+        "indexed"
+      ]);
+    });
+    expect(formats.sort()).toEqual(["pptx", "xlsx"]);
+    expect(
+      await inStore(
+        record,
+        (sql) => sql<{ page: number; heading: string | null; text: string }[]>`
+          select page, heading, text from catalyst_kb.chunks order by text`
+      )
+    ).toEqual(
+      expect.arrayContaining([
+        { page: 3, heading: null, text: "Angebot Dachsanierung" },
+        { page: 1, heading: "Armaturen", text: rows }
+      ])
+    );
+    const answered = await instance.api.call("knowledge_bases.search", {
+      params: { knowledgeBase: KB },
+      payload: { query: "TB-4711", limit: 5 }
+    });
+    expect(answered.statusCode, answered.body).toBe(200);
+    const { passages } = z.object({ passages: z.array(z.unknown()) }).parse(answered.json());
+    expect(readKnowledgeCitationSources(passages)).toMatchObject([
+      { fileName: "Preisliste.xlsx", page: 1, sheet: "Armaturen" }
+    ]);
+    await extractWorker.stop();
   });
 
   it("hands a PDF to the extract job and indexes the pages it stores, and stores a failure for an unreadable one", async () => {

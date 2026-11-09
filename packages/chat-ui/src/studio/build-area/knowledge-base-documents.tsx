@@ -42,7 +42,9 @@ const FORMAT_NAMES: Record<string, string> = {
   txt: "TXT",
   markdown: "Markdown",
   pdf: "PDF",
-  docx: "DOCX"
+  docx: "DOCX",
+  xlsx: "XLSX",
+  pptx: "PPTX"
 };
 
 /**

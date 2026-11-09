@@ -445,13 +445,27 @@ describe("adding files to a Knowledge Base", () => {
     });
     expect(await reasonOf([csv])).toBe("knowledge_file_format_unsupported");
 
-    // Without document processing, PDF and DOCX wait for nothing that could read them.
+    // The legacy Office formats stay refused, whatever media type they come with.
+    const xls = await conversationWithFile(instance, {
+      filename: "preise.xls",
+      contentType: "application/vnd.ms-excel",
+      content: "legacy"
+    });
+    expect(await reasonOf([xls])).toBe("knowledge_file_format_unsupported");
+
+    // Without document processing, PDF, DOCX, XLSX and PPTX wait for nothing that could read them.
     const pdf = await conversationWithFile(instance, {
       filename: "expose.pdf",
       contentType: "application/pdf",
       content: "%PDF-1.7"
     });
     expect(await reasonOf([pdf])).toBe("knowledge_file_format_unavailable");
+    const xlsx = await conversationWithFile(instance, {
+      filename: "preise.xlsx",
+      contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      content: "PK"
+    });
+    expect(await reasonOf([xlsx])).toBe("knowledge_file_format_unavailable");
 
     // A file larger than a Knowledge Base takes, as its attachment states it: refused unread.
     const large = await conversationWithFile(instance, {

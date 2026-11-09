@@ -13,14 +13,17 @@ import type { FirstPassStop } from "./first-pass";
 
 /**
  * Tokens per listed byte, low and high, by format. Text is about three to five bytes a token;
- * a PDF or DOCX file holds its text among layout, fonts and images, so far fewer per byte.
+ * a PDF, DOCX, XLSX or PPTX file holds its text among layout, fonts and images, so far fewer per
+ * byte, and a compressed sheet of figures far more than a deck of images.
  * Estimates until MD-5 measures real sources.
  */
 const TOKENS_PER_BYTE: Record<KnowledgeDocumentFormat, readonly [number, number]> = {
   txt: [0.2, 0.3],
   markdown: [0.2, 0.3],
   pdf: [0.01, 0.04],
-  docx: [0.02, 0.08]
+  docx: [0.02, 0.08],
+  xlsx: [0.05, 0.4],
+  pptx: [0.002, 0.03]
 };
 
 /** The chunker's cap on a passage, in tokens. */

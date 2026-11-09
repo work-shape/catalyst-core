@@ -1,5 +1,6 @@
 import {
   KNOWLEDGE_SOURCE_UNREACHABLE,
+  knowledgeDocumentFormatOf,
   resolveFilePreviewCapability
 } from "@work-shape/catalyst-core";
 import { FileText } from "lucide-react";
@@ -20,10 +21,29 @@ export interface KnowledgeCitation {
   documentId: string;
   fileName: string;
   page?: number;
+  /** The name of the sheet a spreadsheet's passage is on. */
+  sheet?: string;
 }
 
 /**
- * The chip of a cited Knowledge Base passage, "file name, p. 4". A click reads the file through
+ * Where in an office file a passage is, as the file counts it: a spreadsheet's sheet, by its name
+ * where the passage knows it, or a slide. Nothing for a file of pages, which the caller says its
+ * own way.
+ */
+export function knowledgeOfficePlace(
+  t: ReturnType<typeof useTranslation>["t"],
+  citation: Pick<KnowledgeCitation, "fileName" | "page" | "sheet">
+): string | undefined {
+  const format = knowledgeDocumentFormatOf({ filename: citation.fileName });
+  if (format === "xlsx" && citation.sheet) return citation.sheet;
+  if ((format !== "xlsx" && format !== "pptx") || citation.page === undefined) return undefined;
+  const page = String(citation.page);
+  return t(format === "xlsx" ? "knowledge.citationSheet" : "knowledge.citationSlide", { page });
+}
+
+/**
+ * The chip of a cited Knowledge Base passage, "file name, p. 4", in a spreadsheet "file name,
+ * sheet name" and in a deck "file name, slide 4". A click reads the file through
  * the API, with the reader's own session or token, and opens it at the page in a new tab; a
  * blocked tab, or a file no viewer of ours shows, saves it instead. A removed source says so and
  * opens nothing. A synced document whose source cannot be reached says so ("Quelle nicht
@@ -45,10 +65,12 @@ export function KnowledgeCitationChip({
   const [state, setState] = useState<"idle" | "opening" | "removed" | "unreachable" | "failed">(
     "idle"
   );
-  const label =
-    citation.page === undefined
-      ? citation.fileName
-      : `${citation.fileName}, ${t("knowledge.citationPage", { page: String(citation.page) })}`;
+  const place =
+    knowledgeOfficePlace(t, citation) ??
+    (citation.page === undefined
+      ? undefined
+      : t("knowledge.citationPage", { page: String(citation.page) }));
+  const label = place === undefined ? citation.fileName : `${citation.fileName}, ${place}`;
   const open = async () => {
     if (!api) return;
     setState("opening");

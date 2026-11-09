@@ -337,12 +337,19 @@ describe("initial and full source import (KB 72, 73)", () => {
       bytes: new Uint8Array(KNOWLEDGE_FILE_MAX_BYTES + 1)
     });
     world.world.put({ folderId: "folder", name: "bad.zip", mime: "application/zip", bytes });
+    world.world.put({
+      folderId: "folder",
+      name: "preise.xls",
+      mime: "application/vnd.ms-excel",
+      bytes
+    });
     await world.drain(await world.sync());
     expect(fetches).toBe(2);
     expect(
       await world.sql`select failure_code from catalyst_kb.source_items where state = 'failed' order by item_id`
     ).toEqual([
       { failure_code: "knowledge_file_over_limit" },
+      { failure_code: "knowledge_file_format_unsupported" },
       { failure_code: "knowledge_file_format_unsupported" }
     ]);
     const [content] = await world.sql`select sha256 from catalyst_kb.contents`;

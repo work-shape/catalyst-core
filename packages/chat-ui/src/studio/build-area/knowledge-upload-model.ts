@@ -25,7 +25,9 @@ const FORMAT_ACCEPT: Record<string, readonly string[]> = {
   txt: [".txt", "text/plain"],
   markdown: [".md", ".markdown", "text/markdown"],
   pdf: [".pdf", "application/pdf"],
-  docx: [".docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
+  docx: [".docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+  xlsx: [".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+  pptx: [".pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"]
 };
 
 /** How a format is named in a sentence. */
@@ -33,7 +35,9 @@ const FORMAT_NAMES: Record<string, string> = {
   txt: "TXT",
   markdown: "Markdown",
   pdf: "PDF",
-  docx: "DOCX"
+  docx: "DOCX",
+  xlsx: "XLSX",
+  pptx: "PPTX"
 };
 
 /**

@@ -54,7 +54,9 @@ export const UNSIZED_ITEM_BYTES: Record<KnowledgeDocumentFormat, number> = {
   txt: 8_000,
   markdown: 8_000,
   pdf: 250_000,
-  docx: 60_000
+  docx: 60_000,
+  xlsx: 150_000,
+  pptx: 2_000_000
 };
 
 /** Adds `items` of `format` and their bytes to a stop's tally. */

@@ -197,7 +197,7 @@ function checked(runtime: KnowledgeRuntime, label: string, file: OpenedKnowledge
   if (!format) {
     throw knowledgeLimitError(
       "knowledge_file_format_unsupported",
-      `${label} is in no format a Knowledge Base takes: PDF, DOCX, TXT or Markdown.`
+      `${label} is in no format a Knowledge Base takes: PDF, DOCX, XLSX, PPTX, TXT or Markdown.`
     );
   }
   if (!runtime.documentFormats.includes(format)) {

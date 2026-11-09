@@ -1,4 +1,4 @@
-import type { KnowledgeChunkingStrategy } from "../document-types";
+import { defaultKnowledgeChunking, type KnowledgeChunkingStrategy } from "../document-types";
 import type {
   KnowledgeProcessorOutput,
   KnowledgeChunkInput,
@@ -6,8 +6,8 @@ import type {
 } from "@work-shape/catalyst-core";
 
 // How the built-in backend cuts a document's text into passages, by the defaults of the spec
-// (Indexing settings on the Knowledge Base): Markdown at its headings, a PDF or DOCX by page,
-// every part then by a cap of about 512 tokens with the prefix counted in, no overlap. The
+// (Indexing settings on the Knowledge Base): Markdown at its headings, a spreadsheet by rows, a
+// PDF, DOCX or PPTX by page, every part then by a cap of about 512 tokens with the prefix counted in, no overlap. The
 // prefix is a short line of title, path and heading that the embedding of a passage is made
 // with (KB-5d); the passage's text is stored without it, and its heading in a column of its
 // own. A new cut of the same text needs a new `KNOWLEDGE_CHUNKING_REVISION`, which the skip
@@ -81,7 +81,7 @@ export function chunkKnowledgeText(input: {
   strategy?: KnowledgeChunkingStrategy;
   output?: KnowledgeProcessorOutput;
 }): KnowledgeChunkInput[] {
-  const strategy = input.strategy ?? (input.format === "markdown" ? "heading" : "page");
+  const strategy = input.strategy ?? defaultKnowledgeChunking(input.format);
   const groups = input.output?.documents.map((range) =>
     input.pages.filter(
       (page) => page.page !== undefined && page.page >= range.pageFrom && page.page <= range.pageTo
@@ -96,7 +96,8 @@ export function chunkKnowledgeText(input: {
         }
       ];
     if (strategy === "heading") return pages.flatMap(markdownSections);
-    if (strategy === "sections" && input.output?.sections?.length)
+    // A spreadsheet's sections are its sheets, which name its passages under any strategy.
+    if ((strategy === "sections" || input.format === "xlsx") && input.output?.sections?.length)
       return pages.map((page) => {
         const section = input.output?.sections?.find(
           (section) =>
@@ -117,9 +118,11 @@ export function chunkKnowledgeText(input: {
       MIN_BODY_TOKENS,
       KNOWLEDGE_CHUNK_MAX_TOKENS - estimateKnowledgeTokens(prefix)
     );
-    for (const text of strategy === "sheet_rows"
-      ? sheetRows(section.text, budget)
-      : pack(section.text, budget)) {
+    for (const text of strategy !== "sheet_rows"
+      ? pack(section.text, budget)
+      : input.format === "xlsx"
+        ? sheetTables(section.text, budget)
+        : sheetRows(section.text, budget)) {
       chunks.push({
         position: chunks.length,
         ...(section.page === undefined ? {} : { page: section.page }),
@@ -142,6 +145,11 @@ function sheetRows(text: string, budget: number): string[] {
   if (!header || estimateKnowledgeTokens(header) >= budget / 2) return pack(text, budget);
   const rows = pack(lines.join("\n"), budget - estimateKnowledgeTokens(header));
   return rows.map((rows) => `${header}\n${rows}`);
+}
+
+/** A sheet may hold several tables, apart by an empty line: each repeats its own header. */
+function sheetTables(text: string, budget: number): string[] {
+  return text.split(/\n[ \t]*\n+/u).flatMap((table) => sheetRows(table, budget));
 }
 
 const HEADING = /^ {0,3}(#{1,6})[ \t]+(.+?)[ \t#]*$/u;

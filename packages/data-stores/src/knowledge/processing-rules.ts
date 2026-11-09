@@ -30,7 +30,9 @@ export function processingRules(
         txt: processing("txt").key,
         markdown: processing("markdown").key,
         pdf: processing("pdf").key,
-        docx: processing("docx").key
+        docx: processing("docx").key,
+        xlsx: processing("xlsx").key,
+        pptx: processing("pptx").key
       },
       processorRevision: processing("txt").processorRevision
     };

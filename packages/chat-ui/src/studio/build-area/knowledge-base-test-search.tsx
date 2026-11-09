@@ -9,6 +9,7 @@ import {
   InlineError,
   Input
 } from "@work-shape/catalyst-ui";
+import { knowledgeOfficePlace } from "../../chat/assistant/knowledge-citation-chip";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import type {
   KnowledgeBaseSource,
@@ -124,11 +125,15 @@ function SearchPassages({ answer }: { answer: KnowledgeSearchAnswer }) {
 /** One passage: its ref, the document and where in it, and its text. */
 function SearchPassage({ passage }: { passage: KnowledgeSearchPassage }) {
   const { t } = useTranslation();
-  const where = [
-    passage.fileName,
-    passage.page === undefined ? undefined : t("knowledge.searchPage", { page: passage.page }),
-    passage.heading
-  ].filter((part) => part !== undefined && part !== "");
+  const place =
+    knowledgeOfficePlace(t, {
+      ...passage,
+      ...(passage.heading ? { sheet: passage.heading } : {})
+    }) ??
+    (passage.page === undefined ? undefined : t("knowledge.searchPage", { page: passage.page }));
+  const where = [passage.fileName, place, passage.heading]
+    .filter((part) => part !== undefined && part !== "")
+    .filter((part, index, parts) => parts.indexOf(part) === index);
   return (
     <li className="grid min-w-0 gap-1" data-knowledge-passage={passage.ref}>
       <div className="flex min-w-0 flex-wrap items-center gap-2">

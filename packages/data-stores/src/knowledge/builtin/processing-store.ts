@@ -24,7 +24,7 @@ export async function processingContents(
   const rows = z.array(row).parse(
     await sql.run(
       `select c.sha256,c.format,c.processing_key,c.processor_revision,d.id as document_id,d.managed_file_id,d.file_name as name,
-    coalesce(i.path,d.file_name) as path,coalesce(i.mime,case c.format when 'pdf' then 'application/pdf' when 'docx' then 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' when 'markdown' then 'text/markdown' else 'text/plain' end) as mime,i.source_id
+    coalesce(i.path,d.file_name) as path,coalesce(i.mime,case c.format when 'pdf' then 'application/pdf' when 'docx' then 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' when 'xlsx' then 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' when 'pptx' then 'application/vnd.openxmlformats-officedocument.presentationml.presentation' when 'markdown' then 'text/markdown' else 'text/plain' end) as mime,i.source_id
     from catalyst_kb.contents c join lateral (select id,managed_file_id,file_name,source_item_id from catalyst_kb.documents where content_sha256=c.sha256 and withdrawn_at is null order by added_at,id limit 1) d on true
     left join catalyst_kb.source_items i on i.id=d.source_item_id
     where c.sha256>$1::text order by c.sha256 limit $2::int`,
