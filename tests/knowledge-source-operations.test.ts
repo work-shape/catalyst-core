@@ -182,7 +182,8 @@ describe("source sync operations (KB 74, 75)", () => {
       });
       expect(response.statusCode, response.body).toBe(422);
     }
-    expect(await world.sql`select mode from catalyst_kb.sync_runs`).toEqual([{ mode: "changes" }]);
+    // No pass of this source has finished, so the sync runs as its first import.
+    expect(await world.sql`select mode from catalyst_kb.sync_runs`).toEqual([{ mode: "initial" }]);
   });
 
   it("hides owned principals from all administration paths and never authorizes an absent principal", async () => {

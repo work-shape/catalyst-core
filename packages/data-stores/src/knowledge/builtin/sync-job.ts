@@ -152,7 +152,11 @@ export function createKnowledgeSyncHandler(runtime: SourceJobRuntime): Registere
             )
           )
         };
-        if (run.progress) {
+        // A `changes` pass lists only what its feed names, so it queues what a failed pass left
+        // too: it could not finish while those wait. A listing names them itself.
+        if (run.progress || run.mode === "changes") {
+          // No fetch of this pass exists before its first page, so what holds an item is older.
+          if (!run.progress) await store.releaseLeftovers(payload);
           // A crash between the owned page commit and the platform queue commit is recovered
           // here. Keyset pages never load a source's full inventory into the process.
           let after = "";
