@@ -484,7 +484,7 @@ describe("the sources entry of a Knowledge Base", () => {
     const written = await put(instance, definition({ schedule: "0 2 * * *" }));
     expect(written.statusCode, written.body).toBe(422);
     expect(written.body).toContain("'schedule' is withdrawn");
-    expect(written.body).toContain("abgleichen");
+    expect(written.body).toContain("sources[].schedule.full");
   });
 
   it("holds 500 patterns in exclude and 50 in include", async () => {
@@ -513,6 +513,7 @@ describe("the sources entry of a Knowledge Base", () => {
       [definition({ sources: [{ ...source, folders: ["1", "1"] }] }), "A folder is named once"],
       [definition({ sources: [{ ...source, path: "/Objekte" }] }), "path"],
       [definition({ sources: [{ ...source, schedule: "daily" }] }), "schedule"],
+      [definition({ sources: [{ ...source, schedule: { full: "nightly" } }] }), "schedule.full"],
       [
         definition({
           methods: ["structured"],

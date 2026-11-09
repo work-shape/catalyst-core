@@ -660,7 +660,8 @@ export const KNOWLEDGE_JOB_KINDS = {
   reprocess: "knowledge_base.reprocess",
   reindex: "knowledge_base.reindex",
   endWorkflowSource: "knowledge_base.end_workflow_source",
-  expirePageCache: "knowledge_base.expire_page_cache"
+  expirePageCache: "knowledge_base.expire_page_cache",
+  sourceTick: "knowledge_base.source_tick"
 } as const;
 
 /** Chunks and optionally embeds a content in the configured ingestion process. */

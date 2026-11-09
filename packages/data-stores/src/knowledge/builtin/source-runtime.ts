@@ -20,6 +20,12 @@ export interface KnowledgeSourceJobsInput {
   documentFormats: readonly KnowledgeDocumentFormat[];
   maxDocuments: number;
   withdrawShareConfirm?: number;
+  /** `knowledge.sourcePollMinutes`: minutes between `changes` polls, by connector type. */
+  sourcePollMinutes?: Readonly<Record<string, number>>;
+  /** The zone `schedule.full` is read in: the instance's, UTC unless set. */
+  timeZone?: string;
+  /** The clock of the source tick, which a test sets. */
+  now?: () => Date;
   /**
    * Where a first pass stops for its confirmation: `KNOWLEDGE_FIRST_PASS_STOP` unless a test
    * sets a smaller one to cross it with a small fixture. Release config never sets it.

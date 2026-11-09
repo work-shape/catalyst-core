@@ -97,12 +97,15 @@ export const modelBindingConfigSchema = z
  * only where the embedding quota of the deployment allows. `pageCacheBytes` bounds the page
  * cache of each Knowledge Base: the originals of synced documents that a reader's open of a
  * cited page fetched from their source, kept 7 days. It holds at least one file at the limit.
+ * `sourcePollMinutes` is how often a synced source is asked for its changes, in minutes by
+ * connector type; a type it does not name is asked every 15 minutes.
  */
 export const knowledgeConfigSchema = z
   .object({
     defaultEmbeddingBinding: z.string().min(1).optional(),
     withdrawShareConfirm: z.number().min(0).max(1).default(0.2),
     maxDocuments: z.number().int().positive().max(1_000_000).default(10_000),
+    sourcePollMinutes: z.record(z.string(), z.number().int().min(1).max(1_440)).default({}),
     maxPagesPerDocument: z.number().int().positive().default(KNOWLEDGE_MAX_PAGES_PER_DOCUMENT),
     pageCacheBytes: z
       .number()

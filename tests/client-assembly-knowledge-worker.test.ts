@@ -10,7 +10,7 @@ import {
   JOB_UNCLAIMED_MS,
   JOB_WORKER_SILENT_MS
 } from "@work-shape/catalyst-core";
-import { knowledgeModule } from "@work-shape/catalyst-data-stores";
+import { knowledgeModule, knowledgeSourceTickSchedule } from "@work-shape/catalyst-data-stores";
 import postgres from "postgres";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -37,6 +37,8 @@ describe("knowledge worker placement", () => {
   it("owns every ingestion kind, excludes extraction and refuses an in-process build", async () => {
     expect(knowledgeModule.jobKinds).toEqual(Object.values(KNOWLEDGE_JOB_KINDS));
     expect(Object.values(KNOWLEDGE_JOB_KINDS)).not.toContain("knowledge_base.extract");
+    // The API serves no kind of these once the knowledge worker is separate: so no source tick.
+    expect(Object.values(KNOWLEDGE_JOB_KINDS)).toContain(knowledgeSourceTickSchedule.kind.kind);
     const input = { config: createTestConfig(), tools: [], capabilities: [], env: {} };
     await expect(createClientInstanceKnowledgeWorker(input)).rejects.toThrow(
       'knowledgeWorker: "separate"'

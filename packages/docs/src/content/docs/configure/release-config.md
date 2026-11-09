@@ -871,6 +871,13 @@ reader opens a cited page of it, the API fetches the original through the source
 keeps it there for 7 days from the fetch. When the cache is full, the oldest fetch is removed
 first. The API reads the setting, so restart it after changing it.
 
+`knowledge.sourcePollMinutes` is how often a synced source is asked for its changes, in minutes by
+connector type, such as `{ box: 30 }` (1 to 1440; a type it does not name is asked every 15
+minutes). A source whose connector offers no change feed is listed only at its full pass, which
+runs at `schedule.full` of the source in the Knowledge Base's definition: a cron expression in the
+instance's time zone, `0 2 * * *` unless set. Restart the knowledge workers after changing the
+setting.
+
 Startup stops, naming the binding, when:
 
 - an embedding binding's provider entry has a region other than `eu`. Embeddings send the text of

@@ -203,6 +203,17 @@ describe("the synced sources of a Knowledge Base's definition", () => {
     expect(knowledgeBaseFormToConfig(knowledgeBaseConfigToForm(stored))).toEqual(stored);
   });
 
+  it("keeps the schedule of a source, which the page does not edit, through a save", () => {
+    const source = {
+      id: "objekte",
+      connection: "box",
+      folders: ["1"],
+      schedule: { full: "0 3 * * 1" }
+    };
+    const config = { ...stored, sources: [source] };
+    expect(knowledgeBaseFormToConfig(knowledgeBaseConfigToForm(config))).toEqual(config);
+  });
+
   it("writes a changed source and leaves the rest of the definition as it was", () => {
     const form = knowledgeBaseConfigToForm(stored);
     const [first] = form.sources;

@@ -12,6 +12,7 @@ import {
   KNOWLEDGE_FILTER_TYPES,
   KNOWLEDGE_SEARCH_METHODS,
   knowledgeRecordsRefusalSchema,
+  parseCron,
   type KnowledgeBaseTarget,
   type KnowledgeFilterOperator,
   type KnowledgeEmbeddingModel,
@@ -72,6 +73,9 @@ const KNOWLEDGE_SOURCE_INCLUDE_MAX_COUNT = 50;
 const KNOWLEDGE_SOURCE_EXCLUDE_MAX_COUNT = 500;
 const KNOWLEDGE_SOURCE_PATTERN_MAX_CHARS = 500;
 
+/** How long a source's cron expression may be. */
+const KNOWLEDGE_SOURCE_CRON_MAX_CHARS = 200;
+
 const sourcePatternsSchema = z
   .array(z.string().trim().min(1).max(KNOWLEDGE_SOURCE_PATTERN_MAX_CHARS))
   .min(1);
@@ -103,7 +107,19 @@ const sourceSchema = z.strictObject({
   /** Patterns on the file name, such as `*.pdf`. Without it every file below the folders. */
   include: sourcePatternsSchema.max(KNOWLEDGE_SOURCE_INCLUDE_MAX_COUNT).optional(),
   /** Patterns on the path below the boundary, such as `**\/Personal/**`. */
-  exclude: sourcePatternsSchema.max(KNOWLEDGE_SOURCE_EXCLUDE_MAX_COUNT).optional()
+  exclude: sourcePatternsSchema.max(KNOWLEDGE_SOURCE_EXCLUDE_MAX_COUNT).optional(),
+  /** When the full pass runs. Without it nightly at 02:00, in the instance's time zone. */
+  schedule: z
+    .strictObject({
+      full: z
+        .string()
+        .trim()
+        .max(KNOWLEDGE_SOURCE_CRON_MAX_CHARS)
+        .refine((text) => parseCron(text) !== undefined, {
+          error: "'schedule.full' is a cron expression of five fields, such as '0 2 * * *'"
+        })
+    })
+    .optional()
 });
 
 const tableSchema = z.strictObject({
@@ -261,7 +277,7 @@ const definitionFieldsSchema = z.strictObject({
   schedule: z
     .never({
       error:
-        "'schedule' is withdrawn. A synced source is kept current by its daily Workflow '<Knowledge Base> abgleichen' and by background updates about every 15 minutes. Remove 'schedule'."
+        "'schedule' is withdrawn. A synced source keeps itself current, with background updates about every 15 minutes and a full pass at its 'sources[].schedule.full'. Remove 'schedule'."
     })
     .optional(),
   queries: z

@@ -29,6 +29,7 @@ import {
   createSourceWithdrawalApproval,
   knowledgeModule,
   knowledgeOperationName,
+  knowledgeSourceTickSchedule,
   uploadFingerprint,
   type KnowledgeBases,
   type KnowledgeEmbedding
@@ -414,6 +415,10 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
                   : KNOWLEDGE_TEXT_FORMATS,
                 maxDocuments: parts.config.knowledge.maxDocuments,
                 withdrawShareConfirm: parts.config.knowledge.withdrawShareConfirm,
+                sourcePollMinutes: parts.config.knowledge.sourcePollMinutes,
+                ...(parts.config.clientInstance.timeZone === undefined
+                  ? {}
+                  : { timeZone: parts.config.clientInstance.timeZone }),
                 async openSource(name, signal) {
                   const connections = parts.connections;
                   if (!connections)
@@ -423,6 +428,8 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
               })
             : [])
         ],
+        // The tick is a kind of the knowledge worker, or of the one process that serves its jobs.
+        schedules: runtime.files && sourceJobs ? [knowledgeSourceTickSchedule] : [],
         jobRetries: fileJobs.retries
       };
     }
