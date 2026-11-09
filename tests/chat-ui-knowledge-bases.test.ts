@@ -534,11 +534,11 @@ describe("Knowledge Bases of documents", () => {
       }
       const settings = instanceSettings(true);
       expect(render(documentsKnowledgeBase(), { newAsset: true, settings })).toContain(
-        "Files you add: TXT, Markdown, PDF, and DOCX."
+        "Files you add: TXT, Markdown, PDF, DOCX, XLSX, and PPTX."
       );
       expect(
         render(documentsKnowledgeBase(), { newAsset: true, locale: "de", settings })
-      ).toContain("Dateien, die du hinzufügst: TXT, Markdown, PDF und DOCX.");
+      ).toContain("Dateien, die du hinzufügst: TXT, Markdown, PDF, DOCX, XLSX und PPTX.");
     } finally {
       clearBuildStartRequest();
     }

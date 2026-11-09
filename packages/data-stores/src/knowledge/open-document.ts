@@ -13,7 +13,9 @@ const CONTENT_TYPES = {
   txt: "text/plain; charset=utf-8",
   markdown: "text/plain; charset=utf-8",
   pdf: "application/pdf",
-  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 };
 
 /**

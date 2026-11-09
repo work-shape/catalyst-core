@@ -535,9 +535,9 @@ export interface KnowledgeBaseStateStore {
 }
 
 /**
- * The formats a document of a Knowledge Base is in. Text formats are read as they are; PDF and
- * DOCX need the extraction of the document-processing capability, and an instance without it
- * refuses them when they are added. Spec: Adding files, Ingestion as jobs.
+ * The formats a document of a Knowledge Base is in. Text formats are read as they are; PDF, DOCX,
+ * XLSX and PPTX need the extraction of the document-processing capability, and an instance
+ * without it refuses them when they are added. Spec: Adding files, Ingestion as jobs.
  */
 export { KNOWLEDGE_DOCUMENT_FORMATS, type KnowledgeDocumentFormat } from "./knowledge-formats";
 
@@ -563,8 +563,8 @@ export const KNOWLEDGE_ADD_FILES_MAX_COUNT = 20;
 
 /**
  * The format of a file by its name, then by its media type: what a Knowledge Base reads it as.
- * Nothing for a file in no format a Knowledge Base takes. The Add dialog offers by the same rule
- * what the call accepts.
+ * Nothing for a file in no format a Knowledge Base takes, a legacy `.xls` or `.ppt` whatever its
+ * media type says. The Add dialog offers by the same rule what the call accepts.
  */
 export function knowledgeDocumentFormatOf(file: {
   filename: string;
@@ -583,6 +583,13 @@ export function knowledgeDocumentFormatOf(file: {
       return "pdf";
     case ".docx":
       return "docx";
+    case ".xlsx":
+      return "xlsx";
+    case ".pptx":
+      return "pptx";
+    case ".xls":
+    case ".ppt":
+      return undefined;
   }
   switch (file.mimeType?.split(";")[0]?.trim().toLowerCase()) {
     case "text/plain":
@@ -593,6 +600,10 @@ export function knowledgeDocumentFormatOf(file: {
       return "pdf";
     case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
       return "docx";
+    case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+      return "xlsx";
+    case "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+      return "pptx";
   }
   return undefined;
 }
@@ -629,8 +640,8 @@ export interface KnowledgeFiles {
 }
 
 /**
- * The job that turns one content of a Knowledge Base's store into text by page: PDF and DOCX,
- * served by the document-processing capability in its worker, which calls no model. Its
+ * The job that turns one content of a Knowledge Base's store into text by page: PDF, DOCX, XLSX
+ * and PPTX, served by the document-processing capability in its worker, which calls no model. Its
  * handler is made with `defineKnowledgeExtractHandler` (`knowledge-extraction.ts`), which
  * holds the handoff to the index job.
  */
@@ -677,7 +688,9 @@ export type KnowledgeContentJobPayload = z.infer<typeof knowledgeContentJobPaylo
 /** The formats only extraction reads. */
 export const KNOWLEDGE_EXTRACTED_FORMATS = [
   "pdf",
-  "docx"
+  "docx",
+  "xlsx",
+  "pptx"
 ] as const satisfies readonly KnowledgeDocumentFormat[];
 
 export type KnowledgeExtractedFormat = (typeof KNOWLEDGE_EXTRACTED_FORMATS)[number];
@@ -774,7 +787,8 @@ export function enqueueKnowledgeExtract(
 
 /**
  * What extraction answers for one content: its text by page, numbered from 1. A file without
- * pages, such as a DOCX, answers one page per section the converter finds. It is outside input
+ * pages, such as a DOCX, answers one page per section the converter finds; an XLSX one page per
+ * visible sheet, a PPTX one per slide at the slide's number. It is outside input
  * to the platform, parsed with `knowledgeExtractedPagesSchema` before it is stored.
  */
 export const knowledgeExtractedPagesSchema = z.strictObject({

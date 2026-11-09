@@ -53,7 +53,7 @@ export interface KnowledgeRuntime {
   fieldExtractor?: import("@work-shape/catalyst-core").KnowledgeFieldExtractor;
   /** The embedding models release config approves, and the default. */
   embedding?: KnowledgeEmbedding;
-  /** The formats a file added here may be in: text, and PDF and DOCX with document processing. */
+  /** The formats a file added here may be in: text, and the office formats with document processing. */
   documentFormats: readonly KnowledgeDocumentFormat[];
   /** How many documents one Knowledge Base holds at most (`knowledge.maxDocuments`). */
   maxDocuments: number;

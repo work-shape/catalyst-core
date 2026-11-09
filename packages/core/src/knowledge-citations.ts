@@ -8,6 +8,8 @@ export interface KnowledgeCitationSource {
   fileId: string;
   fileName: string;
   page?: number;
+  /** The name of the sheet, in a spreadsheet, where `page` counts sheets. */
+  sheet?: string;
   originLink?: string;
 }
 
@@ -18,6 +20,8 @@ const sourceSchema = z.object({
   fileId: z.string().min(1),
   fileName: z.string().min(1),
   page: z.number().int().positive().optional(),
+  sheet: z.string().min(1).optional(),
+  heading: z.string().min(1).optional(),
   originLink: z.string().optional()
 });
 
@@ -26,6 +30,14 @@ export function readKnowledgeCitationSources(value: unknown): KnowledgeCitationS
   if (!Array.isArray(value)) return [];
   return value.flatMap((entry) => {
     const parsed = sourceSchema.safeParse(entry);
-    return parsed.success ? [parsed.data] : [];
+    if (!parsed.success) return [];
+    // A heading is passage text and stays behind, but for a spreadsheet's passage it names the
+    // sheet, which the citation shows.
+    const { heading, ...source } = parsed.data;
+    return [
+      heading && /\.xlsx$/iu.test(source.fileName)
+        ? { ...source, sheet: source.sheet ?? heading }
+        : source
+    ];
   });
 }

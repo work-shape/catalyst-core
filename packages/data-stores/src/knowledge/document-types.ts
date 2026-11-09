@@ -66,6 +66,13 @@ export interface KnowledgeProcessing {
   key: string;
 }
 
+/** How a format is cut where no rule names a strategy. */
+export function defaultKnowledgeChunking(
+  format: KnowledgeDocumentFormat
+): KnowledgeChunkingStrategy {
+  return format === "markdown" ? "heading" : format === "xlsx" ? "sheet_rows" : "page";
+}
+
 /** First matching rule wins; patterns within a field are OR, named fields are AND. */
 export function knowledgeProcessingOf(
   types: readonly KnowledgeDocumentType[] | undefined,
@@ -77,7 +84,7 @@ export function knowledgeProcessingOf(
     type: type?.id ?? "default",
     processor,
     processorRevision: `${processor}@${KNOWLEDGE_PROCESSOR_VERSIONS[processor]}`,
-    chunking: type?.chunking ?? (item.format === "markdown" ? "heading" : "page"),
+    chunking: type?.chunking ?? defaultKnowledgeChunking(item.format),
     ...(type?.schema === undefined ? {} : { schema: type.schema })
   };
   return {

@@ -121,6 +121,41 @@ describe("the chip of a cited Knowledge Base passage", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("names a sheet and a slide in English and German, not a page", () => {
+    const sheet = { ...hotel, fileName: "preisliste.xlsx", page: 2 };
+    show({ ...sheet, sheet: "Armaturen" });
+    expect(label()?.textContent).toBe("preisliste.xlsx, Armaturen");
+    show({ ...sheet, sheet: "Armaturen" }, "de");
+    expect(label()?.textContent).toBe("preisliste.xlsx, Armaturen");
+    show(sheet);
+    expect(label()?.textContent).toBe("preisliste.xlsx, sheet 2");
+    show(sheet, "de");
+    expect(label()?.textContent).toBe("preisliste.xlsx, Blatt 2");
+    const slide = { ...hotel, fileName: "angebot.pptx", page: 4 };
+    show(slide);
+    expect(label()?.textContent).toBe("angebot.pptx, slide 4");
+    show(slide, "de");
+    expect(label()?.textContent).toBe("angebot.pptx, Folie 4");
+  });
+
+  it.each([
+    ["preisliste.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+    ["angebot.pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"]
+  ])("saves %s under its name, as no viewer here shows it at a page", async (fileName, type) => {
+    fetchMock.mockResolvedValue(new Response("PK", { headers: { "content-type": type } }));
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+      this: HTMLAnchorElement
+    ) {
+      expect(this.download).toBe(fileName);
+    });
+    show({ ...hotel, fileName, page: 2 });
+    await act(async () => chip()?.click());
+    await settle();
+    expect(click).toHaveBeenCalledOnce();
+    expect(openMock).not.toHaveBeenCalled();
+    expect(label()?.getAttribute("data-knowledge-source-state")).toBe("idle");
+  });
+
   it("opens the file at the page through the API on a click", async () => {
     fetchMock.mockResolvedValue(
       new Response("Hotel: 145 € je Nacht", { headers: { "content-type": "text/plain" } })

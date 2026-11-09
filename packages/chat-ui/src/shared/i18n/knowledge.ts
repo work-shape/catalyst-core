@@ -153,6 +153,8 @@ export const knowledge = defineTranslations({
     "knowledge.signalTitle": "titles and file names",
     "knowledge.searchPage": "page {page}",
     "knowledge.citationPage": "p. {page}",
+    "knowledge.citationSlide": "slide {page}",
+    "knowledge.citationSheet": "sheet {page}",
     "knowledge.citationRemoved": "{name}: source no longer available",
     "knowledge.citationUnreachable": "{name}: source not reachable",
     "knowledge.citationFailed": "{name}: could not be opened, try again",
@@ -253,7 +255,7 @@ export const knowledge = defineTranslations({
     "knowledge.originLinkSaved": "The link of {name} was saved.",
     "knowledge.originLinkCleared": "The link of {name} was removed.",
     "knowledge.failureFormatUnsupported":
-      "A knowledge base cannot read this format. It reads PDF, DOCX, TXT and Markdown.",
+      "A knowledge base cannot read this format. It reads PDF, DOCX, XLSX, PPTX, TXT and Markdown.",
     "knowledge.failureOverLimit": "The file or its text is too large to read.",
     "knowledge.failureTooManyPages":
       "Page limit reached. Split the file, or ask the technical team for a higher limit and retry.",
@@ -264,7 +266,7 @@ export const knowledge = defineTranslations({
     "knowledge.failureFileMissing": "The file is gone. Add it again.",
     "knowledge.failureExtraction": "Its text could not be read, even after several tries.",
     "knowledge.failureFormatUnavailable":
-      "PDF and DOCX files cannot be read here. TXT and Markdown are supported.",
+      "PDF, DOCX, XLSX and PPTX files cannot be read here. TXT and Markdown are supported.",
     "knowledge.failureTextUnreadable": "The file holds no readable text.",
     "knowledge.failureTextEmpty":
       "The file has no text to search, such as a scanned PDF without a text layer.",
@@ -471,6 +473,8 @@ export const knowledge = defineTranslations({
     "knowledge.signalTitle": "Titeln und Dateinamen",
     "knowledge.searchPage": "Seite {page}",
     "knowledge.citationPage": "S. {page}",
+    "knowledge.citationSlide": "Folie {page}",
+    "knowledge.citationSheet": "Blatt {page}",
     "knowledge.citationRemoved": "{name}: Quelle nicht mehr verfügbar",
     "knowledge.citationUnreachable": "{name}: Quelle nicht erreichbar",
     "knowledge.citationFailed": "{name}: konnte nicht geöffnet werden, versuch es noch einmal",
@@ -571,7 +575,7 @@ export const knowledge = defineTranslations({
       "Dieses Dokument kommt aus einer Quelle und lässt sich hier nicht entfernen. Entferne es in der Quelle, oder grenze ein, was die Quelle übernimmt.",
     "knowledge.removed": "Das Dokument {name} wurde entfernt.",
     "knowledge.failureFormatUnsupported":
-      "Dieses Format kann eine Wissensbasis nicht lesen. Sie liest PDF, DOCX, TXT und Markdown.",
+      "Dieses Format kann eine Wissensbasis nicht lesen. Sie liest PDF, DOCX, XLSX, PPTX, TXT und Markdown.",
     "knowledge.failureOverLimit": "Die Datei oder ihr Text ist zu groß zum Auslesen.",
     "knowledge.failureTooManyPages":
       "Seitengrenze erreicht. Teile die Datei, oder bitte das technische Team um eine höhere Grenze und versuche es dann erneut.",
@@ -583,7 +587,7 @@ export const knowledge = defineTranslations({
     "knowledge.failureExtraction":
       "Ihr Text ließ sich auch nach mehreren Versuchen nicht auslesen.",
     "knowledge.failureFormatUnavailable":
-      "PDF- und DOCX-Dateien lassen sich hier nicht lesen. TXT und Markdown werden unterstützt.",
+      "PDF-, DOCX-, XLSX- und PPTX-Dateien lassen sich hier nicht lesen. TXT und Markdown werden unterstützt.",
     "knowledge.failureTextUnreadable": "Die Datei enthält keinen lesbaren Text.",
     "knowledge.failureTextEmpty":
       "Die Datei hat keinen Text zum Durchsuchen, zum Beispiel ein gescanntes PDF ohne Textebene.",

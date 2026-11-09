@@ -28,6 +28,8 @@ export async function processingSummary(
       select c.*, d.file_name as name, coalesce(i.path,d.file_name) as path,
         coalesce(i.mime,case c.format when 'pdf' then 'application/pdf'
           when 'docx' then 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          when 'xlsx' then 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          when 'pptx' then 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
           when 'markdown' then 'text/markdown' else 'text/plain' end) as mime,
         i.size
       from catalyst_kb.contents c join documents d on d.content_sha256=c.sha256

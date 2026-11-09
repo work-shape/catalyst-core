@@ -86,7 +86,7 @@ export class KnowledgeExtractionError extends AppError {
   }
 }
 
-/** What the capability that reads PDF and DOCX gives the platform. It calls no model. */
+/** What the capability that reads PDF, DOCX, XLSX and PPTX gives the platform. It calls no model. */
 export interface KnowledgeExtractor {
   /**
    * The revision of the extraction, a whole number from 1. A new one means text extracted with
