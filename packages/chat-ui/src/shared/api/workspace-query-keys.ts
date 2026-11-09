@@ -166,7 +166,7 @@ export const workspaceQueryKeys = {
    */
   agentDraft: (apiBaseUrl: string, authScope: string, agent: string, workspaceId = "") =>
     ["assets", apiBaseUrl, authScope, "agent-draft", agent, workspaceId] as const,
-  /** The one shared draft of a skill the instance or a Shared Workspace owns (SKILL-DRAFT-1). */
+  /** A skill's draft from before skills went live on save (SKILL-LIVE-1). */
   skillDraft: (apiBaseUrl: string, authScope: string, skill: string, workspaceId = "") =>
     ["assets", apiBaseUrl, authScope, "skill-draft", skill, workspaceId] as const,
   /**

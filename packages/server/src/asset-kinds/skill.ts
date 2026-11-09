@@ -62,8 +62,8 @@ export function createSkillAssetKind(options: {
         description: SKILL_NAME_RULE,
         schema: skillConfigSchema.shape.name
       },
-      // A team's or the instance's skill is saved to its one shared draft, which `publish`
-      // makes live; a personal skill is live on save (SKILL-DRAFT-1).
+      // A save of a team's or the instance's skill asks for `publish` and files a request
+      // without it; a personal skill is live on save (SKILL-LIVE-1).
       actions: {
         read: "skill.read",
         write: "skill.write",

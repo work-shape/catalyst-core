@@ -53,7 +53,7 @@ export class AssetWorkflow {
   /** The writes of a kind with a draft or with files. */
   readonly drafts: AssetDraftWorkflow;
   readonly agentDrafts: AgentDraftWorkflow;
-  /** The shared draft of a team's or the instance's skill (SKILL-DRAFT-1). */
+  /** A skill's draft from before skills went live on save (SKILL-LIVE-1). */
   readonly skillDrafts: SkillDraftWorkflow;
   /** The list, the asset, one revision of it and its history. */
   readonly reads: AssetReadWorkflow;

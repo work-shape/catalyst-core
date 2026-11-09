@@ -33,7 +33,7 @@ export async function writeAgentDraft(
     ...mutation.agentDraft,
     baseRevision: input.liveRevision,
     config: mutation.config,
-    // A skill's draft keeps the folder its write stored beside the config (SKILL-DRAFT-1).
+    // A skill's draft keeps the folder its write stored beside the config (SKILL-LIVE-1: only from before).
     ...(mutation.fileSetId === undefined ? {} : { fileSetId: mutation.fileSetId }),
     savedAt: input.savedAt
   });

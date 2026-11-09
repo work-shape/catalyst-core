@@ -135,7 +135,8 @@ A structured Knowledge Base may read described tables with `knowledge.query` whe
 
 Creating an agent or skill from chat is live at once and requires confirmation of the exact
 call. Existing agents save a shared draft that a person publishes; existing skills are changed
-on their page or through a skill change request. The save's `workspaceId` is the actual owner,
+on their page, where a save goes live or is submitted for approval, or through a skill change
+request. The save's `workspaceId` is the actual owner,
 not a name prefix such as `team-`. Without a workspace id the owner is the instance. To build in
 another workspace, switch to it before starting its Build conversation.
 

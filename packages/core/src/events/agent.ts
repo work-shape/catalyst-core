@@ -9,8 +9,9 @@ export const agentEvents = {
     audited: false,
     phases: ["before"]
   },
-  // Guardrails answer here before the shared draft of a team's or the instance's skill goes
-  // live (SKILL-DRAFT-1). The subject is the skill. No guardrail is bound to it by default.
+  // Guardrails answer here before a new revision of a team's or the instance's skill goes live:
+  // a save, a restore, an approval or an old draft's publish (SKILL-LIVE-1). The subject is the
+  // skill. No guardrail is bound to it by default.
   "skill.before_publish": {
     name: "skill.before_publish",
     subject: "config_asset",

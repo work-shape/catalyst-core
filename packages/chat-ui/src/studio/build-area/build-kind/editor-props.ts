@@ -109,8 +109,7 @@ export interface BuildAssetEditorProps {
   folder?: {
     read(): Promise<AssetFileRead[]>;
     /**
-     * A save that was made answers the files it stored, each with its hash. A save of a skill
-     * with a shared draft names the draft revision the page read and answers the one it wrote.
+     * A save that was made answers the files it stored, each with its hash.
      */
     save(
       files: readonly AssetFileWrite[],
@@ -145,8 +144,8 @@ interface BuildDraftFrame {
   /** The reader may publish the asset: for an agent, its draft. */
   canPublish?: boolean;
   /**
-   * A save of the asset writes its one shared draft, which a publish makes live: an agent's,
-   * and a skill's that a team or the instance owns (SKILL-DRAFT-1).
+   * A save of the asset asks for the publish right: an agent's writes its one shared draft, and
+   * a team's or the instance's skill goes live or waits for an approval (SKILL-LIVE-1).
    */
   shared?: boolean;
   /**

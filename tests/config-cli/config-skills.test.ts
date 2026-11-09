@@ -15,7 +15,7 @@ import {
   writeMinimalManifest,
   pulledBaseline,
   instanceHolding,
-  publishPushedDraft,
+  approvePushedSkill,
   skillConfig
 } from "../support/config-cli";
 
@@ -118,10 +118,10 @@ describe("config CLI command flows", () => {
       resolve(directory, "skills/review/SKILL.md"),
       serializeSkillMarkdown(skillConfig("review", "Review"))
     );
-    expect(await runConfigCommand("push", options)).toBe(0);
+    // The key publishes no skill: the push files the change, which a person approves.
+    expect(await runConfigCommand("push", options)).toBe(3);
     expect(syncs.at(-1)).toMatchObject({ items: [{ kind: "skill", config: { frontmatter: {} } }] });
-    // The skill is the instance's: the push wrote its draft, which a person publishes.
-    await publishPushedDraft(fixture, "skill", "review");
+    await approvePushedSkill(fixture, "review");
     // Force a server read so local reuse cannot hide retained server frontmatter.
     await rm(resolve(directory, "skills/review/SKILL.md"));
     expect(await runConfigCommand("pull", options)).toBe(0);
@@ -198,7 +198,7 @@ describe("config CLI command flows", () => {
         fetchImpl: (await instanceHolding({ agents: [], skills: [remoteSkill] })).fetchImpl,
         stdout: (text) => stdout.push(text)
       })
-    ).toBe(0);
+    ).toBe(3);
     expect(stdout.join("")).toContain("Updated: 1");
     expect(stdout.join("")).toContain("Unchanged: 0");
   });

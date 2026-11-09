@@ -181,12 +181,9 @@ describe("guardrails in release config", () => {
     ).toThrow("Spend budget requires configured customer pricing for model remote/cheap-check");
   });
 
-  it("validates against the effective assembly registry, including the platform-owned skill handler", async () => {
+  it("validates against the effective assembly registry, where the skill handler always is", async () => {
+    // A person's save files a skill change too (SKILL-LIVE-1), whatever agents may propose.
     const config = parseClientInstanceConfig({ ...baseConfig, guardrails: { [name]: guardrail } });
-    await expect(createTestInstance({ execution: { config, tools: [], env: {} } })).rejects.toThrow(
-      "Client instance assembly is invalid"
-    );
-    config.administration.agentConfiguration.agentSkillChanges.enabled = true;
     const assembly = await createTestInstance({
       execution: {
         config,

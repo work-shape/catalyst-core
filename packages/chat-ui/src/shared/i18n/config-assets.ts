@@ -127,6 +127,17 @@ export const configAssets = defineTranslations({
     configReasoningEffort: "Reasoning effort",
     configReloadLatest: "Reload latest",
     configRestore: "Restore",
+    "skillSave.save": "Save",
+    "skillSave.submit": "Submit for approval",
+    "skillSave.hintLive":
+      "Goes live for every agent that uses this skill. Earlier versions stay in the history.",
+    "skillSave.hintSubmit":
+      "Someone who may approve changes decides in their Inbox. Until then the live version stays.",
+    "skillSave.filed":
+      "Submitted for approval. The live version stays until the change is approved.",
+    "skillSave.filedOpen": "Open request",
+    "skillSave.oldDraft":
+      "This skill still has a draft from before skills went live on save. Publish or discard it, then you save directly again.",
     configRevisionCreate: "Created",
     configRevisionDelete: "Deleted",
     configRevisionHistory: "Version history",
@@ -324,6 +335,17 @@ export const configAssets = defineTranslations({
     configReasoningEffort: "Denkaufwand",
     configReloadLatest: "Neueste Version laden",
     configRestore: "Wiederherstellen",
+    "skillSave.save": "Speichern",
+    "skillSave.submit": "Zur Freigabe einreichen",
+    "skillSave.hintLive":
+      "Gilt sofort für jeden Agenten, der den Skill nutzt. Frühere Versionen bleiben im Verlauf.",
+    "skillSave.hintSubmit":
+      "Wer Änderungen freigeben darf, entscheidet im Eingang. Bis dahin bleibt die aktive Version.",
+    "skillSave.filed":
+      "Zur Freigabe eingereicht. Die aktive Version bleibt, bis die Änderung freigegeben ist.",
+    "skillSave.filedOpen": "Anfrage öffnen",
+    "skillSave.oldDraft":
+      "Dieser Skill hat noch einen Entwurf aus der Zeit, bevor Speichern direkt galt. Veröffentliche oder verwirf ihn, dann speicherst du wieder direkt.",
     configRevisionCreate: "Erstellt",
     configRevisionDelete: "Gelöscht",
     configRevisionHistory: "Versionsverlauf",

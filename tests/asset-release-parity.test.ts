@@ -301,14 +301,14 @@ describe("a delete in a release", () => {
       items: [
         { type: "delete", kind: "agent", name: "rel-never-there", status: "absent" },
         { type: "delete", kind: "agent", name: "rel-old", status: "absent" },
-        // The instance's skill is written as its draft (SKILL-DRAFT-1).
+        // A release key publishes no skill: the change waits for a decision (SKILL-LIVE-1).
         {
           type: "put",
           kind: "skill",
           name: "rel-guide",
           status: "applied",
           revision: 1,
-          draftRevision: 1
+          approvalRequestId: expect.any(String)
         }
       ]
     });

@@ -91,7 +91,7 @@ export function AgentDraftNotice({
   answer: AgentDraftAnswer | undefined;
   /** Reads the agent and its draft again: the page starts again from what holds. */
   onLoad(): void;
-  /** Whose draft it is: an agent's, or a shared skill's (SKILL-DRAFT-1). */
+  /** Whose draft it is: an agent's, or a skill's from before SKILL-LIVE-1. */
   kind?: SharedDraftKind;
 }) {
   const { locale, t } = useTranslation();

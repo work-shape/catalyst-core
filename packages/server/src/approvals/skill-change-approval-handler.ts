@@ -35,7 +35,8 @@ import {
   type ConfigAssetWriterOptions
 } from "../assets/config-asset-writer";
 
-import { writesSharedDraft } from "../assets/shared-drafts";
+import { skillLiveNeedsPublish } from "../assets/shared-drafts";
+import { withFiledSkillChanges, type AgentSkillChangeHandler } from "./skill-change-filed";
 import {
   SKILL_APPROVE_ACTION,
   scopeOfWorkspace,
@@ -106,7 +107,7 @@ export function createSkillChangeApprovalHandler(
   options: ConfigAssetWriterOptions
 ): ApprovalRequestHandler {
   const store = options.configAssets.store;
-  return {
+  const proposal: AgentSkillChangeHandler = {
     kind: "skill_change",
     // `skill.approve` on the skill a request changes: on that skill, on what its workspace owns
     // or on the instance, which `agent_skills.approve` carries. A new skill is decided where it
@@ -243,7 +244,7 @@ export function createSkillChangeApprovalHandler(
         kind: "skill",
         name: data.skillName
       });
-      if (live?.status !== "active" || !(await writesSharedDraft(options, "skill", live.scope)))
+      if (live?.status !== "active" || !(await skillLiveNeedsPublish(options, live.scope)))
         return [write];
       return [
         write,
@@ -459,6 +460,7 @@ export function createSkillChangeApprovalHandler(
       return revisionResult(data.skillName, reverted);
     }
   };
+  return withFiledSkillChanges(options, proposal);
 
   /**
    * What a request is about now: the active skill it changes, or for a new skill the owner the
@@ -539,7 +541,7 @@ export function createSkillChangeApprovalHandler(
       read("agent", names.agentName)
     ]);
     const draft =
-      skill?.status === "active" && (await writesSharedDraft(options, "skill", skill.scope))
+      skill?.status === "active" && (await skillLiveNeedsPublish(options, skill.scope))
         ? await options.stores.agentProposals.get({
             clientInstanceId: options.clientInstanceId,
             agentId: skill.id

@@ -240,7 +240,7 @@ export class AssetReadWorkflow {
     ]);
     const draftSummaries = await this.options.stores.agentProposals.summaries({
       clientInstanceId: this.options.clientInstanceId,
-      // The shared draft of an agent, or of a team's or the instance's skill (SKILL-DRAFT-1).
+      // The shared draft of an agent, or a skill's from before SKILL-LIVE-1.
       agentIds: hasSharedDrafts(kind.kind)
         ? records
             .filter((record) =>

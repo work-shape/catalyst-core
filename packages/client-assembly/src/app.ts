@@ -634,18 +634,19 @@ export async function createClientInstanceExecutionAssembly(
     approvalRequestHandlers.set(reconnectNotice.kind, reconnectNotice);
   }
   const skillPolicy = config.administration.agentConfiguration.agentSkillChanges;
-  if (skillPolicy.enabled) {
-    if (approvalRequestHandlers.has("skill_change")) {
-      throw new AppError("VALIDATION_FAILED", "The skill_change approval kind is platform-owned");
-    }
-    const handler = createSkillChangeApprovalHandler({
-      config,
-      clientInstanceId,
-      configAssets,
-      stores: store
-    });
-    approvalRequestHandlers.set(handler.kind, handler);
+  // Always there: a person's save files one too (SKILL-LIVE-1). An agent's proposal is what the
+  // policy of agent skill changes switches.
+  if (approvalRequestHandlers.has("skill_change")) {
+    throw new AppError("VALIDATION_FAILED", "The skill_change approval kind is platform-owned");
   }
+  const skillChangeHandler = createSkillChangeApprovalHandler({
+    config,
+    clientInstanceId,
+    configAssets,
+    stores: store,
+    ...(pages ? { pages } : {})
+  });
+  approvalRequestHandlers.set(skillChangeHandler.kind, skillChangeHandler);
   // The default agent and skills of projects (PRJ-7): a run in a project is offered its skills.
   const projectSetup = new ProjectSetupService({
     stores: store,

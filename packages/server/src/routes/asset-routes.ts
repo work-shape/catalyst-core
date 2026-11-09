@@ -15,6 +15,7 @@ import {
   revertWriteEvents,
   syncWriteEvents
 } from "../guardrails/asset-guardrail-events";
+import { withSkillLiveEvent } from "../assets/skill-live-writes";
 import { readDefinitionName } from "../asset-kinds/shared";
 import {
   authorizeAssetPlacement,
@@ -75,7 +76,33 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     // No module: a release is pushed through this operation also where changing assets in
     // the interface is off. The workflow asks the switch of everyone but the release holder.
     bodyLimitBytes: ASSET_SYNC_BODY_MAX_BYTES,
-    beforeEvents: syncWriteEvents,
+    beforeEvents: async (input, _origin, actor) => {
+      const events = syncWriteEvents(input);
+      const skills = await Promise.all(
+        input.items.flatMap((item) =>
+          item.type === "put" && item.kind === "skill"
+            ? [
+                withSkillLiveEvent(
+                  { options, actor },
+                  {
+                    kind: "skill",
+                    name: readDefinitionName(item.config) ?? "",
+                    ...(input.workspaceId === undefined ? {} : { workspaceId: input.workspaceId })
+                  },
+                  [
+                    assetWriteEvent({
+                      kind: "skill",
+                      name: readDefinitionName(item.config) ?? "",
+                      config: item.config
+                    })
+                  ]
+                )
+              ]
+            : []
+        )
+      );
+      return [...events, ...skills.flatMap((list) => list.slice(1))];
+    },
     approval: (input, actor) => syncHandover.approval(input, actor, undefined),
     policyFloorOf: (_origin, input, actor) => syncHandover.policyFloor(input, actor, undefined),
     execute: async (input, context) => {
@@ -150,12 +177,26 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     changeClass: "reversible",
     module: ASSET_WRITE_MODULE,
     bodyLimitBytes: ASSET_PUT_BODY_LIMIT_BYTES,
-    beforeEvents: ({ kind, name, config, files }) => [
-      assetWriteEvent({ kind, name, config, files })
-    ],
+    beforeEvents: ({ kind, name, config, files, workspaceId }, _origin, actor) =>
+      withSkillLiveEvent(
+        { options, actor },
+        { kind, name, ...(workspaceId === undefined ? {} : { workspaceId }) },
+        [assetWriteEvent({ kind, name, config, files })]
+      ),
     // An agent made with its tools is live at once (DS-13c), so it is checked as a publish is.
     approval: (input, actor) => createHandover.approval(input, actor, undefined),
-    policyFloorOf: (_origin, input, actor) => createHandover.policyFloor(input, actor, undefined),
+    // A save of a skill is live at once, so an agent's call of it asks the person it acts for
+    // (never-rule 7; SKILL-LIVE-1). Who holds a terminal or the page asked for it themselves.
+    policyFloorOf: (origin, input, actor) =>
+      createHandover.policyFloor(
+        input,
+        actor,
+        input.kind === "skill" &&
+          input.expectedRevision != null &&
+          (origin.kind === "agent" || origin.kind === "mcp")
+          ? "confirm"
+          : undefined
+      ),
     execute: async (input, context) => {
       const handover = await createHandover.execute(context, input);
       return workflow.put(
@@ -194,7 +235,7 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
       publishHandover.approval(input, actor, await together.approval(input)),
     // An instance-owned agent's publish is made live without a terminal; a workspace's agent
     // keeps the question, so `--yes` waits as the person's confirmation (WS-PUB-1b). A skill's
-    // draft is published without a question, as `config push --publish` does (SKILL-DRAFT-1).
+    // draft is published without a question, as a save with the publish right is.
     // A publish that hands a source's data on unconfirmed waits for an approval, whatever kind.
     policyFloorOf: (origin, input, actor) =>
       publishHandover.policyFloor(
@@ -376,7 +417,8 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     policyTargets: (input) => workflow.policyTargets(input),
     changeClass: "reversible",
     module: ASSET_WRITE_MODULE,
-    beforeEvents: (input) => revertWriteEvents(options, input),
+    beforeEvents: async (input, _origin, actor) =>
+      withSkillLiveEvent({ options, actor }, input, await revertWriteEvents(options, input)),
     execute: (input, context) => workflow.revert(context, input)
   });
 

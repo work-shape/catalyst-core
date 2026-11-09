@@ -377,7 +377,6 @@ describe("what a committed write answers", () => {
 
   // Fails without the change: the put read the asset again after its commit and answered the
   // revision of whoever wrote next, so its caller's next save went over that write unseen.
-  // A memo is live on save; a team's skill is written as its draft (SKILL-DRAFT-1).
   it("answers a put the revision it wrote, not the one a later write gave the asset", async () => {
     await t.expectOk(t.kai.id, "assets.put", {
       params: { kind: "memo", name: "kai-mine" },

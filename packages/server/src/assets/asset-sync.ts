@@ -1,8 +1,8 @@
 import { agentDependencyWarnings } from "./agent-dependency-availability";
 import { deleteTryConversations } from "../deletion/conversation-cleanup";
 import { agentDraftAuthor } from "./agent-drafts";
-import { draftFolderOf } from "./asset-upsert";
 import { writesSharedDraft } from "./shared-drafts";
+import { fileSkillChange, pendingSkillDraftRefusal, skillWriteOutcome } from "./skill-live-writes";
 import {
   AppError,
   asCollaborationWorkspaceId,
@@ -11,6 +11,8 @@ import {
   type ActorAccess,
   type AuthenticatedIdentity,
   type ConfigAssetMutation,
+  type ConfigAssetRecord,
+  type JsonObject,
   type PolicyTarget
 } from "@work-shape/catalyst-core";
 import type { AgentToolWarning } from "../agent-tool-validation";
@@ -28,6 +30,7 @@ import {
   errorIssues,
   recordHandover,
   transactionalAssetCall,
+  accessResource,
   type AssetCall
 } from "./asset-access";
 import {
@@ -50,7 +53,7 @@ import {
   toJsonObject
 } from "./asset-write-rules";
 import { currentRevisionOf } from "./asset-revision";
-import { readsOther, recordCommitted, scopeOf } from "./asset-target";
+import { readsOther, recordCommitted } from "./asset-target";
 import {
   isReady,
   readsItem,
@@ -147,6 +150,8 @@ interface CheckedBatch {
   storedDefault: string | null;
   defaultChange: { agentName: string | undefined } | undefined;
   mutations: ConfigAssetMutation[];
+  /** The skills that wait for an approval rather than write, by their key. */
+  filings: ReadonlyMap<string, FiledSkill>;
 }
 
 async function checkBatch(
@@ -353,31 +358,42 @@ async function checkBatch(
       })
     );
   }
+  // A save of a skill that is there: live, or a request where its writer may not make it live
+  // (SKILL-LIVE-1). A draft from before that waits to be decided first.
+  const filings = new Map<string, FiledSkill>();
+  for (const entry of ready()) {
+    const asset = entry.asset;
+    if (entry.item.type !== "put" || entry.kind.kind !== "skill" || asset?.status !== "active")
+      continue;
+    const refusal = await pendingSkillDraftRefusal(options, asset);
+    if (refusal) {
+      entry.refusal = toRefusal(refusal);
+      continue;
+    }
+    const resource = accessResource("skill", entry.name, entry.scope, asset.id);
+    if ((await skillWriteOutcome(options, call, asset, resource)) === "request")
+      filings.set(assetKey("skill", entry.name), {
+        asset,
+        config: toJsonObject(acceptedByName("skill").get(entry.name))
+      });
+  }
   stopIfRefused();
 
   // A delete of an asset that is not there writes nothing. It is handed to the store all the
   // same, which checks under its lock that the asset is still not there.
-  // Every item of the batch has its owner: whether a skill's write is its draft is asked once.
-  const skillDrafts = await writesSharedDraft(options, "skill", scopeOf(input.workspaceId));
+  const written = ready().filter((entry) => !filings.has(assetKey(entry.kind.kind, entry.name)));
   const mutations: ConfigAssetMutation[] = await Promise.all(
-    ready().map(async (entry): Promise<ConfigAssetMutation> => {
+    written.map(async (entry): Promise<ConfigAssetMutation> => {
       if (entry.item.type === "delete")
         return { type: "delete", kind: entry.kind.kind, name: entry.name, scope: entry.scope };
       const config = toJsonObject(acceptedByName(entry.kind.kind).get(entry.name));
-      // An agent's write, and a team's or the instance's skill's, goes to its one shared draft
-      // (AD-1, SKILL-DRAFT-1).
-      const toDraft =
-        entry.asset?.status === "active" &&
-        (entry.kind.kind === "agent" || (entry.kind.kind === "skill" && skillDrafts));
-      const folder =
-        toDraft && entry.kind.kind === "skill" && entry.asset
-          ? await draftFolderOf(options, entry.kind, entry.asset.id, config)
-          : undefined;
+      // An agent's write goes to its one shared draft (AD-1).
+      const toDraft = entry.asset?.status === "active" && writesSharedDraft(entry.kind.kind);
       return {
         type: "upsert",
         kind: entry.kind.kind,
         name: entry.name,
-        config: folder?.config ?? config,
+        config,
         scope: entry.scope,
         ...(toDraft
           ? {
@@ -387,7 +403,6 @@ async function checkBatch(
               }
             }
           : {}),
-        ...(folder?.fileSetId === undefined ? {} : { fileSetId: folder.fileSetId }),
         // A kind with a published revision moves its draft with a write and nothing else.
         ...(entry.kind.lifecycle === "draft_published" ? { draft: true as const } : {})
       };
@@ -411,12 +426,13 @@ async function checkBatch(
     ready: ready(),
     storedDefault,
     defaultChange,
-    mutations
+    mutations,
+    filings
   };
 }
 
 async function applyBatch(options: AssetWorkflowOptions, call: AssetCall, checked: CheckedBatch) {
-  const { planned, ready, storedDefault, defaultChange, mutations } = checked;
+  const { planned, ready, storedDefault, defaultChange, mutations, filings } = checked;
   const byKey = new Map(ready.map((entry) => [assetKey(entry.kind.kind, entry.name), entry]));
   const apply = (target: AssetWorkflowOptions) =>
     applyValidatedConfigAssetMutations(
@@ -450,15 +466,42 @@ async function applyBatch(options: AssetWorkflowOptions, call: AssetCall, checke
   );
   const followUps: AssetWriteFollowUp[] = [];
   // A hand-over the batch's new agents confirmed is recorded with it (DS-13c).
+  // A skill the batch files waits for its approval: its request commits with the batch.
+  const requests = new Map<string, string>();
+  const unchanged = async () => {
+    const { version } = await options.configAssets.store.getConfigAssetState({
+      clientInstanceId: options.clientInstanceId
+    });
+    return {
+      version,
+      revisions: {} as Record<string, number>,
+      assetIds: {} as Record<string, string>,
+      draftRevisions: {} as Record<string, number>
+    };
+  };
   const writing =
-    removes.length === 0 && !call.handover?.length
+    removes.length === 0 && !call.handover?.length && filings.size === 0
       ? apply(options)
       : options.stores.transaction(async (stores) => {
-          const result = await apply({
+          const within = {
             ...options,
             stores,
             configAssets: { ...options.configAssets, store: stores.configAssets }
-          });
+          };
+          const result = mutations.length === 0 ? await unchanged() : await apply(within);
+          for (const [key, filing] of filings) {
+            const request = await fileSkillChange(
+              options,
+              {
+                actor: call.actor,
+                correlationId: call.correlationId,
+                ...(call.runtime?.locale === undefined ? {} : { locale: call.runtime.locale }),
+                ...filing
+              },
+              stores.approvals
+            );
+            requests.set(key, request.id);
+          }
           await recordHandover(
             transactionalAssetCall(call, options.clientInstanceId, stores.audit)
           );
@@ -531,6 +574,20 @@ async function applyBatch(options: AssetWorkflowOptions, call: AssetCall, checke
     // The revision the store gave the asset in this transaction. A delete of an asset that
     // was not there wrote nothing and has none.
     const key = assetKey(entry.kind.kind, entry.name);
+    const approvalRequestId = requests.get(key);
+    const filed = filings.get(key);
+    if (approvalRequestId !== undefined && filed && entry.item.type === "put") {
+      items.push({
+        type: "put" as const,
+        kind: entry.kind.kind,
+        name: entry.name,
+        status: "applied" as const,
+        id: filed.asset.id,
+        revision: filed.asset.revision,
+        approvalRequestId
+      });
+      continue;
+    }
     const draftRevision = result.draftRevisions?.[key];
     if (draftRevision !== undefined && entry.item.type === "put") {
       items.push({
@@ -717,4 +774,10 @@ function writeIssues(check: () => AssetSetIssue[]): AssetSetIssue[] {
     }
     throw error;
   }
+}
+
+/** A skill of a batch that waits for an approval, with the whole definition it asks for. */
+interface FiledSkill {
+  asset: ConfigAssetRecord;
+  config: JsonObject;
 }

@@ -13,9 +13,14 @@ import {
   NotFound,
   Page,
   PageHeader,
-  SkeletonPage
+  SkeletonPage,
+  TextLink
 } from "@work-shape/catalyst-ui";
-import { ASSET_ADDRESS_MAX_LENGTH, assetAddressFromName } from "@work-shape/catalyst-core";
+import {
+  ASSET_ADDRESS_MAX_LENGTH,
+  assetAddressFromName,
+  inboxItemPath
+} from "@work-shape/catalyst-core";
 import type {
   AssetContent,
   AssetFileEntry,
@@ -671,9 +676,11 @@ function LoadedAssetPage({
   const canPublish =
     draftAhead && conflict === undefined && mayOnAsset(source.rights, "publish", stored);
   // The agent's draft revision the page shows, which a restore names: an agent has one draft,
-  // and an earlier revision becomes its content. So has a skill a team or the instance owns
-  // (SKILL-DRAFT-1); a skill of the reader's Personal Workspace is live on save.
+  // and an earlier revision becomes its content. A skill a team or the instance owns has none,
+  // and its save asks for `skill.publish`; `shared` says so to its form (SKILL-LIVE-1).
   const agentDraftRead = useRef<number | null>(stored.agentDraft?.revision ?? null);
+  // The request a write of the page filed last, where it waits for an approval (SKILL-LIVE-1).
+  const [filed, setFiled] = useState<string>();
   const sharedDraft =
     entry.kind === AGENT_ASSET_KIND ||
     (entry.kind === "skill" &&
@@ -745,12 +752,20 @@ function LoadedAssetPage({
     BuildWriteOutcome & { stored?: readonly AssetFileEntry[]; draftRevision?: number }
   > => {
     try {
-      const { revision, draftRevision, files } = await source.writes.put({
+      const { revision, draftRevision, files, approvalRequestId } = await source.writes.put({
         ...address,
         ...content,
         expectedRevision: stored.revision,
         ...(draft ?? {})
       });
+      // The change waits for an approval, and the skill the page loaded stays what is live.
+      if (approvalRequestId !== undefined) {
+        setFailure(undefined);
+        onRestored(undefined);
+        setFiled(approvalRequestId);
+        return { ok: true, filed: true };
+      }
+      setFiled(undefined);
       if (draft !== undefined && draftRevision !== undefined) {
         agentDraftRead.current = draftRevision;
         setFailure(undefined);
@@ -978,6 +993,15 @@ function LoadedAssetPage({
             <FormNotice tone="error" data-build-failure="">
               {failure}
             </FormNotice>
+          ) : filed !== undefined ? (
+            <Banner
+              tone="info"
+              data-skill-filed={filed}
+              onDismiss={() => setFiled(undefined)}
+              action={<TextLink href={inboxItemPath(filed)}>{t("skillSave.filedOpen")}</TextLink>}
+            >
+              {t("skillSave.filed")}
+            </Banner>
           ) : restored !== undefined ? (
             <Banner
               tone="success"
@@ -1004,18 +1028,28 @@ function LoadedAssetPage({
         open={historyOpen}
         title={stored.name}
         heldRevision={stored.revision}
+        // A restore of a skill is one click: it is a new revision, and restored the same way.
+        restoresAtOnce={entry.kind === "skill"}
         load={(cursor) => source.writes.revisions({ ...address, cursor })}
         onClose={() => setHistoryOpen(false)}
         onRestore={
           canWrite && conflict === undefined
             ? async (revision) => {
                 try {
-                  await source.writes.revert({
+                  const answer = await source.writes.revert({
                     ...address,
                     revision,
                     expectedRevision: stored.revision,
-                    ...(sharedDraft ? { expectedDraftRevision: agentDraftRead.current } : {})
+                    ...(entry.kind === AGENT_ASSET_KIND
+                      ? { expectedDraftRevision: agentDraftRead.current }
+                      : {})
                   });
+                  // The restore waits for an approval: the page stays as it is.
+                  if (answer.approvalRequestId !== undefined) {
+                    setHistoryOpen(false);
+                    setFiled(answer.approvalRequestId);
+                    return { ok: true, filed: true };
+                  }
                 } catch (error) {
                   const outcome = refusalOf(error);
                   if (!outcome.ok && outcome.conflict) {

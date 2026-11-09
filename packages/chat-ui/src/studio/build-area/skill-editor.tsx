@@ -2,6 +2,7 @@ import { FolderInput, Send, Undo2 } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { SKILL_SUMMARY_MAX_LENGTH, assetAddressFromName } from "@work-shape/catalyst-core";
 import {
+  Banner,
   Button,
   ConfirmDialog,
   DropdownMenuItem,
@@ -65,9 +66,9 @@ export function SkillEditor({
   /** What the line under the name says of the skill first, such as who ships it. */
   facts?: readonly (string | undefined | false)[];
   /**
-   * The one shared draft of a skill a team or the instance owns (SKILL-DRAFT-1), for a reader
-   * who may change it: the form starts from the draft, and saves write it. Absent for a new
-   * skill, a skill of a Personal Workspace, which is live on save, and a reader.
+   * A draft of a skill a team or the instance owns from before skills went live on save
+   * (SKILL-LIVE-1), for a reader who may change it: the form shows it, read only, until it is
+   * published or discarded. Absent for a new skill, a skill of a Personal Workspace and a reader.
    */
   draft?: AgentDraftSource;
 }) {
@@ -75,15 +76,16 @@ export function SkillEditor({
   const state = useAssetForm(initialForm);
   const { form, setForm, outcome, amend } = state;
   const [saving, setSaving] = useState(false);
-  // The draft the form was started from or last saved as. A save names it, and Publish and
-  // Discard decide it.
+  // The draft from before SKILL-LIVE-1 the form shows, which Publish and Discard decide. While
+  // there is one, nothing is saved: a new live revision would leave it behind.
   const [held, setHeld] = useState<SharedDraft | null>(draft?.latest ?? null);
   const [deciding, setDeciding] = useState<DraftDecision>();
   const publishReasonId = useId();
   const [selected, setSelected] = useState<SkillFileSelection>("root");
   const [folderRead, setFolderRead] = useState<FolderRead>("idle");
   const [readAttempt, setReadAttempt] = useState(0);
-  const editable = frame.canWrite && instanceEditable;
+  const pendingDraft = draft !== undefined && held !== null;
+  const editable = frame.canWrite && instanceEditable && !pendingDraft;
   const { folder } = frame;
   const changes = countChangedFields(form, state.baseline);
   const { behind, busy, answer, stale } = useDraftFollow(draft, {
@@ -99,11 +101,6 @@ export function SkillEditor({
     onRead: frame.draft?.onRead
   });
   const asset = frame.asset;
-  // A save of the draft names the draft revision the page holds.
-  const draftWrite =
-    asset !== undefined && draft !== undefined
-      ? { expectedDraftRevision: held?.revision ?? null }
-      : undefined;
   // "Replace from folder" is open, with the folder an import handed over where it found the
   // skill's address taken.
   const [replacing, setReplacing] = useState<{ initial?: SkillImport } | undefined>(() => {
@@ -156,26 +153,17 @@ export function SkillEditor({
     }));
 
   /**
-   * Writes the whole folder, or the config alone, where the files beside it stay. A skill with
-   * a shared draft writes the draft, and the live skill stays as it is.
+   * Writes the whole folder, or the config alone, where the files beside it stay. Every changed
+   * file goes into one revision, which is live, or waits for an approval as one request.
    */
   const write = async (written: SkillFormState, wholeFolder: boolean) => {
     setSaving(true);
     const config = skillFormToConfig(written);
-    const saved: BuildWriteOutcome & {
-      stored?: readonly AssetFileEntry[];
-      draftRevision?: number;
-    } =
+    const saved: BuildWriteOutcome & { stored?: readonly AssetFileEntry[] } =
       folder !== undefined && wholeFolder
-        ? await folder.save(skillFormToFolder(written), draftWrite)
-        : await frame.save(config, draftWrite);
-    const { stored, draftRevision, ...answer } = saved;
-    if (answer.ok && asset !== undefined && draft !== undefined && draftRevision !== undefined) {
-      setHeld(draft.saved({ revision: draftRevision, config, liveRevision: asset.revision }));
-    } else if (!answer.ok && answer.conflict && answer.draft) {
-      // The page reads the draft again and says who wrote it.
-      await draft?.reread().catch(() => undefined);
-    }
+        ? await folder.save(skillFormToFolder(written))
+        : await frame.save(config);
+    const { stored, ...answer } = saved;
     setSaving(false);
     state.setOutcome(answer);
     return { answer, stored };
@@ -193,7 +181,11 @@ export function SkillEditor({
       written,
       !unread && skillFolderChanged(written, state.baseline)
     );
-    if (answer.ok) {
+    if (answer.ok && answer.filed) {
+      // The change waits in the Inbox, whole: the form shows what is live again.
+      state.discard();
+      setSelected("root");
+    } else if (answer.ok) {
       state.markSaved();
       // A save of the folder answers the hash of every file it stored.
       if (stored) amend((value) => withStoredHashes(value, stored));
@@ -210,7 +202,8 @@ export function SkillEditor({
     setSelected("root");
     setForm(replaced);
     const { answer, stored } = await write(replaced, true);
-    if (answer.ok) amend(() => (stored ? withStoredHashes(replaced, stored) : replaced));
+    if (answer.ok && answer.filed) state.discard();
+    else if (answer.ok) amend(() => (stored ? withStoredHashes(replaced, stored) : replaced));
   };
 
   const takeFiles = async (target: UploadTarget, chosen: readonly File[]) => {
@@ -353,6 +346,9 @@ export function SkillEditor({
   ];
 
   const publishRight = frame.draft?.canPublish ? undefined : actionLabel("skill.publish", t);
+  // A team's or the instance's skill goes live with `skill.publish`. Without it a save files the
+  // change for `skill.approve` (SKILL-LIVE-1); a personal skill is its owner's to save.
+  const submitsForApproval = frame.draft?.shared === true && frame.draft.canPublish !== true;
   const liveTitle = liveSkillTitle(asset) ?? (form.title.trim() || form.name);
   const shellWith = (myChats: SkillMyChatsParts) => (
     <AssetEditorShell
@@ -363,13 +359,13 @@ export function SkillEditor({
       }}
       title={form.title.trim() || form.name || t("configNewSkill")}
       status={
-        draft === undefined || frame.asset === undefined ? undefined : (
+        !pendingDraft || frame.asset === undefined ? undefined : (
           <AgentDraftStatus draft={held} publishRight={publishRight} />
         )
       }
       facts={[...(facts ?? []), myChats.fact]}
       primaryAction={
-        draft !== undefined && held !== null && !stale ? (
+        pendingDraft && !stale ? (
           <Button
             data-skill-publish=""
             disabled={
@@ -391,7 +387,7 @@ export function SkillEditor({
         ) : undefined
       }
       menu={
-        draft !== undefined && held !== null && !frame.saveBlocked ? (
+        pendingDraft && !frame.saveBlocked ? (
           <DropdownMenuItem
             icon={<Undo2 aria-hidden="true" />}
             disabled={busy !== undefined}
@@ -402,19 +398,24 @@ export function SkillEditor({
         ) : undefined
       }
       notices={
-        draft !== undefined ? (
-          <AgentDraftNotice
-            kind="skill"
-            draft={held}
-            behind={behind}
-            name={liveTitle}
-            publishRight={publishRight}
-            publishReasonId={publishReasonId}
-            answer={answer}
-            onLoad={() => {
-              frame.reload?.().catch(() => undefined);
-            }}
-          />
+        pendingDraft ? (
+          <>
+            <Banner tone="info" data-skill-old-draft="">
+              {t("skillSave.oldDraft")}
+            </Banner>
+            <AgentDraftNotice
+              kind="skill"
+              draft={held}
+              behind={behind}
+              name={liveTitle}
+              publishRight={publishRight}
+              publishReasonId={publishReasonId}
+              answer={answer}
+              onLoad={() => {
+                frame.reload?.().catch(() => undefined);
+              }}
+            />
+          </>
         ) : undefined
       }
       headActions={
@@ -457,11 +458,15 @@ export function SkillEditor({
       saveLabel={
         frame.asset === undefined
           ? t("configCreateSkill")
-          : draft !== undefined
-            ? t("agentDraft.saveDraft")
-            : t("configSaveChanges")
+          : submitsForApproval
+            ? t("skillSave.submit")
+            : t("skillSave.save")
       }
-      {...(draft !== undefined ? { saveHint: t("agentDraft.saveHintSkill") } : {})}
+      {...(frame.asset === undefined
+        ? {}
+        : {
+            saveHint: submitsForApproval ? t("skillSave.hintSubmit") : t("skillSave.hintLive")
+          })}
     />
   );
   const decision =

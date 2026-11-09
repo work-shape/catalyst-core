@@ -320,9 +320,9 @@ function toolContext(
 describe("the folders of an agent's skills in its workspace commands", () => {
   const { start } = useSkillWorlds();
 
-  it("mounts the admitted Try draft's whole folder even after the draft is discarded", async () => {
+  it("mounts the whole folder of the skill a Try turn froze, even after the skill moved on", async () => {
     const { world, stores } = await startWorld(start);
-    const changedScript = "print('draft script')\n";
+    const changedScript = "print('frozen script')\n";
     const saved = await world.api.call("assets.put", {
       params: FORM,
       payload: { files: formFolder(SKILL_MD, changedScript), expectedRevision: 1 }
@@ -330,8 +330,7 @@ describe("the folders of an agent's skills in its workspace commands", () => {
     expect(saved.statusCode, saved.body).toBe(200);
     const live = await stores.configAssets.getConfigAsset({ clientInstanceId, ...FORM });
     if (!live) throw new Error("Skill missing");
-    const draft = await stores.agentProposals.get({ clientInstanceId, agentId: live.id });
-    if (!draft) throw new Error("Draft missing");
+    const draft = { revision: live.revision, config: live.config, fileSetId: live.fileSetId };
     const started: Started[] = [];
     const h = await harness(world, stores, {
       queueOnly: true,
@@ -355,11 +354,11 @@ describe("the folders of an agent's skills in its workspace commands", () => {
     };
     const queued = await h.exec("ls /skills/form");
     expect(queued.status).toBe("queued");
-    await stores.agentProposals.remove({
-      clientInstanceId,
-      agentId: live.id,
-      revision: draft.revision
+    const moved = await world.api.call("assets.put", {
+      params: FORM,
+      payload: { files: formFolder(SKILL_MD, SCRIPT), expectedRevision: draft.revision }
     });
+    expect(moved.statusCode, moved.body).toBe(200);
     await h.runQueued();
     expect((await h.command(queued.commandId))?.status).toBe("completed");
     expect(started[0]?.skills.form?.["scripts/fill_form.py"]).toBe(

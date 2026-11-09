@@ -27,6 +27,7 @@ import {
   asUserId,
   createAssetKindRegistry,
   type AgentRuntime,
+  type FileSetId,
   type JsonObject,
   type RuntimeCallContext
 } from "@work-shape/catalyst-core";
@@ -38,7 +39,8 @@ import {
 import {
   GuardrailRunner,
   createAuditingEventEmitter,
-  createGuardrailAssetKind
+  createGuardrailAssetKind,
+  createSkillChangeApprovalHandler
 } from "@work-shape/catalyst-server";
 import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import {
@@ -51,6 +53,7 @@ import {
   serializeAgentYaml,
   writeStateFile
 } from "@work-shape/catalyst-cli";
+import { createConfigAssetSource } from "@work-shape/catalyst-client-assembly";
 import { applyAtCurrentRevisions } from "./asset-revisions";
 import {
   agentConfig as personalAgentConfig,
@@ -249,6 +252,27 @@ export async function createFixture(
       stores: store,
       usageGovernance,
       auditRecorder,
+      approvalRequests: {
+        store: store.approvals,
+        handlers: new Map(
+          [
+            createSkillChangeApprovalHandler({
+              config,
+              clientInstanceId,
+              stores: store,
+              configAssets: {
+                store: store.configAssets,
+                validationRefs: fixtureValidationRefs,
+                source: createConfigAssetSource({
+                  store: store.configAssets,
+                  clientInstanceId
+                }),
+                kinds: createTestAssetKinds({ config, validationRefs: fixtureValidationRefs })
+              }
+            })
+          ].map((handler) => [handler.kind, handler])
+        )
+      },
       configAssets: {
         store: store.configAssets,
         validationRefs: fixtureValidationRefs,
@@ -438,30 +462,38 @@ export async function instanceHolding(
 }
 
 /**
- * A person publishes the draft a release push wrote of an agent or a skill the instance owns
- * (SKILL-DRAFT-1): the release's key writes drafts, and publishes none itself.
+ * The skill goes live as the request a push filed for it asked: what the Inbox's approval does,
+ * for a test of the working copy's next steps. `skill-live-on-save.test.ts` decides one for real.
  */
-export async function publishPushedDraft(
+export async function approvePushedSkill(
   fixture: Awaited<ReturnType<typeof createFixture>>,
-  kind: "agent" | "skill",
   name: string
 ): Promise<void> {
   const { clientInstanceId, store } = fixture;
-  const live = await store.configAssets.getConfigAsset({ clientInstanceId, kind, name });
-  if (!live) throw new Error(`No ${kind} ${name}`);
-  const draft = await store.agentProposals.get({ clientInstanceId, agentId: live.id });
-  if (!draft) throw new Error(`No draft of ${kind} ${name}`);
+  const [request] = await store.approvals.listApprovalRequests({
+    clientInstanceId,
+    kinds: ["skill_change"],
+    status: "pending"
+  });
+  const proposed = z
+    .object({
+      proposed: z.object({
+        config: z.custom<JsonObject>(),
+        fileSetId: z.custom<FileSetId>().optional(),
+        baseRevision: z.number()
+      })
+    })
+    .parse(request?.payload).proposed;
   await store.configAssets.applyConfigAssetMutations({
     clientInstanceId,
-    baseRevisions: { [`${kind}:${name}`]: draft.baseRevision },
+    baseRevisions: { [`skill:${name}`]: proposed.baseRevision },
     mutations: [
       {
         type: "upsert",
-        kind,
+        kind: "skill",
         name,
-        config: draft.config,
-        agentPublish: draft.revision,
-        ...(draft.fileSetId === undefined ? {} : { fileSetId: draft.fileSetId })
+        config: proposed.config,
+        ...(proposed.fileSetId === undefined ? {} : { fileSetId: proposed.fileSetId })
       }
     ]
   });

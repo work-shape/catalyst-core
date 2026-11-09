@@ -448,7 +448,7 @@ async function callersRevision(
 }
 
 /** The text of one revision: its definition's strings and its source files. */
-async function revisionText(
+export async function revisionText(
   options: RevisionOptions,
   revision: Pick<ConfigAssetRevisionRecord, "assetId" | "fileSetId"> & { config: JsonObject }
 ): Promise<GuardrailFields[string]> {
@@ -628,8 +628,8 @@ function isImageOrFont(bytes: Uint8Array): boolean {
 }
 
 /**
- * `asset.before_write` and `skill.before_publish` of the shared draft of a team's or the
- * instance's skill that a publish makes live (SKILL-DRAFT-1), with the text of that draft. No
+ * `asset.before_write` and `skill.before_publish` of a skill's draft from before SKILL-LIVE-1
+ * that a publish makes live, with the text of that draft. No
  * guardrail is bound to the publish by default; an instance may bind one. A publish of a draft
  * revision that is not the pending one is refused here, never let through unchecked.
  */

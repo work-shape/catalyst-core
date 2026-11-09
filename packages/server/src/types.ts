@@ -282,6 +282,7 @@ export type AssetWorkflowOptions = Pick<
   | "pages"
   | "authorizer"
   | "operationCalls"
+  | "approvalRequests"
 >;
 
 /** The options as the server's own modules see them, with every default filled in. */

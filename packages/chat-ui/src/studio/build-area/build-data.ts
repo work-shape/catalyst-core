@@ -130,7 +130,13 @@ interface BuildWrites {
       /** A new agent's: what it uses is made available where it starts, by the reader's choice. */
       dependencyConsent?: DependencyConsent;
     } & AssetContent
-  ): Promise<{ revision: number; draftRevision?: number; files?: AssetFileEntry[] }>;
+  ): Promise<{
+    revision: number;
+    draftRevision?: number;
+    files?: AssetFileEntry[];
+    /** The change waits for this request, and the asset stays as it was (SKILL-LIVE-1). */
+    approvalRequestId?: string;
+  }>;
   /** The whole folder of an asset's current revision, each file with its content. */
   readFiles(input: { kind: string; name: string }): Promise<AssetFileRead[]>;
   delete(input: { kind: string; name: string; expectedRevision: number }): Promise<unknown>;
@@ -151,7 +157,7 @@ interface BuildWrites {
     expectedRevision: number;
     /** The agent's draft revision the page read, or `null`: the revision becomes the draft. */
     expectedDraftRevision?: number | null;
-  }): Promise<{ revision: number }>;
+  }): Promise<{ revision: number; approvalRequestId?: string }>;
   /** One page of the history, the newest first. `cursor` continues after an earlier page. */
   revisions(input: { kind: string; name: string; cursor?: string }): Promise<BuildRevisionPage>;
 }

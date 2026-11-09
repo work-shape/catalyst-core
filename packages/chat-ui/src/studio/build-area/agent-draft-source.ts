@@ -84,8 +84,8 @@ export async function decideDraft(input: {
 }
 
 /**
- * The one shared draft of an agent, or of a skill the instance or a Shared Workspace owns
- * (SKILL-DRAFT-1), as a page reads it. A skill's names the skill in `agent` and comes with the
+ * The one shared draft of an agent, or a skill's from before skills went live on save
+ * (SKILL-LIVE-1), as a page reads it. A skill's names the skill in `agent` and comes with the
  * files of its folder.
  */
 export type SharedDraft = AgentDraft & { files?: readonly DraftFile[] };
@@ -136,7 +136,7 @@ export interface AgentDraftSource {
 
 /**
  * The one draft of the agent on the page (AD-4), or of the skill a team or the instance owns
- * (SKILL-DRAFT-1). Only a holder of the write right reads it; the page of anybody else shows
+ * (SKILL-LIVE-1). Only a holder of the write right reads it; the page of anybody else shows
  * the live asset. The draft is read again with every read of the assets, which the dock drops
  * whenever its agent saves, so a draft the agent writes shows.
  */
@@ -285,7 +285,7 @@ export function useAgentDraft(input: {
 }
 
 /**
- * How a page follows the shared draft it holds (AD-4, SKILL-DRAFT-1): a newer draft somebody
+ * How a page follows the shared draft it holds (AD-4, SKILL-LIVE-1): a newer draft somebody
  * else wrote is taken over where nothing is typed, and said beside what is typed otherwise; a
  * draft published or discarded elsewhere reads the live asset again. The agent's page and the
  * skill's both follow theirs by it.

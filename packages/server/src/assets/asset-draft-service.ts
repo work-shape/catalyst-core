@@ -270,7 +270,7 @@ export class AssetDraftWorkflow {
       files: readonly { path: string; bytes: Uint8Array }[];
       extras: readonly string[];
       expectedRevision: number | null;
-      /** The draft revision the caller read, of a kind with one shared draft (SKILL-DRAFT-1). */
+      /** The draft revision the caller read, of a kind with one shared draft. */
       expectedDraftRevision?: number | null;
       /** What the event of a folder write names of its files. */
       auditFiles?: readonly { path: string; sha256: string; bytes: number }[];

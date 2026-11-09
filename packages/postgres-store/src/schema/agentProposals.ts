@@ -19,7 +19,7 @@ import type {
 import { configAssets } from "./configAssets";
 
 /**
- * One counter row per agent, or per skill with a shared draft (SKILL-DRAFT-1); a stored head is
+ * One counter row per agent, or per skill with a shared draft (SKILL-LIVE-1: none are new); a stored head is
  * pending. Source columns remain for rollback.
  */
 export const agentProposals = pgTable(
@@ -59,7 +59,7 @@ export const agentProposalRevisions = pgTable(
       .references(() => agentProposals.id, { onDelete: "cascade" }),
     revision: integer("revision").notNull(),
     config: jsonb("config").$type<JsonObject>().notNull(),
-    /** The file set of a skill draft's folder beside its config (SKILL-DRAFT-1). */
+    /** The file set of a skill draft's folder beside its config (from before SKILL-LIVE-1). */
     fileSetId: text("file_set_id").$type<FileSetId>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull()
   },

@@ -15,9 +15,9 @@ export const agentPreviewSchema = z.object({
   source: z.enum(AGENT_PREVIEW_SOURCES),
   config: agentConfigSchema,
   /**
-   * The shared drafts of the skills the agent lists that the person trying it may write
-   * (SKILL-DRAFT-1), frozen with it: Try reads each in place of its live revision. A skill
-   * without a draft, or one the person may not write, is read live.
+   * Skills frozen with the preview: such a turn reads each in place of its live revision. Turns
+   * since SKILL-LIVE-1 freeze none, because Try reads the live revision; a queued command of an
+   * earlier turn still reads what it froze.
    */
   skills: z
     .array(

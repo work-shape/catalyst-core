@@ -10,7 +10,7 @@ import type { AssetWorkflowOptions } from "../types";
 import { decide, type AssetCall } from "./asset-access";
 import { readRevisionFiles } from "./asset-files";
 import { requireActive, type AssetAddress, type AssetTarget } from "./asset-target";
-import { writesSharedDraft } from "./shared-drafts";
+import { skillLiveNeedsPublish } from "./shared-drafts";
 
 interface SkillDraftHost {
   target(address: AssetAddress): Promise<AssetTarget>;
@@ -23,9 +23,9 @@ interface SkillDraftHost {
 }
 
 /**
- * Reads and decisions of the one shared draft of a skill the instance or a Shared Workspace owns
- * (SKILL-DRAFT-1). It lives in the store of agents' drafts. Writes use the ordinary asset writer,
- * which sends a write of such a skill to its draft; a skill of a Personal Workspace has none.
+ * Reads and decisions of a shared draft a skill still holds from before skills went live on save
+ * (SKILL-LIVE-1). It lives in the store of agents' drafts. No write makes a new one: this is how
+ * the ones that are there are published or discarded, and nothing of them is lost.
  */
 export class SkillDraftWorkflow {
   constructor(
@@ -110,7 +110,7 @@ export class SkillDraftWorkflow {
       throw new AppError("FORBIDDEN", "A service principal cannot publish a skill");
     call.access.require("skill.publish", target.resource);
     const live = requireActive(target);
-    if (!(await writesSharedDraft(this.options, "skill", target.scope)))
+    if (!(await skillLiveNeedsPublish(this.options, target.scope)))
       throw new AppError(
         "VALIDATION_FAILED",
         "A skill of a personal workspace is live on save: it has no draft to publish",
