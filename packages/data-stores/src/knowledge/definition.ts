@@ -67,14 +67,14 @@ const backendSchema = z.strictObject({
 const KNOWLEDGE_SOURCES_MAX_COUNT = 20;
 /** How many folders one source's boundary names at most. */
 const KNOWLEDGE_SOURCE_FOLDERS_MAX_COUNT = 100;
-/** How many patterns one `include` or `exclude` holds at most, and how long one is. */
-const KNOWLEDGE_SOURCE_PATTERNS_MAX_COUNT = 50;
+/** How many patterns one `include` holds at most, how many one `exclude`, and how long one is. */
+const KNOWLEDGE_SOURCE_INCLUDE_MAX_COUNT = 50;
+const KNOWLEDGE_SOURCE_EXCLUDE_MAX_COUNT = 500;
 const KNOWLEDGE_SOURCE_PATTERN_MAX_CHARS = 500;
 
 const sourcePatternsSchema = z
   .array(z.string().trim().min(1).max(KNOWLEDGE_SOURCE_PATTERN_MAX_CHARS))
-  .min(1)
-  .max(KNOWLEDGE_SOURCE_PATTERNS_MAX_COUNT);
+  .min(1);
 
 /**
  * A synced source: documents the platform keeps current from a Connection whose type declares
@@ -101,9 +101,9 @@ const sourceSchema = z.strictObject({
       message: "A folder is named once"
     }),
   /** Patterns on the file name, such as `*.pdf`. Without it every file below the folders. */
-  include: sourcePatternsSchema.optional(),
+  include: sourcePatternsSchema.max(KNOWLEDGE_SOURCE_INCLUDE_MAX_COUNT).optional(),
   /** Patterns on the path below the boundary, such as `**\/Personal/**`. */
-  exclude: sourcePatternsSchema.optional()
+  exclude: sourcePatternsSchema.max(KNOWLEDGE_SOURCE_EXCLUDE_MAX_COUNT).optional()
 });
 
 const tableSchema = z.strictObject({

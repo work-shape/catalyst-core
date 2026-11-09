@@ -3,6 +3,7 @@ export {
   knowledgeProcessingOf,
   validateKnowledgeProcessingOutput
 } from "./knowledge/document-types";
+export { withinSource } from "./knowledge/source-boundary";
 export { createSourceWithdrawalApproval } from "./knowledge/source-withdrawal-approval";
 import type { KnowledgeSources } from "./knowledge/source-port";
 import { createKnowledgeSources } from "./knowledge/builtin/source-queries";
