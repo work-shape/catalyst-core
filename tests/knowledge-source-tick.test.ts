@@ -346,6 +346,42 @@ describe("the source tick keeps a source current (SRC-3, KB 79)", () => {
     expect((await passes(world, "changes")).map((run) => run.state)).toEqual(["done"]);
   });
 
+  it("ends a retry after a failed pass with leftovers, and the tick goes on and takes them", async () => {
+    const faults: Faults = {};
+    const world = await setup(faulty(faults));
+    const broken = world.world.put(file("broken.txt"));
+    await imported(world, "2025-01-06T08:00:00Z");
+    await world.sql`update catalyst_kb.source_items set state='failed',failure_code='knowledge_fetch_failed',document_id=null where item_id=${broken}`;
+    world.world.put(file("left.txt"));
+    faults.feedCalls = 1;
+    await tick(world, "2025-01-06T09:00:00Z");
+    faults.feedCalls = undefined;
+    expect(await itemStates(world)).toEqual([
+      { state: "discovered", n: 1 },
+      { state: "failed", n: 1 }
+    ]);
+
+    const retry = await world.instance.api.call("knowledge_bases.retry_documents", {
+      params: { knowledgeBase: "sync-test" },
+      payload: { source: SOURCE, all: true }
+    });
+    expect(retry.statusCode, retry.body).toBe(200);
+    expect(retry.json()).toMatchObject({ queued: 1 });
+    await runJobs(world);
+    expect((await passes(world, "full")).map((run) => run.state)).toEqual(["done"]);
+    expect(await itemStates(world)).toEqual([
+      { state: "discovered", n: 1 },
+      { state: "fetched", n: 1 }
+    ]);
+
+    await tick(world, addMinutes("2025-01-06T09:00:00Z", 15));
+    expect((await passes(world, "changes")).map((run) => run.state)).toEqual(["failed", "done"]);
+    expect(await itemStates(world)).toEqual([{ state: "fetched", n: 2 }]);
+    // The retry was no pass over the source, so the night's full pass still comes.
+    await tick(world, "2025-01-07T02:00:00Z");
+    expect((await passes(world, "full")).length).toBe(2);
+  });
+
   it("writes the failure of an outage's polls once, and again for the next outage", async () => {
     const faults: Faults = {};
     const world = await setup(faulty(faults));
@@ -463,6 +499,46 @@ describe("a first import that waits for its confirmation (SRC-3, KB-ISO-1b)", ()
     await runJobs(world);
     expect(await lastRun(world)).toMatchObject({ mode: "initial", state: "done" });
     expect(await itemStates(world)).toEqual([{ state: "fetched", n: 3 }]);
+  });
+
+  it("keeps its stop when a retry ends after it failed", async () => {
+    const faults: Faults = { refused: true };
+    const world = await setup(faulty(faults));
+    const broken = world.world.put(file("one.txt"));
+    for (const name of ["two.txt", "three.txt"]) world.world.put(file(name));
+    clock = new Date("2025-01-06T08:00:00Z");
+    await world.sync();
+    await runJobs(world);
+    expect(await lastRun(world)).toMatchObject({ mode: "initial", state: "failed" });
+    faults.refused = false;
+    await world.sql`update catalyst_kb.source_items set state='failed',failure_code='knowledge_fetch_failed' where item_id=${broken}`;
+
+    const retry = await world.instance.api.call("knowledge_bases.retry_documents", {
+      params: { knowledgeBase: "sync-test" },
+      payload: { source: SOURCE, all: true }
+    });
+    expect(retry.statusCode, retry.body).toBe(200);
+    await runJobs(world);
+    expect((await passes(world, "full")).map((run) => run.state)).toEqual(["done"]);
+    const held = [
+      { state: "discovered", n: 2 },
+      { state: "fetched", n: 1 }
+    ];
+    expect(await itemStates(world)).toEqual(held);
+
+    // The retry imported nothing else, so the tick leaves the source for a person's sync.
+    const runs = await runCount(world);
+    await tick(world, "2025-01-06T09:00:00Z");
+    await tick(world, "2025-01-07T02:00:00Z");
+    expect(await runCount(world)).toBe(runs);
+    expect(await itemStates(world)).toEqual(held);
+
+    await world.sync("changes");
+    await runJobs(world);
+    const stopped = await world.sql<{ mode: string; state: string; cursor_after: string }[]>`
+      select mode,state,cursor_after from catalyst_kb.sync_runs where state='running'`;
+    expect(stopped).toMatchObject([{ mode: "initial", state: "running" }]);
+    expect(JSON.parse(required(stopped[0]).cursor_after).stop.confirmed).toBeUndefined();
   });
 
   it("is not pushed past its stop", async () => {

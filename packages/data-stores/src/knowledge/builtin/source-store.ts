@@ -44,6 +44,12 @@ const progressSchema = z.object({
   stop: firstPassStopSchema.optional()
 });
 export type SourceProgress = z.infer<typeof progressSchema>;
+/**
+ * A retry of failed items: a `full` run that lists nothing, so its progress names no `listing`.
+ * It is no pass over the source: what it ends says nothing of an import or of a nightly full.
+ */
+export const RETRY_RUN_SQL =
+  "(sync_runs.mode='full' and sync_runs.cursor_after::jsonb->'listing' is null)";
 const runSchema = z.object({
   mode: knowledgeSyncResultSchema.shape.mode,
   state: z.string(),
@@ -126,7 +132,7 @@ export function createSourceStore(
           .array(z.object({ id: z.string(), operation_run_id: z.string(), created: z.boolean() }))
           .parse(
             await sql.run(
-              "insert into catalyst_kb.sync_runs (id,source_id,mode,operation_run_id,cursor_before,definition_key) values ($1::text,$2::text,case when $3::text='changes' and not exists(select 1 from catalyst_kb.sync_runs where source_id=$2::text and state='done') then 'initial' else $3::text end,$4::text,(select cursor from catalyst_kb.source_cursors where source_id=$2::text and definition_key=$5::text),$5::text) on conflict (source_id) where state='running' do update set source_id=sync_runs.source_id returning id,operation_run_id,(xmax=0) as created",
+              `insert into catalyst_kb.sync_runs (id,source_id,mode,operation_run_id,cursor_before,definition_key) values ($1::text,$2::text,case when $3::text='changes' and not exists(select 1 from catalyst_kb.sync_runs where source_id=$2::text and state='done' and not ${RETRY_RUN_SQL}) then 'initial' else $3::text end,$4::text,(select cursor from catalyst_kb.source_cursors where source_id=$2::text and definition_key=$5::text),$5::text) on conflict (source_id) where state='running' do update set source_id=sync_runs.source_id returning id,operation_run_id,(xmax=0) as created`,
               [payload.syncRunId, payload.sourceId, mode, payload.operationRunId, definitionKey]
             )
           );
@@ -755,8 +761,9 @@ export function createSourceStore(
     async finish(payload: KnowledgeSyncJobPayload, failureCode?: string, outcome?: "superseded") {
       return change(async (sql) => {
         await refreshSourceFreshness(sql, payload.sourceId, false);
+        // A retry waits for the items it queued. What a failed pass left is for the next pass.
         const finished = await sql.run(
-          `update catalyst_kb.sync_runs set state=$2::text,failure_code=$3::text,ended_at=now() where id=$1::text and state='running' and ($2::text='superseded' or $3::text is not null or (cursor_after::jsonb->>'complete'='true' and (cursor_after::jsonb->>'listing' is distinct from 'true' or cursor_after::jsonb->>'reconciled'='true') and not exists (select 1 from catalyst_kb.source_items where source_id=$4::text and state='discovered'))) returning id`,
+          `update catalyst_kb.sync_runs set state=$2::text,failure_code=$3::text,ended_at=now() where id=$1::text and state='running' and ($2::text='superseded' or $3::text is not null or (cursor_after::jsonb->>'complete'='true' and (cursor_after::jsonb->>'listing' is distinct from 'true' or cursor_after::jsonb->>'reconciled'='true') and not exists (select 1 from catalyst_kb.source_items where source_id=$4::text and state='discovered' and (not ${RETRY_RUN_SQL} or enqueued_run_id=$1::text)))) returning id`,
           [
             payload.syncRunId,
             outcome ?? (failureCode ? "failed" : "done"),
