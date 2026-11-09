@@ -135,7 +135,7 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
       }
 
       // The snapshot carries no skill's resources: the skill read is read whole. A Try turn reads
-      // the skill's draft it froze in place of its live revision (SKILL-DRAFT-1).
+      // a skill it froze, from before SKILL-LIVE-1, in place of its live revision.
       const skill = assets.skills.some((candidate) => candidate.name === input.name)
         ? (previewSkill(context.agentPreview, input.name) ??
           (await options.assetSource.getSkill(input.name)))

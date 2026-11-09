@@ -127,7 +127,7 @@ export class TurnLoop {
     input: StartAgentRunInput,
     context: RuntimeCallContext
   ): Promise<RunSetup> {
-    // A Try turn tells the agent of the skill drafts it froze, as it reads them (SKILL-DRAFT-1).
+    // A Try turn from before SKILL-LIVE-1 froze skill drafts, and tells the agent of them.
     const assets = withPreviewSkills(await this.options.assetSource.getSnapshot(), input.preview);
     const listed: AgentConfig = input.workflowAgent
       ? {

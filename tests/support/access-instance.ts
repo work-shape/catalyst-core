@@ -1,7 +1,11 @@
 import { expect } from "vitest";
 import { z } from "zod";
 import type { AuthAdapter } from "@work-shape/catalyst-auth";
-import type { ShippedSkillReference, WorkflowAssetKind } from "@work-shape/catalyst-server";
+import {
+  createSkillChangeApprovalHandler,
+  type ShippedSkillReference,
+  type WorkflowAssetKind
+} from "@work-shape/catalyst-server";
 import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   LEGACY_LIST_GRANTOR,
@@ -386,8 +390,29 @@ export async function setupAccessInstance(
     (stores) => ({
       config,
       ...(operations ? { operations } : {}),
-      // A call the policy holds is filed and decided as on an assembled instance.
-      approvalRequests: { store: stores.approvals, handlers: new Map() },
+      // A call the policy holds, or a skill write without publish, is filed and decided as on an
+      // assembled instance.
+      approvalRequests: {
+        store: stores.approvals,
+        handlers: new Map(
+          [
+            createSkillChangeApprovalHandler({
+              config,
+              clientInstanceId,
+              stores,
+              configAssets: {
+                store: stores.configAssets,
+                validationRefs,
+                source: createStoredConfigAssetSource({
+                  store: stores.configAssets,
+                  clientInstanceId
+                }),
+                kinds: kinds ?? createTestAssetKinds({ config, validationRefs })
+              }
+            })
+          ].map((handler) => [handler.kind, handler])
+        )
+      },
       authAdapter: recordAuthAdapter(),
       auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: stores.audit }),
       configAssets: {

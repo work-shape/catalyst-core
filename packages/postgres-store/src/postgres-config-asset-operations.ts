@@ -366,7 +366,7 @@ async function applyConfigAssetMutations(
           continue;
         }
         appendRevision(key, asset, { operation: "delete", config: null, ...kept(key) }, "deleted");
-        // An agent's draft, or a shared skill's, goes with the asset (SKILL-DRAFT-1).
+        // An agent's draft, or a skill's from before SKILL-LIVE-1, goes with the asset.
         if (asset.kind === "agent" || asset.kind === "skill") draftsDeleted.push(asset.id);
         asset.deleted = true;
         asset.created = false;

@@ -259,7 +259,10 @@ describe("config CLI command flows", () => {
         name: "local"
       })
     ).toMatchObject({ revision: 1 });
-    expect(await runConfigCommand("push", { ...options, only: ["skill:local"] })).toBe(0);
+    // The key publishes no skill: the push files the change and says so.
+    output.length = 0;
+    expect(await runConfigCommand("push", { ...options, only: ["skill:local"] })).toBe(3);
+    expect(output.join("")).toContain("skill:local: not live. Filed for approval");
     expect(
       await fixture.store.configAssets.getConfigAsset({
         clientInstanceId: fixture.clientInstanceId,
@@ -271,17 +274,20 @@ describe("config CLI command flows", () => {
     const after = (await readStateFile(resolve(directory, STATE_FILENAME))).instances.local;
     expect(after?.assets?.["skill:both"]).toMatchObject({ revision: 2 });
     expect(after?.assets?.["skill:remote"]).toEqual(before?.assets?.["skill:remote"]);
-    // The skill is the instance's: the push wrote its draft, and the live revision stays.
-    expect(after?.assets?.["skill:local"]).toMatchObject({
-      revision: 1,
-      draftRevision: 1,
-      draftPushed: true
-    });
+    // The working copy keeps the change as not yet written, and the live revision stays.
+    expect(after?.assets?.["skill:local"]).toEqual(before?.assets?.["skill:local"]);
     expect(after?.defaultAgentName).toBe(before?.defaultAgentName);
+    // A push again changes nothing further: it names the same request.
     output.length = 0;
-    expect(await runConfigCommand("push", options)).toBe(0);
-    expect(output.join("")).toContain("No local changes to push");
-    expect(output.join("")).toContain("Unchanged: 3");
+    expect(await runConfigCommand("push", options)).toBe(3);
+    expect(output.join("")).toContain("skill:local: not live. Filed for approval");
+    expect(
+      await fixture.store.approvals.countApprovalRequests({
+        clientInstanceId: fixture.clientInstanceId,
+        kinds: ["skill_change"],
+        status: "pending"
+      })
+    ).toBe(1);
   });
 
   it("baselines the serialized content so pull normalization and YAML formatting are not local edits", async () => {
@@ -371,7 +377,7 @@ describe("config CLI command flows", () => {
       serializeSkillMarkdown(skillConfig("review", "Local")),
       "utf8"
     );
-    expect(await runConfigCommand("push", options)).toBe(0);
+    expect(await runConfigCommand("push", options)).toBe(3);
     expect(
       await fixture.store.configAssets.getConfigAssetState({
         clientInstanceId: fixture.clientInstanceId

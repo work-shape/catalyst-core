@@ -18,7 +18,8 @@ export interface AgentDraftAuthor {
 
 /**
  * One pending shared draft: an agent's, or a skill's that the instance or a Shared Workspace
- * owns (SKILL-DRAFT-1). `agentId` names the config asset of either kind. Its revisions never
+ * owned before skills went live on save (SKILL-LIVE-1). `agentId` names the config asset of
+ * either kind. Its revisions never
  * enter live history or repeat a number.
  */
 export interface AgentProposal {

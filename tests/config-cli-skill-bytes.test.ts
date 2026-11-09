@@ -58,11 +58,9 @@ describe("CLI skill folder bytes", () => {
     expect(await f.run(source, "push", { only: ["skill:form"] })).toMatchObject({ code: 0 });
     expect(f.calls.filter((call) => call.operation === "assets.put")).toHaveLength(1);
     expect(f.calls.filter((call) => call.operation === "assets.sync")).toHaveLength(0);
-    // The workspace's skill was pushed as its draft (SKILL-DRAFT-1): diff compares with live.
     await rm(join(source, "skills/form/assets/logo.png"));
     const diffed = await f.run(source, "diff");
-    expect(diffed).toMatchObject({ code: 1, out: expect.stringContaining("binary, 6 B → 0 B") });
-    expect(diffed.out).toContain("skill:form: pending draft revision 1");
+    expect(diffed).toMatchObject({ code: 1, out: expect.stringContaining("binary, 3 B → 0 B") });
   });
 
   it("batches resource-only edits and shows UTF-8 script diffs", async () => {
@@ -92,14 +90,13 @@ describe("CLI skill folder bytes", () => {
     const mine = Buffer.from([0, 8]);
     await writeFile(join(target, "skills/form/assets/logo.png"), mine);
     f.calls.length = 0;
-    // The other push wrote the shared skill's draft, which this working copy has not seen: the
-    // instance refuses the folder and names who wrote it (SKILL-DRAFT-1).
+    // The other push wrote a live revision, which this working copy has not seen: the instance
+    // refuses the folder.
     const refused = await f.run(target, "push");
     expect(refused).toMatchObject({
       code: 1,
       err: expect.stringContaining("catalyst config pull --only skill:form")
     });
-    expect(refused.err).toContain("its draft changed since the last pull: draft revision 1");
     expect(await readFile(join(target, "skills/form/assets/logo.png"))).toEqual(mine);
   });
 

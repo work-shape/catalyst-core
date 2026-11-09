@@ -44,8 +44,8 @@ export const skillKind: BuildAssetKind = {
 
 /**
  * The skill form on the asset page. A copy starts from the shipped skill it copies. A skill a
- * team or the instance owns has one shared draft (SKILL-DRAFT-1): the page of a holder of its
- * write right starts from it, with its folder, and saves write it.
+ * team or the instance owns can still hold a draft from before skills went live on save
+ * (SKILL-LIVE-1): the page of a holder of its write right shows it until it is decided.
  */
 function SkillAssetEditor(frame: BuildAssetEditorProps) {
   const { config } = useSettingsPage();

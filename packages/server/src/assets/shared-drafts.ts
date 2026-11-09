@@ -3,35 +3,33 @@ import type { AssetWorkflowOptions } from "../types";
 
 /**
  * Whether a write of an asset that is there goes to its one shared draft, which a publish makes
- * live. Every agent has one. A skill has one where the instance or a Shared Workspace owns it
- * ("Alle", "Team"): an edit there would otherwise change every agent that uses it at once
- * (SKILL-DRAFT-1). A skill of a Personal Workspace ("Nur ich") is used by its owner alone and
- * stays live on save.
+ * live. Every agent has one. A skill has none: a save is live, or files a request where its
+ * writer may not make it live (SKILL-LIVE-1).
  */
-export async function writesSharedDraft(
-  options: Pick<AssetWorkflowOptions, "clientInstanceId" | "stores">,
-  kind: string,
-  scope: AssetScope
-): Promise<boolean> {
-  if (kind === "agent") return true;
-  if (kind !== "skill") return false;
-  return !(await isPersonalScope(options, scope));
+export function writesSharedDraft(kind: string): boolean {
+  return kind === "agent";
 }
 
-/** Whether a kind has a shared draft for any of its assets. */
+/**
+ * Whether a kind may hold a shared draft for one of its assets. A skill's can be there from
+ * before SKILL-LIVE-1: it is still read, published and discarded, and no new one is written.
+ */
 export function hasSharedDrafts(kind: string): boolean {
   return kind === "agent" || kind === "skill";
 }
 
-/** Whether the owner is a Personal Workspace. A workspace that is not found is none. */
-async function isPersonalScope(
+/**
+ * Whether going live takes `skill.publish`: everywhere but in a Personal Workspace ("Nur ich"),
+ * whose skill its owner alone uses. A workspace that is not found is none.
+ */
+export async function skillLiveNeedsPublish(
   options: Pick<AssetWorkflowOptions, "clientInstanceId" | "stores">,
   scope: AssetScope
 ): Promise<boolean> {
-  if (scope.kind !== "workspace") return false;
+  if (scope.kind !== "workspace") return true;
   const workspace = await options.stores.workspaces.getWorkspace(
     options.clientInstanceId,
     scope.workspaceId
   );
-  return workspace?.personalUserId != null;
+  return workspace?.personalUserId == null;
 }

@@ -29,9 +29,8 @@ test.use({
 
 // A skill brought into Studio whole: a .zip is imported from the Skills list, its files show on
 // the new skill's page with their sizes, and a folder replaces them with the files it adds,
-// changes and removes listed before the save. The skill is the instance's, so the replace writes
-// its one shared draft (SKILL-DRAFT-1), which Publish makes live. A member who may not write
-// skills is offered neither.
+// changes and removes listed before the save. The replace writes one live revision (SKILL-LIVE-1).
+// A member who may not write skills is offered neither.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
@@ -174,22 +173,8 @@ test("a skill is imported from a .zip, and its files are replaced from a folder"
     expect((await replaced).ok()).toBe(true);
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.locator('[data-skill-file="references/r.md"]')).toHaveCount(0);
-    await expect(page.locator('[data-asset-status="draft"]')).toHaveAttribute(
-      "data-draft-revision",
-      "1"
-    );
-    // The live skill keeps the imported files until the draft is published.
-    expect(
-      folderSchema.parse(await (await page.request.get(`${skillPath}?files=true`)).json()).revision
-    ).toBe(1);
-    await page.locator("[data-skill-publish]").click();
-    const published = page.waitForResponse(
-      (response) =>
-        response.request().method() === "POST" && response.url() === `${skillPath}/publish`
-    );
-    await page.getByRole("dialog").getByRole("button", { name: "Publish", exact: true }).click();
-    expect((await published).ok()).toBe(true);
     await expect(page.locator('[data-asset-status="draft"]')).toHaveCount(0);
+    await expect(page.locator("[data-skill-publish]")).toHaveCount(0);
 
     const second = folderSchema.parse(
       await (await page.request.get(`${skillPath}?files=true`)).json()

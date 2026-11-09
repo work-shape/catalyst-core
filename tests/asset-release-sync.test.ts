@@ -1,7 +1,9 @@
-import { publishAgentDraft, publishSkillDraft } from "./support/agent-draft-publication";
+import { publishAgentDraft } from "./support/agent-draft-publication";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import {
   SCOPES_HEADER,
+  type AccessInstance,
   agent,
   clientInstanceId,
   errorSchema,
@@ -35,6 +37,19 @@ const NEEDS_WORKSPACE = {
   message:
     "A batch names the workspace it belongs to. Only a release writes the instance's own assets"
 };
+
+/** The instance admin approves the request a release filed for its changed skill. */
+async function approveReleasedSkill(t: AccessInstance, pushed: { json(): unknown }) {
+  const { items } = z
+    .object({ items: z.array(z.object({ approvalRequestId: z.string().optional() }).loose()) })
+    .parse(pushed.json());
+  const requestId = items.flatMap((item) => item.approvalRequestId ?? [])[0];
+  if (!requestId) throw new Error("The release filed no request");
+  await t.expectOk(t.admin.id, "approval_requests.decide", {
+    params: { requestId },
+    payload: { decision: "approve" }
+  });
+}
 
 describe("a release through assets.sync", () => {
   it("drafts a release update and publishes it under release field rules, while the service cannot publish (AD-1 64)", async () => {
@@ -163,15 +178,20 @@ describe("a release through assets.sync", () => {
       version: before + 1,
       items: [
         { name: "rel-intake", status: "applied", revision: 1 },
-        // The instance's skill is written as its draft, which a person publishes (SKILL-DRAFT-1).
-        { name: "rel-guide", status: "applied", revision: 1, draftRevision: 1 },
+        // A release key publishes no skill: the change waits for a decision (SKILL-LIVE-1).
+        {
+          name: "rel-guide",
+          status: "applied",
+          revision: 1,
+          approvalRequestId: expect.any(String)
+        },
         { name: "rel-old", status: "applied", revision: 2 }
       ]
     });
     expect(await t.version()).toBe(before + 1);
     expect(await t.stored("agent", "rel-intake")).toMatchObject({ status: "active", revision: 1 });
     expect(await t.stored("skill", "rel-guide")).toMatchObject({ revision: 1 });
-    await publishSkillDraft(t, "rel-guide");
+    await approveReleasedSkill(t, pushed);
     expect(await t.stored("skill", "rel-guide")).toMatchObject({
       revision: 2,
       config: { content: "The new guidance." }
@@ -283,8 +303,8 @@ describe("a release through assets.sync", () => {
 
     const pushed = await syncAsService(t, release);
     expect(pushed.statusCode, pushed.body).toBe(200);
-    // A person publishes the release's draft of the skill where the interface is off.
-    await publishSkillDraft(t, "rel-guide");
+    // A person decides the release's change of the skill where the interface is off.
+    await approveReleasedSkill(t, pushed);
     expect(await t.stored("skill", "rel-guide")).toMatchObject({
       revision: 2,
       config: { content: "Pushed." }
@@ -530,18 +550,18 @@ describe("what a release is checked against", () => {
     };
     const refused = await syncAsService(t, [
       deleteAgent("rel-ghost"),
-      putSkill("rel-guide", "Pushed.", 1)
+      putAgent("rel-beside", {}, null)
     ]);
     store.applyConfigAssetMutations = apply;
 
     expect(refused.statusCode, refused.body).toBe(412);
     expect(refusedItems(refused).items).toEqual([
       expect.objectContaining({ name: "rel-ghost", status: "refused", code: "REVISION_CONFLICT" }),
-      { name: "rel-guide", status: "not_applied" }
+      { name: "rel-beside", status: "not_applied" }
     ]);
     // The created asset stands, and nothing of the batch was written.
     expect(await t.stored("agent", "rel-ghost")).toMatchObject({ status: "active", revision: 1 });
-    expect(await t.stored("skill", "rel-guide")).toMatchObject({ revision: 1 });
+    expect(await t.stored("agent", "rel-beside")).toBeUndefined();
   });
 });
 

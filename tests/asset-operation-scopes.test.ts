@@ -11,7 +11,6 @@ import {
   type AccessInstance
 } from "./support/access-instance";
 import { setupWorkspaceHolder as setup } from "./support/asset-operations";
-import { required } from "./support/assertions";
 import { withTestSql } from "./support/test-sql";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
@@ -152,20 +151,13 @@ describe("the scope of an asset call", () => {
       }
     });
     expect(batch.statusCode).toBe(422);
-    // The administrator's write of the team's skill is its draft (SKILL-DRAFT-1): live stays.
+    // The administrator's write of the team's skill is live (SKILL-LIVE-1).
     expect(await t.stored("skill", "kai-team-notes")).toMatchObject({
       status: "active",
-      revision: 1,
+      revision: 2,
+      config: { content: "Overwritten." },
       scope: { kind: "workspace", workspaceId }
     });
-    expect(
-      (
-        await t.stores.agentProposals.get({
-          clientInstanceId,
-          agentId: required(await t.stored("skill", "kai-team-notes")).id
-        })
-      )?.config
-    ).toMatchObject({ content: "Overwritten." });
   });
 
   it("removes what a workspace owns with the workspace, and refuses a delete that would orphan it", async () => {

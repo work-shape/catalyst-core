@@ -902,13 +902,16 @@ describe("custom roles", () => {
         const edited = await edit(holder.id, kind, name, change);
         expect(edited.statusCode, edited.body).toBe(200);
         const written = revisionSchema.parse(edited.json());
-        const published = await publish(
-          holder.id,
-          kind,
-          name,
-          written.draftRevision ?? written.revision
-        );
-        expect(published.statusCode, published.body).toBe(200);
+        // An agent's edit is its draft; a skill's is live for who may publish it (SKILL-LIVE-1).
+        if (kind === "agent") {
+          const published = await publish(
+            holder.id,
+            kind,
+            name,
+            written.draftRevision ?? written.revision
+          );
+          expect(published.statusCode, published.body).toBe(200);
+        }
         const { config } = await live(kind, name);
         expect(kind === "agent" ? config?.instructions : config?.content).toBe(change);
       }

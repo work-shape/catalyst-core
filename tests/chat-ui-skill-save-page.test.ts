@@ -22,10 +22,9 @@ import {
 import { instanceActions, platformContext } from "./chat-ui-build-fixtures";
 import { TranslationProvider } from "./chat-ui-render-harness";
 
-// SKILL-DRAFT-1: a skill the instance or a Shared Workspace owns has one shared draft, as an
-// agent has. Its page saves the draft, fenced by the draft revision it holds, names it in the
-// head and offers Publish to a holder of `skill.publish`. A skill of the reader's Personal
-// Workspace is live on save: its page has no draft.
+// SKILL-LIVE-1: the page of a skill saves a new live revision, with no draft and no Publish. A
+// reader who holds `skill.write` alone submits the change for approval, and the form goes back to
+// what is live. A draft from before stands read-only until it is published or discarded.
 
 const LIVE_REVISION = 2;
 const live = {
@@ -43,9 +42,9 @@ function editableSkillKind() {
   return entry;
 }
 
-/** The instance the page writes to: the live skill stays, the draft moves under its fence. */
-function instance() {
-  const state: { draft: AgentDraft | null; next: number } = { draft: null, next: 1 };
+/** The instance the page writes to: a write is live, or filed where `files` says so. */
+function instance(options: { files?: boolean; draft?: AgentDraft } = {}) {
+  const state: { draft: AgentDraft | null } = { draft: options.draft ?? null };
   const puts: { expectedRevision: number | null; expectedDraftRevision?: number | null }[] = [];
   return {
     state,
@@ -59,21 +58,23 @@ function instance() {
         expectedRevision: input.expectedRevision,
         expectedDraftRevision: input.expectedDraftRevision
       });
-      if (input.expectedDraftRevision === undefined) return { revision: LIVE_REVISION + 1 };
-      state.draft = {
-        agent: "form-filler",
-        revision: state.next++,
-        baseRevision: LIVE_REVISION,
-        liveRevision: LIVE_REVISION,
-        stale: false,
-        config: input.config ?? {},
-        author: { userId: "user_me", name: "Me", release: false },
-        updatedAt: "2026-10-28T09:30:00.000Z"
-      };
-      return { revision: LIVE_REVISION, draftRevision: state.draft.revision };
+      return options.files
+        ? { revision: LIVE_REVISION, approvalRequestId: "apr_filed" }
+        : { revision: LIVE_REVISION + 1 };
     }
   };
 }
+
+const oldDraft: AgentDraft = {
+  agent: "form-filler",
+  revision: 4,
+  baseRevision: LIVE_REVISION,
+  liveRevision: LIVE_REVISION,
+  stale: false,
+  config: { ...live, summary: "An old draft's summary." },
+  author: { userId: "user_me", name: "Me", release: false },
+  updatedAt: "2026-10-28T09:30:00.000Z"
+};
 
 type Instance = ReturnType<typeof instance>;
 
@@ -88,10 +89,7 @@ function DraftedSkill({ frame, world }: { frame: BuildAssetEditorProps; world: I
     latest,
     reread: async () => setLatest(world.state.draft),
     saved: () => {
-      const saved = world.state.draft;
-      if (saved === null) throw new Error("The save wrote no draft.");
-      setLatest(saved);
-      return saved;
+      throw new Error("A skill's save writes no draft.");
     },
     decide: async () => undefined,
     busy: undefined,
@@ -236,47 +234,66 @@ function button(text: string): HTMLButtonElement {
   return found;
 }
 
-const badge = () => {
-  const status = host.querySelector('[data-asset-status="draft"]');
-  return status === null ? "" : `Draft version ${status.getAttribute("data-draft-revision") ?? ""}`;
-};
 const publish = () => host.querySelector<HTMLButtonElement>("[data-skill-publish]");
+const noDraft = () => {
+  expect(publish()).toBeNull();
+  expect(host.querySelector('[data-asset-status="draft"]')).toBeNull();
+};
+const summary = () =>
+  [...host.querySelectorAll("input")].find(
+    (candidate) => candidate.getAttribute("maxlength") !== null
+  )?.value;
 
 describe("the page of a skill a team or the instance owns", () => {
-  it("saves its shared draft, fenced by the draft revision it holds, and names it", async () => {
+  it("saves a live revision for a holder of the publish right, with no draft to name", async () => {
     const world = instance();
-    mount(world);
+    mount(world, { kind: "instance" }, ["write", "publish"]);
     await settle();
     expect(seen.shared).toBe(true);
-    expect(host.querySelector('[data-asset-status="draft"]')).toBeNull();
+    noDraft();
 
     typeSummary("Fills a customer form.");
-    await act(async () => button("Save draft").click());
+    await act(async () => button("Save").click());
     await settle();
-    expect(world.puts).toEqual([{ expectedRevision: LIVE_REVISION, expectedDraftRevision: null }]);
-    expect(badge()).toBe("Draft version 1");
-    // The head state's popover names the draft, who saved it and when.
-    const status = host.querySelector<HTMLButtonElement>('button[data-asset-status="draft"]');
-    await act(async () => status?.click());
-    expect(document.querySelector("[data-asset-status-sentence]")?.textContent).toContain(
-      "Draft version 1 by Me, "
-    );
-    await act(async () => status?.click());
-
-    typeSummary("Fills a customer form from a case.");
-    await act(async () => button("Save draft").click());
-    await settle();
-    expect(world.puts[1]).toEqual({ expectedRevision: LIVE_REVISION, expectedDraftRevision: 1 });
-    expect(badge()).toBe("Draft version 2");
+    expect(world.puts).toEqual([
+      { expectedRevision: LIVE_REVISION, expectedDraftRevision: undefined }
+    ]);
+    noDraft();
+    expect(host.querySelector("[data-skill-filed]")).toBeNull();
   });
 
-  it("offers Publish to a holder of the publish right on the skill alone", async () => {
-    const world = instance();
-    await world.put({ config: live, expectedRevision: LIVE_REVISION, expectedDraftRevision: null });
+  it("submits the change for approval without the publish right, and shows what is live", async () => {
+    const world = instance({ files: true });
     mount(world);
     await settle();
+    noDraft();
+
+    typeSummary("Fills a customer form.");
+    await act(async () => button("Submit for approval").click());
+    await settle();
+    expect(world.puts).toEqual([
+      { expectedRevision: LIVE_REVISION, expectedDraftRevision: undefined }
+    ]);
+    const filed = host.querySelector("[data-skill-filed]");
+    expect(filed?.textContent).toContain("Submitted for approval.");
+    expect(filed?.querySelector("a")?.getAttribute("href")).toContain("apr_filed");
+    expect(summary()).toBe("");
+    noDraft();
+  });
+
+  it("shows a draft from before read-only, offering its Publish to a holder of the right", async () => {
+    const world = instance({ draft: oldDraft });
+    mount(world);
+    await settle();
+    expect(host.querySelector("[data-skill-old-draft]")?.textContent).toContain(
+      "from before skills went live on save"
+    );
+    expect(summary()).toBe(oldDraft.config.summary);
     expect(publish()?.disabled).toBe(true);
     expect(publish()?.title).toBe("Publishing needs the right “Publish skills”.");
+    expect(
+      [...host.querySelectorAll("button")].map((found) => found.textContent?.trim())
+    ).not.toContain("Submit for approval");
     act(() => root.unmount());
     root = createRoot(host);
     mount(world, { kind: "instance" }, ["write", "publish"]);
@@ -292,12 +309,11 @@ describe("the page of a skill of the reader's Personal Workspace", () => {
     await settle();
     expect(seen.shared).toBe(false);
     typeSummary("Fills a customer form.");
-    await act(async () => button("Save changes").click());
+    await act(async () => button("Save").click());
     await settle();
     expect(world.puts).toEqual([
       { expectedRevision: LIVE_REVISION, expectedDraftRevision: undefined }
     ]);
-    expect(publish()).toBeNull();
-    expect(host.querySelector('[data-asset-status="draft"]')).toBeNull();
+    noDraft();
   });
 });

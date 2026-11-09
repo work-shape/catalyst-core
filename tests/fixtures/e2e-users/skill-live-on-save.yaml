@@ -1,0 +1,10 @@
+# The person the skill save spec gives `skill.read` and `skill.write` on one skill, and no publish
+# right. No other spec uses this person.
+- email: e2e-skill-writer@example.test
+  displayLabel: E2E Zz Skill Writer
+  passwordEnvName: E2E_SKILL_WRITER_PASSWORD
+  developmentPassword: e2e-skill-writer-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

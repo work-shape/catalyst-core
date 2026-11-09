@@ -34,6 +34,7 @@ export function BuildHistory({
   open,
   title,
   heldRevision,
+  restoresAtOnce = false,
   load,
   onRestore,
   onClose
@@ -46,6 +47,8 @@ export function BuildHistory({
    * here: the page loads the newer version first.
    */
   heldRevision: number;
+  /** A restore needs no question: a further restore brings back what it replaced. */
+  restoresAtOnce?: boolean;
   /** One page of the history, the newest first. `cursor` continues after an earlier page. */
   load(cursor: string | undefined): Promise<BuildRevisionPage>;
   /** Absent for a reader who may not change the asset. */
@@ -186,7 +189,11 @@ export function BuildHistory({
                         variant="ghost"
                         size="sm"
                         aria-label={t("build.restoreRevision", { number: revision.revision })}
-                        onClick={() => setAsked(revision.revision)}
+                        disabled={restoring}
+                        onClick={() => {
+                          if (restoresAtOnce) restore(revision.revision).catch(() => undefined);
+                          else setAsked(revision.revision);
+                        }}
                       >
                         {t("configRestore")}
                       </Button>
