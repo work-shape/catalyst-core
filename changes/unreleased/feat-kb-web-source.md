@@ -10,7 +10,8 @@ section: Added
   robots.txt is honored, one request a second goes to a host unless the Connection's
   `requestsPerSecond` says otherwise, and a page or linked PDF, DOCX or TXT larger than the
   limits is left out. Pages are read again conditionally (ETag, Last-Modified, else a hash of
-  the text); a full pass runs weekly by default and the feed polls at most hourly. The
+  the text); by default the type polls hourly and passes in full each Monday at 03:00
+  (`documentSource.schedule`), and no source or release setting polls it more often than hourly. The
   operator opens public hosts with the egress policy's public HTTPS setting.
 - **Knowledge:** A search passage carries `modifiedAt`, the date of its document: for a web page
   the date the page states, else its Last-Modified or the day it was first read.
