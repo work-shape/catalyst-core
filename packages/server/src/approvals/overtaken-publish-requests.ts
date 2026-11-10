@@ -40,7 +40,10 @@ interface WentLive {
 
 export interface OvertakenPublishRequestsOptions {
   clientInstanceId: ClientInstanceId;
-  approvals: Pick<ApprovalRequestStore, "listApprovalRequests" | "transitionPendingApprovalRequest">;
+  approvals: Pick<
+    ApprovalRequestStore,
+    "listApprovalRequests" | "transitionPendingApprovalRequest"
+  >;
   now?: () => Date;
 }
 
@@ -175,9 +178,9 @@ function overtakenOutcome(
   reason: OvertakenReason
 ): ApprovalRequestOutcome {
   const runId = payloadSchema.pick({ runId: true }).safeParse(request.payload);
-  const name = z.object({ name: z.string() }).safeParse(
-    payloadSchema.pick({ subject: true }).safeParse(request.payload).data?.subject
-  );
+  const name = z
+    .object({ name: z.string() })
+    .safeParse(payloadSchema.pick({ subject: true }).safeParse(request.payload).data?.subject);
   return {
     status: "superseded",
     applyResult: {

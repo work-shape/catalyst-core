@@ -381,8 +381,11 @@ describe("publishing an agent a workspace owns (WS-PUB-1b)", () => {
     expect(await listed(t.lena.id, team)).toContain("lena-made");
     expect(await listed(t.lena.id, other)).not.toContain("lena-made");
 
-    // A second publish without a draft is no first one: there is nothing to publish.
-    expect((await publish(t.lena.id, "lena-made", 1)).statusCode).toBe(412);
+    // A second publish without a draft is no first one: there is nothing to publish, and the
+    // answer says so at once.
+    const again = await publish(t.lena.id, "lena-made", 1);
+    expect(again.statusCode).toBe(409);
+    expect(again.json()).toMatchObject({ error: { details: { reason: "already_live" } } });
   });
 
   it("keeps a creator who holds agent.approve offering the agent in the workspace at once", async () => {
@@ -550,6 +553,7 @@ describe("publishing an agent a workspace owns (WS-PUB-1b)", () => {
     const held = await publish(t.kai.id, "drafted", 1);
     expect(held.statusCode, held.body).toBe(202);
     await create(t.admin.id, "house-plain");
-    expect((await publish(t.admin.id, "house-plain", 1)).statusCode).toBe(412);
+    // An instance agent offers no first version: its live revision is already live.
+    expect((await publish(t.admin.id, "house-plain", 1)).statusCode).toBe(409);
   });
 });

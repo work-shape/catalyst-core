@@ -25,6 +25,7 @@ import {
 } from "../assets/asset-placement";
 import { publishPolicyFloor } from "../approvals/publish-approval";
 import { settleOvertakenAfterPublish } from "../approvals/overtaken-publish-requests";
+import { refuseAlreadyLive } from "../assets/already-live";
 import { AssetWorkflow } from "../assets/asset-service";
 import { adoptAssetRepositories } from "../assets/asset-repo-adoption";
 import { checkAssetMove, moveAsset, moveChanges } from "../assets/asset-move-operation";
@@ -221,6 +222,8 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   route.operation(apiOperations["assets.publish"], {
     authorize: async (input, { actor, access, origin }) => {
       const right = await together.authorize({ actor, access, origin }, input);
+      // A publish of what is live already answers so at once and waits for nobody.
+      if (right.allowed) await refuseAlreadyLive(options, input);
       if (right.allowed) await publishHandover.authorize({ actor, access, origin }, input);
       return right;
     },

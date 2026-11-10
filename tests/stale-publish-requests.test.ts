@@ -264,7 +264,9 @@ describe("requests a revision that went live overtook", () => {
     expect(await live("overtaken")).toMatchObject({ revision: 2 });
 
     const toDecide = listSchema.parse(
-      (await t.expectOk(t.kai.id, "approval_requests.list", { query: { status: "pending" } })).json()
+      (
+        await t.expectOk(t.kai.id, "approval_requests.list", { query: { status: "pending" } })
+      ).json()
     );
     expect(toDecide.items.map((item) => item.id)).not.toContain(first.approvalRequestId);
     expect(toDecide.items.map((item) => item.id)).not.toContain(second.approvalRequestId);
@@ -298,7 +300,10 @@ describe("requests a revision that went live overtook", () => {
   it("settles the approval filed after an Allow when another revision goes live", async () => {
     const { t, team, live, create, push, publishYes, decide, request, run } = await setup();
     await create(t.admin.id, "held-then-overtaken", team);
-    await push(t.kai.id, "held-then-overtaken", { instructions: "Kai.", toolNames: ["known.tool"] });
+    await push(t.kai.id, "held-then-overtaken", {
+      instructions: "Kai.",
+      toolNames: ["known.tool"]
+    });
     const waiting = waitingSchema.parse(
       (await publishYes(t.kai.id, "held-then-overtaken", 1)).json()
     );
@@ -345,5 +350,38 @@ describe("requests a revision that went live overtook", () => {
     expect(await request(t.kai.id, waiting.approvalRequestId)).toMatchObject({
       status: "pending"
     });
+  });
+});
+
+describe("a publish of what is live already", () => {
+  it("answers at once that nothing is to do, files no request, and still publishes a draft", async () => {
+    const { t, team, live, create, push, publishYes } = await setup();
+    await create(t.admin.id, "live-only", team);
+    const kinds = ["operation_call", "agent_publish"];
+    const before = await t.stores.approvals.countApprovalRequests({ clientInstanceId, kinds });
+    for (const response of [
+      await publishYes(t.kai.id, "live-only", 1),
+      await t.call(t.admin.id, "assets.publish", {
+        params: { kind: "agent", name: "live-only" },
+        payload: { revision: 1, workspaceId: team }
+      })
+    ]) {
+      expect(response.statusCode, response.body).toBe(409);
+      expect(response.json()).toMatchObject({
+        error: {
+          code: "CONFLICT",
+          message: expect.stringContaining("is already live") as unknown,
+          details: { reason: "already_live", liveRevision: 1 }
+        }
+      });
+    }
+    expect(await t.stores.approvals.countApprovalRequests({ clientInstanceId, kinds })).toBe(
+      before
+    );
+
+    // A draft beside it is no live revision: its publish waits as before.
+    await push(t.kai.id, "live-only", { instructions: "Draft.", toolNames: ["known.tool"] });
+    expect((await publishYes(t.kai.id, "live-only", 1)).statusCode).toBe(202);
+    expect(await live("live-only")).toMatchObject({ revision: 1 });
   });
 });

@@ -42,10 +42,7 @@ const outcomes: readonly OperationCallOutcome[] = [...APPROVAL_EXECUTIONS];
 /** The code of a publish request a revision that went live since overtook: it can do nothing. */
 const PUBLISH_OVERTAKEN = "PUBLISH_OVERTAKEN";
 
-export function operationCallOutcome(request: {
-  status: string;
-  applyResult?: unknown;
-}):
+export function operationCallOutcome(request: { status: string; applyResult?: unknown }):
   | {
       outcome: OperationCallOutcome;
       reason?: string;

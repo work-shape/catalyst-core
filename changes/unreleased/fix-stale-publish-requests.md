@@ -19,3 +19,8 @@ section: Fixed
   leaves "Zu entscheiden" with the reason, "Version N ist bereits live" or "Eine neuere Version
   ist live gegangen", and stays readable under "Entschieden" and "Meine Anfragen". Before, it
   stayed open with a working "Erlauben" that could only end in a conflict.
+- **CLI:** `catalyst agent publish` of the live revision of an agent with no draft answers
+  "already live. Nothing to do" and exits 0; the API answers `CONFLICT` with
+  `reason: already_live`. No confirmation and no request is filed. A publish of a draft is never
+  this answer. The line of a publish that waits, and `catalyst requests` for a superseded
+  request, say that a superseded request can do nothing.
