@@ -180,6 +180,8 @@ export const knowledge = defineTranslations({
     "knowledge.fromConnected": "Connected",
     "knowledge.fromConnectionDescription":
       "Folders from {type}, kept up to date automatically. You choose the folders next.",
+    "knowledge.fromWebDescription":
+      "Public pages of its hosts, kept up to date automatically. You name the addresses next.",
     "knowledge.fromNotConnected": "Not connected yet: {types}.",
     "knowledge.holdsLabel": "What it answers from",
     "knowledge.holdsDocuments": "Documents",
@@ -502,6 +504,8 @@ export const knowledge = defineTranslations({
     "knowledge.fromConnected": "Verbunden",
     "knowledge.fromConnectionDescription":
       "Ordner aus {type}, automatisch aktuell gehalten. Die Ordner wählst du als Nächstes.",
+    "knowledge.fromWebDescription":
+      "Öffentliche Seiten ihrer Hosts, automatisch aktuell gehalten. Die Adressen nennst du als Nächstes.",
     "knowledge.fromNotConnected": "Noch nicht verbunden: {types}.",
     "knowledge.holdsLabel": "Woraus sie antwortet",
     "knowledge.holdsDocuments": "Dokumente",
