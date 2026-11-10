@@ -191,6 +191,8 @@ export const MANAGED_CLIENT_SECRET_NAME = "SAMPLE_MANAGED_CLIENT_SECRET";
 export async function createOAuthWorld(
   options: {
     extraPort?: number;
+    /** An `imaps` entry of the egress list for 127.0.0.1 on this port. */
+    imapsPort?: number;
     personalModelRegions?: string[];
     /**
      * A second deterministic entry in region `us`, and the bindings `eu` and `outside` on the
@@ -309,6 +311,17 @@ export async function createOAuthWorld(
     secretStore: { keys: [{ id: "k1", ref: "CATALYST_SECRET_STORE_KEY" }] },
     egress: {
       allow: [
+        ...(options.imapsPort === undefined
+          ? []
+          : [
+              {
+                protocol: "imaps",
+                host: "127.0.0.1",
+                port: options.imapsPort,
+                network: "private",
+                cidrs: ["127.0.0.1/32"]
+              }
+            ]),
         ...(options.extraPort === undefined
           ? []
           : [

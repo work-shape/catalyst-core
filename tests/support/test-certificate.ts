@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { isIP } from "node:net";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,8 +12,8 @@ export interface TestCertificate {
 }
 
 /**
- * Makes a certificate authority and a server certificate it signed for `host`, with the
- * system's `openssl`. Both keys are made here and exist for this run only.
+ * Makes a certificate authority and a server certificate it signed for `host`, a name or an
+ * address, with the system's `openssl`. Both keys are made here and exist for this run only.
  */
 export function makeTestCertificate(host: string): TestCertificate {
   const directory = mkdtempSync(join(tmpdir(), "catalyst-test-certificate-"));
@@ -44,7 +45,7 @@ export function makeTestCertificate(host: string): TestCertificate {
         "[name]",
         `CN = ${host}`,
         "[server]",
-        `subjectAltName = DNS:${host}`,
+        `subjectAltName = ${isIP(host) === 0 ? "DNS" : "IP"}:${host}`,
         ""
       ].join("\n")
     );
