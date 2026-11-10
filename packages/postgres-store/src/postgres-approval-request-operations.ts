@@ -2,6 +2,7 @@ import { keysetFilter } from "./paging";
 import { and, count, desc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import {
   AppError,
+  approvalRequestBusyError,
   createPlatformId,
   type ApprovalRequest,
   type ApprovalRequestStore,
@@ -353,8 +354,7 @@ async function transition(
           ${`approval_decision:${input.clientInstanceId}:${input.requestId}`}, 0
         )) as locked
       `);
-      if (lock?.locked !== true)
-        throw new AppError("CONFLICT", "Approval request is being decided right now");
+      if (lock?.locked !== true) throw approvalRequestBusyError();
       // Stop owns the conversation before it withdraws the request. Take it before the
       // request too, then let the handler take run -> operation run as in #200.
       await lockAgentRunConversations(tx, input.clientInstanceId, [seen.origin.agentRunId]);
@@ -369,7 +369,7 @@ async function transition(
       .limit(1)
       .catch((error: unknown) => {
         if (isLockNotAvailable(error)) {
-          throw new AppError("CONFLICT", "Approval request is being decided right now");
+          throw approvalRequestBusyError();
         }
         throw error;
       });

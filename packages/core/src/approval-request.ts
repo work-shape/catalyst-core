@@ -3,6 +3,7 @@ import {
   APPROVAL_EXECUTIONS,
   APPROVAL_REQUEST_STATUSES
 } from "@work-shape/catalyst-asset-schemas";
+import { AppError } from "./errors";
 import type { AuthenticatedUser } from "./identity";
 import type { AgentRunId, ClientInstanceId, ConversationId, ToolCallId } from "./ids";
 import type { JsonObject } from "./json";
@@ -79,4 +80,26 @@ export function approvalExecutionOf(
 ): ApprovalExecution | undefined {
   const value = request.applyResult?.execution;
   return APPROVAL_EXECUTIONS.find((execution) => execution === value);
+}
+
+/** Why a transition of a request was refused: another transaction holds the request now. */
+const APPROVAL_REQUEST_BUSY = "approval_request_busy";
+
+/** The refusal of a transition while another one holds the request. Asking again may succeed. */
+export function approvalRequestBusyError(): AppError {
+  return new AppError("CONFLICT", "Approval request is being decided right now", {
+    reason: APPROVAL_REQUEST_BUSY
+  });
+}
+
+/** Whether a transition was refused only because another one held the request at that moment. */
+export function isApprovalRequestBusy(error: unknown): boolean {
+  return (
+    error instanceof AppError &&
+    error.code === "CONFLICT" &&
+    typeof error.details === "object" &&
+    error.details !== null &&
+    "reason" in error.details &&
+    error.details.reason === APPROVAL_REQUEST_BUSY
+  );
 }
