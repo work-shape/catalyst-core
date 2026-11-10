@@ -164,15 +164,20 @@ function credentialOf(
 
 /**
  * What a Connection's secret and sign-in are bound to, for settings its type accepted: the
- * origin of `target` and, where the Connection names its authorization server itself, that
- * server's origins and client id (`connectionCredentialOrigin`).
+ * origin of `target`, the account its type binds the secret to where it binds one, and, where
+ * the Connection names its authorization server itself, that server's origins and client id
+ * (`connectionCredentialOrigin`).
  */
 export function credentialOriginOf(
   type: ConnectorTypeDefinition,
   settings: JsonObject,
   target: EgressTarget
 ): string {
-  return connectionCredentialOrigin(target, type.oauthEndpoints?.(settings));
+  return connectionCredentialOrigin(
+    target,
+    type.oauthEndpoints?.(settings),
+    type.credentialAccount?.(settings)
+  );
 }
 
 /**
@@ -225,7 +230,11 @@ function storedSecretHandle(config: ConnectionConfig): string {
 
 export interface OpenConnectorContextInput {
   actor?: AuthenticatedIdentity;
-  /** Only the operation call path supplies this owner gate and durable privacy mark. */
+  /**
+   * Only the operation call path supplies this owner gate and durable privacy mark, for a
+   * personal call (`connectionCallsArePersonal`). It runs after the egress check and before
+   * the credential is resolved.
+   */
   personalCall?: () => Promise<void>;
   /**
    * The owner's own discovery of a personal MCP Connection (CS-9b exception): only the
@@ -316,7 +325,7 @@ export async function openConnectorContext(
   // A call that ended while its target was checked resolves no credential.
   if (signal.aborted) throw connectionCallError("upstream_timeout");
 
-  if (config.credentialMode === "user") await input.personalCall?.();
+  if (input.personalCall) await input.personalCall();
   if (signal.aborted) throw connectionCallError("upstream_timeout");
   let credential: ConnectionCredential | undefined;
   if (config.authScheme !== AUTH_SCHEME_NONE) {

@@ -216,8 +216,23 @@ function oauthEndpointsOf(
 }
 
 /**
- * What the Connection's own secret and its sign-in are bound to: its target's origin and, where
- * it names its authorization server, that server's full addresses, its issuer and the client id.
+ * The account a Connection's type binds its own secret to, such as a mailbox's user name, as
+ * the opaque key the type makes of it. Nothing where the type binds none.
+ */
+function credentialAccountOf(
+  options: ConnectionAssetKindOptions,
+  connection: ConnectionConfig
+): string | undefined {
+  const type = options.connectorTypes.get(connection.connectorType);
+  const settings = type?.settingsSchema.safeParse(connection.settings);
+  if (!type?.credentialAccount || !settings?.success) return undefined;
+  return type.credentialAccount(settings.data);
+}
+
+/**
+ * What the Connection's own secret and its sign-in are bound to: its target's origin, the
+ * account its type binds the secret to, and, where it names its authorization server, that
+ * server's full addresses, its issuer and the client id.
  */
 function credentialOriginOf(
   options: ConnectionAssetKindOptions,
@@ -225,7 +240,11 @@ function credentialOriginOf(
 ): string | undefined {
   const target = targetOf(options, connection);
   if (target === undefined) return undefined;
-  return connectionCredentialOrigin(target, oauthEndpointsOf(options, connection));
+  return connectionCredentialOrigin(
+    target,
+    oauthEndpointsOf(options, connection),
+    credentialAccountOf(options, connection)
+  );
 }
 
 /**

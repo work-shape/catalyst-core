@@ -214,7 +214,13 @@ export const CONNECTION_CALL_REASONS = {
   schema_too_deep: "CONFLICT",
   schema_too_many_refs: "CONFLICT",
   schema_too_many_patterns: "CONFLICT",
-  schema_pattern_too_long: "CONFLICT"
+  schema_pattern_too_long: "CONFLICT",
+  /** A mailbox folder the call names is not in the Connection's folders, or not on the server. */
+  folder_not_found: "NOT_FOUND",
+  /** A message the call names is outside the Connection's folders, or no longer there. */
+  message_not_found: "NOT_FOUND",
+  /** A paging cursor of an earlier call no longer fits the folder: start again without it. */
+  cursor_expired: "CONFLICT"
 } as const satisfies Record<string, AppErrorCode>;
 
 export type ConnectionCallReason = keyof typeof CONNECTION_CALL_REASONS;
@@ -272,7 +278,10 @@ const CONNECTION_CALL_MESSAGES: Record<ConnectionCallReason, string> = {
   schema_too_many_patterns:
     "the operation's schema holds more regular expressions than the platform takes",
   schema_pattern_too_long:
-    "a regular expression of the operation's schema is longer than the platform takes"
+    "a regular expression of the operation's schema is longer than the platform takes",
+  folder_not_found: "the folder is not one of the Connection's folders or is not on the server",
+  message_not_found: "the message is not in the Connection's folders or is gone",
+  cursor_expired: "the cursor no longer fits the folder"
 };
 
 /**
@@ -399,7 +408,13 @@ const CONNECTION_CALL_SENTENCES: Record<
   schema_too_deep: overLimit("it may be nested at most 64 levels deep"),
   schema_too_many_refs: overLimit("it may hold at most 200 references"),
   schema_too_many_patterns: overLimit("it may hold at most 100 text patterns"),
-  schema_pattern_too_long: overLimit("a text pattern may have at most 1,000 characters")
+  schema_pattern_too_long: overLimit("a text pattern may have at most 1,000 characters"),
+  folder_not_found: (c) =>
+    `${c} does not read this folder: it is not one of the connection's folders, or the server no longer has it. Trying again will not help. An administrator can check the folders under ${WHERE}.`,
+  message_not_found: (c) =>
+    `${c} cannot find this message: it is outside the connection's folders, or it was moved or deleted. Trying again will not help; a new search finds the messages there now.`,
+  cursor_expired: (c) =>
+    `The page of results from ${c} cannot be continued because the folder changed on the server. Trying again with it will not help; a new search without it starts over.`
 };
 
 /** The display name as one word group of a sentence: one line, no control character, bounded. */
