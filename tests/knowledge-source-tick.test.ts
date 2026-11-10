@@ -642,6 +642,33 @@ describe("a source's own sync settings (SRC-SYNC)", () => {
     ).toBe(2);
   });
 
+  it("catches up a full pass a running sync held at its minute, once, with changes off", async () => {
+    const world = await setup();
+    world.world.put(file("one.txt"));
+    await imported(world, "2025-01-06T08:00:00Z");
+    await world.publishSources([
+      {
+        id: SOURCE,
+        connection: "fixture",
+        folders: ["folder", "other"],
+        schedule: { changes: "off" }
+      }
+    ]);
+    await tick(world, "2025-01-07T01:50:00Z");
+    // A sync by hand still runs at 02:00, so the nightly pass cannot start then.
+    await world.sql`insert into catalyst_kb.sync_runs (id,source_id,mode,operation_run_id,state,started_at) values ('held',${SOURCE},'changes','by-hand','running','2025-01-07T01:55:00Z')`;
+    await tick(world, "2025-01-07T02:00:00Z");
+    expect((await passes(world, "full")).length).toBe(0);
+    await world.sql`update catalyst_kb.sync_runs set state='done', ended_at='2025-01-07T02:05:00Z' where id='held'`;
+    // Without a changes poll the next due time is a day away; the tick still owes this one.
+    await tick(world, "2025-01-07T02:10:00Z");
+    await tick(world, "2025-01-07T02:20:00Z");
+    await tick(world, "2025-01-07T03:00:00Z");
+    const full = await passes(world, "full");
+    expect(full.length).toBe(1);
+    expect(full[0]?.state).toBe("done");
+  });
+
   it("polls a source at its own interval, and runs no full pass where that is off", async () => {
     const calls = noCalls();
     const world = await setup(counting(calls));
