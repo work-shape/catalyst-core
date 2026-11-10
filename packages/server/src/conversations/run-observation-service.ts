@@ -92,6 +92,7 @@ export class RunObservationWorkflow {
         clientInstanceId,
         conversationId
       });
+      const namesSenders = snapshotNamesSenders(conversation, runAgents);
       const serverTime = new Date().toISOString();
       const completedRunProjections = await this.createCompletedRunProjections(
         stores,
@@ -135,9 +136,9 @@ export class RunObservationWorkflow {
                 ({ inputMessageId, agentName, ownerUserId, ownerDisplayLabel }) => ({
                   inputMessageId,
                   agentName,
-                  // Who sent each turn, by id and name, which a chat more than one person reads
-                  // names (CHAT-SHARE-2), also once that person no longer reads it.
-                  ...(snapshotNamesSenders(conversation)
+                  // Who sent each turn, by id and name (CHAT-SHARE-2), also once that person no
+                  // longer reads the chat.
+                  ...(namesSenders
                     ? {
                         ...(ownerUserId === undefined ? {} : { ownerUserId }),
                         ...(ownerDisplayLabel === undefined ? {} : { ownerDisplayLabel })
@@ -483,7 +484,16 @@ async function withDecidersNamedNow(
   );
 }
 
-/** A chat its creator named people on: its readers see who sent each turn. */
-function snapshotNamesSenders(conversation: { people: readonly unknown[] }): boolean {
-  return conversation.people.length > 0;
+/**
+ * A chat that names people, or that more than one person ever wrote in: its readers see who sent
+ * each turn, so a turn of someone who left or was removed never reads as another's. A chat only
+ * one person wrote in and nobody else reads carries nothing.
+ */
+function snapshotNamesSenders(
+  conversation: { people: readonly unknown[] },
+  runAgents: ReadonlyArray<{ ownerUserId?: string }>
+): boolean {
+  if (conversation.people.length > 0) return true;
+  const senders = new Set(runAgents.flatMap(({ ownerUserId }) => ownerUserId ?? []));
+  return senders.size > 1;
 }

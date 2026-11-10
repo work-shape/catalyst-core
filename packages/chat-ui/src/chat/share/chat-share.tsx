@@ -449,17 +449,24 @@ function useChatShareValue({
     [menuSearch.data, menuSearch.error, menuSearch.isFetching]
   );
 
-  // Only a chat that names people says who wrote each message.
+  // A chat more than one person reads or wrote in says who wrote each message, so the turns of
+  // someone who left never read as another's. One person alone sees no names.
+  const namesSenders = useMemo(
+    () =>
+      readers.length > 1 ||
+      new Set(Array.from(runSenders?.values() ?? [], (sender) => sender.userId)).size > 1,
+    [readers.length, runSenders]
+  );
   const senderOf = useCallback(
     (messageId: string) => {
-      if (readers.length < 2) return undefined;
+      if (!namesSenders) return undefined;
       const sender = runSenders?.get(messageId);
       if (!sender) return undefined;
       if (sender.userId === viewerId) return t("chatShare.senderYou");
       // Someone who left or was removed keeps their name on what they wrote.
       return readers.find((each) => each.userId === sender.userId)?.label ?? sender.label;
     },
-    [readers, runSenders, t, viewerId]
+    [namesSenders, readers, runSenders, t, viewerId]
   );
 
   return useMemo(

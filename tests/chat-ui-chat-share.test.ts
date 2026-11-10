@@ -511,18 +511,20 @@ describe("who reads the chat, in its head", () => {
     expect(changes()).toEqual(["remove user-ben"]);
   });
 
+  function Senders() {
+    const share = useChatShare();
+    return createElement(
+      "ul",
+      null,
+      ["msg_1", "msg_2", "msg_3", "msg_4"].map((id) =>
+        createElement("li", { key: id }, share?.senderOf(id) ?? "-")
+      )
+    );
+  }
+  const sendersShown = () => [...container.querySelectorAll("li")].map((item) => item.textContent);
+
   it("names who wrote each message, also someone who has since left", async () => {
     const { client } = shareClient();
-    function Senders() {
-      const share = useChatShare();
-      return createElement(
-        "ul",
-        null,
-        ["msg_1", "msg_2", "msg_3", "msg_4"].map((id) =>
-          createElement("li", { key: id }, share?.senderOf(id) ?? "-")
-        )
-      );
-    }
     mount({
       client,
       conversation: shared,
@@ -533,12 +535,29 @@ describe("who reads the chat, in its head", () => {
       ]),
       children: createElement(Senders)
     });
-    expect([...container.querySelectorAll("li")].map((item) => item.textContent)).toEqual([
-      "You",
-      "Ben Ito",
-      "Dee Park",
-      "-"
-    ]);
+    expect(sendersShown()).toEqual(["You", "Ben Ito", "Dee Park", "-"]);
+  });
+
+  it("keeps the names once the last named person is gone, and shows none to one writer alone", async () => {
+    const { client } = shareClient();
+    mount({
+      client,
+      conversation: chat(),
+      runSenders: new Map([
+        ["msg_1", { userId: creator.id, label: creator.label }],
+        ["msg_2", { userId: "user-ben", label: "Ben Ito" }]
+      ]),
+      children: createElement(Senders)
+    });
+    expect(sendersShown()).toEqual(["You", "Ben Ito", "-", "-"]);
+
+    mount({
+      client,
+      conversation: chat(),
+      runSenders: new Map([["msg_1", { userId: creator.id }]]),
+      children: createElement(Senders)
+    });
+    expect(sendersShown()).toEqual(["-", "-", "-", "-"]);
   });
 
   it("lets a named person leave, and goes elsewhere", async () => {

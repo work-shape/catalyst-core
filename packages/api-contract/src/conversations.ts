@@ -1090,7 +1090,10 @@ export const conversationThreadSnapshotSchema = z.object({
       z.object({
         inputMessageId: z.string(),
         agentName: z.string(),
-        /** The person the run acts for, on a chat that names people (CHAT-SHARE-2). */
+        /**
+         * The person the run acts for, on a chat that names people or that more than one person
+         * wrote in (CHAT-SHARE-2).
+         */
         ownerUserId: z.string().optional(),
         /**
          * That person's name, on the same chats: their turns stay attributed after they leave

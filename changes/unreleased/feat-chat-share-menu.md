@@ -16,6 +16,7 @@ section: Added
 - **Inbox:** The notice of a chat shared with the reader opens the chat in its workspace.
 - **API:** A conversation that names people carries `createdByDisplayLabel`, and the run agents
   of its snapshot carry `ownerUserId` and `ownerDisplayLabel`, so its readers see who started it
-  and who wrote what.
+  and who wrote what. A chat more than one person wrote in carries them too, so the turns of
+  someone removed keep their name after the last named person is gone.
 - **UI library:** `SuggestionList`, the list a text field offers as one types, and
   `AvatarStack`, overlapping avatars with a count of the rest.
