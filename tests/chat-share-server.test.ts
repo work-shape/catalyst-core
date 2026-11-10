@@ -669,6 +669,28 @@ describe("CHAT-SHARE-1: named people on a private chat", () => {
       as("named")
     );
     expect(after.statusCode).toBe(404);
+    // A turn whose access check passed just before the removal starts nothing: the store asks
+    // again under the conversation's lock, which the removal took too.
+    const inputMessageId = createPlatformId<"MessageId">("msg");
+    const runOf = (ownerUserId: string) =>
+      app.stores.agentRuns.prepareConversationRunStart({
+        clientInstanceId,
+        conversationId: asConversationId(conversationId),
+        ownerUserId,
+        userMessage: { id: inputMessageId, text: "late" },
+        run: {
+          id: createPlatformId<"AgentRunId">("run"),
+          clientInstanceId,
+          conversationId: asConversationId(conversationId),
+          ownerUserId,
+          inputMessageId,
+          agentName: "default",
+          status: "queued",
+          correlationId: "corr_late"
+        }
+      });
+    await expect(runOf(ids.named)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(runOf(ids.colleague)).rejects.toMatchObject({ code: "NOT_FOUND" });
 
     // Leave.
     expect((await share(app, conversationId, ids.named)).statusCode).toBe(200);
@@ -740,30 +762,56 @@ describe("CHAT-SHARE-1: named people on a private chat", () => {
     await app.close();
   });
 
-  it("offers the workspace's members, the ones named before first, and files the notice with a conversation link", async () => {
+  it("offers only people the creator knows from the workspace, the ones named before first, and files the notice with a conversation link", async () => {
     const { app, ids, workspaceId, conversationId } = await createFixture();
+    type Offered = { userId: string; email?: string; hasAccess: boolean };
+    const offer = async (actor: string, id: string, query?: string) => {
+      const response = await app.call(
+        "conversations.share_candidates",
+        { params: { conversationId: id }, ...(query ? { query: { query } } : {}) },
+        as(actor)
+      );
+      expect(response.statusCode, response.body).toBe(200);
+      return response.json<{ candidates: Offered[] }>().candidates;
+    };
+    const letters = [..."abcdefghijklmnopqrstuvwxyz0123456789@."];
+
+    // A member who knows nobody here yet is offered nobody, bare or a letter at a time: a
+    // member cannot list the workspace's members, and the search does not either.
+    const strangersChat = await createChat(app, workspaceId, "Alone", "colleague");
+    await expect(offer("colleague", strangersChat)).resolves.toEqual([]);
+    for (const letter of letters) {
+      await expect(offer("colleague", strangersChat, letter), letter).resolves.toEqual([]);
+    }
+
+    // The creator knows the colleague from a chat they named them on, and the other member
+    // from a team chat both read in which that member wrote.
     const before = await createChat(app, workspaceId, "Earlier");
     expect((await share(app, before, ids.colleague)).statusCode).toBe(200);
-
-    const candidates = await app.call(
-      "conversations.share_candidates",
-      { params: { conversationId } },
-      as("creator")
+    const team = await createChat(app, workspaceId, "Team", "owner");
+    await withTestSql(
+      (sql) => sql`update conversations set visibility = 'workspace' where id = ${team}`
     );
-    expect(candidates.statusCode).toBe(200);
-    const offered = candidates.json<{ candidates: { userId: string; hasAccess: boolean }[] }>();
-    expect(offered.candidates[0]).toMatchObject({ userId: ids.colleague, hasAccess: false });
-    expect(offered.candidates.map((candidate) => candidate.userId)).not.toContain(ids.creator);
-    expect(offered.candidates.map((candidate) => candidate.userId)).not.toContain(ids.outsider);
+    await createRun(app, team, ids.named, "completed");
 
-    const searched = await app.call(
-      "conversations.share_candidates",
-      { params: { conversationId }, query: { query: "nam" } },
-      as("creator")
-    );
-    expect(
-      searched.json<{ candidates: { userId: string }[] }>().candidates.map((item) => item.userId)
-    ).toEqual([ids.named]);
+    const offered = await offer("creator", conversationId);
+    expect(offered).toEqual([
+      { userId: ids.colleague, displayLabel: "colleague", hasAccess: false },
+      { userId: ids.named, displayLabel: "named", hasAccess: false }
+    ]);
+    // The Workspace Owner, who wrote nowhere the creator reads, and the outsider are not.
+    for (const letter of letters) {
+      for (const candidate of await offer("creator", conversationId, letter)) {
+        expect([ids.colleague, ids.named], letter).toContain(candidate.userId);
+        if (candidate.email !== undefined) {
+          expect(candidate.email.startsWith(letter), letter).toBe(true);
+        }
+      }
+    }
+    // The bare list answers names alone; a search that typed the start of an email shows it.
+    await expect(offer("creator", conversationId, "named@")).resolves.toEqual([
+      { userId: ids.named, displayLabel: "named", email: "named@example.test", hasAccess: false }
+    ]);
 
     expect((await share(app, conversationId, ids.named)).statusCode).toBe(200);
     // Naming again changes nothing and files no second notice.
