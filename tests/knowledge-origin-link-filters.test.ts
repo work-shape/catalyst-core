@@ -127,7 +127,7 @@ describe("the origin link and declared filters of a Knowledge Base (DS-6b)", () 
         clientInstanceId,
         name: `knowledge-base:${name}`
       });
-      expect(record).toMatchObject({ status: "ready", level: 19 });
+      expect(record).toMatchObject({ status: "ready", level: 20 });
       return required(record);
     });
   }

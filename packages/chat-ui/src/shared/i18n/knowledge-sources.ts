@@ -66,6 +66,21 @@ export const knowledgeSources = defineTranslations({
       "The folders could not be read. You can still enter folder IDs under Advanced settings.",
     "knowledgeSources.pickCount": "{count} chosen",
     "knowledgeSources.pickApply": "Use these folders",
+    "knowledgeSources.pages": "Pages",
+    "knowledgeSources.pagesHint":
+      "Single pages, one address per line, such as https://example.com/terms.",
+    "knowledgeSources.prefixes": "Everything below",
+    "knowledgeSources.prefixesHint":
+      "Addresses whose linked pages below them are read too, three links deep, one per line, such as https://example.com/docs/.",
+    "knowledgeSources.sitemaps": "Sitemaps",
+    "knowledgeSources.sitemapsHint":
+      "The pages a sitemap lists, such as https://example.com/sitemap.xml.",
+    "knowledgeSources.addressPlaceholder": "https://",
+    "knowledgeSources.includeWeb": "Only paths",
+    "knowledgeSources.includeWebHint":
+      "Patterns on the address's path, one per line, such as /docs/**. Empty for every page.",
+    "knowledgeSources.excludeWebHint":
+      "Patterns on the address's path, one per line, such as /docs/archive/**.",
     "knowledgeSources.include": "Only files named",
     "knowledgeSources.includeHint": "Patterns, one per line, such as *.pdf. Empty for every file.",
     "knowledgeSources.exclude": "Leave out paths",
@@ -208,6 +223,21 @@ export const knowledgeSources = defineTranslations({
       "Die Ordner ließen sich nicht lesen. Ordner-IDs kannst du unter Erweiterte Einstellungen eintragen.",
     "knowledgeSources.pickCount": "{count} gewählt",
     "knowledgeSources.pickApply": "Diese Ordner übernehmen",
+    "knowledgeSources.pages": "Seiten",
+    "knowledgeSources.pagesHint":
+      "Einzelne Seiten, eine Adresse pro Zeile, etwa https://example.com/agb.",
+    "knowledgeSources.prefixes": "Alles unterhalb von",
+    "knowledgeSources.prefixesHint":
+      "Adressen, unter denen auch verlinkte Seiten gelesen werden, drei Links tief, eine pro Zeile, etwa https://example.com/docs/.",
+    "knowledgeSources.sitemaps": "Sitemaps",
+    "knowledgeSources.sitemapsHint":
+      "Die Seiten, die eine Sitemap nennt, etwa https://example.com/sitemap.xml.",
+    "knowledgeSources.addressPlaceholder": "https://",
+    "knowledgeSources.includeWeb": "Nur Pfade",
+    "knowledgeSources.includeWebHint":
+      "Muster auf dem Pfad der Adresse, eines pro Zeile, etwa /docs/**. Leer für alle Seiten.",
+    "knowledgeSources.excludeWebHint":
+      "Muster auf dem Pfad der Adresse, eines pro Zeile, etwa /docs/archiv/**.",
     "knowledgeSources.include": "Nur Dateien mit Namen",
     "knowledgeSources.includeHint": "Muster, eines pro Zeile, etwa *.pdf. Leer für alle Dateien.",
     "knowledgeSources.exclude": "Pfade auslassen",

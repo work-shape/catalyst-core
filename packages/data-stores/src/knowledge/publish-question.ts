@@ -1,3 +1,4 @@
+import { sourceFolderIds } from "./source-urls";
 import {
   createActorAccess,
   KNOWLEDGE_BASE_ACTIONS,
@@ -68,6 +69,16 @@ export async function knowledgePublishQuestion(
         })
       : undefined;
     const account = binding?.accountLabel ?? source.connection;
+    if (source.folders === undefined) {
+      // A web source reads public pages without an account.
+      const addresses = sourceFolderIds(source).join(", ");
+      lines.push(
+        input.locale === "de"
+          ? `${audience} ${audience === 1 ? "Person" : "Personen"} mit Zugriff auf „${definition.title}“ ${audience === 1 ? "findet" : "finden"} die öffentlichen Seiten unter ${addresses}, regelmäßig neu geladen.`
+          : `${audience} ${audience === 1 ? "person" : "people"} with access to “${definition.title}” can find the public pages at ${addresses}, fetched again on a schedule.`
+      );
+      continue;
+    }
     const folders = source.folders.join(", ");
     const one = source.folders.length === 1;
     lines.push(

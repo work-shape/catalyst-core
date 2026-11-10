@@ -28692,6 +28692,12 @@
                           },
                           "originLink": {
                             "type": "string"
+                          },
+                          "statedAt": {
+                            "type": "string"
+                          },
+                          "retrievedAt": {
+                            "type": "string"
                           }
                         },
                         "required": [
@@ -50681,6 +50687,12 @@
                   "minLength": 1
                 },
                 "originLink": {
+                  "type": "string"
+                },
+                "statedAt": {
+                  "type": "string"
+                },
+                "retrievedAt": {
                   "type": "string"
                 }
               },

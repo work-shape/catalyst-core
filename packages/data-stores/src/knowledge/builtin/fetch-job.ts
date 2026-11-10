@@ -1,3 +1,4 @@
+import { sourceBoundary } from "../source-urls";
 import { sourceBoundaryKey } from "../source-boundary";
 import { sourceAuthority, type SourceAuthority } from "../source-principal";
 import { enqueueOriginalRelease, hasStoredKnowledgeExtraction } from "../original-release";
@@ -21,6 +22,7 @@ import {
   knowledgeFetchJob,
   knowledgeSourceKey,
   knowledgeIndexPayloadOfFetch,
+  type DocumentSourceBoundary,
   type JobControl,
   type KnowledgeDocumentFailureCode,
   type KnowledgeFetchJobPayload,
@@ -162,7 +164,7 @@ async function fetchItem(
   payload: KnowledgeFetchJobPayload,
   item: SourceItem,
   connection: string,
-  folderIds: readonly string[],
+  boundary: DocumentSourceBoundary,
   signal: AbortSignal
 ) {
   const format = sourceFormat(item);
@@ -190,7 +192,7 @@ async function fetchItem(
               itemId: item.item_id,
               version: item.version,
               maxBytes: KNOWLEDGE_FILE_MAX_BYTES,
-              boundary: { folderIds }
+              boundary
             },
             context
           )) {
@@ -437,7 +439,7 @@ export function createKnowledgeFetchHandler(runtime: SourceJobRuntime): Register
                   payload,
                   item,
                   found.source.connection,
-                  found.source.folders,
+                  sourceBoundary(found.source),
                   signal
                 )
               });

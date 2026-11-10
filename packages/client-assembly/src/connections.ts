@@ -16,6 +16,7 @@ import {
   createHttpApiConnectorType,
   createManagedOAuthClients,
   createMcpConnectorType,
+  createWebConnectorType,
   discoverConnection,
   endStaleManagedSignIns,
   expandReleaseConnections,
@@ -212,6 +213,10 @@ async function buildInstanceConnections(
     createHttpApiConnectorType(resultShapers, managedClients),
     // A functional mailbox (MBX). Nothing connects without an `imaps` entry of the egress list.
     createImapConnectorType(),
+    // Public web pages as a Knowledge Base source (KB-WEB); without a Connection it reads nothing.
+    createWebConnectorType(
+      config.instance.publicUrl === undefined ? {} : { instanceUrl: config.instance.publicUrl }
+    ),
     ...types
   ]);
   // Every shipped entry is checked now, so a broken one stops the start; an entry that

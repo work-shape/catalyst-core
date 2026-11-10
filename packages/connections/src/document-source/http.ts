@@ -34,7 +34,16 @@ export const sourceHttpTransport: SourceHttpTransport = async (input) => {
       headers: { ...input.headers, host: hostHeaderOf(input.grant) }
     });
     const headers: Record<string, string | undefined> = {};
-    for (const name of ["location", "content-length", "retry-after"]) {
+    // A web source (KB-WEB) also reads the validators and the type of a page.
+    for (const name of [
+      "location",
+      "content-length",
+      "retry-after",
+      "etag",
+      "last-modified",
+      "content-type",
+      "content-encoding"
+    ]) {
       const value = response.headers[name];
       if (typeof value === "string") headers[name] = value;
     }

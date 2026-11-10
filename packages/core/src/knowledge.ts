@@ -156,6 +156,13 @@ export interface KnowledgeSearchHit {
   text: string;
   score: number;
   originLink?: string;
+  /**
+   * The date a synced document states of its own version, such as the "Stand" of a web page, as
+   * an ISO time. Only a date the document itself gives.
+   */
+  statedAt?: string;
+  /** When the platform fetched the synced version the index holds, as an ISO time. */
+  retrievedAt?: string;
 }
 
 /**

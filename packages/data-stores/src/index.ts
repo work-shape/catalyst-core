@@ -3,8 +3,9 @@ export {
   knowledgeProcessingOf,
   validateKnowledgeProcessingOutput
 } from "./knowledge/document-types";
-export { sourceExcludesFolder, withinSource } from "./knowledge/source-boundary";
+export { sourceBoundaryKey, sourceExcludesFolder, withinSource } from "./knowledge/source-boundary";
 export { sourceDefaultsOfType, sourceScheduleOf } from "./knowledge/source-schedule";
+export { sourceBoundary } from "./knowledge/source-urls";
 export { createSourceWithdrawalApproval } from "./knowledge/source-withdrawal-approval";
 export {
   changesDueAt,

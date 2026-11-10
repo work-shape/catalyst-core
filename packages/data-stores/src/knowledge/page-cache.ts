@@ -1,3 +1,4 @@
+import { sourceBoundary } from "./source-urls";
 import { createHash } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import { rm } from "node:fs/promises";
@@ -134,7 +135,7 @@ export async function openCachedPage(
     if (body) return body;
   }
 
-  const folderIds = source.folders;
+  const boundary = sourceBoundary(source);
   const started = Date.now();
   const audit = async (outcome: { bytes?: number; failure?: string }) => {
     if (!input.reader) return;
@@ -179,7 +180,7 @@ export async function openCachedPage(
             itemId: item.itemId,
             version: item.version,
             maxBytes: KNOWLEDGE_FILE_MAX_BYTES,
-            boundary: { folderIds }
+            boundary
           },
           context
         )) {
