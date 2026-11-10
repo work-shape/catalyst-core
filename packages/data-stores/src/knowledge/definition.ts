@@ -73,6 +73,35 @@ const KNOWLEDGE_SOURCE_INCLUDE_MAX_COUNT = 50;
 const KNOWLEDGE_SOURCE_EXCLUDE_MAX_COUNT = 500;
 const KNOWLEDGE_SOURCE_PATTERN_MAX_CHARS = 500;
 
+/** How many links below a prefix's own page a web source follows at most. */
+const KNOWLEDGE_SOURCE_MAX_DEPTH = 10;
+
+/**
+ * A web source's addresses: `https` only, without a user, a password or a fragment. That the
+ * host is one its Connection lists is checked on every request, where the Connection is read.
+ */
+const sourceUrlsSchema = z
+  .array(
+    z
+      .string()
+      .trim()
+      .max(2_000)
+      .refine(
+        (text) => {
+          if (!URL.canParse(text)) return false;
+          const url = new URL(text);
+          return (
+            url.protocol === "https:" &&
+            url.username === "" &&
+            url.password === "" &&
+            url.hash === ""
+          );
+        },
+        { error: "A web address starts with 'https://' and has no user, password or '#'" }
+      )
+  )
+  .min(1);
+
 /** How long a source's cron expression may be. */
 const KNOWLEDGE_SOURCE_CRON_MAX_CHARS = 200;
 /** A source's `schedule.changes` or `schedule.full` that starts no pass of its mode. */
@@ -93,68 +122,107 @@ const sourcePatternsSchema = z
  * `document_source` (spec: Synced sources, "The shape"). Adding, narrowing or removing one is a
  * draft change that takes effect at publish.
  */
-const sourceSchema = z.strictObject({
-  /** Stable within the Knowledge Base; the operations and the CLI name the source by it. */
-  id: z
-    .string()
-    .max(DATA_STORE_NAME_MAX_LENGTH)
-    .regex(DATA_STORE_NAME_PATTERN, { error: `A source id is ${DATA_STORE_NAME_RULE}` }),
-  /** The Connection the source reads through. */
-  connection: z
-    .string()
-    .max(CONNECTION_NAME_MAX_LENGTH)
-    .regex(CONNECTION_NAME_PATTERN, { error: CONNECTION_NAME_RULE }),
-  /** The boundary: folder ids in the source system, never a path. */
-  folders: z
-    .array(z.string().trim().min(1).max(500))
-    .min(1)
-    .max(KNOWLEDGE_SOURCE_FOLDERS_MAX_COUNT)
-    .refine((folders) => new Set(folders).size === folders.length, {
-      message: "A folder is named once"
-    }),
-  /** Patterns on the file name, such as `*.pdf`. Without it every file below the folders. */
-  include: sourcePatternsSchema.max(KNOWLEDGE_SOURCE_INCLUDE_MAX_COUNT).optional(),
-  /** Patterns on the path below the boundary, such as `**\/Personal/**`. */
-  exclude: sourcePatternsSchema.max(KNOWLEDGE_SOURCE_EXCLUDE_MAX_COUNT).optional(),
-  /**
-   * When the source syncs by itself (SRC-SYNC). `changes`: minutes between `changes` polls,
-   * `knowledge.sourcePollMinutes` of its connector type unless set. `full`: the full pass,
-   * nightly at 02:00 in the instance's time zone unless set. Either `off` starts no pass of that
-   * mode; both `off` is a source synced by hand, whose documents stay as they are.
-   */
-  schedule: z
-    .strictObject({
-      changes: z
-        .union(
-          [
-            z.literal(KNOWLEDGE_SOURCE_SYNC_OFF, { error: SOURCE_CHANGES_RULE }),
-            z
-              .number({ error: SOURCE_CHANGES_RULE })
-              .int({ error: SOURCE_CHANGES_RULE })
-              .min(KNOWLEDGE_SOURCE_CHANGES_MIN_MINUTES, { error: SOURCE_CHANGES_RULE })
-              .max(KNOWLEDGE_SOURCE_CHANGES_MAX_MINUTES, { error: SOURCE_CHANGES_RULE })
-          ],
-          { error: SOURCE_CHANGES_RULE }
-        )
-        .optional(),
-      full: z
-        .union(
-          [
-            z.literal(KNOWLEDGE_SOURCE_SYNC_OFF, { error: SOURCE_FULL_RULE }),
-            z
-              .string()
-              .trim()
-              .max(KNOWLEDGE_SOURCE_CRON_MAX_CHARS)
-              .refine((text) => parseCron(text) !== undefined, {
-                error: SOURCE_FULL_RULE
-              })
-          ],
-          { error: SOURCE_FULL_RULE }
-        )
-        .optional()
-    })
-    .optional()
-});
+const sourceSchema = z
+  .strictObject({
+    /** Stable within the Knowledge Base; the operations and the CLI name the source by it. */
+    id: z
+      .string()
+      .max(DATA_STORE_NAME_MAX_LENGTH)
+      .regex(DATA_STORE_NAME_PATTERN, { error: `A source id is ${DATA_STORE_NAME_RULE}` }),
+    /** The Connection the source reads through. */
+    connection: z
+      .string()
+      .max(CONNECTION_NAME_MAX_LENGTH)
+      .regex(CONNECTION_NAME_PATTERN, { error: CONNECTION_NAME_RULE }),
+    /** The boundary: folder ids in the source system, never a path. A web source names URLs instead. */
+    folders: z
+      .array(z.string().trim().min(1).max(500))
+      .min(1)
+      .max(KNOWLEDGE_SOURCE_FOLDERS_MAX_COUNT)
+      .refine((folders) => new Set(folders).size === folders.length, {
+        message: "A folder is named once"
+      })
+      .optional(),
+    /** A web source (KB-WEB): single pages. */
+    pages: sourceUrlsSchema.optional(),
+    /** A web source: everything linked below each address, on its host, to `maxDepth`. */
+    prefixes: sourceUrlsSchema.optional(),
+    /** A web source: the pages a sitemap lists. */
+    sitemaps: sourceUrlsSchema.optional(),
+    /** A web source: how many links below a prefix's own page are followed, 3 unless set. */
+    maxDepth: z.number().int().min(0).max(KNOWLEDGE_SOURCE_MAX_DEPTH).optional(),
+    /**
+     * Patterns on the file name, such as `*.pdf`, or on the path of a web source's address.
+     * Without it every file below the folders.
+     */
+    include: sourcePatternsSchema.max(KNOWLEDGE_SOURCE_INCLUDE_MAX_COUNT).optional(),
+    /** Patterns on the path below the boundary, such as `**\/Personal/**`. */
+    exclude: sourcePatternsSchema.max(KNOWLEDGE_SOURCE_EXCLUDE_MAX_COUNT).optional(),
+    /**
+     * When the source syncs by itself (SRC-SYNC). `changes`: minutes between `changes` polls,
+     * `knowledge.sourcePollMinutes` of its connector type unless set. `full`: the full pass,
+     * nightly at 02:00 in the instance's time zone unless set. Either `off` starts no pass of that
+     * mode; both `off` is a source synced by hand, whose documents stay as they are.
+     */
+    schedule: z
+      .strictObject({
+        changes: z
+          .union(
+            [
+              z.literal(KNOWLEDGE_SOURCE_SYNC_OFF, { error: SOURCE_CHANGES_RULE }),
+              z
+                .number({ error: SOURCE_CHANGES_RULE })
+                .int({ error: SOURCE_CHANGES_RULE })
+                .min(KNOWLEDGE_SOURCE_CHANGES_MIN_MINUTES, { error: SOURCE_CHANGES_RULE })
+                .max(KNOWLEDGE_SOURCE_CHANGES_MAX_MINUTES, { error: SOURCE_CHANGES_RULE })
+            ],
+            { error: SOURCE_CHANGES_RULE }
+          )
+          .optional(),
+        full: z
+          .union(
+            [
+              z.literal(KNOWLEDGE_SOURCE_SYNC_OFF, { error: SOURCE_FULL_RULE }),
+              z
+                .string()
+                .trim()
+                .max(KNOWLEDGE_SOURCE_CRON_MAX_CHARS)
+                .refine((text) => parseCron(text) !== undefined, {
+                  error: SOURCE_FULL_RULE
+                })
+            ],
+            { error: SOURCE_FULL_RULE }
+          )
+          .optional()
+      })
+      .optional()
+  })
+  .superRefine((source, context) => {
+    const web = [source.pages, source.prefixes, source.sitemaps].some((urls) => urls !== undefined);
+    if (web === (source.folders !== undefined))
+      context.addIssue({
+        code: "custom",
+        path: web ? ["folders"] : [],
+        message: web
+          ? "A source names 'folders' or web addresses under 'pages', 'prefixes' and 'sitemaps', not both"
+          : "A source names its 'folders', or web addresses under 'pages', 'prefixes' or 'sitemaps'"
+      });
+    if (!web && source.maxDepth !== undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["maxDepth"],
+        message: "'maxDepth' is for a source that names 'prefixes'"
+      });
+    const all = [...(source.pages ?? []), ...(source.prefixes ?? []), ...(source.sitemaps ?? [])];
+    if (all.length > KNOWLEDGE_SOURCE_FOLDERS_MAX_COUNT)
+      context.addIssue({
+        code: "custom",
+        path: ["pages"],
+        message: `A web source names at most ${KNOWLEDGE_SOURCE_FOLDERS_MAX_COUNT} addresses`
+      });
+    if (new Set(all).size !== all.length)
+      context.addIssue({ code: "custom", path: ["pages"], message: "An address is named once" });
+  });
 
 const tableSchema = z.strictObject({
   /** A table or view of the schema `public` of the backend. */
