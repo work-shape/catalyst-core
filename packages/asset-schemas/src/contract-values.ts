@@ -437,7 +437,12 @@ export type ConfigAssetKind = (typeof CONFIG_ASSET_KINDS)[number];
 export const CONFIG_ASSET_CHANGE_OPERATIONS = ["create", "update", "delete", "revert"] as const;
 export type ConfigAssetChangeOperation = (typeof CONFIG_ASSET_CHANGE_OPERATIONS)[number];
 
-export const AGENT_AVAILABILITY_MODES = ["all", "selected"] as const;
+/**
+ * Where an asset is offered: every workspace, the selected ones, or every workspace except the
+ * selected Shared Workspaces, those made later included. Personal Workspaces follow their own
+ * switch with `selected` and `all_except`; no Personal Workspace is excluded one by one.
+ */
+export const AGENT_AVAILABILITY_MODES = ["all", "selected", "all_except"] as const;
 export type AgentAvailabilityMode = (typeof AGENT_AVAILABILITY_MODES)[number];
 
 /**

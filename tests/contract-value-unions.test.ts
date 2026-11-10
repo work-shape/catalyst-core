@@ -106,7 +106,7 @@ it("preserves the exported unions when contract lists become shared", () => {
   expectTypeOf<CollaborationWorkspaceKind>().toEqualTypeOf<"personal" | "shared">();
   expectTypeOf<WorkspaceVisibility>().toEqualTypeOf<"discoverable" | "private">();
   expectTypeOf<WorkspaceMembershipRole>().toEqualTypeOf<"owner" | "admin" | "member">();
-  expectTypeOf<AgentAvailabilityMode>().toEqualTypeOf<"all" | "selected">();
+  expectTypeOf<AgentAvailabilityMode>().toEqualTypeOf<"all" | "selected" | "all_except">();
   expectTypeOf<ModelProviderAuthModeConfig>().toEqualTypeOf<"bearer" | "api-key">();
   expectTypeOf<OpenAiCompatibleModelProviderApiConfig>().toEqualTypeOf<
     "chat_completions" | "responses"

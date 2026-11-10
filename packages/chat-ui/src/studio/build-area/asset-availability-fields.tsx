@@ -131,7 +131,8 @@ export function AvailabilityFields({
   edit: AvailabilityEdit;
   /**
    * Where an agent is a default and has to stay available: why, and the workspaces it keeps.
-   * Choosing selected workspaces starts from them; taking one away is refused on save.
+   * Choosing selected workspaces starts from them, and none of them is offered to exclude;
+   * taking one away is refused on save.
    */
   defaults?: AvailabilityDefaults;
   /** Why the availability cannot be changed at all: the fields grey, with this as their hint. */
@@ -158,11 +159,42 @@ export function AvailabilityFields({
     ...workspaces.map((workspace) => workspace.id),
     ...form.collaborationWorkspaceIds.filter((id) => !workspaceNames.has(id))
   ];
+  // A workspace where the agent is a default is never excluded: it is not offered to choose.
+  const excludable = workspaceIds.filter(
+    (id) =>
+      !required.collaborationWorkspaceIds.includes(id) ||
+      form.collaborationWorkspaceIds.includes(id)
+  );
   const nothingSelected =
     form.mode === "selected" &&
     !form.personalWorkspaces &&
     form.collaborationWorkspaceIds.length === 0;
   const update = (patch: Partial<AgentAvailabilityForm>) => edit.setForm({ ...form, ...patch });
+  // Each mode starts from what it keeps of the form: the selected workspaces with the ones a
+  // default needs, or no exclusion with Personal Workspaces on.
+  const choose = (mode: AgentAvailabilityForm["mode"]) =>
+    update(
+      mode === "selected"
+        ? {
+            mode,
+            personalWorkspaces:
+              (form.mode === "selected" && form.personalWorkspaces) || required.personalWorkspaces,
+            collaborationWorkspaceIds: [
+              ...new Set([
+                ...(form.mode === "selected" ? form.collaborationWorkspaceIds : []),
+                ...required.collaborationWorkspaceIds
+              ])
+            ]
+          }
+        : mode === "all_except"
+          ? {
+              mode,
+              personalWorkspaces: form.mode === "all_except" ? form.personalWorkspaces : true,
+              collaborationWorkspaceIds:
+                form.mode === "all_except" ? form.collaborationWorkspaceIds : []
+            }
+          : { mode }
+    );
 
   return (
     <>
@@ -173,33 +205,23 @@ export function AvailabilityFields({
         hint={fixedReason ?? defaults?.note}
         disabled={fixed}
         value={form.mode}
-        onValueChange={(mode) =>
-          update(
-            mode === "selected"
-              ? {
-                  mode,
-                  personalWorkspaces: form.personalWorkspaces || required.personalWorkspaces,
-                  collaborationWorkspaceIds: [
-                    ...new Set([
-                      ...form.collaborationWorkspaceIds,
-                      ...required.collaborationWorkspaceIds
-                    ])
-                  ]
-                }
-              : { mode }
-          )
-        }
+        onValueChange={choose}
         options={[
           {
             value: "all",
             label: t("configAvailabilityAll"),
             description: t("configAvailabilityAllHint")
           },
+          {
+            value: "all_except",
+            label: t("configAvailabilityAllExcept"),
+            description: t("configAvailabilityAllExceptHint")
+          },
           { value: "selected", label: t("configAvailabilitySelected") }
         ]}
       />
 
-      {form.mode === "selected" ? (
+      {form.mode === "all" ? null : (
         <>
           <Checkbox
             checked={form.personalWorkspaces}
@@ -209,18 +231,31 @@ export function AvailabilityFields({
             description={t("configAvailabilityPersonalHint")}
             onCheckedChange={(personalWorkspaces) => update({ personalWorkspaces })}
           />
-          <CheckboxGroup
-            label={t("collaborationWorkspaceSharedHeading")}
-            options={workspaceIds}
-            optionLabel={(id) => workspaceNames.get(id) ?? id}
-            selected={form.collaborationWorkspaceIds}
-            disabled={fixed}
-            emptyHint={workspacesError ?? t("configAvailabilityNoSharedWorkspaces")}
-            hint={nothingSelected ? hiddenHint : undefined}
-            onChange={(collaborationWorkspaceIds) => update({ collaborationWorkspaceIds })}
-          />
+          {form.mode === "selected" ? (
+            <CheckboxGroup
+              label={t("collaborationWorkspaceSharedHeading")}
+              options={workspaceIds}
+              optionLabel={(id) => workspaceNames.get(id) ?? id}
+              selected={form.collaborationWorkspaceIds}
+              disabled={fixed}
+              emptyHint={workspacesError ?? t("configAvailabilityNoSharedWorkspaces")}
+              hint={nothingSelected ? hiddenHint : undefined}
+              onChange={(collaborationWorkspaceIds) => update({ collaborationWorkspaceIds })}
+            />
+          ) : (
+            <CheckboxGroup
+              label={t("configAvailabilityExcluded")}
+              description={t("configAvailabilityExcludedHint")}
+              options={excludable}
+              optionLabel={(id) => workspaceNames.get(id) ?? id}
+              selected={form.collaborationWorkspaceIds}
+              disabled={fixed}
+              emptyHint={workspacesError ?? t("configAvailabilityNoSharedWorkspaces")}
+              onChange={(collaborationWorkspaceIds) => update({ collaborationWorkspaceIds })}
+            />
+          )}
         </>
-      ) : null}
+      )}
 
       {edit.changed && dependencies ? (
         <ChangedDependencies

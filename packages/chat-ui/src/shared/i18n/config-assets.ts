@@ -18,6 +18,12 @@ export const configAssets = defineTranslations({
     configAvailability: "Available in",
     configAvailabilityAll: "All workspaces",
     configAvailabilityAllHint: "Every personal and shared workspace, including future ones.",
+    configAvailabilityAllExcept: "All workspaces except…",
+    configAvailabilityAllExceptHint:
+      "Every shared workspace, including future ones, except those you exclude.",
+    configAvailabilityAllExceptCount: "All except {count}",
+    configAvailabilityExcluded: "Not in",
+    configAvailabilityExcludedHint: "The shared workspaces left out.",
     configAvailabilityAskAdmin: "Ask an admin for all workspaces to make them available.",
     configAvailabilityAskAdmins: "Ask {names} to make them available.",
     configAvailabilityAssetHiddenHint:
@@ -219,6 +225,12 @@ export const configAssets = defineTranslations({
     configAvailability: "Verfügbar in",
     configAvailabilityAll: "Alle Arbeitsbereiche",
     configAvailabilityAllHint: "Jeder persönliche und geteilte Arbeitsbereich, auch künftige.",
+    configAvailabilityAllExcept: "Alle Arbeitsbereiche außer…",
+    configAvailabilityAllExceptHint:
+      "Jeder geteilte Arbeitsbereich, auch künftige, außer den ausgeschlossenen.",
+    configAvailabilityAllExceptCount: "Alle außer {count}",
+    configAvailabilityExcluded: "Nicht in",
+    configAvailabilityExcludedHint: "Die geteilten Arbeitsbereiche, die ausgenommen sind.",
     configAvailabilityAskAdmin:
       "Bitte einen Admin für alle Arbeitsbereiche, sie verfügbar zu machen.",
     configAvailabilityAskAdmins: "Bitte {names}, sie verfügbar zu machen.",

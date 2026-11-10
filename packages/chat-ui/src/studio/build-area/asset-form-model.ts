@@ -56,6 +56,8 @@ export interface AgentAvailabilityForm {
 
 export type AgentAvailabilitySummary =
   | { kind: "all" }
+  /** Every workspace except `count` Shared Workspaces, those made later included. */
+  | { kind: "allExcept"; count: number; personalWorkspaces: boolean }
   | { kind: "hidden" }
   | { kind: "personal" }
   | { kind: "workspaces"; count: number; personalWorkspaces: boolean };
@@ -73,6 +75,13 @@ export function agentAvailabilitySummary(
 ): AgentAvailabilitySummary {
   if (availability?.mode === "all") {
     return { kind: "all" };
+  }
+  if (availability?.mode === "all_except") {
+    return {
+      kind: "allExcept",
+      count: availability.collaborationWorkspaceIds.length,
+      personalWorkspaces: availability.personalWorkspaces
+    };
   }
   const count = availability?.collaborationWorkspaceIds.length ?? 0;
   if (count > 0) {

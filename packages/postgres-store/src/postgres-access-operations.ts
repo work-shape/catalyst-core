@@ -32,7 +32,12 @@ const LEGACY_KEY_ACTIONS: string[] = PERMISSIONS.flatMap((key) => [
   ...LEGACY_PERMISSION_ACTIONS[key]
 ]);
 
-/** One membership rule for runtime rights and the audience read, against asset/availability aliases. */
+/**
+ * One membership rule for runtime rights and the audience read, against asset/availability
+ * aliases. Where it offers an asset it reads availability as `isAgentAvailableInWorkspace` does,
+ * in SQL: every workspace, Personal Workspaces by their switch, and a Shared Workspace when it is
+ * among the selected ones, or with `all_except` when it is not.
+ */
 function availableThroughMembership(
   clientInstanceId: string,
   userId: string | SQLWrapper,
@@ -46,8 +51,10 @@ function availableThroughMembership(
       and (${workspaceId === undefined} or membership.collaboration_workspace_id = ${workspaceId ?? null})
       and (availability.mode = 'all'
         or (availability.personal_workspaces and workspace.kind = 'personal')
-        or exists (select 1 from config_asset_workspace_availability selected
-          where selected.asset_id = asset.id and selected.collaboration_workspace_id = workspace.id))
+        or ((availability.mode = 'all_except') <> exists (
+            select 1 from config_asset_workspace_availability selected
+            where selected.asset_id = asset.id and selected.collaboration_workspace_id = workspace.id)
+          and (availability.mode <> 'all_except' or workspace.kind = 'shared')))
   )`;
 }
 

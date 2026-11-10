@@ -119,7 +119,7 @@ export function assetAudience(
 
 /**
  * Where a chat can choose an asset, in the words of its "Available in" section: "All
- * workspaces", or the workspaces by their names. Nothing where no chat can.
+ * workspaces", "All except 1", or the workspaces by their names. Nothing where no chat can.
  */
 export function offeredPlaces(
   offered: Pick<AgentAvailabilityForm, "mode" | "personalWorkspaces" | "collaborationWorkspaceIds">,
@@ -128,6 +128,13 @@ export function offeredPlaces(
   locale: string
 ): string | undefined {
   if (offered.mode === "all") return t("configAvailabilityAll");
+  // All but some: how many are left out, also where the reader knows them by name.
+  if (offered.mode === "all_except")
+    return offered.collaborationWorkspaceIds.length === 0
+      ? t("configAvailabilityAll")
+      : t("configAvailabilityAllExceptCount", {
+          count: offered.collaborationWorkspaceIds.length
+        });
   const names = offered.collaborationWorkspaceIds.map(
     (id) => assetPlace({ kind: "workspace", workspaceId: id }, workspaces, t).name
   );

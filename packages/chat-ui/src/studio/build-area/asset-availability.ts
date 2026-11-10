@@ -22,7 +22,7 @@ function availabilityPreviewQuery(form: AgentAvailabilityForm) {
   return form.mode === "all"
     ? { availabilityMode: "all" as const }
     : {
-        availabilityMode: "selected" as const,
+        availabilityMode: form.mode,
         availabilityPersonalWorkspaces: form.personalWorkspaces
           ? ("true" as const)
           : ("false" as const),

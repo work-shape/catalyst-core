@@ -2,6 +2,7 @@ import {
   KNOWLEDGE_BASE_ASSET_KIND,
   WORKFLOW_ASSET_KIND,
   asCollaborationWorkspaceId,
+  normalizeAvailability,
   confirmsAsPerson,
   dataHandoverGaps,
   dataHandoverLines,
@@ -372,14 +373,13 @@ function availabilityOf(input: {
   personalWorkspaces?: boolean;
   collaborationWorkspaceIds?: readonly string[];
 }): AgentAvailability {
-  const selected = input.mode === "selected";
-  return {
+  return normalizeAvailability({
     mode: input.mode,
-    personalWorkspaces: selected && input.personalWorkspaces === true,
-    collaborationWorkspaceIds: selected
-      ? (input.collaborationWorkspaceIds ?? []).map(asCollaborationWorkspaceId)
-      : []
-  };
+    personalWorkspaces: input.personalWorkspaces,
+    collaborationWorkspaceIds: (input.collaborationWorkspaceIds ?? []).map(
+      asCollaborationWorkspaceId
+    )
+  });
 }
 
 /**

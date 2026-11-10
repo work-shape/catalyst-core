@@ -17,6 +17,7 @@ import {
   ASSET_SYNC_CHANGE_TYPES,
   AppError,
   asCollaborationWorkspaceId,
+  availabilityOffersNowhere,
   hasAuthScope,
   isAppError,
   isJsonObject,
@@ -296,12 +297,7 @@ export function isReleasedKind(kind: WorkflowAssetKind): boolean {
 
 /** An agent no workspace shows: it has no availability, or one that selects nothing. */
 export function isHiddenEverywhere(availability: AgentAvailability | undefined): boolean {
-  return (
-    !availability ||
-    (availability.mode === "selected" &&
-      !availability.personalWorkspaces &&
-      availability.collaborationWorkspaceIds.length === 0)
-  );
+  return availabilityOffersNowhere(availability);
 }
 
 /**

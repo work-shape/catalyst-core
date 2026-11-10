@@ -89,6 +89,35 @@ describe("agent availability", () => {
     expect(section).not.toContain("not available in any workspace");
   });
 
+  it("offers all, all except and selected, and lists the excluded workspaces under Not in", () => {
+    const section = availabilitySection({
+      saved: {
+        mode: "all_except",
+        personalWorkspaces: true,
+        collaborationWorkspaceIds: ["ws_legal"]
+      }
+    });
+    expect(section).toContain("All workspaces");
+    expect(section).toContain("All workspaces except…");
+    expect(section).toContain("Selected workspaces");
+    expect(section).toMatch(
+      /value="all_except"[^>]*aria-checked="true"|aria-checked="true"[^>]*value="all_except"/u
+    );
+    expect(section).toContain("Not in");
+    expect(section).toContain("Personal workspaces");
+    // Personal workspaces and Legal are ticked: Legal is the one left out.
+    expect(section.match(/type="checkbox"[^>]*checked=""/gu)).toHaveLength(2);
+  });
+
+  it("never offers to exclude a workspace whose own default the agent is", () => {
+    const section = availabilitySection({
+      saved: { mode: "all_except", personalWorkspaces: true, collaborationWorkspaceIds: [] },
+      workspaces: [sales, { ...legal, defaultAgentName: "assistant" }]
+    });
+    expect(section).toMatch(/<label[^>]*>(?:(?!<\/label>).)*Sales/u);
+    expect(section).not.toMatch(/<label[^>]*>(?:(?!<\/label>).)*Legal/u);
+  });
+
   it("lets the default agent be restricted and says where it has to stay", () => {
     const section = availabilitySection(
       { saved: { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] } },
