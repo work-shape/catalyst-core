@@ -120,6 +120,35 @@ Owner Disconnect deletes the token set and asks the provider to revoke its grant
 
 The personal sign-in lifecycle is separate from the conversation isolation gate and Settings interface.
 
+## A functional mailbox over IMAP
+
+The connector type `imap` reads one shared mailbox, such as a team's service address, with its password. It has two operations, both reading: `search_messages` searches one folder, newest first, and answers date, sender, subject, size, attachment count and whether a message was read; `get_message` answers one message's headers, up to 20,000 characters of its text and the names of its attachments. Attachments are never downloaded. Folders are opened read-only and bodies read with `BODY.PEEK`, so a message read here stays unread for everyone else, and nothing is moved, flagged or deleted.
+
+```yaml
+connections:
+  service-mailbox:
+    connectorType: imap
+    displayName: Service mailbox
+    settings:
+      host: imap.example.com
+      port: 993
+      username: service@example.com
+      folders: [INBOX]
+    authScheme: password
+    secret: SERVICE_MAILBOX_PASSWORD
+    operations:
+      - { name: search_messages, effect: reading, exposure: [agent] }
+      - { name: get_message, effect: reading, exposure: [agent] }
+egress:
+  allow:
+    - { protocol: imaps, host: imap.example.com, port: 993 }
+```
+
+- The connection is IMAP over implicit TLS only, on 993 unless `port` says otherwise; plain IMAP and STARTTLS are not offered, and port 143 is refused. The certificate must be valid for `host` under the system's trusted authorities. `egress.allowPublicHttps` does not open a mail server: it needs an `imaps` entry.
+- `folders` is the boundary, one to twenty folder names, `INBOX` by default. A folder or message id outside it is refused before the server is contacted, and a test opens each folder.
+- The password is the Connection's own secret and bound to `host`, `port` and the user name: a change of any of them deletes it. A change of `folders` keeps it.
+- What a mailbox answers is one person's to read, though the password is shared. Every call is a personal call: it runs only in the caller's own agent chat, which it marks, never from the CLI, a Workflow, an App or a chat others can read. The operations accept exposure `agent` only, its Operation Runs keep no input or output, and the caller needs `connection.use`. Mail text is untrusted input to the agent.
+
 ## Catalogue OAuth parts and result shapers
 
 A catalogue tools part may declare `authScheme: oauth`, the provider endpoints under `oauth`,

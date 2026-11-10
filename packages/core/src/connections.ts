@@ -272,8 +272,11 @@ export interface ConnectorLimits {
   maxParallelCalls: number;
 }
 
-/** The transports a Connection may open. Plain `http` only reaches a private target. */
-export const EGRESS_PROTOCOLS = ["https", "http", "postgres"] as const;
+/**
+ * The transports a Connection may open. Plain `http` only reaches a private target. `imaps` is
+ * IMAP over implicit TLS (MBX); there is no plain IMAP.
+ */
+export const EGRESS_PROTOCOLS = ["https", "http", "postgres", "imaps"] as const;
 export type EgressProtocol = (typeof EGRESS_PROTOCOLS)[number];
 
 /**
@@ -329,9 +332,18 @@ export function connectionOAuthTargets(endpoints: ConnectorOAuthEndpoints): Egre
  */
 export function connectionCredentialOrigin(
   target: EgressTarget,
-  endpoints: ConnectorOAuthEndpoints | undefined
+  endpoints: ConnectorOAuthEndpoints | undefined,
+  /**
+   * The opaque key of the account a typed secret is for, where the type binds one
+   * (`ConnectorTypeDefinition.credentialAccount`). A secret set for one account is none for
+   * another account on the same origin.
+   */
+  account?: string
 ): string {
-  const origin = egressOriginOf(target);
+  const origin =
+    account === undefined
+      ? egressOriginOf(target)
+      : `${egressOriginOf(target)} account ${encodeURIComponent(account)}`;
   if (endpoints === undefined) return origin;
   const of = (address: string | undefined) =>
     address === undefined ? "-" : encodeURIComponent(new URL(address).href);
@@ -881,6 +893,22 @@ interface ConnectorTypeBase {
   documentSource?: DocumentSourceCapability;
   /** The type's card and form in the New connection dialog. */
   form?: ConnectorTypeForm;
+  /**
+   * What a call of the type answers is one person's to read, whatever the Connection's mode,
+   * as a functional mailbox's mail is (MBX). Every call is then a personal call
+   * (`connectionCallsArePersonal`): it runs only in its caller's own agent chat, which it
+   * marks, its Operation Run keeps no input or output, and the Connection accepts the exposure
+   * `agent` only.
+   */
+  privateResults?: true;
+  /**
+   * An opaque key of the outside account the Connection's own secret is for, read from
+   * settings its schema accepted, such as a digest of a mailbox's user name. The secret is
+   * bound to it beside the origin (`connectionCredentialOrigin`), so a writer who changes the
+   * account has the secret deleted and cannot try it on another account. Never the account
+   * name itself: the key is stored beside the secret.
+   */
+  credentialAccount?(settings: JsonObject): string | undefined;
 }
 
 /**
@@ -990,6 +1018,21 @@ export function createConnectorTypeRegistry(
   const types = Object.freeze([...byType.values()]);
   return Object.freeze({ types, get: (type: string) => byType.get(type) });
 }
+
+/**
+ * Whether calls of a Connection are personal calls: each person's own account (`user`), or a
+ * type whose results are one person's to read (`privateResults`). The one rule for the context
+ * gate, the mark of the conversation, the run's personal flag and its Operation Run.
+ */
+export function connectionCallsArePersonal(
+  config: Pick<ConnectionConfig, "credentialMode">,
+  type: Pick<ConnectorTypeDefinition, "privateResults"> | undefined
+): boolean {
+  return config.credentialMode === "user" || type?.privateResults === true;
+}
+
+/** The one exposure an operation of a type with `privateResults` accepts. */
+const PRIVATE_RESULTS_EXPOSURE: ConnectionExposure = "agent";
 
 /** The reasons a Connection is refused for, as the first word of an issue or a `reason`. */
 export const CONNECTION_REFUSALS = {
@@ -1186,6 +1229,17 @@ export function findConnectorTypeIssues(
     });
   } else if (settings.success && type.oauthEndpoints) {
     issues.push(...oauthSchemeIssues(type.oauthEndpoints(settings.data), connection.authScheme));
+  }
+  if (type.privateResults) {
+    // Its results reach one person's own chat and nothing else: no App, Workflow or client.
+    connection.operations.forEach((operation, index) => {
+      const refused = operation.exposure.find((exposure) => exposure !== PRIVATE_RESULTS_EXPOSURE);
+      if (refused === undefined) return;
+      issues.push({
+        message: `Connector type '${type.type}' answers what only its caller may read, so an operation accepts only the exposure '${PRIVATE_RESULTS_EXPOSURE}', not '${refused}'`,
+        path: ["operations", index, "exposure"]
+      });
+    });
   }
   return [...issues, ...declarationIssues(type, connection.operations)];
 }

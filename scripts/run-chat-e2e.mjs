@@ -31,6 +31,7 @@ const requiredBuilds = [
   ["packages/auth", "build"],
   ["packages/tool-sdk", "build"],
   ["packages/postgres-connector", "build"],
+  ["packages/imap-connector", "build"],
   ["packages/capability-sdk", "build"],
   ["packages/mail", "build"],
   ["packages/model-provider", "build"],

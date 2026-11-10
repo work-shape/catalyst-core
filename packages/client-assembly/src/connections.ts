@@ -53,6 +53,7 @@ import {
   requestConnectionDiscovery,
   type ChatServerOptions
 } from "@work-shape/catalyst-server";
+import { createImapConnectorType } from "@work-shape/catalyst-imap-connector";
 import {
   getPersonalModelRegions,
   type ClientInstanceConfig
@@ -205,6 +206,8 @@ async function buildInstanceConnections(
   const connectorTypes = createConnectorTypeRegistry([
     createMcpConnectorType({ logger }),
     createHttpApiConnectorType(resultShapers, managedClients),
+    // A functional mailbox (MBX). Nothing connects without an `imaps` entry of the egress list.
+    createImapConnectorType(),
     ...types
   ]);
   // Every shipped entry is checked now, so a broken one stops the start; an entry that

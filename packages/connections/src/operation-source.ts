@@ -3,6 +3,7 @@ import {
   CONNECTION_ASSET_KIND,
   CONNECTION_EXPOSURE_ACTION_PREFIX,
   answersOutsideClient,
+  connectionCallsArePersonal,
   connectionOperationName,
   exposureOfOrigin,
   isAuthenticatedServicePrincipal,
@@ -158,7 +159,7 @@ async function authorizeCall(
   operation: ConnectionOperationConfig,
   context: OperationAuthorizeContext
 ): Promise<OperationAuthorization> {
-  if (connection.config.credentialMode === "user") {
+  if (connectionCallsArePersonal(connection.config, connection.type)) {
     await requirePersonalConnectionContext({
       ...deps,
       modelRoutes: context.modelRoutes,
@@ -280,10 +281,14 @@ function definitionOf(
     connection.type?.carriesIdempotencyKey === true
       ? { repeatsUnderKey: true as const }
       : {}),
-    ...(connection.config.credentialMode === "user" ? { personalConnection: true as const } : {}),
+    // Its Operation Run keeps no input or output, and its call is never frozen for later.
+    ...(connectionCallsArePersonal(connection.config, connection.type)
+      ? { personalConnection: true as const }
+      : {}),
     // A shared Connection's test credential is its test target (ADR-0031, DT-3): where one is
     // set, every call of a draft goes there, reading and changing alike. Asked only for a draft.
-    ...(connection.config.credentialMode === "shared"
+    // A type whose results are private has none: no draft App or Workflow reaches it.
+    ...(connection.config.credentialMode === "shared" && connection.type?.privateResults !== true
       ? {
           testTarget: {
             state: async () =>

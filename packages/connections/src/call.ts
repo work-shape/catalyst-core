@@ -10,6 +10,7 @@ import {
   EGRESS_UNRESOLVED,
   signInSecretSubject,
   connectionCallError,
+  connectionCallsArePersonal,
   connectionCallFailure,
   connectionCallReasonOf,
   isAppError,
@@ -876,7 +877,8 @@ async function call(
     return found;
   };
   const first = await read();
-  if (first.connection.config.credentialMode === "user") {
+  // A personal connection, or a type whose results are its caller's alone (`privateResults`).
+  if (connectionCallsArePersonal(first.connection.config, first.type)) {
     await requirePersonalConnectionContext({
       ...deps,
       modelRoutes: context.runtime.modelRoutes,
@@ -925,7 +927,7 @@ async function call(
       const opening = openConnectorContext({
         ...(test === undefined ? {} : { test }),
         type,
-        ...(connection.config.credentialMode === "user"
+        ...(connectionCallsArePersonal(connection.config, type)
           ? {
               personalCall: async () => {
                 const root = await requirePersonalConnectionContext({

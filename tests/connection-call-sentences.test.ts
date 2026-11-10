@@ -50,7 +50,10 @@ const REASONS: ConnectionCallReason[] = [
   "schema_too_deep",
   "schema_too_many_refs",
   "schema_too_many_patterns",
-  "schema_pattern_too_long"
+  "schema_pattern_too_long",
+  "folder_not_found",
+  "message_not_found",
+  "cursor_expired"
 ];
 
 /** What a caller can do next, as each sentence has to say it. */

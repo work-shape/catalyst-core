@@ -261,7 +261,11 @@ export const tool = (name: string, further: JsonObject = {}): JsonObject => ({
 /** The result of a tool call that holds one text. */
 export const textResult = (text: string): JsonObject => ({ content: [{ type: "text", text }] });
 
-export type AllowedTestTarget = { host: string; port: number; protocol?: "http" | "https" };
+export type AllowedTestTarget = {
+  host: string;
+  port: number;
+  protocol?: "http" | "https" | "imaps";
+};
 
 /**
  * The operator's list of a test: each entry a private target on loopback, and a resolver

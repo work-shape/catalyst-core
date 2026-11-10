@@ -48,7 +48,7 @@ import { BlockList, isIP } from "node:net";
 // - `egress.allowPublicHttps` is the operator opening every `https` target on port 443 that
 //   no entry names. Such a target is judged as a `public` entry, so every answer must be a
 //   public address. The Platform Store's host is refused on every port, by name and by
-//   address. Plain `http`, `postgres` and every other port still need an entry.
+//   address. Plain `http`, `postgres`, `imaps` and every other port still need an entry.
 // - A refusal says which setting would let the target through, or that none would.
 
 /** One entry of release config `egress.allow`, as the schema reads it. */
@@ -83,7 +83,12 @@ export const EGRESS_RESOLUTION_FAILURE_TTL_MS = 5_000;
 /** How long one DNS lookup may take before the target is refused. */
 export const EGRESS_RESOLVE_TIMEOUT_MS = 5_000;
 /** The default ports of the protocols an address may name without one. */
-const DEFAULT_PORTS: Record<EgressProtocol, number> = { https: 443, http: 80, postgres: 5432 };
+const DEFAULT_PORTS: Record<EgressProtocol, number> = {
+  https: 443,
+  http: 80,
+  postgres: 5432,
+  imaps: 993
+};
 
 export interface EgressCheckerOptions {
   allow: readonly EgressAllowEntry[];
