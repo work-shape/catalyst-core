@@ -101,15 +101,16 @@ export const SHARE_CANDIDATES_QUERY_MAX_CHARS = 200;
 export const SHARE_CANDIDATES_LIMIT_MAX = 50;
 
 export const shareCandidatesQuerySchema = z.object({
-  /** A prefix of a name, of a word of the name, or of an email. */
+  /** A prefix of a name, of a word of the name, or of an email, among the people offered. */
   query: z.string().trim().min(1).max(SHARE_CANDIDATES_QUERY_MAX_CHARS).optional(),
   limit: z.coerce.number().int().min(1).max(SHARE_CANDIDATES_LIMIT_MAX).default(5)
 });
 
 /**
- * A member of the chat's workspace its creator may name: the people they named before in this
- * workspace first, then those who last wrote in a chat of it the creator reads, then by name.
- * `hasAccess` marks the creator and those already named.
+ * A member of the chat's workspace its creator knows from it: one they named before in this
+ * workspace, then one who last wrote in a chat of it the creator reads. A search filters these
+ * people only, never the workspace's members. `email` is present only where the query typed
+ * its start; `hasAccess` marks those already named.
  */
 export const conversationShareCandidateSchema = z.object({
   userId: z.string(),

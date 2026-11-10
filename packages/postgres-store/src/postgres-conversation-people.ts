@@ -1,4 +1,16 @@
-import { and, asc, eq, ilike, inArray, isNull, ne, or, sql, type SQLWrapper } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  ne,
+  or,
+  sql,
+  type SQLWrapper
+} from "drizzle-orm";
 import {
   ACTIVE_AGENT_RUN_STATUSES,
   AppError,
@@ -393,6 +405,14 @@ export async function listShareCandidates(
         isNull(productUsers.deletionRequestedAt),
         // The creator reads it already.
         ne(productUsers.id, creatorUserId),
+        // Only people the creator knows from this workspace, with a query or without: a member
+        // cannot list the members (only an Owner or Admin can), and a search must not do so
+        // a letter at a time (spec section 5: "among the offered people only").
+        or(
+          isNotNull(namedAt.at),
+          isNotNull(wroteAt.at),
+          sql`exists (select 1 from ${conversationPeople} where ${conversationPeople.clientInstanceId} = ${clientInstanceId} and ${conversationPeople.conversationId} = ${input.conversationId} and ${conversationPeople.userId} = ${productUsers.id})`
+        ),
         query
           ? or(
               ilike(productUsers.displayLabel, prefixPattern(query)),
@@ -409,10 +429,15 @@ export async function listShareCandidates(
       asc(productUsers.id)
     )
     .limit(input.limit);
+  // An email is shown only to a search that typed its start: the bare list and a search by
+  // name answer names alone.
+  const emailQuery = query?.toLocaleLowerCase();
   return rows.map((row) => ({
     userId: row.userId,
     displayLabel: row.displayLabel,
-    ...(row.email ? { email: row.email } : {}),
+    ...(row.email && emailQuery && row.email.toLocaleLowerCase().startsWith(emailQuery)
+      ? { email: row.email }
+      : {}),
     hasAccess: row.named
   }));
 }

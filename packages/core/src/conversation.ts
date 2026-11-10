@@ -253,10 +253,14 @@ export interface AddConversationPersonInput {
   checked: { dataStoreAssetIds: readonly string[]; subject?: ConversationSubject };
 }
 
-/** A person a chat's creator may name, as the share picker offers them. */
+/**
+ * A person a chat's creator may name, as the share picker offers them: only one the creator
+ * knows from the workspace, never a list of its members.
+ */
 export interface ConversationShareCandidate {
   userId: string;
   displayLabel: string;
+  /** Only where the search typed the start of it. */
   email?: string;
   /** Named on the chat already: shown, never named again. The creator is never offered. */
   hasAccess: boolean;

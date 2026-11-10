@@ -10,10 +10,11 @@ section: Added
   the same way. The names go when the membership ends, when the person is deleted and when the
   chat moves to another workspace; a chat that names people does not enter a project. Only the
   creator moves or deletes it.
-- **Chats:** `GET …/share-candidates` offers the workspace's members, the ones the creator named
-  before first. A share is refused, with a stable `details.reason`, where the chat must stay its
-  creator's: personal data read in it, a Data Store or an asset the person may not read, a
-  project, a Personal Workspace. A chat that names people no longer takes personal data.
+- **Chats:** `GET …/share-candidates` offers only people the creator knows from the workspace:
+  the ones they named before first, then those who wrote in a chat of it they read. A search
+  filters these people only, and an email shows only to a search that typed its start. A share is
+  refused, with a stable `details.reason`, where the chat must stay its creator's: personal data
+  read in it, a Data Store or an asset the person may not read, a project, a Personal Workspace. A chat that names people no longer takes personal data.
 - **Chats:** Naming, removing and changing who reads a chat is the person's own step in their own
   session: never an agent tool, a key or an embedding host. The named person gets an Inbox notice
   linking the chat, and `conversation.person_added` and `conversation.person_removed` are audited
