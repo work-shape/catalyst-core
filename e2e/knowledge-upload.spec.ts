@@ -242,7 +242,7 @@ test.describe("uploading files from the computer into a Knowledge Base", () => {
       ).toBeVisible();
       if ((await sources.locator("[data-knowledge-sources-none]").count()) > 0) {
         await expect(sources).toContainText(
-          "Um Ordner aus Testordner zu synchronisieren, lege zuerst eine Verbindung an."
+          "Um Ordner aus Testordner oder Webseiten zu synchronisieren, lege zuerst eine Verbindung an."
         );
         await expect(sources.locator("[data-knowledge-source-connect]")).toBeVisible();
       }

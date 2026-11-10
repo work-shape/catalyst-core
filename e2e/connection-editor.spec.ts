@@ -140,8 +140,15 @@ async function openDialog(page: Page, locale: Locale) {
   // The title of the dialog follows its step; its first step is "New connection".
   await expect(page.getByRole("dialog", { name: WORDS[locale].newConnection })).toBeVisible();
   const dialog = page.getByRole("dialog").first();
-  // An MCP server, a REST API and the suite's folder source, which has a form of its own.
-  await expect(dialog.locator("[data-connection-type]")).toHaveCount(3);
+  // An MCP server, a REST API and the types with a form of their own: the mailbox, the suite's
+  // folder source and web pages. No person's own MCP server: that is no Connection to make here.
+  const types = dialog.locator("[data-connection-type]");
+  await expect(types).toHaveCount(5);
+  expect(
+    await types.evaluateAll((cards) =>
+      cards.map((card) => card.getAttribute("data-connection-type"))
+    )
+  ).toEqual(["mcp", "http_api", "imap", "test_folders", "web"]);
   return { main, dialog };
 }
 /** The writes the browser sends about one Connection, in their order. */
