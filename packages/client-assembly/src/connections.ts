@@ -43,6 +43,7 @@ import {
   type ModuleSnapshot,
   type OperationRegistry,
   type OperationSource,
+  type OwnServersSettings,
   type PlatformStores,
   type ResultShaper,
   type SecretResolver
@@ -55,6 +56,7 @@ import {
 } from "@work-shape/catalyst-server";
 import { createImapConnectorType } from "@work-shape/catalyst-imap-connector";
 import {
+  getOwnServers,
   getPersonalModelRegions,
   type ClientInstanceConfig
 } from "@work-shape/catalyst-config-schema";
@@ -78,6 +80,8 @@ export interface InstanceConnections {
   readonly signInEnding?: ConnectionSignInEnding;
   /** The Inbox notice of a Connection whose sign-in the outside system refused. */
   readonly reconnectNotice?: ApprovalRequestHandler;
+  /** `modules.connections.ownServers`: people's own MCP servers (PMCP). */
+  readonly ownServers: OwnServersSettings;
   /**
    * Makes the stored release Connections equal to release config, then queues one discovery
    * for every Connection that reads its operations from its outside system. The API process
@@ -294,6 +298,7 @@ async function buildInstanceConnections(
         managedClients
       })
     : undefined;
+  const ownServers = getOwnServers(config);
   const operations = {
     clientInstanceId,
     stores,
@@ -302,7 +307,8 @@ async function buildInstanceConnections(
     credentials,
     logger,
     personalModelRegions: getPersonalModelRegions(config),
-    managedClients
+    managedClients,
+    ownServers
   };
   const slots = new ConnectionCallSlots();
   const openDocumentSource = createDocumentSourceOpener(operations, slots);
@@ -314,6 +320,7 @@ async function buildInstanceConnections(
     ...(credentials ? { credentials } : {}),
     ...(signInEnding ? { signInEnding } : {}),
     reconnectNotice: createConnectionReconnectNoticeHandler(notices),
+    ownServers,
     operationSource: createConnectionOperationSource(operations, slots),
     toolSource: createConnectionToolSource(operations),
     management: {

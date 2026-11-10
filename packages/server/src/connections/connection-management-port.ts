@@ -113,6 +113,8 @@ export interface ConnectionManagementPort {
   ): Promise<ConnectionPersonContext>;
   /** What a right on the Connection is decided on. Nothing where no such Connection exists. */
   resource(name: string): Promise<OperationResource | undefined>;
+  /** Refuses a discovery of a person's own server with `own_servers_off` while it is off. */
+  requireOwnServersOn(name: string): Promise<void>;
   /** `agents` are the agents the caller may read: the answer names no other. */
   get(
     name: string,

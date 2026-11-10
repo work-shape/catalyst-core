@@ -15,6 +15,7 @@ import {
   isOutsideCall,
   personalConnectionContextError,
   requirePersonalDiscoveryContext,
+  type AccessResource,
   type ActorAccess,
   type AuthenticatedIdentity,
   type OperationAuthorization,
@@ -51,11 +52,19 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
     action: string,
     name: string
   ): Promise<OperationAuthorization> {
-    const resource = (await connections?.resource(name)) ?? {
+    const resource: AccessResource = (await connections?.resource(name)) ?? {
       kind: CONNECTION_ASSET_KIND,
       name
     };
-    return decide(access, action, resource);
+    const decision = decide(access, action, resource);
+    // A person's own server is tested, rediscovered and given a secret by its owner alone: an
+    // instance admin's write right on it switches it off and nothing more (PMCP).
+    if (!decision.allowed || resource.ownerOnly === undefined) return decision;
+    if (action !== CONNECTION_ACTIONS.write) return decision;
+    const own = access.authorize(action, resource);
+    return own.allowed && own.source === "owner"
+      ? decision
+      : { allowed: false, action, reason: "not_owner" };
   }
 
   function requestDiscovery(connectionName: string, personalOwner?: string): Promise<void> {
@@ -294,6 +303,7 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
       if (!(await required().resource(input.name))) {
         throw new AppError("NOT_FOUND", `Connection '${input.name}' does not exist`);
       }
+      await required().requireOwnServersOn(input.name);
       await requestDiscovery(input.name, await personalOwnerOf(input.name, context));
       return { status: "queued" as const };
     }

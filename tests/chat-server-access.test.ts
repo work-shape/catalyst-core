@@ -502,7 +502,8 @@ describe("deny rows and asset grants", () => {
         ).json()
       );
     expect(effective.holderActive).toBe(false);
-    expect(effective.items).toEqual([{ source: "grant" }]);
+    // The `user` role's add of one's own MCP server (PMCP), and the grant.
+    expect(effective.items).toEqual([{ source: "role" }, { source: "grant" }]);
 
     await t.stores.users.updateUser({ clientInstanceId, userId: t.kai.id, status: "active" });
     expect((await t.putAgent(t.kai.id, "kai-helper", { instructions: "Back." })).statusCode).toBe(

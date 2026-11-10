@@ -316,7 +316,8 @@ describe("operation contracts", () => {
             | "holder_inactive"
             | "holder_not_administrable"
             | "user_only"
-            | "outside_key_scope";
+            | "outside_key_scope"
+            | "not_owner";
           message?: string;
           boundBy?: { id: string; label: string };
         }

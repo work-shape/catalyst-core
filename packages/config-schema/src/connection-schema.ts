@@ -325,6 +325,8 @@ export const storedConnectionConfigSchema = z
     settings: settingsSchema.default({}),
     authScheme: z.string().min(1).max(64),
     credentialMode: z.enum(CONNECTION_CREDENTIAL_MODES).default("shared"),
+    /** A person's own MCP server (PMCP). Set by the server on the self-add create alone. */
+    ownerOnly: z.boolean().optional(),
     secretHandle: z
       .string()
       .regex(CONNECTION_SECRET_HANDLE_PATTERN, {
@@ -351,6 +353,17 @@ export const storedConnectionConfigSchema = z
         code: "custom",
         path: ["credentialMode"],
         message: "personal_oauth_required: personal Connections require OAuth on http_api or mcp"
+      });
+    }
+    // A person's own server is an MCP server each person signs in to (PMCP).
+    if (
+      connection.ownerOnly === true &&
+      (connection.connectorType !== "mcp" || connection.credentialMode !== "user")
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["ownerOnly"],
+        message: "A person's own server is an MCP server in the credential mode 'user'"
       });
     }
     for (const { path, finding } of findCredentialsInSettings(connection.settings)) {

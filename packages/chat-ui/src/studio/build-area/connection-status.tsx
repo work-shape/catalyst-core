@@ -132,7 +132,9 @@ const TEST_RESULTS: Record<ConnectionTestResult["status"], HealthView> = {
   network_denied: "network_denied",
   unavailable: "unavailable",
   // The server asks for a sign-in, or the Connection signs in and nobody has.
-  oauth_required: "sign_in_needed"
+  oauth_required: "sign_in_needed",
+  // A person's own server takes a token and has none yet (PMCP).
+  token_required: "unauthorized"
 };
 
 /** What the instance recorded, before this page's own test. */

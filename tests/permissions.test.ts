@@ -42,6 +42,7 @@ describe("permissions", () => {
       "connection.write",
       "connection.delete",
       "connection.approve",
+      "connection.add_own",
       "app.read",
       "app.write",
       "app.publish",
@@ -168,7 +169,8 @@ describe("permissions", () => {
   // The unmapped-action branch requires an unsafe cast or an untyped boundary.
 
   it("derives unchanged legacy role defaults from the canonical actions", () => {
-    expect(ROLE_DEFAULT_ACTIONS.user).toEqual([]);
+    // A `user` holds one default: adding their own MCP server (PMCP), which no legacy key names.
+    expect(ROLE_DEFAULT_ACTIONS.user).toEqual(["connection.add_own"]);
     expect(ROLE_DEFAULT_ACTIONS.admin).toEqual([
       "agent.read",
       "agent.write",
@@ -186,6 +188,7 @@ describe("permissions", () => {
       "connection.write",
       "connection.delete",
       "connection.approve",
+      "connection.add_own",
       "app.read",
       "app.write",
       "app.publish",

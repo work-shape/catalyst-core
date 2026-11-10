@@ -24,9 +24,11 @@ import {
   type ConnectorTypeDefinition,
   type EgressGrant,
   type JsonObject,
-  type OperationResource
+  type OperationResource,
+  requireOwnServersOn
 } from "@work-shape/catalyst-core";
 import {
+  connectionResourceOf,
   readConnection,
   readConnections,
   type ConnectionOperationSourceDeps,
@@ -177,15 +179,6 @@ function withConnection(error: unknown, connectionName: string): unknown {
   if (!(error instanceof AppError)) return error;
   const details = typeof error.details === "object" && error.details !== null ? error.details : {};
   return new AppError(error.code, error.message, { ...details, connection: connectionName });
-}
-
-function resourceOf(connection: StoredConnection): OperationResource {
-  return {
-    kind: CONNECTION_ASSET_KIND,
-    id: connection.assetId,
-    assetId: connection.assetId,
-    name: connection.config.name
-  };
 }
 
 function signInOf(connection: StoredConnection): {
@@ -712,6 +705,7 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
         ) {
           throw personalConnectionBrowserError();
         }
+        requireOwnServersOn(connection.config, deps.ownServers);
         return await start(connection, starter, audit, deadline(signal));
       } catch (error) {
         await refused(audit, "start", error, connection);
@@ -775,13 +769,18 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
         ) {
           throw connectionOAuthError("oauth_state_invalid");
         }
-        if (!(personal ? mayUse?.(resourceOf(connection)) : mayWrite(resourceOf(connection)))) {
+        if (
+          !(personal
+            ? mayUse?.(connectionResourceOf(connection))
+            : mayWrite(connectionResourceOf(connection)))
+        ) {
           throw new AppError(
             "FORBIDDEN",
             `forbidden: connecting the Connection needs the right ${personal ? "connection.use" : "connection.write"}`,
             { reason: "forbidden" }
           );
         }
+        requireOwnServersOn(connection.config, deps.ownServers);
         await complete(session, connection, query, audit, deadline(signal));
         const location = signInLandingUrl(
           required(connection.config.name).publicUrl,

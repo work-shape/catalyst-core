@@ -75,7 +75,7 @@ function rights(props: Partial<ComponentProps<typeof GrantsTab>>, locale: "en" |
 const actionOf = (kind: string, verb: string) => (kind === "workspace" ? verb : `${kind}.${verb}`);
 
 describe("what the Access page offers", () => {
-  it("is every kind core writes a grant row for, with every action of it", () => {
+  it("is every kind core writes a grant row for, with every action of it but one's own server's add", () => {
     const kindsOfCore = [
       ...new Set(
         GRANTABLE_ACTIONS.map((action) =>
@@ -88,8 +88,11 @@ describe("what the Access page offers", () => {
     const offered = GRANT_KINDS.flatMap((kind) =>
       grantVerbs(kind).map((verb) => actionOf(kind, verb))
     );
-    expect([...offered].sort()).toEqual([...GRANTABLE_ACTIONS].sort());
-    for (const action of GRANTABLE_ACTIONS) {
+    // Adding one's own MCP server names no Connection: the role editor holds it (PMCP).
+    const ofTheDialog = GRANTABLE_ACTIONS.filter((action) => action !== "connection.add_own");
+    expect([...offered].sort()).toEqual([...ofTheDialog].sort());
+    expect(splitGrantableAction("connection.add_own")).toBeUndefined();
+    for (const action of ofTheDialog) {
       const parts = splitGrantableAction(action);
       expect([action, parts && actionOf(parts.kind, parts.verb)]).toEqual([action, action]);
     }

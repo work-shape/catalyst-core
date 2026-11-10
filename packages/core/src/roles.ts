@@ -55,7 +55,8 @@ export const SUPERADMIN_DEFAULT_ACTIONS = [
  * stored, so a new action is reachable by somebody from the first start.
  */
 export const ROLE_DEFAULT_ACTIONS: Record<BuiltInRole, readonly PlatformAction[]> = {
-  user: [],
+  // Everybody may add their own MCP server, which only they use (PMCP, 2026-11-10).
+  user: ["connection.add_own"],
   admin: ACTIONS.filter(
     (action) =>
       action !== "assets.release" &&

@@ -1,7 +1,9 @@
 import {
   AppError,
   asClientInstanceId,
-  DEFAULT_PERSONAL_MODEL_REGIONS
+  DEFAULT_OWN_SERVERS,
+  DEFAULT_PERSONAL_MODEL_REGIONS,
+  type OwnServersSettings
 } from "@work-shape/catalyst-core";
 import type {
   AgentConfig,
@@ -21,6 +23,19 @@ export function getClientInstanceId(config: ClientInstanceConfig) {
  */
 export function getPersonalModelRegions(config: ClientInstanceConfig): readonly string[] {
   return config.modules.connections?.personalModelRegions ?? DEFAULT_PERSONAL_MODEL_REGIONS;
+}
+
+/**
+ * How people may add their own MCP servers: `modules.connections.ownServers`, each value left
+ * out at its default. Where the module `connections` is off there is no Connection to add.
+ */
+export function getOwnServers(config: ClientInstanceConfig): OwnServersSettings {
+  const own = config.modules.connections?.ownServers;
+  return {
+    enabled: own?.enabled ?? DEFAULT_OWN_SERVERS.enabled,
+    perPerson: own?.perPerson ?? DEFAULT_OWN_SERVERS.perPerson,
+    publicHttps: own?.publicHttps ?? DEFAULT_OWN_SERVERS.publicHttps
+  };
 }
 
 export interface ResolvedModelSelection {

@@ -2,7 +2,6 @@ import { createPersonalConnectionManagement } from "./personal-management";
 import type { Catalogue } from "./catalogue/catalogue";
 import {
   AppError,
-  CONNECTION_ASSET_KIND,
   CONNECTION_REFUSALS,
   CREDENTIAL_REFUSALS,
   EGRESS_DENIED,
@@ -31,7 +30,9 @@ import {
   type ConnectorTestStatus,
   type OperationResource,
   type OperationPaging,
-  type SecretState
+  type SecretState,
+  type ConnectorTypeDefinition,
+  requireOwnServersOn
 } from "@work-shape/catalyst-core";
 import {
   connectorTypeOffers,
@@ -46,6 +47,7 @@ import type { AuthenticatedIdentity } from "@work-shape/catalyst-core";
 import { connectionCallLimits } from "./call";
 import { connectionOperationStatus, type ConnectionOperationState } from "./catalog";
 import {
+  connectionResourceOf,
   readConnection,
   readConnections,
   type ConnectionOperationSourceDeps,
@@ -219,6 +221,8 @@ export interface ConnectionManagement
     ReturnType<typeof createPersonalConnectionManagement> {
   /** What a right on the Connection is decided on. Nothing where no such Connection exists. */
   resource(name: string): Promise<OperationResource | undefined>;
+  /** Refuses a discovery of a person's own server with `own_servers_off` while it is off. */
+  requireOwnServersOn(name: string): Promise<void>;
   /** `agents` are the agents the caller may read: `usedBy` names no other. */
   get(
     name: string,
@@ -295,15 +299,6 @@ export interface ConnectionManagement
 export interface ConnectionDisconnected {
   state: "revoked";
   providerRevocation: ConnectionProviderRevocation;
-}
-
-function resourceOf(connection: StoredConnection): OperationResource {
-  return {
-    kind: CONNECTION_ASSET_KIND,
-    id: connection.assetId,
-    assetId: connection.assetId,
-    name: connection.config.name
-  };
 }
 
 function notFound(name: string): AppError {
@@ -432,6 +427,50 @@ function healthOfTest(
   return "failed";
 }
 
+/**
+ * The owner's test of a person's own server (PMCP): one request to its checked address with no
+ * credential resolved, which answers whether it is there and what it asks for, and writes the
+ * Connection's health. The route lets only the owner ask it.
+ */
+async function probeOwnServer(
+  deps: ConnectionOperationSourceDeps,
+  connection: StoredConnection,
+  type: ConnectorTypeDefinition,
+  outer: AbortSignal | undefined,
+  now: () => Date
+): Promise<{ status: ConnectorTestStatus; testedAt: string }> {
+  requireOwnServersOn(connection.config, deps.ownServers);
+  const settings = type.settingsSchema.safeParse(connection.config.settings);
+  if (!type.probe || !settings.success) throw connectionCallError("connection_unavailable");
+  const signal = AbortSignal.any([
+    ...(outer ? [outer] : []),
+    AbortSignal.timeout(connectionCallLimits(type).callTimeoutMs)
+  ]);
+  let status: ConnectorTestStatus;
+  let reason: ConnectionCallReason | undefined;
+  try {
+    const target = await deps.egress.check(type.target(settings.data));
+    status = await type.probe({ target, settings: settings.data, signal });
+  } catch (error) {
+    reason = connectionCallReasonOf(error);
+    status = testStatusOf(reason);
+  }
+  const testedAt = now().toISOString();
+  await deps.stores.connections.putConnectionState({
+    clientInstanceId: deps.clientInstanceId,
+    connectionAssetId: connection.assetId,
+    health:
+      status === "ready"
+        ? "ok"
+        : status === "oauth_required" || status === "token_required"
+          ? "needs_configuration"
+          : "failed",
+    lastTestedAt: testedAt,
+    lastErrorCode: status === "ready" ? null : (reason ?? status)
+  });
+  return { status, testedAt };
+}
+
 export function createConnectionManagement(
   deps: ConnectionOperationSourceDeps &
     Pick<ConnectionSignInDeps, "publicUrl" | "oauth"> & {
@@ -541,7 +580,12 @@ export function createConnectionManagement(
     ...createPersonalConnectionManagement(deps),
     async resource(name) {
       const connection = await readConnection(deps, name);
-      return connection ? resourceOf(connection) : undefined;
+      return connection ? connectionResourceOf(connection) : undefined;
+    },
+
+    async requireOwnServersOn(name) {
+      const connection = await readConnection(deps, name);
+      if (connection) requireOwnServersOn(connection.config, deps.ownServers);
     },
 
     async get(name, agents, readable, reader) {
@@ -607,6 +651,9 @@ export function createConnectionManagement(
       if (!connection) throw notFound(name);
       const { type } = connection;
       if (!type) throw connectionCallError("connection_unavailable");
+      if (connection.config.ownerOnly === true) {
+        return probeOwnServer(deps, connection, type, outer, now);
+      }
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), connectionCallLimits(type).callTimeoutMs);
       const onOuterAbort = () => controller.abort();
@@ -931,7 +978,7 @@ export function createConnectionManagement(
 
     async listTools(readable) {
       const connections = (await readConnections(deps))
-        .filter((connection) => readable(resourceOf(connection)))
+        .filter((connection) => readable(connectionResourceOf(connection)))
         .sort((left, right) => (left.config.name < right.config.name ? -1 : 1));
       return {
         connections: connections.flatMap((connection) => {

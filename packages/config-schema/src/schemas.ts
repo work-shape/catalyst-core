@@ -333,6 +333,13 @@ const moduleSwitchSchema = z.object({ enabled: z.boolean() }).strict();
  * (`DEFAULT_PERSONAL_MODEL_REGIONS`). The operator widens it only on the customer's written
  * instruction. An empty list would refuse every personal call without saying why, so it stops
  * startup instead.
+ *
+ * `modules.connections.ownServers` governs a person's own MCP server (PMCP): `enabled` (default
+ * off until PMCP-5 turns it on) lets a holder of `connection.add_own` add one, and off stops
+ * every self-added server, its calls, tests, discovery and sign-in, without deleting it;
+ * `perPerson` (default 10) bounds how many one person adds; `publicHttps` (default on) will let
+ * a self-added server reach a public `https` host on port 443 without an entry of
+ * `egress.allow`. Nothing reads `publicHttps` before PMCP-3, which brings that egress rule.
  */
 export const modulesConfigSchema = z
   .object({
@@ -343,6 +350,14 @@ export const modulesConfigSchema = z
           .min(1, {
             message: "List at least one region, or leave the key out for the default [eu]"
           })
+          .optional(),
+        ownServers: z
+          .object({
+            enabled: z.boolean().optional(),
+            perPerson: z.number().int().min(1).max(100).optional(),
+            publicHttps: z.boolean().optional()
+          })
+          .strict()
           .optional()
       })
       .strict()

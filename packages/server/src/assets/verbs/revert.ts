@@ -11,7 +11,7 @@ import {
 import { requirePrecondition, revisionConflictOf } from "../asset-revision";
 import { writeAssetConfig } from "./apply";
 import type { AssetVerbScope } from "./scope";
-import { requireFurtherRight, revisionOf } from "./revision-rights";
+import { requireFurtherRight, requireWriteOn, revisionOf } from "./revision-rights";
 
 /** Makes an earlier revision the content again, as a new revision. A deleted asset returns. */
 export async function revertAsset(
@@ -26,6 +26,8 @@ export async function revertAsset(
   const target = await scope.target(input);
   call.access.require(target.kind.actions.write, target.resource);
   const restored = await revisionOf(scope, target, input.revision);
+  // What a revert puts back is a write of that config: a kind may decide it on more.
+  requireWriteOn(call.access, target, restored?.config);
   if (restored?.config) {
     await requireFurtherRight(scope, call.access, target, "write", restored.config);
   }

@@ -11,6 +11,9 @@ import {
   type ConnectorTypeRegistry,
   type EgressChecker,
   type Logger,
+  ownerOnlyResource,
+  type OwnServersSettings,
+  type OperationResource,
   type OperationResolutionStores,
   type PlatformStores
 } from "@work-shape/catalyst-core";
@@ -44,6 +47,12 @@ export interface ConnectionOperationSourceDeps {
   personalModelRegions?: readonly string[];
   /** The operator's managed OAuth clients (MS-APP-1). Left out, none. */
   managedClients?: ManagedOAuthClients;
+  /**
+   * `modules.connections.ownServers`: with `enabled` off, a person's own server answers
+   * `own_servers_off` to every call, test, discovery and sign-in. Left out, the release
+   * default (off).
+   */
+  ownServers?: Pick<OwnServersSettings, "enabled">;
 }
 
 /** One stored Connection as a reader of this package sees it. */
@@ -55,6 +64,20 @@ export interface StoredConnection {
   type: ConnectorTypeDefinition | undefined;
   state: ConnectionStateRecord | undefined;
   catalog: ConnectionCatalog | undefined;
+}
+
+/**
+ * A stored Connection as a right is asked on it. A person's own server carries its owner, so
+ * its rights are its owner's alone (PMCP).
+ */
+export function connectionResourceOf(connection: StoredConnection): OperationResource {
+  return {
+    kind: CONNECTION_ASSET_KIND,
+    id: connection.assetId,
+    assetId: connection.assetId,
+    name: connection.config.name,
+    ...ownerOnlyResource(connection.config)
+  };
 }
 
 type ReadDeps = Pick<
