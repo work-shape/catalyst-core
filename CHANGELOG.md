@@ -7,6 +7,225 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.32 — 2026-11-10
+
+### Added
+
+- **Studio:** "Available in" offers a third choice beside "All workspaces" and "Selected
+  workspaces": "All workspaces except…" ("Alle Arbeitsbereiche außer…"). The asset stays offered
+  in every shared workspace, also those made later, except the ones ticked under "Not in"
+  ("Nicht in"); "Personal workspaces" keeps its own switch. It applies to agents, Knowledge Bases
+  and Connections. The agent's line then says "All except 1" ("Alle außer 1").
+- **Assets:** `assets.set_availability` and every read of an asset's availability take the mode
+  `all_except`, whose `collaborationWorkspaceIds` are the Shared Workspaces left out. Leaving out
+  a workspace whose own default the agent is, or one where the instance default is needed, is
+  refused as with `selected`. `catalyst <kind> set-availability <name> --mode all_except
+  [--personal] --except <workspace-id>` sets it from the CLI.
+- **Database:** Migrations 0197 and 0198 let `config_asset_availability.mode` hold `all_except`.
+  An older release reads such a row as `selected`; set those assets to another mode before
+  rolling back past this release.
+- **Chats:** The creator of a private chat in a team shares it with single members from the
+  composer. An `@` at the start of the text or after a space offers up to five likely people,
+  and the letters after it search them; arrows, Enter and Escape move, pick and close. A picked
+  person becomes a chip above the composer with one line on what sharing gives them, and Send
+  shares first, then sends. A refused share says why on the chip and sends nothing. A message
+  of chips alone shares and sends the files waiting with it.
+- **Chats:** The head of a shared chat shows who reads it, and the creator's private chats carry
+  a Share button. Both open "Who can see this chat", where the creator adds and removes people
+  and a named person leaves. The rail's row menu gains "Share…", a shared chat carries a people
+  mark in place of the lock, and each message of a shared chat names who wrote it, also after
+  that person left or was removed.
+- **Inbox:** The notice of a chat shared with the reader opens the chat in its workspace.
+- **API:** A conversation that names people carries `createdByDisplayLabel`, and the run agents
+  of its snapshot carry `ownerUserId` and `ownerDisplayLabel`, so its readers see who started it
+  and who wrote what. A chat more than one person wrote in carries them too, so the turns of
+  someone removed keep their name after the last named person is gone.
+- **UI library:** `SuggestionList`, the list a text field offers as one types, and
+  `AvatarStack`, overlapping avatars with a count of the rest.
+- **Chats:** The creator of a private chat in a Shared Workspace, outside any project, can name up
+  to 20 members of that workspace on it (`POST /api/v1/conversations/:id/people`). Each named
+  member reads and writes in the chat while a member; nobody else gains anything, and a Workspace
+  Owner or Admin still does not see it. Every read of a conversation carries its `people`.
+- **Chats:** The creator takes a person off (`DELETE …/people/:userId`) and a named person leaves
+  the same way. The names go when the membership ends, when the person is deleted and when the
+  chat moves to another workspace; a chat that names people does not enter a project. Only the
+  creator moves or deletes it.
+- **Chats:** `GET …/share-candidates` offers only people the creator knows from the workspace:
+  the ones they named before first, then those who wrote in a chat of it they read. A search
+  filters these people only, and an email shows only to a search that typed its start. A share is
+  refused, with a stable `details.reason`, where the chat must stay its creator's: personal data
+  read in it, a Data Store or an asset the person may not read, a project, a Personal Workspace. A chat that names people no longer takes personal data.
+- **Chats:** Naming, removing and changing who reads a chat is the person's own step in their own
+  session: never an agent tool, a key or an embedding host. The named person gets an Inbox notice
+  linking the chat, and `conversation.person_added` and `conversation.person_removed` are audited
+  with ids only.
+- **Connections:** New connection shows the card "Mailbox (IMAP)": server, user name, password
+  or app password and folders, the port under Technical details. Connect saves the Connection,
+  sets the password as its secret only and tests it; both reading operations are then ticked
+  for approval, and "May use them" offers Agents only. A connector type's form may name a
+  field's value kind (number or list), its default, a field under Technical details, and a
+  sentence of what everyone who may use the Connection reads. A Connection's page lists the
+  operations its type declares and it does not accept yet under "Tools to approve", and offers
+  for each operation only the callers its type allows.
+- **Connections:** `platform.connections.propose` takes `settings` for a type with a form of its
+  own, such as `imap` with host, port, user name and folders. It refuses a secret field.
+- **Skills:** A `skill_change` request filed from a conversation marked as holding private
+  data, such as one that read a mailbox, carries the flag `markedConversation` and no content; the
+  Inbox shows "Prompted in a chat with private data, such as mail from outside" on it.
+- **Connections:** The connector type `imap` reads a functional mailbox over IMAP with implicit
+  TLS and the Connection's password. `search_messages` searches one of the Connection's folders,
+  newest first; `get_message` reads one message's headers, text and attachment names. Folders
+  are opened read-only and bodies read with `BODY.PEEK`, so no flag changes; attachments are
+  never downloaded. The password is bound to the server and the user name.
+- **Connections:** A connector type may declare `privateResults`: what it answers is one
+  person's to read whatever the Connection's credential mode. Every call of such a type is a
+  personal call, and its operations accept exposure `agent` only. `imap` declares it.
+- **Connections:** `egress.allow` takes the protocol `imaps`. `egress.allowPublicHttps` does not
+  open it.
+- Each synced source of a Knowledge Base sets its own sync, and can switch it off (SRC-SYNC). Its `schedule` now takes `changes`, the minutes between change polls (5 to 1440), and both `changes` and `full` take `off`. A source with both off runs no pass by itself. Its documents stay searchable until someone syncs it, including files deleted or made private in the source, and **Sync now**, **Try again** and the first-import confirmation still work. When switched on again, it fetches the changes since its cursor, and a full pass that fell due in the meantime runs once. A full pass that a running sync or a failed tick held at its due time runs at a later tick, once, whatever `changes` is set to. On the Knowledge Base page each source has **Sync** with **Sync automatically**, **Fetch changes** and **Full sync**, and a published source shows how it syncs now. `knowledge_bases.sources` answers each source's `schedule` as it applies, with its defaults and floor. A publish that changes a schedule writes the audit event `knowledge_base.source_schedule_changed` with the source and its new values. Changing only a source's schedule, or writing the same source in another key order, no longer asks the publisher for `connection.use`. `ScheduleField` takes `zonePicker={false}` for a schedule that runs in the instance's own time zone.
+- A connector type with `documentSource` may declare `schedule: { changes, full, minChanges }`. A source that sets nothing takes the type's full pass, and its poll comes from `knowledge.sourcePollMinutes` for the type, then the type's own `changes`, then 15 minutes. A source's `changes` below `minChanges` is refused at publish. A `knowledge.sourcePollMinutes` below it stops the instance at start. The page offers no shorter interval.
+- **Knowledge:** Public web pages are a synced source of a Knowledge Base. A Connection of the
+  new built-in type `web` names the hosts it may read and needs no secret; a source through it
+  names `pages`, `prefixes` (everything below an address, `maxDepth` 3 by default) or `sitemaps`
+  in place of `folders`, and `include`/`exclude` match the address's path. A link to another
+  host is never followed. Each request passes the egress policy and must reach a public address
+  (an entry with `network: private` is refused), a redirect is checked again, robots.txt is
+  honored, one request a second goes to a host unless the Connection's
+  `requestsPerSecond` says otherwise, and a page or linked PDF, DOCX or TXT larger than the
+  limits is left out. Pages are read again conditionally (ETag, Last-Modified, else a hash of
+  the text); by default the type polls hourly and passes in full each Monday at 03:00
+  (`documentSource.schedule`), and no source or release setting polls it more often than hourly. The
+  operator opens public hosts with the egress policy's public HTTPS setting.
+  Only 404, 410, a robots.txt rule or a full pass that no longer reaches a page withdraws it;
+  an unreadable robots.txt, a 401 or 403, or a host that does not answer keeps the document.
+- **Knowledge:** A search passage of a synced document carries `statedAt`, the date the document
+  states of its own version (for a web page its "Stand"), and `retrievedAt`, when the platform
+  fetched it.
+- **Chat:** A citation of a synced document shows the date it states ("Stand 01.11.2026", "as of
+  01/11/2026"), else only the day it was retrieved ("abgerufen 10.11.2026", "retrieved
+  10/11/2026").
+- **Studio:** A source through a web Connection is edited with fields for pages, addresses to
+  read everything below, and sitemaps.
+- **Connections:** The rights and rules of a person's own MCP server. A Connection of type `mcp`
+  in mode `user` may carry `ownerOnly: true`, which is fixed when it is added
+  (`owner_only_fixed`). A person signed in to the instance in a first-party session who holds
+  the new action `connection.add_own` adds one through `assets.put` without any Connection
+  right. The built-in role `user` holds the action by default. Such a server takes exposure
+  `agent` only, has no availability and no accepted tool in its create, and nobody but its owner
+  reads, uses, changes or deletes it. No role, grant, workspace, availability or key scope
+  reaches it (`not_owner`). An instance admin reads it, switches it off and deletes it, and
+  nothing more. No grant on it can be written.
+- **Connections:** The owner's test of their own server resolves no credential. It answers
+  `ready`, `oauth_required`, `token_required` (a 401 with no Bearer challenge) or `unavailable`,
+  and writes the server's health. The owner reads its tools with their own sign-in, as for a
+  personal MCP Connection.
+- **Release config:** `modules.connections.ownServers` with `enabled` (default `false` until
+  the interface that adds one ships), `perPerson` (default 10, `own_servers_limit`) and
+  `publicHttps` (default `true`, read once the egress rule for self-added servers lands). Off,
+  adding one answers `own_servers_off`, and so do the calls, tests, discovery and sign-in of a
+  server added before. Nothing is deleted.
+- No interface offers the add yet.
+
+### Changed
+
+- **Chat:** A title a conversation gets from elsewhere while its row is in the rail is typed in
+  letter by letter: the title generated for a new conversation, and the one an agent gives with
+  `platform.conversations.rename`. A title the person types into the row shows at once, as does
+  every title under reduced motion.
+- **UI library:** `TypedText` types in a text that replaces another, with the whole text in the
+  element from the first letter on.
+- **CLI:** A `catalyst` installed with `npm install --global` whose instance answers a command's
+  first request with a newer release installs that version of `@work-shape/catalyst-cli`, says so
+  in one line and runs the same command again, once. It never installs an older version, never
+  reacts to a later answer of the same command and never replaces a checkout `npm link` points at. A Catalyst skill `catalyst setup` wrote and nobody changed is
+  updated with it. It happens only at a terminal: in CI, without a terminal and with
+  `CATALYST_NO_AUTO_UPDATE=1` the CLI still stops with the update command, as it does when the
+  install fails. A CLI installed in a project names the project's folder and its own install
+  command instead of the global one.
+
+### Fixed
+
+- **Inbox:** The comment and the decisions of an open item sit flush on the lower edge of its panel. Before, a long proposal showed through in a strip below the buttons while it scrolled.
+- **Access:** Builder and Publisher in a workspace carry their verbs only on the kinds a
+  workspace can own. Builder no longer carries `connection.read` and `connection.write`, which
+  named a right on no asset, since no workspace owns a Connection; a workspace builder is no
+  longer offered an empty Connections page in Studio. Agents, skills, Apps, Workflows, Data
+  Stores, Knowledge Bases and guardrails the workspace owns are reached as before.
+- **Knowledge Bases:** A synced source's pass no longer fails as unreachable when it lists while
+  the indexing of an earlier pass's documents finishes. A listing page and a Workflow `ingest`
+  page locked the source's items before their contents, and an index completion takes them the
+  other way round, so the database broke the deadlock by ending one of them: an ended page
+  failed the whole pass with `knowledge_source_unreachable`. Both now take the contents first.
+- **Knowledge Bases:** a source at `knowledge.maxDocuments` keeps withdrawing what was deleted or moved out at the source and keeps applying changes; only new documents wait. A full pass lists to the end instead of stopping at the first new item, a change feed page applies its deletions and moves on instead of failing again on every poll, and a pass that reached the limit counts as the source's import, so its schedule goes on. It still ends with `knowledge_source_limit_reached`.
+- **Knowledge Bases:** a folder that a source's `exclude` leaves out is no longer listed. `list` of the `document_source` contract takes an optional `excludesFolder(path)`, and a connector that walks folders skips those it names.
+- **Knowledge Bases:** `include` and `exclude` follow one written rule: `**`, `*` and `?` are the only wildcards, and every other character matches itself. `Projekt [alt]/**` now leaves out that folder, where brackets used to be a character class, and a folder left out takes its dot folders and dot files with it. Braces, extglobs and backslashes are plain characters too. Patterns, paths and names are compared in Unicode NFC, so an excluded folder whose name a source composes differently stays out, and `include: ["**"]` keeps every file instead of none.
+- **Knowledge Bases:** a listing position over 16 KiB is written at most every 30 seconds and when a call fails, not with every page.
+- **Personal API keys:** A builder who holds `agent_models.manage` can push an agent's model settings (`modelBindingId`, `reasoningEffort` and the rest) with a personal key. The key covers the right where it covers `agent.write` for that agent, with its workspace and asset, so no key has to be reissued. Before, every such push was refused with `Missing the right 'agent_models.manage'`, since no key scope could name the right.
+- **Personal API keys:** A batch item refused because the key does not cover a right its owner holds now says that the key's scope is missing, instead of `Missing the right`.
+- **Inbox:** An approved call whose outcome was written while another transaction held its
+  request, such as a second click on "Freigeben" or "Erlauben" that was being refused, no longer
+  stays "queued" for good. The write is tried again for about three seconds; a request still
+  held after that gets its outcome from the run at the next upkeep pass, and the server logs a
+  warning. Before, the call ran but its Inbox item never said so.
+- **Knowledge Bases:** A search or query of a Knowledge Base of the person's Personal Workspace,
+  as a private project attaches it, sets the chat's personal-data mark before anything is read,
+  as a read of the person's own skill does. The chat then stays theirs alone: it cannot be moved
+  to a team or shared. Where the chat cannot be marked, because others read it, that Knowledge
+  Base answers nothing.
+- **Chat:** The panel "Who can see this chat" asks for the people to add only once it opens. A
+  chat whose head offers Share no longer asks on every open, and a chat marked personal no
+  longer logs a refused request before anyone opened the panel.
+- **Inbox:** A `--yes` publish of a workspace agent's draft that its person allowed in the Inbox
+  and an approver then approved goes live. The approval was refused with "The input of this call
+  is no longer valid": the request filed after the Allow froze the input with what the publish's
+  guardrails had kept beside it, so its hash no longer matched the call.
+- **Inbox:** A person's Allow of their own `catalyst <kind> publish --yes` is the approval where
+  that person, signed in, may decide the approval it would file, a holder of `agent.approve` in
+  the agent's workspace included: the publish goes live and no second request is filed. The
+  rights are those the person holds when the call runs after the Allow, never a key's. Where
+  the person may not approve, the item says first that a person with the approval right decides
+  after the Allow. A confirmation recorded by anybody but the person the call acts for runs
+  nothing.
+- **Inbox:** When a revision of an App, a Workflow, a form page or a workspace agent goes live,
+  by any path, every pending request to publish an earlier or the same revision of it is settled
+  at once: the person's confirmation of a CLI publish and the approvers' publish item alike. It
+  leaves "Zu entscheiden" with the reason, "Version N ist bereits live" or "Eine neuere Version
+  ist live gegangen", and stays readable under "Entschieden" and "Meine Anfragen". Before, it
+  stayed open with a working "Erlauben" that could only end in a conflict.
+- **CLI:** `catalyst agent publish` of the live revision of an agent with no draft answers
+  "already live. Nothing to do" and exits 0; the API answers `CONFLICT` with
+  `reason: already_live`. No confirmation and no request is filed. A publish of a draft is never
+  this answer. The line of a publish that waits, and `catalyst requests` for a superseded
+  request, say that a superseded request can do nothing.
+- **Inbox:** A request filed by a person who holds the right to decide it, such as a skill
+  change by a holder of `skill.approve` or a workspace approver's own agent publish, is in
+  "Zu entscheiden" and its count for that person alone. The other holders of the right get no
+  entry and no badge, and still decide it: "Auch Anfragen zeigen, die andere selbst freigeben
+  können" in "Zu entscheiden" lists them (`approval_requests.list` with `scope=others_own`;
+  `count_pending` gives `othersOwn`). Who may decide is unchanged.
+- **Studio:** A holder of `agent.approve` on a workspace, without the right on the instance,
+  publishes that workspace's agent with their own Publish click: it goes live at once and no
+  approval is filed, as for an instance approver. Their click, their confirmation of an agent's
+  publish and their Allow in the Inbox all ask the right on the agent's workspace. A call that
+  waited while its agent moved to another workspace ends as not found, unexecuted.
+- **Studio:** Every list of a kind a workspace can own (Agents, Skills, Guardrails, and the other
+  kinds with "Where") starts on "Everywhere": what each owner offered to the reader holds, each
+  row with its owner. "Where" narrows it to one owner and names the instance's own "For everyone"
+  ("Für alle"), so no one reads it as every owner. Before, the list opened on the instance's
+  assets alone under "Everyone", and an asset a workspace owned seemed missing.
+- **API:** `assets.list` takes `owners`, `instance` and workspace ids separated by commas, in
+  place of `workspaceId`: one page across those owners, each asset listed by the same right as
+  in its owner's own list.
+
+### Database
+
+- **Knowledge Bases:** Owned-store migration 20 `source_item_stated_at` (applied to every
+  Knowledge Base store at the next start, no platform migration): source items get a nullable
+  `stated_at`, the date a synced item states of its own version, such as a web page's "Stand".
+  Existing rows keep it null, so their citations show only the day they were retrieved until a
+  source reads a stated date. A rollback leaves the column unused.
+- Migration 0200 adds `approval_requests.requester_decides` (boolean, default false): the requester held the request's deciding right when filing. It needs no backfill, since requests filed before stay listed to all who may decide them, and rolls back without a step: the previous release ignores the column.
+
 ## 0.8.0-rc.31 — 2026-11-09
 
 ### Added
