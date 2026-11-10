@@ -11,6 +11,9 @@ export const inbox = defineTranslations({
     "inbox.emptyMyRequests":
       "You have not requested anything that needs a decision. When an agent needs someone's approval, it shows up here.",
     "inbox.emptyToDecide": "Nothing to decide.",
+    "inbox.othersOwn": "Also show requests others can approve themselves ({count})",
+    "inbox.othersOwnHint":
+      "Whoever asked holds the right to approve them and decides them in their own Inbox. You can decide them too.",
     "inbox.kindOperationCall": "Action to approve",
     "inbox.kindAppPublish": "App to publish",
     "inbox.kindWorkflowPublish": "Workflow to publish",
@@ -73,6 +76,9 @@ export const inbox = defineTranslations({
     "inbox.emptyMyRequests":
       "Du hast nichts angefragt, das eine Entscheidung braucht. Wenn ein Agent die Freigabe von jemandem braucht, erscheint sie hier.",
     "inbox.emptyToDecide": "Nichts zu entscheiden.",
+    "inbox.othersOwn": "Auch Anfragen zeigen, die andere selbst freigeben können ({count})",
+    "inbox.othersOwnHint":
+      "Wer sie gestellt hat, darf sie selbst freigeben und entscheidet sie im eigenen Eingang. Du kannst sie auch entscheiden.",
     "inbox.kindOperationCall": "Aktion zur Freigabe",
     "inbox.kindAppPublish": "App zur Veröffentlichung",
     "inbox.kindWorkflowPublish": "Workflow zur Veröffentlichung",

@@ -1,12 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { asUserId, type AuthenticatedUser, type PermissionGrant } from "@work-shape/catalyst-core";
+import {
+  StoreBackedAuditRecorder,
+  asUserId,
+  type AuthenticatedUser,
+  type PermissionGrant
+} from "@work-shape/catalyst-core";
+import { ApprovalRequestWorkflow } from "@work-shape/catalyst-server";
 import { accessOf } from "./support/access";
 import {
   clientInstanceId,
   context,
   creation,
   fixture,
-  requester
+  requester,
+  reviewer
 } from "./support/skill-change-fixture";
 
 // `skill.approve` on the skill a `skill_change` request changes decides it: on that skill, on
@@ -158,5 +165,56 @@ describe("skill.approve on a request that creates a skill", () => {
         decision: "approve"
       })
     ).toMatchObject({ status: "approved" });
+  });
+});
+
+describe("a skill change its requester may approve", () => {
+  it("is in To decide for the requester alone, and another approver finds and decides it", async () => {
+    const f = await fixture();
+    const editorAccess = editorWith({ scopeKind: "asset", scopeId: await skillAssetId(f) });
+    // The workflow reads each requester's rights as they are when they file.
+    const workflow = new ApprovalRequestWorkflow({
+      clientInstanceId,
+      store: f.store.approvals,
+      handlers: new Map([[f.handler.kind, f.handler]]),
+      auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: f.store.audit }),
+      authorizer: {
+        forActor: (actor) =>
+          Promise.resolve(actor.id === editor.id ? editorAccess : accessOf(actor))
+      }
+    });
+    const theirs = await workflow.createRequest(requester, context, {
+      kind: "skill_change",
+      summary: "Verify facts carefully.",
+      payload: (await f.propose()).payload
+    });
+    const own = await workflow.createRequest(editor, context, {
+      kind: "skill_change",
+      summary: "Verify facts carefully.",
+      payload: theirs.payload
+    });
+    expect(own.requesterDecides).toBe(true);
+    expect(theirs.requesterDecides).toBeUndefined();
+
+    const pending = async (user: AuthenticatedUser, access = accessOf(user)) =>
+      (await workflow.listRequests(user, access, context, { status: "pending" })).map(
+        (item) => item.id
+      );
+    expect(await pending(editor, editorAccess)).toContain(own.id);
+    expect(await pending(reviewer)).not.toContain(own.id);
+    expect(await pending(reviewer)).toContain(theirs.id);
+    expect(await workflow.pendingCount(reviewer, accessOf(reviewer))).toMatchObject({
+      othersOwn: 1
+    });
+    const others = await workflow.listRequests(reviewer, accessOf(reviewer), context, {
+      scope: "others_own"
+    });
+    expect(others.map((item) => [item.id, item.canDecide])).toEqual([[own.id, true]]);
+    expect(
+      await workflow.decideRequest(reviewer, accessOf(reviewer), context, {
+        requestId: own.id,
+        decision: "reject"
+      })
+    ).toMatchObject({ status: "rejected" });
   });
 });

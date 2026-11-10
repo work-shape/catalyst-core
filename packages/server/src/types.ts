@@ -95,7 +95,7 @@ export interface ChatServerOptions {
    */
   approvalRequests?: Pick<
     ApprovalRequestWorkflowOptions,
-    "store" | "handlers" | "onDecided" | "checks"
+    "store" | "handlers" | "onDecided" | "checks" | "authorizer"
   >;
   /**
    * The call path the assembly built, where agents of this process call tools on it too.

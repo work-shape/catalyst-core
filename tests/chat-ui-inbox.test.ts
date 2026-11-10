@@ -558,6 +558,35 @@ describe("inbox area", () => {
     expect(markup).toContain('data-testid="inbox-row"');
   });
 
+  it("offers the requests others can approve themselves in To decide, off by default and with no badge", () => {
+    const counts = {
+      count: 0,
+      canReview: true,
+      decided: 0,
+      othersOwn: 2,
+      mine: { pending: 0, total: 0 }
+    };
+    const offered = renderArea(counts, "to_decide", [], "de", {
+      onOthersOwnChange: () => undefined
+    });
+    expect(offered).toContain("Auch Anfragen zeigen, die andere selbst freigeben können (2)");
+    expect(offered).toMatch(/data-testid="inbox-others-own"[^>]*/u);
+    expect(offered).toMatch(
+      /role="switch" aria-checked="false"|aria-checked="false"[^>]*role="switch"/u
+    );
+    // To decide counts none of them.
+    expect(offered).not.toMatch(/Zu entscheiden<span[^>]*aria-hidden="true">2</u);
+    // Nothing to offer, or another tab: no switch.
+    expect(
+      renderArea({ ...counts, othersOwn: 0 }, "to_decide", [], "de", {
+        onOthersOwnChange: () => undefined
+      })
+    ).not.toContain('data-testid="inbox-others-own"');
+    expect(
+      renderArea(counts, "decided", [], "de", { onOthersOwnChange: () => undefined })
+    ).not.toContain('data-testid="inbox-others-own"');
+  });
+
   it("shows a plain member their own requests without a tab bar", () => {
     const markup = renderArea(
       { count: 0, canReview: false, decided: 0, mine: { pending: 1, total: 1 } },

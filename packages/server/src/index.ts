@@ -236,7 +236,9 @@ export async function createChatServer(
     // The kind a waiting call is decided on is one of the instance's approval kinds.
     approvalRequests: input.approvalRequests && {
       ...input.approvalRequests,
-      handlers: operationCalls.approvalRequestHandlers
+      handlers: operationCalls.approvalRequestHandlers,
+      // A request its requester may decide is listed to them alone.
+      authorizer
     }
   };
   const app = Fastify({

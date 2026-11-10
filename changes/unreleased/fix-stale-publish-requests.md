@@ -24,3 +24,9 @@ section: Fixed
   `reason: already_live`. No confirmation and no request is filed. A publish of a draft is never
   this answer. The line of a publish that waits, and `catalyst requests` for a superseded
   request, say that a superseded request can do nothing.
+- **Inbox:** A request filed by a person who holds the right to decide it, such as a skill
+  change by a holder of `skill.approve` or a workspace approver's own agent publish, is in
+  "Zu entscheiden" and its count for that person alone. The other holders of the right get no
+  entry and no badge, and still decide it: "Auch Anfragen zeigen, die andere selbst freigeben
+  können" in "Zu entscheiden" lists them (`approval_requests.list` with `scope=others_own`;
+  `count_pending` gives `othersOwn`). Who may decide is unchanged.

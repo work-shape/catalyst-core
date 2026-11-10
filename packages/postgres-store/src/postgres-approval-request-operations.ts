@@ -171,7 +171,9 @@ function subjectKindsFilter(input: Pick<ListFilter, "subjectKinds">) {
  * Which kinds a list holds, and to whom: for a reader, a request addressed to somebody only
  * where it is addressed to them (OP-4b); for the instance itself, every request of the kinds.
  */
-function audienceFilter(input: Pick<ListFilter, "kinds" | "reader" | "subjectKinds">) {
+function audienceFilter(
+  input: Pick<ListFilter, "kinds" | "reader" | "subjectKinds" | "othersSelfDecided">
+) {
   const { reader } = input;
   if (!reader) {
     return or(
@@ -179,6 +181,29 @@ function audienceFilter(input: Pick<ListFilter, "kinds" | "reader" | "subjectKin
       subjectKindsFilter(input)
     );
   }
+  return and(
+    readerAudienceFilter(input, reader),
+    selfDecidedFilter(reader.userId, input.othersSelfDecided ?? "hidden")
+  );
+}
+
+/**
+ * The pending requests their requester may decide themselves: to anyone else listed only when
+ * asked for. A request no longer pending is listed as any other.
+ */
+function selfDecidedFilter(readerId: string, mode: NonNullable<ListFilter["othersSelfDecided"]>) {
+  const othersPending = and(
+    eq(approvalRequests.requesterDecides, true),
+    eq(approvalRequests.status, "pending"),
+    sql`not ${requestedBy(readerId)}`
+  );
+  return mode === "only" ? othersPending : sql`not coalesce(${othersPending}, false)`;
+}
+
+function readerAudienceFilter(
+  input: Pick<ListFilter, "kinds" | "subjectKinds">,
+  reader: NonNullable<ListFilter["reader"]>
+) {
   return or(
     subjectKindsFilter(input),
     input.kinds.length === 0

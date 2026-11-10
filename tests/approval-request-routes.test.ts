@@ -196,6 +196,7 @@ describe("approval routes and generated instance client", () => {
         count: 0,
         canReview: false,
         decided: 0,
+        othersOwn: 0,
         mine: { pending: 1, total: 1 }
       });
       await expect(f.requester.approval_requests.list()).rejects.toMatchObject({ status: 403 });
@@ -221,6 +222,7 @@ describe("approval routes and generated instance client", () => {
         count: 1,
         canReview: true,
         decided: 0,
+        othersOwn: 0,
         mine: { pending: 0, total: 0 }
       });
       await expect(
@@ -262,6 +264,7 @@ describe("approval routes and generated instance client", () => {
         count: 0,
         canReview: true,
         decided: 1,
+        othersOwn: 0,
         mine: { pending: 0, total: 0 }
       });
       await expect(
@@ -468,6 +471,7 @@ describe("approval routes and generated instance client", () => {
         count: 0,
         canReview: true,
         decided: 0,
+        othersOwn: 0,
         mine: { pending: 0, total: 0 }
       });
       await expect(f.reviewer.approval_requests.list()).resolves.toEqual({ items: [] });

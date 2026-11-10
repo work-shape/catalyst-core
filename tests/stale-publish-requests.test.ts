@@ -385,3 +385,72 @@ describe("a publish of what is live already", () => {
     expect(await live("live-only")).toMatchObject({ revision: 1 });
   });
 });
+
+// A request its requester may decide themselves is theirs in To decide: the other holders of
+// the right still decide it, and find it when they ask for the requests others may decide.
+describe("a request its requester may decide", () => {
+  const countSchema = z.looseObject({ count: z.number(), othersOwn: z.number() });
+  const listSchema = z.object({ items: z.array(requestSchema.extend({ canDecide: z.boolean() })) });
+  const pendingIds = async (
+    t: AccessInstance,
+    userId: string,
+    query: Record<string, string> = { status: "pending" }
+  ) =>
+    listSchema
+      .parse((await t.expectOk(userId, "approval_requests.list", { query })).json())
+      .items.map((entry) => [entry.id, entry.canDecide] as const);
+  const counted = async (t: AccessInstance, userId: string) =>
+    countSchema.parse((await t.expectOk(userId, "approval_requests.count_pending", {})).json());
+  const publish = (t: AccessInstance, team: string, userId: string, name: string) =>
+    t.call(userId, "assets.publish", {
+      params: { kind: "agent", name },
+      payload: { revision: 1, workspaceId: team }
+    });
+
+  it("is listed and counted for the requester alone, and another approver can still decide it", async () => {
+    const { t, team, live, create, push, decide, request } = await setup();
+    await t.grant(t.kai.id, "agent.approve", { workspaceId: team });
+    await create(t.admin.id, "own-call", team);
+    await push(t.kai.id, "own-call", { instructions: "Draft.", toolNames: ["known.tool"] });
+    const held = await publish(t, team, t.kai.id, "own-call");
+    expect(held.statusCode, held.body).toBe(202);
+    const requestId = z
+      .object({ approvalRequestId: z.string() })
+      .parse(held.json()).approvalRequestId;
+    expect(await request(t.kai.id, requestId)).toMatchObject({
+      kind: "agent_publish",
+      requesterDecides: true
+    });
+
+    expect(await pendingIds(t, t.kai.id)).toEqual([[requestId, true]]);
+    expect(await counted(t, t.kai.id)).toMatchObject({ count: 1, othersOwn: 0 });
+    // The admin gets no entry and no badge, but finds it and may decide it.
+    expect(await pendingIds(t, t.admin.id)).toEqual([]);
+    expect(await counted(t, t.admin.id)).toMatchObject({ count: 0, othersOwn: 1 });
+    expect(await pendingIds(t, t.admin.id, { scope: "others_own" })).toEqual([[requestId, true]]);
+
+    const approved = await decide(t.admin.id, requestId);
+    expect(approved.statusCode, approved.body).toBe(200);
+    expect(await live("own-call")).toMatchObject({ revision: 2 });
+    expect(await counted(t, t.admin.id)).toMatchObject({ count: 0, othersOwn: 0 });
+    // Decided, it is in the admin's decided list as any other.
+    expect((await pendingIds(t, t.admin.id, { scope: "decided" })).map(([id]) => id)).toContain(
+      requestId
+    );
+  });
+
+  it("goes to the approvers as before where the requester may not decide it", async () => {
+    const { t, team, create, push, request } = await setup();
+    await create(t.admin.id, "their-call", team);
+    await push(t.kai.id, "their-call", { instructions: "Draft.", toolNames: ["known.tool"] });
+    const held = await publish(t, team, t.kai.id, "their-call");
+    expect(held.statusCode, held.body).toBe(202);
+    const requestId = z
+      .object({ approvalRequestId: z.string() })
+      .parse(held.json()).approvalRequestId;
+    expect((await request(t.admin.id, requestId)).requesterDecides).toBeUndefined();
+    expect(await pendingIds(t, t.admin.id)).toEqual([[requestId, true]]);
+    expect(await counted(t, t.admin.id)).toMatchObject({ count: 1, othersOwn: 0 });
+    expect(await pendingIds(t, t.admin.id, { scope: "others_own" })).toEqual([]);
+  });
+});

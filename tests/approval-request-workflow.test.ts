@@ -393,6 +393,7 @@ describe("approval request workflow", () => {
       count: 1,
       canReview: true,
       decided: 1,
+      othersOwn: 0,
       mine: { pending: 0, total: 0 }
     });
     await expect(
@@ -405,6 +406,7 @@ describe("approval request workflow", () => {
       count: 0,
       canReview: false,
       decided: 0,
+      othersOwn: 0,
       mine: { pending: 2, total: 3 }
     });
   });
@@ -544,6 +546,7 @@ describe("approval request workflow", () => {
         count: 205,
         canReview: true,
         decided: 0,
+        othersOwn: 0,
         mine: { pending: 0, total: 0 }
       });
       await expect(
@@ -554,6 +557,7 @@ describe("approval request workflow", () => {
         count: 0,
         canReview: false,
         decided: 0,
+        othersOwn: 0,
         mine: { pending: 0, total: 0 }
       });
     } finally {
@@ -666,6 +670,7 @@ describe("approval request workflow", () => {
       count: 0,
       canReview: false,
       decided: 0,
+      othersOwn: 0,
       mine: { pending: 0, total: 0 }
     });
     await expect(
