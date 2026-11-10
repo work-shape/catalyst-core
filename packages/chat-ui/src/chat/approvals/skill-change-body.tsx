@@ -63,8 +63,8 @@ export function SkillChangeBody({
         </Banner>
       )}
       {change.markedConversation ? (
-        <Banner tone="warning" layout="line" data-skill-change-from-outside="">
-          {t("skillChangeFromOutside")}
+        <Banner tone="warning" layout="line" data-skill-change-private-chat="">
+          {t("skillChangeFromPrivateChat")}
         </Banner>
       ) : null}
       {heading ? (

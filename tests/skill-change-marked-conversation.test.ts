@@ -13,8 +13,8 @@ import {
 } from "./support/skill-change-fixture";
 
 // A skill change an agent files after it read a functional mailbox (MBX-1b, acceptance check
-// 74): the request carries one flag and nothing of the mail, the Inbox says "Angeregt durch
-// eine E-Mail von außen" on it, and the skill stays at its live revision until approved. Fails
+// 74): the request carries one flag and nothing of the mail, the Inbox says "Angeregt in einem
+// Chat mit privaten Daten, etwa Mails von außen" on it, a sentence true of every mark, and the skill stays at its live revision until approved. Fails
 // where a request from a marked conversation reads like any other, or where it stored text
 // beyond the agent's own edit and reason.
 
@@ -104,11 +104,13 @@ describe("a skill change filed from a marked conversation", () => {
       changes: [{ type: "replace", target: "root", before: "Alt.", after: "Neu." }]
     };
     expect(renderItem({ preview: { ...preview, markedConversation: true } })).toContain(
-      "Angeregt durch eine E-Mail von außen"
+      "Angeregt in einem Chat mit privaten Daten, etwa Mails von außen"
     );
     expect(
       renderItem({ preview: { ...preview, markedConversation: true } }, { locale: "en" })
-    ).toContain("Prompted by an email from outside");
-    expect(renderItem({ preview })).not.toContain("Angeregt durch eine E-Mail von außen");
+    ).toContain("Prompted in a chat with private data, such as mail from outside");
+    expect(renderItem({ preview })).not.toContain(
+      "Angeregt in einem Chat mit privaten Daten, etwa Mails von außen"
+    );
   });
 });
