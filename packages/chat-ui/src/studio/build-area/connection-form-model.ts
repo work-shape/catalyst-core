@@ -395,7 +395,7 @@ export function newConnectionConfig(
 }
 
 /** The accepted operations of a definition, each with the members the form keeps. */
-function acceptedOperationsOf(config: Record<string, unknown>): AcceptedOperation[] {
+export function acceptedOperationsOf(config: Record<string, unknown>): AcceptedOperation[] {
   const { operations } = config;
   if (!Array.isArray(operations)) return [];
   return operations.flatMap((entry): AcceptedOperation[] => {

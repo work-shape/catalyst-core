@@ -14,6 +14,7 @@ import {
   type ConnectionFormAuthScheme
 } from "./connection-form-model";
 import type { CatalogueEntryOffer } from "./connection-catalogue-model";
+import type { TypedSettingValue } from "./connection-typed-model";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { forgetWhenSessionEnds, sessionMark, sessionStillOn } from "../../shared/shell-session";
 import { toolAnswer } from "../../chat/conversation/subject-run";
@@ -75,6 +76,11 @@ export interface ConnectionDraft {
     testPath?: string;
     /** The header a proposal sends the key in, by name: the person types the key. */
     keyHeader?: string;
+    /**
+     * For a type with a form of its own: the values a proposal named for its settings, such
+     * as a mailbox's server and folders. Never a secret: the form's secret field starts empty.
+     */
+    settings?: Record<string, TypedSettingValue>;
   };
   /** The drafted read operations, as rows of the approval list. */
   operations: ApprovalCandidate[];
@@ -128,6 +134,21 @@ function namesOf(value: unknown): string[] {
     : [];
 }
 
+/** The values a proposal named for a typed form: text, numbers and lists of text only. */
+function proposalSettings(value: unknown): Record<string, TypedSettingValue> | undefined {
+  const record = recordOf(value);
+  if (record === undefined) return undefined;
+  const settings: Record<string, TypedSettingValue> = {};
+  for (const [key, entry] of Object.entries(record)) {
+    if (typeof entry === "string" || (typeof entry === "number" && Number.isFinite(entry))) {
+      settings[key] = entry;
+    } else if (Array.isArray(entry) && entry.every((item) => typeof item === "string")) {
+      settings[key] = entry;
+    }
+  }
+  return Object.keys(settings).length === 0 ? undefined : settings;
+}
+
 /** Only public OAuth settings from an answer enter the dialog model. */
 function proposalOAuth(value: unknown): ConnectionDraft["connection"]["oauth"] {
   const oauth = recordOf(value);
@@ -164,6 +185,7 @@ export function readConnectionProposal(result: unknown): ConnectionDraft | undef
   );
   const mode = connection?.credentialMode;
   const oauth = proposalOAuth(connection?.oauth);
+  const settings = proposalSettings(connection?.settings);
   const entry = recordOf(answer?.entry);
   const operations = Array.isArray(answer?.operations)
     ? answer.operations.flatMap((value) => {
@@ -196,7 +218,8 @@ export function readConnectionProposal(result: unknown): ConnectionDraft | undef
       baseUrl: textOf(connection?.url) ?? "",
       headerNames: namesOf(connection?.headerNames),
       ...(testPath === undefined ? {} : { testPath }),
-      ...(keyHeader === undefined ? {} : { keyHeader })
+      ...(keyHeader === undefined ? {} : { keyHeader }),
+      ...(settings === undefined ? {} : { settings })
     },
     operations
   };

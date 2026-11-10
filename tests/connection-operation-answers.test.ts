@@ -639,7 +639,10 @@ describe("the Connection routes", () => {
               optional: false,
               secret: true
             }
-          ]
+          ],
+          // It reads its operations itself, and any surface may use them.
+          operations: [],
+          exposures: ["agent", "bridge", "workflow", "outside"]
         }
       ],
       // The instance names no catalogue entry.

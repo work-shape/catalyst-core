@@ -117,6 +117,9 @@ export const connections = defineTranslations({
     "connections.incompleteRow": "Saved, but no tools yet.",
     "connections.incompleteRemove": "Remove {name}",
     "connections.writeFailed": "The change could not be saved.",
+    "connections.typeToolsTitle": "Tools to approve",
+    "connections.typeToolsDescription":
+      "The tools its type offers that are not approved yet. None is enabled until you approve it.",
     "connections.discoveredTitle": "Discovered tools",
     "connections.discoveredDescription":
       "Tools the server offers that this connection does not accept. Nobody can call one until it is accepted.",
@@ -438,6 +441,9 @@ export const connections = defineTranslations({
     "connections.incompleteRow": "Gespeichert, aber noch ohne Tools.",
     "connections.incompleteRemove": "{name} entfernen",
     "connections.writeFailed": "Die Änderung konnte nicht gespeichert werden.",
+    "connections.typeToolsTitle": "Freizugebende Tools",
+    "connections.typeToolsDescription":
+      "Die Tools ihres Typs, die noch nicht freigegeben sind. Keines ist eingeschaltet, bevor du es freigibst.",
     "connections.discoveredTitle": "Gefundene Tools",
     "connections.discoveredDescription":
       "Tools, die der Server anbietet und die diese Verbindung nicht akzeptiert. Niemand kann eines aufrufen, bevor es akzeptiert ist.",

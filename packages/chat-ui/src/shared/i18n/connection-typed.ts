@@ -13,7 +13,11 @@ export const connectionTyped = defineTranslations({
     "connectionTyped.errorEgress":
       "A network rule blocks {service}. Ask the technical team to allow it.",
     "connectionTyped.saved":
-      "{name} is saved already and is in the list. Correct the field and connect again."
+      "{name} is saved already and is in the list. Correct the field and connect again.",
+    "connectionTyped.connected": "{name} is connected.",
+    "connectionTyped.reviewIntro": "None of its tools is enabled until you approve them.",
+    "connectionTyped.whoUses": "Who may use it is set under use rights on its page.",
+    "connectionTyped.whoUsesLink": "Choose who may use it"
   },
   de: {
     "connectionTyped.heading": "{title} verbinden",
@@ -25,6 +29,11 @@ export const connectionTyped = defineTranslations({
     "connectionTyped.errorEgress":
       "Eine Netzwerkregel sperrt {service}. Bitte das technische Team, es freizugeben.",
     "connectionTyped.saved":
-      "{name} ist schon gespeichert und steht in der Liste. Korrigiere das Feld und verbinde noch einmal."
+      "{name} ist schon gespeichert und steht in der Liste. Korrigiere das Feld und verbinde noch einmal.",
+    "connectionTyped.connected": "{name} ist verbunden.",
+    "connectionTyped.reviewIntro": "Keines seiner Tools ist eingeschaltet, bevor du es freigibst.",
+    "connectionTyped.whoUses":
+      "Wer sie nutzen darf, legst du auf ihrer Seite unter Nutzungsrechten fest.",
+    "connectionTyped.whoUsesLink": "Festlegen, wer sie nutzen darf"
   }
 });

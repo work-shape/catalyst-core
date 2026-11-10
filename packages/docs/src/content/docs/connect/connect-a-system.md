@@ -149,6 +149,12 @@ egress:
 - The password is the Connection's own secret and bound to `host`, `port` and the user name: a change of any of them deletes it. A change of `folders` keeps it.
 - What a mailbox answers is one person's to read, though the password is shared. Every call is a personal call: it runs only in the caller's own agent chat, which it marks, never from the CLI, a Workflow, an App or a chat others can read. The operations accept exposure `agent` only, its Operation Runs keep no input or output, and the caller needs `connection.use`. Mail text is untrusted input to the agent.
 
+In Studio, New connection shows the card **Mailbox (IMAP)** beside MCP server and REST API. It asks for the server, the user name, the password or app password and the folders, with the port under Technical details. Connect saves the Connection, sets the password as its secret and tests it; the password is not shown again. The next step lists both operations ticked, and "May use them" offers Agents only. Installing gives nobody `connection.use`: everyone who is given it on the Connection's page reads every mail in its folders. An agent can propose the Connection with `platform.connections.propose`, naming `connectorType: imap` and `settings` with `host`, `port`, `username` and `folders`, never the password, which the person types in the dialog.
+
+**Later** leaves both under **Tools to approve** on the Connection's page, which approves them the same way; for each approved operation the page offers Agents only.
+
+A skill change an agent proposes in a conversation marked as holding private data, such as one that read this mailbox, a personal Connection or a person's own skill, shows "Prompted in a chat with private data, such as mail from outside" in the Inbox. The request holds the agent's edit and its reason, and no mail.
+
 ## Catalogue OAuth parts and result shapers
 
 A catalogue tools part may declare `authScheme: oauth`, the provider endpoints under `oauth`,

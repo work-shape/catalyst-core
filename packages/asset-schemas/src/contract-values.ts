@@ -191,6 +191,12 @@ export const GUARDRAIL_NAME_MAX_LENGTH = 64;
 export const CONNECTION_EXPOSURES = ["agent", "bridge", "workflow", "outside"] as const;
 export type ConnectionExposure = (typeof CONNECTION_EXPOSURES)[number];
 
+/**
+ * What a setting field of a Connector type's form holds: text, a whole number such as a port,
+ * or a list of names such as folders.
+ */
+export const CONNECTOR_FORM_FIELD_VALUES = ["text", "number", "list"] as const;
+
 /** The health of a Connection as its page and its list show it. */
 export const CONNECTION_HEALTH_STATES = [
   "unknown",
