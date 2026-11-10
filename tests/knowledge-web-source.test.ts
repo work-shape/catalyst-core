@@ -423,7 +423,7 @@ describe("what a web source never reaches", () => {
 });
 
 describe("the changes of a web source", () => {
-  it("revalidates at most hourly, with conditional requests, and answers what changed or went", async () => {
+  it("settles each poll, revalidates with conditional requests, and answers what changed or went", async () => {
     let version = 1;
     site.routes.set("/live", (request, response) => {
       if (request.headers["if-none-match"] === `"live-${String(version)}"`) {
@@ -454,22 +454,22 @@ describe("the changes of a web source", () => {
       throw new Error("The feed never settled");
     };
 
-    // Within the hour: no request at all.
+    // The poll that just began settles: no request at all.
     const quiet = site.requests.length;
     expect((await drain(start.nextCursor)).changes).toEqual([]);
     expect(site.requests.length).toBe(quiet);
 
-    // An hour on and nothing changed: one conditional request per page, and no change.
-    clock += 61 * 60_000;
+    // The next poll, nothing changed: one conditional request per page, and no change.
+    clock += 3 * 60_000;
     const unchanged = await drain(start.nextCursor);
     expect(unchanged.changes).toEqual([]);
     const live = site.requests.filter((request) => request.path === "/live").at(-1);
     expect(live?.headers["if-none-match"]).toBe('"live-1"');
 
-    // Another hour: one page changed, the other is gone.
+    // Another poll: one page changed, the other is gone.
     version = 2;
     site.routes.delete("/going");
-    clock += 61 * 60_000;
+    clock += 3 * 60_000;
     const after = await drain(unchanged.cursor);
     expect(after.changes).toEqual([
       expect.objectContaining({

@@ -1,7 +1,18 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { parseRobots, readHtmlPage } from "@work-shape/catalyst-connections";
-import { sourceBoundary, sourceBoundaryKey, withinSource } from "@work-shape/catalyst-data-stores";
+import { knowledgeSourceDefaults } from "@work-shape/catalyst-client-assembly";
+import {
+  createWebConnectorType,
+  parseRobots,
+  readHtmlPage
+} from "@work-shape/catalyst-connections";
+import {
+  sourceBoundary,
+  sourceBoundaryKey,
+  sourceDefaultsOfType,
+  sourceScheduleOf,
+  withinSource
+} from "@work-shape/catalyst-data-stores";
 
 // The rules of a web source (KB-WEB) that need no site: how its boundary reaches the sync, how
 // a page is read and how robots.txt is applied.
@@ -128,5 +139,21 @@ Crawl-delay: 60`;
     expect(rules.allows("/data.json")).toBe(false);
     expect(rules.allows("/data.json?x")).toBe(true);
     expect(rules.crawlDelayMs).toBe(4_000);
+  });
+});
+
+describe("when a web source syncs", () => {
+  it("polls hourly at most and passes in full each Monday, unless the source says otherwise", () => {
+    const byType = knowledgeSourceDefaults({}, [createWebConnectorType()]);
+    const defaults = sourceDefaultsOfType(byType, "web");
+    expect(defaults).toEqual({ changes: 60, full: "0 3 * * 1", minChanges: 60 });
+    const source = { id: "web", connection: "pages", prefixes: ["https://www.example.org/docs/"] };
+    expect(sourceScheduleOf(source, defaults)).toEqual({ changes: 60, full: "0 3 * * 1" });
+    expect(
+      sourceScheduleOf({ ...source, schedule: { changes: 240, full: "off" } }, defaults)
+    ).toEqual({ changes: 240, full: "off" });
+    expect(sourceScheduleOf({ ...source, schedule: { changes: "off" } }, defaults).changes).toBe(
+      "off"
+    );
   });
 });

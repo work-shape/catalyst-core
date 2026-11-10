@@ -53,8 +53,12 @@ const SITEMAP_MAX_BYTES = 20 * 1024 * 1024;
 const DOCUMENT_HASH_MAX_BYTES = 100 * 1024 * 1024;
 /** How often one address may fail for a moment in a pass before the pass fails. */
 const FAILURES_MAX = 3;
-/** How often a `changes` poll walks again at most. */
-const CHANGES_INTERVAL_MS = 60 * 60_000;
+/**
+ * A poll settles when the feed answers its own position: a walk that ended this recently is
+ * the poll that is running, and the next one walks again. Polls come hourly at most
+ * (`documentSource.schedule.minChanges`); a person's sync now walks again after this pause.
+ */
+const CHANGES_SETTLED_MS = 2 * 60_000;
 /** How deep sitemap indexes nest. */
 const SITEMAP_DEPTH_MAX = 2;
 /** How many pages' validators and links one process keeps. */
@@ -506,6 +510,8 @@ export function createWebSource(deps: WebFetchDeps): DocumentSourceCapability {
   });
 
   return {
+    // Polls hourly at most, and a full pass each Monday at 03:00 (spec: KB-WEB).
+    schedule: { changes: 60, full: "0 3 * * 1", minChanges: 60 },
     async list(input, context) {
       const session = open(context);
       const boundary = readBoundary(input.boundary, session);
@@ -540,7 +546,7 @@ export function createWebSource(deps: WebFetchDeps): DocumentSourceCapability {
       const cursor = decoded(feedCursorSchema, input.cursor);
       if (!cursor || cursor.b !== boundary.key)
         throw new DocumentSourceError("cursor_expired", "The position is not this boundary's");
-      if (!cursor.w && now - cursor.at < CHANGES_INTERVAL_MS)
+      if (!cursor.w && now - cursor.at < CHANGES_SETTLED_MS)
         return { kind: "changes", changes: [], nextCursor: input.cursor };
       const walk = cursor.w ?? boundary.start();
       const { items, gone } = await walkStep(session, boundary, walk, options(context, true));
