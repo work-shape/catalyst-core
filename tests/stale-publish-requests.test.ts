@@ -64,11 +64,14 @@ async function setup() {
   const push = async (userId: string, name: string, overrides: Record<string, unknown>) => {
     const asset = await live(name);
     if (!asset) throw new Error(`No agent '${name}'`);
+    // A write over a draft names the draft it read.
+    const draft = await t.stores.agentProposals.get({ clientInstanceId, agentId: asset.id });
     const response = await t.call(userId, "assets.put", {
       params: { kind: "agent", name },
       payload: {
-        config: { ...asset.config, ...overrides },
+        config: { ...(draft?.config ?? asset.config), ...overrides },
         expectedRevision: asset.revision,
+        ...(draft ? { expectedDraftRevision: draft.revision } : {}),
         workspaceId: team
       }
     });
@@ -236,5 +239,111 @@ describe("an owner's Allow that is the approval", () => {
     expect(end).toMatchObject({ execution: "refused", error: { code: "FORBIDDEN" } });
     expect(await run(waiting.id)).toMatchObject({ status: "denied" });
     expect(await live("someone-else")).toMatchObject({ revision: 1 });
+  });
+});
+
+// A revision that goes live settles the requests to publish an earlier or the same one: they
+// leave To decide at once with the reason, and stay readable where their requester reads them.
+describe("requests a revision that went live overtook", () => {
+  const listSchema = z.object({ items: z.array(requestSchema) });
+
+  it("settles both CLI confirmations when an admin publishes the draft in the interface", async () => {
+    const { t, team, live, create, push, publishYes, request, run } = await setup();
+    await create(t.admin.id, "overtaken", team);
+    await push(t.kai.id, "overtaken", { instructions: "First.", toolNames: ["known.tool"] });
+    const first = waitingSchema.parse((await publishYes(t.kai.id, "overtaken", 1)).json());
+    await push(t.kai.id, "overtaken", { instructions: "Second.", toolNames: ["known.tool"] });
+    const second = waitingSchema.parse((await publishYes(t.kai.id, "overtaken", 2)).json());
+
+    // An instance admin's own Publish of the draft: the newer revision goes live.
+    const published = await t.call(t.admin.id, "assets.publish", {
+      params: { kind: "agent", name: "overtaken" },
+      payload: { revision: 2, workspaceId: team }
+    });
+    expect(published.statusCode, published.body).toBe(200);
+    expect(await live("overtaken")).toMatchObject({ revision: 2 });
+
+    const toDecide = listSchema.parse(
+      (await t.expectOk(t.kai.id, "approval_requests.list", { query: { status: "pending" } })).json()
+    );
+    expect(toDecide.items.map((item) => item.id)).not.toContain(first.approvalRequestId);
+    expect(toDecide.items.map((item) => item.id)).not.toContain(second.approvalRequestId);
+    expect(await request(t.kai.id, first.approvalRequestId)).toMatchObject({
+      status: "superseded",
+      applyResult: {
+        execution: "refused",
+        error: { code: "PUBLISH_OVERTAKEN", liveRevision: 2, alreadyLive: false }
+      },
+      payload: { inputRemoved: true }
+    });
+    expect(await request(t.kai.id, second.approvalRequestId)).toMatchObject({
+      status: "superseded",
+      applyResult: {
+        error: { code: "PUBLISH_OVERTAKEN", liveRevision: 2, alreadyLive: true }
+      }
+    });
+    for (const waiting of [first, second])
+      expect(await run(waiting.id)).toMatchObject({ status: "denied" });
+    // Its requester reads it among their requests, as settled.
+    const mine = listSchema.parse(
+      (await t.expectOk(t.kai.id, "approval_requests.list_mine")).json()
+    );
+    expect(
+      mine.items.filter((item) =>
+        [first.approvalRequestId, second.approvalRequestId].includes(item.id)
+      )
+    ).toHaveLength(2);
+  });
+
+  it("settles the approval filed after an Allow when another revision goes live", async () => {
+    const { t, team, live, create, push, publishYes, decide, request, run } = await setup();
+    await create(t.admin.id, "held-then-overtaken", team);
+    await push(t.kai.id, "held-then-overtaken", { instructions: "Kai.", toolNames: ["known.tool"] });
+    const waiting = waitingSchema.parse(
+      (await publishYes(t.kai.id, "held-then-overtaken", 1)).json()
+    );
+    await decide(t.kai.id, waiting.approvalRequestId);
+    const heldRequestId = (await run(waiting.id))?.approvalRequestId ?? "";
+    expect(await request(t.admin.id, heldRequestId)).toMatchObject({ status: "pending" });
+
+    // The admin writes a draft of their own over Kai's and publishes it.
+    await push(t.admin.id, "held-then-overtaken", { instructions: "Admin." });
+    const published = await t.call(t.admin.id, "assets.publish", {
+      params: { kind: "agent", name: "held-then-overtaken" },
+      payload: { revision: 2, workspaceId: team }
+    });
+    expect(published.statusCode, published.body).toBe(200);
+    expect(await live("held-then-overtaken")).toMatchObject({
+      revision: 2,
+      config: { instructions: "Admin." }
+    });
+
+    expect(await request(t.admin.id, heldRequestId)).toMatchObject({
+      kind: "agent_publish",
+      status: "superseded",
+      applyResult: { error: { code: "PUBLISH_OVERTAKEN", alreadyLive: false } }
+    });
+    const count = z
+      .looseObject({ count: z.number() })
+      .parse((await t.expectOk(t.admin.id, "approval_requests.count_pending")).json());
+    expect(count.count).toBe(0);
+    expect(await run(waiting.id)).toMatchObject({ status: "denied" });
+  });
+
+  it("leaves a request filed against the live revision as it is now", async () => {
+    const { t, team, create, push, publishYes, request } = await setup();
+    await create(t.admin.id, "other-agent", team);
+    await create(t.admin.id, "still-waits", team);
+    await push(t.kai.id, "still-waits", { instructions: "Kai.", toolNames: ["known.tool"] });
+    const waiting = waitingSchema.parse((await publishYes(t.kai.id, "still-waits", 1)).json());
+    // Another agent goes live: nothing of this request moved.
+    await push(t.admin.id, "other-agent", { instructions: "Other." });
+    await t.expectOk(t.admin.id, "assets.publish", {
+      params: { kind: "agent", name: "other-agent" },
+      payload: { revision: 1, workspaceId: team }
+    });
+    expect(await request(t.kai.id, waiting.approvalRequestId)).toMatchObject({
+      status: "pending"
+    });
   });
 });

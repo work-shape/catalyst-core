@@ -252,6 +252,33 @@ describe("a confirmation waiting in its person's Inbox", () => {
     );
   });
 
+  it("says that a publish a newer live version overtook can do nothing, and offers nothing to decide", () => {
+    const overtaken = (alreadyLive: boolean): Partial<ApprovalRequestView> => ({
+      status: "superseded",
+      canDecide: false,
+      preview: publishCall,
+      applyResult: {
+        runId: "opr_c1",
+        execution: "refused",
+        error: {
+          code: "PUBLISH_OVERTAKEN",
+          message: "A newer version went live.",
+          liveRevision: 5,
+          alreadyLive
+        }
+      }
+    });
+    const newer = renderItem(confirmation(overtaken(false)));
+    expect(newer).toContain(
+      "Ohne Entscheidung erledigt: Eine neuere Version ist live gegangen (Version 5). Von dieser Anfrage wurde nichts veröffentlicht, und sie kann nichts mehr bewirken."
+    );
+    expect(newer).not.toContain("data-decision=");
+    expect(newer).not.toContain("A newer version went live.");
+    expect(renderItem(confirmation(overtaken(true)))).toContain(
+      "Ohne Entscheidung erledigt: Version 5, um die es hier ging, ist bereits live. Diese Anfrage kann nichts mehr bewirken."
+    );
+  });
+
   it("asks what a Data Store row write changes and lists every row from the frozen input (RECORDS-AGENT)", () => {
     const rowWrite = (
       verb: string,

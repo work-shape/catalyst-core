@@ -24,6 +24,7 @@ import {
   setAssetDefault
 } from "../assets/asset-placement";
 import { publishPolicyFloor } from "../approvals/publish-approval";
+import { settleOvertakenAfterPublish } from "../approvals/overtaken-publish-requests";
 import { AssetWorkflow } from "../assets/asset-service";
 import { adoptAssetRepositories } from "../assets/asset-repo-adoption";
 import { checkAssetMove, moveAsset, moveChanges } from "../assets/asset-move-operation";
@@ -266,6 +267,18 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
             )
           : await together.publish(called, input);
       if (input.kind === "agent") await tries.settled(context, input, "published");
+      // A request to publish an earlier or the same revision can do nothing now: it leaves
+      // To decide at once, whoever made this revision live and however.
+      await settleOvertakenAfterPublish(
+        {
+          clientInstanceId: options.clientInstanceId,
+          approvals: options.stores.approvals,
+          configAssets: options.configAssets.store,
+          logger: options.logger
+        },
+        input,
+        result
+      );
       return result;
     }
   });

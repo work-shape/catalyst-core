@@ -1,0 +1,10 @@
+# The Builder and Publisher of a workspace in the stale publish request spec, who holds no
+# agent.approve. No other spec uses this person.
+- email: e2e-stale-publisher@example.test
+  displayLabel: E2E Zz Stale Publisher
+  passwordEnvName: E2E_STALE_PUBLISHER_PASSWORD
+  developmentPassword: e2e-stale-publisher-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
