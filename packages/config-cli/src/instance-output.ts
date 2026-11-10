@@ -77,13 +77,24 @@ export function cliCompatibilityError(
     : new CliVersionError(cliVersion, serverVersion);
 }
 
+/**
+ * The release a server names, without its build metadata, where it is a valid SemVer version;
+ * otherwise nothing. Only such a version is ever handed to npm.
+ */
+export function releaseVersionOf(serverVersion: string): string | undefined {
+  const release = serverVersion.split("+")[0] ?? "";
+  return release.length <= 64 && versionParts(release) ? release : undefined;
+}
+
 export class CliVersionError extends Error {
   constructor(
     readonly cliVersion: string,
-    readonly serverVersion: string
+    readonly serverVersion: string,
+    /** What to run instead of the global install, for a CLI installed in a project. */
+    instead?: string
   ) {
     super(
-      `Catalyst CLI ${cliVersion} does not match server ${serverVersion}; run: npm install --global @work-shape/catalyst-cli@${serverVersion.split("+")[0]}`
+      `Catalyst CLI ${cliVersion} does not match server ${serverVersion}; ${instead ?? `run: npm install --global @work-shape/catalyst-cli@${serverVersion.split("+")[0]}`}`
     );
     this.name = "CliVersionError";
   }
