@@ -170,7 +170,7 @@ describe("the Guardrails list", () => {
   it("shows the shipped guardrail as a row of the list, under the search and the scope", () => {
     const markup = renderList();
     const search = markup.indexOf('aria-label="Search guardrails"');
-    const scope = markup.indexOf('aria-label="Where: Everyone"');
+    const scope = markup.indexOf('aria-label="Where: For everyone"');
     const list = markup.indexOf('aria-label="Guardrails"');
     expect(search).toBeGreaterThan(-1);
     expect(scope).toBeGreaterThan(search);

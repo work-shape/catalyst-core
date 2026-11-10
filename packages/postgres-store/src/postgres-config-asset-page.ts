@@ -11,7 +11,7 @@ import {
   sql,
   type SQLWrapper
 } from "drizzle-orm";
-import type { ConfigAssetRecord, ConfigAssetStore } from "@work-shape/catalyst-core";
+import type { AssetScope, ConfigAssetRecord, ConfigAssetStore } from "@work-shape/catalyst-core";
 import { containsPattern, prefixPattern } from "./like-pattern";
 import { publishedColumns, publishedRevisions } from "./postgres-config-asset-revisions";
 import type { PostgresConnection } from "./postgres-database";
@@ -29,26 +29,26 @@ export async function listConfigAssetPage(
   db: PostgresConnection,
   input: Parameters<ConfigAssetStore["listConfigAssetPage"]>[0]
 ): Promise<ConfigAssetRecord[]> {
+  const scopes: readonly AssetScope[] = Array.isArray(input.scope) ? input.scope : [input.scope];
+  const workspaceIds = scopes.flatMap((scope) =>
+    scope.kind === "workspace" ? [scope.workspaceId] : []
+  );
   const conditions = [
     eq(configAssets.clientInstanceId, input.clientInstanceId),
     eq(configAssets.kind, input.kind),
     eq(configAssets.status, "active"),
-    input.scope.kind === "workspace"
-      ? or(
-          input.kind === "app"
-            ? sql`${appAvailabilityColumn}->>'audience' = 'instance'`
-            : undefined,
-          and(
-            eq(configAssets.scopeKind, "workspace"),
-            eq(configAssets.scopeId, input.scope.workspaceId)
-          )
-        )
-      : or(
-          input.kind === "app"
-            ? sql`${appAvailabilityColumn}->>'audience' = 'instance'`
-            : undefined,
-          eq(configAssets.scopeKind, "instance")
-        )
+    or(
+      // An App published for the whole instance stands in the list of every owner.
+      input.kind === "app" ? sql`${appAvailabilityColumn}->>'audience' = 'instance'` : undefined,
+      scopes.some((scope) => scope.kind === "instance")
+        ? eq(configAssets.scopeKind, "instance")
+        : undefined,
+      workspaceIds.length > 0
+        ? and(eq(configAssets.scopeKind, "workspace"), inArray(configAssets.scopeId, workspaceIds))
+        : undefined,
+      // No owner named: no asset.
+      sql`false`
+    )
   ];
   if (input.namePrefix !== undefined) {
     // A constant pattern, so the planner reads it as a range of the prefix index.

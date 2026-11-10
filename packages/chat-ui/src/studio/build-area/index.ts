@@ -249,8 +249,10 @@ export {
   mayCreateAgents,
   resolveBuildRights,
   readLastBuildScope,
+  readListsEveryOwner,
   resolveBuildScope,
   showOwnerInStudio,
+  storeListsEveryOwner,
   type BuildScope
 } from "../../shared/build-rights";
 export {

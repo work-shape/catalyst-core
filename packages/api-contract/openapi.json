@@ -3816,6 +3816,17 @@
             }
           },
           {
+            "name": "owners",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 10000,
+              "pattern": "^[^,]+(?:,[^,]+)*$"
+            }
+          },
+          {
             "name": "locale",
             "in": "query",
             "required": false,

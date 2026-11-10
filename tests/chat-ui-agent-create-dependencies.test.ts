@@ -472,14 +472,9 @@ describe("creating an agent in a workspace's Studio scope", () => {
   it("writes the agent into the workspace Studio is set to", async () => {
     window.localStorage.setItem("vivd-catalyst:build-scope", sales.id);
     try {
+      // The list shows every owner; Studio still works in the workspace it is set to.
       const page = await mountAgents([], inSales, { workspace: sales, studioSource: true });
-      await vi.waitFor(
-        () =>
-          expect(
-            document.querySelector('button[aria-label^="Where: "]')?.getAttribute("aria-label")
-          ).toBe("Where: Sales"),
-        { timeout: CONDITION_WAIT_MS }
-      );
+      await vi.waitFor(() => button("New agent"), { timeout: CONDITION_WAIT_MS });
       await startAndCreate();
 
       await vi.waitFor(() => expect(page.sent).toHaveLength(1), { timeout: CONDITION_WAIT_MS });

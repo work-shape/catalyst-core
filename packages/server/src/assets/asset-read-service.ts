@@ -148,8 +148,9 @@ export class AssetReadWorkflow {
   }
 
   /**
-   * One page of the assets of a kind in one scope, each one the caller may read. The right is
-   * decided per asset by the one resolver, so a list never shows what `assets.get` refuses.
+   * One page of the assets of a kind in one scope, or in the several `owners` names, each one
+   * the caller may read. The right is decided per asset by the one resolver, so a list never
+   * shows what `assets.get` refuses, and a list of several owners shows what theirs would.
    */
   async list(
     call: AssetCall,
@@ -158,6 +159,8 @@ export class AssetReadWorkflow {
       prefix?: string;
       text?: string;
       workspaceId?: string;
+      /** `instance` and workspace ids, separated by commas, in place of `workspaceId`. */
+      owners?: string;
       locale?: string;
       forUse?: true;
     },
@@ -168,7 +171,13 @@ export class AssetReadWorkflow {
     const locale = resolveConfigLocale(this.options.config.localization, {
       requestedLocale: input.locale ?? call.runtime?.locale
     });
-    const scope = scopeOf(input.workspaceId);
+    if (input.owners !== undefined && input.workspaceId !== undefined) {
+      throw new AppError("VALIDATION_FAILED", "Name either owners or a workspaceId, not both");
+    }
+    const scope: AssetScope | AssetScope[] =
+      input.owners === undefined
+        ? scopeOf(input.workspaceId)
+        : input.owners.split(",").map((owner) => scopeOf(owner === "instance" ? undefined : owner));
     const searchText = input.text?.toLowerCase();
     const [after] = page?.after ?? [];
     // As in assets.get, a draft is for writers and publishers; readers see the live revision.
@@ -303,7 +312,9 @@ export class AssetReadWorkflow {
         revision: record.revision,
         ...pointersOf(kind, record),
         ...(draftSummaries.has(record.id) ? { agentDraft: draftSummaries.get(record.id) } : {}),
-        ...(record.name === defaultName ? { isDefault: true as const } : {}),
+        ...(record.name === defaultName && record.scope.kind === "instance"
+          ? { isDefault: true as const }
+          : {}),
         ...startedBy(record.name),
         updatedAt: record.updatedAt
       };
@@ -978,9 +989,11 @@ export class AssetReadWorkflow {
    */
   private async defaultName(
     kind: WorkflowAssetKind,
-    scope: AssetScope
+    scope: AssetScope | readonly AssetScope[]
   ): Promise<string | undefined> {
-    if (!kind.holdsInstanceDefault || scope.kind !== "instance") {
+    // The instance's default is one of its own assets, read where a list or read names it.
+    const scopes: readonly AssetScope[] = Array.isArray(scope) ? scope : [scope];
+    if (!kind.holdsInstanceDefault || !scopes.some((owner) => owner.kind === "instance")) {
       return undefined;
     }
     const state = await this.options.configAssets.store.getConfigAssetState({

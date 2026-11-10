@@ -5,7 +5,7 @@ import type { BuildScope } from "../../../shared/build-rights";
 export interface BuildListLeadFilter {
   /** What the reader typed, once they paused. */
   text: string;
-  /** The scope the list shows, for a kind that is listed per scope. */
+  /** The one owner the list shows, for a kind listed per owner; absent while it shows every owner. */
   scope: BuildScope | undefined;
 }
 

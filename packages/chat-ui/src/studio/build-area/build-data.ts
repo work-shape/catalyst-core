@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import type {
   ApiClient,
   ConfigAssetRevision,
@@ -27,12 +27,15 @@ import type { PublishQuestionAnswer } from "./build-publish-question";
 import { approverNamesOf, instanceSentence, PendingApprovalError } from "./build-refusals";
 import {
   AGENT_ASSET_KIND,
+  buildOwnersValue,
   buildScopes,
   buildScopeValue,
   readLastBuildScope,
+  readListsEveryOwner,
   resolveBuildRights,
   resolveBuildScope,
   storeLastBuildScope,
+  storeListsEveryOwner,
   subscribeBuildScope,
   type BuildRights,
   type BuildScope
@@ -204,8 +207,16 @@ export interface BuildSource {
    * and absent where the source has one owner.
    */
   scopeOf?(kind: string): BuildScope | undefined;
-  /** Works in another owner. */
+  /** Works in another owner. The lists stay as narrow as the reader set them. */
   chooseScope?(scope: BuildScope): void;
+  /**
+   * The list of a kind a workspace can own shows every owner Studio offers, each row with its
+   * owner, until the reader narrows it to the owner Studio works in. Absent where the source
+   * lists one owner at a time.
+   */
+  listsEveryOwner?: boolean;
+  /** "Wo": shows every owner again, or narrows the lists to one and works in it. */
+  chooseListOwner?(owner: BuildScope | "every"): void;
   /**
    * Opens the dock with a new conversation with an agent that builds assets, `prompt` in its
    * composer: the brief of a kind without a hand editor, the empty list's offer, and "Chat" on
@@ -255,20 +266,11 @@ export function useBuildSource(): BuildSource {
     () => undefined
   );
   const scope = resolveBuildScope(rights, chosenScope, activeWorkspace?.id);
-  // The kinds whose list opened on an owner that has some of them, and whether the reader chose
-  // an owner here: a list opens on an owner once, and never against the reader's choice.
-  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
-  const [picked, setPicked] = useState(false);
-  // The owner the Skills list opened on by itself, and the owner Studio was set to then. It
-  // holds for skills alone and only while Studio stays set there: the other lists and Create
-  // keep Studio's owner, and what Studio remembers stays as it was.
-  const [skillsOpenedOn, setSkillsOpenedOn] = useState<{ on: string; over: string }>();
-  const skillScope =
-    skillsOpenedOn !== undefined && skillsOpenedOn.over === buildScopeValue(scope)
-      ? resolveBuildScope(rights, skillsOpenedOn.on, activeWorkspace?.id)
-      : scope;
-  /** The owner a list, read or write of the kind works in. */
-  const scopeFor = (kind: string): BuildScope => (kind === "skill" ? skillScope : scope);
+  const listsEveryOwner = useSyncExternalStore(
+    subscribeBuildScope,
+    readListsEveryOwner,
+    () => true
+  );
   const scopedKinds = new Set(
     (context?.kinds ?? [])
       .filter((kind) => kind.owners.includes("workspace") && kind.owners.includes("instance"))
@@ -276,18 +278,15 @@ export function useBuildSource(): BuildSource {
   );
   /** The workspace a call about an asset of the kind names: the scope's, for a scoped kind. */
   const workspaceOf = (kind: string): string | undefined => {
-    const owner = scopeFor(kind);
-    return scopedKinds.has(kind) && owner.kind === "workspace" ? owner.workspaceId : undefined;
+    return scopedKinds.has(kind) && scope.kind === "workspace" ? scope.workspaceId : undefined;
   };
   const inScope = (kind: string): { workspaceId?: string } => {
     const workspaceId = workspaceOf(kind);
     return workspaceId === undefined ? {} : { workspaceId };
   };
   /** The other owners Studio offers, where an asset of the kind missing in its scope is looked for. */
-  const otherScopes = (kind: string) =>
-    buildScopes(rights).filter(
-      (other) => buildScopeValue(other) !== buildScopeValue(scopeFor(kind))
-    );
+  const otherScopes = () =>
+    buildScopes(rights).filter((other) => buildScopeValue(other) !== buildScopeValue(scope));
 
   const kinds = useMemo<BuildKindState[]>(() => {
     // The instance's own switches for the two kinds it has always had. A kind that brings no
@@ -298,29 +297,25 @@ export function useBuildSource(): BuildSource {
     };
     return (context?.kinds ?? [])
       .filter((kind) => rights.reads(kind.kind))
-      .map((kind) => {
-        const owner = kind.kind === "skill" ? skillScope : scope;
-        return {
-          kind: kind.kind,
-          canCreate:
-            (switches[kind.kind]?.create ?? true) &&
-            rights.mayCreate(
-              kind.kind,
-              kind.owners.includes("workspace") && owner.kind === "workspace"
-                ? owner.workspaceId
-                : undefined
-            ),
-          canDelete: switches[kind.kind]?.delete ?? true
-        };
-      });
+      .map((kind) => ({
+        kind: kind.kind,
+        canCreate:
+          (switches[kind.kind]?.create ?? true) &&
+          rights.mayCreate(
+            kind.kind,
+            kind.owners.includes("workspace") && scope.kind === "workspace"
+              ? scope.workspaceId
+              : undefined
+          ),
+        canDelete: switches[kind.kind]?.delete ?? true
+      }));
   }, [
     context,
     management.allowAgentCreation,
     management.allowAgentDeletion,
     management.allowSkillEditing,
     rights,
-    scope,
-    skillScope
+    scope
   ]);
 
   const writes = createAssetWrites(client);
@@ -358,71 +353,33 @@ export function useBuildSource(): BuildSource {
     share: createAssetShareSource(client, (kind) => {
       changed(kind)().catch(() => undefined);
     }),
-    scopeOf: (kind) => (scopedKinds.has(kind) ? scopeFor(kind) : undefined),
-    chooseScope: (next) => {
-      setPicked(true);
-      setSkillsOpenedOn(undefined);
-      storeLastBuildScope(buildScopeValue(next));
+    scopeOf: (kind) => (scopedKinds.has(kind) ? scope : undefined),
+    chooseScope: (next) => storeLastBuildScope(buildScopeValue(next)),
+    listsEveryOwner,
+    chooseListOwner: (next) => {
+      storeListsEveryOwner(next === "every");
+      if (next !== "every") storeLastBuildScope(buildScopeValue(next));
     },
     ...(buildWithAgent === undefined ? {} : { buildWithAgent }),
     ...(editWithAgent === undefined ? {} : { editWithAgent }),
     useList(kind, filter) {
       const text = filter.text.trim();
-      const owner = inScope(kind);
-      // The first time the Skills list opens, an owner without skills would show an empty list
-      // where another owner has some: the list opens on the owner in Studio when it has some,
-      // otherwise on the first owner offered that has, and reads nothing before that is known.
-      // Every other list opens where Studio is set.
-      const opening =
-        kind === "skill" &&
-        scopedKinds.has(kind) &&
-        !picked &&
-        !opened.has(kind) &&
-        otherScopes(kind).length > 0;
-      const firstWithItems = useQuery({
-        queryKey: [...assetsKey, "opening-scope", kind, buildScopeValue(scope)],
-        enabled: opening,
-        queryFn: async ({ signal }) => {
-          const candidates = [scope, ...otherScopes(kind)];
-          const holds = await Promise.all(
-            candidates.map((candidate) =>
-              client.assets
-                .list({
-                  params: { kind },
-                  query: {
-                    limit: 1,
-                    ...(candidate.kind === "workspace"
-                      ? { workspaceId: candidate.workspaceId }
-                      : {})
-                  },
-                  signal
-                })
-                .then(
-                  (page) => page.items.length > 0,
-                  () => false
-                )
-            )
-          );
-          const found = candidates.find((_, index) => holds[index]);
-          return found === undefined ? null : buildScopeValue(found);
-        },
-        gcTime: 0,
-        staleTime: Infinity,
-        retry: false
-      });
-      const openingSettled = opening && !firstWithItems.isPending;
-      const openOn = firstWithItems.data;
-      const current = buildScopeValue(scope);
-      useEffect(() => {
-        if (!openingSettled) return;
-        if (typeof openOn === "string" && openOn !== current) {
-          setSkillsOpenedOn({ on: openOn, over: current });
-        }
-        setOpened((before) => new Set([...before, kind]));
-      }, [openingSettled, openOn, current, kind]);
+      // A list of every owner asks for them all in one page: each row names its owner. A kind
+      // with one owner, and a reader offered one, is listed as before.
+      const every =
+        listsEveryOwner && scopedKinds.has(kind) && buildScopes(rights).length > 1
+          ? { owners: buildOwnersValue(rights) }
+          : undefined;
+      const owner: { workspaceId?: string; owners?: string } = every ?? inScope(kind);
       const query = useInfiniteQuery({
-        enabled: !opening,
-        queryKey: [...assetsKey, "list", kind, owner.workspaceId ?? "", text, locale],
+        queryKey: [
+          ...assetsKey,
+          "list",
+          kind,
+          owner.owners === undefined ? (owner.workspaceId ?? "") : `every:${owner.owners}`,
+          text,
+          locale
+        ],
         queryFn: ({ pageParam, signal }) =>
           client.assets.list({
             params: { kind },
@@ -439,8 +396,7 @@ export function useBuildSource(): BuildSource {
         getNextPageParam: (page) => page.nextCursor
       });
       return {
-        // Undefined while the list's owner is chosen: the list shows as loading, not as empty.
-        rows: opening ? undefined : query.data?.pages.flatMap((page) => page.items),
+        rows: query.data?.pages.flatMap((page) => page.items),
         error: query.error
           ? (instanceSentence(query.error, t) ?? t("build.loadFailed"))
           : undefined,
@@ -472,17 +428,10 @@ export function useBuildSource(): BuildSource {
       // way to the page reads the asset where it is.
       const missingHere =
         query.error !== null && !query.isFetching && apiErrorCode(query.error) === "NOT_FOUND";
-      const others = otherScopes(kind);
+      const others = otherScopes();
       const searched = missingHere && scopedKinds.has(kind) && others.length > 0;
       const elsewhere = useQuery({
-        queryKey: [
-          "asset-owner",
-          apiBaseUrl,
-          authScope,
-          kind,
-          buildScopeValue(scopeFor(kind)),
-          name
-        ],
+        queryKey: ["asset-owner", apiBaseUrl, authScope, kind, buildScopeValue(scope), name],
         enabled: searched,
         queryFn: async ({ signal }) => {
           const found = await Promise.all(

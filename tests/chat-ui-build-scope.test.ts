@@ -121,7 +121,7 @@ describe("the Studio scope", () => {
       }),
       "de"
     );
-    expect(onInstance).toContain('aria-label="Wo: Alle"');
+    expect(onInstance).toContain('aria-label="Wo: Für alle"');
     expect(onInstance).toContain("house-agent");
     expect(onInstance).not.toContain(">Team<");
   });
