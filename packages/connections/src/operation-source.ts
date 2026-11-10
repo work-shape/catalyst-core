@@ -24,7 +24,7 @@ import {
   type OperationOrigin,
   type OperationResource,
   type OperationSource,
-  ownServersOffError
+  requireOwnServersOn
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import {
@@ -152,9 +152,7 @@ async function authorizeCall(
   context: OperationAuthorizeContext
 ): Promise<OperationAuthorization> {
   // The operator switched people's own servers off: they stay, and nothing reaches them.
-  if (connection.config.ownerOnly === true && deps.ownServers?.enabled === false) {
-    throw ownServersOffError();
-  }
+  requireOwnServersOn(connection.config, deps.ownServers);
   if (connectionCallsArePersonal(connection.config, connection.type)) {
     await requirePersonalConnectionContext({
       ...deps,

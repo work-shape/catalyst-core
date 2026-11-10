@@ -19,9 +19,13 @@ export const OWN_SERVER_REFUSALS = {
   notOwner: "not_owner"
 } as const;
 
-/** `modules.connections.ownServers` where release config leaves a value out. */
+/**
+ * `modules.connections.ownServers` where release config leaves a value out. Off until the
+ * egress rule for self-added servers (PMCP-3) and their tools in chats (PMCP-4) are in, and the
+ * interface that adds one (PMCP-5) turns it on.
+ */
 export const DEFAULT_OWN_SERVERS = Object.freeze({
-  enabled: true,
+  enabled: false,
   perPerson: 10,
   publicHttps: true
 });
@@ -58,6 +62,24 @@ export function isOwnServerOwner(
 ): boolean {
   const owner = ownerOnlyOwnerOf(config);
   return owner !== undefined && owner !== "" && actor !== undefined && actor.id === owner;
+}
+
+/** Whether people's own servers are on: the operator's switch, or the release default. */
+export function ownServersOn(settings: Pick<OwnServersSettings, "enabled"> | undefined): boolean {
+  return settings?.enabled ?? DEFAULT_OWN_SERVERS.enabled;
+}
+
+/**
+ * Refuses with `own_servers_off` what would contact a person's own server, a call, a test, a
+ * discovery or a sign-in, while the operator's switch is off. Any other Connection passes.
+ */
+export function requireOwnServersOn(
+  config: unknown,
+  settings: Pick<OwnServersSettings, "enabled"> | undefined
+): void {
+  if (ownerOnlyOwnerOf(config) !== undefined && !ownServersOn(settings)) {
+    throw ownServersOffError();
+  }
 }
 
 /**

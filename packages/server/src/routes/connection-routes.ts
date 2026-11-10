@@ -303,6 +303,7 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
       if (!(await required().resource(input.name))) {
         throw new AppError("NOT_FOUND", `Connection '${input.name}' does not exist`);
       }
+      await required().requireOwnServersOn(input.name);
       await requestDiscovery(input.name, await personalOwnerOf(input.name, context));
       return { status: "queued" as const };
     }

@@ -24,7 +24,8 @@ import {
   type ConnectorTypeDefinition,
   type EgressGrant,
   type JsonObject,
-  type OperationResource
+  type OperationResource,
+  requireOwnServersOn
 } from "@work-shape/catalyst-core";
 import {
   connectionResourceOf,
@@ -704,6 +705,7 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
         ) {
           throw personalConnectionBrowserError();
         }
+        requireOwnServersOn(connection.config, deps.ownServers);
         return await start(connection, starter, audit, deadline(signal));
       } catch (error) {
         await refused(audit, "start", error, connection);
@@ -778,6 +780,7 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
             { reason: "forbidden" }
           );
         }
+        requireOwnServersOn(connection.config, deps.ownServers);
         await complete(session, connection, query, audit, deadline(signal));
         const location = signInLandingUrl(
           required(connection.config.name).publicUrl,

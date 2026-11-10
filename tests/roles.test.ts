@@ -1199,6 +1199,38 @@ describe("a release that changes a default", () => {
   });
 });
 
+describe("the release that adds one's own MCP server (PMCP-2)", () => {
+  it("leaves an edited `user` role as it is, with `connection.add_own` pending for a superadmin to decide", async () => {
+    const t = await setup();
+    // As the release before PMCP-2 left them: `user` held nothing by default, and an admin
+    // gave it `usage.view`.
+    await t.expectOk(t.root.id, "roles.update", {
+      params: { roleId: "user" },
+      payload: { grants: [instanceAllow("usage.view")] }
+    });
+    await withTestSql(async (sql) => {
+      await sql`update roles set default_actions = '[]'::jsonb where id = 'user'`;
+    });
+
+    await migrateDatabase({ databaseUrl: await fileTestDatabaseUrl(), log: () => {} });
+
+    expect(await role(t, "user")).toMatchObject({
+      grants: [instanceAllow("usage.view")],
+      equalsDefault: false,
+      pendingActions: [{ action: "connection.add_own", change: "added" }]
+    });
+    // Until a superadmin applies it, nobody holds it by the role.
+    const effective = effectiveSchema.parse(
+      (
+        await t.expectOk(t.admin.id, "permissions.effective", {
+          query: { holderKind: "user", holderId: t.kai.id }
+        })
+      ).json()
+    );
+    expect(effective.items.map((entry) => entry.action)).not.toContain("connection.add_own");
+  });
+});
+
 describe("the last superadmin", () => {
   it("is never demoted or deactivated through the API", async () => {
     const t = await setup();

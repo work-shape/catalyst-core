@@ -32,7 +32,7 @@ import {
   type OperationPaging,
   type SecretState,
   type ConnectorTypeDefinition,
-  ownServersOffError
+  requireOwnServersOn
 } from "@work-shape/catalyst-core";
 import {
   connectorTypeOffers,
@@ -221,6 +221,8 @@ export interface ConnectionManagement
     ReturnType<typeof createPersonalConnectionManagement> {
   /** What a right on the Connection is decided on. Nothing where no such Connection exists. */
   resource(name: string): Promise<OperationResource | undefined>;
+  /** Refuses a discovery of a person's own server with `own_servers_off` while it is off. */
+  requireOwnServersOn(name: string): Promise<void>;
   /** `agents` are the agents the caller may read: `usedBy` names no other. */
   get(
     name: string,
@@ -437,7 +439,7 @@ async function probeOwnServer(
   outer: AbortSignal | undefined,
   now: () => Date
 ): Promise<{ status: ConnectorTestStatus; testedAt: string }> {
-  if (deps.ownServers?.enabled === false) throw ownServersOffError();
+  requireOwnServersOn(connection.config, deps.ownServers);
   const settings = type.settingsSchema.safeParse(connection.config.settings);
   if (!type.probe || !settings.success) throw connectionCallError("connection_unavailable");
   const signal = AbortSignal.any([
@@ -579,6 +581,11 @@ export function createConnectionManagement(
     async resource(name) {
       const connection = await readConnection(deps, name);
       return connection ? connectionResourceOf(connection) : undefined;
+    },
+
+    async requireOwnServersOn(name) {
+      const connection = await readConnection(deps, name);
+      if (connection) requireOwnServersOn(connection.config, deps.ownServers);
     },
 
     async get(name, agents, readable, reader) {

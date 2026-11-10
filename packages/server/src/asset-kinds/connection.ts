@@ -25,6 +25,7 @@ import {
   operationDenialError,
   ownServersLimitError,
   ownServersOffError,
+  ownServersOn,
   ownerOnlyFixedError,
   ownerOnlyOwnerOf,
   type AccessResource,
@@ -562,7 +563,7 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
           reason: "user_only"
         });
       }
-      if (options.ownServers?.enabled === false) throw ownServersOffError();
+      if (!ownServersOn(options.ownServers)) throw ownServersOffError();
       const issue = ownServerCreateIssue(next);
       if (issue !== undefined) throw new AppError("VALIDATION_FAILED", issue);
     },

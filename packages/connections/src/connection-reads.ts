@@ -49,7 +49,8 @@ export interface ConnectionOperationSourceDeps {
   managedClients?: ManagedOAuthClients;
   /**
    * `modules.connections.ownServers`: with `enabled` off, a person's own server answers
-   * `own_servers_off` to every call and test. Left out, the release default (on).
+   * `own_servers_off` to every call, test, discovery and sign-in. Left out, the release
+   * default (off).
    */
   ownServers?: Pick<OwnServersSettings, "enabled">;
 }

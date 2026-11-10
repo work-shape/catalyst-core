@@ -577,7 +577,8 @@ describe("workspace bundles (WS-BUILD-1)", () => {
 
   it("carries no right on a Connection, which no workspace owns (PMCP-1, check 82)", () => {
     const connectionIn: AccessResource = { kind: "connection", workspaceId: "kai" };
-    const access = createActorAccess(holder(), persisted([builder, publisher]));
+    // No role: the `user` role's `connection.add_own` (PMCP-2) is the role's, not the bundle's.
+    const access = createActorAccess(holder({ roles: [] }), persisted([builder, publisher]));
     for (const action of ACTIONS.filter((name) => name.startsWith("connection."))) {
       for (const resource of [connectionIn, { workspaceId: "kai" }]) {
         expect(access.authorize(action, resource), action).toEqual(noGrant);

@@ -15,8 +15,9 @@ section: Added
   `ready`, `oauth_required`, `token_required` (a 401 with no Bearer challenge) or `unavailable`,
   and writes the server's health. The owner reads its tools with their own sign-in, as for a
   personal MCP Connection.
-- **Release config:** `modules.connections.ownServers` with `enabled` (default `true`),
-  `perPerson` (default 10, `own_servers_limit`) and `publicHttps` (default `true`, read by a
-  later change). With `enabled: false`, adding one answers `own_servers_off`, and so do the
-  calls and tests of a server added before. Nothing is deleted.
+- **Release config:** `modules.connections.ownServers` with `enabled` (default `false` until
+  the interface that adds one ships), `perPerson` (default 10, `own_servers_limit`) and
+  `publicHttps` (default `true`, read once the egress rule for self-added servers lands). Off,
+  adding one answers `own_servers_off`, and so do the calls, tests, discovery and sign-in of a
+  server added before. Nothing is deleted.
 - No interface offers the add yet.

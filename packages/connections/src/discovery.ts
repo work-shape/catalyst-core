@@ -17,7 +17,9 @@ import {
   type JsonObject,
   type JsonValue,
   type Logger,
-  type PlatformStores
+  type OwnServersSettings,
+  type PlatformStores,
+  ownServersOn
 } from "@work-shape/catalyst-core";
 import { holdsSecret } from "./call";
 import { buildConnectionCatalog } from "./catalog";
@@ -132,6 +134,8 @@ export interface DiscoverConnectionInput {
    * Connection is discovered with nothing else.
    */
   personalOwner?: string;
+  /** `modules.connections.ownServers`: off, a person's own server is not contacted. */
+  ownServers?: Pick<OwnServersSettings, "enabled">;
 }
 
 /**
@@ -440,7 +444,13 @@ export async function discoverConnection(
   const { clientInstanceId, connectionName, stores } = input;
   const connection = await readConnection(input, connectionName);
   const type = connection?.type;
-  if (!connection || !type || !type.discover || !connection.config.enabled) {
+  if (
+    !connection ||
+    !type ||
+    !type.discover ||
+    !connection.config.enabled ||
+    (connection.config.ownerOnly === true && !ownServersOn(input.ownServers))
+  ) {
     return { status: "skipped" };
   }
   if (connection.config.credentialMode === "user" && !ownerMayDiscover(input, connection)) {

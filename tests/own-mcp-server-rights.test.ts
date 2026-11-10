@@ -59,7 +59,8 @@ beforeAll(async () => {
   world = await createOAuthWorld({
     plainPeople: true,
     extraPort: probe.port,
-    ownServers: { perPerson: 3 }
+    // On, as an operator or PMCP-5 turns it on: the release default is off.
+    ownServers: { enabled: true, perPerson: 3 }
   });
   alice = await world.signIn("alice");
   carol = await world.signIn("carol");
