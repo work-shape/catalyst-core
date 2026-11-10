@@ -340,7 +340,8 @@ describe("inbox item", () => {
   it("offers a person who can decide a comment and the three decisions, below the proposal", () => {
     const markup = renderItem({ canDecide: true, canWithdraw: true });
 
-    expect(markup).toContain("sticky bottom-0");
+    // Flush on the surface's lower edge: the offset spans the surface's padding like the margins.
+    expect(markup).toContain("sticky -bottom-4 -mx-4 -mb-4");
     expect(markup).toContain("Kommentar");
     expect(markup).toContain("<textarea");
     expect(markup).toContain(">Übernehmen</button>");

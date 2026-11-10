@@ -267,10 +267,11 @@ function InboxItemFoot({
   const KindFoot = kind?.Foot;
   const ApproveHold = kind?.ApproveHold;
   return (
-    // Stays at the surface's lower edge while a long proposal scrolls behind it; the negative
-    // margins span the surface's own padding.
+    // Stays at the surface's lower edge while a long proposal scrolls behind it. A sticky offset
+    // counts from inside the surface's padding, so the negative offset and margins span it;
+    // at `bottom-0` the proposal would show in that padding, below the foot.
     <footer
-      className="sticky bottom-0 -mx-4 -mb-4 grid min-w-0 gap-3 border-t bg-background px-4 py-3"
+      className="sticky -bottom-4 -mx-4 -mb-4 grid min-w-0 gap-3 border-t bg-background px-4 py-3"
       data-testid="inbox-item-foot"
     >
       {actions.failure ? (
