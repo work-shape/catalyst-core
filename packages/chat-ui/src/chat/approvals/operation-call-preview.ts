@@ -39,16 +39,35 @@ const outcomes: readonly OperationCallOutcome[] = [...APPROVAL_EXECUTIONS];
  * What became of the call of a request that is not pending, read from what the server recorded
  * on it. A request that was approved before outcomes were recorded ran with its approval.
  */
-export function operationCallOutcome(request: {
-  status: string;
-  applyResult?: unknown;
-}): { outcome: OperationCallOutcome; reason?: string; reasonCode?: string } | undefined {
+/** The code of a publish request a revision that went live since overtook: it can do nothing. */
+const PUBLISH_OVERTAKEN = "PUBLISH_OVERTAKEN";
+
+export function operationCallOutcome(request: { status: string; applyResult?: unknown }):
+  | {
+      outcome: OperationCallOutcome;
+      reason?: string;
+      reasonCode?: string;
+      /** A publish another revision overtook: the version live now, and whether it is this one. */
+      overtaken?: { liveRevision: number; alreadyLive: boolean };
+    }
+  | undefined {
   const result = isRecord(request.applyResult) ? request.applyResult : {};
   const outcome = outcomes.find((candidate) => candidate === result.execution);
   const reason = isRecord(result.error) ? readText(result.error.message) : undefined;
   const reasonCode = isRecord(result.error) ? readText(result.error.code) : undefined;
+  const overtaken =
+    isRecord(result.error) &&
+    reasonCode === PUBLISH_OVERTAKEN &&
+    typeof result.error.liveRevision === "number"
+      ? { liveRevision: result.error.liveRevision, alreadyLive: result.error.alreadyLive === true }
+      : undefined;
   if (outcome) {
-    return { outcome, ...(reason ? { reason } : {}), ...(reasonCode ? { reasonCode } : {}) };
+    return {
+      outcome,
+      ...(reason ? { reason } : {}),
+      ...(reasonCode ? { reasonCode } : {}),
+      ...(overtaken ? { overtaken } : {})
+    };
   }
   return request.status === "approved" ? { outcome: "done" } : undefined;
 }
@@ -276,6 +295,11 @@ export interface OperationCallPreview {
   /** The confirmation offers "Always allow": allowing can also stop it asking again (OP-6). */
   alwaysAllow?: true;
   /**
+   * Allowing the confirmation files an approval that another person decides: a guardrail
+   * asked for one, and the reader may not decide it.
+   */
+  approvalFollows?: true;
+  /**
    * What a call that hands a source's data on says to who decides it (DS-13c), one line each,
    * worded by the server with only the titles the reader may see.
    */
@@ -332,6 +356,9 @@ export function parseOperationCallPreview(preview: unknown): OperationCallPrevie
     ...(preview.mode === "confirmation" ? { confirmation: true as const } : {}),
     ...(preview.mode === "confirmation" && preview.alwaysAllow === true
       ? { alwaysAllow: true as const }
+      : {}),
+    ...(preview.mode === "confirmation" && preview.approvalFollows === true
+      ? { approvalFollows: true as const }
       : {}),
     ...(targetTitle ? { targetTitle } : {}),
     ...(handover.length > 0 ? { handover } : {}),

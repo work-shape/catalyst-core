@@ -150,7 +150,9 @@ export function createInstanceOperationCalls(
     handlers: operationCalls.approvalRequestHandlers,
     checks,
     onDecided: (request) => store.approvals.appendApprovalDecision(request),
-    auditRecorder
+    auditRecorder,
+    // A request its requester may decide is listed to them alone.
+    authorizer
   });
   return { authorizer, operationCalls, approvalRequestCreator, checks };
 }

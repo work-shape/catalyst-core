@@ -16,22 +16,34 @@ export const INBOX_REFETCH_MS = 60_000;
  * The key of a list. It stands under the prefix of every approval request query, so a decision
  * refreshes the lists together with the count and the open item.
  */
-export function inboxListQueryKey(apiBaseUrl: string, authScope: string, tab: InboxTab) {
-  return [...approvalRequestQueryKeys.all(apiBaseUrl, authScope), "inbox", tab] as const;
+export function inboxListQueryKey(
+  apiBaseUrl: string,
+  authScope: string,
+  tab: InboxTab,
+  othersOwn = false
+) {
+  return [
+    ...approvalRequestQueryKeys.all(apiBaseUrl, authScope),
+    "inbox",
+    tab,
+    ...(othersOwn ? ["others_own"] : [])
+  ] as const;
 }
 
 /**
  * One list of the Inbox, read whole and ordered by the page. `to_decide` and `decided` need a
- * review right and are asked only for a person who has one.
+ * review right and are asked only for a person who has one. `othersOwn` adds to To decide the
+ * requests others filed who may decide them themselves.
  */
 export function useInboxListQuery(
-  input: ApprovalRequestApiInput & { tab: InboxTab; enabled: boolean }
+  input: ApprovalRequestApiInput & { tab: InboxTab; enabled: boolean; othersOwn?: boolean }
 ) {
   const { client, tab } = input;
+  const othersOwn = tab === "to_decide" && input.othersOwn === true;
   return useQuery({
-    queryKey: inboxListQueryKey(input.apiBaseUrl, input.authScope, tab),
-    queryFn: (): Promise<ApprovalRequestView[]> =>
-      listAll((paging) =>
+    queryKey: inboxListQueryKey(input.apiBaseUrl, input.authScope, tab, othersOwn),
+    queryFn: async (): Promise<ApprovalRequestView[]> => {
+      const list = listAll((paging) =>
         tab === "mine"
           ? client.approval_requests.list_mine({ query: paging })
           : client.approval_requests.list({
@@ -40,7 +52,16 @@ export function useInboxListQuery(
                   ? { status: "pending", ...paging }
                   : { scope: "decided", ...paging }
             })
-      ),
+      );
+      if (!othersOwn) return list;
+      const [own, others] = await Promise.all([
+        list,
+        listAll((paging) =>
+          client.approval_requests.list({ query: { scope: "others_own", ...paging } })
+        )
+      ]);
+      return [...own, ...others];
+    },
     enabled: input.enabled,
     refetchOnWindowFocus: true,
     refetchInterval: INBOX_REFETCH_MS

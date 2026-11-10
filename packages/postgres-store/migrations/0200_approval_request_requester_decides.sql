@@ -1,0 +1,1 @@
+ALTER TABLE "approval_requests" ADD COLUMN "requester_decides" boolean DEFAULT false NOT NULL;

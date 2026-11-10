@@ -221,6 +221,10 @@ export const operations = defineTranslations({
     "operations.callOutcomeExpired": "Expired before it was decided. Nothing was executed.",
     "operations.callOutcomeHeld":
       "Allowed. The call now waits for an approver; nothing was executed yet.",
+    "operations.callOutcomeAlreadyLive":
+      "Settled without a decision: version {revision}, which this request asked for, is already live. This request can do nothing.",
+    "operations.callOutcomeOvertaken":
+      "Settled without a decision: a newer version went live (version {revision}). Nothing of this request was published, and it can do nothing any more.",
     "operations.callOutcomeStale":
       "Not applied: “{title}” was changed after this request was made, so nothing changed. Submit a new change if it is still needed.",
     "operations.callOutcomeStaleApprover":
@@ -264,6 +268,8 @@ export const operations = defineTranslations({
       "If you allow it, it runs once as you. If you deny it, nothing runs.",
     "operations.confirmPublishEffect":
       "Allow counts as your own click on Publish: where publishing needs an approval, Allow asks for it. Deny publishes nothing.",
+    "operations.confirmPublishApprovalFollows":
+      "You cannot approve this publish yourself. After your Allow, a person who may approve it decides; only then does it go live.",
     "operations.confirmOnlyYou":
       "Only you can decide this. It is in nobody else's Inbox, an admin's included.",
     "operations.confirmOutcomeDone": "Allowed. The call ran once.",
@@ -499,6 +505,10 @@ export const operations = defineTranslations({
       "Abgelaufen, bevor entschieden wurde. Es wurde nichts ausgeführt.",
     "operations.callOutcomeHeld":
       "Erlaubt. Der Aufruf wartet jetzt auf eine Freigabe; noch wurde nichts ausgeführt.",
+    "operations.callOutcomeAlreadyLive":
+      "Ohne Entscheidung erledigt: Version {revision}, um die es hier ging, ist bereits live. Diese Anfrage kann nichts mehr bewirken.",
+    "operations.callOutcomeOvertaken":
+      "Ohne Entscheidung erledigt: Eine neuere Version ist live gegangen (Version {revision}). Von dieser Anfrage wurde nichts veröffentlicht, und sie kann nichts mehr bewirken.",
     "operations.callOutcomeStale":
       "Nicht übernommen: „{title}“ wurde nach dieser Anfrage geändert, deshalb hat sich nichts geändert. Reiche eine neue Änderung ein, wenn sie noch nötig ist.",
     "operations.callOutcomeStaleApprover":
@@ -544,6 +554,8 @@ export const operations = defineTranslations({
       "Wenn du es erlaubst, läuft es einmal als du. Wenn du es verweigerst, läuft nichts.",
     "operations.confirmPublishEffect":
       "Erlauben zählt wie dein eigener Klick auf Veröffentlichen: Braucht die Veröffentlichung eine Freigabe, fragt Erlauben sie an. Verweigern veröffentlicht nichts.",
+    "operations.confirmPublishApprovalFollows":
+      "Du kannst diese Veröffentlichung nicht selbst freigeben. Nach deinem Erlauben entscheidet eine Person mit Freigaberecht; erst dann geht sie live.",
     "operations.confirmOnlyYou":
       "Nur du kannst das entscheiden. Es liegt in keinem anderen Eingang, auch nicht bei Admins.",
     "operations.confirmOutcomeDone": "Erlaubt. Der Aufruf lief einmal.",

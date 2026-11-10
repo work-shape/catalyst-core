@@ -22,6 +22,11 @@ export interface InboxCounts {
   canReview: boolean;
   /** How many the decided list holds. */
   decided: number;
+  /**
+   * The pending requests others filed who may decide them themselves: not in `count`, and
+   * listed in To decide only when the reader asks for them.
+   */
+  othersOwn?: number;
   mine: { pending: number; total: number };
 }
 

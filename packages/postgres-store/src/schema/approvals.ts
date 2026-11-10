@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, index, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import type { ApprovalRequest, JsonObject } from "@work-shape/catalyst-core";
 
 export const approvalRequests = pgTable(
@@ -14,6 +14,8 @@ export const approvalRequests = pgTable(
     // The one person a confirmation in the Inbox is addressed to (OP-4b). Null for a request
     // the holders of its kind's right decide.
     addresseeUserId: text("addressee_user_id"),
+    // The requester held the deciding right when filing: To decide lists it for them alone.
+    requesterDecides: boolean("requester_decides").notNull().default(false),
     origin: jsonb("origin").$type<ApprovalRequest["origin"]>(),
     status: text("status").$type<ApprovalRequest["status"]>().notNull(),
     // Reversion metadata shares the decision JSON; the public request exposes it separately.

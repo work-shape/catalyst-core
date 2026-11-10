@@ -141,7 +141,7 @@ export async function executeConfirmedOperation(
     const access = await deps.authorizer.forActor(context.call.actor);
     const clicked = { ...context.call, origin: { kind: "user" as const } };
     if (!approval || !approvedByCaller(clicked, policy, approval, access))
-      return holdForApproval(context, policy, waiting.heldInput, approval);
+      return holdForApproval(context, policy, waiting, approval);
     return executeWaitingCall(
       context,
       { ...decision, mode: "approved", reason: "approved_by_caller" },
@@ -185,6 +185,32 @@ export async function executeInboxConfirmedOperation(
   ) {
     return readDecidedOperationEnd(waiting.runId, options.requestId, deps);
   }
+  if (decision.by !== run.actor.id) {
+    // A confirmation is its person's own: one recorded by anybody else runs nothing.
+    const ended = await deps.runs.endWaiting({
+      clientInstanceId: deps.clientInstanceId,
+      id: run.id,
+      end: deniedEnd(
+        { now: deps.now ?? (() => new Date()) },
+        {
+          kind: "forbidden",
+          action: run.operation,
+          reason: "no_grant"
+        }
+      ),
+      decision
+    });
+    return ended
+      ? {
+          execution: "refused",
+          run: ended,
+          error: {
+            code: "FORBIDDEN",
+            message: "Only the person this call acts for can confirm it. Nothing ran."
+          }
+        }
+      : readDecidedOperationEnd(run.id, options.requestId, deps);
+  }
   const asClicked: WaitingOperationCall = {
     ...waiting,
     call: { ...waiting.call, origin: { kind: "user" } }
@@ -198,34 +224,47 @@ export async function executeInboxConfirmedOperation(
     return executeWaitingCall(context, decision, options.signal);
   }
   const approval = await context.definition.approval?.(context.call.input, context.call.actor);
-  const access = await deps.authorizer.forActor(context.call.actor);
-  if (approval && approvedByCaller(context.call, policy, approval, access)) {
+  // The Allow is the approval where the person who confirmed may decide the approval it would
+  // file: asked with that person's own rights as they are now, never a key's, and only where
+  // that person is the one the call acts for.
+  const confirmedByCaller = decision.by === context.call.actor.id && decision.by === run.actor.id;
+  const person: AuthenticatedIdentity = { ...context.call.actor };
+  Reflect.deleteProperty(person, "keyScopes");
+  const access = await deps.authorizer.forActor(person);
+  if (confirmedByCaller && approval && approvedByCaller(context.call, policy, approval, access)) {
     // An approver's own click is the approval, as when they click Publish themselves.
     return executeWaitingCall(
       context,
       {
         mode: "approved",
         reason: "approved_by_caller",
-        by: context.call.actor.id,
+        by: decision.by,
+        ...(decision.byLabel ? { byLabel: decision.byLabel } : {}),
         at: context.now().toISOString()
       },
       options.signal
     );
   }
-  return holdForApproval(context, policy, waiting.heldInput, approval);
+  return holdForApproval(context, policy, waiting, approval);
 }
 
 /**
  * Files the approval a confirmed call waits for next and moves its run on to wait for it. A
  * call nothing can hold for an approval is refused, as its person's own call would be.
+ *
+ * The approval freezes the call's input as it was made, with what its before-events held kept
+ * beside it: the run's input hash names that input, so the approved call is admitted again.
  */
 async function holdForApproval(
   context: RunContext,
   policy: PolicyResolution,
-  heldInput: JsonObject | undefined,
+  waiting: Pick<WaitingOperationCall, "call" | "heldInput">,
   approval: Awaited<ReturnType<NonNullable<OperationDefinition["approval"]>>>
 ): Promise<ApprovedOperationEnd> {
-  const { run, definition, call, deps } = context;
+  const { run, definition, deps } = context;
+  const { heldInput } = waiting;
+  // The admitted call carries the held keys in its input; the frozen input does not.
+  const call = { ...context.call, input: waiting.call.input };
   const refuse = async () => {
     const end = deniedEnd(context, {
       kind: "policy",
@@ -535,7 +574,27 @@ async function admitAgain(
   if (!right.allowed) {
     return refuse({ kind: "forbidden", action: right.action, reason: right.reason });
   }
-  const guarded = await resolveGuardedPolicy(context);
+  // The before-events read what the call names as it is now. One that is no longer where the
+  // call named it, such as an agent moved to another workspace while the call waited, is not
+  // found: the run ends with that, unexecuted, as for a resource that is gone.
+  const guarded = await resolveGuardedPolicy(context).catch((error: unknown) => {
+    if (error instanceof AppError && error.code === "NOT_FOUND") {
+      return { gone: { code: error.code, message: error.message } };
+    }
+    throw error;
+  });
+  if ("gone" in guarded) {
+    const { gone } = guarded;
+    const ended = await endWaiting({
+      status: "failed",
+      finishedAt: now().toISOString(),
+      error: { ...gone, unexecuted: true }
+    });
+    if (ended) {
+      await context.emit("operation.failed", "after", { status: "failed", reason: gone.code });
+    }
+    return refused(ended, () => gone);
+  }
   if ("denial" in guarded) {
     return refuse(guarded.denial);
   }

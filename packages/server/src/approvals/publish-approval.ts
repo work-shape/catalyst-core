@@ -135,11 +135,12 @@ export function publishApproval(
       revision,
       firstVersion
     );
-    // The caller's own click approves it only where they hold the right on this agent too.
+    // The caller's own click, confirmation or Allow in the Inbox approves it where they may
+    // decide its item: `agent.approve` on this agent, its workspace's included (`resource`).
     return {
       kind: AGENT_PUBLISH_APPROVAL_KIND,
       action: AGENT_APPROVE,
-      alsoRequires: [{ action: AGENT_APPROVE, resource: agentPublishResource(subject) }],
+      resource: agentPublishResource(subject),
       subject
     };
   }

@@ -189,6 +189,28 @@ describe("a confirmation waiting in its person's Inbox", () => {
     expect(english).toContain("Nothing is published until you decide.");
   });
 
+  it("says first that another person decides after the Allow, where the reader may not approve", () => {
+    const plain = renderItem(
+      confirmation({ summary: "assets.publish", origin: undefined, preview: publishCall })
+    );
+    expect(plain).not.toContain('data-testid="confirmation-approval-follows"');
+
+    const markup = renderItem(
+      confirmation({
+        summary: "assets.publish",
+        origin: undefined,
+        preview: { ...publishCall, approvalFollows: true }
+      })
+    );
+    expect(markup).toMatch(
+      /data-testid="confirmation-approval-follows"[\s\S]*Du kannst diese Veröffentlichung nicht selbst freigeben\. Nach deinem Erlauben entscheidet eine Person mit Freigaberecht; erst dann geht sie live\./u
+    );
+    // It stands before what Allow does.
+    expect(markup.indexOf("confirmation-approval-follows")).toBeLessThan(
+      markup.indexOf("Erlauben zählt wie dein eigener Klick")
+    );
+  });
+
   it("says how it ended once allowed, denied, expired or withdrawn, and offers nothing to decide", () => {
     const states: [Partial<ApprovalRequestView>, string, string][] = [
       [allowed, "Erlaubt", "Erlaubt. Der Aufruf lief einmal."],
@@ -227,6 +249,33 @@ describe("a confirmation waiting in its person's Inbox", () => {
     expect(renderItem(confirmation(denied))).toMatch(/<blockquote[^>]*>Nicht diesen Kontakt\.</u);
     expect(renderItem(confirmation(expired), { locale: "en" })).toContain(
       "Expired after 7 days without your answer. Nothing ran."
+    );
+  });
+
+  it("says that a publish a newer live version overtook can do nothing, and offers nothing to decide", () => {
+    const overtaken = (alreadyLive: boolean): Partial<ApprovalRequestView> => ({
+      status: "superseded",
+      canDecide: false,
+      preview: publishCall,
+      applyResult: {
+        runId: "opr_c1",
+        execution: "refused",
+        error: {
+          code: "PUBLISH_OVERTAKEN",
+          message: "A newer version went live.",
+          liveRevision: 5,
+          alreadyLive
+        }
+      }
+    });
+    const newer = renderItem(confirmation(overtaken(false)));
+    expect(newer).toContain(
+      "Ohne Entscheidung erledigt: Eine neuere Version ist live gegangen (Version 5). Von dieser Anfrage wurde nichts veröffentlicht, und sie kann nichts mehr bewirken."
+    );
+    expect(newer).not.toContain("data-decision=");
+    expect(newer).not.toContain("A newer version went live.");
+    expect(renderItem(confirmation(overtaken(true)))).toContain(
+      "Ohne Entscheidung erledigt: Version 5, um die es hier ging, ist bereits live. Diese Anfrage kann nichts mehr bewirken."
     );
   });
 

@@ -429,6 +429,51 @@ describe("catalyst config and agent drafts (Platform Access 66)", () => {
     expect(await draft()).toMatchObject({ revision: 1 });
   });
 
+  it("answers a publish of the live revision without a draft: nothing to do, and no request", async () => {
+    const { t, team, live } = await setup();
+    const mine = await workingCopy(team);
+    const cli = cliAs(t.instance, { user: t.admin.id }, mine);
+    const before = await t.stores.approvals.countApprovalRequests({
+      clientInstanceId,
+      kinds: ["operation_call", "agent_publish"]
+    });
+
+    const answered = await cli.run([
+      "agent",
+      "publish",
+      AGENT,
+      "--revision",
+      "1",
+      "--workspace",
+      team,
+      "--yes"
+    ]);
+    expect(answered.code, answered.err).toBe(0);
+    expect(answered.out).toContain(
+      "Revision 1 of agent 'kai-helper' is already live. Nothing to do: nothing was published and no request was filed."
+    );
+    const json = await cli.run([
+      "agent",
+      "publish",
+      AGENT,
+      "--revision",
+      "1",
+      "--workspace",
+      team,
+      "--yes",
+      "--json"
+    ]);
+    expect(json.code, json.err).toBe(0);
+    expect(JSON.parse(json.out)).toEqual({ status: "already_live", liveRevision: 1 });
+    expect(await live()).toMatchObject({ revision: 1 });
+    expect(
+      await t.stores.approvals.countApprovalRequests({
+        clientInstanceId,
+        kinds: ["operation_call", "agent_publish"]
+      })
+    ).toBe(before);
+  });
+
   it("writes drafts with a service principal's key and publishes nothing, saying why", async () => {
     const { t, live, draft } = await setup({}, "instance");
     const mine = await workingCopy();

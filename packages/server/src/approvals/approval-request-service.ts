@@ -1,4 +1,4 @@
-import { apiOperations } from "@work-shape/catalyst-api-contract";
+import { apiOperations, type ApprovalRequestListScope } from "@work-shape/catalyst-api-contract";
 import type { LocaleCode, StorePage } from "@work-shape/catalyst-core";
 import {
   AppError,
@@ -26,7 +26,9 @@ import {
   type ApprovalRequestStore,
   type ApprovalSubjectKind,
   type AuditRecorder,
+  type AuthenticatedIdentity,
   type AuthenticatedUser,
+  type Authorizer,
   type ClientInstanceId,
   type JsonObject,
   type OperationBeforeEvent,
@@ -79,6 +81,12 @@ export interface ApprovalRequestWorkflowOptions {
    * who reverted it. Without it a request shows the names stored with it.
    */
   users?: Pick<UserStore, "getUser">;
+  /**
+   * Reads the requester's own rights when a request is filed. A request whose requester holds
+   * its deciding right then is listed in To decide for them alone (`requesterDecides`).
+   * Without it every request is listed to all who may decide it.
+   */
+  authorizer?: Pick<Authorizer, "forActor">;
   /** A few people this reader can see who currently hold this request's approval right. */
   approverNames?(
     user: AuthenticatedUser,
@@ -147,9 +155,14 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
         `Approval request blocked: ${blocked.map((check) => check.message).join("; ")}`
       );
     }
+    const requesterDecides = await this.requesterDecides(user, handler, {
+      ...command,
+      payload
+    });
     const request = await this.options.store.createApprovalRequest({
       ...command,
       payload,
+      ...(requesterDecides ? { requesterDecides: true } : {}),
       checks,
       clientInstanceId: this.options.clientInstanceId,
       requestedBy: { id: user.id, displayLabel: user.displayLabel },
@@ -158,6 +171,42 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     });
     await this.record(user, context, "approval_request.created", request);
     return request;
+  }
+
+  /**
+   * Whether the requester may decide the request they file, with their own rights as they are
+   * now and never a key's: they hold its deciding right and every further right it asks. A
+   * request addressed to a person, or hidden from its requester, is never theirs this way.
+   */
+  private async requesterDecides(
+    user: AuthenticatedUser,
+    handler: ApprovalRequestHandler,
+    command: Pick<ApprovalRequest, "kind" | "summary" | "payload" | "addresseeUserId">
+  ): Promise<boolean> {
+    const { authorizer } = this.options;
+    if (!authorizer || command.addresseeUserId !== undefined || handler.hiddenFromRequester)
+      return false;
+    const person: AuthenticatedIdentity = { ...user };
+    Reflect.deleteProperty(person, "keyScopes");
+    const access = await authorizer.forActor(person);
+    const filed: ApprovalRequest = {
+      id: "",
+      clientInstanceId: this.options.clientInstanceId,
+      kind: command.kind,
+      summary: command.summary,
+      payload: command.payload,
+      requestedBy: { id: user.id, displayLabel: user.displayLabel },
+      status: "pending",
+      checks: [],
+      createdAt: "",
+      updatedAt: ""
+    };
+    try {
+      return decidesRequest(handler, filed, user, access);
+    } catch {
+      // A payload the kind cannot read names no right: the request goes to its deciders.
+      return false;
+    }
   }
 
   async getRequest(
@@ -191,7 +240,15 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     user: AuthenticatedUser,
     access: ActorAccess,
     context: CallContext,
-    filter: { status?: ApprovalRequestStatus; scope?: "decided"; page?: StorePage } = {}
+    filter: {
+      status?: ApprovalRequestStatus;
+      /**
+       * `decided`: no longer pending, changed in the last 30 days. `others_own`: the pending
+       * requests other people filed who may decide them themselves.
+       */
+      scope?: ApprovalRequestListScope;
+      page?: StorePage;
+    } = {}
   ): Promise<ApprovalRequestView[]> {
     const { kinds, subjectKinds } = await this.reviewable(user, access);
     // A person without any kind's right reads the confirmations addressed to them, and
@@ -210,7 +267,8 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       subjectKinds,
       reader: this.reader(user),
       ...storeFilter,
-      ...(scope === "decided" ? decidedListFilter() : {})
+      ...(scope === "decided" ? decidedListFilter() : {}),
+      ...(scope === "others_own" ? { status: "pending", othersSelfDecided: "only" } : {})
     });
     // One viewer for the page: what a kind reads for one row it does not read for the next.
     const viewer: ApprovalPreviewViewer = { access, inList: true };
@@ -255,16 +313,25 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     count: number;
     canReview: boolean;
     decided: number;
+    othersOwn: number;
     mine: { pending: number; total: number };
   }> {
     const { kinds, subjectKinds } = await this.reviewable(user, access);
     const reader = this.reader(user);
-    const [count, decided, mine] = await Promise.all([
+    const [count, othersOwn, decided, mine] = await Promise.all([
       this.options.store.countPendingApprovalRequests({
         clientInstanceId: this.options.clientInstanceId,
         kinds,
         subjectKinds,
         reader
+      }),
+      // Not in the count, and no badge: their requesters decide them themselves.
+      this.options.store.countPendingApprovalRequests({
+        clientInstanceId: this.options.clientInstanceId,
+        kinds,
+        subjectKinds,
+        reader,
+        othersSelfDecided: "only"
       }),
       // What the decided list holds for this person: the same kinds and the same filter.
       this.options.store.countApprovalRequests({
@@ -285,6 +352,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       count,
       canReview: kinds.length > 0 || subjectKinds.length > 0 || count + decided > 0,
       decided,
+      othersOwn,
       mine
     };
   }

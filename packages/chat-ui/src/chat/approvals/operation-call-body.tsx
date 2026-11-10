@@ -101,6 +101,17 @@ function shownOutcome(
   }
   const ended = operationCallOutcome(request);
   if (!ended) return undefined;
+  // A revision that went live after the request was filed left it nothing to do.
+  if (ended.overtaken) {
+    return {
+      outcome: ended.outcome,
+      label: ended.overtaken.alreadyLive
+        ? "operations.callOutcomeAlreadyLive"
+        : "operations.callOutcomeOvertaken",
+      values: { revision: String(ended.overtaken.liveRevision) },
+      tone: "info"
+    };
+  }
   // The instance's sentence is in its own language; this one is told in the reader's.
   if (ended.reasonCode === APPROVAL_STALE) {
     return asset

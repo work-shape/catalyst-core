@@ -202,7 +202,8 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
           ...options.approvalRequests,
           handlers: approvalRequestHandlers,
           clientInstanceId,
-          auditRecorder: options.auditRecorder
+          auditRecorder: options.auditRecorder,
+          authorizer: options.authorizer
         })
       })
     : undefined;

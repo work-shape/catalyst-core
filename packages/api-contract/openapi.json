@@ -1953,7 +1953,8 @@
             "schema": {
               "type": "string",
               "enum": [
-                "decided"
+                "decided",
+                "others_own"
               ]
             }
           },
@@ -48909,6 +48910,10 @@
           "addresseeUserId": {
             "type": "string"
           },
+          "requesterDecides": {
+            "type": "boolean",
+            "const": true
+          },
           "status": {
             "$ref": "#/components/schemas/ApprovalRequestStatus"
           },
@@ -49067,6 +49072,10 @@
           },
           "addresseeUserId": {
             "type": "string"
+          },
+          "requesterDecides": {
+            "type": "boolean",
+            "const": true
           },
           "status": {
             "$ref": "#/components/schemas/ApprovalRequestStatus"
@@ -57713,6 +57722,11 @@
             "minimum": 0,
             "maximum": 9007199254740991
           },
+          "othersOwn": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
           "mine": {
             "type": "object",
             "properties": {
@@ -57737,6 +57751,7 @@
           "count",
           "canReview",
           "decided",
+          "othersOwn",
           "mine"
         ]
       },

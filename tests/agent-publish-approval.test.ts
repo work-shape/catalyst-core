@@ -91,10 +91,12 @@ async function setup() {
     const scope = (await live(name))?.scope;
     return scope?.kind === "workspace" ? { workspaceId: scope.workspaceId } : {};
   };
-  const publish = async (userId: string, name: string, revision: number) =>
+  /** `cli` sends it as the CLI does, whose call is never its caller's approval. */
+  const publish = async (userId: string, name: string, revision: number, cli = false) =>
     t.call(userId, "assets.publish", {
       params: { kind: "agent", name },
-      payload: { revision, ...(await ownerOf(name)) }
+      payload: { revision, ...(await ownerOf(name)) },
+      ...(cli ? { headers: { "x-test-key": "personal" } } : {})
     });
   const listed = async (userId: string, workspaceId: CollaborationWorkspaceId) =>
     listedSchema
@@ -381,8 +383,11 @@ describe("publishing an agent a workspace owns (WS-PUB-1b)", () => {
     expect(await listed(t.lena.id, team)).toContain("lena-made");
     expect(await listed(t.lena.id, other)).not.toContain("lena-made");
 
-    // A second publish without a draft is no first one: there is nothing to publish.
-    expect((await publish(t.lena.id, "lena-made", 1)).statusCode).toBe(412);
+    // A second publish without a draft is no first one: there is nothing to publish, and the
+    // answer says so at once.
+    const again = await publish(t.lena.id, "lena-made", 1);
+    expect(again.statusCode).toBe(409);
+    expect(again.json()).toMatchObject({ error: { details: { reason: "already_live" } } });
   });
 
   it("keeps a creator who holds agent.approve offering the agent in the workspace at once", async () => {
@@ -397,9 +402,10 @@ describe("publishing an agent a workspace owns (WS-PUB-1b)", () => {
     const { t, team, other, create, push, publish, listed, request, decide } = await setup();
     await t.grant(t.lena.id, "agent.approve", { workspaceId: team });
     const approve = async (name: string) => {
-      // A tool it did not have widens its reach, so the publish waits (GR-PUB-2).
+      // A tool it did not have widens its reach, so the publish waits (GR-PUB-2). Sent from
+      // the CLI, it waits also where Kai may approve it himself.
       await push(t.kai.id, name, { instructions: `${name} draft.`, toolNames: ["known.tool"] });
-      const held = heldSchema.parse((await publish(t.kai.id, name, 1)).json());
+      const held = heldSchema.parse((await publish(t.kai.id, name, 1, true)).json());
       expect((await request(t.lena.id, held.approvalRequestId)).preview.review).toMatchObject({
         agent: { offers: false }
       });
@@ -550,6 +556,7 @@ describe("publishing an agent a workspace owns (WS-PUB-1b)", () => {
     const held = await publish(t.kai.id, "drafted", 1);
     expect(held.statusCode, held.body).toBe(202);
     await create(t.admin.id, "house-plain");
-    expect((await publish(t.admin.id, "house-plain", 1)).statusCode).toBe(412);
+    // An instance agent offers no first version: its live revision is already live.
+    expect((await publish(t.admin.id, "house-plain", 1)).statusCode).toBe(409);
   });
 });

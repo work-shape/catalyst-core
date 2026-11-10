@@ -260,8 +260,19 @@ export function createOperationCallApprovalHandler(
               context.viewer?.locale ?? "en"
             )
           : undefined;
+      // A confirmation whose Allow files an approval says so before the person decides: a
+      // guardrail asked for one, and the person who reads it may not decide it.
+      const approvalFollows =
+        call.mode === "confirmation" &&
+        context.status === "pending" &&
+        about !== undefined &&
+        call.subject !== undefined &&
+        context.viewer !== undefined &&
+        (call.guardrails ?? []).some((answer) => answer.outcome === "require_approval") &&
+        !mayDecideHeld(about, call.subject, context.viewer.access);
       return toJsonObject({
         ...previewOf(call),
+        ...(approvalFollows ? { approvalFollows: true } : {}),
         ...(alwaysAllow ? { alwaysAllow: true } : {}),
         ...(handover ? { handover } : {}),
         ...(target.success ? { targetTitle: target.data.title } : {}),
@@ -392,6 +403,28 @@ export function createOperationCallApprovalHandler(
     },
     endedPayload: minimizedOperationCallPayload
   };
+}
+
+/**
+ * Whether a person may decide the request of a held call of this kind about this subject: its
+ * right where the kind asks it, and every further right. A subject it cannot read: no.
+ */
+function mayDecideHeld(
+  kind: HeldCallApprovalKind,
+  subject: JsonObject,
+  access: ActorAccess
+): boolean {
+  try {
+    const resource = kind.resourceOf?.(subject);
+    return (
+      access.authorize(kind.requiredPermission, resource).allowed &&
+      (kind.furtherPermissions?.(subject) ?? []).every(
+        ({ permission, resource: further }) => access.authorize(permission, further).allowed
+      )
+    );
+  } catch {
+    return false;
+  }
 }
 
 const GONE = { code: "NOT_FOUND", message: "The call of this request no longer exists." };

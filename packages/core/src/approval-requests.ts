@@ -273,6 +273,13 @@ export interface ApprovalRequestListFilter {
    */
   reader?: { userId: string; addressedKinds: readonly string[] };
   /**
+   * With `reader`: the pending requests whose requester may decide them themselves
+   * (`requesterDecides`). `hidden`, the default, lists only the reader's own of them; `only`
+   * lists only those other people filed, and nothing else. A request no longer pending is
+   * listed either way.
+   */
+  othersSelfDecided?: "hidden" | "only";
+  /**
    * Beside `kinds`: requests of these kinds, addressed to nobody, whose `payload.subject`
    * holds one of the subjects with its values. The kinds a reader may review on some assets
    * only.
@@ -297,6 +304,7 @@ export interface ApprovalRequestStore {
       | "requestedBy"
       | "origin"
       | "addresseeUserId"
+      | "requesterDecides"
     > & {
       checks?: ApprovalCheckResult[];
       /** Given when an Agent Run creates the request: refused once the run lost its lease. */
@@ -320,7 +328,10 @@ export interface ApprovalRequestStore {
   /** How many requests `listApprovalRequests` answers for the same filter, read to its end. */
   countApprovalRequests(input: ApprovalRequestListFilter): Promise<number>;
   countPendingApprovalRequests(
-    input: Pick<ApprovalRequestListFilter, "clientInstanceId" | "kinds" | "reader" | "subjectKinds">
+    input: Pick<
+      ApprovalRequestListFilter,
+      "clientInstanceId" | "kinds" | "reader" | "subjectKinds" | "othersSelfDecided"
+    >
   ): Promise<number>;
   /**
    * How many requests of these kinds one person made: those still pending, and all of them.

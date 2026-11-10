@@ -154,14 +154,21 @@ async function readInstance(input: SeededInstanceInput, fetchImpl: typeof fetch)
         )
       ])
     : [[], []];
-  const [users, workspaceLimits, grants, principals, overview, approvals] = await Promise.all([
-    listAll((paging) => client.users.list({ query: paging })),
-    listAll((paging) => client.workspaces.limits.list({ query: paging })),
-    listAll((paging) => client.permissions.list({ query: paging })),
-    listAll((paging) => client.service_principals.list({ query: paging })),
-    client.config_assets.get_overview(),
-    listAll((paging) => client.approval_requests.list({ query: { ...paging, status: "pending" } }))
-  ]);
+  const [users, workspaceLimits, grants, principals, overview, approvals, othersOwn] =
+    await Promise.all([
+      listAll((paging) => client.users.list({ query: paging })),
+      listAll((paging) => client.workspaces.limits.list({ query: paging })),
+      listAll((paging) => client.permissions.list({ query: paging })),
+      listAll((paging) => client.service_principals.list({ query: paging })),
+      client.config_assets.get_overview(),
+      listAll((paging) =>
+        client.approval_requests.list({ query: { ...paging, status: "pending" } })
+      ),
+      // The requests whose requesters may decide them, which To decide lists for them alone.
+      listAll((paging) =>
+        client.approval_requests.list({ query: { ...paging, scope: "others_own" } })
+      )
+    ]);
   return {
     client,
     users: users
@@ -202,7 +209,7 @@ async function readInstance(input: SeededInstanceInput, fetchImpl: typeof fetch)
       draftRevision,
       publishedRevision
     })),
-    approvals: approvals.map((request) => ({
+    approvals: [...approvals, ...othersOwn].map((request) => ({
       id: request.id,
       kind: request.kind,
       requestedBy: request.requestedBy.displayLabel,

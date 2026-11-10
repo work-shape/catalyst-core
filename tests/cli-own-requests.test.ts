@@ -242,6 +242,7 @@ describe("personal keys following their calls and requests", () => {
     expect(counted.json()).toEqual({
       count: 0,
       decided: 0,
+      othersOwn: 0,
       canReview: false,
       mine: { pending: 1, total: 1 }
     });
@@ -285,7 +286,14 @@ describe("personal keys following their calls and requests", () => {
     const writer = await t.key(["guardrail.write"]);
     const reader = await t.key(["guardrail.read"]);
     const all = await t.expectOk(t.root.id, "approval_requests.list");
-    const requests = mineSchema.parse(all.json()).items;
+    // The admin may decide their own held call, so it is listed to others only when asked.
+    const othersOwn = await t.expectOk(t.root.id, "approval_requests.list", {
+      query: { scope: "others_own" }
+    });
+    const requests = [
+      ...mineSchema.parse(all.json()).items,
+      ...mineSchema.parse(othersOwn.json()).items
+    ];
     const own = requests.find((request) => request.requestedBy.id === t.admin.id);
     const other = requests.find((request) => request.requestedBy.id === t.root.id);
     if (!own || !other) throw new Error("Both owners must have a held call");

@@ -4,10 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import {
   EmptyState,
+  Field,
   FilterBar,
   Page,
   PageHeader,
   Select,
+  Switch,
   Tabs,
   TabsContent,
   TabsList,
@@ -104,7 +106,14 @@ export function InboxArea({
       : canReview
         ? "to_decide"
         : "mine";
-  const listQuery = useInboxListQuery({ ...api, tab, enabled: counts !== undefined });
+  // The requests others may decide themselves are the reader's to ask for, never a default.
+  const [othersOwn, setOthersOwn] = useState(false);
+  const listQuery = useInboxListQuery({
+    ...api,
+    tab,
+    othersOwn,
+    enabled: counts !== undefined
+  });
   const listItems = listQuery.data;
   const items = useMemo(() => (listItems ? orderInboxItems(tab, listItems) : []), [listItems, tab]);
   const [covering, setCovering] = useState(false);
@@ -171,6 +180,8 @@ export function InboxArea({
       {...(places ? { workspace: (workspaceId) => places.workspace(workspaceId, t) } : {})}
       filter={filter}
       onFilterChange={setFilter}
+      othersOwn={othersOwn}
+      onOthersOwnChange={setOthersOwn}
       onTabChange={setChosenTab}
       onOpenItem={(nextItemId) => {
         // The reader chose it from a list, so the list stays.
@@ -201,6 +212,8 @@ export function InboxAreaView({
   workspace,
   filter,
   onFilterChange,
+  othersOwn = false,
+  onOthersOwnChange,
   onTabChange,
   onOpenItem,
   onCloseItem,
@@ -222,6 +235,9 @@ export function InboxAreaView({
   workspace?(workspaceId: string): InboxWorkspace | undefined;
   filter: InboxFilter;
   onFilterChange(filter: InboxFilter): void;
+  /** To decide also lists the requests others filed who may decide them themselves. */
+  othersOwn?: boolean;
+  onOthersOwnChange?(othersOwn: boolean): void;
   onTabChange(tab: InboxTab): void;
   onOpenItem(itemId: string): void;
   onCloseItem(): void;
@@ -252,9 +268,26 @@ export function InboxAreaView({
         onChange={onFilterChange}
       />
     ) : null;
+  // Offered while there are such requests, and kept while the reader has them shown.
+  const othersOwnCount = counts?.othersOwn ?? 0;
+  const othersOwnSwitch =
+    tab === "to_decide" && onOthersOwnChange && (othersOwnCount > 0 || othersOwn) ? (
+      <Field
+        layout="inline"
+        label={t("inbox.othersOwn", { count: othersOwnCount })}
+        hint={t("inbox.othersOwnHint")}
+      >
+        <Switch
+          data-testid="inbox-others-own"
+          checked={othersOwn}
+          onCheckedChange={onOthersOwnChange}
+        />
+      </Field>
+    ) : null;
   const list = (
     <div className="grid min-w-0 gap-3">
       {filters}
+      {othersOwnSwitch}
       <InboxList
         tab={tab}
         state={shown}

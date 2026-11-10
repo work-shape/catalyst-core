@@ -227,9 +227,12 @@ function policyDenial(policy: PolicyResolution, operation: string): OperationDen
 }
 
 /**
- * Whether the caller's own call is the approval a guardrail asked for: they hold the right at
- * instance scope and clicked in the interface. A CLI origin never counts: the server cannot
- * tell a person at a terminal from an agent driving it.
+ * Whether the caller's own call is the approval a guardrail asked for: they clicked in the
+ * interface and hold the right where the request it would file is decided, on the approval's
+ * resource (for a workspace's agent, `agent.approve` on that workspace), or on the instance
+ * where the approval names none. Their Publish click, their confirmation of an agent's publish
+ * and their Allow in the Inbox ask the same. A CLI origin never counts: the server cannot tell
+ * a person at a terminal from an agent driving it.
  */
 export function approvedByCaller(
   call: Pick<OperationCall, "origin" | "draft">,
@@ -241,7 +244,7 @@ export function approvedByCaller(
     policy.source === "guardrail" &&
     call.origin.kind === "user" &&
     call.draft === undefined &&
-    access.authorize(approval.action).allowed &&
+    access.authorize(approval.action, approval.resource).allowed &&
     (approval.alsoRequires ?? []).every(
       ({ action, resource }) => access.authorize(action, resource).allowed
     )

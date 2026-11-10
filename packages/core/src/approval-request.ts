@@ -42,6 +42,13 @@ export interface ApprovalRequest {
    * request without one is decided by the holders of its kind's right.
    */
   addresseeUserId?: string;
+  /**
+   * The requester held the right that decides it when they filed it. While it is pending it is
+   * listed and counted in To decide for the requester alone; the other holders of the right
+   * still decide it, and list it only when they ask for the requests others may decide
+   * themselves. Who may decide it is not changed by this.
+   */
+  requesterDecides?: true;
   origin?: {
     conversationId: ConversationId;
     agentRunId: AgentRunId;
