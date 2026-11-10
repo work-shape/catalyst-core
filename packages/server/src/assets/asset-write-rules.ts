@@ -49,6 +49,7 @@ import {
   configValuesEqual,
   readDefinitionName,
   type AssetWriteSurface,
+  type MissingUpsertRight,
   type WorkflowAssetKind
 } from "../asset-kinds/shared";
 import type { AssetWorkflowOptions } from "../types";
@@ -418,7 +419,7 @@ export function missingUpsertRightOf(
   surface: AssetWriteSurface,
   kind: WorkflowAssetKind,
   input: Omit<Parameters<WorkflowAssetKind["missingUpsertRight"]>[0], "access">
-): string | undefined {
+): MissingUpsertRight | undefined {
   return isReleaseSync(access, surface) ? undefined : kind.missingUpsertRight({ access, ...input });
 }
 
@@ -428,9 +429,9 @@ export function assertUpsertPolicyAndMissingRight(
   surface: AssetWriteSurface,
   kind: WorkflowAssetKind,
   input: Omit<Parameters<WorkflowAssetKind["missingUpsertRight"]>[0], "access">
-): string | undefined {
-  const action = missingUpsertRightOf(access, surface, kind, input);
-  if (action !== undefined) return action;
+): MissingUpsertRight | undefined {
+  const missing = missingUpsertRightOf(access, surface, kind, input);
+  if (missing !== undefined) return missing;
   const parsed = kind.read([input.next]);
   const write = { ...input, next: parsed.accepted[0] ?? input.next };
   // Invalid shapes are reported by validation; a valid definition also passes edit policy.
@@ -567,7 +568,12 @@ export async function findChangedAgentRefusals(
   const lists = await loadAgentLists(options, toolTargets.scope.workspaceId);
   for (const { agent } of changed) {
     const error =
-      lists.workspace && buildLimitRefusal(access, workspaceLimits(lists.workspace), agent);
+      lists.workspace &&
+      buildLimitRefusal(access, workspaceLimits(lists.workspace), agent, {
+        kind: "agent",
+        name: agent.name,
+        workspaceId: lists.workspace.id
+      });
     if (error) refusals.push({ agentName: agent.name, error });
   }
   return { lists, modelIssues, refusals, warnings };
@@ -646,7 +652,8 @@ function invalidAssetSet(issues: readonly string[]): AppError {
 function buildLimitRefusal(
   access: ActorAccess,
   limits: BuildLimits,
-  agent: AgentConfig
+  agent: AgentConfig,
+  resource: AccessResource
 ): AppError | undefined {
   const allowedToolNames = limits.allowedToolNames;
   const toolName =
@@ -677,7 +684,7 @@ function buildLimitRefusal(
   if (
     allowedModelBindingIds &&
     agent.modelBindingId === undefined &&
-    !access.authorize("agent_models.manage").allowed
+    !access.authorize("agent_models.manage", resource).allowed
   ) {
     return new AppError(
       "FORBIDDEN",

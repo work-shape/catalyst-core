@@ -1,4 +1,10 @@
-import { AppError, assetScopesEqual, type ActorAccess } from "@work-shape/catalyst-core";
+import {
+  AppError,
+  assetScopesEqual,
+  operationDenialError,
+  type ActorAccess,
+  type OperationAuthorization
+} from "@work-shape/catalyst-core";
 import { ASSET_SYNC_ITEM_MAX_BYTES } from "@work-shape/catalyst-api-contract";
 import { z } from "zod";
 import { readDefinitionName, type WorkflowAssetKind } from "../asset-kinds/shared";
@@ -89,11 +95,7 @@ export async function authorizeItems(
       entry.item.type
     );
     if (!right.allowed) {
-      entry.refusal = {
-        code: "FORBIDDEN",
-        message: `Missing the right '${right.action}'`,
-        action: right.action
-      };
+      entry.refusal = rightRefusal(right.action ?? entry.kind.actions.write, right.reason);
     } else if (own) {
       entry.asset = own;
     } else if (row) {
@@ -176,19 +178,35 @@ async function requireFurtherRights(
   for (const entry of ready) {
     if (entry.item.type !== "put" || entry.refusal) continue;
     const current = storedByName(entry.kind.kind).get(entry.name);
-    const action = missingUpsertRightOf(access, "sync", entry.kind, {
+    const missing = missingUpsertRightOf(access, "sync", entry.kind, {
       name: entry.name,
+      resource: accessResource(entry.kind.kind, entry.name, entry.scope, entry.asset?.id),
       current,
       next: preparedUpsert(access, "sync", entry.kind, { current, next: entry.item.config }),
       modelBindingsListed: listsModelBindings(lists)
     });
-    if (action !== undefined) {
-      entry.refusal = { code: "FORBIDDEN", message: `Missing the right '${action}'`, action };
+    if (missing !== undefined) {
+      entry.refusal = rightRefusal(missing.action, missing.reason);
     }
   }
   if (planned.some((entry) => entry.refusal)) {
     throw refusedBatch(planned);
   }
+}
+
+/**
+ * The refusal of an item for a right the caller lacks. Where the owner of the call's personal
+ * key holds it and the key does not cover it, it says so, not that the right is missing.
+ */
+function rightRefusal(
+  action: string,
+  reason: Extract<OperationAuthorization, { allowed: false }>["reason"]
+): ItemRefusal {
+  return {
+    code: "FORBIDDEN",
+    message: operationDenialError({ kind: "forbidden", action, reason }).message,
+    action
+  };
 }
 
 export function defaultChangeRefusal(kind: WorkflowAssetKind): ItemRefusal {

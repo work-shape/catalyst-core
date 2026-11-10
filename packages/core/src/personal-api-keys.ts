@@ -386,6 +386,16 @@ function scopeCovers(
 }
 
 /**
+ * The rights no scope names that a key covers where it covers another action on the same
+ * resource. Changing an agent's model settings is part of writing it: the key's scope for
+ * `agent.write`, with its workspace and asset, says which agents, and the right itself stays
+ * the owner's. Nothing else is carried this way.
+ */
+const PERSONAL_API_KEY_CARRIED_RIGHTS: ReadonlyMap<string, PlatformAction> = new Map([
+  ["agent_models.manage", "agent.write"]
+]);
+
+/**
  * Whether the key covers a check. A legacy key such as `config_assets.read` stands for several
  * actions on the whole instance, so each of them needs a scope without a workspace.
  */
@@ -396,6 +406,10 @@ export function personalApiKeyCovers(
   legacyActions: readonly string[] | undefined
 ): boolean {
   const parsed = scopes.flatMap((scope) => parsePersonalApiKeyScope(scope) ?? []);
+  const carriedBy = PERSONAL_API_KEY_CARRIED_RIGHTS.get(action);
+  if (carriedBy !== undefined) {
+    return parsed.some((scope) => scopeCovers(scope, carriedBy, resource));
+  }
   if (legacyActions !== undefined) {
     return legacyActions.every((target) =>
       parsed.some((scope) => scopeCovers(scope, target, undefined))

@@ -24,7 +24,8 @@ export async function authorizePlatformAssetPut(
   };
   const decision = await workflow.authorizeRevisionWrite(context.access, write, "write", true);
   if (!decision.allowed)
-    return decision.action === "agent_models.manage"
+    // A key that does not cover the right its owner holds is told about the key instead.
+    return decision.action === "agent_models.manage" && decision.reason !== "outside_key_scope"
       ? {
           ...decision,
           message:
