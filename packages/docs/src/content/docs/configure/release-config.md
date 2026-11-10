@@ -1420,7 +1420,7 @@ Nothing returns a stored secret: no operation, route, CLI command, export, log l
 
 | Key        | Meaning                                                                   |
 | ---------- | ------------------------------------------------------------------------- |
-| `protocol` | `https`, `http` or `postgres`.                                            |
+| `protocol` | `https`, `http`, `postgres` or `imaps` (IMAP over implicit TLS).          |
 | `host`     | One exact host name or one literal address. No wildcard, no suffix match. |
 | `port`     | The one port. A default port is written out.                              |
 | `network`  | `public`, the default, or `private`.                                      |
@@ -1466,7 +1466,7 @@ egress:
 - Such a target is judged as a `public` entry: every address the host answers must be public. Loopback, link-local, cloud metadata addresses, private ranges and their IPv4-mapped IPv6 forms are refused as above.
 - The instance's database host is refused on every port, by name and by address.
 - Redirects and returned download addresses are checked as new targets, and the credential still goes only to the origin it was configured for.
-- Another port, plain `http` and `postgres` still need an entry under `egress.allow`. The entries keep working beside the setting, and a private host is reached only through a `private` entry.
+- Another port, plain `http`, `postgres` and `imaps` still need an entry under `egress.allow`. The entries keep working beside the setting, and a private host is reached only through a `private` entry.
 - A start with the setting on logs a warning once.
 
 #### Refusals
