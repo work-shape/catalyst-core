@@ -59,7 +59,8 @@ export function ChatPeopleHead() {
           onClick={() => share.setPanelOpen(true)}
         >
           <Users aria-hidden="true" />
-          {t("chatShare.share")}
+          {/* In a narrow window the head keeps the icon alone; the button's name stays. */}
+          <span className="max-md:hidden">{t("chatShare.share")}</span>
         </Button>
       ) : null}
       <ChatPeoplePanel />

@@ -1,0 +1,26 @@
+# The three members of one team in the CHAT-SHARE-2 spec: the creator shares a private chat
+# with the reader; the outsider is a member of the team who is never named on it.
+- email: e2e-chat-share@example.test
+  displayLabel: E2E Zz Chat Share
+  passwordEnvName: E2E_CHAT_SHARE_PASSWORD
+  developmentPassword: e2e-chat-share-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
+- email: e2e-chat-share-reader@example.test
+  displayLabel: E2E Zz Chat Share Reader
+  passwordEnvName: E2E_CHAT_SHARE_READER_PASSWORD
+  developmentPassword: e2e-chat-share-reader-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
+- email: e2e-chat-share-outsider@example.test
+  displayLabel: E2E Zz Chat Share Outsider
+  passwordEnvName: E2E_CHAT_SHARE_OUTSIDER_PASSWORD
+  developmentPassword: e2e-chat-share-outsider-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

@@ -102,12 +102,23 @@ export function useComposerMention(
   }, [read, syncChips, text]);
 
   const query = useDebounced(trigger?.query ?? "", SEARCH_DELAY_MS);
-  const open = trigger !== undefined && share !== undefined;
+  const candidates = share?.menuCandidates;
+  // A search with a space that nobody matches was text after all, as in "@Ada is right": the
+  // menu steps aside until the search matches someone again.
+  const settledOnNobody =
+    trigger !== undefined &&
+    /\s/u.test(trigger.query) &&
+    query === trigger.query &&
+    candidates !== undefined &&
+    !candidates.loading &&
+    candidates.error === undefined &&
+    candidates.candidates.length === 0;
+  const searching = trigger !== undefined && share !== undefined;
+  const open = searching && !settledOnNobody;
   const searchMenu = share?.searchMenu;
   useEffect(() => {
-    searchMenu?.(open ? query : undefined);
-  }, [open, query, searchMenu]);
-  const candidates = share?.menuCandidates;
+    searchMenu?.(searching ? query : undefined);
+  }, [query, searchMenu, searching]);
   const chips = share?.chips;
   const options = useMemo((): SuggestionListOption[] => {
     const picked = new Set(chips?.map((chip) => chip.userId));

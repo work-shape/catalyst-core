@@ -36,6 +36,7 @@ import { recordedApiClient } from "./support/recorded-api-client";
 describe("the @ of the composer", () => {
   it("opens at the start of the text and after a space or a line break", () => {
     expect(findMentionTrigger("@", 1)).toEqual({ at: 0, query: "" });
+    expect(findMentionTrigger("@Ada Lo", 7)).toEqual({ at: 0, query: "Ada Lo" });
     expect(findMentionTrigger("Ask @an", 7)).toEqual({ at: 4, query: "an" });
     expect(findMentionTrigger("Line\n@b", 7)).toEqual({ at: 5, query: "b" });
   });
@@ -43,7 +44,7 @@ describe("the @ of the composer", () => {
   it("never opens in an address, after a space following it, or in a code fence", () => {
     expect(findMentionTrigger("ada@example.com", 15)).toBeUndefined();
     expect(findMentionTrigger("@ ", 2)).toBeUndefined();
-    expect(findMentionTrigger("@ada lovelace", 13)).toBeUndefined();
+    expect(findMentionTrigger("@\nada", 5)).toBeUndefined();
     expect(findMentionTrigger("```\n@ada", 8)).toBeUndefined();
     expect(findMentionTrigger("```\ncode\n```\n@ada", 17)).toEqual({ at: 13, query: "ada" });
   });

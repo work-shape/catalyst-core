@@ -16,7 +16,8 @@ const MAX_QUERY = 40;
 /**
  * The @ the caret is in, or nothing. It opens only at the start of the text or after a space or
  * a line break, so an address such as "anna@example.com" never does, nor an @ inside a code
- * fence. A space or a line break after it ends it: "@ " is text.
+ * fence. A space right after it ends it, "@ " is text, and so does a line break. A space later
+ * on stays in the search, as names have them: "@Ada Lo".
  */
 export function findMentionTrigger(text: string, caret: number): MentionTrigger | undefined {
   if (caret < 1 || caret > text.length) return undefined;
@@ -24,7 +25,7 @@ export function findMentionTrigger(text: string, caret: number): MentionTrigger 
   const at = before.lastIndexOf("@");
   if (at < 0) return undefined;
   const query = before.slice(at + 1);
-  if (query.length > MAX_QUERY || /\s/u.test(query)) return undefined;
+  if (query.length > MAX_QUERY || /^\s|[\r\n]/u.test(query)) return undefined;
   const preceding = at === 0 ? undefined : before[at - 1];
   if (preceding !== undefined && !/\s/u.test(preceding)) return undefined;
   if (insideCodeFence(before.slice(0, at))) return undefined;
