@@ -48,6 +48,7 @@ import { sourceFailureText, sourceItemCounts, sourceStateView } from "./knowledg
 import {
   newKnowledgeSource,
   sourceFolderIds,
+  WEB_SOURCE_CONNECTOR_TYPE,
   type KnowledgeSourceForm
 } from "./knowledge-sources-model";
 import { KnowledgeSourceFolderPicker } from "./knowledge-source-folder-picker";
@@ -248,7 +249,12 @@ export function KnowledgeSourcesSection({
           <AddSource
             read={read}
             onSearchChange={setSearch}
-            onAdd={(connection) => onChange([...sources, newKnowledgeSource(connection, sources)])}
+            onAdd={(connection) =>
+              onChange([
+                ...sources,
+                newKnowledgeSource(connection, sources, choiceOf(connection)?.connectorType)
+              ])
+            }
           />
           <p className="text-caption text-muted-foreground">{t("knowledgeSources.draftNote")}</p>
         </>
@@ -287,8 +293,23 @@ function SourceItem({
   children: ReactNode;
 }) {
   const { t } = useTranslation();
-  const browses = choice?.browsesFolders === true;
+  // A source of public web pages names addresses instead of folders (KB-WEB).
+  const web = entry.web === true || choice?.connectorType === WEB_SOURCE_CONNECTOR_TYPE;
+  const browses = !web && choice?.browsesFolders === true;
   const folders = sourceFolderIds(entry.folders);
+  const addressField = (key: "pages" | "prefixes" | "sitemaps") => (
+    <Field label={t(`knowledgeSources.${key}`)} hint={t(`knowledgeSources.${key}Hint`)} optional>
+      <Textarea
+        rows={key === "sitemaps" ? 1 : 2}
+        spellCheck={false}
+        placeholder={t("knowledgeSources.addressPlaceholder")}
+        value={entry[key] ?? ""}
+        readOnly={!canWrite}
+        data-knowledge-source-field={key}
+        onChange={(event) => onChange({ web: true, [key]: event.target.value })}
+      />
+    </Field>
+  );
   const idsField = (
     <Field
       label={t("knowledgeSources.folders")}
@@ -309,8 +330,8 @@ function SourceItem({
   const patternFields = (
     <div className="grid min-w-0 gap-3 sm:grid-cols-2">
       <Field
-        label={t("knowledgeSources.include")}
-        hint={t("knowledgeSources.includeHint")}
+        label={t(web ? "knowledgeSources.includeWeb" : "knowledgeSources.include")}
+        hint={t(web ? "knowledgeSources.includeWebHint" : "knowledgeSources.includeHint")}
         optional
       >
         <Textarea
@@ -324,7 +345,7 @@ function SourceItem({
       </Field>
       <Field
         label={t("knowledgeSources.exclude")}
-        hint={t("knowledgeSources.excludeHint")}
+        hint={t(web ? "knowledgeSources.excludeWebHint" : "knowledgeSources.excludeHint")}
         optional
       >
         <Textarea
@@ -366,7 +387,12 @@ function SourceItem({
           </Button>
         ) : null}
       </div>
-      {browses ? (
+      {web ? (
+        <div className="grid min-w-0 gap-3" data-knowledge-source-web="">
+          {addressField("pages")}
+          {addressField("prefixes")}
+        </div>
+      ) : browses ? (
         <Field label={t("knowledgeSources.chosenFolders")} required>
           <div className="grid min-w-0 gap-2" data-knowledge-source-folders="">
             {folders.length === 0 ? (
@@ -423,6 +449,7 @@ function SourceItem({
         <DisclosureContent>
           <div className="grid min-w-0 gap-3 pt-2">
             {browses ? idsField : null}
+            {web ? addressField("sitemaps") : null}
             {patternFields}
           </div>
         </DisclosureContent>

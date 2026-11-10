@@ -65,7 +65,7 @@ describe("built-in roles as data", () => {
 
     await t.expectOk(t.root.id, "roles.update", {
       params: { roleId: "user" },
-      payload: { grants: [instanceAllow("usage.view")] }
+      payload: { grants: [...ROLE_DEFAULT_ACTIONS.user, "usage.view"].map(instanceAllow) }
     });
 
     await t.expectOk(t.kai.id, "usage.get_summary");
@@ -76,8 +76,14 @@ describe("built-in roles as data", () => {
         })
       ).json()
     );
-    expect(effective.items.filter((entry) => entry.source === "role")).toEqual([
-      expect.objectContaining({ action: "usage.view", roleId: "user" })
+    expect(
+      effective.items
+        .filter((entry) => entry.source === "role")
+        .map((entry) => [entry.action, entry.roleId])
+        .sort()
+    ).toEqual([
+      ["connection.add_own", "user"],
+      ["usage.view", "user"]
     ]);
     expect(await role(t, "user")).toMatchObject({ equalsDefault: false, builtIn: true });
     const [event] = await auditOf(t, "role.updated");
@@ -619,7 +625,9 @@ describe("reset, a pending right and a role's deny stay inside the rules (review
       const after = await allowed(t, t.kai.id);
       expect([...after].filter((right) => !before.has(right))).toEqual([]);
     }
-    expect(await actionsOf("user")).toEqual([]);
+    expect(await actionsOf("user")).toEqual(
+      ROLE_DEFAULT_ACTIONS.user.map((action) => `allow:${action}`)
+    );
     expect(await actionsOf("admin")).toContain("allow:audit.view");
     expect(await actionsOf("admin")).not.toContain("allow:agent.read");
 
@@ -779,17 +787,19 @@ describe("custom roles", () => {
         })
       ).json()
     );
+    const fromRoles = effective.items.filter((entry) => entry.source === "role");
     expect(
-      effective.items
-        .filter((entry) => entry.source === "role")
+      fromRoles
+        .filter((entry) => entry.roleId === created.id)
         .map((entry) => entry.action)
         .sort()
     ).toEqual(["agent.read", "usage.view"]);
+    // Beside it, only the `user` role's add of one's own MCP server (PMCP).
     expect(
-      effective.items
-        .filter((entry) => entry.source === "role")
-        .every((entry) => entry.roleId === created.id)
-    ).toBe(true);
+      fromRoles
+        .filter((entry) => entry.roleId !== created.id)
+        .map((entry) => [entry.action, entry.roleId])
+    ).toEqual([["connection.add_own", "user"]]);
 
     // A role a person holds is not deleted from under them; taken from them, it goes.
     await t.expectRefused(
@@ -969,6 +979,7 @@ describe("custom roles", () => {
         .filter((entry) => entry.source === "role")
         .map((entry) => [entry.action, entry.roleId])
     ).toEqual([
+      ["connection.add_own", "user"],
       ["app.use", created.id],
       ["app.use", created.id]
     ]);
@@ -1155,7 +1166,10 @@ describe("a release that changes a default", () => {
     );
     await t.expectOk(t.root.id, "usage.get_summary");
     // `user` took the release's default, which no longer holds `usage.view`.
-    expect(await role(t, "user")).toMatchObject({ grants: [], equalsDefault: true });
+    expect(await role(t, "user")).toMatchObject({
+      grants: ROLE_DEFAULT_ACTIONS.user.map(instanceAllow),
+      equalsDefault: true
+    });
     await t.expectRefused(t.kai.id, "usage.get_summary", {}, t.forbidden("usage.view", "no_grant"));
     const reconciled = await auditOf(t, "role.reconciled");
     expect(
@@ -1164,7 +1178,12 @@ describe("a release that changes a default", () => {
         .sort((a, b) => String(a.roleId).localeCompare(String(b.roleId)))
     ).toEqual([
       { roleId: "admin", edited: true, added: ["usage.view"], removed: [] },
-      { roleId: "user", edited: false, added: [], removed: ["usage.view"] }
+      {
+        roleId: "user",
+        edited: false,
+        added: [...ROLE_DEFAULT_ACTIONS.user],
+        removed: ["usage.view"]
+      }
     ]);
 
     // A second run of the step finds nothing to change.
@@ -1177,6 +1196,38 @@ describe("a release that changes a default", () => {
     });
     expect((await role(t, "admin")).pendingActions).toEqual([]);
     await t.expectOk(t.admin.id, "usage.get_summary");
+  });
+});
+
+describe("the release that adds one's own MCP server (PMCP-2)", () => {
+  it("leaves an edited `user` role as it is, with `connection.add_own` pending for a superadmin to decide", async () => {
+    const t = await setup();
+    // As the release before PMCP-2 left them: `user` held nothing by default, and an admin
+    // gave it `usage.view`.
+    await t.expectOk(t.root.id, "roles.update", {
+      params: { roleId: "user" },
+      payload: { grants: [instanceAllow("usage.view")] }
+    });
+    await withTestSql(async (sql) => {
+      await sql`update roles set default_actions = '[]'::jsonb where id = 'user'`;
+    });
+
+    await migrateDatabase({ databaseUrl: await fileTestDatabaseUrl(), log: () => {} });
+
+    expect(await role(t, "user")).toMatchObject({
+      grants: [instanceAllow("usage.view")],
+      equalsDefault: false,
+      pendingActions: [{ action: "connection.add_own", change: "added" }]
+    });
+    // Until a superadmin applies it, nobody holds it by the role.
+    const effective = effectiveSchema.parse(
+      (
+        await t.expectOk(t.admin.id, "permissions.effective", {
+          query: { holderKind: "user", holderId: t.kai.id }
+        })
+      ).json()
+    );
+    expect(effective.items.map((entry) => entry.action)).not.toContain("connection.add_own");
   });
 });
 

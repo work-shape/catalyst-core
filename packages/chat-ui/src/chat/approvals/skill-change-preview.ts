@@ -24,6 +24,11 @@ export interface SkillChangePreview {
   isNewSkill: boolean;
   changes: SkillChangePreviewChange[];
   newSkill?: SkillChangePreviewNewSkill;
+  /**
+   * Filed from a conversation that read what anyone could write, such as mail of a functional
+   * mailbox (MBX). The request holds no part of it.
+   */
+  markedConversation?: true;
 }
 
 export const SKILL_ROOT_TARGET = "root";
@@ -51,7 +56,8 @@ export function parseSkillChangePreview(preview: unknown): SkillChangePreview | 
     skillTitle,
     isNewSkill: preview.isNewSkill === true || (newSkill !== undefined && changes.length === 0),
     changes,
-    ...(newSkill ? { newSkill } : {})
+    ...(newSkill ? { newSkill } : {}),
+    ...(preview.markedConversation === true ? { markedConversation: true as const } : {})
   };
 }
 

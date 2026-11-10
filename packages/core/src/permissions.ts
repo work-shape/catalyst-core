@@ -1,5 +1,6 @@
 import type { AppAvailability } from "./app-audience";
 import {
+  ASSET_RIGHT_VERBS,
   WORKSPACE_USE_ASSET_KINDS,
   ACCESS_SOURCES,
   ACTIONS,
@@ -114,7 +115,22 @@ export interface AccessResource {
   name?: string;
   assetId?: string;
   workspaceId?: string;
+  /**
+   * The asset is one person's alone, a person's own MCP server (PMCP): its rights are
+   * owner-bound (`OWNER_BOUND_VERBS`). Read from the asset's definition wherever the resource
+   * is built from it (`ownerOnlyResource`).
+   */
+  ownerOnly?: { ownerId: string };
 }
+
+/**
+ * The verbs of a kind's rights that are its owner's alone on an asset with `ownerOnly`. No
+ * role, grant, group, availability or key scope gives another holder `use`. Reading, writing
+ * and deleting stay with who holds them on the whole instance, an instance admin, and the kind
+ * narrows what such a write may change: an admin reads a person's own server, switches it off
+ * and deletes it (access-and-permissions.md, Owner-bound actions).
+ */
+const OWNER_BOUND_VERBS = ASSET_RIGHT_VERBS;
 
 /**
  * The rights on a project: a member holds them on the projects of their workspace, and nobody
@@ -194,11 +210,24 @@ function bundleCarries(bundle: string, action: string): boolean {
 export type AccessSource = (typeof ACCESS_SOURCES)[number];
 
 export type AccessDecision =
-  | { allowed: true; source: AccessSource }
+  | {
+      allowed: true;
+      /** `owner`: an owner-bound right of the person who owns the asset (`ownerOnly`). */
+      source: AccessSource | "owner";
+    }
   | {
       allowed: false;
-      /** `outside_key_scope`: the holder has the right, and the personal key of the call does not cover it. */
-      reason: "no_grant" | "denied" | "unknown_action" | "holder_inactive" | "outside_key_scope";
+      /**
+       * `outside_key_scope`: the holder has the right, and the personal key of the call does not
+       * cover it. `not_owner`: the right is owner-bound and the holder is not the owner.
+       */
+      reason:
+        | "no_grant"
+        | "denied"
+        | "unknown_action"
+        | "holder_inactive"
+        | "outside_key_scope"
+        | "not_owner";
     };
 
 export { WORKSPACE_USE_ASSET_KINDS };
@@ -620,6 +649,8 @@ function evaluateAccessEntries(
     return refused ?? allowed ?? { allowed: false, reason: "no_grant" };
   }
   if (isPlatformAction(input.action)) {
+    const ownerBound = ownerBoundDecision(input, granting);
+    if (ownerBound !== undefined) return ownerBound;
     const decision = evaluateRegisteredAction(granting, input.action, input.resource);
     const availability = input.resource?.appAvailability;
     if (input.action === "app.use" && availability) {
@@ -641,6 +672,47 @@ function evaluateAccessEntries(
     return decision;
   }
   return { allowed: false, reason: "unknown_action" };
+}
+
+/**
+ * A right on an asset only its owner uses, or nothing where the resource is no such asset or the
+ * action is no owner-bound verb of it. The owner holds it without any grant, unless a deny
+ * covers it. Any
+ * other holder never uses the asset, and reads, writes or deletes it only through what it holds
+ * on the whole instance: a grant on the asset, a workspace or an availability reaches nobody.
+ * A service principal is nobody's owner and reaches none of it.
+ */
+function ownerBoundDecision(
+  input: AccessEvaluationInput,
+  entries: readonly AccessEntry[]
+): AccessDecision | undefined {
+  const owner = input.resource?.ownerOnly;
+  if (owner === undefined) return undefined;
+  const dot = input.action.indexOf(".");
+  const verb = dot > 0 ? input.action.slice(dot + 1) : "";
+  if (!OWNER_BOUND_VERBS.some((candidate) => candidate === verb)) return undefined;
+  if (input.holder.kind === "user" && owner.ownerId !== "" && input.holder.id === owner.ownerId) {
+    // A deny an admin wrote still reaches the owner; nothing else is asked of them.
+    const denied = evaluateRegisteredAction(
+      entries.filter((entry) => entry.effect === "deny"),
+      input.action,
+      input.resource
+    );
+    return denied.allowed || denied.reason !== "denied"
+      ? { allowed: true, source: "owner" }
+      : denied;
+  }
+  if (verb === "use" || input.holder.kind !== "user") {
+    return { allowed: false, reason: "not_owner" };
+  }
+  const decision = evaluateRegisteredAction(
+    entries.filter((entry) => entry.scopeKind === "instance" && entry.source !== "membership"),
+    input.action,
+    input.resource
+  );
+  return decision.allowed || decision.reason === "denied"
+    ? decision
+    : { allowed: false, reason: "not_owner" };
 }
 
 /**

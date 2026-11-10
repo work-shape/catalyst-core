@@ -1,13 +1,13 @@
 import {
   AppError,
   asUserId,
-  CONNECTION_ASSET_KIND,
   endConnectionSignIn,
   type AuditActor,
   type ConnectionBindingRecord,
   type OperationResource
 } from "@work-shape/catalyst-core";
 import {
+  connectionResourceOf,
   readConnection,
   readConnections,
   type ConnectionOperationSourceDeps,
@@ -69,12 +69,7 @@ export function createPersonalConnectionManagement(deps: ConnectionOperationSour
             (connection) =>
               connection.config.credentialMode === "user" &&
               connection.config.enabled &&
-              usable({
-                kind: CONNECTION_ASSET_KIND,
-                assetId: connection.assetId,
-                id: connection.assetId,
-                name: connection.config.name
-              })
+              usable(connectionResourceOf(connection))
           )
           .map((connection) => ({
             name: connection.config.name,

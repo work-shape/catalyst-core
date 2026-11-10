@@ -14,6 +14,7 @@ export {
 } from "@work-shape/catalyst-asset-schemas";
 import {
   CONNECTION_EXPOSURES,
+  CONNECTOR_FORM_FIELD_VALUES,
   CONNECTION_HEALTH_STATES,
   CONNECTION_NAME_MAX_LENGTH,
   CONNECTION_NAME_PATTERN,
@@ -62,7 +63,9 @@ export const CONNECTION_ACTIONS = {
   use: "connection.use",
   write: "connection.write",
   delete: "connection.delete",
-  approve: "connection.approve"
+  approve: "connection.approve",
+  /** Adding one's own MCP server, a Connection with `ownerOnly` (PMCP). */
+  addOwn: "connection.add_own"
 } as const;
 
 export { CONNECTION_NAME_MAX_LENGTH, CONNECTION_NAME_PATTERN };
@@ -247,6 +250,12 @@ export interface ConnectionConfig {
   authScheme: string;
   /** Shared account, or each acting person’s own OAuth binding. */
   credentialMode: ConnectionCredentialMode;
+  /**
+   * A person's own MCP server (PMCP): only `ownerPrincipalId` reads, uses, changes and deletes
+   * it, and an instance admin only reads it, switches it off and deletes it. The server sets it
+   * on the self-add create, and no write changes it (`owner_only_fixed`).
+   */
+  ownerOnly?: boolean;
   secretHandle?: ConnectionSecretHandle;
   operations: ConnectionOperationConfig[];
   /** Shared limits of list, changes and fetch across every sync of this instance. */
@@ -817,7 +826,32 @@ export type ConnectorFormField = {
   help?: LocalizedStringConfig;
   /** A field the person may leave empty; an empty setting is left out of `settings`. */
   optional?: true;
-} & ({ setting: string; secret?: undefined } | { secret: true; setting?: undefined });
+} & (
+  | {
+      setting: string;
+      secret?: undefined;
+      /**
+       * What the setting holds: text (the default), a whole number such as a port, or a list
+       * of names typed one per line or separated by commas, such as folders.
+       */
+      value?: ConnectorFormFieldValue;
+      /** What the field starts with, as the person would type it. */
+      default?: string;
+      /** The field folds away under "Technical details", as a port does. */
+      advanced?: true;
+    }
+  | {
+      secret: true;
+      setting?: undefined;
+      value?: undefined;
+      default?: undefined;
+      advanced?: undefined;
+    }
+);
+
+export { CONNECTOR_FORM_FIELD_VALUES };
+/** What a setting field of a form holds. */
+export type ConnectorFormFieldValue = (typeof CONNECTOR_FORM_FIELD_VALUES)[number];
 
 /**
  * How the New connection dialog offers a Connector type of the build beside an MCP server and
@@ -838,6 +872,12 @@ export interface ConnectorTypeForm {
   /** Settings every Connection the form makes holds, beside the fields' values. */
   settings?: JsonObject;
   fields: readonly ConnectorFormField[];
+  /**
+   * Whose account everyone reads and what they read through it, said before the secret and
+   * again where the setup asks who may use the Connection, such as every mail of a shared
+   * mailbox's folders.
+   */
+  sharedAccountNote?: LocalizedStringConfig;
 }
 
 interface ConnectorTypeBase {
@@ -883,6 +923,17 @@ interface ConnectorTypeBase {
   oauthEndpoints?(settings: JsonObject): ConnectorOAuthEndpoints | undefined;
   /** A bounded check of reachability and authentication. It changes nothing outside. */
   test(context: ConnectorContext): Promise<{ status: ConnectorTestStatus }>;
+  /**
+   * One request to the checked target without any credential: whether the server is there and
+   * what it asks for, `ready`, `oauth_required` (a 401 with a Bearer challenge),
+   * `token_required` (a 401 without one) or `unavailable`. The owner's test of a person's own
+   * server asks it (PMCP), and nothing of the answer is kept.
+   */
+  probe?(input: {
+    target: EgressGrant;
+    settings: JsonObject;
+    signal: AbortSignal;
+  }): Promise<ConnectorTestStatus>;
   execute(operation: string, input: JsonValue, context: ConnectorContext): Promise<JsonValue>;
   limits: ConnectorLimits;
   /**
@@ -1036,6 +1087,13 @@ export function connectionCallsArePersonal(
 
 /** The one exposure an operation of a type with `privateResults` accepts. */
 const PRIVATE_RESULTS_EXPOSURE: ConnectionExposure = "agent";
+
+/** The exposures an operation of a Connection of the type accepts. */
+export function connectorTypeExposures(
+  type: Pick<ConnectorTypeDefinition, "privateResults"> | undefined
+): readonly ConnectionExposure[] {
+  return type?.privateResults === true ? [PRIVATE_RESULTS_EXPOSURE] : CONNECTION_EXPOSURES;
+}
 
 /** The reasons a Connection is refused for, as the first word of an issue or a `reason`. */
 export const CONNECTION_REFUSALS = {

@@ -1,5 +1,6 @@
 import {
   AppError,
+  CONNECTION_ASSET_KIND,
   INSTANCE_ASSET_SCOPE,
   MAIL_SENDER_RESOURCE_KIND,
   MAIL_SENDER_USE_ACTION,
@@ -7,6 +8,8 @@ import {
   isPlatformAction,
   isPrincipalGrantableAction,
   moduleOffError,
+  notOwnerError,
+  ownerOnlyOwnerOf,
   type AccessResource,
   type GrantScopeAsset,
   type PermissionGrant,
@@ -195,6 +198,17 @@ export async function grantableAsset(
   // The action carries the kind, so a skill action on an agent could never match.
   if (!asset || asset.kind !== kindOfAction(command.action)) {
     throw refused("invalid_scope", "The asset is not an active asset of the action's kind");
+  }
+  // A person's own server: its rights are its owner's, and no grant names it (PMCP).
+  if (asset.kind === CONNECTION_ASSET_KIND) {
+    const record = await options.stores.configAssets.getConfigAsset({
+      clientInstanceId: options.clientInstanceId,
+      kind: CONNECTION_ASSET_KIND,
+      name: asset.name
+    });
+    if (ownerOnlyOwnerOf(record?.config) !== undefined) {
+      throw notOwnerError("holds a right on it: no grant names it");
+    }
   }
   return asset;
 }

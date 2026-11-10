@@ -629,6 +629,54 @@ const MCP_CHALLENGE_TIMEOUT_MS = 10_000;
  * checked target, whose refusal carries the challenge. Nothing is kept of the answer but the
  * challenge of a 401; a server that answers anything else names none.
  */
+/**
+ * What an MCP server answers one `initialize` sent without any credential: `ready` for a 2xx,
+ * `oauth_required` for a 401 whose challenge is a Bearer one, `token_required` for a 401
+ * without, and `unavailable` for anything else, a redirect included, which is not followed.
+ * Nothing of the answer is read beyond its status and its challenge (PMCP, the owner's probe).
+ */
+export async function probeMcpServer(input: {
+  target: EgressGrant;
+  url: string;
+  signal: AbortSignal;
+}): Promise<"ready" | "oauth_required" | "token_required" | "unavailable"> {
+  const signal = AbortSignal.any([input.signal, AbortSignal.timeout(MCP_CHALLENGE_TIMEOUT_MS)]);
+  const body = JSON.stringify({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "initialize",
+    params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: CLIENT_INFO }
+  });
+  const agent = oneRequestAgent(input.target);
+  try {
+    const response = await sendPinnedRequest({
+      url: new URL(input.url),
+      grant: input.target,
+      method: "POST",
+      headers: {
+        host: hostHeaderOf(input.target),
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+        "content-length": String(Buffer.byteLength(body))
+      },
+      body,
+      agent,
+      signal
+    });
+    const status = response.statusCode ?? 0;
+    const challenge =
+      status === 401 ? parseBearerChallenge(headerOf(response, "www-authenticate")) : undefined;
+    response.destroy();
+    if (status >= 200 && status < 300) return "ready";
+    if (status === 401) return challenge === undefined ? "token_required" : "oauth_required";
+    return "unavailable";
+  } catch {
+    return "unavailable";
+  } finally {
+    agent.destroy();
+  }
+}
+
 export async function readMcpChallenge(input: {
   target: EgressGrant;
   url: string;

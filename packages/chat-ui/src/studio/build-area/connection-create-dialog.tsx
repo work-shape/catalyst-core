@@ -76,7 +76,7 @@ import {
 } from "./connection-rest-tools";
 import { useConnectionSource, type ConnectionSource } from "./connection-source";
 import { ConnectionApprovedBody, useGiveToAgent } from "./connection-give-step";
-import { TypedConnectionCreate } from "./connection-typed-create";
+import { TypedConnectionSetup } from "./connection-typed-setup";
 import { CatalogueInstall } from "./connection-catalogue-install";
 import { CatalogueServices } from "./connection-catalogue-services";
 import {
@@ -84,7 +84,7 @@ import {
   typesWithEntries,
   type CatalogueEntryOffer
 } from "./connection-catalogue-model";
-import { offerText, type ConnectorTypeOffer } from "./connection-typed-model";
+import { offerText, typedInitialValues, type ConnectorTypeOffer } from "./connection-typed-model";
 
 // The New connection dialog (CS-5a 2/2): pick what to connect, give it a name, its address and
 // its key, press Verbinden, and choose which of its tools agents, Apps and Workflows may use.
@@ -772,8 +772,9 @@ export function ConnectionCreateFlow({
   }
 
   if (stage.step === "typed") {
+    const proposed = drafted && stage.offer.type === draftedType ? drafted.connection : undefined;
     return (
-      <TypedConnectionCreate
+      <TypedConnectionSetup
         offer={stage.offer}
         source={source}
         checkName={checkName}
@@ -781,14 +782,15 @@ export function ConnectionCreateFlow({
         onBack={() => setStage({ step: "pick" })}
         onClose={onClose}
         onCreated={(created, after) => {
-          tellReady(
-            { kind: "none" },
-            { name: created, title: drafted?.connection.title ?? created }
-          );
+          tellReady({ kind: "none" }, { name: created, title: proposed?.title ?? created });
           onCreated(created, after);
         }}
-        {...(drafted && stage.offer.type === draftedType
-          ? { initial: { title: drafted.connection.title, name: drafted.connection.name } }
+        onApproved={(connection, outcome) => tellReady(outcome, connection)}
+        {...(proposed
+          ? {
+              initial: { title: proposed.title, name: proposed.name },
+              defaults: typedInitialValues(stage.offer, proposed.settings)
+            }
           : {})}
       />
     );

@@ -52,6 +52,7 @@ export * from "./connection-connect";
 export { ConnectionCreateFlow } from "./connection-create-dialog";
 export { ConnectionCreateForm, createsPersonal, type CreateFields } from "./connection-create-form";
 export { TypedConnectionCreate } from "./connection-typed-create";
+export { TypedConnectionSetup } from "./connection-typed-setup";
 export * from "./connection-typed-model";
 export {
   connectionDraftEntry,

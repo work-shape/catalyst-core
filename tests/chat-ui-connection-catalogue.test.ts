@@ -35,6 +35,8 @@ const folderType: ConnectorTypeOffer = {
   description: { en: "Syncs shared folders.", de: "Synchronisiert geteilte Ordner." },
   service: "folder-store",
   documentSource: true,
+  operations: [],
+  exposures: ["agent", "bridge", "workflow", "outside"],
   authScheme: "client_credentials",
   settings: {},
   fields: [{ label: { en: "Secret", de: "Secret" }, optional: false, secret: true }]

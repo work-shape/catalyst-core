@@ -6,7 +6,7 @@ import { offerText } from "./connection-typed-model";
 import type { KnowledgeBaseForm } from "./knowledge-base-model";
 import type { KnowledgeBaseSource } from "./knowledge-base-source";
 import { NewSourceConnection } from "./knowledge-base-sources";
-import { newKnowledgeSource } from "./knowledge-sources-model";
+import { newKnowledgeSource, WEB_SOURCE_CONNECTOR_TYPE } from "./knowledge-sources-model";
 
 // Where a new Knowledge Base's knowledge comes from, as its first question (KB-FOLDERS-1): files
 // added by hand, a Connection that syncs folders, or the tables of a Data Store. Choosing a
@@ -55,7 +55,11 @@ export function KnowledgeSourceChoice({
     if (next === UPLOAD) return update({ holds: "documents", sources: [] });
     const connection = next.slice(CONNECTION.length);
     const kept = form.sources.find((entry) => entry.connection === connection);
-    update({ holds: "documents", sources: [kept ?? newKnowledgeSource(connection, [])] });
+    const type = connections.find((entry) => entry.name === connection)?.connectorType;
+    update({
+      holds: "documents",
+      sources: [kept ?? newKnowledgeSource(connection, [], type)]
+    });
   };
 
   return (
@@ -88,7 +92,10 @@ export function KnowledgeSourceChoice({
                   </Badge>
                 </OptionLabel>
               ),
-              description: t("knowledge.fromConnectionDescription", { type })
+              description:
+                connection.connectorType === WEB_SOURCE_CONNECTOR_TYPE
+                  ? t("knowledge.fromWebDescription")
+                  : t("knowledge.fromConnectionDescription", { type })
             };
           }),
           {

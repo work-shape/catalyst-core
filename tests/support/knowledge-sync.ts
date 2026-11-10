@@ -186,7 +186,7 @@ export function useKnowledgeSync({
         name: `knowledge-base:${KB}`
       });
       expect(row?.status).toBe("ready");
-      expect(row?.level).toBe(19);
+      expect(row?.level).toBe(20);
       return required(row);
     });
     const url = new URL(await fileTestDatabaseUrl());
@@ -401,7 +401,9 @@ export function useKnowledgeSync({
       sources: {
         id: string;
         connection: string;
-        folders: string[];
+        folders?: string[];
+        /** A web source names addresses in place of folders. */
+        prefixes?: string[];
         include?: string[];
         exclude?: string[];
         schedule?: { changes?: number | "off"; full?: string };

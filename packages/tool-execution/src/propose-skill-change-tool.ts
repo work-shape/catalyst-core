@@ -7,6 +7,7 @@ import {
   type AgentSkillChangesPolicy,
   type ApprovalRequestCreator,
   type ConfigAssetSource,
+  type ConversationId,
   type SkillConfig
 } from "@work-shape/catalyst-core";
 import {
@@ -42,6 +43,12 @@ export function createProposeSkillChangeTool(options: {
   assetSource: ConfigAssetSource;
   policy: AgentSkillChangesPolicy;
   creator: ApprovalRequestCreator;
+  /**
+   * Whether the run's conversation is marked: it read what only its person may read, such as
+   * mail anyone could send (MBX). A change filed there carries the flag `markedConversation`
+   * and nothing of what was read. Without it no request carries the flag.
+   */
+  markedConversation?(conversationId: ConversationId): Promise<boolean>;
 }): AnyToolDefinition {
   return defineTool({
     name: "propose_skill_change",
@@ -102,12 +109,16 @@ export function createProposeSkillChangeTool(options: {
           );
         }
         const preview = createSkillChangePreview(skill, parsed.operations);
+        const marked = (await options.markedConversation?.(run.conversationId)) ?? false;
         const payload = unknownToJsonValue({
           agentName: run.agentName,
           skillName: parsed.skillName,
           operations: parsed.operations,
           baseSourceVersion: skill ? createSkillSourceVersion(skill) : null,
-          preview
+          preview,
+          // A flag and no content: the approver reads the change as written in answer to
+          // outside text, such as a mail.
+          ...(marked ? { markedConversation: true } : {})
         });
         if (!isJsonObject(payload)) {
           throw new AppError("VALIDATION_FAILED", "Invalid skill change payload");

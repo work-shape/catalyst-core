@@ -44,7 +44,9 @@ import { ConnectionCatalogueUpdate } from "./connection-catalogue-update";
 import {
   ConnectionSecretEditor,
   ConnectionSettingsEditor,
-  DiscoveredTools
+  DiscoveredTools,
+  TypeTools,
+  typeToolsToApprove
 } from "./connection-editing";
 import {
   personContextHeaderOf,
@@ -340,6 +342,7 @@ export function ConnectionPage({
                 <EditableOperations
                   asset={asset}
                   frame={editing}
+                  {...(offer === undefined ? {} : { exposures: offer.exposures })}
                   operations={detail.operations}
                   written={written}
                 />
@@ -366,27 +369,39 @@ export function ConnectionPage({
                   )
                 }
               ]
-            : editing && discovers
+            : editing && offer && typeToolsToApprove(offer, asset.config).length > 0
               ? [
                   {
-                    id: "discovered",
-                    label: t("connections.discoveredTitle"),
-                    description: t("connections.discoveredDescription"),
-                    count: detail?.discovered.length,
+                    id: "type-tools",
+                    label: t("connections.typeToolsTitle"),
+                    description: t("connections.typeToolsDescription"),
+                    count: typeToolsToApprove(offer, asset.config).length,
                     body: (
-                      <DiscoveredTools
-                        name={asset.name}
-                        asset={asset}
-                        frame={editing}
-                        detail={detail}
-                        waiting={waiting}
-                        source={source}
-                        written={written}
-                      />
+                      <TypeTools asset={asset} frame={editing} offer={offer} written={written} />
                     )
                   }
                 ]
-              : []),
+              : editing && discovers
+                ? [
+                    {
+                      id: "discovered",
+                      label: t("connections.discoveredTitle"),
+                      description: t("connections.discoveredDescription"),
+                      count: detail?.discovered.length,
+                      body: (
+                        <DiscoveredTools
+                          name={asset.name}
+                          asset={asset}
+                          frame={editing}
+                          detail={detail}
+                          waiting={waiting}
+                          source={source}
+                          written={written}
+                        />
+                      )
+                    }
+                  ]
+                : []),
           {
             id: "agents",
             label: t("connections.agentsTitle"),

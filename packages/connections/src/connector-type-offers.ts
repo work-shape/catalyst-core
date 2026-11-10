@@ -1,8 +1,12 @@
 import type { Catalogue, CatalogueEntryView } from "./catalogue/catalogue";
-import type {
-  ConnectorTypeRegistry,
-  JsonObject,
-  LocalizedStringConfig
+import {
+  connectorTypeExposures,
+  type ConnectionExposure,
+  type ConnectionOperationEffect,
+  type ConnectorFormFieldValue,
+  type ConnectorTypeRegistry,
+  type JsonObject,
+  type LocalizedStringConfig
 } from "@work-shape/catalyst-core";
 
 /** One field of a type's form as the New connection dialog reads it. */
@@ -13,6 +17,19 @@ export interface ConnectorFormFieldView {
   /** The dotted path in `settings` the value goes to; absent for the secret. */
   setting?: string;
   secret: boolean;
+  /** What a setting holds: text, a whole number or a list. Text where left out. */
+  value?: ConnectorFormFieldValue;
+  /** What the field starts with. Never for the secret. */
+  default?: string;
+  /** The field folds away under "Technical details". */
+  advanced?: true;
+}
+
+/** An operation of the type's own catalog, as the approval step after Verbinden lists it. */
+export interface ConnectorTypeOfferOperation {
+  name: string;
+  description: string;
+  effect: ConnectionOperationEffect;
 }
 
 /** A Connector type the New connection dialog offers, with its card and its form. */
@@ -26,6 +43,15 @@ export interface ConnectorTypeOfferView {
   authScheme: string;
   settings: JsonObject;
   fields: ConnectorFormFieldView[];
+  /** Whose account everyone reads, before the secret and where the setup asks who may use it. */
+  sharedAccountNote?: LocalizedStringConfig;
+  /**
+   * The operations of the type's static catalog, which the setup offers to approve once it
+   * connected. Empty for a type without one, such as a document source.
+   */
+  operations: ConnectorTypeOfferOperation[];
+  /** Where an approved operation may be used: only by agents for a `privateResults` type. */
+  exposures: ConnectionExposure[];
 }
 
 /** An entry as the dialog reads it: an OAuth part also names the redirect URI to register. */
@@ -86,8 +112,20 @@ export function connectorTypeOffers(
               ...(field.help === undefined ? {} : { help: field.help }),
               optional: field.optional === true,
               ...(field.setting === undefined ? {} : { setting: field.setting }),
-              secret: field.secret === true
-            }))
+              secret: field.secret === true,
+              ...(field.value === undefined ? {} : { value: field.value }),
+              ...(field.default === undefined ? {} : { default: field.default }),
+              ...(field.advanced ? { advanced: true as const } : {})
+            })),
+            ...(form.sharedAccountNote === undefined
+              ? {}
+              : { sharedAccountNote: form.sharedAccountNote }),
+            operations: (definition.catalog ?? []).map((operation) => ({
+              name: operation.name,
+              description: operation.description,
+              effect: operation.proposedEffect
+            })),
+            exposures: [...connectorTypeExposures(definition)]
           }
         ];
       })

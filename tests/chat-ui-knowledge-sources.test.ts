@@ -110,7 +110,9 @@ function sourceWith(
               documentSource: true,
               authScheme: "none" as const,
               settings: {},
-              fields: []
+              fields: [],
+              operations: [],
+              exposures: ["agent" as const]
             }))
         }),
     useSources: () => ready(sources),

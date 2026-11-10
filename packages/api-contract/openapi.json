@@ -8647,7 +8647,8 @@
                         "unauthorized",
                         "network_denied",
                         "unavailable",
-                        "oauth_required"
+                        "oauth_required",
+                        "token_required"
                       ]
                     },
                     "testedAt": {
@@ -9151,12 +9152,83 @@
                                 },
                                 "secret": {
                                   "type": "boolean"
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "enum": [
+                                    "text",
+                                    "number",
+                                    "list"
+                                  ]
+                                },
+                                "default": {
+                                  "type": "string"
+                                },
+                                "advanced": {
+                                  "type": "boolean",
+                                  "const": true
                                 }
                               },
                               "required": [
                                 "label",
                                 "optional",
                                 "secret"
+                              ]
+                            }
+                          },
+                          "sharedAccountNote": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "en": {
+                                    "type": "string"
+                                  },
+                                  "de": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "operations": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "description": {
+                                  "type": "string"
+                                },
+                                "effect": {
+                                  "type": "string",
+                                  "enum": [
+                                    "reading",
+                                    "changing"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "description",
+                                "effect"
+                              ]
+                            }
+                          },
+                          "exposures": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "agent",
+                                "bridge",
+                                "workflow",
+                                "outside"
                               ]
                             }
                           }
@@ -9168,7 +9240,9 @@
                           "documentSource",
                           "authScheme",
                           "settings",
-                          "fields"
+                          "fields",
+                          "operations",
+                          "exposures"
                         ]
                       }
                     },
@@ -28617,6 +28691,12 @@
                             "type": "number"
                           },
                           "originLink": {
+                            "type": "string"
+                          },
+                          "statedAt": {
+                            "type": "string"
+                          },
+                          "retrievedAt": {
                             "type": "string"
                           }
                         },
@@ -50607,6 +50687,12 @@
                   "minLength": 1
                 },
                 "originLink": {
+                  "type": "string"
+                },
+                "statedAt": {
+                  "type": "string"
+                },
+                "retrievedAt": {
                   "type": "string"
                 }
               },

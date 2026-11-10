@@ -9,5 +9,7 @@ export const CONNECTION_GRANT_SCOPES = {
   "connection.use": ["asset", "instance"],
   "connection.write": ["asset", "instance"],
   "connection.delete": ["asset", "instance"],
-  "connection.approve": ["asset", "instance"]
+  "connection.approve": ["asset", "instance"],
+  // Adding one's own MCP server names no Connection: it is held, or denied, on the instance.
+  "connection.add_own": ["instance"]
 } as const satisfies ActionScopes;

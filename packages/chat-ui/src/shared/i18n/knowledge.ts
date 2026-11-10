@@ -155,6 +155,8 @@ export const knowledge = defineTranslations({
     "knowledge.citationPage": "p. {page}",
     "knowledge.citationSlide": "slide {page}",
     "knowledge.citationSheet": "sheet {page}",
+    "knowledge.citationAsOf": "as of {date}",
+    "knowledge.citationRetrieved": "retrieved {date}",
     "knowledge.citationRemoved": "{name}: source no longer available",
     "knowledge.citationUnreachable": "{name}: source not reachable",
     "knowledge.citationFailed": "{name}: could not be opened, try again",
@@ -179,6 +181,8 @@ export const knowledge = defineTranslations({
     "knowledge.fromConnected": "Connected",
     "knowledge.fromConnectionDescription":
       "Folders from {type}, kept up to date automatically. You choose the folders next.",
+    "knowledge.fromWebDescription":
+      "Public pages of its hosts, kept up to date automatically. You name the addresses next.",
     "knowledge.fromNotConnected": "Not connected yet: {types}.",
     "knowledge.holdsLabel": "What it answers from",
     "knowledge.holdsDocuments": "Documents",
@@ -475,6 +479,8 @@ export const knowledge = defineTranslations({
     "knowledge.citationPage": "S. {page}",
     "knowledge.citationSlide": "Folie {page}",
     "knowledge.citationSheet": "Blatt {page}",
+    "knowledge.citationAsOf": "Stand {date}",
+    "knowledge.citationRetrieved": "abgerufen {date}",
     "knowledge.citationRemoved": "{name}: Quelle nicht mehr verfügbar",
     "knowledge.citationUnreachable": "{name}: Quelle nicht erreichbar",
     "knowledge.citationFailed": "{name}: konnte nicht geöffnet werden, versuch es noch einmal",
@@ -500,6 +506,8 @@ export const knowledge = defineTranslations({
     "knowledge.fromConnected": "Verbunden",
     "knowledge.fromConnectionDescription":
       "Ordner aus {type}, automatisch aktuell gehalten. Die Ordner wählst du als Nächstes.",
+    "knowledge.fromWebDescription":
+      "Öffentliche Seiten ihrer Hosts, automatisch aktuell gehalten. Die Adressen nennst du als Nächstes.",
     "knowledge.fromNotConnected": "Noch nicht verbunden: {types}.",
     "knowledge.holdsLabel": "Woraus sie antwortet",
     "knowledge.holdsDocuments": "Dokumente",

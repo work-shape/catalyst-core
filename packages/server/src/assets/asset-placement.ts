@@ -7,6 +7,8 @@ import {
   auditActorFromIdentity,
   isAppError,
   isAuthenticatedServicePrincipal,
+  notOwnerError,
+  ownerOnlyResource,
   type AccessResource,
   type ActorAccess,
   type AgentAvailability,
@@ -89,6 +91,10 @@ export async function authorizeAssetPlacement(
     return { allowed: false, action: kind.actions.write, reason: instanceWide.reason };
   }
   const named = await namedResource(options, kind, input.name);
+  // A person's own server is offered nowhere, by anyone (PMCP).
+  if (named?.ownerOnly !== undefined) {
+    return { allowed: false, action: kind.actions.write, reason: "not_owner" };
+  }
   return named ? decide(access, kind.actions.write, named) : { allowed: true };
 }
 
@@ -576,6 +582,7 @@ async function requirePlacementRight(
   const kind = kindOf(options, input.kind);
   call.access.require(kind.actions.write);
   const named = await namedResource(options, kind, input.name);
+  if (named?.ownerOnly !== undefined) throw notOwnerError("uses it: it is offered nowhere");
   if (named) {
     call.access.require(kind.actions.write, named);
   }
@@ -598,7 +605,10 @@ async function namedResource(
     kind: kind.kind,
     name
   });
-  return accessResource(kind.kind, name, row?.scope ?? INSTANCE_ASSET_SCOPE, row?.id);
+  return {
+    ...accessResource(kind.kind, name, row?.scope ?? INSTANCE_ASSET_SCOPE, row?.id),
+    ...ownerOnlyResource(row?.config)
+  };
 }
 
 async function recordPlacement(call: AssetCall, type: string, metadata: JsonObject): Promise<void> {

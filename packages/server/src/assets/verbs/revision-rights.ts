@@ -51,7 +51,7 @@ export async function authorizeRevisionWrite(
   const decision =
     right === "delete"
       ? deleteDecision(access, target)
-      : decide(access, target.kind.actions.write, target.resource);
+      : writeDecisionOn(access, target, await writtenConfigOf(scope, target, input));
   if (!decision.allowed) {
     return decision;
   }
@@ -90,6 +90,47 @@ export async function authorizeRevisionWrite(
     });
   }
   return further;
+}
+
+/** The config a put or a revert writes: the one sent, or the revision's for a revert. */
+async function writtenConfigOf(
+  scope: AssetVerbScope,
+  target: AssetTarget,
+  input: { config?: Record<string, unknown>; revision?: number }
+): Promise<unknown> {
+  if (input.config !== undefined) return input.config;
+  if (input.revision === undefined) return undefined;
+  return (await revisionOf(scope, target, input.revision))?.config ?? undefined;
+}
+
+/**
+ * The right a put or a revert of `next` asks: what the kind decides it on (a person's own
+ * server, PMCP), else the kind's write right on the asset.
+ */
+function writeDecisionOn(
+  access: ActorAccess,
+  target: AssetTarget,
+  next: unknown
+): OperationAuthorization {
+  const decided =
+    next === undefined || next === null
+      ? undefined
+      : target.kind.writeDecision?.({
+          access,
+          resource: target.resource,
+          current: target.asset?.status === "active" ? target.asset.config : undefined,
+          next
+        });
+  return decided ?? decide(access, target.kind.actions.write, target.resource);
+}
+
+/** Throws the refusal of `writeDecisionOn`, as the operation layer answers a missing right. */
+export function requireWriteOn(access: ActorAccess, target: AssetTarget, next: unknown): void {
+  const decision = writeDecisionOn(access, target, next);
+  if (!decision.allowed) {
+    const { allowed: _allowed, ...denial } = decision;
+    throw operationDenialError({ kind: "forbidden", ...denial });
+  }
 }
 
 /**

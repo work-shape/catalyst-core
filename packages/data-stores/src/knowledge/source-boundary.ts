@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { KnowledgeBaseDefinition } from "./definition";
+import { sourceFolderIds, webBoundaryOf } from "./source-urls";
 
 export type SyncedSource = NonNullable<KnowledgeBaseDefinition["sources"]>[number];
 
@@ -123,8 +124,14 @@ export function withinSource(
   return (
     // Migration 5 leaves ancestry unknown until a listing learns it. A connector item
     // must have at least one parent (documentSourceItemSchema), so [] is unambiguous.
-    (item.parents.length === 0 || item.parents.some((parent) => source.folders.includes(parent))) &&
-    (!source.include || included(source.include, item.name)) &&
+    (item.parents.length === 0 ||
+      item.parents.some((parent) => sourceFolderIds(source).includes(parent))) &&
+    // A web source's `include` is read on the address's path, as `exclude` reads a path; a
+    // folder source's on the name.
+    (!source.include ||
+      (source.folders
+        ? included(source.include, item.name)
+        : excluded(source.include, item.path))) &&
     !(source.exclude && excluded(source.exclude, item.path))
   );
 }
@@ -157,9 +164,11 @@ export function sourceBoundaryKey(source: SyncedSource): string {
     .update(
       JSON.stringify([
         source.connection,
-        [...source.folders].sort(),
+        [...sourceFolderIds(source)].sort(),
         source.include,
-        source.exclude
+        source.exclude,
+        // A folder source's key stays what it was; a web source's names its kinds and depth.
+        ...(source.folders ? [] : [webBoundaryOf(source)])
       ])
     )
     .digest("hex");

@@ -290,6 +290,14 @@ describe("who may write a grant, and what a grant may say", () => {
     expect(effective).toEqual({
       holderActive: true,
       items: [
+        // Every `user` may add their own MCP server (PMCP).
+        {
+          action: "connection.add_own",
+          effect: "allow",
+          scopeKind: "instance",
+          roleId: "user",
+          source: "role"
+        },
         {
           action: "agent.write",
           effect: "allow",

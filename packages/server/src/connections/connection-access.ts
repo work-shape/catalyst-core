@@ -96,7 +96,10 @@ export async function readConnectionAccess(
   const rows = (
     await Promise.all([
       read({ scopeKind: "asset", scopeId: assetId }),
-      ...Object.values(CONNECTION_ACTIONS).map((action) => read({ action, scopeKind: "instance" }))
+      // Adding one's own server names no Connection: who holds it reaches none of them.
+      ...Object.values(CONNECTION_ACTIONS)
+        .filter((action) => action !== CONNECTION_ACTIONS.addOwn)
+        .map((action) => read({ action, scopeKind: "instance" }))
     ])
   ).flat();
   const byHolder = new Map<string, { kind: Holder["kind"]; id: string; rows: Row[] }>();

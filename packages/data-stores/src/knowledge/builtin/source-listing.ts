@@ -14,6 +14,7 @@ import {
   withinSource,
   type SyncedSource
 } from "../source-boundary";
+import { sourceBoundary } from "../source-urls";
 import { createSourceStore, sourceTransaction, type SourceProgress } from "./source-store";
 import { sourceCall, sourceTarget, type SourceJobRuntime } from "./source-runtime";
 import { reconcileSource } from "./source-reconciliation";
@@ -41,7 +42,7 @@ export async function readSourcePages(
   queue: (ids: string[]) => Promise<void>
 ) {
   const store = createSourceStore(runtime.data, payload.knowledgeBaseId, control.signal);
-  const boundary = { folderIds: source.folders };
+  const boundary = sourceBoundary(source);
   const excludesFolder = sourceExcludesFolder(source);
   const call = <T>(fn: Parameters<typeof sourceCall<T>>[4]) =>
     sourceCall(runtime, source.connection, payload.knowledgeBaseId, control.signal, fn);

@@ -32,8 +32,10 @@ import {
   offerText,
   typedComplete,
   typedConnectionConfig,
+  typedInitialValues,
   typedSecret,
   type ConnectorTypeOffer,
+  type TypedField,
   type TypedValues
 } from "./connection-typed-model";
 import { addressBlocksCreate, useAddressCheck } from "./name-check";
@@ -122,7 +124,10 @@ export function TypedConnectionCreate({
         : initial.name
   );
   const [description, setDescription] = useState("");
-  const [values, setValues] = useState<TypedValues>(() => ({ ...defaults }));
+  const [values, setValues] = useState<TypedValues>(() => ({
+    ...typedInitialValues(offer),
+    ...defaults
+  }));
   const [errors, setErrors] = useState<Errors>({});
   const [steps, setSteps] = useState<{ step: ConnectStep; state: ConnectStepState }[]>([]);
   const [busy, setBusy] = useState(false);
@@ -252,6 +257,42 @@ export function TypedConnectionCreate({
     else onClose();
   };
 
+  // Whose account everyone reads: the install's sentence, else the type's own.
+  const sharedNote =
+    install !== undefined ? (
+      install.note
+    ) : offer.sharedAccountNote === undefined ? null : (
+      <Banner layout="line" data-connection-shared-note="">
+        {offerText(offer.sharedAccountNote, locale)}
+      </Banner>
+    );
+
+  // The fields are the type's, in its order: they never move.
+  const fieldOf = (field: TypedField, index: number) => (
+    <Fragment key={field.setting ?? "secret"}>
+      {field.secret ? sharedNote : null}
+      <Field
+        label={offerText(field.label, locale)}
+        hint={field.help === undefined ? undefined : offerText(field.help, locale)}
+        {...(field.optional ? { optional: true } : { required: true })}
+        {...(field.secret && errors.secret ? { error: errors.secret } : {})}
+      >
+        <Input
+          type={field.secret ? "password" : "text"}
+          {...(field.value === "number" ? { inputMode: "numeric" as const } : {})}
+          autoComplete={field.secret ? "new-password" : "off"}
+          spellCheck={false}
+          value={values[index] ?? ""}
+          disabled={busy}
+          data-connection-field={field.setting ?? "secret"}
+          onChange={(event) =>
+            setValues((current) => ({ ...current, [index]: event.target.value }))
+          }
+        />
+      </Field>
+    </Fragment>
+  );
+
   const heading = held
     ? t("connectionCreate.heldTitle")
     : t("connectionTyped.heading", { title: offerText(offer.title, locale) });
@@ -327,6 +368,11 @@ export function TypedConnectionCreate({
             advancedLabel={t("connectionCreate.details")}
             disabled={busy || created}
             addressFixed={install?.addressFixed === true}
+            advanced={offer.fields.map((field, index) =>
+              field.advanced ? fieldOf(field, index) : null
+            )}
+            // A refused definition may be about a field in the fold, such as the port.
+            advancedOpen={errors.general !== undefined}
           >
             <Field
               label={t("connectionPage.descriptionField")}
@@ -341,30 +387,7 @@ export function TypedConnectionCreate({
                 onChange={(event) => setDescription(event.target.value)}
               />
             </Field>
-            {offer.fields.map((field, index) => (
-              // The fields are the type's, in its order: they never move.
-              <Fragment key={field.setting ?? "secret"}>
-                {field.secret && install ? install.note : null}
-                <Field
-                  label={offerText(field.label, locale)}
-                  hint={field.help === undefined ? undefined : offerText(field.help, locale)}
-                  {...(field.optional ? { optional: true } : { required: true })}
-                  {...(field.secret && errors.secret ? { error: errors.secret } : {})}
-                >
-                  <Input
-                    type={field.secret ? "password" : "text"}
-                    autoComplete={field.secret ? "new-password" : "off"}
-                    spellCheck={false}
-                    value={values[index] ?? ""}
-                    disabled={busy}
-                    data-connection-field={field.setting ?? "secret"}
-                    onChange={(event) =>
-                      setValues((current) => ({ ...current, [index]: event.target.value }))
-                    }
-                  />
-                </Field>
-              </Fragment>
-            ))}
+            {offer.fields.map((field, index) => (field.advanced ? null : fieldOf(field, index)))}
           </NameWithAddress>
           {steps.length > 0 ? (
             <Steps label={t("connectionCreate.steps")} data-connection-steps="">

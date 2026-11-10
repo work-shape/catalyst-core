@@ -86,10 +86,10 @@ const EXCEPTIONS: { keys: RegExp; words: readonly string[]; reason: string }[] =
       "The System group: Jobs, Operations, Modules and Infrastructure are shown only to the team that runs the instance (ruling 2 of section 4.16)."
   },
   {
-    keys: /^(?:connectionCreate\.(?:mcpTitle|mcpHeading|proposalCardMcp)|connections\.(?:serverDescription|urlHint|exposeOutside)|guardrails\.runs\.byMcp|workflows\.workflowSettings\.byOutside)$/u,
+    keys: /^(?:connectionCreate\.(?:mcpTitle|mcpHeading|proposalCardMcp)|connections\.(?:serverDescription|urlHint|exposeOutside)|guardrails\.runs\.byMcp|workflows\.workflowSettings\.byOutside|rights\.actionConnectionAddOwn)$/u,
     words: ["MCP"],
     reason:
-      "MCP server is the kind of Connection a builder picks and the client an outside tool connects as; the provider names it so."
+      "MCP server is the kind of Connection a builder picks, the client an outside tool connects as, and what a person adds as their own (PMCP); the provider names it so."
   },
   {
     keys: /^(?:connectionCreate\.sendAsBearer|connections\.authBearer)$/u,

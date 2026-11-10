@@ -12,6 +12,7 @@ import {
   type ConnectorTypeDefinition,
   type ToolExecutionContext
 } from "@work-shape/catalyst-core";
+import { createImapConnectorType } from "@work-shape/catalyst-imap-connector";
 import {
   CONNECTION_PROPOSE_TOOL_NAME,
   createConnectionProposeTool,
@@ -197,6 +198,83 @@ describe("the agent's proposal of a new Connection", () => {
     const result = await run(proposal({ apiKey: SECRET, secret: SECRET }));
     expect(result.status).toBe("invalid");
     expect(JSON.stringify(result)).not.toContain(SECRET);
+  });
+});
+
+describe("a proposal of a functional mailbox (MBX-1b)", () => {
+  const mailboxTool = createConnectionProposeTool({
+    connectorTypes: createConnectorTypeRegistry([
+      createMcpConnectorType(),
+      createImapConnectorType()
+    ])
+  });
+  const mailbox = (settings: Record<string, unknown>) => ({
+    connectorType: "imap",
+    connection: "feedback-mailbox",
+    title: "Feedback mailbox",
+    settings
+  });
+  const issuesOf = async (input: Record<string, unknown>) => {
+    const result = await run(input, mailboxTool);
+    if (result.status !== "failed") throw new Error(`Expected a refusal, got ${result.status}`);
+    expect(JSON.stringify(result)).not.toContain(SECRET);
+    const issues = isJsonObject(result.error.details) ? result.error.details.issues : undefined;
+    return Array.isArray(issues)
+      ? issues.map((issue) =>
+          isJsonObject(issue)
+            ? `${String(issue.path)}${typeof issue.code === "string" ? `:${issue.code}` : ""}`
+            : ""
+        )
+      : [];
+  };
+
+  it("answers the type with host, port, user name and folders, for the form to start with", async () => {
+    const result = await run(
+      mailbox({
+        host: "imap.example.test",
+        port: 993,
+        username: "feedback@example.test",
+        folders: ["INBOX", "Feedback"]
+      }),
+      mailboxTool
+    );
+    if (result.status !== "success") throw new Error(`Expected a proposal, got ${result.status}`);
+    expect(result.output).toEqual({
+      state: "needs_setup",
+      mayWrite: false,
+      connection: {
+        connectorType: "imap",
+        name: "feedback-mailbox",
+        title: "Feedback mailbox",
+        headerNames: [],
+        settings: {
+          host: "imap.example.test",
+          port: 993,
+          username: "feedback@example.test",
+          folders: ["INBOX", "Feedback"]
+        }
+      }
+    });
+    // The audit names the id and the type: no server, no user name.
+    expect(JSON.stringify(result.auditSummary)).not.toContain("example.test");
+  });
+
+  it("never takes the password, and refuses what the form does not ask or the type refuses", async () => {
+    expect(await issuesOf(mailbox({ host: "imap.example.test", password: SECRET }))).toEqual([
+      "settings.password:secret_in_proposal"
+    ]);
+    expect(await issuesOf(mailbox({ host: "imap.example.test", tls: "starttls" }))).toEqual([
+      "settings.tls"
+    ]);
+    // Plain IMAP and a host with a scheme are refused as the save would refuse them.
+    expect(await issuesOf(mailbox({ port: 143 }))).toEqual(["settings.port"]);
+    expect(await issuesOf(mailbox({ host: "imaps://imap.example.test" }))).toEqual([
+      "settings.host"
+    ]);
+    // A type that takes an address names it in its own fields, never in settings.
+    expect(
+      await issuesOf({ ...proposal(), settings: { url: "https://brain.example.test/mcp" } })
+    ).toEqual(["settings"]);
   });
 });
 

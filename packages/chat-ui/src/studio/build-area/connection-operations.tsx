@@ -78,11 +78,17 @@ export function EditableOperations({
   asset,
   frame,
   operations,
+  exposures: allowed = EXPOSURES,
   written
 }: {
   asset: BuildAsset;
   frame: BuildAssetEditorProps;
   operations: ConnectionOperationDetail[];
+  /**
+   * Who the Connector type lets call its operations, such as agents alone for a type whose
+   * results only its caller may read. One already chosen still shows, to be taken back.
+   */
+  exposures?: readonly Exposure[];
   written(): void;
 }) {
   const { t } = useTranslation();
@@ -100,7 +106,9 @@ export function EditableOperations({
               aria-label={t("connections.operationExposure")}
               className="flex w-full min-w-0 flex-wrap items-start gap-x-5 gap-y-2"
             >
-              {EXPOSURES.map((exposure) => (
+              {EXPOSURES.filter(
+                (exposure) => allowed.includes(exposure) || operation.exposure.includes(exposure)
+              ).map((exposure) => (
                 <Checkbox
                   key={exposure}
                   label={t(

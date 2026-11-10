@@ -5,6 +5,7 @@ import type {
   ActorAccess,
   AssetScope,
   AuditActor,
+  AuthenticatedIdentity,
   ClientInstanceId,
   ConfigAssetKind,
   CapabilityAssetKindChecks,
@@ -12,6 +13,7 @@ import type {
   FileSet,
   JsonObject,
   LocaleCode,
+  OperationAuthorization,
   OperationEffect,
   PlatformStores,
   PUBLISH_CHANGE_KINDS,
@@ -262,6 +264,26 @@ export interface WorkflowAssetKind
     definition: unknown;
     stores: PlatformStores;
   }): Promise<{ code: string; message: string }[]>;
+  /**
+   * What a put or a revert of `next` is decided on in place of the kind's write right on the
+   * asset, or nothing for that right: of a kind whose assets may be one person's alone (PMCP).
+   * `current` is the stored definition, or undefined for a create.
+   */
+  writeDecision?(input: {
+    access: ActorAccess;
+    resource: AccessResource;
+    current: unknown;
+    next: unknown;
+  }): OperationAuthorization | undefined;
+  /**
+   * Throws where this caller may not make the put, asked by `assets.put` with who calls before
+   * anything is read or written. `current` is the stored definition, or undefined for a create.
+   */
+  assertPutBy?(input: {
+    actor: AuthenticatedIdentity;
+    current: unknown;
+    next: Record<string, unknown>;
+  }): void;
   /** Throws `FORBIDDEN` when the instance's editing policy refuses an interactive delete. */
   assertInteractiveDeleteAllowed(input: { surface: AssetWriteSurface }): void;
   /**

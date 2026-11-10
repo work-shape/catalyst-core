@@ -34,8 +34,11 @@ afterEach(async () => {
 });
 
 // A project's rights came after AP-4 and are carried by membership alone, never by a role or a
-// row (PRJ-1): no seed writes one, and the evaluator before AP-4 has no answer to compare.
-const ROW_ACTIONS = ACTIONS.filter((action) => !isMembershipOnlyAction(action));
+// row (PRJ-1): no seed writes one, and the evaluator before AP-4 has no answer to compare. So
+// with adding one's own MCP server, which came after AP-4 with the `user` role's default (PMCP).
+const ROW_ACTIONS = ACTIONS.filter(
+  (action) => !isMembershipOnlyAction(action) && action !== "connection.add_own"
+);
 
 const INSTANCES = ["ap4-a", "ap4-b"];
 

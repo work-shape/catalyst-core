@@ -293,10 +293,10 @@ export function createSourceStore(
           // statement needs no flag per item.
           await sql.run(
             `insert into catalyst_kb.source_items
-            (id, source_id, item_id, version, path, name, mime, size, modified_at, origin_link, state, failure_code, parents, seen_run_id)
-            select v.id,$1::text,v.item,v.version,v.path,v.name,v.mime,v.size,v.modified::timestamptz,nullif(v.link,''),case when v.failure<>'' then 'failed' else 'discovered' end,nullif(v.failure,''),v.parents::jsonb,$2::text
-            from unnest($3::text[],$4::text[],$5::text[],$6::text[],$7::text[],$8::text[],$9::bigint[],$10::text[],$11::text[],$12::text[],$13::text[]) as v(id,item,version,path,name,mime,size,modified,link,failure,parents)
-            on conflict (source_id,item_id) do update set parents=excluded.parents, seen_run_id=excluded.seen_run_id,withdrawn_at=null,purged_at=null,version=excluded.version, path=excluded.path, name=excluded.name, mime=excluded.mime, size=excluded.size, modified_at=excluded.modified_at, origin_link=excluded.origin_link,
+            (id, source_id, item_id, version, path, name, mime, size, modified_at, origin_link, state, failure_code, parents, seen_run_id, stated_at)
+            select v.id,$1::text,v.item,v.version,v.path,v.name,v.mime,v.size,v.modified::timestamptz,nullif(v.link,''),case when v.failure<>'' then 'failed' else 'discovered' end,nullif(v.failure,''),v.parents::jsonb,$2::text,nullif(v.stated,'')::timestamptz
+            from unnest($3::text[],$4::text[],$5::text[],$6::text[],$7::text[],$8::text[],$9::bigint[],$10::text[],$11::text[],$12::text[],$13::text[],$14::text[]) as v(id,item,version,path,name,mime,size,modified,link,failure,parents,stated)
+            on conflict (source_id,item_id) do update set parents=excluded.parents, seen_run_id=excluded.seen_run_id,withdrawn_at=null,purged_at=null,version=excluded.version, path=excluded.path, name=excluded.name, mime=excluded.mime, size=excluded.size, modified_at=excluded.modified_at, stated_at=excluded.stated_at, origin_link=excluded.origin_link,
             state=case when source_items.version=excluded.version and source_items.state<>'withdrawn' then source_items.state else excluded.state end,
             failure_code=case when source_items.version=excluded.version and source_items.state<>'withdrawn' then source_items.failure_code else excluded.failure_code end,
             attempts=case when source_items.version=excluded.version and source_items.state<>'withdrawn' then source_items.attempts else 0 end,
@@ -317,7 +317,8 @@ export function createSourceStore(
               column((row) => row.item.modifiedAt),
               column((row) => row.item.originLink ?? ""),
               column((row) => row.failure ?? ""),
-              column((row) => JSON.stringify(row.item.parents))
+              column((row) => JSON.stringify(row.item.parents)),
+              column((row) => row.item.statedAt ?? "")
             ]
           );
         }

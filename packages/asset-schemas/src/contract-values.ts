@@ -191,6 +191,12 @@ export const GUARDRAIL_NAME_MAX_LENGTH = 64;
 export const CONNECTION_EXPOSURES = ["agent", "bridge", "workflow", "outside"] as const;
 export type ConnectionExposure = (typeof CONNECTION_EXPOSURES)[number];
 
+/**
+ * What a setting field of a Connector type's form holds: text, a whole number such as a port,
+ * or a list of names such as folders.
+ */
+export const CONNECTOR_FORM_FIELD_VALUES = ["text", "number", "list"] as const;
+
 /** The health of a Connection as its page and its list show it. */
 export const CONNECTION_HEALTH_STATES = [
   "unknown",
@@ -222,6 +228,9 @@ export type GrantHolderKind = (typeof GRANT_HOLDER_KINDS)[number];
 
 export const GRANT_SCOPE_KINDS = ["instance", "workspace", "asset"] as const;
 export type GrantScopeKind = (typeof GRANT_SCOPE_KINDS)[number];
+
+/** The verbs of a right on one asset that a screen and an owner-bound asset know: see to remove. */
+export const ASSET_RIGHT_VERBS = ["read", "use", "write", "delete"] as const;
 
 /** Where a role's grant lies: the whole instance, one workspace or one asset. */
 export const ROLE_GRANT_SCOPE_KINDS = [
@@ -376,7 +385,9 @@ export const OPERATION_DENIAL_REASONS = [
   "holder_inactive",
   "holder_not_administrable",
   "user_only",
-  "outside_key_scope"
+  "outside_key_scope",
+  // An owner-bound right of a person's own MCP server, and the caller is not its owner (PMCP).
+  "not_owner"
 ] as const;
 export type OperationDenialReason = (typeof OPERATION_DENIAL_REASONS)[number];
 
@@ -743,7 +754,12 @@ export const CONNECTOR_TEST_STATUSES = [
   "network_denied",
   "unavailable",
   /** The server asks for an OAuth sign-in, or the Connection signs in and nobody has. */
-  "oauth_required"
+  "oauth_required",
+  /**
+   * A person's own server refuses a request without a credential and describes no sign-in:
+   * it takes a token (PMCP).
+   */
+  "token_required"
 ] as const;
 export type ConnectorTestStatus = (typeof CONNECTOR_TEST_STATUSES)[number];
 
