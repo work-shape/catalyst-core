@@ -88,6 +88,7 @@ export function ConnectionApprovalList({
   declared = false,
   source,
   groups,
+  surfaces: offered = APPROVAL_SURFACES,
   disabled = false
 }: {
   candidates: readonly ApprovalCandidate[];
@@ -108,6 +109,11 @@ export function ConnectionApprovalList({
    * part's scope groups. Left out, one list.
    */
   groups?: readonly ApprovalGroup[];
+  /**
+   * The places the "may use" row offers, such as agents alone for a type whose results only
+   * its caller may read. Left out, agents, Apps and Workflows.
+   */
+  surfaces?: readonly ApprovalSurface[];
   disabled?: boolean;
 }) {
   const { t } = useTranslation();
@@ -221,7 +227,7 @@ export function ConnectionApprovalList({
         <span id={surfacesLabel} className="mr-1 text-label">
           {t("connectionCreate.mayUse")}
         </span>
-        {APPROVAL_SURFACES.map((surface) => (
+        {offered.map((surface) => (
           <Checkbox
             key={surface}
             label={t(SURFACE_LABELS[surface])}

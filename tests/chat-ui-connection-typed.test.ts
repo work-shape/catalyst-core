@@ -28,6 +28,8 @@ const offer: ConnectorTypeOffer = {
   description: { en: "Syncs shared folders.", de: "Synchronisiert geteilte Ordner." },
   service: "folder-store",
   documentSource: true,
+  operations: [],
+  exposures: ["agent", "bridge", "workflow", "outside"],
   authScheme: "client_credentials",
   settings: { subject: { type: "enterprise" } },
   fields: [

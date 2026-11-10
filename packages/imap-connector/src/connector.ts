@@ -2,6 +2,7 @@ import {
   connectionCallError,
   type ConnectorContext,
   type ConnectorTypeDefinition,
+  type ConnectorTypeForm,
   type JsonValue
 } from "@work-shape/catalyst-core";
 import { openMailboxSession, type MailboxSession } from "./mailbox";
@@ -15,6 +16,8 @@ import {
   searchMessages
 } from "./operations";
 import {
+  IMAP_FOLDERS_MAX,
+  IMAPS_PORT,
   imapCredentialAccount,
   imapSettingsOf,
   imapSettingsSchema,
@@ -55,6 +58,71 @@ function inputOf<T>(
 }
 
 /**
+ * The card "Mailbox (IMAP)" in the New connection dialog and its form: server, user name,
+ * password and folders, the port under "Technical details". The password goes through
+ * `connections.set_secret` and is never a setting.
+ */
+const IMAP_FORM: ConnectorTypeForm = {
+  title: { en: "Mailbox (IMAP)", de: "Postfach (IMAP)" },
+  description: {
+    en: "A shared mailbox an agent reads, such as a feedback address. Reading leaves every mail unread.",
+    de: "Ein gemeinsames Postfach, das ein Agent liest, etwa eine Feedback-Adresse. Lesen lässt jede Mail ungelesen."
+  },
+  authScheme: "password",
+  fields: [
+    {
+      label: { en: "Server", de: "Server" },
+      help: {
+        en: "The IMAP server's host name, such as imap.example.com, without imaps:// or a port.",
+        de: "Der Hostname des IMAP-Servers, etwa imap.example.com, ohne imaps:// und ohne Port."
+      },
+      setting: "host"
+    },
+    {
+      label: { en: "User name", de: "Benutzername" },
+      help: {
+        en: "Usually the mailbox's address.",
+        de: "Meist die Adresse des Postfachs."
+      },
+      setting: "username"
+    },
+    {
+      label: { en: "Password or app password", de: "Passwort oder App-Passwort" },
+      help: {
+        en: "Where the mail provider offers app passwords, use one for this mailbox alone.",
+        de: "Wo der Mail-Anbieter App-Passwörter anbietet, nimm eines nur für dieses Postfach."
+      },
+      secret: true
+    },
+    {
+      label: { en: "Folders", de: "Ordner" },
+      help: {
+        en: `The folders agents may read, separated by commas, at most ${IMAP_FOLDERS_MAX}.`,
+        de: `Die Ordner, die Agenten lesen dürfen, mit Kommas getrennt, höchstens ${IMAP_FOLDERS_MAX}.`
+      },
+      setting: "folders",
+      value: "list",
+      default: "INBOX"
+    },
+    {
+      label: { en: "Port", de: "Port" },
+      help: {
+        en: `IMAP over implicit TLS, ${IMAPS_PORT} at almost every provider. Port 143 is refused.`,
+        de: `IMAP über TLS von Anfang an, bei fast jedem Anbieter ${IMAPS_PORT}. Port 143 wird abgelehnt.`
+      },
+      setting: "port",
+      value: "number",
+      default: String(IMAPS_PORT),
+      advanced: true
+    }
+  ],
+  sharedAccountNote: {
+    en: "Everyone who may use this connection reads every mail in these folders.",
+    de: "Alle, die diese Verbindung nutzen dürfen, lesen jede Mail in diesen Ordnern."
+  }
+};
+
+/**
  * The Connector type `imap`: one functional mailbox, read over IMAP with implicit TLS and the
  * password of the Connection (MBX). It reads the folders its settings list and nothing else,
  * opens them read-only and reads bodies with BODY.PEEK, so no flag of the mailbox changes. What
@@ -71,6 +139,7 @@ export function createImapConnectorType(): ConnectorTypeDefinition {
     credentialAccount: imapCredentialAccount,
     privateResults: true,
     catalog: IMAP_OPERATIONS,
+    form: IMAP_FORM,
     limits: {
       callTimeoutMs: IMAP_CALL_TIMEOUT_MS,
       resultMaxBytes: IMAP_RESULT_MAX_BYTES,

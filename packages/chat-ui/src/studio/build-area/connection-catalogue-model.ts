@@ -68,7 +68,8 @@ export function partOffer(
       documentSource: part.documentSource,
       authScheme: part.authScheme,
       settings: managedSettings(part.settings, part.managedClient),
-      fields: []
+      fields: [],
+      ...PART_REVIEWS_ITS_OWN
     };
   }
   return {
@@ -85,9 +86,19 @@ export function partOffer(
       optional: field.optional,
       ...(field.setting === undefined ? {} : { setting: field.setting }),
       secret: field.secret
-    }))
+    })),
+    ...PART_REVIEWS_ITS_OWN
   };
 }
+
+/**
+ * A part's operations are the entry's, reviewed by the install after Verbinden: the form
+ * offers none of its own, and where they may be used is the review's to say.
+ */
+const PART_REVIEWS_ITS_OWN = {
+  operations: [],
+  exposures: ["agent", "bridge", "workflow", "outside"]
+} satisfies Pick<ConnectorTypeOffer, "operations" | "exposures">;
 
 /** What the fields start with: each field's default, by its position. Never a secret. */
 export function partDefaults(part: CataloguePartOffer): TypedValues {

@@ -14,6 +14,7 @@ export {
 } from "@work-shape/catalyst-asset-schemas";
 import {
   CONNECTION_EXPOSURES,
+  CONNECTOR_FORM_FIELD_VALUES,
   CONNECTION_HEALTH_STATES,
   CONNECTION_NAME_MAX_LENGTH,
   CONNECTION_NAME_PATTERN,
@@ -817,7 +818,32 @@ export type ConnectorFormField = {
   help?: LocalizedStringConfig;
   /** A field the person may leave empty; an empty setting is left out of `settings`. */
   optional?: true;
-} & ({ setting: string; secret?: undefined } | { secret: true; setting?: undefined });
+} & (
+  | {
+      setting: string;
+      secret?: undefined;
+      /**
+       * What the setting holds: text (the default), a whole number such as a port, or a list
+       * of names typed one per line or separated by commas, such as folders.
+       */
+      value?: ConnectorFormFieldValue;
+      /** What the field starts with, as the person would type it. */
+      default?: string;
+      /** The field folds away under "Technical details", as a port does. */
+      advanced?: true;
+    }
+  | {
+      secret: true;
+      setting?: undefined;
+      value?: undefined;
+      default?: undefined;
+      advanced?: undefined;
+    }
+);
+
+export { CONNECTOR_FORM_FIELD_VALUES };
+/** What a setting field of a form holds. */
+export type ConnectorFormFieldValue = (typeof CONNECTOR_FORM_FIELD_VALUES)[number];
 
 /**
  * How the New connection dialog offers a Connector type of the build beside an MCP server and
@@ -838,6 +864,12 @@ export interface ConnectorTypeForm {
   /** Settings every Connection the form makes holds, beside the fields' values. */
   settings?: JsonObject;
   fields: readonly ConnectorFormField[];
+  /**
+   * Whose account everyone reads and what they read through it, said before the secret and
+   * again where the setup asks who may use the Connection, such as every mail of a shared
+   * mailbox's folders.
+   */
+  sharedAccountNote?: LocalizedStringConfig;
 }
 
 interface ConnectorTypeBase {
@@ -1036,6 +1068,13 @@ export function connectionCallsArePersonal(
 
 /** The one exposure an operation of a type with `privateResults` accepts. */
 const PRIVATE_RESULTS_EXPOSURE: ConnectionExposure = "agent";
+
+/** The exposures an operation of a Connection of the type accepts. */
+export function connectorTypeExposures(
+  type: Pick<ConnectorTypeDefinition, "privateResults"> | undefined
+): readonly ConnectionExposure[] {
+  return type?.privateResults === true ? [PRIVATE_RESULTS_EXPOSURE] : CONNECTION_EXPOSURES;
+}
 
 /** The reasons a Connection is refused for, as the first word of an issue or a `reason`. */
 export const CONNECTION_REFUSALS = {
