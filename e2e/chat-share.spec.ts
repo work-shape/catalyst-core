@@ -221,6 +221,9 @@ test(TITLE, async ({ page, browser, baseURL, pageErrors }) => {
   await panel.getByLabel("Add person").fill("E2E Zz Chat Share R");
   await panel.getByRole("option", { name: new RegExp(reader.label, "u") }).click();
   await expect(panel.getByTestId("chat-reader")).toHaveCount(2);
+  // With the field empty again, nobody who already reads the chat is offered.
+  await expect(panel.getByLabel("Add person")).toHaveValue("");
+  await expect(panel.getByRole("option", { name: new RegExp(reader.label, "u") })).toHaveCount(0);
   await shot(page, "chat-share-people");
   await panel.getByRole("button", { name: `Remove ${reader.label}` }).click();
   await expect(panel.getByTestId("chat-reader")).toHaveCount(1);
