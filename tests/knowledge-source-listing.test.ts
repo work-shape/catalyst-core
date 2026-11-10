@@ -65,7 +65,11 @@ describe("a source at knowledge.maxDocuments", () => {
     ).toEqual([{ n: 9 }]);
     // The next pass has room for one of them.
     const next = await world.sync("full");
-    expect(await ended(world, next)).toMatchObject({ state: "failed" });
+    expect(await ended(world, next)).toEqual({
+      state: "failed",
+      failure_code: "knowledge_source_limit_reached",
+      mode: "full"
+    });
     expect(
       (await items(world)).filter(
         (row) => String(row.name).startsWith("new-") && row.state !== "withdrawn"

@@ -197,6 +197,13 @@ export function createSourceStore(
         if (!active.length) return { queued: [], limited: false };
         // Admission shares add_files' writer lock: concurrent sources cannot exceed the cap.
         await sql.run("lock table catalyst_kb.documents in share row exclusive mode");
+        // Content locks come before the items lock. An index completion holds its content
+        // and then writes the items through its trigger: the other way round, the two
+        // deadlock. The documents lock keeps which content an item names fixed meanwhile.
+        await sql.run(
+          "select c.sha256 from catalyst_kb.contents c join catalyst_kb.documents d on d.content_sha256=c.sha256 join catalyst_kb.source_items i on i.document_id=d.id where i.source_id=$1::text and i.item_id=any($2::text[]) order by c.sha256 for share of c",
+          [payload.sourceId, items.map((item) => item.id)]
+        );
         await sql.run("lock table catalyst_kb.source_items in share row exclusive mode");
         const [count] = z
           .array(z.object({ n: z.number().int() }))
@@ -205,12 +212,6 @@ export function createSourceStore(
               `select ((select coalesce(sum(items),0) from catalyst_kb.source_counts where state <> 'withdrawn') + (select count(*) from catalyst_kb.documents where source_item_id is null and withdrawn_at is null))::int as n`
             )
           );
-        // Take content locks before any count delta in this page. An index completion takes
-        // its content first too, so a mixed page cannot invert that order.
-        await sql.run(
-          "select c.sha256 from catalyst_kb.contents c join catalyst_kb.documents d on d.content_sha256=c.sha256 join catalyst_kb.source_items i on i.document_id=d.id where i.source_id=$1::text and i.item_id=any($2::text[]) order by c.sha256 for share of c",
-          [payload.sourceId, items.map((item) => item.id)]
-        );
         let held = count?.n ?? 0;
         const queued: string[] = [];
         let limited = false;
