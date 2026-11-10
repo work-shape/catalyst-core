@@ -4,7 +4,8 @@ import { required } from "./support/assertions";
 
 // The pattern rule of a source's `include` and `exclude` (spec: Synced sources, "The shape"):
 // segments split at `/`; `**` any number of segments, at the end at least one; `*` any
-// characters in a segment, `?` one; every other character itself. A literal `<folder>/**` is
+// characters in a segment, `?` one; every other character itself, compared in Unicode NFC. A
+// literal `<folder>/**` is
 // decided by a set, every other pattern by an expression; both answer what the rule says.
 
 const source = (exclude: string[], include?: string[]) => ({
@@ -22,7 +23,7 @@ const excludedNow = (exclude: string[], path: string) =>
 function excludedByRule(pattern: string, path: string): boolean {
   const segmentsOf = (text: string) => {
     const segments: string[] = [];
-    for (const segment of text.split("/"))
+    for (const segment of text.normalize("NFC").split("/"))
       if (segment === "..") segments.pop();
       else if (segment !== "" && segment !== ".") segments.push(segment);
     return segments;
@@ -79,7 +80,10 @@ describe("the exclude of a source", () => {
     ["Ä/**", "/ä/file.pdf", false, "another case of an umlaut"],
     ["Old Projects/**", "/Old Projects/a b/file.pdf", true, "spaces"],
     [`${nfc}/**`, `/${nfc}/file.pdf`, true, "an umlaut"],
-    [`${nfc}/**`, `/${nfd}/file.pdf`, false, "the same umlaut, decomposed"],
+    [`${nfc}/**`, `/${nfd}/file.pdf`, true, "the same umlaut, decomposed in the path"],
+    [`${nfd}/**`, `/${nfc}/file.pdf`, true, "the same umlaut, decomposed in the pattern"],
+    [`${nfd}*/**`, `/${nfc} 2019/file.pdf`, true, "a decomposed umlaut beside a star"],
+    ["a?/**", "/au\u0308/file.pdf", true, "a question mark is one decomposed umlaut"],
     ["Old/**", "/Old/.hidden", true, "a dot file below"],
     ["Old/**", "/Old/.hidden/file.pdf", true, "a dot folder below"],
     ["Old/**", "/Old/a/.hidden/file.pdf", true, "a dot folder further down"],
@@ -108,6 +112,8 @@ describe("the exclude of a source", () => {
     ["a*/**", "/a*/file.pdf", true, "a star matches itself"],
     ["a*/**", "/ab/file.pdf", true, "a star matches more"],
     ["a*/**", "/a/b/file.pdf", true, "a star matches nothing"],
+    ["a**b/**", "/axyb/file.pdf", true, "a double star inside a name is a star"],
+    ["a**b/**", "/ax/yb/file.pdf", false, "a double star inside a name stays in it"],
     ["a?/**", "/ab/file.pdf", true, "a question mark"],
     ["a?/**", "/a/file.pdf", false, "a question mark is one character"],
     ["a?/**", "/aä/file.pdf", true, "a question mark is one umlaut"],
@@ -209,6 +215,11 @@ describe("the exclude of a source", () => {
     expect(kept(["Plan [1].pdf"], "Plan [1].pdf")).toBe(true);
     expect(kept(["Plan [1].pdf"], "Plan 1.pdf")).toBe(false);
     expect(kept(["*.{pdf,docx}"], "Plan.pdf")).toBe(false);
+    expect(kept(["**"], "Plan.pdf")).toBe(true);
+    expect(kept(["/**", "*.docx"], "Plan.pdf")).toBe(true);
+    expect(kept(["Old/**"], "Plan.pdf")).toBe(false);
+    expect(kept([`${nfc}*.pdf`], `${nfd} Plan.pdf`)).toBe(true);
+    expect(kept([`${nfd}*.pdf`], `${nfc} Plan.pdf`)).toBe(true);
   });
 });
 
@@ -234,6 +245,9 @@ describe("the folders a listing need not walk", () => {
     expect(skips("/")).toBe(false);
     expect(sourceExcludesFolder({ id: "s", connection: "c", folders: ["root"] })).toBeUndefined();
     expect(required(sourceExcludesFolder(source(["/**"])))("/a")).toBe(true);
+    // A folder name in another Unicode form is the same folder.
+    expect(required(sourceExcludesFolder(source([`${nfc}/**`])))(`/${nfd}`)).toBe(true);
+    expect(required(sourceExcludesFolder(source([`**/${nfd}/**`])))(`/a/${nfc}`)).toBe(true);
   });
 
   it("names only folders whose every path below is excluded, over generated patterns", () => {

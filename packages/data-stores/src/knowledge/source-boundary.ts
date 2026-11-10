@@ -7,14 +7,16 @@ export type SyncedSource = NonNullable<KnowledgeBaseDefinition["sources"]>[numbe
 // a path are compared segment by segment, split at `/`. `**` as a whole segment stands for any
 // number of segments, at the end of a pattern for at least one; `*` for any characters within a
 // segment, `?` for one. Every other character stands for itself, brackets, braces, parentheses
-// and a backslash included, so `Projekt [alt]/**` names that folder. A dot is not special:
-// `Old/**` holds `/Old/.git/config` as well. Case and Unicode form count as written. Empty and
-// `.` segments are dropped, and `..` drops the segment before it, in a pattern and a path alike.
+// and a backslash included, so `Projekt [alt]/**` names that folder; `**` inside a name is `*`,
+// and a literal `*` or `?` cannot be written. A dot is not special: `Old/**` holds
+// `/Old/.git/config` as well. Case counts as written; patterns, paths and names are compared in
+// Unicode NFC, so `Müller` matches however a source composes the umlaut. Empty and `.` segments
+// are dropped, and `..` drops the segment before it, in a pattern and a path alike.
 
 /** The segments of a path or a pattern, as the rule reads them. */
 function segmentsOf(text: string): string[] {
   const segments: string[] = [];
-  for (const segment of text.split("/")) {
+  for (const segment of text.normalize("NFC").split("/")) {
     if (segment === "" || segment === ".") continue;
     if (segment === "..") segments.pop();
     else segments.push(segment);
@@ -104,6 +106,16 @@ function excluded(patterns: readonly string[], path: string): boolean {
   return globs.some((glob) => glob.test(joined));
 }
 
+/**
+ * Whether a file's name matches `include`. A name is one segment, so of the literal folder
+ * patterns only `**` holds it.
+ */
+function included(patterns: readonly string[], name: string): boolean {
+  const { folders, globs } = compiled(patterns);
+  const normal = name.normalize("NFC");
+  return folders.has("") || globs.some((glob) => glob.test(normal));
+}
+
 export function withinSource(
   source: SyncedSource,
   item: { parents: readonly string[]; name: string; path: string }
@@ -112,7 +124,7 @@ export function withinSource(
     // Migration 5 leaves ancestry unknown until a listing learns it. A connector item
     // must have at least one parent (documentSourceItemSchema), so [] is unambiguous.
     (item.parents.length === 0 || item.parents.some((parent) => source.folders.includes(parent))) &&
-    (!source.include || compiled(source.include).globs.some((glob) => glob.test(item.name))) &&
+    (!source.include || included(source.include, item.name)) &&
     !(source.exclude && excluded(source.exclude, item.path))
   );
 }
