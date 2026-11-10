@@ -707,6 +707,8 @@ export interface ConversationRunAgent {
   runId: AgentRunId;
   inputMessageId: MessageId;
   agentName: string;
+  /** The person the run acts for: who sent its message, in a chat more than one reads. */
+  ownerUserId?: string;
 }
 
 export interface AgentRunStore {

@@ -131,9 +131,13 @@ export class RunObservationWorkflow {
           : {}),
         ...(runAgents.length > 0
           ? {
-              runAgents: runAgents.map(({ inputMessageId, agentName }) => ({
+              runAgents: runAgents.map(({ inputMessageId, agentName, ownerUserId }) => ({
                 inputMessageId,
-                agentName
+                agentName,
+                // Who sent each turn, which a chat more than one person reads names (CHAT-SHARE-2).
+                ...(ownerUserId !== undefined && snapshotNamesSenders(conversation)
+                  ? { ownerUserId }
+                  : {})
               }))
             }
           : {}),
@@ -471,4 +475,9 @@ async function withDecidersNamedNow(
       };
     })
   );
+}
+
+/** A chat its creator named people on: its readers see who sent each turn. */
+function snapshotNamesSenders(conversation: { people: readonly unknown[] }): boolean {
+  return conversation.people.length > 0;
 }

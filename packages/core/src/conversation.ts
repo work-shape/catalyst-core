@@ -229,6 +229,11 @@ export interface Conversation {
    * any. A subagent's run thread carries those of its root, which it is read through.
    */
   people: ConversationPerson[];
+  /**
+   * The creator's name as the instance holds it now, on a chat that names people: its other
+   * readers see who started it and who wrote each turn. Missing on every other conversation.
+   */
+  createdByDisplayLabel?: string;
 }
 
 /** A person the creator of a private chat named: they read and write in it (CHAT-SHARE). */

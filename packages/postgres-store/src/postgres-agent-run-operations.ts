@@ -562,7 +562,8 @@ async function listConversationRunAgents(
     .select({
       runId: agentRuns.id,
       inputMessageId: agentRuns.inputMessageId,
-      agentName: agentRuns.agentName
+      agentName: agentRuns.agentName,
+      ownerUserId: agentRuns.ownerUserId
     })
     .from(agentRuns)
     .where(
@@ -576,7 +577,8 @@ async function listConversationRunAgents(
   return rows.map((row) => ({
     runId: asAgentRunId(row.runId),
     inputMessageId: asMessageId(row.inputMessageId),
-    agentName: row.agentName
+    agentName: row.agentName,
+    ...(row.ownerUserId === null ? {} : { ownerUserId: row.ownerUserId })
   }));
 }
 

@@ -52694,6 +52694,9 @@
             "items": {
               "$ref": "#/components/schemas/ConversationPerson"
             }
+          },
+          "createdByDisplayLabel": {
+            "type": "string"
           }
         },
         "required": [
@@ -52899,6 +52902,9 @@
             "items": {
               "$ref": "#/components/schemas/ConversationPerson"
             }
+          },
+          "createdByDisplayLabel": {
+            "type": "string"
           },
           "latestMessageAt": {
             "$ref": "#/components/schemas/Timestamp"
@@ -53449,6 +53455,9 @@
                   "type": "string"
                 },
                 "agentName": {
+                  "type": "string"
+                },
+                "ownerUserId": {
                   "type": "string"
                 }
               },

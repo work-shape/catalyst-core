@@ -24,8 +24,26 @@ const conversationPeopleColumn = sql<ConversationPersonRow[]>`coalesce((
       coalesce("conversations"."parent_conversation_id", "conversations"."id")
 ), '[]'::json)`;
 
+/**
+ * The creator's name, on a chat that names people only: its other readers see who started it
+ * and who wrote each of its turns (CHAT-SHARE-2). Nothing on every other conversation.
+ */
+const conversationCreatorLabelColumn = sql<string | null>`(
+  select u.display_label
+  from product_users u
+  where u.client_instance_id = "conversations"."client_instance_id"
+    and u.id = "conversations"."created_by_user_id"
+    and exists (
+      select 1 from conversation_people cp
+      where cp.client_instance_id = "conversations"."client_instance_id"
+        and cp.conversation_id =
+          coalesce("conversations"."parent_conversation_id", "conversations"."id")
+    )
+)`;
+
 /** Every column of a conversation with its named people: what `mapConversation` maps. */
 export const conversationFields = {
   ...getTableColumns(conversations),
-  people: conversationPeopleColumn
+  people: conversationPeopleColumn,
+  createdByDisplayLabel: conversationCreatorLabelColumn
 };
