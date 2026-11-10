@@ -68,6 +68,12 @@ export const documentSourceItemSchema = z.strictObject({
   size: z.number().int().min(0).optional(),
   modifiedAt: z.iso.datetime({ offset: true }),
   /**
+   * The date the item states of its own version, such as the "Stand" a web page gives. Only a
+   * source that read it from the item answers it; a citation names it as the item's date, and
+   * any other date only as when the platform retrieved the item.
+   */
+  statedAt: z.iso.datetime({ offset: true }).optional(),
+  /**
    * Where a person opens the original at the source, such as the file's address in Box. A link
    * that is no web address or carries a credential is dropped, and the item is kept without it.
    */

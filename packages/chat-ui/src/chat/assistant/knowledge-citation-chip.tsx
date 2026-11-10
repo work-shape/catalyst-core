@@ -23,26 +23,38 @@ export interface KnowledgeCitation {
   page?: number;
   /** The name of the sheet a spreadsheet's passage is on. */
   sheet?: string;
-  /** The document's date at its source, such as the "Stand" of a web page (KB-WEB). */
-  modifiedAt?: string;
+  /** The date the document states of its version, such as the "Stand" of a web page (KB-WEB). */
+  statedAt?: string;
+  /** When the platform fetched the synced document. */
+  retrievedAt?: string;
 }
 
-/** "Stand 01.11.2026": the date of the version a citation quotes, in the reader's language. */
+/**
+ * "Stand 01.11.2026" for the date the document states of itself, else "abgerufen 10.11.2026"
+ * for when it was fetched, in the reader's language. Any other date of the source is never
+ * shown as its "Stand".
+ */
 function knowledgeCitationDate(
   t: ReturnType<typeof useTranslation>["t"],
   locale: string,
-  modifiedAt: string | undefined
+  citation: Pick<KnowledgeCitation, "statedAt" | "retrievedAt">
 ): string | undefined {
-  if (modifiedAt === undefined) return undefined;
-  const at = new Date(modifiedAt);
-  if (Number.isNaN(at.getTime())) return undefined;
-  const date = new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-GB", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    timeZone: "UTC"
-  }).format(at);
-  return t("knowledge.citationAsOf", { date });
+  const day = (value: string | undefined) => {
+    const at = value === undefined ? undefined : new Date(value);
+    if (at === undefined || Number.isNaN(at.getTime())) return undefined;
+    return new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-GB", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      timeZone: "UTC"
+    }).format(at);
+  };
+  const stated = day(citation.statedAt);
+  if (stated !== undefined) return t("knowledge.citationAsOf", { date: stated });
+  const retrieved = day(citation.retrievedAt);
+  return retrieved === undefined
+    ? undefined
+    : t("knowledge.citationRetrieved", { date: retrieved });
 }
 
 /**
@@ -90,7 +102,7 @@ export function KnowledgeCitationChip({
     (citation.page === undefined
       ? undefined
       : t("knowledge.citationPage", { page: String(citation.page) }));
-  const asOf = knowledgeCitationDate(t, locale, citation.modifiedAt);
+  const asOf = knowledgeCitationDate(t, locale, citation);
   const label = [citation.fileName, place, asOf].filter((part) => part !== undefined).join(", ");
   const open = async () => {
     if (!api) return;

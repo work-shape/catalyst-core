@@ -157,10 +157,12 @@ export interface KnowledgeSearchHit {
   score: number;
   originLink?: string;
   /**
-   * The document's date at its source, as an ISO time: a synced item's own date, such as the
-   * "Stand" a web page states, else when the source last changed it. None for a file added by hand.
+   * The date a synced document states of its own version, such as the "Stand" of a web page, as
+   * an ISO time. Only a date the document itself gives.
    */
-  modifiedAt?: string;
+  statedAt?: string;
+  /** When the platform fetched the synced version the index holds, as an ISO time. */
+  retrievedAt?: string;
 }
 
 /**

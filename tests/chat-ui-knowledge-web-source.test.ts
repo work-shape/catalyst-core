@@ -138,10 +138,11 @@ describe("the citation of a web page", () => {
     fileId: "file_s7",
     fileName: "Section 7 Depreciation",
     originLink: "https://www.example.org/law/s7",
-    modifiedAt: "2026-11-01T00:00:00Z"
+    statedAt: "2026-11-01T00:00:00Z",
+    retrievedAt: "2026-11-10T09:30:00Z"
   };
 
-  function show(locale: "en" | "de") {
+  function show(locale: "en" | "de", source: KnowledgeCitationSource = page) {
     act(() =>
       root.render(
         createElement(
@@ -157,10 +158,10 @@ describe("the citation of a web page", () => {
                 type: "source",
                 sourceType: "document",
                 id: "knowledge:K1",
-                title: page.fileName,
-                filename: page.fileName,
+                title: source.fileName,
+                filename: source.fileName,
                 mediaType: "application/octet-stream",
-                providerMetadata: { vivdCatalyst: { knowledge: { ...page } } },
+                providerMetadata: { vivdCatalyst: { knowledge: { ...source } } },
                 status: { type: "complete" }
               } as const)
             )
@@ -179,6 +180,18 @@ describe("the citation of a web page", () => {
     show("en");
     expect(host.querySelector("[data-knowledge-source]")?.textContent).toBe(
       "Section 7 Depreciation, as of 01/11/2026"
+    );
+  });
+
+  it("names a page that states no date only with the day it was retrieved, never as its Stand", () => {
+    const { statedAt: _stated, ...unstated } = page;
+    show("de", unstated);
+    expect(host.querySelector("[data-knowledge-source]")?.textContent).toBe(
+      "Section 7 Depreciation, abgerufen 10.11.2026"
+    );
+    show("en", unstated);
+    expect(host.querySelector("[data-knowledge-source]")?.textContent).toBe(
+      "Section 7 Depreciation, retrieved 10/11/2026"
     );
   });
 });

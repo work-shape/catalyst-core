@@ -90,8 +90,10 @@ const knowledgePassageSchema = z.object({
   /** The fused score: compared only with passages of the same Knowledge Base. */
   score: z.number(),
   originLink: z.string().optional(),
-  /** The document's date at its source, such as the "Stand" a web page states. */
-  modifiedAt: z.string().optional()
+  /** The date a synced document states of its version, such as the "Stand" of a web page. */
+  statedAt: z.string().optional(),
+  /** When the platform fetched the synced version. */
+  retrievedAt: z.string().optional()
 });
 
 const searchOutputSchema = z.object({

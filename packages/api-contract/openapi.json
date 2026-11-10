@@ -28618,7 +28618,10 @@
                           "originLink": {
                             "type": "string"
                           },
-                          "modifiedAt": {
+                          "statedAt": {
+                            "type": "string"
+                          },
+                          "retrievedAt": {
                             "type": "string"
                           }
                         },
@@ -50603,7 +50606,10 @@
                 "originLink": {
                   "type": "string"
                 },
-                "modifiedAt": {
+                "statedAt": {
+                  "type": "string"
+                },
+                "retrievedAt": {
                   "type": "string"
                 }
               },

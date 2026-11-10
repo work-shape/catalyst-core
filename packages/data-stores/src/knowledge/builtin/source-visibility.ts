@@ -18,9 +18,19 @@ export async function visibleSourceDocumentIds(
   return (await visibleSources(runtime, knowledgeBaseId, name, documentIds, read)).visible;
 }
 
+/** The dates a citation of a synced document shows (KB-WEB). */
+interface SourceDates {
+  /** The date the item states of its version, such as a web page's "Stand". */
+  statedAt?: string;
+  /** When the platform fetched the version the index holds. */
+  retrievedAt?: string;
+}
+
+const UTC_SECONDS = `'YYYY-MM-DD"T"HH24:MI:SS"Z"'`;
+
 /**
- * The visible documents, and the date of each synced one, read with them so a search touches
- * the source's items once: a citation shows the date (KB-WEB).
+ * The visible documents, and the dates of each synced one, read with them so a search touches
+ * the source's items once.
  */
 async function visibleSources(
   runtime: DataStoreRuntime,
@@ -28,8 +38,8 @@ async function visibleSources(
   name: string,
   documentIds: readonly string[],
   read: <T>(work: (sql: PostgresChangeStatements) => Promise<T>) => Promise<T>
-): Promise<{ visible: Set<string>; modifiedAt: Map<string, string> }> {
-  const none = { visible: new Set<string>(), modifiedAt: new Map<string, string>() };
+): Promise<{ visible: Set<string>; dates: Map<string, SourceDates> }> {
+  const none = { visible: new Set<string>(), dates: new Map<string, SourceDates>() };
   if (!documentIds.length) return none;
   const rows = await read(async (sql) =>
     z
@@ -41,21 +51,28 @@ async function visibleSources(
           parents: z.array(z.string()).nullable(),
           name: z.string().nullable(),
           path: z.string().nullable(),
-          modified_at: z.string().nullable()
+          stated_at: z.string().nullable(),
+          fetched_at: z.string().nullable()
         })
       )
       .parse(
         await sql.run(
-          "select d.id,i.source_id,i.parents,i.name,i.path,seen.definition_key,pg_catalog.to_char(i.modified_at at time zone 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') as modified_at from catalyst_kb.documents d left join catalyst_kb.source_items i on i.id=d.source_item_id left join catalyst_kb.sync_runs seen on seen.id=i.seen_run_id where d.id=any($1::text[]) and d.withdrawn_at is null",
+          `select d.id,i.source_id,i.parents,i.name,i.path,seen.definition_key,pg_catalog.to_char(i.stated_at at time zone 'UTC',${UTC_SECONDS}) as stated_at,pg_catalog.to_char(i.fetched_at at time zone 'UTC',${UTC_SECONDS}) as fetched_at from catalyst_kb.documents d left join catalyst_kb.source_items i on i.id=d.source_item_id left join catalyst_kb.sync_runs seen on seen.id=i.seen_run_id where d.id=any($1::text[]) and d.withdrawn_at is null`,
           [[...documentIds]]
         )
       )
   );
   const liveIds = new Set(rows.map((row) => row.id));
-  const modifiedAt = new Map(
-    rows.flatMap((row) => (row.modified_at === null ? [] : [[row.id, row.modified_at] as const]))
+  const dates = new Map(
+    rows.map((row) => [
+      row.id,
+      {
+        ...(row.stated_at === null ? {} : { statedAt: row.stated_at }),
+        ...(row.fetched_at === null ? {} : { retrievedAt: row.fetched_at })
+      }
+    ])
   );
-  if (!rows.some((row) => row.source_id !== null)) return { visible: liveIds, modifiedAt };
+  if (!rows.some((row) => row.source_id !== null)) return { visible: liveIds, dates };
   const asset = await runtime.stores.configAssets.getConfigAsset({
     clientInstanceId: runtime.clientInstanceId,
     kind: "knowledge_base",
@@ -85,7 +102,7 @@ async function visibleSources(
       })
       .map((row) => row.id)
   );
-  return { visible: new Set([...liveIds].filter((id) => !hidden.has(id))), modifiedAt };
+  return { visible: new Set([...liveIds].filter((id) => !hidden.has(id))), dates };
 }
 
 /** Search and proposal admission use the same decision, including pending source cleanup. */
@@ -96,7 +113,7 @@ export async function visibleSourceHits(
   answer: KnowledgeSearchAnswer,
   read: <T>(work: (sql: PostgresChangeStatements) => Promise<T>) => Promise<T>
 ): Promise<KnowledgeSearchAnswer> {
-  const { visible, modifiedAt } = await visibleSources(
+  const { visible, dates } = await visibleSources(
     runtime,
     knowledgeBaseId,
     name,
@@ -107,8 +124,7 @@ export async function visibleSourceHits(
     ...answer,
     hits: answer.hits.flatMap((hit) => {
       if (!visible.has(hit.documentId)) return [];
-      const date = modifiedAt.get(hit.documentId);
-      return [date === undefined ? hit : { ...hit, modifiedAt: date }];
+      return [{ ...hit, ...dates.get(hit.documentId) }];
     })
   };
 }

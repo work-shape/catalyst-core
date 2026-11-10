@@ -409,6 +409,14 @@ const PAGE_CACHE = `
   create index page_cache_expires_idx on catalyst_kb.page_cache (expires_at);
 `;
 
+/**
+ * The date a synced item states of its own version (KB-WEB), such as a web page's "Stand". A
+ * citation shows it as the document's date; without it, only when the platform fetched it.
+ */
+const SOURCE_ITEM_STATED_AT = `
+  alter table catalyst_kb.source_items add column stated_at timestamp with time zone;
+`;
+
 /** The tables of the store of a built-in Knowledge Base, in the order a store applies them. */
 const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   { number: 1, name: "documents", sql: DOCUMENTS },
@@ -454,7 +462,8 @@ const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   { number: 16, name: "record_corrected_value", sql: RECORD_FIELDS_CORRECTED_VALUE },
   { number: 17, name: "chunk_switch_fetch_window", sql: CHUNK_SWITCH_FETCH_WINDOW },
   { number: 18, name: "keyword_languages", sql: KEYWORD_LANGUAGES },
-  { number: 19, name: "page_cache", sql: PAGE_CACHE }
+  { number: 19, name: "page_cache", sql: PAGE_CACHE },
+  { number: 20, name: "source_item_stated_at", sql: SOURCE_ITEM_STATED_AT }
 ];
 
 /** A later applied number never proves that earlier migrations were applied. */

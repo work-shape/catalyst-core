@@ -347,10 +347,12 @@ const knowledgeSearchResponseSchema = z.object({
       score: z.number(),
       originLink: z.string().optional(),
       /**
-       * The date of a synced document: for a web page the date it states, else its
-       * Last-Modified or the day it was first read. An ISO date-time in UTC.
+       * The date a synced document states of its own version, such as the "Stand" of a web
+       * page. An ISO date-time in UTC; none where the document states no date.
        */
-      modifiedAt: z.string().optional()
+      statedAt: z.string().optional(),
+      /** When the platform fetched the synced version. An ISO date-time in UTC. */
+      retrievedAt: z.string().optional()
     })
   ),
   /** The ranked lists fused: `semantic`, `keyword` and `title`. */
