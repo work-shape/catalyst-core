@@ -6,6 +6,7 @@ import {
   approvalExecutionOf,
   asUserId,
   dataHandoverRights,
+  isApprovalRequestBusy,
   isAppError,
   unknownToJsonValue,
   type ApprovalExecution,
@@ -18,6 +19,7 @@ import {
   type ClientInstanceId,
   type ConfigAssetStore,
   type JsonObject,
+  type Logger,
   type OperationDenial,
   type OperationRun,
   type OperationRunStore,
@@ -629,7 +631,11 @@ export async function executeApprovedOperationCall(
     return;
   }
   const end = await runFrozenCall(options, request, signal, runtime);
-  await recordApprovedOperationCallEnd(options, requestId, end);
+  await recordApprovedOperationCallEnd(
+    { ...options, logger: options.deps().logger },
+    requestId,
+    end
+  );
   return end;
 }
 
@@ -696,61 +702,97 @@ async function runFrozenCall(
   );
 }
 
-/** Records what an approved call came to on its request. A request that moved on is left. */
+/**
+ * How long the outcome of an approved call waits, between its tries, for a request that
+ * another transaction holds, such as a second click on Allow that is being refused. About
+ * three seconds in all; a request still held after that is left to the upkeep job, which
+ * records the outcome from the run.
+ */
+const OUTCOME_RETRY_DELAYS_MS = [50, 100, 200, 400, 800, 1600] as const;
+
+/**
+ * Records what an approved call came to on its request. A request that moved on is left. One
+ * another transaction holds at that moment is asked again: the call has run, and its request
+ * would otherwise say "queued" until the upkeep job repairs it.
+ */
 export async function recordApprovedOperationCallEnd(
+  options: Pick<ApprovedOperationCallExecutorOptions, "clientInstanceId" | "approvals"> & {
+    logger?: Pick<Logger, "warn">;
+  },
+  requestId: string,
+  end: ApprovedOperationEnd
+): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await transitionToEnd(options, requestId, end);
+      return;
+    } catch (error) {
+      if (isApprovalRequestBusy(error)) {
+        const delay = OUTCOME_RETRY_DELAYS_MS[attempt];
+        if (delay !== undefined) {
+          await setTimeout(delay);
+          continue;
+        }
+        options.logger?.warn(
+          { requestId, execution: end.execution, attempts: attempt + 1 },
+          "The outcome of an approved call was not recorded: its request stayed locked. The upkeep job records it from the run"
+        );
+        return;
+      }
+      if (!(isAppError(error) && (error.code === "CONFLICT" || error.code === "NOT_FOUND"))) {
+        throw error;
+      }
+      return;
+    }
+  }
+}
+
+async function transitionToEnd(
   options: Pick<ApprovedOperationCallExecutorOptions, "clientInstanceId" | "approvals">,
   requestId: string,
   end: ApprovedOperationEnd
 ): Promise<void> {
-  try {
-    await options.approvals.transitionApprovedApprovalRequest({
-      clientInstanceId: options.clientInstanceId,
-      requestId,
-      resolve: (approved) => {
-        if (end.execution === "held") {
-          // The confirmation is decided; the call now waits for another person's approval,
-          // which keeps the input in its own request.
-          return Promise.resolve({
-            status: "approved",
-            decision: approved.decision,
-            applyResult: {
-              ...(end.run ? { runId: end.run.id } : {}),
-              requestId,
-              execution: "held",
-              approvalRequestId: end.approvalRequestId
-            },
-            payload: minimizedOperationCallPayload(approved.payload)
-          });
-        }
-        if (end.execution === "refused" || end.execution === "expired") {
-          return Promise.resolve({
-            ...endedOperationCallOutcome(approved, {
-              execution: end.execution,
-              ...("error" in end ? { error: end.error } : {})
-            }),
-            decision: approved.decision
-          });
-        }
+  await options.approvals.transitionApprovedApprovalRequest({
+    clientInstanceId: options.clientInstanceId,
+    requestId,
+    resolve: (approved) => {
+      if (end.execution === "held") {
+        // The confirmation is decided; the call now waits for another person's approval,
+        // which keeps the input in its own request.
         return Promise.resolve({
           status: "approved",
           decision: approved.decision,
           applyResult: {
             ...(end.run ? { runId: end.run.id } : {}),
             requestId,
-            execution: end.execution,
-            ...("error" in end
-              ? { error: { code: end.error.code, message: end.error.message } }
-              : {})
+            execution: "held",
+            approvalRequestId: end.approvalRequestId
           },
           payload: minimizedOperationCallPayload(approved.payload)
         });
       }
-    });
-  } catch (error) {
-    if (!(isAppError(error) && (error.code === "CONFLICT" || error.code === "NOT_FOUND"))) {
-      throw error;
+      if (end.execution === "refused" || end.execution === "expired") {
+        return Promise.resolve({
+          ...endedOperationCallOutcome(approved, {
+            execution: end.execution,
+            ...("error" in end ? { error: end.error } : {})
+          }),
+          decision: approved.decision
+        });
+      }
+      return Promise.resolve({
+        status: "approved",
+        decision: approved.decision,
+        applyResult: {
+          ...(end.run ? { runId: end.run.id } : {}),
+          requestId,
+          execution: end.execution,
+          ...("error" in end ? { error: { code: end.error.code, message: end.error.message } } : {})
+        },
+        payload: minimizedOperationCallPayload(approved.payload)
+      });
     }
-  }
+  });
 }
 
 /**

@@ -241,7 +241,9 @@ async function recordAbandonedOperationCall(
  * A request that is still open, or approved and not executed, is ended here where its call
  * can never run: the run no longer exists, because its conversation was deleted while
  * somebody decided on the request, its run already ended, or its requester is gone. This
- * also repairs expiry ticks cut off before their request settlement.
+ * also repairs expiry ticks cut off before their request settlement, and an approved request
+ * whose call ran while the write of its outcome found the request held: it says "queued" and
+ * gets the outcome from its run.
  */
 export async function removeEndedOperationCallInput(
   options: OperationRunJobOptions,
@@ -319,8 +321,18 @@ async function endOrphanedOperationCall(
     !WAITING_OPERATION_RUN_STATUSES.some((status) => status === run.status);
   if (run && !runEnded && !requesterGone) return false;
   if (request.status === "approved") {
-    // The job of an approved call refuses a requester who is gone itself.
-    if (run) return false;
+    if (run) {
+      // The job of an approved call refuses a requester who is gone itself. A run that ended
+      // while its request still says "queued" lost the write of its outcome, such as to a
+      // second decision that held the request: it is recorded from the run.
+      if (!runEnded) return false;
+      await recordApprovedOperationCallEnd(
+        { clientInstanceId, approvals },
+        request.id,
+        await readDecidedOperationEnd(run.id, request.id, { clientInstanceId, runs: options.runs })
+      );
+      return true;
+    }
     await recordApprovedOperationCallEnd({ clientInstanceId, approvals }, request.id, {
       execution: "refused",
       error: RUN_GONE
