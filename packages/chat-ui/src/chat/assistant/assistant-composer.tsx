@@ -24,6 +24,8 @@ import { ComposerAction } from "./composer-action";
 import { followUpModeOfSend } from "./follow-up-shortcut";
 import { AddFromProjectButton } from "../projects/add-from-project";
 import { ChatInputNotice } from "../guardrails/chat-input-notice";
+import { useChatShare } from "../share/chat-share";
+import { ShareChips, ShareMenu, useComposerMention, useShareSendBlock } from "../share/share-menu";
 
 export interface LocalUploadingAttachment {
   id: string;
@@ -43,7 +45,7 @@ export interface LocalUploadingAttachment {
 export function AssistantComposer({
   attachments,
   localUploadingAttachments,
-  sendBlock,
+  sendBlock: givenSendBlock,
   sendQueued,
   conversationRunning,
   optimisticPending,
@@ -120,6 +122,12 @@ export function AssistantComposer({
   const composerLayoutAnimationsRef = useRef<Animation[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const hasAttachments = attachments.length > 0 || localUploadingAttachments.length > 0;
+  // The people picked with @ are shared with before the message goes (CHAT-SHARE-2): while
+  // that runs, or where one was refused, Send waits.
+  const share = useChatShare();
+  const mention = useComposerMention(composerInputRef, currentText);
+  const shareSendBlock = useShareSendBlock();
+  const sendBlock = givenSendBlock ?? shareSendBlock;
   const submitBlocked = Boolean(sendBlock);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const composerRuntime = useComposerRuntime();
@@ -129,6 +137,13 @@ export function AssistantComposer({
   const queuesFollowUp = Boolean(conversationRunning && followUps);
   // The reader's own mode, or with the modifier the other one (FU-2). The server queues a
   // steer that cannot reach the run, such as one into someone else's run.
+  // Sends the message once the picked people read the chat; a message of chips alone is
+  // cleared instead, as it holds nothing to send. It goes through the runtime, not the form:
+  // the form's handler of the last render still holds the share's block of Send.
+  const resubmit = useCallback(() => {
+    if (composerRuntime.getState().canSend) composerRuntime.send();
+  }, [composerRuntime]);
+  const clearText = useCallback(() => composerRuntime.setText(""), [composerRuntime]);
   const queueFollowUp = useCallback(
     (otherMode = false) => {
       const currentText = composerRuntime.getState().text;
@@ -136,6 +151,8 @@ export function AssistantComposer({
       if (!followUps || followUps.queueing || text.length === 0) {
         return;
       }
+      // Once the picked people read the chat, the follow-up goes as it would have.
+      if (share?.beforeSend(currentText, () => queueFollowUp(otherMode), clearText)) return;
       followUps.queue(
         text,
         () => {
@@ -147,7 +164,7 @@ export function AssistantComposer({
         followUpModeOfSend(followUps.mode, otherMode)
       );
     },
-    [composerRuntime, followUps]
+    [clearText, composerRuntime, followUps, share]
   );
   // A keystroke updates the composer before React renders it. Submission reads that current
   // state, so a fast Enter or click never sends the previous render's text (or starter).
@@ -185,6 +202,15 @@ export function AssistantComposer({
   }, [composerRuntime, onQueueSend, runtimeReady, sendBlock, sendQueued]);
   const handleSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
+      if (
+        !submitBlocked &&
+        !queuesFollowUp &&
+        share?.beforeSend(composerRuntime.getState().text, resubmit, clearText)
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       if (submitBlocked || queuesFollowUp) {
         event.preventDefault();
         event.stopPropagation();
@@ -206,10 +232,21 @@ export function AssistantComposer({
         event.stopPropagation();
       }
     },
-    [composerRuntime, onSubmitMessage, queueFollowUp, queuesFollowUp, submitBlocked]
+    [
+      clearText,
+      composerRuntime,
+      onSubmitMessage,
+      queueFollowUp,
+      queuesFollowUp,
+      resubmit,
+      share,
+      submitBlocked
+    ]
   );
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>) => {
+      // The open @ menu takes its keys first: arrows, Enter, Tab and Escape.
+      if (mention.onKeyDown(event)) return;
       if (
         event.key !== "Enter" ||
         event.shiftKey ||
@@ -246,6 +283,7 @@ export function AssistantComposer({
     [
       attachmentsGoAlone,
       composerRuntime,
+      mention,
       onSubmitMessage,
       queueFollowUp,
       queueSend,
@@ -343,6 +381,8 @@ export function AssistantComposer({
       <ComposerPrimitive.Attachments>
         {() => <AttachmentPreview removable />}
       </ComposerPrimitive.Attachments>
+      {mention.menu ? <ShareMenu menu={mention.menu} /> : null}
+      <ShareChips />
       {hasAttachments ? (
         <DraftAttachmentList
           attachments={attachments}
@@ -418,13 +458,18 @@ export function AssistantComposer({
             onScroll={inputFade.onScroll}
             placeholder={t("messagePlaceholder")}
             aria-label={inputLabel}
+            {...mention.inputProps}
             rows={1}
             submitMode={onSubmitMessage ? "none" : "enter"}
+            // Escape closes the open @ menu, not the run.
+            cancelOnEscape={!mention.open}
             onKeyDown={handleKeyDown}
+            onSelect={mention.onCaretChange}
             // A pasted picture uploads like a picked file. The library's own paste keeps it in
             // the browser, where the message goes without it.
             addAttachmentOnPaste={false}
             onPaste={(event) => {
+              mention.onPaste();
               const files = [...event.clipboardData.files];
               if (!attachmentsEnabled || files.length === 0) return;
               event.preventDefault();
@@ -469,7 +514,12 @@ export function AssistantComposer({
               onCancelRun={onCancelRun}
               onQueueFollowUp={() => queueFollowUp()}
               onQueueSend={queueSend}
-              onSubmitMessage={onSubmitMessage}
+              onSubmitMessage={
+                onSubmitMessage ??
+                (share && share.chips.length > 0
+                  ? (text) => share.beforeSend(text, resubmit, clearText)
+                  : undefined)
+              }
               onSendWithoutText={attachmentsGoAlone ? sendWithoutText : undefined}
             />
           </div>

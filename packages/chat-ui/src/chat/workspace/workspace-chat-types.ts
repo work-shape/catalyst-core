@@ -3,6 +3,7 @@ import type { CreationTarget } from "../dock/creation-target";
 import {
   type ApiClient,
   type ApiUser,
+  type Conversation,
   type ConversationListItem,
   type DraftAttachment,
   type LocaleCode,
@@ -284,6 +285,10 @@ export interface SelectedChatModel {
   selectedConversationTitle: string | undefined;
   /** Who started the selected conversation; unknown until its thread is read. */
   selectedConversationOwnerId: string | undefined;
+  /** The open conversation as its thread holds it, with the people its creator named. */
+  selectedConversation: Conversation | undefined;
+  /** The person signed in. */
+  viewerId: string | undefined;
   /**
    * Sends `text` as the person's message to a conversation, queued behind a run that goes
    * (CHAT-CONN-1): a Connect card's word that the service is connected.
@@ -356,6 +361,11 @@ export interface SelectedChatModel {
   activeRun: ConversationControllerState["activeRun"];
   /** The agent of each run of the open conversation, oldest first: its agent change lines. */
   runAgents: ReadonlyArray<{ inputMessageId: string; agentName: string }>;
+  /**
+   * Who sent each turn, by the message that started its run, on a chat that names people
+   * (CHAT-SHARE-2): the run underway too. Empty on every other conversation.
+   */
+  runSenders: ReadonlyMap<string, string>;
   /** The open conversation's queue of follow-up messages. */
   followUpSource: FollowUpSource;
   sendBlock: SendBlock | undefined;

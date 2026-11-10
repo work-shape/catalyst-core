@@ -253,7 +253,8 @@ export function WorkspaceChrome({
   selectedAgentName,
   showAgentSelector,
   onSelectAgent,
-  onOpenSidebar
+  onOpenSidebar,
+  trailing
 }: {
   agentDisplay: AgentChipDisplay;
   agents: SafeConfig["agents"];
@@ -272,6 +273,8 @@ export function WorkspaceChrome({
   showAgentSelector: boolean;
   onSelectAgent: (agentName: string) => void;
   onOpenSidebar: () => void;
+  /** At the header's end on a conversation, such as who reads the chat (CHAT-SHARE-2). */
+  trailing?: ReactNode;
 }) {
   const { t } = useTranslation();
   const besideSurface = surfaceBesideWidth > 0;
@@ -339,6 +342,17 @@ export function WorkspaceChrome({
           />
         ) : null}
       </div>
+      {conversation && trailing ? (
+        <div
+          data-header-trailing=""
+          className={cn(
+            "pointer-events-auto ml-auto flex min-w-0 items-center gap-1",
+            floating && "md:-m-2 md:bg-background md:p-2"
+          )}
+        >
+          {trailing}
+        </div>
+      ) : null}
     </header>
   );
 }

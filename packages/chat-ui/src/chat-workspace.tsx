@@ -11,6 +11,7 @@ import {
 import { cn, SkipLink, Spinner, UiRoot, useExit } from "@work-shape/catalyst-ui";
 import { DocsAddressProvider } from "@work-shape/catalyst-ui";
 import { DEFAULT_THEME_INPUTS } from "@work-shape/catalyst-ui/theme";
+import type { Conversation } from "@work-shape/catalyst-api-client";
 import { CONNECTION_OAUTH_ADMIN_CONSENTED } from "@work-shape/catalyst-core";
 import { startNewAgent } from "./studio/agents/agents-model";
 import { AgentsPage } from "./studio/agents/agents-page";
@@ -104,6 +105,8 @@ import { WorkspaceRail } from "./chat/workspace/workspace-rail";
 import { type WorkspaceRoute, type WorkspaceRouteChangeOptions } from "./shared/workspace-route";
 import { workspaceRoutePath } from "./shared/routes";
 import { useWorkspaceChatModel, WORKSPACE_AUTH_SCOPE } from "./chat/workspace/workspace-chat-model";
+import { ChatShareProvider } from "./chat/share/chat-share";
+import { ChatPeopleHead } from "./chat/share/chat-people";
 import { WorkspaceProviders } from "./chat/workspace/workspace-providers";
 import { useRequestLocale } from "./shared/api/workspace-api-client";
 import {
@@ -295,6 +298,8 @@ function ChatWorkspaceContent({
   });
   // The plus of the rail's Projects group asked to make a project in the open workspace.
   const [creatingProject, setCreatingProject] = useState(false);
+  // The rail's "Share…" asked for this chat's panel "Who can see this chat" (CHAT-SHARE-2).
+  const [shareRequest, setShareRequest] = useState<string>();
   const chatCovered = onChatRoute && chatSurface.covering && displayPanel.open;
   // The header's button that opens the sidebar leaves the tab order where a surface covers it.
   const headerCovered = inboxRoute
@@ -582,6 +587,14 @@ function ChatWorkspaceContent({
     model.chrome.requestComposerFocus();
   };
 
+  // The open chat, as its sharing reads it (CHAT-SHARE-2).
+  const sharedConversation = chat.selectedConversation;
+  const resourcesToggleShown =
+    resourcesAvailable &&
+    Boolean(resourcesConversationId) &&
+    resourcesPanel.hasResources &&
+    !resourcesShown;
+
   const dockConversationId = dock.conversationId;
   // The dock names its conversation by the loaded thread, and by its row until then.
   const dockTitle =
@@ -855,363 +868,408 @@ function ChatWorkspaceContent({
             onReloadConversations={rail.reloadConversations}
             onRenameConversation={rail.renameConversation}
             onMoveConversation={rail.moveConversation}
+            viewerId={model.auth.user.id}
+            // Only a team's chats are shared with single people; a Personal Workspace's stay its owner's.
+            {...(activeWorkspace?.kind === "shared"
+              ? {
+                  onShareConversation: (conversationId: string) => {
+                    setShareRequest(conversationId);
+                    if (conversationId !== chat.selectedConversationId) {
+                      openConversation(conversationId);
+                    } else {
+                      closeDrawer();
+                    }
+                  }
+                }
+              : {})}
             onDeleteConversation={rail.deleteConversation}
           />
 
-          <div
-            id={CONTENT_ID}
-            ref={dockView.measure}
-            tabIndex={-1}
-            // Clipped, not hidden: a panel on its way in or out reaches past the edge, and
-            // nothing that takes the focus there may scroll the frame sideways.
-            className="group/workspace-content relative flex min-w-0 flex-1 overflow-clip outline-none"
+          <ChatShareProvider
+            client={chat.client}
+            apiBaseUrl={model.auth.apiBaseUrl}
+            authScope={WORKSPACE_AUTH_SCOPE}
+            viewer={{ id: model.auth.user.id, label: userLabel }}
+            workspaceName={activeWorkspaceName}
+            conversation={sharedConversation}
+            {...(rail.canMoveConversation
+              ? {
+                  onMove: (conversation: Conversation) =>
+                    rail.moveConversation(conversation.id, conversation.title)
+                }
+              : {})}
+            onLeft={startNewChat}
+            runSenders={chat.runSenders}
+            panelRequested={shareRequest !== undefined && shareRequest === sharedConversation?.id}
+            onPanelRequestHandled={() => setShareRequest(undefined)}
           >
-            <WorkspaceChrome
-              agents={model.config.config.agents}
-              agentDisplay={agentChipDisplayFor(model.config.config.ui)}
-              // An App takes the whole main area, and so do a Workflow and a Studio page: the
-              // band gives way to the pinned head they stand under, which it would cover, and so
-              // does it to a sub-rail that names its area. In a narrow window a list scrolls
-              // under the band like a conversation; from 768 px up a page has no band.
-              conversation={onChatRoute}
-              // Only beside a conversation does a surface share the main area with the band.
-              surfaceBesideWidth={onChatRoute ? chatSurface.besideWidth : 0}
-              covered={headerCovered}
-              selectedAgentName={model.config.activeAgentName}
-              // Only a conversation has an agent to choose: no other area has one. Until its
-              // thread has loaded, the agent it was held with is not known (T30).
-              showAgentSelector={onChatRoute && !onStartPage && !model.config.activeAgentLoading}
-              onSelectAgent={model.config.selectAgentName}
-              onOpenSidebar={model.chrome.openSidebarDrawer}
-            />
-
-            {collaborationWorkspacesAvailable ? (
-              <CollaborationWorkspacePanel
-                apiBaseUrl={model.auth.apiBaseUrl}
-                authScope={WORKSPACE_AUTH_SCOPE}
-                client={chat.client}
-                userLabel={userLabel}
-                collaborationWorkspaces={collaborationWorkspace.collaborationWorkspaces}
-                activeCollaborationWorkspaceId={
-                  collaborationWorkspace.activeCollaborationWorkspaceId
-                }
-                dialog={collaborationWorkspace.dialog}
-                onClose={collaborationWorkspace.closeDialog}
-                onCollaborationWorkspaceCreated={
-                  collaborationWorkspace.selectCollaborationWorkspace
-                }
-                onConversationMoved={collaborationWorkspace.conversationMoved}
-              />
-            ) : null}
-
-            <DockAgentWorkContext.Provider
-              value={dockView.mode === undefined ? undefined : dockAgentWork}
+            <div
+              id={CONTENT_ID}
+              ref={dockView.measure}
+              tabIndex={-1}
+              // Clipped, not hidden: a panel on its way in or out reaches past the edge, and
+              // nothing that takes the focus there may scroll the frame sideways.
+              className="group/workspace-content relative flex min-w-0 flex-1 overflow-clip outline-none"
             >
-              <ApprovalRevisionHostProvider value={model.approvalRevision}>
-                <AppsHostProvider value={appsHost}>
-                  {/* Around every area: a Data Store's page in Studio links to the Workflows
+              <WorkspaceChrome
+                agents={model.config.config.agents}
+                agentDisplay={agentChipDisplayFor(model.config.config.ui)}
+                // An App takes the whole main area, and so do a Workflow and a Studio page: the
+                // band gives way to the pinned head they stand under, which it would cover, and so
+                // does it to a sub-rail that names its area. In a narrow window a list scrolls
+                // under the band like a conversation; from 768 px up a page has no band.
+                conversation={onChatRoute}
+                // Only beside a conversation does a surface share the main area with the band.
+                surfaceBesideWidth={onChatRoute ? chatSurface.besideWidth : 0}
+                covered={headerCovered}
+                selectedAgentName={model.config.activeAgentName}
+                // Only a conversation has an agent to choose: no other area has one. Until its
+                // thread has loaded, the agent it was held with is not known (T30).
+                showAgentSelector={onChatRoute && !onStartPage && !model.config.activeAgentLoading}
+                onSelectAgent={model.config.selectAgentName}
+                onOpenSidebar={model.chrome.openSidebarDrawer}
+                trailing={
+                  onStartPage ? undefined : (
+                    // Clear of the Resources button, which stands at the same end.
+                    <div className={cn("flex items-center gap-1", resourcesToggleShown && "mr-12")}>
+                      <ChatPeopleHead />
+                    </div>
+                  )
+                }
+              />
+
+              {collaborationWorkspacesAvailable ? (
+                <CollaborationWorkspacePanel
+                  apiBaseUrl={model.auth.apiBaseUrl}
+                  authScope={WORKSPACE_AUTH_SCOPE}
+                  client={chat.client}
+                  userLabel={userLabel}
+                  collaborationWorkspaces={collaborationWorkspace.collaborationWorkspaces}
+                  activeCollaborationWorkspaceId={
+                    collaborationWorkspace.activeCollaborationWorkspaceId
+                  }
+                  dialog={collaborationWorkspace.dialog}
+                  onClose={collaborationWorkspace.closeDialog}
+                  onCollaborationWorkspaceCreated={
+                    collaborationWorkspace.selectCollaborationWorkspace
+                  }
+                  onConversationMoved={collaborationWorkspace.conversationMoved}
+                />
+              ) : null}
+
+              <DockAgentWorkContext.Provider
+                value={dockView.mode === undefined ? undefined : dockAgentWork}
+              >
+                <ApprovalRevisionHostProvider value={model.approvalRevision}>
+                  <AppsHostProvider value={appsHost}>
+                    {/* Around every area: a Data Store's page in Studio links to the Workflows
                     that use the store. */}
-                  <WorkflowsHostWithRecipients
-                    value={workflowsHost}
-                    api={{
-                      apiBaseUrl: model.auth.apiBaseUrl,
-                      authScope: WORKSPACE_AUTH_SCOPE,
-                      client: chat.client
-                    }}
-                    viewer={{ id: model.auth.user.id, name: userLabel }}
-                    workspaces={collaborationWorkspace.collaborationWorkspaces.map((workspace) => ({
-                      id: workspace.id,
-                      name: collaborationWorkspaceDisplayName(workspace, userLabel, t)
-                    }))}
-                    readsPeople={readsRecipientPeople(
-                      model.route.route,
-                      canManageUsers(model.auth.user)
-                    )}
-                  >
-                    <ConnectionDraftHostProvider value={connectionDraft}>
-                      <ConnectionGiveCardHostProvider value={connectionGive}>
-                        <QuestionHostProvider value={questionHost}>
-                          <DataStoreUseHostProvider value={dataStoreUseHost}>
-                            <AgentTryHostProvider value={agentTry.host}>
-                              {dockView.mode === undefined ? null : (
-                                <DockedChat
-                                  view={{ ...dockView, mode: dockView.mode }}
-                                  dock={dock}
-                                  title={dockTitle}
-                                  agent={dockAgent}
-                                  {...(agentTry.view === undefined
-                                    ? {}
-                                    : { agentTry: agentTry.view })}
-                                  onOpenFullChat={
-                                    dockConversationId === undefined
-                                      ? undefined
-                                      : () => openConversation(dockConversationId)
-                                  }
-                                  onNewChat={model.dockChat.newChat}
-                                  onAgentWork={setDockAgentWork}
-                                >
-                                  <section className="relative h-full min-h-0 min-w-0">
-                                    <AddFromProjectProvider
-                                      target={
-                                        model.projects.enabled && chat.selectedConversationId
-                                          ? {
-                                              conversationId: chat.selectedConversationId,
-                                              projectId: model.projects.selectedProjectId,
-                                              agentName: model.config.activeAgentName
-                                            }
-                                          : undefined
-                                      }
-                                    >
-                                      <AttachmentContentProvider
-                                        client={chat.client}
-                                        selectedConversationId={chat.selectedConversationId}
+                    <WorkflowsHostWithRecipients
+                      value={workflowsHost}
+                      api={{
+                        apiBaseUrl: model.auth.apiBaseUrl,
+                        authScope: WORKSPACE_AUTH_SCOPE,
+                        client: chat.client
+                      }}
+                      viewer={{ id: model.auth.user.id, name: userLabel }}
+                      workspaces={collaborationWorkspace.collaborationWorkspaces.map(
+                        (workspace) => ({
+                          id: workspace.id,
+                          name: collaborationWorkspaceDisplayName(workspace, userLabel, t)
+                        })
+                      )}
+                      readsPeople={readsRecipientPeople(
+                        model.route.route,
+                        canManageUsers(model.auth.user)
+                      )}
+                    >
+                      <ConnectionDraftHostProvider value={connectionDraft}>
+                        <ConnectionGiveCardHostProvider value={connectionGive}>
+                          <QuestionHostProvider value={questionHost}>
+                            <DataStoreUseHostProvider value={dataStoreUseHost}>
+                              <AgentTryHostProvider value={agentTry.host}>
+                                {dockView.mode === undefined ? null : (
+                                  <DockedChat
+                                    view={{ ...dockView, mode: dockView.mode }}
+                                    dock={dock}
+                                    title={dockTitle}
+                                    agent={dockAgent}
+                                    {...(agentTry.view === undefined
+                                      ? {}
+                                      : { agentTry: agentTry.view })}
+                                    onOpenFullChat={
+                                      dockConversationId === undefined
+                                        ? undefined
+                                        : () => openConversation(dockConversationId)
+                                    }
+                                    onNewChat={model.dockChat.newChat}
+                                    onAgentWork={setDockAgentWork}
+                                  >
+                                    <section className="relative h-full min-h-0 min-w-0">
+                                      <AddFromProjectProvider
+                                        target={
+                                          model.projects.enabled && chat.selectedConversationId
+                                            ? {
+                                                conversationId: chat.selectedConversationId,
+                                                projectId: model.projects.selectedProjectId,
+                                                agentName: model.config.activeAgentName
+                                              }
+                                            : undefined
+                                        }
                                       >
-                                        <PageHostProvider
-                                          conversationId={chat.selectedConversationId}
-                                          {...pageHost}
+                                        <AttachmentContentProvider
+                                          client={chat.client}
+                                          selectedConversationId={chat.selectedConversationId}
                                         >
-                                          {wrapProjectStart(
-                                            <div
-                                              ref={setSplitAreaElement}
-                                              className="flex h-full min-h-0 min-w-0"
-                                            >
+                                          <PageHostProvider
+                                            conversationId={chat.selectedConversationId}
+                                            {...pageHost}
+                                          >
+                                            {wrapProjectStart(
                                               <div
-                                                className={cn(
-                                                  "relative h-full min-h-0 min-w-0 flex-1",
-                                                  // The card's width of 22rem and its gap of 1.5rem to the edge,
-                                                  // so the thread centres with equal gaps to the sidebar and to
-                                                  // the card. It is less than the split minimum: a card that has
-                                                  // room beside the conversation leaves it its minimum too.
-                                                  resourcesInset && "[--resources-inset:23.5rem]"
-                                                )}
-                                                // Under a surface that covers it the chat leaves the tab order.
-                                                inert={chatCovered}
-                                                onDragEnter={chatDrop?.onChatDragEnter}
-                                                onDragOver={chatDrop?.onChatDragOver}
-                                                onDragLeave={chatDrop?.onChatDragLeave}
-                                                onDrop={chatDrop?.onChatDrop}
+                                                ref={setSplitAreaElement}
+                                                className="flex h-full min-h-0 min-w-0"
                                               >
-                                                <DockConversationPane
-                                                  chat={chat}
-                                                  agentTry={agentTry.pane}
-                                                  buildUnoffered={buildUnoffered}
-                                                />
-                                                {chatDrop?.draggingFiles ? (
-                                                  <ChatDropOverlay />
-                                                ) : null}
-                                                {resourcesAvailable &&
-                                                resourcesConversationId &&
-                                                resourcesPanel.hasResources &&
-                                                !resourcesShown ? (
-                                                  <ResourcesPanelToggle
-                                                    onOpen={() => {
-                                                      displayPanel.close();
-                                                      resourcesPanel.openExplicitly();
-                                                    }}
+                                                <div
+                                                  className={cn(
+                                                    "relative h-full min-h-0 min-w-0 flex-1",
+                                                    // The card's width of 22rem and its gap of 1.5rem to the edge,
+                                                    // so the thread centres with equal gaps to the sidebar and to
+                                                    // the card. It is less than the split minimum: a card that has
+                                                    // room beside the conversation leaves it its minimum too.
+                                                    resourcesInset && "[--resources-inset:23.5rem]"
+                                                  )}
+                                                  // Under a surface that covers it the chat leaves the tab order.
+                                                  inert={chatCovered}
+                                                  onDragEnter={chatDrop?.onChatDragEnter}
+                                                  onDragOver={chatDrop?.onChatDragOver}
+                                                  onDragLeave={chatDrop?.onChatDragLeave}
+                                                  onDrop={chatDrop?.onChatDrop}
+                                                >
+                                                  <DockConversationPane
+                                                    chat={chat}
+                                                    agentTry={agentTry.pane}
+                                                    buildUnoffered={buildUnoffered}
+                                                  />
+                                                  {chatDrop?.draggingFiles ? (
+                                                    <ChatDropOverlay />
+                                                  ) : null}
+                                                  {resourcesAvailable &&
+                                                  resourcesConversationId &&
+                                                  resourcesPanel.hasResources &&
+                                                  !resourcesShown ? (
+                                                    <ResourcesPanelToggle
+                                                      onOpen={() => {
+                                                        displayPanel.close();
+                                                        resourcesPanel.openExplicitly();
+                                                      }}
+                                                    />
+                                                  ) : null}
+                                                </div>
+                                                {/* Beside a page the dock's surfaces cover the page instead. */}
+                                                {onChatRoute ? (
+                                                  <SurfaceSlot
+                                                    onBesideWidthChange={
+                                                      chatSurface.reportBesideWidth
+                                                    }
+                                                    onCoveringChange={chatSurface.reportCovering}
                                                   />
                                                 ) : null}
                                               </div>
-                                              {/* Beside a page the dock's surfaces cover the page instead. */}
-                                              {onChatRoute ? (
-                                                <SurfaceSlot
-                                                  onBesideWidthChange={
-                                                    chatSurface.reportBesideWidth
-                                                  }
-                                                  onCoveringChange={chatSurface.reportCovering}
-                                                />
-                                              ) : null}
-                                            </div>
-                                          )}
-                                          {/* Placed in the main area, not in the conversation: it keeps its
+                                            )}
+                                            {/* Placed in the main area, not in the conversation: it keeps its
                                 place when a surface takes room from the conversation. */}
-                                          {resourcesExit.held ? (
-                                            <ResourcesPanel
-                                              client={resourcesPanel.client}
-                                              conversationId={resourcesExit.held}
-                                              {...resourcesPanel.contents}
-                                              onClose={resourcesPanel.close}
-                                              open
-                                              leaving={resourcesExit.leaving}
-                                              covered={displayPanel.open}
-                                              onAnimationEnd={resourcesExit.onAnimationEnd}
-                                            />
-                                          ) : null}
-                                        </PageHostProvider>
-                                      </AttachmentContentProvider>
-                                    </AddFromProjectProvider>
-                                  </section>
-                                </DockedChat>
-                              )}
-                              {onChatRoute ? null : (
-                                // What the dock's conversation opens covers the page beside it, an App
-                                // or a Page among it: that surface is told who looks at it, as it is
-                                // beside the conversation, or the App waits for an answer to `ready`.
-                                <PageHostProvider
-                                  conversationId={chat.selectedConversationId}
-                                  {...pageHost}
-                                >
-                                  <DockedPage
-                                    view={dockView}
-                                    dock={dock}
-                                    running={chat.conversationRunning}
-                                    shortcut={workspaceShortcutLabel("chat")}
-                                    onChat={openDockChat}
+                                            {resourcesExit.held ? (
+                                              <ResourcesPanel
+                                                client={resourcesPanel.client}
+                                                conversationId={resourcesExit.held}
+                                                {...resourcesPanel.contents}
+                                                onClose={resourcesPanel.close}
+                                                open
+                                                leaving={resourcesExit.leaving}
+                                                covered={displayPanel.open}
+                                                onAnimationEnd={resourcesExit.onAnimationEnd}
+                                              />
+                                            ) : null}
+                                          </PageHostProvider>
+                                        </AttachmentContentProvider>
+                                      </AddFromProjectProvider>
+                                    </section>
+                                  </DockedChat>
+                                )}
+                                {onChatRoute ? null : (
+                                  // What the dock's conversation opens covers the page beside it, an App
+                                  // or a Page among it: that surface is told who looks at it, as it is
+                                  // beside the conversation, or the App waits for an answer to `ready`.
+                                  <PageHostProvider
+                                    conversationId={chat.selectedConversationId}
+                                    {...pageHost}
                                   >
-                                    <DockPageChatProvider value={model.dockChat.offerPageChat}>
-                                      <DockCreationScopeProvider
-                                        value={model.dockChat.offerCreationScope}
-                                      >
-                                        <ControlPlaneRoutes
-                                          controlPlane={model.controlPlane}
-                                          agentsArea={
-                                            agentsRoute ? (
-                                              <AgentsPage
-                                                agents={model.config.config.agents}
-                                                defaultAgentName={
-                                                  model.config.config.defaultAgentName
-                                                }
-                                                status={model.agents.status}
-                                                onRetry={model.agents.retry}
-                                                onStartChat={model.agents.startChat}
-                                                onOpenStudio={
-                                                  model.controlPlane.canOpenAgentsInBuild
-                                                    ? model.route.showRoute
-                                                    : undefined
-                                                }
-                                                newAgent={
-                                                  model.controlPlane.agentCreation
-                                                    ? {
-                                                        ...model.controlPlane.agentCreation,
-                                                        startsIn: {
-                                                          workspace:
-                                                            activeWorkspace?.kind === "shared"
-                                                              ? {
-                                                                  id: activeWorkspace.id,
-                                                                  name: activeWorkspace.name
-                                                                }
-                                                              : undefined,
-                                                          mayChooseAll:
-                                                            model.controlPlane.agentCreation
-                                                              .mayChooseAll
-                                                        },
-                                                        onStart: (start) =>
-                                                          startNewAgent(
-                                                            model.route.showRoute,
-                                                            start
-                                                          )
-                                                      }
-                                                    : undefined
-                                                }
-                                              />
-                                            ) : undefined
-                                          }
-                                          appsArea={
-                                            appsRoute ? (
-                                              // An App is told who looks at it and how the interface looks, as a Page is.
-                                              <PageHostProvider
-                                                conversationId={undefined}
-                                                {...pageHost}
-                                              >
-                                                <AppsArea route={appsRoute} />
-                                              </PageHostProvider>
-                                            ) : undefined
-                                          }
-                                          workflowsArea={
-                                            workflowsRoute ? (
-                                              model.workflows.access === "open" ? (
-                                                <WorkflowsArea route={workflowsRoute} />
-                                              ) : (
-                                                <div className="h-full bg-background" />
-                                              )
-                                            ) : undefined
-                                          }
-                                          projectsArea={
-                                            projectsRoute &&
-                                            activeWorkspace &&
-                                            activeWorkspaceName ? (
-                                              <ProjectsArea
-                                                route={projectsRoute}
-                                                workspace={{
-                                                  id: activeWorkspace.id,
-                                                  name: activeWorkspaceName,
-                                                  kind: activeWorkspace.kind,
-                                                  emoji: activeWorkspace.emoji,
-                                                  defaultConversationVisibility:
-                                                    activeWorkspace.defaultConversationVisibility
-                                                }}
-                                                workspaces={projectWorkspaces}
-                                                onOpenRoute={model.route.showRoute}
-                                              />
-                                            ) : undefined
-                                          }
-                                          scheduledArea={
-                                            scheduledRoute ? (
-                                              <ScheduledPage
-                                                key={scheduledRoute.collaborationWorkspaceId}
-                                                workspaceId={
-                                                  scheduledRoute.collaborationWorkspaceId
-                                                }
-                                                agents={model.config.config.agents}
-                                                defaultAgentName={
-                                                  model.config.config.defaultAgentName
-                                                }
-                                                {...(model.controlPlane.canViewBuild
-                                                  ? {
-                                                      connectionsRoute: {
-                                                        kind: "build-kind",
-                                                        assetKind: CONNECTIONS_BUILD_PATH
-                                                      }
-                                                    }
-                                                  : {})}
-                                                onOpenRoute={model.route.showRoute}
-                                              />
-                                            ) : undefined
-                                          }
-                                          inboxArea={
-                                            inboxRoute ? (
-                                              <InboxArea
-                                                itemId={
-                                                  inboxRoute.kind === "inbox-item"
-                                                    ? inboxRoute.itemId
-                                                    : undefined
-                                                }
-                                                {...(inboxRoute.kind === "inbox-agent"
-                                                  ? { agentName: inboxRoute.agentName }
-                                                  : {})}
-                                                onOpenItem={(itemId) =>
-                                                  model.route.showRoute({
-                                                    kind: "inbox-item",
-                                                    itemId
-                                                  })
-                                                }
-                                                onCloseItem={() =>
-                                                  model.route.showRoute({ kind: "inbox" })
-                                                }
-                                                onBesideWidthChange={inboxSurface.reportBesideWidth}
-                                                onCoveringChange={inboxSurface.reportCovering}
-                                              />
-                                            ) : undefined
-                                          }
+                                    <DockedPage
+                                      view={dockView}
+                                      dock={dock}
+                                      running={chat.conversationRunning}
+                                      shortcut={workspaceShortcutLabel("chat")}
+                                      onChat={openDockChat}
+                                    >
+                                      <DockPageChatProvider value={model.dockChat.offerPageChat}>
+                                        <DockCreationScopeProvider
+                                          value={model.dockChat.offerCreationScope}
                                         >
-                                          {model.route.view === "not-found" ? (
-                                            <RouteNotFound onOpenChat={startNewChat} />
-                                          ) : null}
-                                        </ControlPlaneRoutes>
-                                      </DockCreationScopeProvider>
-                                    </DockPageChatProvider>
-                                  </DockedPage>
-                                </PageHostProvider>
-                              )}
-                            </AgentTryHostProvider>
-                          </DataStoreUseHostProvider>
-                        </QuestionHostProvider>
-                      </ConnectionGiveCardHostProvider>
-                    </ConnectionDraftHostProvider>
-                  </WorkflowsHostWithRecipients>
-                </AppsHostProvider>
-              </ApprovalRevisionHostProvider>
-            </DockAgentWorkContext.Provider>
-          </div>
+                                          <ControlPlaneRoutes
+                                            controlPlane={model.controlPlane}
+                                            agentsArea={
+                                              agentsRoute ? (
+                                                <AgentsPage
+                                                  agents={model.config.config.agents}
+                                                  defaultAgentName={
+                                                    model.config.config.defaultAgentName
+                                                  }
+                                                  status={model.agents.status}
+                                                  onRetry={model.agents.retry}
+                                                  onStartChat={model.agents.startChat}
+                                                  onOpenStudio={
+                                                    model.controlPlane.canOpenAgentsInBuild
+                                                      ? model.route.showRoute
+                                                      : undefined
+                                                  }
+                                                  newAgent={
+                                                    model.controlPlane.agentCreation
+                                                      ? {
+                                                          ...model.controlPlane.agentCreation,
+                                                          startsIn: {
+                                                            workspace:
+                                                              activeWorkspace?.kind === "shared"
+                                                                ? {
+                                                                    id: activeWorkspace.id,
+                                                                    name: activeWorkspace.name
+                                                                  }
+                                                                : undefined,
+                                                            mayChooseAll:
+                                                              model.controlPlane.agentCreation
+                                                                .mayChooseAll
+                                                          },
+                                                          onStart: (start) =>
+                                                            startNewAgent(
+                                                              model.route.showRoute,
+                                                              start
+                                                            )
+                                                        }
+                                                      : undefined
+                                                  }
+                                                />
+                                              ) : undefined
+                                            }
+                                            appsArea={
+                                              appsRoute ? (
+                                                // An App is told who looks at it and how the interface looks, as a Page is.
+                                                <PageHostProvider
+                                                  conversationId={undefined}
+                                                  {...pageHost}
+                                                >
+                                                  <AppsArea route={appsRoute} />
+                                                </PageHostProvider>
+                                              ) : undefined
+                                            }
+                                            workflowsArea={
+                                              workflowsRoute ? (
+                                                model.workflows.access === "open" ? (
+                                                  <WorkflowsArea route={workflowsRoute} />
+                                                ) : (
+                                                  <div className="h-full bg-background" />
+                                                )
+                                              ) : undefined
+                                            }
+                                            projectsArea={
+                                              projectsRoute &&
+                                              activeWorkspace &&
+                                              activeWorkspaceName ? (
+                                                <ProjectsArea
+                                                  route={projectsRoute}
+                                                  workspace={{
+                                                    id: activeWorkspace.id,
+                                                    name: activeWorkspaceName,
+                                                    kind: activeWorkspace.kind,
+                                                    emoji: activeWorkspace.emoji,
+                                                    defaultConversationVisibility:
+                                                      activeWorkspace.defaultConversationVisibility
+                                                  }}
+                                                  workspaces={projectWorkspaces}
+                                                  onOpenRoute={model.route.showRoute}
+                                                />
+                                              ) : undefined
+                                            }
+                                            scheduledArea={
+                                              scheduledRoute ? (
+                                                <ScheduledPage
+                                                  key={scheduledRoute.collaborationWorkspaceId}
+                                                  workspaceId={
+                                                    scheduledRoute.collaborationWorkspaceId
+                                                  }
+                                                  agents={model.config.config.agents}
+                                                  defaultAgentName={
+                                                    model.config.config.defaultAgentName
+                                                  }
+                                                  {...(model.controlPlane.canViewBuild
+                                                    ? {
+                                                        connectionsRoute: {
+                                                          kind: "build-kind",
+                                                          assetKind: CONNECTIONS_BUILD_PATH
+                                                        }
+                                                      }
+                                                    : {})}
+                                                  onOpenRoute={model.route.showRoute}
+                                                />
+                                              ) : undefined
+                                            }
+                                            inboxArea={
+                                              inboxRoute ? (
+                                                <InboxArea
+                                                  itemId={
+                                                    inboxRoute.kind === "inbox-item"
+                                                      ? inboxRoute.itemId
+                                                      : undefined
+                                                  }
+                                                  {...(inboxRoute.kind === "inbox-agent"
+                                                    ? { agentName: inboxRoute.agentName }
+                                                    : {})}
+                                                  onOpenItem={(itemId) =>
+                                                    model.route.showRoute({
+                                                      kind: "inbox-item",
+                                                      itemId
+                                                    })
+                                                  }
+                                                  onCloseItem={() =>
+                                                    model.route.showRoute({ kind: "inbox" })
+                                                  }
+                                                  onBesideWidthChange={
+                                                    inboxSurface.reportBesideWidth
+                                                  }
+                                                  onCoveringChange={inboxSurface.reportCovering}
+                                                />
+                                              ) : undefined
+                                            }
+                                          >
+                                            {model.route.view === "not-found" ? (
+                                              <RouteNotFound onOpenChat={startNewChat} />
+                                            ) : null}
+                                          </ControlPlaneRoutes>
+                                        </DockCreationScopeProvider>
+                                      </DockPageChatProvider>
+                                    </DockedPage>
+                                  </PageHostProvider>
+                                )}
+                              </AgentTryHostProvider>
+                            </DataStoreUseHostProvider>
+                          </QuestionHostProvider>
+                        </ConnectionGiveCardHostProvider>
+                      </ConnectionDraftHostProvider>
+                    </WorkflowsHostWithRecipients>
+                  </AppsHostProvider>
+                </ApprovalRevisionHostProvider>
+              </DockAgentWorkContext.Provider>
+            </div>
+          </ChatShareProvider>
         </div>
         {activeWorkspace && activeWorkspaceName ? (
           <NewProjectDialog

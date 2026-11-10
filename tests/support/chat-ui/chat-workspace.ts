@@ -74,5 +74,6 @@ export { attachedFilesTitle } from "../../../packages/chat-ui/src/chat/workspace
 export { useConversationListRefresh } from "../../../packages/chat-ui/src/chat/workspace/use-conversation-list-refresh";
 export {
   RATE_LIMIT_CONTINUE_WAIT_MS,
-  rateLimitContinueOffer
+  rateLimitContinueOffer,
+  turnSenders
 } from "../../../packages/chat-ui/src/chat/workspace/workspace-chat-state";

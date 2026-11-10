@@ -42,6 +42,7 @@ import {
 } from "./recently-active-runs";
 import { isWorkspacePromotedSurfacesData } from "../tools/tool-surfaces";
 import { useFoldedCards } from "../conversation/card-fold-context";
+import { useChatShare } from "../share/chat-share";
 import {
   MessageFeedbackAction,
   MessageFeedbackPanel,
@@ -613,6 +614,8 @@ function UserMessage() {
   const activeAnchorId = useThreadViewport((state) => state.topAnchorTurn?.anchorId);
   const viewportStore = useThreadViewportStore();
   const anchorMarkerRef = useRef<HTMLDivElement>(null);
+  // In a chat that names people each message says who wrote it (CHAT-SHARE-2).
+  const sender = useChatShare()?.senderOf(messageId);
   // A picture or file sent alone stands above the message without an empty bubble under it.
   const hasContent = useAuiState((state) =>
     state.message.parts.some((part) => part.type !== "text" || part.text.trim().length > 0)
@@ -637,6 +640,11 @@ function UserMessage() {
         data-message-id={messageId}
         aria-hidden="true"
       />
+      {sender ? (
+        <span className="px-1 text-caption text-muted-foreground" data-testid="message-sender">
+          {sender}
+        </span>
+      ) : null}
       <MessageAttachments />
       {hasContent ? (
         <>

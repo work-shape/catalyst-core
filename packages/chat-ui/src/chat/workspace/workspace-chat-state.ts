@@ -167,6 +167,25 @@ export function withRunUnderway(
     : [...runAgents, { inputMessageId, agentName }];
 }
 
+/**
+ * Who sent each turn, by the message that started its run, as the thread names them on a chat
+ * that names people, with the run underway added (CHAT-SHARE-2).
+ */
+export function turnSenders(
+  runAgents: ReadonlyArray<{ inputMessageId: string; ownerUserId?: string }>,
+  activeInputMessageId: string | undefined,
+  activeOwnerUserId: string | undefined
+): ReadonlyMap<string, string> {
+  const senders = new Map<string, string>();
+  for (const run of runAgents) {
+    if (run.ownerUserId !== undefined) senders.set(run.inputMessageId, run.ownerUserId);
+  }
+  if (activeInputMessageId !== undefined && activeOwnerUserId !== undefined) {
+    senders.set(activeInputMessageId, activeOwnerUserId);
+  }
+  return senders;
+}
+
 // The code a run is failed with when no worker took it within its queue limit.
 const RUN_NOT_STARTED_CODE = "AGENT_RUN_NOT_STARTED";
 

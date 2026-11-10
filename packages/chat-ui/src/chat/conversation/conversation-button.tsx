@@ -9,7 +9,9 @@ import {
   Lock,
   MoreHorizontal,
   Pencil,
-  Trash2
+  Trash2,
+  UserPlus,
+  Users
 } from "lucide-react";
 import type { ConversationListItem, SafeConfig } from "@work-shape/catalyst-api-client";
 import {
@@ -27,7 +29,8 @@ import {
   TypedText
 } from "@work-shape/catalyst-ui";
 import { conversationTitle, NEW_CONVERSATION_TITLE } from "../../shared/conversation-title";
-import { useTranslation } from "../../shared/i18n";
+import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
+import { listNames } from "../share/share-words";
 import { retentionWarningDate, retentionWarningText } from "./retention-warning";
 
 export function ConversationButton({
@@ -37,6 +40,8 @@ export function ConversationButton({
   onSelect,
   onRename,
   onMove,
+  onShare,
+  viewerId,
   onMoveToProject,
   onRemoveFromProject,
   onDelete,
@@ -53,6 +58,10 @@ export function ConversationButton({
   onRename: (title: string) => Promise<void>;
   /** Absent while the user belongs to a single Collaboration Workspace. */
   onMove?: () => void;
+  /** Opens the chat's panel "Who can see this chat": for the creator of a private chat (CHAT-SHARE-2). */
+  onShare?: () => void;
+  /** The person reading the rail: the people mark names everyone else who reads the chat. */
+  viewerId?: string;
   /** Present while projects are on and the person wrote the conversation (PRJ-1). */
   onMoveToProject?: () => void;
   /** Present while projects are on and the conversation is in a project. */
@@ -62,6 +71,7 @@ export function ConversationButton({
 }) {
   const { locale, t } = useTranslation();
   const title = conversationTitle(conversation.title, t);
+  const sharedWith = sharedWithLabel(conversation, viewerId, t);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(title);
@@ -201,6 +211,19 @@ export function ConversationButton({
           <Pencil size={15} aria-hidden="true" />
           <span>{t("renameConversationMenuItem")}</span>
         </ThreadListItemMorePrimitive.Item>
+        {onShare ? (
+          <ThreadListItemMorePrimitive.Item
+            className={cn(
+              "flex min-h-9 cursor-default select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none transition-colors",
+              "focus:bg-accent data-[highlighted]:bg-accent data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+            )}
+            disabled={deleting || saving}
+            onSelect={onShare}
+          >
+            <UserPlus size={15} aria-hidden="true" />
+            <span>{t("chatShare.menuItem")}</span>
+          </ThreadListItemMorePrimitive.Item>
+        ) : null}
         {onMove ? (
           <ThreadListItemMorePrimitive.Item
             className={cn(
@@ -352,7 +375,18 @@ export function ConversationButton({
                   <Folder className="size-3" aria-hidden="true" />
                 </span>
               ) : null}
-              {conversation.visibility === "private" ? (
+              {sharedWith ? (
+                // A shared chat carries the people mark in place of the lock, for every reader.
+                <span
+                  className="shrink-0 text-muted-foreground"
+                  data-testid="conversation-shared-marker"
+                  role="img"
+                  aria-label={sharedWith}
+                  title={sharedWith}
+                >
+                  <Users className="size-3" aria-hidden="true" />
+                </span>
+              ) : conversation.visibility === "private" ? (
                 <span
                   className="shrink-0 text-muted-foreground"
                   data-testid="conversation-private-marker"
@@ -434,6 +468,26 @@ export function ConversationButton({
 }
 
 /** What holds the retention hint open: the pointer on the clock, the keyboard on the row. */
+/**
+ * "Shared with …" for a chat that names people: everyone who reads it but the reader, the
+ * creator among them. Nothing for a chat no one was named on.
+ */
+function sharedWithLabel(
+  conversation: ConversationListItem,
+  viewerId: string | undefined,
+  t: TranslationContextValue["t"]
+): string | undefined {
+  if (conversation.people.length === 0) return undefined;
+  const creator =
+    conversation.createdByUserId === viewerId
+      ? []
+      : [conversation.createdByDisplayLabel ?? t("chatShare.someone")];
+  const named = conversation.people
+    .filter((person) => person.userId !== viewerId)
+    .map((person) => person.displayLabel);
+  return t("chatShare.sharedWith", { names: listNames([...creator, ...named], t) });
+}
+
 export interface RetentionHintState {
   hovered: boolean;
   focused: boolean;

@@ -1,7 +1,7 @@
 import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import { Button } from "@work-shape/catalyst-ui";
 import { RouteLink } from "../../studio/route-link";
-import { useTranslation } from "../../shared/i18n";
+import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import type { WorkspaceRoute } from "../../shared/workspace-route";
 import { useApprovalRevisionHost } from "../approvals/approval-revision-host";
 import { ResultFeedback } from "../feedback/result-feedback";
@@ -12,7 +12,8 @@ import type { InboxItemActions } from "./inbox-item-actions";
 
 type NoticeLink =
   | { kind: "workflow_run"; workspaceId: string; workflowId: string; runId: string }
-  | { kind: "app"; workspaceId: string; app: string };
+  | { kind: "app"; workspaceId: string; app: string }
+  | { kind: "conversation"; workspaceId: string; conversationId: string };
 
 export interface NoticePreview {
   title: string;
@@ -35,6 +36,10 @@ function parseLink(value: unknown): NoticeLink | undefined {
   if (value.kind === "app" && typeof value.app === "string") {
     return { kind: "app", workspaceId, app: value.app };
   }
+  // A chat its creator shared with the person (CHAT-SHARE).
+  if (value.kind === "conversation" && typeof value.conversationId === "string") {
+    return { kind: "conversation", workspaceId, conversationId: value.conversationId };
+  }
   if (
     value.kind === "workflow_run" &&
     typeof value.workflowId === "string" &&
@@ -51,15 +56,30 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /** The place of the workspace a notice links to. */
 function noticeRoute(link: NoticeLink): WorkspaceRoute {
-  return link.kind === "app"
-    ? { kind: "app", collaborationWorkspaceId: link.workspaceId, app: link.app }
-    : {
+  switch (link.kind) {
+    case "app":
+      return { kind: "app", collaborationWorkspaceId: link.workspaceId, app: link.app };
+    case "conversation":
+      return {
+        kind: "conversation",
+        collaborationWorkspaceId: link.workspaceId,
+        conversationId: link.conversationId
+      };
+    case "workflow_run":
+      return {
         kind: "workflow-run",
         collaborationWorkspaceId: link.workspaceId,
         workflow: link.workflowId,
         run: link.runId
       };
+  }
 }
+
+const openLabels = {
+  app: "inbox.noticeOpenApp",
+  conversation: "chatShare.openChat",
+  workflow_run: "inbox.noticeOpenRun"
+} as const satisfies Record<NoticeLink["kind"], TranslationKey>;
 
 export function NoticeBody({ item }: { item: ApprovalRequestView }) {
   const { t } = useTranslation();
@@ -79,7 +99,7 @@ export function NoticeBody({ item }: { item: ApprovalRequestView }) {
             className="px-0"
             onOpen={(route) => host?.openRoute?.(route)}
           >
-            {t(notice.link.kind === "app" ? "inbox.noticeOpenApp" : "inbox.noticeOpenRun")}
+            {t(openLabels[notice.link.kind])}
           </RouteLink>
         </div>
       ) : null}
