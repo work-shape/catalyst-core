@@ -23,9 +23,10 @@ import {
   Spinner,
   Tooltip,
   TooltipContent,
-  TooltipTrigger
+  TooltipTrigger,
+  TypedText
 } from "@work-shape/catalyst-ui";
-import { conversationTitle } from "../../shared/conversation-title";
+import { conversationTitle, NEW_CONVERSATION_TITLE } from "../../shared/conversation-title";
 import { useTranslation } from "../../shared/i18n";
 import { retentionWarningDate, retentionWarningText } from "./retention-warning";
 
@@ -65,6 +66,12 @@ export function ConversationButton({
   const [editing, setEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(title);
   const [saving, setSaving] = useState(false);
+  // The title the person gave in this row stands at once, as does the placeholder, which only
+  // changes with the language. Every other title came from elsewhere while the row was shown,
+  // as the generated one and an agent's rename do, and is typed in.
+  const [titleByHand, setTitleByHand] = useState<string>();
+  const titleStands =
+    conversation.title === titleByHand || conversation.title === NEW_CONVERSATION_TITLE;
   const editorFormRef = useRef<HTMLFormElement | null>(null);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const renamingFromMenuRef = useRef(false);
@@ -142,6 +149,7 @@ export function ConversationButton({
 
     exitEditing();
     setSaving(true);
+    setTitleByHand(draft);
     try {
       await onRename(draft);
     } catch {
@@ -314,9 +322,11 @@ export function ConversationButton({
                   aria-label={t("conversationRunning")}
                 />
               ) : null}
-              <span
+              <TypedText
                 className="min-w-0 truncate"
                 title={title}
+                text={title}
+                still={titleStands}
                 onClick={(event) => {
                   if (!selected) {
                     return;
@@ -325,9 +335,7 @@ export function ConversationButton({
                   event.stopPropagation();
                   startEditing();
                 }}
-              >
-                {title}
-              </span>
+              />
               {waitsForDecision ? (
                 <Badge tone="warning" size="sm" dot data-testid="conversation-waits-for-you">
                   {t("conversationWaitsForYou")}
