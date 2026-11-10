@@ -762,6 +762,51 @@ describe("CHAT-SHARE-1: named people on a private chat", () => {
     await app.close();
   });
 
+  it("names who started each turn on a shared chat, also once that person was removed", async () => {
+    const { app, ids, conversationId } = await createFixture();
+    type Thread = {
+      runAgents: Array<{
+        inputMessageId: string;
+        ownerUserId?: string;
+        ownerDisplayLabel?: string;
+      }>;
+    };
+    const sendersFor = async (actor: string) => {
+      const thread = await app.call(
+        "conversations.thread.get",
+        { params: { conversationId } },
+        as(actor)
+      );
+      expect(thread.statusCode).toBe(200);
+      return thread.json<Thread>().runAgents.map(({ ownerUserId, ownerDisplayLabel }) => ({
+        ownerUserId,
+        ownerDisplayLabel
+      }));
+    };
+
+    // A chat that names nobody says nothing about who sent its turns.
+    await expect(sendersFor("creator")).resolves.toEqual([
+      { ownerUserId: undefined, ownerDisplayLabel: undefined }
+    ]);
+
+    expect((await share(app, conversationId, ids.named)).statusCode).toBe(200);
+    expect((await share(app, conversationId, ids.colleague)).statusCode).toBe(200);
+    await createRun(app, conversationId, ids.named, "completed");
+    const removed = await app.call(
+      "conversations.remove_person",
+      { params: { conversationId, userId: ids.named } },
+      as("creator")
+    );
+    expect(removed.statusCode).toBe(200);
+
+    // The removed person's turn stays attributed by name for the one who still reads.
+    await expect(sendersFor("colleague")).resolves.toEqual([
+      { ownerUserId: ids.creator, ownerDisplayLabel: "creator" },
+      { ownerUserId: ids.named, ownerDisplayLabel: "named" }
+    ]);
+    await app.close();
+  });
+
   it("offers only people the creator knows from the workspace, the ones named before first, and files the notice with a conversation link", async () => {
     const { app, ids, workspaceId, conversationId } = await createFixture();
     type Offered = { userId: string; email?: string; hasAccess: boolean };

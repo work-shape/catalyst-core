@@ -131,14 +131,20 @@ export class RunObservationWorkflow {
           : {}),
         ...(runAgents.length > 0
           ? {
-              runAgents: runAgents.map(({ inputMessageId, agentName, ownerUserId }) => ({
-                inputMessageId,
-                agentName,
-                // Who sent each turn, which a chat more than one person reads names (CHAT-SHARE-2).
-                ...(ownerUserId !== undefined && snapshotNamesSenders(conversation)
-                  ? { ownerUserId }
-                  : {})
-              }))
+              runAgents: runAgents.map(
+                ({ inputMessageId, agentName, ownerUserId, ownerDisplayLabel }) => ({
+                  inputMessageId,
+                  agentName,
+                  // Who sent each turn, by id and name, which a chat more than one person reads
+                  // names (CHAT-SHARE-2), also once that person no longer reads it.
+                  ...(snapshotNamesSenders(conversation)
+                    ? {
+                        ...(ownerUserId === undefined ? {} : { ownerUserId }),
+                        ...(ownerDisplayLabel === undefined ? {} : { ownerDisplayLabel })
+                      }
+                    : {})
+                })
+              )
             }
           : {}),
         // Synthetic until a backend read-marker mutation makes unread/read state product scope.

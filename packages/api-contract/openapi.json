@@ -53459,6 +53459,9 @@
                 },
                 "ownerUserId": {
                   "type": "string"
+                },
+                "ownerDisplayLabel": {
+                  "type": "string"
                 }
               },
               "required": [
