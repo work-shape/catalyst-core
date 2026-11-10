@@ -15,8 +15,37 @@ export interface KnowledgeSourceForm {
   include: string;
   /** Patterns on the path below the folders, one per line. Empty for none. */
   exclude: string;
-  /** The source's `schedule`, which this page does not edit and a save keeps. */
-  schedule?: unknown;
+  /** When the source syncs by itself (SRC-SYNC); a field left out is the instance's default. */
+  schedule?: KnowledgeSourceSchedule;
+}
+
+/** A source's `schedule` as the page edits it: `off` starts no pass of that mode. */
+export interface KnowledgeSourceSchedule {
+  /** Minutes between `changes` polls. */
+  changes?: number | typeof SYNC_OFF;
+  /** The full pass as a cron expression in the instance's time zone. */
+  full?: string;
+}
+
+/** A schedule field that starts no pass of its mode. */
+export const SYNC_OFF = "off";
+/** The full pass of a source that sets none: nightly at 02:00. */
+export const FULL_SYNC_DEFAULT = "0 2 * * *";
+
+/** Whether the source syncs by itself at all. */
+export function syncsByItself(schedule: KnowledgeSourceSchedule | undefined): boolean {
+  return !(schedule?.changes === SYNC_OFF && schedule.full === SYNC_OFF);
+}
+
+/** A stored `schedule`, as far as the page reads it. */
+function scheduleOf(value: unknown): KnowledgeSourceSchedule | undefined {
+  const changes = member(value, "changes");
+  const full = member(value, "full");
+  const schedule: KnowledgeSourceSchedule = {
+    ...(changes === SYNC_OFF || typeof changes === "number" ? { changes } : {}),
+    ...(typeof full === "string" ? { full } : {})
+  };
+  return Object.keys(schedule).length > 0 ? schedule : undefined;
 }
 
 /** The longest source id the definition takes. */
@@ -41,7 +70,7 @@ export function knowledgeSourcesFromConfig(value: unknown): KnowledgeSourceForm[
     const id = member(entry, "id");
     const connection = member(entry, "connection");
     if (typeof id !== "string" || typeof connection !== "string") return [];
-    const schedule = member(entry, "schedule");
+    const schedule = scheduleOf(member(entry, "schedule"));
     return [
       {
         id,
@@ -82,15 +111,27 @@ export function knowledgeSourcesToConfig(
   return sources.map((source) => {
     const include = patterns(source.include);
     const exclude = patterns(source.exclude);
+    const schedule = scheduleConfig(source.schedule);
     return {
       id: source.id,
       connection: source.connection,
       folders: sourceFolderIds(source.folders),
       ...(include.length > 0 ? { include } : {}),
       ...(exclude.length > 0 ? { exclude } : {}),
-      ...(source.schedule === undefined ? {} : { schedule: source.schedule })
+      ...(schedule === undefined ? {} : { schedule })
     };
   });
+}
+
+/** The `schedule` a save writes: a field left at its default is left out, and so is an empty one. */
+function scheduleConfig(
+  schedule: KnowledgeSourceSchedule | undefined
+): KnowledgeSourceSchedule | undefined {
+  const written = {
+    ...(schedule?.changes === undefined ? {} : { changes: schedule.changes }),
+    ...(schedule?.full === undefined ? {} : { full: schedule.full })
+  };
+  return Object.keys(written).length > 0 ? written : undefined;
 }
 
 /**

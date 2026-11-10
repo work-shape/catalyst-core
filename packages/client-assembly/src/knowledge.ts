@@ -14,6 +14,7 @@ import {
   modelRouteAllowedForPersonalData,
   personalDataConversation,
   type ClientInstanceId,
+  type DocumentSourceSchedule,
   type KnowledgeQueryEmbedder,
   type PlatformStores
 } from "@work-shape/catalyst-core";
@@ -304,6 +305,37 @@ const knowledgeRoutes: RouteRegistration = (routes) => {
 };
 
 /**
+ * What a synced source that sets nothing takes, by connector type (SRC-SYNC): the type's own
+ * `documentSource.schedule`, its `changes` replaced by `knowledge.sourcePollMinutes` where that
+ * names the type. A setting below the type's floor is refused here, as release config loads.
+ */
+export function knowledgeSourceDefaults(
+  sourcePollMinutes: Readonly<Record<string, number>>,
+  connectorTypes: readonly {
+    type: string;
+    documentSource?: { schedule?: DocumentSourceSchedule };
+  }[]
+): Record<string, DocumentSourceSchedule> {
+  const byType: Record<string, DocumentSourceSchedule> = {};
+  for (const definition of connectorTypes) {
+    const own = definition.documentSource?.schedule;
+    if (own) byType[definition.type] = { ...own };
+  }
+  for (const [type, minutes] of Object.entries(sourcePollMinutes)) {
+    const floor = byType[type]?.minChanges;
+    if (floor !== undefined && minutes < floor)
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `knowledge.sourcePollMinutes.${type} is ${minutes}, and the connector type '${type}' polls no more often than every ${floor} minutes`,
+        { reason: "knowledge_source_poll_below_floor" },
+        { exposeMessage: true }
+      );
+    byType[type] = { ...byType[type], changes: minutes };
+  }
+  return byType;
+}
+
+/**
  * What an instance with the module `knowledge` on has for its Knowledge Bases: the kind, the
  * operations of each with their routes, and the one agent tool over an agent's. The backend
  * is the Data Store, which an earlier seam offers: the module requires `dataStores`.
@@ -319,6 +351,10 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
   }
   const sourceJobs = earlier.find((assembly) => assembly.knowledgeSourceJobs)?.knowledgeSourceJobs;
   const embedding = knowledgeEmbedding(parts.config);
+  const sourceDefaults = knowledgeSourceDefaults(
+    parts.config.knowledge.sourcePollMinutes,
+    parts.connections?.connectorTypes.types ?? []
+  );
   let assertFieldBudgetPriced: (() => void) | undefined;
   const knowledgeBases = createKnowledgeBases({
     defaultLocale: parts.config.localization.defaultLocale,
@@ -350,6 +386,7 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
       ? KNOWLEDGE_DOCUMENT_FORMATS
       : KNOWLEDGE_TEXT_FORMATS,
     maxDocuments: parts.config.knowledge.maxDocuments,
+    sourceDefaults,
     maxPages: parts.config.knowledge.maxPagesPerDocument,
     indexConcurrency: parts.config.knowledge.indexConcurrency,
     assertFieldBudgetPriced: () => assertFieldBudgetPriced?.(),
@@ -415,7 +452,7 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
                   : KNOWLEDGE_TEXT_FORMATS,
                 maxDocuments: parts.config.knowledge.maxDocuments,
                 withdrawShareConfirm: parts.config.knowledge.withdrawShareConfirm,
-                sourcePollMinutes: parts.config.knowledge.sourcePollMinutes,
+                sourceDefaults,
                 ...(parts.config.clientInstance.timeZone === undefined
                   ? {}
                   : { timeZone: parts.config.clientInstance.timeZone }),

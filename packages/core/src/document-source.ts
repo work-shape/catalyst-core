@@ -196,3 +196,17 @@ export class DocumentSourceError extends AppError {
 export function documentSourceErrorCodeOf(error: unknown): DocumentSourceErrorCode {
   return error instanceof DocumentSourceError ? error.sourceCode : "unavailable";
 }
+
+/**
+ * When a source of a Connector type syncs where the source sets nothing (spec: Freshness,
+ * SRC-SYNC). `changes` is the default minutes between `changes` polls, which
+ * `knowledge.sourcePollMinutes` of the type overrides; `full` the default full pass, a cron
+ * expression of five fields; `minChanges` the shortest interval any source of the type, and the
+ * release setting, may ask for. Unset, the platform's 15 minutes and nightly 02:00 apply, with no
+ * floor beyond the definition's own.
+ */
+export interface DocumentSourceSchedule {
+  changes?: number;
+  full?: string;
+  minChanges?: number;
+}

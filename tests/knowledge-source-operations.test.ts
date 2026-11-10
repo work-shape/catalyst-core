@@ -853,6 +853,35 @@ describe("source sync operations (KB 74, 75)", () => {
         })
       )
     ).rejects.toMatchObject({ code: "FORBIDDEN", details: { action: "connection.use" } });
+    // What the source reads decides it, not when (SRC-SYNC): a schedule alone, or the same source
+    // in another key order, lends nothing; other folders on the same Connection do.
+    const only = required(definition.sources[0]);
+    const publishAs = (
+      sources: ((typeof definition.sources)[number] & {
+        schedule?: { changes?: number | "off"; full?: string };
+      })[],
+      revision: number
+    ) =>
+      world.instance.stores.transaction((stores) =>
+        world.knowledge.publish(stores, {
+          access: denied,
+          actor: knowledgePublisher,
+          assetId: asset.id,
+          revision,
+          config: { ...definition, sources },
+          replaced: definition
+        })
+      );
+    await expect(
+      publishAs([{ ...only, schedule: { changes: "off", full: "off" } }], 4)
+    ).resolves.toBeUndefined();
+    await expect(
+      publishAs([{ folders: ["folder"], connection: "fixture", id: SOURCE }], 5)
+    ).resolves.toBeUndefined();
+    await expect(publishAs([{ ...only, folders: ["folder", "other"] }], 6)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      details: { action: "connection.use" }
+    });
     await world.knowledge.retire(world.instance.stores, asset.id, definition);
     expect(
       await world.instance.stores.apiAccess.findServicePrincipalByOwner({ clientInstanceId, owner })

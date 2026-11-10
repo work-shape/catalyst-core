@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { DocumentSourceError, type DocumentSourceCapability } from "@work-shape/catalyst-core";
-import { changesDueAt, scheduledPass, sourceTickJob } from "@work-shape/catalyst-data-stores";
+import { knowledgeSourceDefaults } from "@work-shape/catalyst-client-assembly";
+import {
+  changesDueAt,
+  scheduledPass,
+  sourceDefaultsOfType,
+  sourceScheduleOf,
+  sourceTickJob
+} from "@work-shape/catalyst-data-stores";
 import { required } from "./support/assertions";
 import { clientInstanceId } from "./support/data-store-instance";
 import { useKnowledgeSync } from "./support/knowledge-sync";
@@ -437,7 +444,8 @@ describe("the source tick keeps a source current (SRC-3, KB 79)", () => {
 
 describe("the source's cron and the poll setting (SRC-3)", () => {
   const { setup } = useKnowledgeSync({
-    sourceTick: { now: () => clock, sourcePollMinutes: { fixture: 720 } }
+    sourceTick: { now: () => clock },
+    sourceDefaults: { fixture: { changes: 720 } }
   });
 
   it("runs a custom full pass at its due time only, and polls by the connector type's setting", async () => {
@@ -563,5 +571,182 @@ describe("a first import that waits for its confirmation (SRC-3, KB-ISO-1b)", ()
     expect(await runCount(world)).toBe(1);
     expect(calls).toEqual(noCalls());
     expect(await stopped()).toEqual([before]);
+  });
+});
+
+describe("a source's own sync settings (SRC-SYNC)", () => {
+  const { setup } = useKnowledgeSync({ sourceTick: { now: () => clock } });
+
+  it("starts nothing for a source switched off, keeps its documents, and picks it up when on again", async () => {
+    const calls = noCalls();
+    const world = await setup(counting(calls));
+    world.world.put(file("one.txt"));
+    world.world.put(file("two.txt"));
+    await imported(world, "2025-01-06T08:00:00Z");
+    const off = { id: SOURCE, connection: "fixture", folders: ["folder", "other"] };
+    await world.publishSources([{ ...off, schedule: { changes: "off", full: "off" } }]);
+    const audited = await world.platform<{ metadata: Record<string, unknown> }[]>`
+      select metadata from audit_events where type='knowledge_base.source_schedule_changed'`;
+    expect(audited.map((event) => event.metadata)).toEqual([
+      { source: SOURCE, changes: "off", full: "off" }
+    ]);
+    const runs = await runCount(world);
+    Object.assign(calls, noCalls());
+
+    // A day and a night of ticks, the nightly full pass's time among them.
+    for (const at of [
+      "2025-01-06T08:15:00Z",
+      "2025-01-06T12:00:00Z",
+      "2025-01-07T02:00:00Z",
+      "2025-01-07T02:15:00Z",
+      "2025-01-07T09:00:00Z"
+    ])
+      await tick(world, at);
+    expect(calls).toEqual(noCalls());
+    expect(await runCount(world)).toBe(runs);
+    expect(await itemStates(world)).toEqual([{ state: "fetched", n: 2 }]);
+    const sources = await world.instance.api.call("knowledge_bases.sources", {
+      params: { knowledgeBase: "sync-test" }
+    });
+    expect(sources.statusCode, sources.body).toBe(200);
+    expect(sources.json<{ sources: { schedule?: unknown }[] }>().sources[0]?.schedule).toEqual({
+      changes: "off",
+      full: "off",
+      defaultChanges: 15,
+      defaultFull: "0 2 * * *"
+    });
+
+    // Sync now still works while it is off.
+    await world.sync("changes");
+    await runJobs(world);
+    expect(await lastRun(world)).toMatchObject({ mode: "changes", state: "done" });
+
+    // Switched on again with its own interval: the full pass it missed runs once, at the first
+    // pass the tick starts, and then the changes come every 30 minutes.
+    await world.publishSources([{ ...off, schedule: { changes: 30 } }]);
+    const firstSlot = changesDueAt(world.record.id, SOURCE, 30, new Date("2025-01-07T10:29:00Z"));
+    const slot = (n: number) => addMinutes(firstSlot, 30 * n);
+    await tick(world, slot(1));
+    expect((await passes(world, "full")).length).toBe(1);
+    const polls = (await passes(world, "changes")).length;
+    await tick(world, addMinutes(slot(1), 10));
+    await tick(world, slot(2));
+    await tick(world, addMinutes(slot(2), 1));
+    await tick(world, slot(3));
+    expect((await passes(world, "changes")).length - polls).toBe(2);
+    expect(
+      (
+        await world.platform<{ n: number }[]>`
+          select count(*)::int as n from audit_events where type='knowledge_base.source_schedule_changed'`
+      )[0]?.n
+    ).toBe(2);
+  });
+
+  it("catches up a full pass a running sync held at its minute, once, with changes off", async () => {
+    const world = await setup();
+    world.world.put(file("one.txt"));
+    await imported(world, "2025-01-06T08:00:00Z");
+    await world.publishSources([
+      {
+        id: SOURCE,
+        connection: "fixture",
+        folders: ["folder", "other"],
+        schedule: { changes: "off" }
+      }
+    ]);
+    await tick(world, "2025-01-07T01:50:00Z");
+    // A sync by hand still runs at 02:00, so the nightly pass cannot start then.
+    await world.sql`insert into catalyst_kb.sync_runs (id,source_id,mode,operation_run_id,state,started_at) values ('held',${SOURCE},'changes','by-hand','running','2025-01-07T01:55:00Z')`;
+    await tick(world, "2025-01-07T02:00:00Z");
+    expect((await passes(world, "full")).length).toBe(0);
+    await world.sql`update catalyst_kb.sync_runs set state='done', ended_at='2025-01-07T02:05:00Z' where id='held'`;
+    // Without a changes poll the next due time is a day away; the tick still owes this one.
+    await tick(world, "2025-01-07T02:10:00Z");
+    await tick(world, "2025-01-07T02:20:00Z");
+    await tick(world, "2025-01-07T03:00:00Z");
+    const full = await passes(world, "full");
+    expect(full.length).toBe(1);
+    expect(full[0]?.state).toBe("done");
+  });
+
+  it("polls a source at its own interval, and runs no full pass where that is off", async () => {
+    const calls = noCalls();
+    const world = await setup(counting(calls));
+    world.world.put(file("one.txt"));
+    await imported(world, "2025-01-06T08:00:00Z");
+    await world.publishSources([
+      {
+        id: SOURCE,
+        connection: "fixture",
+        folders: ["folder", "other"],
+        schedule: { changes: 60, full: "off" }
+      }
+    ]);
+    Object.assign(calls, noCalls());
+    // Ticks every quarter hour through the night: one poll an hour, where the default would
+    // poll every quarter, and no listing at 02:00.
+    const first = changesDueAt(world.record.id, SOURCE, 60, new Date("2025-01-07T00:59:00Z"));
+    for (let quarter = 1; quarter <= 16; quarter += 1)
+      await tick(world, addMinutes(first, quarter * 15));
+    expect(calls.list).toBe(0);
+    expect((await passes(world, "full")).length).toBe(0);
+    // The source's minute of the hour before 01:00, caught a quarter later, and the four after it.
+    expect(calls.changes).toBe(5);
+  });
+});
+
+describe("a connector type's own defaults and floor (SRC-SYNC)", () => {
+  const { setup } = useKnowledgeSync({
+    sourceTick: { now: () => clock },
+    sourceDefaults: { fixture: { changes: 60, full: "0 3 * * 1", minChanges: 60 } }
+  });
+
+  it("refuses a poll below the type's floor, and runs the type's full pass, not the nightly one", async () => {
+    const world = await setup();
+    world.world.put(file("one.txt"));
+    await imported(world, "2025-01-06T08:00:00Z");
+    const source = { id: SOURCE, connection: "fixture", folders: ["folder", "other"] };
+    await expect(
+      world.publishSources([{ ...source, schedule: { changes: 30 } }])
+    ).rejects.toMatchObject({
+      code: "VALIDATION_FAILED",
+      details: { reason: "knowledge_source_changes_below_floor" }
+    });
+    await world.publishSources([source]);
+    // The API process of the fixture has no such type, so the tick shows what it applies.
+    // 02:00 on Tuesday is the platform's nightly pass, not this type's weekly one.
+    await tick(world, "2025-01-07T02:00:00Z");
+    expect((await passes(world, "full")).length).toBe(0);
+  });
+});
+
+describe("the defaults a source takes (SRC-SYNC)", () => {
+  it("holds a published poll below a later floor at the floor, and leaves off off", () => {
+    const source = { id: SOURCE, connection: "fixture", folders: ["folder"] };
+    const defaults = sourceDefaultsOfType({ web: { full: "0 3 * * 1", minChanges: 60 } }, "web");
+    expect(defaults).toEqual({ changes: 15, full: "0 3 * * 1", minChanges: 60 });
+    expect(sourceScheduleOf({ ...source, schedule: { changes: 15 } }, defaults)).toEqual({
+      changes: 60,
+      full: "0 3 * * 1"
+    });
+    expect(sourceScheduleOf({ ...source, schedule: { changes: "off" } }, defaults).changes).toBe(
+      "off"
+    );
+    expect(sourceDefaultsOfType({}, undefined)).toEqual({ changes: 15, full: "0 2 * * *" });
+  });
+
+  it("lets the release setting replace a type's poll, never below its floor", () => {
+    const web = {
+      type: "web",
+      documentSource: { schedule: { changes: 60, full: "0 3 * * 1", minChanges: 60 } }
+    };
+    const registry = [web];
+    expect(knowledgeSourceDefaults({ web: 120, box: 5 }, registry)).toEqual({
+      web: { changes: 120, full: "0 3 * * 1", minChanges: 60 },
+      box: { changes: 5 }
+    });
+    expect(() => knowledgeSourceDefaults({ web: 30 }, registry)).toThrow(
+      /polls no more often than every 60 minutes/u
+    );
   });
 });

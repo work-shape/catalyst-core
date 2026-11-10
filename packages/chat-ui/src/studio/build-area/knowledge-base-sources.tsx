@@ -51,6 +51,13 @@ import {
   type KnowledgeSourceForm
 } from "./knowledge-sources-model";
 import { KnowledgeSourceFolderPicker } from "./knowledge-source-folder-picker";
+import {
+  intervalWords,
+  KnowledgeSourceSchedule,
+  scheduleDefaults,
+  type SourceScheduleDefaults
+} from "./knowledge-source-schedule";
+import { scheduleInWords } from "../workflows/schedule-words";
 import type { ActionNotice } from "./build-model";
 import { useOptionalBuildNavigation } from "../../shared/build-route";
 import { requestBuildCreateDialog } from "./build-create-request";
@@ -187,6 +194,7 @@ export function KnowledgeSourcesSection({
               source={source}
               entry={entry}
               choice={choiceOf(entry.connection)}
+              defaults={scheduleDefaults(statusOf(entry.id)?.schedule, choiceOf(entry.connection))}
               canWrite={canWrite}
               onPick={() => setPicking(entry.id)}
               onChange={(patch) => change(entry.id, patch)}
@@ -258,6 +266,7 @@ function SourceItem({
   source,
   entry,
   choice,
+  defaults,
   canWrite,
   onPick,
   onChange,
@@ -268,6 +277,8 @@ function SourceItem({
   entry: KnowledgeSourceForm;
   /** The Connection as the list names it, once read. */
   choice: KnowledgeChoice | undefined;
+  /** What the source takes where it sets nothing, as far as it is known. */
+  defaults: SourceScheduleDefaults;
   canWrite: boolean;
   /** Opens the folder chooser of this source. */
   onPick(): void;
@@ -399,6 +410,12 @@ function SourceItem({
       ) : (
         idsField
       )}
+      <KnowledgeSourceSchedule
+        schedule={entry.schedule}
+        defaults={defaults}
+        readOnly={!canWrite}
+        onChange={(schedule) => onChange({ schedule })}
+      />
       <Disclosure data-knowledge-source-advanced="">
         <DisclosureTrigger className="text-caption">
           {t("knowledgeSources.advanced")}
@@ -570,6 +587,7 @@ function SourceStatus({
           })}
         </p>
       ) : null}
+      {status.schedule ? <ScheduleLine schedule={status.schedule} /> : null}
       <KeyValueList layout="stacked">
         {status.running?.estimatedEndAt ? (
           <KeyValue label={t("knowledgeSources.estimatedEnd")}>
@@ -672,6 +690,36 @@ function SourceStatus({
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * How the published source syncs by itself: how often it fetches changes and when it runs a
+ * full sync, or that it syncs only by hand.
+ */
+function ScheduleLine({ schedule }: { schedule: NonNullable<KnowledgeSourceStatus["schedule"]> }) {
+  const translation = useTranslation();
+  const { t } = translation;
+  if (schedule.changes === "off" && schedule.full === "off")
+    return (
+      <p className="text-caption text-muted-foreground" data-knowledge-source-sync-state="off">
+        <span className="font-medium text-foreground">{t("knowledgeSources.syncOff")}.</span>{" "}
+        {t("knowledgeSources.syncOffNote")}
+      </p>
+    );
+  return (
+    <KeyValueList layout="stacked" data-knowledge-source-sync-state="on">
+      <KeyValue label={t("knowledgeSources.syncChangesEvery")}>
+        {schedule.changes === "off"
+          ? t("knowledgeSources.syncModeOff")
+          : intervalWords(schedule.changes, t)}
+      </KeyValue>
+      <KeyValue label={t("knowledgeSources.syncFullAt")}>
+        {schedule.full === "off"
+          ? t("knowledgeSources.syncModeOff")
+          : (scheduleInWords(schedule.full, translation) ?? t("workflows.schedule.custom"))}
+      </KeyValue>
+    </KeyValueList>
   );
 }
 

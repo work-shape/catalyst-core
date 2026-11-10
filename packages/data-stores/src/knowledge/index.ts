@@ -14,15 +14,17 @@ import {
   type KnowledgeProcessingCost
 } from "./processing-publish";
 import { createKnowledgeReindexHandler } from "./reindex";
-import { sourceBoundaryKey } from "./source-boundary";
+import { sourceBoundaryKey, type SyncedSource } from "./source-boundary";
 import { sourcePolicyJob } from "./builtin/source-policy-job";
 import { knowledgePublishQuestion } from "./publish-question";
 import type { KnowledgeSources } from "./source-port";
+import type { SourceDefaultsByType } from "./source-schedule";
 import { publishSourcePrincipal } from "./source-principal";
 import { enqueueSourceSync, initialSyncIds } from "./builtin/source-lifecycle";
 import {
   AppError,
   ASSET_OWNER_KINDS,
+  auditActorFromIdentity,
   defineAssetKind,
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_BASE_ASSET_KIND,
@@ -205,6 +207,11 @@ export function createKnowledgeBases(input: {
   documentFormats: readonly KnowledgeDocumentFormat[];
   /** `knowledge.maxDocuments` of release config. */
   maxDocuments: number;
+  /**
+   * What a source sets nothing for takes, by connector type: the type's own defaults and floor,
+   * its `changes` replaced by `knowledge.sourcePollMinutes` of release config where that names it.
+   */
+  sourceDefaults?: SourceDefaultsByType;
   maxPages?: number;
   /** `knowledge.indexConcurrency` of release config. */
   indexConcurrency?: { perWorker: number; total: number };
@@ -221,6 +228,7 @@ export function createKnowledgeBases(input: {
     embedding: input.embedding,
     documentFormats: input.documentFormats,
     maxDocuments: input.maxDocuments,
+    ...(input.sourceDefaults ? { sourceDefaults: input.sourceDefaults } : {}),
     ...(input.maxPages === undefined ? {} : { maxPages: input.maxPages }),
     ...(input.indexConcurrency ? { indexConcurrency: input.indexConcurrency } : {}),
     logger: input.logger,
@@ -373,6 +381,7 @@ export function createKnowledgeBases(input: {
         access,
         sources: definition.sources ?? [],
         documentSourceOffered: input.documentSourceOffered,
+        ...(input.sourceDefaults ? { sourceDefaults: input.sourceDefaults } : {}),
         previous: before.success ? (before.data.sources ?? []) : []
       });
       const result = await runtime.backend.publish(stores, { target, replaced: previous, access });
@@ -403,6 +412,26 @@ export function createKnowledgeBases(input: {
             correlationId: `${assetId}:${revision}`,
             metadata: { source: old.id }
           });
+      }
+      // A source kept with another schedule (SRC-SYNC). The tick reads it from the definition.
+      for (const source of definition.sources ?? []) {
+        const old = before.success
+          ? before.data.sources?.find((candidate) => candidate.id === source.id)
+          : undefined;
+        if (!old || sameSchedule(old.schedule, source.schedule)) continue;
+        await stores.audit.appendAuditEvent({
+          clientInstanceId: input.clientInstanceId,
+          type: "knowledge_base.source_schedule_changed",
+          status: "success",
+          actor: auditActorFromIdentity(actor),
+          subject: assetId,
+          correlationId: `${assetId}:${revision}`,
+          metadata: {
+            source: source.id,
+            ...(source.schedule?.changes === undefined ? {} : { changes: source.schedule.changes }),
+            ...(source.schedule?.full === undefined ? {} : { full: source.schedule.full })
+          }
+        });
       }
       if (principal)
         for (const source of definition.sources ?? []) {
@@ -500,4 +529,9 @@ export function createKnowledgeBases(input: {
     },
     toolSource: createKnowledgeToolSource(runtime)
   };
+}
+
+/** Whether two schedules of a source start the same passes: an absent field is the default. */
+function sameSchedule(a: SyncedSource["schedule"], b: SyncedSource["schedule"]): boolean {
+  return a?.changes === b?.changes && a?.full === b?.full;
 }

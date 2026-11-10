@@ -28849,6 +28849,46 @@
                                   "storeBytes"
                                 ]
                               },
+                              "schedule": {
+                                "type": "object",
+                                "properties": {
+                                  "changes": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "const": "off"
+                                      },
+                                      {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 9007199254740991
+                                      }
+                                    ]
+                                  },
+                                  "full": {
+                                    "type": "string"
+                                  },
+                                  "defaultChanges": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "defaultFull": {
+                                    "type": "string"
+                                  },
+                                  "minChanges": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "changes",
+                                  "full",
+                                  "defaultChanges",
+                                  "defaultFull"
+                                ]
+                              },
                               "lastChangeAt": {
                                 "type": "string"
                               },
@@ -29221,6 +29261,46 @@
                                   "bytes",
                                   "stop",
                                   "storeBytes"
+                                ]
+                              },
+                              "schedule": {
+                                "type": "object",
+                                "properties": {
+                                  "changes": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "const": "off"
+                                      },
+                                      {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 9007199254740991
+                                      }
+                                    ]
+                                  },
+                                  "full": {
+                                    "type": "string"
+                                  },
+                                  "defaultChanges": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "defaultFull": {
+                                    "type": "string"
+                                  },
+                                  "minChanges": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "changes",
+                                  "full",
+                                  "defaultChanges",
+                                  "defaultFull"
                                 ]
                               },
                               "lastChangeAt": {

@@ -12,7 +12,13 @@ import {
   type ClientInstanceId,
   type PlatformStores
 } from "@work-shape/catalyst-core";
-import type { KnowledgeBaseDefinition } from "./definition";
+import { KNOWLEDGE_SOURCE_SYNC_OFF, type KnowledgeBaseDefinition } from "./definition";
+import { sourceBoundaryKey } from "./source-boundary";
+import {
+  connectorTypeOf,
+  sourceDefaultsOfType,
+  type SourceDefaultsByType
+} from "./source-schedule";
 
 type Source = NonNullable<KnowledgeBaseDefinition["sources"]>[number];
 async function sourceConnection(
@@ -40,6 +46,8 @@ export async function publishSourcePrincipal(
     access: ActorAccess;
     sources: Source[];
     documentSourceOffered?: (config: unknown) => boolean;
+    /** The defaults and floor of each connector type, which a source's schedule is held to. */
+    sourceDefaults?: SourceDefaultsByType;
     previous: Source[];
   }
 ) {
@@ -57,9 +65,11 @@ export async function publishSourcePrincipal(
   const connections = await Promise.all(
     sources.map(async (source) => {
       const asset = await sourceConnection(stores, clientInstanceId, source.connection);
+      // What the source reads decides whose Connection it uses: its Connection, folders and
+      // patterns. A schedule changes when it reads, not what, so changing it alone lends nothing.
       if (
         !previous.some(
-          (old) => old.id === source.id && JSON.stringify(old) === JSON.stringify(source)
+          (old) => old.id === source.id && sourceBoundaryKey(old) === sourceBoundaryKey(source)
         )
       )
         requireHeldRights(
@@ -72,6 +82,10 @@ export async function publishSourcePrincipal(
           ],
           { lends: { label: `Knowledge Base ${input.name}` } }
         );
+      assertAboveFloor(
+        source,
+        sourceDefaultsOfType(input.sourceDefaults ?? {}, connectorTypeOf(asset.config)).minChanges
+      );
       if (input.documentSourceOffered && !input.documentSourceOffered(asset.config))
         throw new AppError(
           "VALIDATION_FAILED",
@@ -178,4 +192,18 @@ export async function requireSourceUse(
   connection: string
 ) {
   await sourceAuthority(stores, clientInstanceId, assetId, connection);
+}
+
+/** A source polls no more often than its connector type allows (SRC-SYNC). */
+function assertAboveFloor(source: Source, minChanges: number | undefined) {
+  const changes = source.schedule?.changes;
+  if (minChanges === undefined || changes === undefined || changes === KNOWLEDGE_SOURCE_SYNC_OFF)
+    return;
+  if (changes < minChanges)
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Source '${source.id}' polls every ${changes} minutes, and its Connection's type allows no shorter 'schedule.changes' than ${minChanges} minutes. Set ${minChanges} or more, or 'off'.`,
+      { reason: "knowledge_source_changes_below_floor" },
+      { exposeMessage: true }
+    );
 }

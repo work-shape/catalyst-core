@@ -152,6 +152,10 @@ export interface KnowledgeChoice {
   connectorType?: string;
   /** For a Connection: a person can choose its folders by name. */
   browsesFolders?: true;
+  /** For a Connection: the full pass its type gives a source that sets none (SRC-SYNC). */
+  sourceFull?: string;
+  /** For a Connection: the shortest `changes` poll its type allows, in minutes. */
+  sourceMinChanges?: number;
 }
 
 /** One folder of a source, as a person chooses it. */
@@ -800,10 +804,16 @@ function toSourceChoice(asset: {
   attributes?: Record<string, unknown>;
 }): KnowledgeChoice {
   const connectorType = asset.attributes?.connectorType;
+  const sourceFull = asset.attributes?.sourceFull;
+  const sourceMinChanges = asset.attributes?.sourceMinChanges;
   return {
     ...toKnowledgeChoice(asset),
     ...(typeof connectorType === "string" ? { connectorType } : {}),
-    ...(asset.attributes?.browsesFolders === true ? { browsesFolders: true as const } : {})
+    ...(asset.attributes?.browsesFolders === true ? { browsesFolders: true as const } : {}),
+    ...(typeof sourceFull === "string" ? { sourceFull } : {}),
+    ...(typeof sourceMinChanges === "string" && /^[1-9]\d*$/u.test(sourceMinChanges)
+      ? { sourceMinChanges: Number(sourceMinChanges) }
+      : {})
   };
 }
 

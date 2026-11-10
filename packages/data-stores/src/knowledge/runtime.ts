@@ -1,4 +1,5 @@
 import type { KnowledgeSources } from "./source-port";
+import type { SourceDefaultsByType } from "./source-schedule";
 import type {
   ClientInstanceId,
   ConnectorContext,
@@ -57,6 +58,8 @@ export interface KnowledgeRuntime {
   documentFormats: readonly KnowledgeDocumentFormat[];
   /** How many documents one Knowledge Base holds at most (`knowledge.maxDocuments`). */
   maxDocuments: number;
+  /** What a source sets nothing for takes, by connector type (`SourceDefaultsByType`). */
+  sourceDefaults?: SourceDefaultsByType;
   maxPages?: number;
   /** How many contents are indexed side by side (`knowledge.indexConcurrency`). */
   indexConcurrency?: { perWorker: number; total: number };
