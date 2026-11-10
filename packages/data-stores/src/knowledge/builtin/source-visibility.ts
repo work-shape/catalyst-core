@@ -15,7 +15,22 @@ export async function visibleSourceDocumentIds(
   documentIds: readonly string[],
   read: <T>(work: (sql: PostgresChangeStatements) => Promise<T>) => Promise<T>
 ): Promise<Set<string>> {
-  if (!documentIds.length) return new Set();
+  return (await visibleSources(runtime, knowledgeBaseId, name, documentIds, read)).visible;
+}
+
+/**
+ * The visible documents, and the date of each synced one, read with them so a search touches
+ * the source's items once: a citation shows the date (KB-WEB).
+ */
+async function visibleSources(
+  runtime: DataStoreRuntime,
+  knowledgeBaseId: string,
+  name: string,
+  documentIds: readonly string[],
+  read: <T>(work: (sql: PostgresChangeStatements) => Promise<T>) => Promise<T>
+): Promise<{ visible: Set<string>; modifiedAt: Map<string, string> }> {
+  const none = { visible: new Set<string>(), modifiedAt: new Map<string, string>() };
+  if (!documentIds.length) return none;
   const rows = await read(async (sql) =>
     z
       .array(
@@ -25,24 +40,28 @@ export async function visibleSourceDocumentIds(
           definition_key: z.string().nullable(),
           parents: z.array(z.string()).nullable(),
           name: z.string().nullable(),
-          path: z.string().nullable()
+          path: z.string().nullable(),
+          modified_at: z.string().nullable()
         })
       )
       .parse(
         await sql.run(
-          "select d.id,i.source_id,i.parents,i.name,i.path,seen.definition_key from catalyst_kb.documents d left join catalyst_kb.source_items i on i.id=d.source_item_id left join catalyst_kb.sync_runs seen on seen.id=i.seen_run_id where d.id=any($1::text[]) and d.withdrawn_at is null",
+          "select d.id,i.source_id,i.parents,i.name,i.path,seen.definition_key,pg_catalog.to_char(i.modified_at at time zone 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') as modified_at from catalyst_kb.documents d left join catalyst_kb.source_items i on i.id=d.source_item_id left join catalyst_kb.sync_runs seen on seen.id=i.seen_run_id where d.id=any($1::text[]) and d.withdrawn_at is null",
           [[...documentIds]]
         )
       )
   );
   const liveIds = new Set(rows.map((row) => row.id));
-  if (!rows.some((row) => row.source_id !== null)) return liveIds;
+  const modifiedAt = new Map(
+    rows.flatMap((row) => (row.modified_at === null ? [] : [[row.id, row.modified_at] as const]))
+  );
+  if (!rows.some((row) => row.source_id !== null)) return { visible: liveIds, modifiedAt };
   const asset = await runtime.stores.configAssets.getConfigAsset({
     clientInstanceId: runtime.clientInstanceId,
     kind: "knowledge_base",
     name
   });
-  if (!asset || asset.id !== knowledgeBaseId || asset.status !== "active") return new Set();
+  if (!asset || asset.id !== knowledgeBaseId || asset.status !== "active") return none;
   const definition = knowledgeBaseDefinitionSchema.parse(asset.publishedConfig);
   const hidden = new Set(
     rows
@@ -66,7 +85,7 @@ export async function visibleSourceDocumentIds(
       })
       .map((row) => row.id)
   );
-  return new Set([...liveIds].filter((id) => !hidden.has(id)));
+  return { visible: new Set([...liveIds].filter((id) => !hidden.has(id))), modifiedAt };
 }
 
 /** Search and proposal admission use the same decision, including pending source cleanup. */
@@ -77,12 +96,19 @@ export async function visibleSourceHits(
   answer: KnowledgeSearchAnswer,
   read: <T>(work: (sql: PostgresChangeStatements) => Promise<T>) => Promise<T>
 ): Promise<KnowledgeSearchAnswer> {
-  const visible = await visibleSourceDocumentIds(
+  const { visible, modifiedAt } = await visibleSources(
     runtime,
     knowledgeBaseId,
     name,
     answer.hits.map((hit) => hit.documentId),
     read
   );
-  return { ...answer, hits: answer.hits.filter((hit) => visible.has(hit.documentId)) };
+  return {
+    ...answer,
+    hits: answer.hits.flatMap((hit) => {
+      if (!visible.has(hit.documentId)) return [];
+      const date = modifiedAt.get(hit.documentId);
+      return [date === undefined ? hit : { ...hit, modifiedAt: date }];
+    })
+  };
 }
