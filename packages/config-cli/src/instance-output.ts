@@ -20,7 +20,8 @@ function versionParts(version: string) {
     : undefined;
 }
 
-function older(left: string, right: string): boolean {
+/** Whether `left` precedes `right`; false where either is no valid version. */
+export function older(left: string, right: string): boolean {
   const a = versionParts(left);
   const b = versionParts(right);
   if (!a || !b) return false;

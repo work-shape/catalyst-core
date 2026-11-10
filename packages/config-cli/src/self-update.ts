@@ -1,10 +1,10 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { posix, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { type ConfigCliEnv, environmentUpdatedFrom, readConfigCliEnv } from "./env";
-import { CliVersionError, releaseVersionOf } from "./instance-output";
+import { CliVersionError, older, releaseVersionOf } from "./instance-output";
 
 /** The package that is installed. Fixed: nothing the instance answers names another. */
 const PACKAGE = "@work-shape/catalyst-cli";
@@ -31,6 +31,8 @@ export interface SelfUpdateHost {
   exists: (path: string) => boolean;
   readText: (path: string) => string | undefined;
   realpath: (path: string) => string;
+  /** Whether the entry at the path is a symbolic link, as `npm link` leaves one. */
+  isLink: (path: string) => boolean;
   /**
    * Runs a program without a shell and captures its output; with `againFrom`, the command run
    * again, on the terminal, told the version it was updated from.
@@ -54,7 +56,10 @@ function mayUpdateItself(env: ConfigCliEnv, interactive: boolean): boolean {
   );
 }
 
-type Installation = { kind: "project"; folder: string; command: string } | { kind: "elsewhere" };
+type Installation =
+  | { kind: "project"; folder: string; command: string }
+  | { kind: "pnpm-global"; command: string }
+  | { kind: "elsewhere" };
 
 /**
  * A CLI that a project installed: the folder before the first `node_modules` of its path holds
@@ -66,9 +71,13 @@ function projectInstallation(host: SelfUpdateHost, version: string): Installatio
   const parts = host.packageRoot.split(path.sep);
   const first = parts.indexOf("node_modules");
   if (first <= 0 || parts.includes("_npx") || parts.includes("dlx")) return { kind: "elsewhere" };
+  const spec = `${PACKAGE}@${version}`;
+  // pnpm keeps its global packages in a project of its own: <pnpm home>/global/<n>/.
+  if (parts[first - 2] === "global" && /^[0-9]+$/u.test(parts[first - 1] ?? "")) {
+    return { kind: "pnpm-global", command: `pnpm add --global ${spec}` };
+  }
   const folder = parts.slice(0, first).join(path.sep) || path.sep;
   if (!host.exists(path.join(folder, "package.json"))) return { kind: "elsewhere" };
-  const spec = `${PACKAGE}@${version}`;
   const command = host.exists(path.join(folder, "pnpm-lock.yaml"))
     ? `pnpm add --save-exact ${spec}`
     : host.exists(path.join(folder, "yarn.lock"))
@@ -139,13 +148,17 @@ export function updateToServerVersion(
   const version = releaseVersionOf(mismatch.serverVersion);
   if (version === undefined) return mismatch;
   const project = projectInstallation(host, version);
-  if (project.kind === "project") {
+  if (project.kind !== "elsewhere") {
     return new CliVersionError(
       mismatch.cliVersion,
       mismatch.serverVersion,
-      `in ${project.folder} run: ${project.command}`
+      project.kind === "project"
+        ? `in ${project.folder} run: ${project.command}`
+        : `run: ${project.command}`
     );
   }
+  // Only ever forward: an older version on an instance's word stays the person's decision.
+  if (!older(mismatch.cliVersion, version)) return mismatch;
   if (!mayUpdateItself(host.env, host.interactive)) return mismatch;
   const npm = npmCommand(host);
   if (npm === undefined) return mismatch;
@@ -153,12 +166,14 @@ export function updateToServerVersion(
   // Only the global install npm manages is replaced; any other copy stays as it is.
   const root = host.run(npm.file, [...npm.args, "root", "--global"], {});
   const globalRoot = root.status === 0 ? root.stdout.trim() : "";
+  const globalPackage = path.join(globalRoot, ...PACKAGE.split("/"));
   let ours: boolean;
   try {
+    // A copy `npm link` points at, a checkout being developed, is never replaced.
     ours =
       globalRoot !== "" &&
-      host.realpath(path.join(globalRoot, ...PACKAGE.split("/"))) ===
-        host.realpath(host.packageRoot);
+      !host.isLink(globalPackage) &&
+      host.realpath(globalPackage) === host.realpath(host.packageRoot);
   } catch {
     ours = false;
   }
@@ -195,23 +210,50 @@ export function updateToServerVersion(
   return host.exit(again.status ?? 1);
 }
 
-let attempt: Promise<CliVersionError> | undefined;
-let host: SelfUpdateHost | undefined;
+interface SelfUpdateState {
+  host: SelfUpdateHost;
+  /** Set once an answer of the instance passed the version check. */
+  answered: boolean;
+  attempt?: Promise<CliVersionError>;
+}
+
+let state: SelfUpdateState | undefined;
+
+/** Called by `instanceFetch` for every answer of the instance that passed the version check. */
+export function onInstanceAnswer(): void {
+  if (state) state.answered = true;
+}
 
 /**
- * Called by `instanceFetch` on a version mismatch. Without `enableSelfUpdate`, as for every
+ * Called by `instanceFetch` on a version mismatch. Only the command's first answer can update:
+ * after one answer passed, the command may have changed something, and running it again could
+ * do that twice, so a later mismatch is today's error. Without `enableSelfUpdate`, as for every
  * caller of `runCli` but the `catalyst` command itself, it answers the mismatch unchanged.
  */
 export function onCliVersionMismatch(mismatch: CliVersionError): Promise<CliVersionError> {
-  if (host === undefined) return Promise.resolve(mismatch);
-  const active = host;
-  attempt ??= Promise.resolve().then(() => updateToServerVersion(mismatch, active));
-  return attempt;
+  const active = state;
+  if (active === undefined || active.answered) return Promise.resolve(mismatch);
+  active.attempt ??= Promise.resolve().then(() => updateToServerVersion(mismatch, active.host));
+  return active.attempt;
 }
 
-/** Turns the self-update on for this process, the `catalyst` command run with `argv`. */
-export function enableSelfUpdate(argv: readonly string[]): void {
-  host = {
+/**
+ * Turns the self-update on for this process, the `catalyst` command run with `argv`, and
+ * answers how to turn it off. Tests pass the host.
+ */
+export function enableSelfUpdate(
+  argv: readonly string[],
+  host: SelfUpdateHost = processHost(argv)
+): () => void {
+  const enabled: SelfUpdateState = { host, answered: false };
+  state = enabled;
+  return () => {
+    if (state === enabled) state = undefined;
+  };
+}
+
+function processHost(argv: readonly string[]): SelfUpdateHost {
+  return {
     argv,
     env: readConfigCliEnv(),
     interactive: process.stdin.isTTY === true && process.stderr.isTTY === true,
@@ -227,6 +269,13 @@ export function enableSelfUpdate(argv: readonly string[]): void {
       }
     },
     realpath: realpathSync,
+    isLink: (path) => {
+      try {
+        return lstatSync(path).isSymbolicLink();
+      } catch {
+        return false;
+      }
+    },
     run: (file, args, options) => {
       const result = spawnSync(file, args, {
         shell: false,

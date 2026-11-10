@@ -10,7 +10,12 @@ import { refreshWrittenSkills } from "./setup";
 
 export * from "./api";
 export { CliVersionError, cliCompatibilityError, releaseVersionOf } from "./instance-output";
-export { npmCommand, type SelfUpdateHost, updateToServerVersion } from "./self-update";
+export {
+  enableSelfUpdate,
+  npmCommand,
+  type SelfUpdateHost,
+  updateToServerVersion
+} from "./self-update";
 export { publishReview, type PublishReview } from "./app-commands";
 export * from "./commands";
 export * from "./diff";

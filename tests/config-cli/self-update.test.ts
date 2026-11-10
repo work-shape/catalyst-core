@@ -1,8 +1,11 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { RELEASE_VERSION } from "@work-shape/catalyst-api-contract";
 import {
   CliVersionError,
+  enableSelfUpdate,
+  instanceFetch,
   npmCommand,
   refreshWrittenSkills,
   releaseVersionOf,
@@ -46,6 +49,7 @@ function fake(overrides: Partial<SelfUpdateHost> & { files?: Record<string, stri
     exists: (path) => path in files,
     readText: (path) => files[path],
     realpath: (path) => path,
+    isLink: () => false,
     run: (file, args, options) => {
       runs.push({
         file,
@@ -55,7 +59,7 @@ function fake(overrides: Partial<SelfUpdateHost> & { files?: Record<string, stri
       if (args.includes("root")) return { status: 0, stdout: `${GLOBAL_ROOT}\n`, stderr: "" };
       if (args.includes("install")) {
         files[`${PACKAGE_ROOT}/package.json`] = JSON.stringify({
-          version: "0.8.0-rc.31",
+          version: String(args.at(-1)).split("@").at(-1),
           bin: { catalyst: "./dist/index.js" }
         });
         return { status: 0, stdout: "", stderr: "" };
@@ -72,6 +76,14 @@ function fake(overrides: Partial<SelfUpdateHost> & { files?: Record<string, stri
 }
 
 const mismatch = () => new CliVersionError("0.8.0-rc.30", "0.8.0-rc.31+build.7");
+
+/** An instance whose answers name these versions in turn. */
+function instance(...versions: string[]) {
+  return instanceFetch(async () => {
+    const version = versions.shift() ?? RELEASE_VERSION;
+    return new Response("{}", { headers: { "catalyst-server-version": version } });
+  });
+}
 
 describe("CLI self-update", () => {
   it("installs the instance's version where this CLI is installed and runs the command again once", () => {
@@ -172,6 +184,73 @@ describe("CLI self-update", () => {
       args: ["C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js"]
     });
     expect(npmCommand(fake({ platform: "win32", execPath: "D:\\node.exe" }).host)).toBeUndefined();
+  });
+
+  it("updates on the command's first answer only, never after an answer passed", async () => {
+    const first = fake();
+    const offFirst = enableSelfUpdate(first.host.argv, first.host);
+    try {
+      await expect(instance("999.0.0")("https://instance.test/api/v1/context")).rejects.toThrow(
+        new Exited(3)
+      );
+    } finally {
+      offFirst();
+    }
+    expect(first.runs.map(({ args }) => args.at(-1))).toEqual([
+      "--global",
+      "@work-shape/catalyst-cli@999.0.0",
+      "--json"
+    ]);
+
+    // A deploy in the middle of a command: the second answer names a newer release.
+    const later = fake();
+    const offLater = enableSelfUpdate(later.host.argv, later.host);
+    try {
+      const send = instance(RELEASE_VERSION, "999.0.0");
+      await send("https://instance.test/api/v1/auth/access-token");
+      await expect(send("https://instance.test/api/v1/assets/sync")).rejects.toThrow(
+        `Catalyst CLI ${RELEASE_VERSION} does not match server 999.0.0; run: npm install --global @work-shape/catalyst-cli@999.0.0`
+      );
+    } finally {
+      offLater();
+    }
+    expect(later.runs).toEqual([]);
+    expect(later.errors).toEqual([]);
+  });
+
+  it("never installs an older version than the one installed", () => {
+    const { host, runs, errors } = fake();
+    const error = updateToServerVersion(new CliVersionError("0.8.0-rc.31", "0.8.0-rc.30"), host);
+    expect(error.message).toBe(
+      "Catalyst CLI 0.8.0-rc.31 does not match server 0.8.0-rc.30; run: npm install --global @work-shape/catalyst-cli@0.8.0-rc.30"
+    );
+    expect(runs).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  it("names pnpm's global install for a CLI pnpm installed globally", () => {
+    const { host, runs } = fake({
+      packageRoot:
+        "/Users/a/Library/pnpm/global/5/node_modules/.pnpm/x/node_modules/@work-shape/catalyst-cli",
+      files: {
+        "/Users/a/Library/pnpm/global/5/package.json": "{}",
+        "/Users/a/Library/pnpm/global/5/pnpm-lock.yaml": ""
+      }
+    });
+    expect(updateToServerVersion(mismatch(), host).message).toBe(
+      "Catalyst CLI 0.8.0-rc.30 does not match server 0.8.0-rc.31+build.7; run: pnpm add --global @work-shape/catalyst-cli@0.8.0-rc.31"
+    );
+    expect(runs).toEqual([]);
+  });
+
+  it("never replaces a checkout npm link points at", () => {
+    const { host, runs } = fake({
+      packageRoot: "/work/catalyst/packages/config-cli",
+      isLink: (path) => path === PACKAGE_ROOT,
+      realpath: (path) => (path === PACKAGE_ROOT ? "/work/catalyst/packages/config-cli" : path)
+    });
+    expect(updateToServerVersion(mismatch(), host)).toBeInstanceOf(CliVersionError);
+    expect(runs.map(({ args }) => args.at(-1))).toEqual(["--global"]);
   });
 
   it("hands npm only a release version", () => {
