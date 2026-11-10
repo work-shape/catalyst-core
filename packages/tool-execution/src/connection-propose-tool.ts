@@ -13,6 +13,7 @@ import {
   OPERATION_EFFECTS,
   findConnectorTypeIssues,
   type AssetValidationIssue,
+  type ConnectorTypeDefinition,
   type ConnectorTypeRegistry,
   type ToolExecutionContext,
   type JsonObject
@@ -43,6 +44,10 @@ const HTTP_API = "http_api";
 /** How many fixed headers a proposal names: the type's own bound. */
 const PROPOSAL_HEADERS_MAX = 16;
 
+/** The longest value, and the longest list, a typed form's field takes from a proposal. */
+const FORM_VALUE_MAX_CHARS = 1_000;
+const FORM_LIST_MAX = 50;
+
 /** A header name as HTTP spells it. */
 const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$/u;
 
@@ -51,6 +56,13 @@ const proposalOperationSchema = connectionDraftOperationSchema.strict().extend({
   pathParams: z.record(z.string(), connectionDraftParameterSchema.strict()).optional(),
   query: z.record(z.string(), connectionDraftParameterSchema.strict()).optional()
 });
+
+/** A value of a typed form's field: text, a number such as a port, or a list such as folders. */
+const formValueSchema = z.union([
+  z.string().max(FORM_VALUE_MAX_CHARS),
+  z.number(),
+  z.array(z.string().max(FORM_VALUE_MAX_CHARS)).max(FORM_LIST_MAX)
+]);
 
 const customInputSchema = z.strictObject({
   authScheme: z.enum(["none", "bearer", "header", "oauth", "oauth_client"]).optional(),
@@ -100,7 +112,13 @@ const customInputSchema = z.strictObject({
     .string()
     .min(1)
     .optional()
-    .describe("For 'http_api': a GET path that answers 2xx only with a valid key, such as '/me'.")
+    .describe("For 'http_api': a GET path that answers 2xx only with a valid key, such as '/me'."),
+  settings: z
+    .record(z.string(), formValueSchema)
+    .optional()
+    .describe(
+      "For a type with a form of its own, such as 'imap': the values its form asks for, by setting, such as host, port, username and folders. Never a password or key: the person types it in the dialog."
+    )
 });
 
 const entrySchema = z.strictObject({ id: z.string().min(1), part: z.enum(CATALOGUE_PARTS) });
@@ -185,7 +203,8 @@ const outputSchema = z.object({
     url: z.string().optional(),
     keyHeader: z.string().optional(),
     headerNames: z.array(z.string()),
-    testPath: z.string().optional()
+    testPath: z.string().optional(),
+    settings: z.record(z.string(), formValueSchema).optional()
   })
 });
 
@@ -297,6 +316,9 @@ function checkProposal(
   const issues: ProposalIssue[] = [];
   if (takesAddress && input.url === undefined) {
     issues.push({ path: "url", message: "Name the address to connect" });
+  }
+  if (input.settings !== undefined) {
+    issues.push(...formSettingsIssues(type, input.settings));
   }
   if (!takesAddress) {
     for (const field of [
@@ -414,10 +436,80 @@ function checkProposal(
         ...(input.url === undefined ? {} : { url: input.url }),
         ...(input.keyHeader === undefined ? {} : { keyHeader: input.keyHeader }),
         headerNames: input.headerNames ?? [],
-        ...(input.testPath === undefined ? {} : { testPath: input.testPath })
+        ...(input.testPath === undefined ? {} : { testPath: input.testPath }),
+        ...(input.settings === undefined ? {} : { settings: input.settings })
       }
     }
   };
+}
+
+/**
+ * The values a proposal names for a type's own form: each one a setting the form asks for,
+ * never its secret, and each as the type's settings take it. A field left out is typed by the
+ * person, so only the values named are checked.
+ */
+function formSettingsIssues(
+  type: ConnectorTypeDefinition,
+  given: Readonly<Record<string, unknown>>
+): ProposalIssue[] {
+  const form = type.form;
+  if (form === undefined) {
+    return [
+      {
+        path: "settings",
+        message: `A '${type.type}' Connection takes no settings in a proposal: its address and key go in their own fields`
+      }
+    ];
+  }
+  const settable = new Set(
+    form.fields.flatMap((field) => (field.setting === undefined ? [] : [field.setting]))
+  );
+  const issues: ProposalIssue[] = [];
+  for (const key of Object.keys(given)) {
+    if (type.secretFields.includes(key)) {
+      issues.push({
+        path: `settings.${key}`,
+        code: "secret_in_proposal",
+        message: "A proposal never holds a password or key: the person types it in the dialog"
+      });
+    } else if (!settable.has(key)) {
+      issues.push({
+        path: `settings.${key}`,
+        message: `The '${type.type}' form asks for ${[...settable].join(", ")}, not '${key}'`
+      });
+    }
+  }
+  if (issues.length > 0) return issues;
+  const settings: Record<string, unknown> = structuredClone(form.settings ?? {});
+  for (const [key, value] of Object.entries(given)) setAt(settings, key.split("."), value);
+  const parsed = type.settingsSchema.safeParse(settings);
+  if (parsed.success) return [];
+  return parsed.error.issues
+    .filter((issue) => {
+      const path = (issue.path ?? []).map(String).join(".");
+      return Object.keys(given).some((key) => path === key || path.startsWith(`${key}.`));
+    })
+    .map((issue) => ({
+      path: `settings.${(issue.path ?? []).map(String).join(".")}`,
+      message: issue.message
+    }));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function setAt(target: Record<string, unknown>, path: readonly string[], value: unknown): void {
+  const [head, ...rest] = path;
+  if (head === undefined) return;
+  if (rest.length === 0) {
+    target[head] = value;
+    return;
+  }
+  const current = target[head];
+  const child: Record<string, unknown> = isRecord(current) ? { ...current } : {};
+  setAt(child, rest, value);
+  target[head] = child;
 }
 
 /** The tool an agent proposes a new Connection with. Offered where the module `connections` is on. */
@@ -437,7 +529,7 @@ export function createConnectionProposeTool(input: {
     effect: "reading",
     description: [
       "Propose a new Connection to an outside system: a remote MCP server ('mcp'), a REST API ('http_api') or another Connector type of the instance.",
-      "Read catalogue.entries in platform.context first. If an entry fits, pass only entry: { id, part }; do not web-search the provider or draft tools against its hosts. Otherwise name the type, an id, a title and, for 'mcp' or 'http_api', the url, authScheme, credentialMode (user for mail, calendar and personal files), OAuth endpoints, scopes and public clientId, and GET read operations.",
+      "Read catalogue.entries in platform.context first. If an entry fits, pass only entry: { id, part }; do not web-search the provider or draft tools against its hosts. Otherwise name the type, an id, a title and, for 'mcp' or 'http_api', the url, authScheme, credentialMode (user for mail, calendar and personal files), OAuth endpoints, scopes and public clientId, and GET read operations. A shared functional mailbox, such as a feedback address, is 'imap' with settings host, port, username and folders; a person's own mailbox is no 'imap' Connection.",
       "Issues in the answer are fixed before you call again. A passing proposal shows as a card; the person's screen opens the New connection dialog filled with it, where they enter the key or sign in and press Connect. Nothing is saved before.",
       "Never ask for a key, token or password, nor put one into the proposal: say in one sentence that they enter it in the dialog. Never ask a question in the same turn as an approval card. Never say a service is unsupported: build the custom path and name the one step you cannot do.",
       "A message from the person says when it is connected and which tools they approved. Then draft any missing reads of a REST API with " +
