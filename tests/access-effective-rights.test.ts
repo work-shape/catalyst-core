@@ -98,7 +98,7 @@ describe("a custom role's rights on the User screen (acceptance check 5)", () =>
 
     const read = await rightsOf(t, t.admin.id, t.lena.id);
     const fromRole = read.rights.filter((right) =>
-      right.grantedBy.some((origin) => origin.source === "role")
+      right.grantedBy.some((origin) => origin.source === "role" && origin.roleId === buchhaltung.id)
     );
     expect(
       fromRole.map((right) => [right.action, right.scopeAsset?.name, right.allowed]).sort()
@@ -112,10 +112,16 @@ describe("a custom role's rights on the User screen (acceptance check 5)", () =>
         expect.objectContaining({ source: "role", roleId: buchhaltung.id, effect: "allow" })
       ]);
     }
-    expect(read.roles).toEqual([{ id: buchhaltung.id, name: "Buchhaltung", builtIn: false }]);
-    // Everything else the person holds comes from somewhere other than a role.
+    // `user` is named for its one default, the add of one's own MCP server (PMCP).
+    expect(read.roles).toEqual([
+      { id: "user", name: "user", builtIn: true },
+      { id: buchhaltung.id, name: "Buchhaltung", builtIn: false }
+    ]);
+    // Everything else the person holds comes from somewhere other than a role, but that add.
     expect(
-      read.rights.filter((right) => !fromRole.includes(right)).flatMap((right) => right.grantedBy)
+      read.rights
+        .filter((right) => !fromRole.includes(right) && right.action !== "connection.add_own")
+        .flatMap((right) => right.grantedBy)
     ).not.toContainEqual(expect.objectContaining({ source: "role" }));
 
     // The Check tab answers from the same rule: the use of one App is the role's.
@@ -168,7 +174,11 @@ describe("where a refusal comes from", () => {
         deniedBy: expect.objectContaining({ source: "role", roleId: noUsage.id, effect: "deny" })
       })
     ]);
-    expect(read.roles).toEqual([{ id: noUsage.id, name: "No usage", builtIn: false }]);
+    // `user` is named for its add of one's own MCP server (PMCP).
+    expect(read.roles).toEqual([
+      { id: "user", name: "user", builtIn: true },
+      { id: noUsage.id, name: "No usage", builtIn: false }
+    ]);
   });
 
   it("names a deny given directly on one asset, and the role that allows everywhere else", async () => {

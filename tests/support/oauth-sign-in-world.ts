@@ -49,7 +49,10 @@ export const REST_CONNECTION = "rest";
 
 const PEOPLE = {
   alice: "alice@example.test",
-  bob: "bob@example.test"
+  bob: "bob@example.test",
+  // Seeded only with `plainPeople`: people who hold the role `user` and nothing more.
+  carol: "carol@example.test",
+  dave: "dave@example.test"
 } as const;
 type Person = keyof typeof PEOPLE;
 
@@ -206,13 +209,22 @@ export async function createOAuthWorld(
     managedClient?: string;
     /** The catalogue entries the instance ships and offers, at the sample's address. */
     catalogue?: (sampleBase: string, samplePort: number) => CatalogueEntry[];
+    /** Seeds carol and dave beside the two administrators, with the role `user` alone. */
+    plainPeople?: true;
+    /** `modules.connections.ownServers`: people's own MCP servers (PMCP). */
+    ownServers?: { enabled?: boolean; perPerson?: number };
   } = {}
 ): Promise<OAuthWorld> {
   const secrets: string[] = [];
   const provider: OAuthWorld["provider"] = {};
   const clientSecret = generateTestSecret();
   const restClientSecret = generateTestSecret();
-  const passwords = { alice: generateTestSecret(), bob: generateTestSecret() };
+  const passwords = {
+    alice: generateTestSecret(),
+    bob: generateTestSecret(),
+    carol: generateTestSecret(),
+    dave: generateTestSecret()
+  };
   const serverCredential = generateTestSecret();
   const sessions = new Map<Person, string>();
   const trap = await startTrap();
@@ -292,7 +304,23 @@ export async function createOAuthWorld(
             displayLabel: "Bob",
             passwordEnvName: "BOB_PASSWORD",
             roles: ["user", "admin"]
-          }
+          },
+          ...(options.plainPeople
+            ? [
+                {
+                  email: PEOPLE.carol,
+                  displayLabel: "Carol",
+                  passwordEnvName: "CAROL_PASSWORD",
+                  roles: ["user"]
+                },
+                {
+                  email: PEOPLE.dave,
+                  displayLabel: "Dave",
+                  passwordEnvName: "DAVE_PASSWORD",
+                  roles: ["user"]
+                }
+              ]
+            : [])
         ]
       },
       sessionToken: { issuer: "embedding-host", ttlSeconds: 900 }
@@ -303,7 +331,8 @@ export async function createOAuthWorld(
         enabled: true,
         ...(options.personalModelRegions
           ? { personalModelRegions: options.personalModelRegions }
-          : {})
+          : {}),
+        ...(options.ownServers ? { ownServers: options.ownServers } : {})
       },
       assetManagement: { enabled: true },
       personalApiKeys: { enabled: true }
@@ -387,6 +416,8 @@ export async function createOAuthWorld(
       BETTER_AUTH_SECRET: generateTestSecret(),
       ALICE_PASSWORD: passwords.alice,
       BOB_PASSWORD: passwords.bob,
+      CAROL_PASSWORD: passwords.carol,
+      DAVE_PASSWORD: passwords.dave,
       REGISTERED_CLIENT_SECRET: clientSecret,
       SAMPLE_MCP_KEY: sampleKey,
       CHAT_SESSION_TOKEN_SECRET: generateTestSecret(),

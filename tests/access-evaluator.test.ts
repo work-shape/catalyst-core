@@ -173,7 +173,9 @@ describe("access evaluator: whose rows apply", () => {
 
   it("ignores a row whose action is not registered", () => {
     const grants = [grant({ action: "unregistered.action" }), grant({ action: "ref:demo-tools" })];
-    expect(listAccessEntries(holder(), persisted(grants))).toEqual([]);
+    expect(listAccessEntries(holder(), persisted(grants))).toEqual(
+      listAccessEntries(holder(), persisted())
+    );
     expect(decide({ grants, action: "unregistered.action" })).toEqual({
       allowed: false,
       reason: "unknown_action"
@@ -362,7 +364,10 @@ describe("access evaluator: the classes of action", () => {
 
   it("writes no row for an entry of a legacy list that names no key", () => {
     expect(legacyGrantRows(["agent.write", "!agent.write", "nonsense", "!"])).toEqual([]);
-    expect(listAccessEntries(holder(), persisted())).toEqual([]);
+    // What is left is the `user` role's one default: adding one's own MCP server (PMCP).
+    expect(listAccessEntries(holder(), persisted()).map((entry) => entry.action)).toEqual([
+      "connection.add_own"
+    ]);
   });
 });
 
@@ -387,11 +392,11 @@ describe("access evaluator: an inactive holder", () => {
 });
 
 describe("access evaluator: role defaults", () => {
-  it("gives a plain user nothing, an admin no release, no API access, no built-in role edits, no user deletion, no job retry and no System pages, a superadmin all but release, and no role a project", () => {
+  it("gives a plain user only the add of their own MCP server, an admin no release, no API access, no built-in role edits, no user deletion, no job retry and no System pages, a superadmin all but release, and no role a project", () => {
     const allowedFor = (roles: string[]) =>
       ACTIONS.filter((action) => decide({ holder: holder({ roles }), action }).allowed);
 
-    expect(allowedFor(["user"])).toEqual([]);
+    expect(allowedFor(["user"])).toEqual(["connection.add_own"]);
     expect(allowedFor(["user", "admin"])).toEqual(
       ACTIONS.filter(
         (action) =>

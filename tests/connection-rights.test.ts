@@ -58,15 +58,17 @@ function refusalOf(access: ActorAccess, action: string, resource: AccessResource
 }
 
 describe("the vocabulary of Connection rights", () => {
-  it("holds the five actions, all of them with the administrator's role and none with a user's", () => {
-    expect(ACTIONS.filter((action) => action.startsWith("connection."))).toEqual(CONNECTION_RIGHTS);
+  it("holds the five actions and the add of one's own server, the five with the administrator's role and only the add with a user's", () => {
+    // `connection.add_own` adds a person's own MCP server and names no Connection (PMCP).
+    const rights = [...CONNECTION_RIGHTS, "connection.add_own"];
+    expect(ACTIONS.filter((action) => action.startsWith("connection."))).toEqual(rights);
     for (const role of ["admin", "superadmin"] as const) {
       expect(
         ROLE_DEFAULT_ACTIONS[role].filter((action) => action.startsWith("connection.")),
         role
-      ).toEqual(CONNECTION_RIGHTS);
+      ).toEqual(rights);
     }
-    expect(ROLE_DEFAULT_ACTIONS.user).toEqual([]);
+    expect(ROLE_DEFAULT_ACTIONS.user).toEqual(["connection.add_own"]);
   });
 
   it("gives no legacy key a Connection right and no role another legacy key than before", async () => {
@@ -101,13 +103,16 @@ describe("the vocabulary of Connection rights", () => {
   it("lets a new grant row name every Connection right on one Connection or the instance", () => {
     // Writing, deleting and approving are grantable since a change of host clears the key
     // (RIGHTS-1d, D11).
-    expect(GRANTABLE_ACTIONS.filter((action) => action.startsWith("connection."))).toEqual(
-      CONNECTION_RIGHTS
-    );
+    expect(GRANTABLE_ACTIONS.filter((action) => action.startsWith("connection."))).toEqual([
+      ...CONNECTION_RIGHTS,
+      "connection.add_own"
+    ]);
     const scopesOf: Readonly<Record<string, readonly string[]>> = GRANTABLE_ACTION_SCOPES;
     for (const action of CONNECTION_RIGHTS) {
       expect(scopesOf[action], action).toEqual(["asset", "instance"]);
     }
+    // Adding one's own server names no Connection: it is given or denied on the instance.
+    expect(scopesOf["connection.add_own"]).toEqual(["instance"]);
     // A workspace owns agents, skills, Apps and Data Stores (WS-OWN-1a), so their rights are
     // written there too. No workspace owns a Connection, so no right on Connections is written
     // at workspace scope. A right no legacy key carries is also written for the whole instance

@@ -1,6 +1,5 @@
 import {
   CONNECTION_ACTIONS,
-  CONNECTION_ASSET_KIND,
   CONNECTION_EXPOSURE_ACTION_PREFIX,
   answersOutsideClient,
   connectionCallsArePersonal,
@@ -24,7 +23,8 @@ import {
   type OperationDefinition,
   type OperationOrigin,
   type OperationResource,
-  type OperationSource
+  type OperationSource,
+  ownServersOffError
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import {
@@ -40,6 +40,7 @@ import {
   type ConnectionOperationState
 } from "./catalog";
 import {
+  connectionResourceOf,
   readConnection,
   readConnections,
   type ConnectionOperationSourceDeps,
@@ -65,15 +66,6 @@ const CONNECTION_RUN_GRACE_MS = 30_000;
 
 /** How long the description of a tool is at most as a model is sent it. */
 export const CONNECTION_TOOL_DESCRIPTION_MAX_CHARS = 4_000;
-
-function resourceOf(connection: StoredConnection): OperationResource {
-  return {
-    kind: CONNECTION_ASSET_KIND,
-    id: connection.assetId,
-    assetId: connection.assetId,
-    name: connection.config.name
-  };
-}
 
 /**
  * Whether the operation is exposed to the surface the call came through. An agent needs
@@ -159,6 +151,10 @@ async function authorizeCall(
   operation: ConnectionOperationConfig,
   context: OperationAuthorizeContext
 ): Promise<OperationAuthorization> {
+  // The operator switched people's own servers off: they stay, and nothing reaches them.
+  if (connection.config.ownerOnly === true && deps.ownServers?.enabled === false) {
+    throw ownServersOffError();
+  }
   if (connectionCallsArePersonal(connection.config, connection.type)) {
     await requirePersonalConnectionContext({
       ...deps,
@@ -178,7 +174,7 @@ async function authorizeCall(
       reason: "no_grant"
     };
   }
-  const resource = resourceOf(connection);
+  const resource = connectionResourceOf(connection);
   const decision = keyCoversUse(context, resource)
     ? context.access.authorize(CONNECTION_ACTIONS.use, resource)
     : { allowed: false as const, reason: "outside_key_scope" as const };
@@ -258,7 +254,7 @@ function definitionOf(
   const limits = connection.type
     ? connectionCallLimits(connection.type)
     : { callTimeoutMs: CONNECTION_CALL_TIMEOUT_MS, slotWaitMs: CONNECTION_SLOT_WAIT_MS };
-  const resource = resourceOf(connection);
+  const resource = connectionResourceOf(connection);
   const target = {
     connectionName: connection.config.name,
     operationName: operation.name,

@@ -119,7 +119,12 @@ it("preserves the exported unions when contract lists become shared", () => {
   expectTypeOf<ConnectionOrigin>().toEqualTypeOf<"release" | "runtime">();
   expectTypeOf<SecretState>().toEqualTypeOf<"set" | "not_set" | "unreadable">();
   expectTypeOf<ConnectorTestStatus>().toEqualTypeOf<
-    "ready" | "unauthorized" | "network_denied" | "unavailable" | "oauth_required"
+    | "ready"
+    | "unauthorized"
+    | "network_denied"
+    | "unavailable"
+    | "oauth_required"
+    | "token_required"
   >();
   expectTypeOf<ConversationVisibility>().toEqualTypeOf<"workspace" | "private">();
   expectTypeOf<ChatMessageRole>().toEqualTypeOf<"user" | "assistant" | "system" | "tool">();

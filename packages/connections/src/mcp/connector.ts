@@ -19,6 +19,7 @@ import {
   MCP_SOCKETS_PER_CONNECTION,
   MCP_TRANSPORT_HEADER_NAMES,
   createMcpSocketPool,
+  probeMcpServer,
   readMcpChallenge,
   withMcpSession
 } from "./client";
@@ -260,6 +261,9 @@ export function createMcpConnectorType(options: McpConnectorOptions = {}): Conne
       challenge: ({ target, settings, signal }) =>
         readMcpChallenge({ target, url: settingsOf(settings).url, signal })
     },
+
+    probe: ({ target, settings, signal }) =>
+      probeMcpServer({ target, url: settingsOf(settings).url, signal }),
 
     async test(context) {
       let challenged: BearerChallenge | undefined;

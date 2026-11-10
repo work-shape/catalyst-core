@@ -10,7 +10,8 @@ import {
   type ActorAccess,
   type AssetScope,
   type ConfigAssetRecord,
-  type JsonObject
+  type JsonObject,
+  ownerOnlyResource
 } from "@work-shape/catalyst-core";
 import type { WorkflowAssetKind } from "../asset-kinds/shared";
 import type { AssetWorkflowOptions } from "../types";
@@ -89,7 +90,11 @@ export async function resolveAssetTarget(
           }
         }
       : {}),
-    resource: accessResource(kind.kind, address.name, scope, asset?.id, asset?.appAvailability),
+    resource: {
+      ...accessResource(kind.kind, address.name, scope, asset?.id, asset?.appAvailability),
+      // A person's own server: what is decided on it is its owner's (PMCP).
+      ...ownerOnlyResource(asset?.config)
+    },
     address
   };
 }

@@ -162,9 +162,10 @@ describe("the role model", () => {
   });
 
   it("holds back a reset or an applied release change the server would refuse, and says why", () => {
+    // The editor is a `user` too, so holds the add of one's own MCP server (PMCP).
     const narrow: RoleEditor = {
       superadmin: false,
-      rights: rights(["users.manage", "roles.edit_built_in", "audit.view"])
+      rights: rights(["users.manage", "roles.edit_built_in", "audit.view", "connection.add_own"])
     };
     const deny = (action: string) => ({ ...allow(action), effect: "deny" as const });
     const narrowed = builtIn("admin", {

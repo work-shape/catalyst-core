@@ -62,7 +62,9 @@ export const CONNECTION_ACTIONS = {
   use: "connection.use",
   write: "connection.write",
   delete: "connection.delete",
-  approve: "connection.approve"
+  approve: "connection.approve",
+  /** Adding one's own MCP server, a Connection with `ownerOnly` (PMCP). */
+  addOwn: "connection.add_own"
 } as const;
 
 export { CONNECTION_NAME_MAX_LENGTH, CONNECTION_NAME_PATTERN };
@@ -247,6 +249,12 @@ export interface ConnectionConfig {
   authScheme: string;
   /** Shared account, or each acting person’s own OAuth binding. */
   credentialMode: ConnectionCredentialMode;
+  /**
+   * A person's own MCP server (PMCP): only `ownerPrincipalId` reads, uses, changes and deletes
+   * it, and an instance admin only reads it, switches it off and deletes it. The server sets it
+   * on the self-add create, and no write changes it (`owner_only_fixed`).
+   */
+  ownerOnly?: boolean;
   secretHandle?: ConnectionSecretHandle;
   operations: ConnectionOperationConfig[];
   /** Shared limits of list, changes and fetch across every sync of this instance. */
@@ -883,6 +891,17 @@ interface ConnectorTypeBase {
   oauthEndpoints?(settings: JsonObject): ConnectorOAuthEndpoints | undefined;
   /** A bounded check of reachability and authentication. It changes nothing outside. */
   test(context: ConnectorContext): Promise<{ status: ConnectorTestStatus }>;
+  /**
+   * One request to the checked target without any credential: whether the server is there and
+   * what it asks for, `ready`, `oauth_required` (a 401 with a Bearer challenge),
+   * `token_required` (a 401 without one) or `unavailable`. The owner's test of a person's own
+   * server asks it (PMCP), and nothing of the answer is kept.
+   */
+  probe?(input: {
+    target: EgressGrant;
+    settings: JsonObject;
+    signal: AbortSignal;
+  }): Promise<ConnectorTestStatus>;
   execute(operation: string, input: JsonValue, context: ConnectorContext): Promise<JsonValue>;
   limits: ConnectorLimits;
   /**

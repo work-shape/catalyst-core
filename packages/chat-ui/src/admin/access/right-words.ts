@@ -41,6 +41,7 @@ type VerbAction = Extract<PlatformAction, `${RightKind}.${RightVerb}`>;
  * core adds does not compile until it has its words here or is a verb on a kind above.
  */
 const ownActionKeys: Record<Exclude<PlatformAction, VerbAction>, TranslationKey> = {
+  "connection.add_own": "rights.actionConnectionAddOwn",
   "workflow.read_run_data": "rights.actionWorkflowReadRunData",
   "data_store.insert": "rights.actionDataStoreInsert",
   "data_store.execute": "rights.actionDataStoreExecute",

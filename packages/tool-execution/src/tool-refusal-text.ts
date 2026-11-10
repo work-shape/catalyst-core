@@ -150,6 +150,10 @@ type OwnWordAction = Exclude<PlatformAction, `${RightKind}.${RightVerb}`>;
 
 /** An action core adds does not compile until it is a verb on a kind or has its words here. */
 const OWN_ACTION_WORDS: Record<OwnWordAction, Words> = {
+  "connection.add_own": {
+    en: "add your own MCP servers",
+    de: "Eigene MCP-Server hinzufügen"
+  },
   "workflow.read_run_data": {
     en: "view the data of workflow runs",
     de: "Daten der Workflow-Läufe ansehen"

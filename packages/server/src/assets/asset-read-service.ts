@@ -26,6 +26,7 @@ import {
   isAppError,
   isAuthenticatedServicePrincipal,
   liveRevisionId,
+  ownerOnlyResource,
   type ActorAccess,
   type AuthenticatedIdentity,
   type AgentAvailability,
@@ -281,13 +282,17 @@ export class AssetReadWorkflow {
       return callers === undefined || callers.length === 0 ? {} : { appCallers: callers };
     };
     return records.map((record) => {
-      const resource = accessResource(
-        record.kind,
-        record.name,
-        record.scope,
-        record.id,
-        record.appAvailability
-      );
+      const resource = {
+        ...accessResource(
+          record.kind,
+          record.name,
+          record.scope,
+          record.id,
+          record.appAvailability
+        ),
+        // A person's own server: what a reader may do with it is decided as its owner's.
+        ...ownerOnlyResource(record.config)
+      };
       const allowed = allowedOn(kind, call, resource);
       if (!reads(resource)) {
         return {

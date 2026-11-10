@@ -15,7 +15,7 @@ import { requirePrecondition } from "../asset-revision";
 import type { AssetWorkflowOptions } from "../../types";
 import { writeAssetConfig } from "./apply";
 import type { AssetVerbScope } from "./scope";
-import { requireFurtherRight } from "./revision-rights";
+import { requireFurtherRight, requireWriteOn } from "./revision-rights";
 
 /**
  * Creates the asset, or replaces it at the revision the caller read. `null` as the expected
@@ -40,7 +40,14 @@ export async function putAsset(
 ) {
   const target = await scope.target(input);
   const { kind } = target;
-  call.access.require(kind.actions.write, target.resource);
+  requireWriteOn(call.access, target, input.config);
+  if (input.config !== undefined) {
+    kind.assertPutBy?.({
+      actor: call.actor,
+      current: target.asset?.status === "active" ? target.asset.config : undefined,
+      next: input.config
+    });
+  }
   await requireFurtherRight(scope, call.access, target, "write", input.config);
   const expectedRevision = requirePrecondition(input, input.expectedRevision);
   await scope.authorizeEditing(call, "put");

@@ -68,7 +68,8 @@ const GRANT_VERB_RANK: Record<GrantVerb, number> = {
   view_users: 15,
   retry: 16,
   view: 17,
-  manage: 18
+  manage: 18,
+  add_own: 19
 };
 
 function isGrantKind(kind: string): kind is GrantKind {
@@ -86,8 +87,15 @@ interface GrantRight {
   verb: GrantVerb;
 }
 
+/**
+ * Rights the dialog does not offer. Adding one's own MCP server names no Connection, so it is
+ * no right on one: a role holds it or refuses it in the role editor (PMCP).
+ */
+const OUTSIDE_THE_DIALOG: readonly string[] = ["connection.add_own"];
+
 /** Every right core writes a grant row for, the kinds in core's order and each kind's verbs in the page's. */
 const GRANT_RIGHTS: readonly GrantRight[] = GRANTABLE_ACTIONS.flatMap((action) => {
+  if (OUTSIDE_THE_DIALOG.includes(action)) return [];
   const dot = action.indexOf(".");
   const kind = dot < 0 ? BUNDLE_KIND : action.slice(0, dot);
   const verb = action.slice(dot + 1);

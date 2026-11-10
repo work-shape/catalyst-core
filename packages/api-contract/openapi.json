@@ -8647,7 +8647,8 @@
                         "unauthorized",
                         "network_denied",
                         "unavailable",
-                        "oauth_required"
+                        "oauth_required",
+                        "token_required"
                       ]
                     },
                     "testedAt": {

@@ -20,6 +20,15 @@ import {
   findPersonContextAppIssue,
   parseConnectionOperationName,
   endConnectionSignIn,
+  DEFAULT_OWN_SERVERS,
+  isFirstPartyPerson,
+  operationDenialError,
+  ownServersLimitError,
+  ownServersOffError,
+  ownerOnlyFixedError,
+  ownerOnlyOwnerOf,
+  type AccessResource,
+  type ActorAccess,
   type AssetValidationIssue,
   type ConnectionBindingEndReason,
   type ConnectionCatalogueLink,
@@ -30,7 +39,10 @@ import {
   type JsonObject,
   type ConnectorTypeRegistry,
   type EgressChecker,
-  type EgressTarget
+  type EgressTarget,
+  type OperationAuthorization,
+  type OwnServersSettings,
+  isRecord
 } from "@work-shape/catalyst-core";
 import { endHeldCallsOnDeletedConnection } from "../approvals/connection-held-calls";
 import { requestConnectionDiscovery } from "../connections/connection-jobs";
@@ -61,6 +73,11 @@ export interface ConnectionAssetKindOptions {
     linkIssue(link: ConnectionCatalogueLink, connectorType: string): string | undefined;
     prepareConnection?(config: Record<string, unknown>): Record<string, unknown>;
   };
+  /**
+   * `modules.connections.ownServers`: whether people add their own MCP servers and how many
+   * each. Left out, the release default.
+   */
+  ownServers?: Pick<OwnServersSettings, "enabled" | "perPerson">;
 }
 
 /** The catalogue link a definition holds, as written, or nothing. */
@@ -331,8 +348,17 @@ function withServerFields(
       { reason: "credential_mode_fixed" }
     );
   }
+  // Whether only its owner uses it is decided by the create (PMCP): a write that leaves it
+  // out keeps it, and one that names another answers `owner_only_fixed`.
+  const ownerOnly =
+    current === undefined ? next.ownerOnly === true : ownerOnlyOwnerOf(current) !== undefined;
+  if (current !== undefined && next.ownerOnly !== undefined && next.ownerOnly !== ownerOnly) {
+    throw ownerOnlyFixedError();
+  }
   // A handle the caller sent names nothing of this Connection's.
-  const rest = Object.fromEntries(Object.entries(next).filter(([key]) => key !== "secretHandle"));
+  const rest = Object.fromEntries(
+    Object.entries(next).filter(([key]) => key !== "secretHandle" && key !== "ownerOnly")
+  );
   const storedOwner = readDefinitionField(current, "ownerPrincipalId");
   const storedHandle = readDefinitionField(current, "secretHandle");
   const owner = typeof storedOwner === "string" ? storedOwner : principalId;
@@ -340,6 +366,7 @@ function withServerFields(
   return {
     ...rest,
     ...(owner === undefined ? {} : { ownerPrincipalId: owner }),
+    ...(ownerOnly ? { ownerOnly: true } : {}),
     credentialMode:
       next.credentialMode ?? readDefinitionField(current, "credentialMode") ?? "shared",
     origin: "runtime",
@@ -350,6 +377,63 @@ function withServerFields(
         }
       : {})
   };
+}
+
+/** What a self-add create may not carry: its tools are accepted once it is added (PMCP). */
+function ownServerCreateIssue(next: Record<string, unknown>): string | undefined {
+  const operations = readDefinitionField(next, "operations");
+  if (Array.isArray(operations) && operations.length > 0) {
+    return "a person's own MCP server accepts its tools once it is added, never in the create";
+  }
+  return undefined;
+}
+
+/**
+ * Whether a write of a person's own server by somebody else only switches it off: `enabled:
+ * false`, and the rest as stored. That is all an instance admin changes of one (PMCP).
+ */
+function switchesOffOnly(current: unknown, next: Record<string, unknown>): boolean {
+  const before = connectionConfigSchema.safeParse(current);
+  const after = connectionConfigSchema.safeParse(withServerFields(current, next, undefined));
+  return (
+    before.success &&
+    after.success &&
+    after.data.enabled === false &&
+    configValuesEqual({ ...before.data, enabled: false }, after.data)
+  );
+}
+
+/**
+ * The right a put or a revert of a Connection asks where it is a person's own server: the
+ * create asks `connection.add_own`, never the write right; a change asks the owner, and of
+ * anyone else, an instance admin, a switch-off and nothing more. Nothing for any other write.
+ */
+function ownServerWriteDecision(input: {
+  access: ActorAccess;
+  resource: AccessResource;
+  current: unknown;
+  next: unknown;
+}): OperationAuthorization | undefined {
+  const { access, resource, current, next } = input;
+  if (!isRecord(next)) return undefined;
+  const definition = next;
+  if (current === undefined) {
+    if (definition.ownerOnly !== true) return undefined;
+    // Asked without a resource: the right to add one's own server is the instance's.
+    const decision = access.authorize(CONNECTION_ACTIONS.addOwn);
+    return decision.allowed
+      ? { allowed: true }
+      : { allowed: false, action: CONNECTION_ACTIONS.addOwn, reason: decision.reason };
+  }
+  if (ownerOnlyOwnerOf(current) === undefined) return undefined;
+  const decision = access.authorize(CONNECTION_ACTIONS.write, resource);
+  if (!decision.allowed) {
+    return { allowed: false, action: CONNECTION_ACTIONS.write, reason: decision.reason };
+  }
+  if (decision.source === "owner" || switchesOffOnly(current, definition)) {
+    return { allowed: true };
+  }
+  return { allowed: false, action: CONNECTION_ACTIONS.write, reason: "not_owner" };
 }
 
 /**
@@ -456,13 +540,32 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
         readDefinitionField(restored, "origin") === "release"
           ? restored
           : withServerFields(
-              current ?? { ownerPrincipalId: readDefinitionField(restored, "ownerPrincipalId") },
+              current ?? {
+                ownerPrincipalId: readDefinitionField(restored, "ownerPrincipalId"),
+                ownerOnly: readDefinitionField(restored, "ownerOnly")
+              },
               restored,
               principalId
             );
       return options.catalogue?.prepareConnection?.(config) ?? config;
     },
     missingUpsertRight: () => undefined,
+    writeDecision: ownServerWriteDecision,
+    // The self-add create (PMCP): only a person in their own session on the instance adds one,
+    // while the operator lets people, and it brings no tool yet.
+    assertPutBy({ actor, current, next }) {
+      if (current !== undefined || next.ownerOnly !== true) return;
+      if (!isFirstPartyPerson(actor)) {
+        throw operationDenialError({
+          kind: "forbidden",
+          action: CONNECTION_ACTIONS.addOwn,
+          reason: "user_only"
+        });
+      }
+      if (options.ownServers?.enabled === false) throw ownServersOffError();
+      const issue = ownServerCreateIssue(next);
+      if (issue !== undefined) throw new AppError("VALIDATION_FAILED", issue);
+    },
     // Asked before the definition is read: a seeded Connection answers `read_only_origin`
     // also where this build ships no Connector type for what the caller sent.
     assertStoredWritable({ current }) {
@@ -511,6 +614,21 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
     // install gets (its allows went with the delete). A revert restores and keeps them.
     async withinWrite(input) {
       const { clientInstanceId, assetId, previous, config, stores } = input;
+      // Counted in the write's transaction, the new one with them: one person holds at most
+      // `perPerson` own servers (PMCP).
+      if (previous === undefined && config !== undefined) {
+        const owner = ownerOnlyOwnerOf(config);
+        if (owner !== undefined) {
+          const perPerson = options.ownServers?.perPerson ?? DEFAULT_OWN_SERVERS.perPerson;
+          const held = (
+            await stores.configAssets.listActiveConfigAssets({
+              clientInstanceId,
+              kind: CONNECTION_ASSET_KIND
+            })
+          ).filter((asset) => ownerOnlyOwnerOf(asset.config) === owner).length;
+          if (held > perPerson) throw ownServersLimitError(perPerson);
+        }
+      }
       if (
         input.createdAgainId !== undefined &&
         readDefinitionField(config, "catalogue") !== undefined
