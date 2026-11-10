@@ -54,7 +54,7 @@ describe("the place ladder", () => {
 
   it("says where a chat can choose an agent for everyone, and when no chat can", () => {
     const agent = (availability?: {
-      mode: "all" | "selected";
+      mode: "all" | "selected" | "all_except";
       collaborationWorkspaceIds: string[];
       personalWorkspaces: boolean;
     }) => ({ scope: { kind: "instance" as const }, ...(availability ? { availability } : {}) });
@@ -74,6 +74,23 @@ describe("the place ladder", () => {
         "de"
       )
     ).toEqual({ text: "Wählbar in: Controlling und Persönliche Arbeitsbereiche" });
+    // All but some: how many are left out, in either language.
+    expect(
+      agentAudience(
+        agent({ mode: "all_except", collaborationWorkspaceIds: [TEAM], personalWorkspaces: true }),
+        workspaces,
+        de,
+        "de"
+      )
+    ).toEqual({ text: "Wählbar in: Alle außer 1" });
+    expect(
+      agentAudience(
+        agent({ mode: "all_except", collaborationWorkspaceIds: [TEAM], personalWorkspaces: true }),
+        workspaces,
+        en,
+        "en"
+      )
+    ).toEqual({ text: "Can be chosen in: All except 1" });
     // Offered nowhere: the outcome in plain words, which the page links to "Verfügbar in".
     expect(
       agentAudience(
