@@ -3,13 +3,7 @@ import { Banner, Button, Dialog } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import type { BuildCreateDialogProps } from "./build-asset-kind";
 import { ConnectionApprovalList, approveLabel, useApprovalChoice } from "./connection-approval";
-import {
-  APPROVAL_SURFACES,
-  operationTitle,
-  selectedCandidates,
-  type ApprovalCandidate,
-  type ApprovalSurface
-} from "./connection-approval-model";
+import { selectedCandidates, type ApprovalCandidate } from "./connection-approval-model";
 import { withApprovedOperations } from "./connection-form-model";
 import { ConnectionApprovedBody, useGiveToAgent } from "./connection-give-step";
 import type { ConnectionReadyOutcome } from "./connection-ready";
@@ -17,7 +11,13 @@ import { approvalRefusals, type ApprovalRefused } from "./connection-refusals";
 import { ApprovalRefusals } from "./connection-rest-tools";
 import type { ConnectionSource } from "./connection-source";
 import { TypedConnectionCreate, type TypedConnected } from "./connection-typed-create";
-import { offerText, type ConnectorTypeOffer, type TypedValues } from "./connection-typed-model";
+import {
+  offerText,
+  typedCandidates,
+  typedSurfaces,
+  type ConnectorTypeOffer,
+  type TypedValues
+} from "./connection-typed-model";
 import { RefusalDetail } from "./refusal-notice";
 
 // A Connector type with a form and a catalog of its own, such as a mailbox: the form, then
@@ -38,22 +38,6 @@ type Stage =
   | { step: "review"; connected: TypedConnected; candidates: ApprovalCandidate[] }
   | { step: "approved"; connected: TypedConnected; count: number; gives: boolean }
   | { step: "give"; connected: TypedConnected; count: number; gives: boolean };
-
-/** The type's operations as rows of the approval list: the reading ones start ticked. */
-export function typedCandidates(offer: ConnectorTypeOffer): ApprovalCandidate[] {
-  return offer.operations.map((operation) => ({
-    name: operation.name,
-    title: operationTitle(operation.name),
-    ...(operation.description === "" ? {} : { description: operation.description }),
-    effect: operation.effect,
-    recommended: operation.effect === "reading"
-  }));
-}
-
-/** Where the "may use" row offers the approved tools: what the type allows of the three. */
-export function typedSurfaces(offer: ConnectorTypeOffer): ApprovalSurface[] {
-  return APPROVAL_SURFACES.filter((surface) => offer.exposures.includes(surface));
-}
 
 export function TypedConnectionSetup({
   offer,

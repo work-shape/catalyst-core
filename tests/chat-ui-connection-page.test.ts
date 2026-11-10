@@ -23,7 +23,8 @@ import {
   type ConnectionDetailRead,
   type ConnectionHoldersRead,
   type ConnectionSource,
-  type ConnectionTestRun
+  type ConnectionTestRun,
+  type ConnectorTypeOffer
 } from "@work-shape/catalyst-chat-ui/build-area";
 import { SettingsPageProvider } from "@work-shape/catalyst-chat-ui/settings-page-context";
 import { platformContext } from "./chat-ui-build-fixtures";
@@ -37,6 +38,9 @@ import {
 } from "./chat-ui-connection-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { mailbox } from "./chat-ui-catalogue-oauth-fixtures";
+import { connectorTypeOffers } from "@work-shape/catalyst-connections";
+import { createConnectorTypeRegistry } from "@work-shape/catalyst-core";
+import { createImapConnectorType } from "@work-shape/catalyst-imap-connector";
 
 // The Connection page against the answers of the contract, handed in where the instance's
 // answers will stand. Every test here fails without the page: before it, the address of a
@@ -75,6 +79,8 @@ interface PageInput {
   settings?: boolean;
   /** The source writes the test credential. Yes unless it says no. */
   testCredentialWrites?: boolean;
+  /** The Connector types with a form of their own the instance offers. None unless it says so. */
+  types?: ConnectorTypeOffer[];
 }
 
 /** The page at the Connection's address, inside the frame, with fixed answers. */
@@ -87,6 +93,7 @@ function renderPage(input: PageInput = {}): string {
     useTest: () => ({ run: input.run ?? { status: "idle" }, start: noop }),
     useHolders: () => input.holders ?? { status: "hidden" },
     useCatalogueEntries: () => input.entries ?? [],
+    useConnectorTypes: () => input.types ?? [],
     setSecret: async () => undefined,
     ...(input.testCredentialWrites === false
       ? {}
@@ -1188,6 +1195,70 @@ describe("Connection page", () => {
       "Du hast die Tools schon als YAML."
     );
     expect(renderPage({ asset: rest, canWrite: false })).not.toContain("data-connection-paste");
+  });
+
+  it("offers a mailbox's operations to agents alone, and lists those its type declares that wait for approval", () => {
+    // MBX-1b: "Later" left one of the mailbox's two operations unapproved. The type allows
+    // agents alone, so the page offers no box for Apps, Workflows or outside clients.
+    const imap = connectorTypeOffers(
+      createConnectorTypeRegistry([createImapConnectorType()])
+    ).types;
+    const asset = connectionAsset("feedback-mailbox", {
+      origin: "runtime",
+      connectorType: "imap",
+      authScheme: "password",
+      settings: {
+        host: "imap.example.test",
+        port: 993,
+        username: "f@example.test",
+        folders: ["INBOX"]
+      },
+      operations: [
+        { name: "search_messages", effect: "reading", exposure: ["agent"], enabled: true }
+      ]
+    });
+    const detail = {
+      operations: [
+        {
+          name: "search_messages",
+          toolName: "connection.feedback-mailbox.search_messages",
+          effect: "reading" as const,
+          exposure: ["agent" as const],
+          enabled: true,
+          status: "ready" as const,
+          description: "Search one folder of the mailbox."
+        }
+      ]
+    };
+    const markup = renderPage({ asset, detail, types: imap });
+    expect(markup).toContain('data-connection-exposure="agent:search_messages"');
+    for (const surface of ["bridge", "workflow", "outside"]) {
+      expect(markup, surface).not.toContain(
+        `data-connection-exposure="${surface}:search_messages"`
+      );
+    }
+    // The one left waits under "Tools to approve", where "May use them" offers agents alone.
+    expect(markup).toContain('data-connection-type-tools="imap"');
+    expect(markup).toContain("Tools to approve");
+    expect(markup).toContain('data-approval-tool="get_message"');
+    expect(markup).not.toContain('data-approval-tool="search_messages"');
+    expect(
+      [...markup.matchAll(/data-approval-surface="([a-z]+)"/gu)].map((match) => match[1])
+    ).toEqual(["agent"]);
+    expect(renderPage({ asset, detail, types: imap, locale: "de" })).toContain(
+      "Freizugebende Tools"
+    );
+    // Once both are approved, nothing waits.
+    const both = connectionAsset("feedback-mailbox", {
+      ...asset.config,
+      operations: [
+        { name: "search_messages", effect: "reading", exposure: ["agent"], enabled: true },
+        { name: "get_message", effect: "reading", exposure: ["agent"], enabled: true }
+      ]
+    });
+    expect(renderPage({ asset: both, detail, types: imap })).not.toContain(
+      "data-connection-type-tools"
+    );
   });
 
   it("offers a writer four check boxes per operation, for agents, Apps, Workflows and outside clients", () => {

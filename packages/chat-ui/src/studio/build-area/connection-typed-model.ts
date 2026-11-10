@@ -1,5 +1,11 @@
 import type { ConnectorTypeOffers, LocaleCode } from "@work-shape/catalyst-api-client";
-import { recordOf } from "./connection-approval-model";
+import {
+  APPROVAL_SURFACES,
+  operationTitle,
+  recordOf,
+  type ApprovalCandidate,
+  type ApprovalSurface
+} from "./connection-approval-model";
 
 // A Connector type the build offers with its own form, such as a document source: the New
 // connection dialog shows a card for it and asks for the fields the type declares.
@@ -123,4 +129,20 @@ function setAt(target: Record<string, unknown>, path: readonly string[], value: 
   const child: Record<string, unknown> = { ...recordOf(target[head]) };
   setAt(child, rest, value);
   target[head] = child;
+}
+
+/** The type's operations as rows of the approval list: the reading ones start ticked. */
+export function typedCandidates(offer: ConnectorTypeOffer): ApprovalCandidate[] {
+  return offer.operations.map((operation) => ({
+    name: operation.name,
+    title: operationTitle(operation.name),
+    ...(operation.description === "" ? {} : { description: operation.description }),
+    effect: operation.effect,
+    recommended: operation.effect === "reading"
+  }));
+}
+
+/** Where the "may use" row offers the approved tools: what the type allows of the three. */
+export function typedSurfaces(offer: ConnectorTypeOffer): ApprovalSurface[] {
+  return APPROVAL_SURFACES.filter((surface) => offer.exposures.includes(surface));
 }

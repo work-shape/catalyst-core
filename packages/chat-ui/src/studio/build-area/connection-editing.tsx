@@ -21,9 +21,11 @@ import { usedByNames } from "./connection-used-by";
 import {
   discoveredCandidates,
   selectedCandidates,
-  type ApprovalCandidate
+  type ApprovalCandidate,
+  type ApprovalSurface
 } from "./connection-approval-model";
 import {
+  acceptedOperationsOf,
   connectionConfigToForm,
   countConnectionFormChanges,
   holdsSecret,
@@ -33,6 +35,7 @@ import {
 } from "./connection-form-model";
 import { connectionRefusalOf, type ConnectionRefusal } from "./connection-refusals";
 import type { ConnectionSource } from "./connection-source";
+import { typedCandidates, typedSurfaces, type ConnectorTypeOffer } from "./connection-typed-model";
 import { RefusalNotice } from "./refusal-notice";
 import type { ActionNotice } from "./build-model";
 
@@ -429,13 +432,67 @@ export function DiscoveredTools({
   );
 }
 
+/** The operations a type declares that its Connection does not accept yet. */
+export function typeToolsToApprove(
+  offer: ConnectorTypeOffer,
+  config: Record<string, unknown>
+): ApprovalCandidate[] {
+  const accepted = new Set(acceptedOperationsOf(config).map((entry) => entry.name));
+  return typedCandidates(offer).filter((candidate) => !accepted.has(candidate.name));
+}
+
+/**
+ * The operations a Connector type declares itself, such as a mailbox's, that its Connection
+ * does not accept yet: approved here once "Later" left them, for where the type allows.
+ */
+export function TypeTools({
+  asset,
+  frame,
+  offer,
+  written
+}: {
+  asset: BuildAsset;
+  frame: BuildAssetEditorProps;
+  offer: ConnectorTypeOffer;
+  written(): void;
+}) {
+  const write = useConnectionWrite(frame, written);
+  const candidates = typeToolsToApprove(offer, asset.config);
+  const surfaces = typedSurfaces(offer);
+  return (
+    <div className="grid gap-3" data-connection-type-tools={offer.type}>
+      <DiscoveredApproval
+        key={candidates.map((candidate) => candidate.name).join("|")}
+        candidates={candidates}
+        surfaces={surfaces}
+        saving={write.saving === "approve"}
+        blocked={frame.saveBlocked === true || write.saving !== undefined}
+        approve={(chosen, chosenSurfaces) =>
+          write.write(
+            "approve",
+            withApprovedOperations(
+              asset.config,
+              chosen,
+              chosenSurfaces.filter((surface) => surfaces.some((allowed) => allowed === surface))
+            )
+          )
+        }
+      />
+      {write.failure ? <RefusalNotice {...write.failure} /> : null}
+    </div>
+  );
+}
+
 function DiscoveredApproval({
   candidates,
+  surfaces,
   saving,
   blocked,
   approve
 }: {
   candidates: ApprovalCandidate[];
+  /** Where the "may use" row offers the tools, where the type allows fewer than all. */
+  surfaces?: readonly ApprovalSurface[];
   saving: boolean;
   blocked: boolean;
   approve(chosen: ApprovalCandidate[], surfaces: string[]): Promise<boolean>;
@@ -451,6 +508,7 @@ function DiscoveredApproval({
         onSelectedChange={approval.setSelected}
         onSurfacesChange={approval.setSurfaces}
         onEffectsChange={approval.setEffects}
+        {...(surfaces === undefined ? {} : { surfaces })}
         disabled={blocked}
       />
       <Button
