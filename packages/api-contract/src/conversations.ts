@@ -179,7 +179,9 @@ const knowledgeCitationSourceSchema = z.object({
   fileName: z.string().min(1),
   page: z.number().int().positive().optional(),
   sheet: z.string().min(1).optional(),
-  originLink: z.string().optional()
+  originLink: z.string().optional(),
+  /** The date of the cited synced document, shown on its chip. An ISO date-time. */
+  modifiedAt: z.string().optional()
 });
 
 export const messageCitationSchema = z.object({

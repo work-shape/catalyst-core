@@ -345,7 +345,12 @@ const knowledgeSearchResponseSchema = z.object({
       text: z.string(),
       /** Reciprocal rank fusion of the lists in `signals`: compare it only within one Knowledge Base. */
       score: z.number(),
-      originLink: z.string().optional()
+      originLink: z.string().optional(),
+      /**
+       * The date of a synced document: for a web page the date it states, else its
+       * Last-Modified or the day it was first read. An ISO date-time in UTC.
+       */
+      modifiedAt: z.string().optional()
     })
   ),
   /** The ranked lists fused: `semantic`, `keyword` and `title`. */

@@ -28617,6 +28617,9 @@
                           },
                           "originLink": {
                             "type": "string"
+                          },
+                          "modifiedAt": {
+                            "type": "string"
                           }
                         },
                         "required": [
@@ -50598,6 +50601,9 @@
                   "minLength": 1
                 },
                 "originLink": {
+                  "type": "string"
+                },
+                "modifiedAt": {
                   "type": "string"
                 }
               },
