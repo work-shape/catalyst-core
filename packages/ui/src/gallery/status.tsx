@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Button } from "../actions/button";
 import { Spinner } from "../feedback/spinner";
 import { Avatar, type AvatarKind, type AvatarSize } from "../status/avatar";
+import { AvatarStack } from "../status/avatar-stack";
 import { Badge, type BadgeAppearance, type BadgeTone } from "../status/badge";
 import { Chip, ScopeChip, type ChipSize } from "../status/chip";
 import { CountBadge, type CountBadgeTone } from "../status/count-badge";
@@ -236,6 +237,26 @@ export const statusGallery: GalleryGroup = {
           ))}
         </>
       )
+    },
+    {
+      name: "AvatarStack",
+      components: ["AvatarStack"],
+      render: (text) => {
+        const people = [
+          text.personName,
+          text.personNameSecond,
+          text.personNameThird,
+          text.personNameFourth
+        ].map((name) => ({ id: name, name }));
+        return (
+          <Samples>
+            <AvatarStack people={people.slice(0, 1)} />
+            <AvatarStack people={people.slice(0, 3)} />
+            <AvatarStack people={people} />
+            <AvatarStack people={people} size="xs" max={2} />
+          </Samples>
+        );
+      }
     },
     {
       name: "Chip",
