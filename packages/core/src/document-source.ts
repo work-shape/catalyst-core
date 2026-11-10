@@ -25,6 +25,24 @@ import { AppError, type AppErrorCode } from "./errors";
 /** Where a source is read: folder ids of the outside system, never a path. */
 export interface DocumentSourceBoundary {
   folderIds: readonly string[];
+  /**
+   * The boundary of a source that reads web pages (KB-WEB): addresses, not folder ids. Its
+   * `folderIds` are then its addresses, `pages`, `prefixes` and `sitemaps` in that order, and an
+   * item's `parents` name the address it was found from. `include` and `exclude` are the
+   * source's patterns on the address's path, so a walk leaves out what the sync would drop.
+   */
+  web?: DocumentSourceWebBoundary;
+}
+
+/** A web source's boundary: single pages, everything linked below a prefix, and sitemaps. */
+export interface DocumentSourceWebBoundary {
+  pages: readonly string[];
+  prefixes: readonly string[];
+  sitemaps: readonly string[];
+  /** How many links below a prefix's own page are followed. */
+  maxDepth: number;
+  include?: readonly string[];
+  exclude?: readonly string[];
 }
 
 /**
