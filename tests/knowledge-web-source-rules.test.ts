@@ -105,6 +105,44 @@ describe("reading a page", () => {
     expect(page.statedDate?.slice(0, 10)).toBe(date);
   });
 
+  it.each([
+    "Die Anlage entspricht dem Stand der Technik nach der Richtlinie vom 12.05.2016.",
+    "Stand: Zuletzt geändert durch Art. 5 G v. 22.12.2023",
+    "Updated guidance was published on 1 March 2024."
+  ])("states no date in %s", (text) => {
+    const page = readHtmlPage(`<main><p>${text}</p></main>`, new URL("https://www.example.org/"));
+    expect(page.statedDate).toBeUndefined();
+  });
+
+  it("reads a <time> marked as the date of the change, and no other <time>", () => {
+    const page = (time: string) =>
+      readHtmlPage(`<main><p>Published ${time}</p></main>`, new URL("https://www.example.org/"))
+        .statedDate;
+    expect(page('<time itemprop="dateModified" datetime="2026-04-05">5 April</time>')).toBe(
+      "2026-04-05T00:00:00.000Z"
+    );
+    expect(page('<time datetime="2026-04-05">5 April</time>')).toBeUndefined();
+  });
+
+  // A page is read synchronously in the sync worker, where no signal or deadline stops it, so a
+  // hostile one must cost its length only.
+  it.each([
+    ["unclosed scripts", "<script>"],
+    ["unclosed navigation", "<nav>"],
+    ["unclosed headings", "<h2>"],
+    ["unclosed titles", "<title>"],
+    ["unclosed comments", "<!--"],
+    ["tags that never end", "<a href=x "],
+    ["bare brackets", "<"],
+    ["empty cells on one line", "<td></td>"],
+    ["date labels", "Stand der "]
+  ])("reads 5 MB of %s in well under a second", (_name, piece) => {
+    const html = `<html><body><main>${piece.repeat(Math.ceil((5 * 1024 * 1024) / piece.length))}</main></body></html>`;
+    const started = performance.now();
+    readHtmlPage(html, new URL("https://www.example.org/"));
+    expect(performance.now() - started).toBeLessThan(1_000);
+  });
+
   it("follows no script, mail or other-scheme link", () => {
     const page = readHtmlPage(
       `<a href="javascript:alert(1)">x</a><a href="mailto:a@b.c">m</a><a href="http://www.example.org/plain">p</a><a href="https://u:p@www.example.org/">c</a>`,
