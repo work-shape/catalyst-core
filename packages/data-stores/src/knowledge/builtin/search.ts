@@ -70,6 +70,7 @@ const hitRow = z.object({
   file_name: z.string(),
   title: z.string(),
   origin_link: z.string().nullable(),
+  modified_at: z.string().nullable(),
   page: z.number().int().nullable(),
   heading: z.string().nullable(),
   text: z.string(),
@@ -189,7 +190,8 @@ function hitOf(row: z.infer<typeof hitRow>): KnowledgeSearchHit {
     ...(row.heading === null ? {} : { heading: row.heading }),
     text: row.text,
     score: row.score,
-    ...(row.origin_link === null ? {} : { originLink: row.origin_link })
+    ...(row.origin_link === null ? {} : { originLink: row.origin_link }),
+    ...(row.modified_at === null ? {} : { modifiedAt: row.modified_at })
   };
 }
 
@@ -364,12 +366,15 @@ function searchStatement(
   );
   return `with ${parts.join(",\n")}
     select d.id as document_id, d.managed_file_id, d.file_name, d.title, d.origin_link,
+      -- A synced item's own date, which a citation shows (KB-WEB).
+      (select pg_catalog.to_char(fi.modified_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+        from catalyst_kb.source_items fi where fi.id = d.source_item_id) as modified_at,
       c.page, c.heading, c.text, f.score::pg_catalog.float8 as score
     from fused f
     join catalyst_kb.chunks c on c.id = f.id
     -- The document each passage names: the first added that holds its content and matches.
     join lateral (
-      select d.id, d.managed_file_id, d.file_name, d.title, d.origin_link
+      select d.id, d.managed_file_id, d.file_name, d.title, d.origin_link, d.source_item_id
       from catalyst_kb.documents d
       where d.content_sha256 = c.content_sha256 and d.withdrawn_at is null${filter}
       order by d.added_at, d.id limit 1

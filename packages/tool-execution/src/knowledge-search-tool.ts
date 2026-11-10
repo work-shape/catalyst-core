@@ -56,7 +56,8 @@ const passageSchema = z.object({
   heading: z.string().optional(),
   text: z.string(),
   score: z.number(),
-  originLink: z.string().optional()
+  originLink: z.string().optional(),
+  modifiedAt: z.string().optional()
 });
 
 const searchOutputSchema = z.object({ passages: z.array(passageSchema) });

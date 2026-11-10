@@ -11,6 +11,8 @@ export interface KnowledgeCitationSource {
   /** The name of the sheet, in a spreadsheet, where `page` counts sheets. */
   sheet?: string;
   originLink?: string;
+  /** The document's date at its source, which the citation shows ("Stand 01.11.2026"). */
+  modifiedAt?: string;
 }
 
 const sourceSchema = z.object({
@@ -22,7 +24,8 @@ const sourceSchema = z.object({
   page: z.number().int().positive().optional(),
   sheet: z.string().min(1).optional(),
   heading: z.string().min(1).optional(),
-  originLink: z.string().optional()
+  originLink: z.string().optional(),
+  modifiedAt: z.iso.datetime({ offset: true }).optional().catch(undefined)
 });
 
 /** Reads persisted identities or search passages, discarding passage text and extra fields. */

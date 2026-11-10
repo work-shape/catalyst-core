@@ -23,6 +23,26 @@ export interface KnowledgeCitation {
   page?: number;
   /** The name of the sheet a spreadsheet's passage is on. */
   sheet?: string;
+  /** The document's date at its source, such as the "Stand" of a web page (KB-WEB). */
+  modifiedAt?: string;
+}
+
+/** "Stand 01.11.2026": the date of the version a citation quotes, in the reader's language. */
+function knowledgeCitationDate(
+  t: ReturnType<typeof useTranslation>["t"],
+  locale: string,
+  modifiedAt: string | undefined
+): string | undefined {
+  if (modifiedAt === undefined) return undefined;
+  const at = new Date(modifiedAt);
+  if (Number.isNaN(at.getTime())) return undefined;
+  const date = new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "UTC"
+  }).format(at);
+  return t("knowledge.citationAsOf", { date });
 }
 
 /**
@@ -60,7 +80,7 @@ export function KnowledgeCitationChip({
   conversationId?: string;
   className?: string;
 }) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const api = useOptionalWorkspaceApiClient();
   const [state, setState] = useState<"idle" | "opening" | "removed" | "unreachable" | "failed">(
     "idle"
@@ -70,7 +90,8 @@ export function KnowledgeCitationChip({
     (citation.page === undefined
       ? undefined
       : t("knowledge.citationPage", { page: String(citation.page) }));
-  const label = place === undefined ? citation.fileName : `${citation.fileName}, ${place}`;
+  const asOf = knowledgeCitationDate(t, locale, citation.modifiedAt);
+  const label = [citation.fileName, place, asOf].filter((part) => part !== undefined).join(", ");
   const open = async () => {
     if (!api) return;
     setState("opening");

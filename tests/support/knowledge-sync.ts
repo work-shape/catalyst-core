@@ -401,7 +401,9 @@ export function useKnowledgeSync({
       sources: {
         id: string;
         connection: string;
-        folders: string[];
+        folders?: string[];
+        /** A web source names addresses in place of folders. */
+        prefixes?: string[];
         include?: string[];
         exclude?: string[];
         schedule?: { changes?: number | "off"; full?: string };
