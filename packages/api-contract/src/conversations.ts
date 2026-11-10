@@ -51,6 +51,13 @@ export const conversationSubjectSchema = z.object({
  */
 export const conversationCreationTargetSchema = z.literal("instance");
 
+/** A member a private chat's creator named, as every reader of the chat sees them. */
+export const conversationPersonSchema = z.object({
+  userId: z.string(),
+  displayLabel: z.string(),
+  addedAt: timestampSchema
+});
+
 export const conversationSchema = z.object({
   id: z.string(),
   clientInstanceId: z.string(),
@@ -69,7 +76,50 @@ export const conversationSchema = z.object({
   /** `instance`: its first saves create agents, skills and guardrails for the instance. */
   creationTarget: conversationCreationTargetSchema.optional(),
   /** The project of its workspace it is in; its readers are the project's audience. */
-  projectId: z.string().optional()
+  projectId: z.string().optional(),
+  /**
+   * The members of its workspace its creator named, who read and write in this private chat
+   * while members (CHAT-SHARE). Empty on every other conversation; a run thread carries its
+   * root's.
+   */
+  people: z.array(conversationPersonSchema)
+});
+
+/** Names a member of the chat's workspace to read and write in it (CHAT-SHARE). */
+export const addConversationPersonRequestSchema = z.object({ userId: z.string().min(1) }).strict();
+
+/** What a removal or a leave did: false where the person was not named. */
+export const conversationPersonRemovedSchema = z.object({
+  conversationId: z.string(),
+  userId: z.string(),
+  removed: z.boolean()
+});
+
+/** The longest search text of `conversations.share_candidates`, in characters. */
+export const SHARE_CANDIDATES_QUERY_MAX_CHARS = 200;
+/** How many candidates `conversations.share_candidates` answers at most. */
+export const SHARE_CANDIDATES_LIMIT_MAX = 50;
+
+export const shareCandidatesQuerySchema = z.object({
+  /** A prefix of a name, of a word of the name, or of an email. */
+  query: z.string().trim().min(1).max(SHARE_CANDIDATES_QUERY_MAX_CHARS).optional(),
+  limit: z.coerce.number().int().min(1).max(SHARE_CANDIDATES_LIMIT_MAX).default(5)
+});
+
+/**
+ * A member of the chat's workspace its creator may name: the people they named before in this
+ * workspace first, then those who last wrote in a chat of it the creator reads, then by name.
+ * `hasAccess` marks the creator and those already named.
+ */
+export const conversationShareCandidateSchema = z.object({
+  userId: z.string(),
+  displayLabel: z.string(),
+  email: z.string().optional(),
+  hasAccess: z.boolean()
+});
+
+export const conversationShareCandidatesSchema = z.object({
+  candidates: z.array(conversationShareCandidateSchema)
 });
 
 export const moveConversationRequestSchema = z.object({

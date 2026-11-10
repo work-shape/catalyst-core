@@ -3,7 +3,9 @@ export const NOTICE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/u;
 
 export type NoticeLink =
   | { kind: "workflow_run"; workspaceId?: string; workflowId: string; runId: string }
-  | { kind: "app"; workspaceId: string; app: string };
+  | { kind: "app"; workspaceId: string; app: string }
+  /** A chat of the workspace, such as one shared with the addressee (CHAT-SHARE). */
+  | { kind: "conversation"; workspaceId: string; conversationId: string };
 
 /**
  * Who a notice is for: users of the instance by id, and the members of Shared Workspaces of the

@@ -12,10 +12,10 @@ import { requireWorkspaceToWorkIn } from "../workspaces/workspace-access";
 
 /**
  * The single read check of a Conversation: it is active, the user reaches its Collaboration
- * Workspace, and a private one is its author's. One in a project is read by the project's
- * audience. A holder of a bundle who is no member reaches only their own private ones outside
- * any project. Every refusal reads as a Conversation that does not exist, so an
- * answer never tells a closed one from one that never was.
+ * Workspace, and a private one is its author's and the members they named. One in a project
+ * is read by the project's audience. A holder of a bundle who is no member reaches only their
+ * own private ones outside any project. Every refusal reads as a Conversation that does not
+ * exist, so an answer never tells a closed one from one that never was.
  */
 export async function requireConversationAccess(
   options: Pick<ChatServerOptions, "stores" | "clientInstanceId">,
@@ -70,10 +70,12 @@ export async function requireConversationAccess(
     }
     return conversation;
   }
+  const userId = getSubjectUserId(user);
   const ownPrivate =
-    conversation.visibility === "private" &&
-    conversation.createdByUserId === getSubjectUserId(user);
-  if (member ? conversation.visibility === "private" && !ownPrivate : !ownPrivate) {
+    conversation.visibility === "private" && conversation.createdByUserId === userId;
+  // A member its creator named reads it too while a member, and nobody else does (CHAT-SHARE).
+  const named = member && conversation.people.some((person) => person.userId === userId);
+  if (member ? conversation.visibility === "private" && !ownPrivate && !named : !ownPrivate) {
     throw new AppError("NOT_FOUND", "Conversation is not available");
   }
   return conversation;

@@ -6,6 +6,7 @@ import {
   type AuthenticatedUser,
   isAuthenticatedServicePrincipal
 } from "@work-shape/catalyst-core";
+import { ConversationPeopleWorkflow } from "../conversations/conversation-people-service";
 import { ConversationWorkflow } from "../conversations/conversation-service";
 import { RunObservationWorkflow } from "../conversations/run-observation-service";
 import type { Route } from "../http/route";
@@ -15,6 +16,7 @@ import type { ChatServerOptions } from "../types";
 export function registerConversationRoutes(route: Route, options: ChatServerOptions): void {
   const conversations = new ConversationWorkflow(options);
   const runObservation = new RunObservationWorkflow(options);
+  const people = new ConversationPeopleWorkflow(options);
 
   route(apiOperations["conversations.list"], ({ user, query, paging }) => {
     const { collaborationWorkspaceId } = query;
@@ -102,6 +104,23 @@ export function registerConversationRoutes(route: Route, options: ChatServerOpti
     conversations.moveConversation(conversationIdParam(params), user, context, {
       collaborationWorkspaceId: asCollaborationWorkspaceId(body.collaborationWorkspaceId),
       visibility: body.visibility
+    })
+  );
+
+  // Who reads a private chat beside its creator (CHAT-SHARE). Plain routes, no agent tool:
+  // the service refuses a key, a delegated actor and an embedding host.
+  route(apiOperations["conversations.add_person"], ({ user, context, params, body }) =>
+    people.addPerson(conversationIdParam(params), user, context, { userId: body.userId })
+  );
+
+  route(apiOperations["conversations.remove_person"], ({ user, context, params }) =>
+    people.removePerson(conversationIdParam(params), user, context, params.userId)
+  );
+
+  route(apiOperations["conversations.share_candidates"], ({ user, params, query }) =>
+    people.shareCandidates(conversationIdParam(params), user, {
+      ...(query.query === undefined ? {} : { query: query.query }),
+      limit: query.limit
     })
   );
 

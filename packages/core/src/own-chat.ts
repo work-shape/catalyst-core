@@ -14,17 +14,18 @@ type ChatWorkspace = { kind: CollaborationWorkspace["kind"]; personalUserId?: st
 
 /**
  * Whether no one but `person` reads the chat: one they created, in their own Personal Workspace
- * or private in a team, as for a personal Connection. A chat others read, or one another person
- * created, is not.
+ * or private in a team, that names no other person (CHAT-SHARE), as for a personal Connection.
+ * A chat others read, or one another person created, is not.
  */
 export function chatReadOnlyBy(
-  conversation: Pick<Conversation, "kind" | "createdByUserId" | "visibility">,
+  conversation: Pick<Conversation, "kind" | "createdByUserId" | "visibility" | "people">,
   workspace: ChatWorkspace | undefined,
   person: string
 ): boolean {
   return (
     conversation.kind === "chat" &&
     conversation.createdByUserId === person &&
+    conversation.people.length === 0 &&
     workspace !== undefined &&
     (workspace.kind === "personal"
       ? workspace.personalUserId === person
@@ -39,7 +40,7 @@ export function chatReadOnlyBy(
  */
 export function mayUseOwnInChat(
   user: AuthenticatedIdentity,
-  conversation: Pick<Conversation, "kind" | "status" | "createdByUserId" | "visibility">,
+  conversation: Pick<Conversation, "kind" | "status" | "createdByUserId" | "visibility" | "people">,
   workspace: ChatWorkspace | undefined
 ): boolean {
   if (

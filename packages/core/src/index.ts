@@ -21,6 +21,7 @@ export * from "./config-asset-concurrency";
 export * from "./connection-oauth";
 export * from "./connection-operations";
 export * from "./connection-sign-in-end";
+export * from "./conversation-people";
 export * from "./data-handover";
 export * from "./data-scope";
 export * from "./data-store-description";

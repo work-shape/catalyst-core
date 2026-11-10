@@ -34,6 +34,14 @@ const linkSchema = z.discriminatedUnion("kind", [
       workspaceId: z.string().regex(NOTICE_ID),
       app: z.string().regex(NOTICE_ID)
     })
+    .strict(),
+  // A chat of the workspace, such as one its creator shared with the addressee (CHAT-SHARE).
+  z
+    .object({
+      kind: z.literal("conversation"),
+      workspaceId: z.string().regex(NOTICE_ID),
+      conversationId: z.string().regex(NOTICE_ID)
+    })
     .strict()
 ]);
 

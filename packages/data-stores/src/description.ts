@@ -1,6 +1,7 @@
 import {
   AppError,
   DATA_STORE_ACTIONS,
+  chatReadOnlyBy,
   DATA_STORE_ASSET_KIND,
   DATA_STORE_DESCRIPTION_TOOL_NAME,
   dataStoreDescriptionInputSchema,
@@ -77,18 +78,21 @@ export function dataStoreDescriptionOperation(runtime: DataStoreRuntime): Operat
           context.origin.conversationId
         );
         if (!conversation) throw unavailable();
-        if (
-          conversation.visibility !== "private" &&
-          !(
-            conversation.subject?.kind === DATA_STORE_ASSET_KIND &&
-            conversation.subject.name === name
-          )
-        ) {
+        if (!(
+          conversation.subject?.kind === DATA_STORE_ASSET_KIND && conversation.subject.name === name
+        )) {
           const workspace = await runtime.stores.workspaces.getWorkspace(
             runtime.clientInstanceId,
             conversation.collaborationWorkspaceId
           );
-          if (workspace?.kind !== "personal")
+          // A run thread carries its root's creator, visibility and named people.
+          if (
+            !chatReadOnlyBy(
+              { ...conversation, kind: "chat" },
+              workspace,
+              conversation.createdByUserId
+            )
+          )
             throw new AppError(
               "FORBIDDEN",
               "Describe this Data Store in a private conversation.",

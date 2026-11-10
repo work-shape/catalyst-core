@@ -40,7 +40,8 @@ function snapshot(status: "running" | "failed", error?: RunError): ConversationT
       status: "active",
       createdAt: failedAt,
       updatedAt: failedAt,
-      retainedUntil: "2026-11-30T10:00:00.000Z"
+      retainedUntil: "2026-11-30T10:00:00.000Z",
+      people: []
     },
     messages: [],
     activeRun: {

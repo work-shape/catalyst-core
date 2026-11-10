@@ -1,5 +1,6 @@
 import { CONNECTION_CALL_REASONS, connectionCallSentence } from "./connection-operations";
 import { AppError, PersonalDataModelRegionError } from "./errors";
+import { chatReadOnlyBy } from "./own-chat";
 import {
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
@@ -181,12 +182,8 @@ export async function requirePersonalConnectionContext(input: {
     clientInstanceId,
     conversation.collaborationWorkspaceId
   );
-  if (
-    !workspace ||
-    (workspace.kind === "personal"
-      ? workspace.personalUserId !== owner
-      : conversation.visibility !== "private")
-  ) {
+  // Only its creator reads it: no team, and no person named on it (CHAT-SHARE).
+  if (!chatReadOnlyBy(conversation, workspace, owner)) {
     throw personalConnectionContextError("only its creator may read the conversation");
   }
   const allowed = input.personalModelRegions ?? DEFAULT_PERSONAL_MODEL_REGIONS;

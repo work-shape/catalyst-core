@@ -85,6 +85,8 @@ export const audit = defineTranslations({
       "Refused to create an asset for everyone from a conversation",
     "audit.event.conversation.data_store_added": "Added a data store to a conversation for reading",
     "audit.event.conversation.moved": "Moved a conversation",
+    "audit.event.conversation.person_added": "Shared a private chat with a person",
+    "audit.event.conversation.person_removed": "A person lost access to a shared chat",
     "audit.event.conversation.project_set": "Moved a conversation into or out of a project",
     "audit.event.conversation.renamed": "Renamed a conversation",
     "audit.event.conversation.retention_expiration_failed":
@@ -413,6 +415,9 @@ export const audit = defineTranslations({
     "audit.event.conversation.data_store_added":
       "Datenspeicher zum Lesen zu einer Unterhaltung hinzugefügt",
     "audit.event.conversation.moved": "Unterhaltung verschoben",
+    "audit.event.conversation.person_added": "Privaten Chat mit einer Person geteilt",
+    "audit.event.conversation.person_removed":
+      "Eine Person hat den Zugang zu einem geteilten Chat verloren",
     "audit.event.conversation.project_set":
       "Unterhaltung in ein Projekt verschoben oder herausgenommen",
     "audit.event.conversation.renamed": "Unterhaltung umbenannt",

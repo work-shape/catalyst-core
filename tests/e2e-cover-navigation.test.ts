@@ -23,6 +23,7 @@ it("does not poll the streamed conversation or an idle rail, and stops when its 
     visibility: "private",
     status: "active",
     retainedUntil: "2027-10-24T10:00:00Z",
+    people: [],
     title: "Temporary",
     createdAt: "2026-10-24T10:00:00Z",
     updatedAt: "2026-10-24T10:00:00Z",

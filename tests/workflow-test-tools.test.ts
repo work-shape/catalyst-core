@@ -58,6 +58,7 @@ const conversation: Conversation = {
   createdAt: "2026-10-17T00:00:00.000Z",
   updatedAt: "2026-10-17T00:00:00.000Z",
   retainedUntil: "2026-11-17T00:00:00.000Z",
+  people: [],
   subject: { kind: "workflow", name: "subject-workflow" }
 };
 

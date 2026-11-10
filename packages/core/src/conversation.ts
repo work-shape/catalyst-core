@@ -223,6 +223,43 @@ export interface Conversation {
    * project's audience, and its `visibility` matches that audience.
    */
   projectId?: string;
+  /**
+   * The people its creator named (CHAT-SHARE), in the order they were named: each reads and
+   * writes in it while a member of its workspace. Only a private chat outside any project has
+   * any. A subagent's run thread carries those of its root, which it is read through.
+   */
+  people: ConversationPerson[];
+}
+
+/** A person the creator of a private chat named: they read and write in it (CHAT-SHARE). */
+export interface ConversationPerson {
+  userId: string;
+  /** The person's name as the instance holds it now, for the chat's other readers. */
+  displayLabel: string;
+  addedAt: ISODateString;
+}
+
+/**
+ * Names a person on a private chat under its row lock, after the server checked the person's
+ * rights on what the chat reads. `checked` is what it checked: a Data Store or a subject the
+ * chat holds beyond it under the lock refuses with `share_checks_changed`.
+ */
+export interface AddConversationPersonInput {
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  userId: string;
+  addedByUserId: string;
+  addedAt: ISODateString;
+  checked: { dataStoreAssetIds: readonly string[]; subject?: ConversationSubject };
+}
+
+/** A person a chat's creator may name, as the share picker offers them. */
+export interface ConversationShareCandidate {
+  userId: string;
+  displayLabel: string;
+  email?: string;
+  /** Named on the chat already: shown, never named again. The creator is never offered. */
+  hasAccess: boolean;
 }
 
 export interface ConversationListItem extends Conversation {
@@ -424,8 +461,55 @@ export interface ConversationStore extends ConversationHistoryStore {
     userId: string;
     at: ISODateString;
   }): Promise<void>;
-  /** Moves to another workspace; the Conversation leaves its project and keeps its visibility. */
-  moveConversation(input: MoveConversationInput): Promise<Conversation>;
+  /**
+   * Moves to another workspace; the Conversation leaves its project and keeps its visibility.
+   * Its named people lose it in the same transaction: `peopleRemoved` names them.
+   */
+  moveConversation(
+    input: MoveConversationInput
+  ): Promise<Conversation & { peopleRemoved: readonly string[] }>;
+  /**
+   * Names a person on an active private chat of a Shared Workspace outside any project, under
+   * its row lock (CHAT-SHARE): the personal-data mark refuses it, as a share first refuses the
+   * personal call; so do a project, a Data Store or a subject beyond `checked`, the limit, and
+   * a person who is no active member, whose membership is held until the row is in. `added`
+   * is false where the person was named already.
+   */
+  addConversationPerson(
+    input: AddConversationPersonInput
+  ): Promise<{ added: boolean; conversation: Conversation }>;
+  /**
+   * Takes a person off a chat under its row lock, refused with `person_run_active` while a run
+   * of theirs goes. False where they were not named.
+   */
+  removeConversationPerson(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    userId: string;
+  }): Promise<boolean>;
+  /**
+   * Takes a person off every chat of a workspace, or of every workspace, as their membership
+   * ends there. Answers the chats they lost. Called in the transaction that ends it.
+   */
+  removePersonFromWorkspaceConversations(input: {
+    clientInstanceId: ClientInstanceId;
+    userId: string;
+    collaborationWorkspaceId?: CollaborationWorkspaceId;
+  }): Promise<ConversationId[]>;
+  /**
+   * The members of the chat's workspace its creator may name, active people only, the
+   * creator's likely ones first: those they named on a chat of this workspace most recently,
+   * then those who most recently sent a message in a chat of it the creator reads. With
+   * `query`, those whose name or address starts with it, among the members only.
+   */
+  listShareCandidates(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
+    creatorUserId: string;
+    query?: string;
+    limit: number;
+  }): Promise<ConversationShareCandidate[]>;
   /**
    * Refuses with `CONFLICT` a Conversation that is not active or whose project changed, and
    * with `NOT_FOUND` a project that is not active in the Conversation's workspace.

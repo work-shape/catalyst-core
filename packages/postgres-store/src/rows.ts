@@ -84,7 +84,17 @@ export type AgentRunRow = typeof agentRuns.$inferSelect;
 export type ArtifactPreviewJobRow = typeof artifactPreviewJobs.$inferSelect;
 export type ArtifactPreviewManifestRow = typeof artifactPreviewManifests.$inferSelect;
 export type RunObservationRow = typeof agentRunObservations.$inferSelect;
-export type ConversationRow = typeof conversations.$inferSelect;
+type ConversationRow = typeof conversations.$inferSelect;
+/** A named person as a conversation's read carries them: JSON built in the same statement. */
+export interface ConversationPersonRow {
+  userId: string;
+  displayLabel: string;
+  addedAt: string;
+}
+/** A conversation's row with its named people, or those of its root (CHAT-SHARE-1). */
+export type ConversationWithPeopleRow = ConversationRow & {
+  people: readonly ConversationPersonRow[];
+};
 export type CollaborationWorkspaceRow = typeof collaborationWorkspaces.$inferSelect;
 export type WorkspaceMembershipRow = typeof collaborationWorkspaceMemberships.$inferSelect;
 export type WorkspaceAccessRequestRow = typeof collaborationWorkspaceAccessRequests.$inferSelect;
@@ -112,7 +122,7 @@ export type StructuredDataResourceRow = typeof structuredDataResources.$inferSel
  */
 const AGENT_STEP_ROW_MESSAGE = "An agent step's run is read through its Workflow run";
 
-export function mapConversation(row: ConversationRow | undefined): Conversation {
+export function mapConversation(row: ConversationWithPeopleRow | undefined): Conversation {
   if (!row) {
     throw new AppError("INTERNAL", "Expected conversation row");
   }
@@ -146,7 +156,12 @@ export function mapConversation(row: ConversationRow | undefined): Conversation 
       ? {}
       : { subject: { kind: row.subjectKind, name: row.subjectName } }),
     ...(row.creationTarget === null ? {} : { creationTarget: row.creationTarget }),
-    ...(row.projectId === null ? {} : { projectId: row.projectId })
+    ...(row.projectId === null ? {} : { projectId: row.projectId }),
+    people: row.people.map((person) => ({
+      userId: person.userId,
+      displayLabel: person.displayLabel,
+      addedAt: new Date(person.addedAt).toISOString()
+    }))
   };
 }
 

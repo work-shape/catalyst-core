@@ -14,6 +14,7 @@ import {
   markLockedConversationTreeDeleted
 } from "./postgres-conversation-operations";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
+import { conversationFields } from "./postgres-conversation-fields";
 import { mapConversation } from "./rows";
 import { agentRuns, conversations } from "./schema";
 
@@ -87,7 +88,7 @@ export async function listExpiredConversations(
     return [];
   }
   const rows = await db
-    .select()
+    .select(conversationFields)
     .from(conversations)
     .where(
       and(

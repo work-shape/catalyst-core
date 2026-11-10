@@ -8,6 +8,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { and, asc, eq, ne, notExists } from "drizzle-orm";
 import { type PostgresConnection, type PostgresTransaction } from "./postgres-database";
+import { conversationFields } from "./postgres-conversation-fields";
 import { mapConversation } from "./rows";
 import {
   conversations,
@@ -162,7 +163,7 @@ export async function deleteConversation(
             )
           )
         )
-        .returning();
+        .returning(conversationFields);
       if (!discarded)
         throw new AppError("CONFLICT", "Only your empty conversation draft can be discarded");
       return { ...mapConversation(discarded), status: "deleted" };
@@ -301,7 +302,7 @@ async function markLockedConversationDeleted(
         eq(conversations.status, "active")
       )
     )
-    .returning();
+    .returning(conversationFields);
   if (!row) {
     throw new AppError("NOT_FOUND", "Conversation is not available");
   }

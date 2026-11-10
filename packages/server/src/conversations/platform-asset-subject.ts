@@ -1,6 +1,7 @@
 import {
   AppError,
   DATA_STORE_ASSET_KIND,
+  chatReadOnlyBy,
   INSTANCE_TARGET_KINDS,
   auditActorFromIdentity,
   WORKFLOW_ASSET_KIND,
@@ -99,12 +100,15 @@ export async function requireOwnTranscript(
   conversation: Conversation,
   refusal?: { message: string; reason: string }
 ): Promise<void> {
-  if (conversation.visibility === "private") return;
   const workspace = await options.stores.workspaces.getWorkspace(
     options.clientInstanceId,
     conversation.collaborationWorkspaceId
   );
-  if (workspace?.kind === "personal") return;
+  // A run thread carries its root's creator, visibility and named people: it is read as its
+  // root is.
+  if (chatReadOnlyBy({ ...conversation, kind: "chat" }, workspace, conversation.createdByUserId)) {
+    return;
+  }
   throw new AppError(
     "CONFLICT",
     refusal?.message ??
