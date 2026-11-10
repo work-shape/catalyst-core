@@ -1,7 +1,10 @@
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import {
   AppError,
+  AVAILABLE_EVERYWHERE,
   asCollaborationWorkspaceId,
+  availabilityCovers,
+  availabilityOfferedIn,
   isAgentAvailableInWorkspace,
   type AgentAvailability,
   type CollaborationWorkspaceId,
@@ -59,11 +62,15 @@ export async function requireDefaultsKept(
     instanceDefault: boolean;
   }
 ): Promise<void> {
-  if (input.availability.mode === "all") return;
+  if (availabilityCovers(input.availability, AVAILABLE_EVERYWHERE)) return;
   const workspaces = await openSharedWorkspaces(tx, input.clientInstanceId);
-  const offered = new Set<string>(input.availability.collaborationWorkspaceIds);
+  const offered = (workspace: { id: string }) =>
+    isAgentAvailableInWorkspace(input.availability, {
+      kind: "shared",
+      id: asCollaborationWorkspaceId(workspace.id)
+    });
   const named = workspaces.filter(
-    (workspace) => workspace.defaultAgentName === input.agentName && !offered.has(workspace.id)
+    (workspace) => workspace.defaultAgentName === input.agentName && !offered(workspace)
   );
   if (named.length > 0) {
     throw new AppError(
@@ -76,7 +83,7 @@ export async function requireDefaultsKept(
     );
   }
   if (!input.instanceDefault) return;
-  if (!input.availability.personalWorkspaces) {
+  if (!isAgentAvailableInWorkspace(input.availability, { kind: "personal" })) {
     throw new AppError(
       "VALIDATION_FAILED",
       `Default agent '${input.agentName}' must stay available in Personal Workspaces`,
@@ -84,7 +91,7 @@ export async function requireDefaultsKept(
     );
   }
   const uncovered = workspaces.filter(
-    (workspace) => workspace.defaultAgentName === null && !offered.has(workspace.id)
+    (workspace) => workspace.defaultAgentName === null && !offered(workspace)
   );
   if (uncovered.length > 0) {
     throw new AppError(
@@ -258,7 +265,8 @@ export async function setWorkspaceDefaultAgent(
 
 /**
  * A new Shared Workspace names no default of its own, so the instance default is offered in it
- * where the instance offers it only in selected workspaces.
+ * where it is not yet: where the instance offers it only in selected workspaces, or excludes
+ * this one, as a workspace whose own default was removed may.
  */
 export async function offerInstanceDefaultIn(
   tx: PostgresTransaction,
@@ -272,14 +280,22 @@ export async function offerInstanceDefaultIn(
     .limit(1);
   if (!state?.defaultAgentName) return;
   const agent = await activeAgentAvailability(tx, input.clientInstanceId, state.defaultAgentName);
-  if (agent?.availability?.mode !== "selected") return;
+  const here = asCollaborationWorkspaceId(input.collaborationWorkspaceId);
+  if (!agent || isAgentAvailableInWorkspace(agent.availability, { kind: "shared", id: here }))
+    return;
+  // Offered there as well, whichever mode it has: one of selected workspaces gains a row, one
+  // excluded loses its row.
+  const offered = availabilityOfferedIn(agent.availability, here);
   await tx
-    .insert(configAssetWorkspaceAvailability)
-    .values({
-      assetId: agent.id,
-      collaborationWorkspaceId: asCollaborationWorkspaceId(input.collaborationWorkspaceId)
-    })
-    .onConflictDoNothing();
+    .delete(configAssetWorkspaceAvailability)
+    .where(eq(configAssetWorkspaceAvailability.assetId, agent.id));
+  if (offered.collaborationWorkspaceIds.length > 0)
+    await tx.insert(configAssetWorkspaceAvailability).values(
+      offered.collaborationWorkspaceIds.map((collaborationWorkspaceId) => ({
+        assetId: agent.id,
+        collaborationWorkspaceId
+      }))
+    );
   await tx
     .update(configAssetState)
     .set({ version: state.version + 1, updatedAt: new Date() })

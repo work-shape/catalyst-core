@@ -1,6 +1,6 @@
 import type { AppAudience } from "./app-audience";
 import type { CollaborationWorkspaceKind } from "./collaboration-workspace";
-import type { AgentAvailability } from "./config-assets";
+import { availabilityOffersNowhere, type AgentAvailability } from "./config-assets";
 
 /**
  * The owner of an asset as reach reads it. A Personal Workspace reaches its one owner ("Nur
@@ -62,7 +62,9 @@ export function ownerReachRefusal(
       return "invalid_scope";
     }
     case "availability":
-      return isPersonal(source) && !offersNowhere(use.availability) ? "owner_reach" : undefined;
+      return isPersonal(source) && !availabilityOffersNowhere(use.availability)
+        ? "owner_reach"
+        : undefined;
     case "app_audience":
       return isPersonal(source) && use.audience === "instance"
         ? "app_instance_needs_shared_workspace"
@@ -80,12 +82,4 @@ export function ownerReachRefusal(
 /** A Personal Workspace, or a workspace of unknown kind. */
 function isPersonal(owner: AssetOwnerReach): boolean {
   return owner.kind === "workspace" && owner.workspaceKind !== "shared";
-}
-
-function offersNowhere(availability: AgentAvailability): boolean {
-  return (
-    availability.mode === "selected" &&
-    !availability.personalWorkspaces &&
-    availability.collaborationWorkspaceIds.length === 0
-  );
 }

@@ -165,7 +165,10 @@ export const configAssetAvailability = pgTable(
   },
   (table) => [
     index("config_asset_availability_client_idx").on(table.clientInstanceId),
-    check("config_asset_availability_mode_check", sql`${table.mode} in ('all', 'selected')`)
+    check(
+      "config_asset_availability_mode_check",
+      sql`${table.mode} in ('all', 'selected', 'all_except')`
+    )
   ]
 );
 

@@ -2,6 +2,7 @@ import {
   AppError,
   INSTANCE_ASSET_SCOPE,
   asCollaborationWorkspaceId,
+  normalizeAvailability,
   asUserId,
   auditActorFromIdentity,
   isAppError,
@@ -215,15 +216,15 @@ export async function setAssetAvailability(
     );
   }
   await authorizeInteractiveWrite(options, call.actor, call, call.audit);
-  const selected = input.mode === "selected";
-  const collaborationWorkspaceIds = selected
-    ? (input.collaborationWorkspaceIds ?? []).map(asCollaborationWorkspaceId)
-    : [];
-  const wanted: AgentAvailability = {
+  const wanted = normalizeAvailability({
     mode: input.mode,
-    personalWorkspaces: selected && input.personalWorkspaces === true,
-    collaborationWorkspaceIds
-  };
+    personalWorkspaces: input.personalWorkspaces,
+    collaborationWorkspaceIds: (input.collaborationWorkspaceIds ?? []).map(
+      asCollaborationWorkspaceId
+    )
+  });
+  // Selected or excluded, each named workspace has to be a Shared Workspace of the instance.
+  const { collaborationWorkspaceIds } = wanted;
   await requireOfferWithinReach(options, call, kind, input.name, wanted);
   if (input.kind === "agent" && input.makeDependenciesAvailable) {
     if (input.expectedRevision === undefined)

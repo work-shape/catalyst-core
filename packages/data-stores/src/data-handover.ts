@@ -10,6 +10,7 @@ import {
   WORKFLOW_ASSET_KIND,
   asCollaborationWorkspaceId,
   createActorAccess,
+  isAgentAvailableInWorkspace,
   workflowStepsDeep,
   type AccessResource,
   type ActorAccess,
@@ -259,11 +260,11 @@ function availableTo(
   memberWorkspaceIds: readonly string[],
   personal: (workspaceId: string) => boolean
 ): boolean {
-  if (availability.mode === "all") return memberWorkspaceIds.length > 0;
-  return memberWorkspaceIds.some(
-    (workspaceId) =>
-      (availability.personalWorkspaces && personal(workspaceId)) ||
-      availability.collaborationWorkspaceIds.some((id) => id === workspaceId)
+  return memberWorkspaceIds.some((workspaceId) =>
+    isAgentAvailableInWorkspace(availability, {
+      kind: personal(workspaceId) ? "personal" : "shared",
+      id: asCollaborationWorkspaceId(workspaceId)
+    })
   );
 }
 

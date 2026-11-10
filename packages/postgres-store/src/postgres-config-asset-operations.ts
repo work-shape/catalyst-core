@@ -14,6 +14,7 @@ import { keysetFilter } from "./paging";
 import { and, asc, desc, eq, inArray, max, or, sql, type SQL } from "drizzle-orm";
 import {
   AppError,
+  AVAILABLE_NOWHERE,
   INSTANCE_ASSET_SCOPE,
   asClientInstanceId,
   assertConfigAssetBases,
@@ -563,20 +564,13 @@ async function applyConfigAssetMutations(
           `Default agent '${defaultAgentName}' is not an active config asset`
         );
       }
-      const availability = await storedAvailability(tx, defaultAgent.id);
-      if (availability?.mode !== "all") {
-        await requireDefaultsKept(tx, {
-          clientInstanceId: input.clientInstanceId,
-          agentName: defaultAgentName,
-          // An agent offered nowhere is selected in nothing.
-          availability: availability ?? {
-            mode: "selected",
-            personalWorkspaces: false,
-            collaborationWorkspaceIds: []
-          },
-          instanceDefault: true
-        });
-      }
+      await requireDefaultsKept(tx, {
+        clientInstanceId: input.clientInstanceId,
+        agentName: defaultAgentName,
+        // An agent without a record is offered nowhere.
+        availability: (await storedAvailability(tx, defaultAgent.id)) ?? AVAILABLE_NOWHERE,
+        instanceDefault: true
+      });
     }
 
     if (!draftsOnly) {

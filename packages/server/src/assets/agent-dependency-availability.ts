@@ -3,6 +3,8 @@ import { agentConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   AppError,
   asUserId,
+  availabilityCovers,
+  availabilityUnion,
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
   operationDenialError,
@@ -24,45 +26,6 @@ interface MissingDependency {
   name: string;
   displayName: string;
   canMakeAvailable: boolean;
-}
-
-/** No availability record means nowhere, including after an upgrade. */
-function availabilityCovers(
-  current: AgentAvailability | undefined,
-  wanted: AgentAvailability | undefined
-): boolean {
-  if (
-    !wanted ||
-    (wanted.mode === "selected" &&
-      !wanted.personalWorkspaces &&
-      wanted.collaborationWorkspaceIds.length === 0)
-  )
-    return true;
-  if (current?.mode === "all") return true;
-  return (
-    current !== undefined &&
-    wanted.mode === "selected" &&
-    (!wanted.personalWorkspaces || current.personalWorkspaces) &&
-    wanted.collaborationWorkspaceIds.every((id) => current.collaborationWorkspaceIds.includes(id))
-  );
-}
-
-function unionAvailability(
-  current: AgentAvailability | undefined,
-  wanted: AgentAvailability
-): AgentAvailability {
-  if (current?.mode === "all" || wanted.mode === "all")
-    return { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] };
-  return {
-    mode: "selected",
-    personalWorkspaces: current?.personalWorkspaces === true || wanted.personalWorkspaces,
-    collaborationWorkspaceIds: [
-      ...new Set([
-        ...(current?.collaborationWorkspaceIds ?? []),
-        ...wanted.collaborationWorkspaceIds
-      ])
-    ]
-  };
 }
 
 /** The exact configured references, not a guess at tools mentioned in instructions. */
@@ -249,7 +212,7 @@ export async function makeAgentDependenciesAvailable(
     await assertOwnerReach(
       options,
       asset,
-      { kind: "availability", availability: unionAvailability(current, wanted) },
+      { kind: "availability", availability: availabilityUnion(current, wanted) },
       call.runtime?.locale ?? options.config.localization.defaultLocale
     );
   for (const { asset, current } of missing) {
@@ -261,7 +224,7 @@ export async function makeAgentDependenciesAvailable(
       agentName: asset.name,
       expectedAssetId: asset.id,
       expectedAvailability: current ?? null,
-      availability: unionAvailability(current, wanted)
+      availability: availabilityUnion(current, wanted)
     });
     await options.stores.audit.appendAuditEvent({
       clientInstanceId: options.clientInstanceId,
@@ -327,7 +290,7 @@ export async function dependencyAvailabilityChanges(
     changes.push({
       kind: "knowledge_base",
       name,
-      availability: unionAvailability(current, wanted)
+      availability: availabilityUnion(current, wanted)
     });
   }
   return changes;

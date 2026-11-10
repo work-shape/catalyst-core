@@ -1,11 +1,14 @@
 import { and, eq, inArray } from "drizzle-orm";
 import {
+  AVAILABLE_EVERYWHERE,
+  availabilityCovers,
   resolveInitialAgentAvailability,
   type AgentAvailability,
   type ClientInstanceId,
   type ConfigAssetStore
 } from "@work-shape/catalyst-core";
 import type { PostgresTransaction } from "./postgres-database";
+import { storedAvailability } from "./postgres-default-agents";
 import { configAssetAvailability, configAssets, configAssetWorkspaceAvailability } from "./schema";
 
 // Where the agents a mutation batch creates or revives start, decided and written inside the
@@ -29,7 +32,8 @@ export async function resolveBatchInitialAvailability(
   const deletedAgentNames = input.mutations.flatMap((mutation) =>
     mutation.type === "delete" && mutation.kind === "agent" ? [mutation.name] : []
   );
-  const [deletedSelectedAgent] =
+  // An agent offered only somewhere, in selected workspaces or in all but some.
+  const deletedAgents =
     input.initialAgentAvailability === "selected_when_replacing_selected" &&
     deletedAgentNames.length > 0
       ? await tx
@@ -40,16 +44,18 @@ export async function resolveBatchInitialAvailability(
             and(
               eq(configAssets.clientInstanceId, input.clientInstanceId),
               eq(configAssets.kind, "agent"),
-              inArray(configAssets.name, deletedAgentNames),
-              eq(configAssetAvailability.mode, "selected")
+              inArray(configAssets.name, deletedAgentNames)
             )
           )
-          .limit(1)
       : [];
-  return resolveInitialAgentAvailability(
-    input.initialAgentAvailability,
-    deletedSelectedAgent !== undefined
-  );
+  let deletedSelectedAgent = false;
+  for (const { assetId } of deletedAgents) {
+    if (!availabilityCovers(await storedAvailability(tx, assetId), AVAILABLE_EVERYWHERE)) {
+      deletedSelectedAgent = true;
+      break;
+    }
+  }
+  return resolveInitialAgentAvailability(input.initialAgentAvailability, deletedSelectedAgent);
 }
 
 /** Writes the availability of agents the batch created, with the workspaces it names. */

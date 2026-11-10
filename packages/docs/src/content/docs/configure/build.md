@@ -144,7 +144,11 @@ A newly created agent is available nowhere. Open **Studio > Agents > the agent >
 Selected workspaces**, choose the requested shared workspace, then **Save changes**. In German:
 **Studio > Agenten > the agent > Verfügbar in > Ausgewählte Arbeitsbereiche**, choose the workspace,
 then **Änderungen speichern**. **Personal workspaces** includes every person's personal workspace;
-it is not a selector for one person's workspace. Availability belongs to the instance: a person who may change
+it is not a selector for one person's workspace. **All workspaces except…** (**Alle Arbeitsbereiche außer…**)
+offers the agent in every shared workspace, also those made later, except the ones ticked under **Not in**
+(**Nicht in**); **Personal workspaces** keeps its own switch there. The list of agents then says **All except 1**
+(**Alle außer 1**). A workspace whose own default the agent is cannot be left out, as it cannot be deselected
+under **Selected workspaces**. Availability belongs to the instance: a person who may change
 agents across the instance performs this step if you lack the right. Changes to an existing agent's draft also need **Publish** (**Veröffentlichen**).
 Knowledge Bases and Connections the agent uses need the same workspaces under their own **Available in**. Publish and **Available in** list any that are missing; a person who may change them can tick **Make them available there too** (**Dort auch verfügbar machen**), anyone else is told which admins to ask.
 

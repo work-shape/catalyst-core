@@ -38,9 +38,12 @@ export type { AgentUse };
  */
 export interface AgentAvailability {
   mode: AgentAvailabilityMode;
-  /** With `selected`: whether the agent is available in Personal Workspaces. */
+  /** With `selected` and `all_except`: whether the agent is available in Personal Workspaces. */
   personalWorkspaces: boolean;
-  /** With `selected`: the Shared Workspaces the agent is available in. */
+  /**
+   * With `selected`: the Shared Workspaces the agent is available in. With `all_except`: the
+   * Shared Workspaces it is not available in; every other one, also one made later, offers it.
+   */
   collaborationWorkspaceIds: CollaborationWorkspaceId[];
 }
 
@@ -79,6 +82,11 @@ export function resolveInitialAgentAvailability(
   return { mode: "selected", collaborationWorkspaceIds: [initial.collaborationWorkspaceId] };
 }
 
+/**
+ * Whether an asset is offered in one workspace: the one reading of every availability mode.
+ * Every place that decides where an asset is offered asks this, or the functions below, which
+ * are built on the same reading; none compares the mode itself.
+ */
 export function isAgentAvailableInWorkspace(
   availability: AgentAvailability | undefined,
   workspace: { kind: CollaborationWorkspaceKind; id?: CollaborationWorkspaceId }
@@ -89,9 +97,126 @@ export function isAgentAvailableInWorkspace(
   if (availability.mode === "all") {
     return true;
   }
-  return workspace.kind === "personal"
-    ? availability.personalWorkspaces
-    : workspace.id !== undefined && availability.collaborationWorkspaceIds.includes(workspace.id);
+  if (workspace.kind === "personal") return availability.personalWorkspaces;
+  if (workspace.id === undefined) return false;
+  const listed = availability.collaborationWorkspaceIds.includes(workspace.id);
+  return availability.mode === "all_except" ? !listed : listed;
+}
+
+/** The availability of an asset that is offered in no workspace. */
+export const AVAILABLE_NOWHERE: AgentAvailability = {
+  mode: "selected",
+  personalWorkspaces: false,
+  collaborationWorkspaceIds: []
+};
+
+/** The availability of an asset that is offered in every workspace. */
+export const AVAILABLE_EVERYWHERE: AgentAvailability = {
+  mode: "all",
+  personalWorkspaces: false,
+  collaborationWorkspaceIds: []
+};
+
+/**
+ * Whether an availability offers an asset in no workspace, also none made later. Every
+ * workspace beyond the ones named offers an asset set to all but some, so it is never nowhere.
+ */
+export function availabilityOffersNowhere(availability: AgentAvailability | undefined): boolean {
+  return (
+    availability === undefined ||
+    (availability.mode === "selected" &&
+      !availability.personalWorkspaces &&
+      availability.collaborationWorkspaceIds.length === 0)
+  );
+}
+
+/**
+ * An availability as it is stored: `all` names nothing, the others name each Shared Workspace
+ * once, in order. Whatever a caller sends beside the mode it does not read is dropped.
+ */
+export function normalizeAvailability(input: {
+  mode: AgentAvailabilityMode;
+  personalWorkspaces?: boolean;
+  collaborationWorkspaceIds?: readonly CollaborationWorkspaceId[];
+}): AgentAvailability {
+  if (input.mode === "all") return { ...AVAILABLE_EVERYWHERE, collaborationWorkspaceIds: [] };
+  return {
+    mode: input.mode,
+    personalWorkspaces: input.personalWorkspaces === true,
+    collaborationWorkspaceIds: [...new Set(input.collaborationWorkspaceIds ?? [])].sort()
+  };
+}
+
+/**
+ * Whether `current` offers an asset everywhere `wanted` does, workspaces made later included.
+ * No availability is nowhere, also after an upgrade.
+ */
+export function availabilityCovers(
+  current: AgentAvailability | undefined,
+  wanted: AgentAvailability | undefined
+): boolean {
+  if (availabilityOffersNowhere(wanted)) return true;
+  if (current === undefined || wanted === undefined) return false;
+  if (current.mode === "all") return true;
+  if (wanted.mode === "all") return false;
+  const personal = { kind: "personal" as const };
+  if (
+    isAgentAvailableInWorkspace(wanted, personal) &&
+    !isAgentAvailableInWorkspace(current, personal)
+  )
+    return false;
+  if (wanted.mode === "selected")
+    return wanted.collaborationWorkspaceIds.every((id) =>
+      isAgentAvailableInWorkspace(current, { kind: "shared", id })
+    );
+  // `wanted` offers every workspace beyond the ones it names, so `current` has to as well.
+  return (
+    current.mode === "all_except" &&
+    current.collaborationWorkspaceIds.every((id) => wanted.collaborationWorkspaceIds.includes(id))
+  );
+}
+
+/** The availability that offers an asset wherever `current` or `wanted` offers it. */
+export function availabilityUnion(
+  current: AgentAvailability | undefined,
+  wanted: AgentAvailability
+): AgentAvailability {
+  const left = current ?? AVAILABLE_NOWHERE;
+  if (left.mode === "all" || wanted.mode === "all") return normalizeAvailability({ mode: "all" });
+  const personalWorkspaces = left.personalWorkspaces || wanted.personalWorkspaces;
+  if (left.mode === "selected" && wanted.mode === "selected")
+    return normalizeAvailability({
+      mode: "selected",
+      personalWorkspaces,
+      collaborationWorkspaceIds: [
+        ...left.collaborationWorkspaceIds,
+        ...wanted.collaborationWorkspaceIds
+      ]
+    });
+  // At least one offers every workspace beyond those it names: excluded stays only a workspace
+  // that neither offers.
+  const excluded = [...left.collaborationWorkspaceIds, ...wanted.collaborationWorkspaceIds].filter(
+    (id) =>
+      !isAgentAvailableInWorkspace(left, { kind: "shared", id }) &&
+      !isAgentAvailableInWorkspace(wanted, { kind: "shared", id })
+  );
+  return normalizeAvailability({
+    mode: "all_except",
+    personalWorkspaces,
+    collaborationWorkspaceIds: excluded
+  });
+}
+
+/** `availability`, also offered in one Shared Workspace. */
+export function availabilityOfferedIn(
+  availability: AgentAvailability | undefined,
+  collaborationWorkspaceId: CollaborationWorkspaceId
+): AgentAvailability {
+  return availabilityUnion(availability, {
+    mode: "selected",
+    personalWorkspaces: false,
+    collaborationWorkspaceIds: [collaborationWorkspaceId]
+  });
 }
 
 /** The tool that saves and creates assets: an agent that lists it builds them. */

@@ -4372,7 +4372,8 @@
               "type": "string",
               "enum": [
                 "all",
-                "selected"
+                "selected",
+                "all_except"
               ]
             }
           },
@@ -45234,7 +45235,8 @@
             "type": "string",
             "enum": [
               "all",
-              "selected"
+              "selected",
+              "all_except"
             ]
           },
           "personalWorkspaces": {
@@ -60813,7 +60815,8 @@
             "type": "string",
             "enum": [
               "all",
-              "selected"
+              "selected",
+              "all_except"
             ]
           },
           "personalWorkspaces": {
