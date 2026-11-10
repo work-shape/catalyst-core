@@ -68,13 +68,13 @@ export const knowledgeSources = defineTranslations({
     "knowledgeSources.pickApply": "Use these folders",
     "knowledgeSources.pages": "Pages",
     "knowledgeSources.pagesHint":
-      "Single pages, one address per line, such as https://www.example.org/terms.",
+      "Single pages, one address per line, such as https://example.com/terms.",
     "knowledgeSources.prefixes": "Everything below",
     "knowledgeSources.prefixesHint":
-      "Addresses whose linked pages below them are read too, three links deep, one per line, such as https://www.example.org/docs/.",
+      "Addresses whose linked pages below them are read too, three links deep, one per line, such as https://example.com/docs/.",
     "knowledgeSources.sitemaps": "Sitemaps",
     "knowledgeSources.sitemapsHint":
-      "The pages a sitemap lists, such as https://www.example.org/sitemap.xml.",
+      "The pages a sitemap lists, such as https://example.com/sitemap.xml.",
     "knowledgeSources.addressPlaceholder": "https://",
     "knowledgeSources.includeWeb": "Only paths",
     "knowledgeSources.includeWebHint":
@@ -225,13 +225,13 @@ export const knowledgeSources = defineTranslations({
     "knowledgeSources.pickApply": "Diese Ordner übernehmen",
     "knowledgeSources.pages": "Seiten",
     "knowledgeSources.pagesHint":
-      "Einzelne Seiten, eine Adresse pro Zeile, etwa https://www.example.org/agb.",
+      "Einzelne Seiten, eine Adresse pro Zeile, etwa https://example.com/agb.",
     "knowledgeSources.prefixes": "Alles unterhalb von",
     "knowledgeSources.prefixesHint":
-      "Adressen, unter denen auch verlinkte Seiten gelesen werden, drei Links tief, eine pro Zeile, etwa https://www.example.org/docs/.",
+      "Adressen, unter denen auch verlinkte Seiten gelesen werden, drei Links tief, eine pro Zeile, etwa https://example.com/docs/.",
     "knowledgeSources.sitemaps": "Sitemaps",
     "knowledgeSources.sitemapsHint":
-      "Die Seiten, die eine Sitemap nennt, etwa https://www.example.org/sitemap.xml.",
+      "Die Seiten, die eine Sitemap nennt, etwa https://example.com/sitemap.xml.",
     "knowledgeSources.addressPlaceholder": "https://",
     "knowledgeSources.includeWeb": "Nur Pfade",
     "knowledgeSources.includeWebHint":

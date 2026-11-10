@@ -67,8 +67,8 @@ export function createWebConnectorType(options: WebConnectorOptions = {}): Conne
           setting: "hosts",
           label: { en: "Hosts", de: "Hosts" },
           help: {
-            en: "The hosts it may read, separated by spaces, such as www.example.org docs.example.org",
-            de: "Die Hosts, die gelesen werden dürfen, durch Leerzeichen getrennt, etwa www.example.org docs.example.org"
+            en: "The hosts it may read, separated by spaces, such as example.com docs.example.com",
+            de: "Die Hosts, die gelesen werden dürfen, durch Leerzeichen getrennt, etwa example.com docs.example.com"
           }
         }
       ]

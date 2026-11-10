@@ -25,7 +25,7 @@ const hostSchema = z
         return false;
       }
     },
-    { error: "A host is a name such as 'www.example.org', with ':port' only where it is not 443" }
+    { error: "A host is a name such as 'example.com', with ':port' only where it is not 443" }
   )
   .transform((text) => text.replace(/:443$/u, ""));
 
