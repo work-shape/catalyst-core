@@ -10,6 +10,7 @@ import { qrCodeGalleryText, type QrCodeGalleryText } from "./text-qr-code";
 import { sampleGalleryText, type SampleGalleryText } from "./text-samples";
 import { skillsGalleryText, type SkillsGalleryText } from "./text-skills";
 import { stepsGalleryText, type StepsGalleryText } from "./text-steps";
+import { typedTextGalleryText, type TypedTextGalleryText } from "./text-typed-text";
 
 export type GalleryLanguage = "en" | "de";
 
@@ -24,6 +25,7 @@ export interface GalleryText
     TimelineGalleryText,
     QrCodeGalleryText,
     StepsGalleryText,
+    TypedTextGalleryText,
     SkillsGalleryText,
     FlowGalleryText,
     MailGalleryText,
@@ -554,6 +556,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     ...timelineGalleryText.en,
     ...qrCodeGalleryText.en,
     ...stepsGalleryText.en,
+    ...typedTextGalleryText.en,
     ...skillsGalleryText.en,
     ...flowGalleryText.en,
     ...mailGalleryText.en,
@@ -849,6 +852,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     ...timelineGalleryText.de,
     ...qrCodeGalleryText.de,
     ...stepsGalleryText.de,
+    ...typedTextGalleryText.de,
     ...skillsGalleryText.de,
     ...flowGalleryText.de,
     ...mailGalleryText.de,

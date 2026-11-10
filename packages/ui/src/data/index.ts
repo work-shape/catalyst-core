@@ -47,6 +47,7 @@ export { QrCode, type QrCodeProps } from "./qr-code";
 export { changedPlaces, diffLines, TextDiff, type DiffLine, type TextDiffProps } from "./text-diff";
 export { Timeline, type TimelineProps, type TimelineRow } from "./timeline";
 export { ListMarker, TimeMarker, type ListMarkerProps, type TimeMarkerProps } from "./time-marker";
+export { TypedText, type TypedTextProps } from "./typed-text";
 export {
   Table,
   TableBody,

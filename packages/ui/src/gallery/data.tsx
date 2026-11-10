@@ -35,6 +35,7 @@ import { levelMeterGalleryEntry } from "./level-meter";
 import { timelineGalleryEntry } from "./timeline";
 import { qrCodeGalleryEntry } from "./qr-code";
 import { stepsGalleryEntry } from "./steps";
+import { typedTextGalleryEntry } from "./typed-text";
 import type { GalleryText } from "./text";
 
 /** A file as an agent writes it: long enough to scroll, with a line wider than the box. */
@@ -656,6 +657,7 @@ export const dataGallery: GalleryGroup = {
         </Samples>
       )
     },
+    typedTextGalleryEntry,
     stepsGalleryEntry,
     levelMeterGalleryEntry,
     timelineGalleryEntry,
