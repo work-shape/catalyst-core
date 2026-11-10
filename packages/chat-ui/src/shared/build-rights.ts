@@ -253,12 +253,39 @@ export function buildScopeValue(scope: BuildScope): string {
   return scope.kind === "instance" ? INSTANCE_SCOPE_VALUE : scope.workspaceId;
 }
 
+/** The value the picker keeps for a list of every owner, which no workspace id is. */
+export const EVERY_OWNER_VALUE = "every";
+
+/**
+ * The owners a list of every owner asks the instance for, as `assets.list` takes them in
+ * `owners`: each owner Studio offers this reader, and none it does not.
+ */
+export function buildOwnersValue(rights: Pick<BuildRights, "readsInstance" | "workspaces">) {
+  return buildScopes(rights).map(buildScopeValue).join(",");
+}
+
 /** The owner Studio worked in last in this browser, as `instance` or a workspace's id. */
 const SCOPE_STORAGE_KEY = "vivd-catalyst:build-scope";
 
 /** The owner chosen in this tab, which a browser that refuses storage keeps as well. */
 let chosenInTab: string | undefined;
+/**
+ * The reader narrowed the lists of Studio to the owner it works in. Until then, and again
+ * after a reload, a list shows what every owner it offers holds, each row with its owner.
+ */
+let narrowedInTab = false;
 const scopeListeners = new Set<() => void>();
+
+/** A list of Studio shows every owner it offers, not only the owner Studio works in. */
+export function readListsEveryOwner(): boolean {
+  return !narrowedInTab;
+}
+
+/** Shows every owner in the lists of Studio again, or only the owner Studio works in. */
+export function storeListsEveryOwner(every: boolean): void {
+  narrowedInTab = !every;
+  for (const listener of scopeListeners) listener();
+}
 
 /** The owner the reader chose last in this browser: `instance`, a workspace's id, or nothing. */
 export function readLastBuildScope(): string | undefined {
@@ -284,6 +311,7 @@ export function storeLastBuildScope(scope: string): void {
 // The owner is a workspace of the person signed in: the next person starts without it.
 forgetWhenSessionEnds(() => {
   chosenInTab = undefined;
+  narrowedInTab = false;
   try {
     window.localStorage.removeItem(SCOPE_STORAGE_KEY);
   } catch {
@@ -292,7 +320,7 @@ forgetWhenSessionEnds(() => {
   for (const listener of scopeListeners) listener();
 });
 
-/** Hears each owner Studio is set to work in. */
+/** Hears each owner Studio is set to work in, and each narrowing of its lists. */
 export function subscribeBuildScope(listener: () => void): () => void {
   scopeListeners.add(listener);
   return () => scopeListeners.delete(listener);

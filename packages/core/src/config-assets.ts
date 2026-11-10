@@ -541,14 +541,14 @@ export interface ConfigAssetStore {
     withoutSkillResources?: boolean;
   }): Promise<ConfigAssetRecord[]>;
   /**
-   * One page of the active assets of a kind in one scope, in the byte order of their names.
-   * The store reads keys in batches and asks `readable` for each, so the page holds only what
-   * the caller may read and the content of no other asset is loaded.
+   * One page of the active assets of a kind in one scope, or in several, in the byte order of
+   * their names. The store reads keys in batches and asks `readable` for each, so the page holds
+   * only what the caller may read and the content of no other asset is loaded.
    */
   listConfigAssetPage(input: {
     clientInstanceId: ClientInstanceId;
     kind: ConfigAssetKind;
-    scope: AssetScope;
+    scope: AssetScope | readonly AssetScope[];
     /** Only assets whose name starts with this text. */
     namePrefix?: string;
     /**

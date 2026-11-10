@@ -59,6 +59,7 @@ import {
 } from "./build-model";
 import { useBuildNavigation } from "../../shared/build-route";
 import {
+  EVERY_OWNER_VALUE,
   buildScopeValue,
   buildScopes,
   buildWorkspaceName,
@@ -666,14 +667,39 @@ function BuildList({
     }
   };
   const scope = source.scopeOf?.(entry.kind);
-  const scopeName = (of: BuildScope) => assetPlace(of, source.rights.workspaces, t).name;
-  // "Wo" offers the places in the order of the ladder: Nur ich, the teams, Alle.
+  // "Wo" names the instance "Für alle", so that no one reads it as every owner: that is
+  // "Überall", the list's first view.
+  const scopeName = (of: BuildScope) =>
+    of.kind === "instance"
+      ? t("build.placeFilterInstance")
+      : assetPlace(of, source.rights.workspaces, t).name;
+  // "Wo" offers "Überall", then the places in the order of the ladder: Nur ich, the teams, Für
+  // alle.
   const rung = (of: BuildScope) =>
     ({ mine: 0, workspace: 1, all: 2 })[assetPlace(of, source.rights.workspaces, t).rung];
   const scopes =
     scope && source.chooseScope
       ? buildScopes(source.rights).toSorted((one, other) => rung(one) - rung(other))
       : [];
+  // Until the reader narrows it, the list shows every owner offered, each row with its own.
+  const everyOwner = scope !== undefined && scopes.length > 1 && source.listsEveryOwner === true;
+  const chooseOwner = (value: string) => {
+    if (value === EVERY_OWNER_VALUE) {
+      source.chooseListOwner?.("every");
+      return;
+    }
+    const chosen = scopes.find((option) => buildScopeValue(option) === value);
+    if (!chosen) return;
+    if (source.chooseListOwner) source.chooseListOwner(chosen);
+    else source.chooseScope?.(chosen);
+  };
+  // A row of another owner opens with Studio set to its owner, so its page reads it there.
+  const openRow = (asset: BuildAssetRow) => {
+    if (everyOwner && buildScopeValue(asset.scope) !== buildScopeValue(scope)) {
+      source.chooseScope?.(asset.scope);
+    }
+    onOpen(asset);
+  };
   const filtered = settledText.trim() !== "";
   // A kind that only lists has no asset to start and no CLI entry, and a page only to show one.
   const editable = isEditableKind(entry) ? entry : undefined;
@@ -722,7 +748,10 @@ function BuildList({
           listError ? null : (
             <SkeletonList rows={6} />
           )
-        ) : rows.length === 0 && leadRows.length === 0 && !filtered && scopes.length < 2 ? (
+        ) : rows.length === 0 &&
+          leadRows.length === 0 &&
+          !filtered &&
+          (scopes.length < 2 || everyOwner) ? (
           <BuildListEmpty kind={kind} newButton={newButton} startWithAgent={startWithAgent} />
         ) : (
           <div className="grid min-w-0 gap-3">
@@ -742,20 +771,22 @@ function BuildList({
                   {scope && scopes.length > 1 ? (
                     <Picker
                       label={t("build.placeFilter")}
-                      options={scopes.map((option) => ({
-                        value: buildScopeValue(option),
-                        label: scopeName(option)
-                      }))}
-                      value={buildScopeValue(scope)}
-                      onValueChange={(value) => {
-                        const chosen = scopes.find((option) => buildScopeValue(option) === value);
-                        if (chosen) source.chooseScope?.(chosen);
-                      }}
+                      options={[
+                        ...(source.chooseListOwner
+                          ? [{ value: EVERY_OWNER_VALUE, label: t("build.placeEvery") }]
+                          : []),
+                        ...scopes.map((option) => ({
+                          value: buildScopeValue(option),
+                          label: scopeName(option)
+                        }))
+                      ]}
+                      value={everyOwner ? EVERY_OWNER_VALUE : buildScopeValue(scope)}
+                      onValueChange={chooseOwner}
                     >
                       <PickerButton
                         label={t("build.placeFilter")}
-                        value={scopeName(scope)}
-                        placeholder={t("build.placeAll")}
+                        value={everyOwner ? t("build.placeEvery") : scopeName(scope)}
+                        placeholder={t("build.placeEvery")}
                       />
                     </Picker>
                   ) : null}
@@ -771,7 +802,7 @@ function BuildList({
               <BuildListEmpty kind={kind} newButton={newButton} startWithAgent={startWithAgent} />
             ) : rows.length === 0 && leadRows.length === 0 ? (
               <EmptyState layout="inline" icon={<SearchX aria-hidden="true" />}>
-                {scope && !filtered
+                {scope && !filtered && !everyOwner
                   ? t("build.noneInPlace", { place: scopeName(scope) })
                   : t("build.noMatch", { query: settledText.trim() })}
               </EmptyState>
@@ -855,7 +886,7 @@ function BuildList({
                             onClick={(event) => {
                               if (opensHere(event)) {
                                 event.preventDefault();
-                                onOpen(asset);
+                                openRow(asset);
                               }
                             }}
                           />
@@ -912,7 +943,9 @@ function BuildList({
       />
       {loadError}
       {entry.ListLead ? (
-        <entry.ListLead filter={{ text: settledText, scope }}>{listBody}</entry.ListLead>
+        <entry.ListLead filter={{ text: settledText, scope: everyOwner ? undefined : scope }}>
+          {listBody}
+        </entry.ListLead>
       ) : (
         listBody(NO_LEAD)
       )}

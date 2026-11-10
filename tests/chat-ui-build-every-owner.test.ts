@@ -12,7 +12,9 @@ import {
   BuildNavigationProvider,
   readLastBuildScope,
   showOwnerInStudio,
-  useBuildSource
+  storeListsEveryOwner,
+  useBuildSource,
+  type BuildLocation
 } from "@work-shape/catalyst-chat-ui/build-area";
 import { SettingsPageProvider } from "@work-shape/catalyst-chat-ui/settings-page-context";
 import { DocsAddressProvider, UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
@@ -22,11 +24,11 @@ import { TranslationProvider } from "./chat-ui-render-harness";
 import { settingsUser } from "./chat-ui-settings-fixtures";
 import { CONDITION_WAIT_MS } from "./support/assertions";
 
-// ACCEPT-2d C-5: Mara opened Skills on "Personal", empty, because an asset she had opened there
-// had set Studio's owner. The Skills list now opens on the owner Studio is set to when that has
-// skills, otherwise on the first owner offered that has, for this tab alone: what Studio
-// remembers stays as it was. A pick of the reader's is kept. Every other list opens where Studio
-// is set, and an owner Studio is taken to on the way to an asset is remembered across a reload.
+// An admin read "Alle" in Studio's "Wo" as every owner and missed an agent a workspace owned
+// (fix/studio-where-filter). Every list of a kind a workspace can own now starts on
+// "Everywhere": what each owner offered holds, in one read, each row with its owner. "Wo"
+// narrows it to one owner, and names the instance "For everyone". Opening a row of another
+// owner sets Studio to that owner, so its page reads it there; the list stays as wide as it was.
 
 const PERSONAL = "cw_personal";
 const STORAGE_KEY = "vivd-catalyst:build-scope";
@@ -40,6 +42,8 @@ afterEach(async () => {
   host?.remove();
   root = undefined;
   host = undefined;
+  storeListsEveryOwner(true);
+  window.localStorage.clear();
   vi.unstubAllGlobals();
 });
 
@@ -73,7 +77,8 @@ async function mountSkills(
   } = {}
 ) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  const reads: { owner: string; limit: string | null }[] = [];
+  /** Each list read, as the owners it named. */
+  const reads: string[] = [];
   const agentReads: string[] = [];
   const context = {
     ...platformContext([], instanceActions(permissions)),
@@ -94,11 +99,11 @@ async function mountSkills(
       return Response.json(context);
     }
     if (listedKind(request, url) === "agent") {
-      const workspaceId = url.searchParams.get("workspaceId") ?? undefined;
-      agentReads.push(workspaceId ?? "instance");
-      const names = workspaceId === undefined ? (options.agents ?? []) : [];
+      const owners = ownersOf(url);
+      agentReads.push(owners.join(","));
+      const names = owners.includes("instance") ? (options.agents ?? []) : [];
       return Response.json({
-        items: names.map((name) => ({ ...skill(name, workspaceId), kind: "agent" }))
+        items: names.map((name) => ({ ...skill(name, undefined), kind: "agent" }))
       });
     }
     const asset = /^\/api\/v1\/assets\/skill\/([^/]+)$/u.exec(url.pathname);
@@ -113,26 +118,32 @@ async function mountSkills(
         : Response.json({ error: { code: "NOT_FOUND", message: "none" } }, { status: 404 });
     }
     if (listedKind(request, url) === "skill") {
-      const workspaceId = url.searchParams.get("workspaceId") ?? undefined;
-      reads.push({ owner: workspaceId ?? "instance", limit: url.searchParams.get("limit") });
-      const names = workspaceId === PERSONAL ? held.personal : held.instance;
-      return Response.json({ items: names.map((name) => skill(name, workspaceId)) });
+      const owners = ownersOf(url);
+      reads.push(owners.join(","));
+      const items = [
+        ...(owners.includes("instance") ? held.instance.map((name) => skill(name, undefined)) : []),
+        ...(owners.includes(PERSONAL) ? held.personal.map((name) => skill(name, PERSONAL)) : [])
+      ].toSorted((one, other) => one.name.localeCompare(other.name));
+      return Response.json({ items });
     }
     return Response.json({ error: { code: "NOT_FOUND", message: "none" } }, { status: 404 });
   };
   function Studio() {
     return createElement(BuildFrame, { source: useBuildSource() });
   }
-  let go: (kindPath: string) => void = () => undefined;
+  let go: (place: BuildLocation) => void = () => undefined;
   function Navigated() {
-    const [kindPath, setKindPath] = useState<string>(startOn);
-    go = setKindPath;
+    const [location, setLocation] = useState<BuildLocation>({
+      kindPath: startOn,
+      ...(options.open ? { name: options.open } : {})
+    });
+    go = setLocation;
     return createElement(
       BuildNavigationProvider,
       {
         value: {
-          location: { kindPath, ...(options.open ? { name: options.open } : {}) },
-          open: () => undefined,
+          location,
+          open: (place) => setLocation(place),
           href: (place) => `/build/${place.kindPath ?? ""}/${place.name ?? ""}`
         }
       },
@@ -176,7 +187,11 @@ async function mountSkills(
       )
     );
   });
-  return { reads, agentReads, go: (kindPath: string) => act(async () => go(kindPath)) };
+  return {
+    reads,
+    agentReads,
+    go: (kindPath: string) => act(async () => go({ kindPath }))
+  };
 }
 
 /** Picks an owner in the list's scope picker. */
@@ -208,86 +223,81 @@ async function until(check: () => void): Promise<void> {
 const scopeButton = () =>
   document.querySelector<HTMLButtonElement>('button[aria-label^="Where: "]');
 const shown = (name: string) => document.body.textContent?.includes(name) ?? false;
-/** The reads of a page of the list, not the look whether an owner has any. */
-const pageReads = (reads: { owner: string; limit: string | null }[]) =>
-  reads.filter((read) => read.limit !== "1").map((read) => read.owner);
 
-describe("the owner Studio's Skills list opens on", () => {
-  it("is the instance, with its skills, when the Personal Workspace kept from before has none", async () => {
-    // An earlier visit kept the Personal Workspace, which has no skills.
-    window.localStorage.setItem(STORAGE_KEY, PERSONAL);
-    const page = await mountSkills({ instance: ["house-style"], personal: [] });
+/** The owners a list read names: `owners`, or the one owner it names. */
+function ownersOf(url: URL): string[] {
+  const owners = url.searchParams.get("owners");
+  if (owners !== null) return owners.split(",");
+  return [url.searchParams.get("workspaceId") ?? "instance"];
+}
 
-    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Everyone"));
-    await until(() => expect(shown("house-style")).toBe(true));
-    // The empty list of the Personal Workspace was never read, so it never showed.
-    expect(pageReads(page.reads)).toEqual(["instance"]);
-    // The opening chose for this tab alone: what Studio remembers is unchanged.
-    expect(window.localStorage.getItem(STORAGE_KEY)).toBe(PERSONAL);
-  });
-
-  it("holds for Skills alone: Agents then opens where Studio is set (ACCEPT-2e C-1)", async () => {
-    window.localStorage.setItem(STORAGE_KEY, PERSONAL);
-    const page = await mountSkills({ instance: ["house-style"], personal: [] });
-    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Everyone"));
-    await until(() => expect(shown("house-style")).toBe(true));
-
-    await page.go("agents");
-
-    await until(() => expect(page.agentReads).toContain(PERSONAL));
-    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Only me"));
-    expect(page.agentReads).not.toContain("instance");
-    expect(readLastBuildScope()).toBe(PERSONAL);
-    // A new agent starts where Studio is set, under the Personal Workspace's own name.
-    await act(async () =>
-      [...document.querySelectorAll<HTMLButtonElement>("button")]
-        .find((button) => button.textContent === "New agent")
-        ?.click()
-    );
-    const availability = () => document.querySelector("[data-new-asset-availability]");
-    await until(() => expect(availability()?.textContent).toContain("Only me"));
-    expect(availability()?.textContent).not.toContain("Felix Pahlke");
-    // Back on Skills, the list still shows the owner it opened on.
-    await page.go("skills");
-    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Everyone"));
-  });
-
-  it("stays the owner Studio is set to when that has some", async () => {
-    showOwnerInStudio(PERSONAL);
+describe("a Studio list of a kind a workspace can own", () => {
+  it("starts on Everywhere: every owner offered, in one read, each row with its owner", async () => {
+    // An earlier visit kept the instance; that narrows nothing.
+    window.localStorage.setItem(STORAGE_KEY, "instance");
     const page = await mountSkills({ instance: ["house-style"], personal: ["my-notes"] });
 
+    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Everywhere"));
     await until(() => expect(shown("my-notes")).toBe(true));
-    expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Only me");
-    expect(pageReads(page.reads)).toEqual([PERSONAL]);
+    expect(shown("house-style")).toBe(true);
+    expect(page.reads).toEqual([`instance,${PERSONAL}`]);
+    // Each row names its owner in the ladder's words.
+    const row = (name: string) =>
+      document.querySelector(`a[href$="/${name}"]`)?.closest("li")?.textContent ?? "";
+    expect(row("house-style")).toContain("Everyone");
+    expect(row("my-notes")).toContain("Only me");
   });
 
-  it("is kept as the reader picks it, even where that owner has none", async () => {
-    showOwnerInStudio(undefined);
-    const page = await mountSkills({ instance: ["house-style"], personal: [] });
-    await until(() => expect(shown("house-style")).toBe(true));
+  it("narrows to each owner Wo offers, and widens again", async () => {
+    const page = await mountSkills({ instance: ["house-style"], personal: ["my-notes"] });
+    await until(() => expect(shown("my-notes")).toBe(true));
 
     await pickScope("Only me");
-
     await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Only me"));
-    await until(() => expect(pageReads(page.reads)).toContain(PERSONAL));
-    // Nothing moves the reader off the empty owner they chose.
-    await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
-    expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Only me");
-    expect(window.localStorage.getItem(STORAGE_KEY)).toBe(PERSONAL);
+    await until(() => expect(shown("house-style")).toBe(false));
+    expect(shown("my-notes")).toBe(true);
+    expect(readLastBuildScope()).toBe(PERSONAL);
+
+    await pickScope("For everyone");
+    await until(() =>
+      expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: For everyone")
+    );
+    await until(() => expect(shown("my-notes")).toBe(false));
+    expect(shown("house-style")).toBe(true);
+
+    await pickScope("Everywhere");
+    await until(() => expect(shown("my-notes")).toBe(true));
+    expect(shown("house-style")).toBe(true);
+    expect(new Set(page.reads)).toEqual(new Set([`instance,${PERSONAL}`, PERSONAL, "instance"]));
   });
 
-  it("is the reader's pick on another list, when Skills opens after it", async () => {
-    showOwnerInStudio(undefined);
-    const page = await mountSkills({ instance: ["house-style"], personal: [] }, "agents");
-    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Everyone"));
+  it("is narrowed for every list at once, and Agents lists every owner as well", async () => {
+    const page = await mountSkills({ instance: ["house-style"], personal: [] }, "agents", {
+      agents: ["helper"]
+    });
+    await until(() => expect(shown("helper")).toBe(true));
+    expect(page.agentReads).toEqual([`instance,${PERSONAL}`]);
     await pickScope("Only me");
-    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Only me"));
+    await until(() => expect(page.agentReads).toContain(PERSONAL));
 
     await page.go("skills");
-    await until(() => expect(pageReads(page.reads)).toContain(PERSONAL));
-    await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
-    expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Only me");
+    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Only me"));
+    expect(page.reads).toEqual([PERSONAL]);
     expect(shown("house-style")).toBe(false);
+  });
+
+  it("opens a row of another owner with Studio set to it, and stays on Everywhere", async () => {
+    showOwnerInStudio(undefined);
+    const page = await mountSkills({ instance: ["house-style"], personal: ["my-notes"] });
+    await until(() => expect(shown("my-notes")).toBe(true));
+
+    const link = document.querySelector<HTMLAnchorElement>('a[href$="/my-notes"]');
+    await act(async () => link?.click());
+
+    expect(readLastBuildScope()).toBe(PERSONAL);
+    await page.go("skills");
+    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Everywhere"));
+    expect(shown("house-style")).toBe(true);
   });
 });
 
@@ -312,20 +322,5 @@ describe("an owner Studio is taken to", () => {
 
     await until(() => expect(window.localStorage.getItem(STORAGE_KEY)).toBe(PERSONAL));
     expect(await reloaded()).toBe(PERSONAL);
-  });
-});
-
-describe("a list other than Skills", () => {
-  it("opens where Studio is set, even where that owner has none of the kind", async () => {
-    window.localStorage.setItem(STORAGE_KEY, PERSONAL);
-    const page = await mountSkills({ instance: [], personal: [] }, "agents", {
-      agents: ["helper"]
-    });
-
-    await until(() => expect(page.agentReads).toContain(PERSONAL));
-    await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
-    expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Only me");
-    expect(page.agentReads).not.toContain("instance");
-    expect(shown("helper")).toBe(false);
   });
 });
