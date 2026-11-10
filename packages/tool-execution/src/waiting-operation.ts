@@ -141,7 +141,7 @@ export async function executeConfirmedOperation(
     const access = await deps.authorizer.forActor(context.call.actor);
     const clicked = { ...context.call, origin: { kind: "user" as const } };
     if (!approval || !approvedByCaller(clicked, policy, approval, access))
-      return holdForApproval(context, policy, waiting.heldInput, approval);
+      return holdForApproval(context, policy, waiting, approval);
     return executeWaitingCall(
       context,
       { ...decision, mode: "approved", reason: "approved_by_caller" },
@@ -212,20 +212,26 @@ export async function executeInboxConfirmedOperation(
       options.signal
     );
   }
-  return holdForApproval(context, policy, waiting.heldInput, approval);
+  return holdForApproval(context, policy, waiting, approval);
 }
 
 /**
  * Files the approval a confirmed call waits for next and moves its run on to wait for it. A
  * call nothing can hold for an approval is refused, as its person's own call would be.
+ *
+ * The approval freezes the call's input as it was made, with what its before-events held kept
+ * beside it: the run's input hash names that input, so the approved call is admitted again.
  */
 async function holdForApproval(
   context: RunContext,
   policy: PolicyResolution,
-  heldInput: JsonObject | undefined,
+  waiting: Pick<WaitingOperationCall, "call" | "heldInput">,
   approval: Awaited<ReturnType<NonNullable<OperationDefinition["approval"]>>>
 ): Promise<ApprovedOperationEnd> {
-  const { run, definition, call, deps } = context;
+  const { run, definition, deps } = context;
+  const { heldInput } = waiting;
+  // The admitted call carries the held keys in its input; the frozen input does not.
+  const call = { ...context.call, input: waiting.call.input };
   const refuse = async () => {
     const end = deniedEnd(context, {
       kind: "policy",
