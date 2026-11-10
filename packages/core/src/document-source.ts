@@ -71,6 +71,13 @@ export interface DocumentSourceListInput {
   boundary: DocumentSourceBoundary;
   /** The `nextPageToken` of the page before. Left out, the first page. */
   pageToken?: string;
+  /**
+   * True for a folder the source's `exclude` leaves out with everything below it, asked by the
+   * folder's path in the form of an item's `path` (`/Projects/Old`). A source that walks folders
+   * should list no such folder; one that ignores it lists them, and the sync leaves their items
+   * out. Every page of one listing gets the same answers.
+   */
+  excludesFolder?: (path: string) => boolean;
 }
 
 export interface DocumentSourceListPage {

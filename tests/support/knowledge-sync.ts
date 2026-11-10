@@ -75,8 +75,11 @@ export function useKnowledgeSync({
   fetchWindow,
   pageCacheBytes,
   methods = ["keyword", "semantic"],
-  sourceTick
+  sourceTick,
+  maxDocuments = 10000
 }: {
+  /** `knowledge.maxDocuments`, smaller than the default. */
+  maxDocuments?: number;
   /** The bound of the page cache, smaller than the default (KB-13b). */
   pageCacheBytes?: number;
   withDataStoreJobs?: boolean;
@@ -317,7 +320,7 @@ export function useKnowledgeSync({
       pageSource: { openSource, cacheBytes: pageCacheBytes ?? KNOWLEDGE_PAGE_CACHE_BYTES_DEFAULT },
       embedding,
       documentFormats: extractor ? KNOWLEDGE_DOCUMENT_FORMATS : KNOWLEDGE_TEXT_FORMATS,
-      maxDocuments: 10000,
+      maxDocuments,
       logger
     });
     const fileJobs = knowledge.fileJobs(
@@ -328,7 +331,7 @@ export function useKnowledgeSync({
     const handlers = dataStores.knowledgeSourceJobs({
       files,
       documentFormats: extractor ? KNOWLEDGE_DOCUMENT_FORMATS : KNOWLEDGE_TEXT_FORMATS,
-      maxDocuments: 10000,
+      maxDocuments,
       ...(firstPassStop === undefined ? {} : { firstPassStop }),
       ...(fetchWindow === undefined ? {} : { fetchWindow }),
       ...sourceTick,

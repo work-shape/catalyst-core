@@ -40,6 +40,11 @@ const progressSchema = z.object({
   feedCursor: z.string().optional(),
   reconciled: z.boolean().optional(),
   listing: z.boolean().optional(),
+  /**
+   * A page held back new items at `knowledge.maxDocuments`. The pass still lists, changes and
+   * withdraws everything else, and ends `failed` with `knowledge_source_limit_reached`.
+   */
+  limited: z.boolean().optional(),
   /** A first sync above the stop waits here for one confirmation (KB-ISO-1b). */
   stop: firstPassStopSchema.optional()
 });
@@ -50,6 +55,11 @@ export type SourceProgress = z.infer<typeof progressSchema>;
  */
 export const RETRY_RUN_SQL =
   "(sync_runs.mode='full' and sync_runs.cursor_after::jsonb->'listing' is null)";
+/**
+ * A pass the first import is behind: one that ended `done`, or one that held back new items at
+ * `knowledge.maxDocuments` once it had applied everything else.
+ */
+export const IMPORTED_RUN_SQL = `((sync_runs.state='done' or (sync_runs.failure_code='knowledge_source_limit_reached' and sync_runs.cursor_after::jsonb->>'limited'='true')) and not ${RETRY_RUN_SQL})`;
 const runSchema = z.object({
   mode: knowledgeSyncResultSchema.shape.mode,
   state: z.string(),
@@ -132,7 +142,7 @@ export function createSourceStore(
           .array(z.object({ id: z.string(), operation_run_id: z.string(), created: z.boolean() }))
           .parse(
             await sql.run(
-              `insert into catalyst_kb.sync_runs (id,source_id,mode,operation_run_id,cursor_before,definition_key) values ($1::text,$2::text,case when $3::text='changes' and not exists(select 1 from catalyst_kb.sync_runs where source_id=$2::text and state='done' and not ${RETRY_RUN_SQL}) then 'initial' else $3::text end,$4::text,(select cursor from catalyst_kb.source_cursors where source_id=$2::text and definition_key=$5::text),$5::text) on conflict (source_id) where state='running' do update set source_id=sync_runs.source_id returning id,operation_run_id,(xmax=0) as created`,
+              `insert into catalyst_kb.sync_runs (id,source_id,mode,operation_run_id,cursor_before,definition_key) values ($1::text,$2::text,case when $3::text='changes' and not exists(select 1 from catalyst_kb.sync_runs where source_id=$2::text and ${IMPORTED_RUN_SQL}) then 'initial' else $3::text end,$4::text,(select cursor from catalyst_kb.source_cursors where source_id=$2::text and definition_key=$5::text),$5::text) on conflict (source_id) where state='running' do update set source_id=sync_runs.source_id returning id,operation_run_id,(xmax=0) as created`,
               [payload.syncRunId, payload.sourceId, mode, payload.operationRunId, definitionKey]
             )
           );
@@ -168,10 +178,14 @@ export function createSourceStore(
         );
       });
     },
+    /**
+     * Records one page of items. Without `progress` the run's position stays as written: the
+     * page's effects commit, and a resume from the older position lists it again.
+     */
     async page(
       payload: KnowledgeSyncJobPayload,
       items: DocumentSourceItem[],
-      progress: SourceProgress,
+      progress: SourceProgress | undefined,
       formats: readonly KnowledgeDocumentFormat[],
       maxDocuments: number
     ) {
@@ -237,9 +251,10 @@ export function createSourceStore(
         for (const item of listed) {
           const id = sourceItemId(payload.sourceId, item.id);
           const old = olds.get(id);
+          // Only a new document waits for room: every other item of the page still counts.
           if ((!old || old.state === "withdrawn") && held >= maxDocuments) {
             limited = true;
-            break;
+            continue;
           }
           if (!old || old.state === "withdrawn") held++;
           const format = sourceFormat(item);
@@ -319,24 +334,33 @@ export function createSourceStore(
           `update catalyst_kb.sync_runs set discovered=discovered+$2::int, changed=changed+$3::int, moved=moved+$4::int, skipped=skipped+$5::int, failed=failed+$6::int where id=$1::text`,
           [payload.syncRunId, discovered, changedCount, moved, skipped, failed]
         );
-        const cursor = JSON.stringify({ ...progress, complete: progress.complete || limited });
-        await sql.run("update catalyst_kb.sync_runs set cursor_after=$2::text where id=$1::text", [
-          payload.syncRunId,
-          cursor
-        ]);
+        if (progress) {
+          const cursor = JSON.stringify(limited ? { ...progress, limited } : progress);
+          await sql.run(
+            "update catalyst_kb.sync_runs set cursor_after=$2::text where id=$1::text",
+            [payload.syncRunId, cursor]
+          );
+        }
         // The feed position and the listed page commit together. Listing progress belongs to
-        // the run, so a full pass never mistakes its page token for a change-feed cursor.
-        if (
-          progress.feedCursor !== undefined &&
-          (progress.listing !== true || progress.complete) &&
-          !limited
-        )
+        // the run, so a full pass never mistakes its page token for a change-feed cursor. A page
+        // that held back new items moves the feed on too, so deletions keep applying; the next
+        // full listing finds what waited.
+        if (progress?.feedCursor !== undefined && (progress.listing !== true || progress.complete))
           await sql.run(
             `insert into catalyst_kb.source_cursors (source_id,cursor,definition_key) values ($1::text,$2::text,(select definition_key from catalyst_kb.sync_runs where id=$3::text)) on conflict(source_id) do update set cursor=excluded.cursor,definition_key=excluded.definition_key,updated_at=now()`,
             [payload.sourceId, progress.feedCursor, payload.syncRunId]
           );
         await refreshSourceFreshness(sql, payload.sourceId, changed);
         return { queued, limited };
+      });
+    },
+    /** Writes the position of a listing whose last pages left it unwritten. */
+    async position(payload: KnowledgeSyncJobPayload, progress: SourceProgress) {
+      return change(async (sql) => {
+        await sql.run(
+          "update catalyst_kb.sync_runs set cursor_after=$2::text where id=$1::text and state='running'",
+          [payload.syncRunId, JSON.stringify(progress)]
+        );
       });
     },
     /** Lets go of the items a job of an ended pass still holds, so this pass can claim them. */
@@ -762,8 +786,10 @@ export function createSourceStore(
       return change(async (sql) => {
         await refreshSourceFreshness(sql, payload.sourceId, false);
         // A retry waits for the items it queued. What a failed pass left is for the next pass.
+        // A pass that held back new items ends like any other once its work is done, and then
+        // names the limit.
         const finished = await sql.run(
-          `update catalyst_kb.sync_runs set state=$2::text,failure_code=$3::text,ended_at=now() where id=$1::text and state='running' and ($2::text='superseded' or $3::text is not null or (cursor_after::jsonb->>'complete'='true' and (cursor_after::jsonb->>'listing' is distinct from 'true' or cursor_after::jsonb->>'reconciled'='true') and not exists (select 1 from catalyst_kb.source_items where source_id=$4::text and state='discovered' and (not ${RETRY_RUN_SQL} or enqueued_run_id=$1::text)))) returning id`,
+          `update catalyst_kb.sync_runs set state=case when $2::text='done' and cursor_after::jsonb->>'limited'='true' then 'failed' else $2::text end,failure_code=case when $2::text='done' and cursor_after::jsonb->>'limited'='true' then 'knowledge_source_limit_reached' else $3::text end,ended_at=now() where id=$1::text and state='running' and ($2::text='superseded' or $3::text is not null or (cursor_after::jsonb->>'complete'='true' and (cursor_after::jsonb->>'listing' is distinct from 'true' or cursor_after::jsonb->>'reconciled'='true') and not exists (select 1 from catalyst_kb.source_items where source_id=$4::text and state='discovered' and (not ${RETRY_RUN_SQL} or enqueued_run_id=$1::text)))) returning id`,
           [
             payload.syncRunId,
             outcome ?? (failureCode ? "failed" : "done"),
