@@ -1028,7 +1028,8 @@ function createSnapshot({
       status: "active",
       createdAt: "2026-06-26T10:00:00.000Z",
       updatedAt: "2026-06-26T10:00:00.000Z",
-      retainedUntil: "2026-07-26T10:00:00.000Z"
+      retainedUntil: "2026-07-26T10:00:00.000Z",
+      people: []
     },
     messages,
     ...(activeRun

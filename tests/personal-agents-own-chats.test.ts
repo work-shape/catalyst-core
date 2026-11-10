@@ -933,13 +933,23 @@ describe("the chat audience rule shared with personal chat skills", () => {
   } satisfies AuthenticatedUser;
   const team = { kind: "shared" as const, personalUserId: null };
   const home = { kind: "personal" as const, personalUserId: "kai" };
-  const chat = { kind: "chat" as const, status: "active" as const, createdByUserId: "kai" };
+  const chat = {
+    kind: "chat" as const,
+    status: "active" as const,
+    createdByUserId: "kai",
+    people: []
+  };
 
   it("admits only a chat its person created that nobody else reads", () => {
     expect(chatReadOnlyBy({ ...chat, visibility: "private" }, team, "kai")).toBe(true);
     expect(chatReadOnlyBy({ ...chat, visibility: "workspace" }, home, "kai")).toBe(true);
     expect(chatReadOnlyBy({ ...chat, visibility: "workspace" }, team, "kai")).toBe(false);
     expect(chatReadOnlyBy({ ...chat, visibility: "private" }, team, "lena")).toBe(false);
+    // A private chat that names another member is read by more than its person (CHAT-SHARE).
+    const named = { userId: "lena", displayLabel: "Lena", addedAt: "2026-11-10T00:00:00.000Z" };
+    expect(chatReadOnlyBy({ ...chat, visibility: "private", people: [named] }, team, "kai")).toBe(
+      false
+    );
     expect(
       chatReadOnlyBy(
         { ...chat, visibility: "workspace" },

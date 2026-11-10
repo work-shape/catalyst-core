@@ -1,16 +1,5 @@
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  exists,
-  getTableColumns,
-  inArray,
-  isNull,
-  ne,
-  or,
-  sql
-} from "drizzle-orm";
+import { and, asc, desc, eq, exists, getTableColumns, inArray, isNull, ne, sql } from "drizzle-orm";
+import { readsConversation } from "./postgres-conversation-people";
 import {
   ACTIVE_AGENT_RUN_STATUSES,
   AppError,
@@ -78,10 +67,7 @@ function followUpsWithAuthors(db: PostgresConnection) {
               and(
                 eq(conversations.clientInstanceId, conversationFollowUps.clientInstanceId),
                 eq(conversations.id, conversationFollowUps.conversationId),
-                or(
-                  eq(conversations.visibility, "workspace"),
-                  eq(conversations.createdByUserId, productUsers.id)
-                )
+                readsConversation(productUsers.id)
               )
             )
         )

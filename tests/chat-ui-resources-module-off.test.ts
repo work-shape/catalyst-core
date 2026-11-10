@@ -59,7 +59,8 @@ function thread(): ConversationThreadSnapshot {
       status: "active",
       createdAt: at,
       updatedAt: at,
-      retainedUntil: at
+      retainedUntil: at,
+      people: []
     },
     messages: [],
     serverTime: at,

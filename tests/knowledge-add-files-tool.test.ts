@@ -32,7 +32,8 @@ describe("the chat attachment Knowledge Base tool", () => {
       title: "Files",
       createdAt: "2026-10-18T00:00:00.000Z",
       updatedAt: "2026-10-18T00:00:00.000Z",
-      retainedUntil: "2026-11-18T00:00:00.000Z"
+      retainedUntil: "2026-11-18T00:00:00.000Z",
+      people: []
     });
     for (const enabled of [true, false]) {
       const modules = createModuleRegistry(platformModules).snapshot({

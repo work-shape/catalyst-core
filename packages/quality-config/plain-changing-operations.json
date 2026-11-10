@@ -32,6 +32,10 @@
       "class": "identity",
       "reason": "This operation establishes the actor."
     },
+    "conversations.add_person": {
+      "class": "conversation",
+      "reason": "A first-party session alone calls it, never an agent or a key; conversation.person_added or person_removed records it."
+    },
     "conversations.artifacts.retry_preview": {
       "class": "conversation",
       "reason": "The Agent Run is the record for this operation."
@@ -79,6 +83,10 @@
     "conversations.move": {
       "class": "conversation",
       "reason": "The Agent Run is the record for this operation."
+    },
+    "conversations.remove_person": {
+      "class": "conversation",
+      "reason": "A first-party session alone calls it, never an agent or a key; conversation.person_added or person_removed records it."
     },
     "conversations.rename": {
       "class": "conversation",
@@ -163,6 +171,7 @@
     "config.get": "own",
     "connect_codes.redeem": "public",
     "connect_codes.start": "public",
+    "conversations.add_person": "conversation_access",
     "conversations.artifacts.get_content": "conversation_access",
     "conversations.artifacts.get_preview": "conversation_access",
     "conversations.artifacts.retry_preview": "conversation_access",
@@ -183,6 +192,7 @@
     "conversations.messages.list": "conversation_access",
     "conversations.move": "conversation_access",
     "conversations.project_instructions.get": "conversation_access",
+    "conversations.remove_person": "conversation_access",
     "conversations.rename": "conversation_access",
     "conversations.resources.list": "conversation_access",
     "conversations.runs.cancel": "conversation_access",
@@ -190,6 +200,7 @@
     "conversations.runs.create": "workspace_role",
     "conversations.runs.observe": "conversation_access",
     "conversations.runs.start": "conversation_access",
+    "conversations.share_candidates": "conversation_access",
     "conversations.structured_data.get": "conversation_access",
     "conversations.subagents.list": "conversation_access",
     "conversations.thread.get": "conversation_access",

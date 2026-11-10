@@ -50,6 +50,7 @@ function chat(id: string, projectId: string): ConversationListItem {
     createdAt: "2026-11-04T10:00:00.000Z",
     updatedAt: "2026-11-04T10:00:00.000Z",
     retainedUntil: "2027-11-04T10:00:00.000Z",
+    people: [],
     projectId
   };
 }

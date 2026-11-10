@@ -16,6 +16,7 @@ import {
   type AgentConfig,
   type AuthenticatedUser,
   type CollaborationWorkspaceId,
+  type ConversationId,
   type DataStoreRecord,
   type JsonObject
 } from "@work-shape/catalyst-core";
@@ -31,6 +32,7 @@ import {
 } from "./support/data-store-instance";
 import { getTestJobs } from "./support/test-instance";
 import { fileTestDatabaseUrl } from "./support/test-database";
+import { withTestSql } from "./support/test-sql";
 
 // Search over the documents of a Knowledge Base on the built-in backend and the agent tool over
 // an agent's Knowledge Bases (KB-7a): German and English full text and titles fused by
@@ -781,6 +783,79 @@ describe("searching the documents of a Knowledge Base", () => {
         status: "failed",
         error: { code: "permission_missing" }
       });
+    });
+
+    it("marks the chat before it searches a Knowledge Base of the person's Personal Workspace, and reads none where others read the chat", async () => {
+      const instance = await instanceWith();
+      await publishKnowledgeBase(instance, "eigen");
+      await addFiles(instance, "eigen", [
+        { filename: "Notiz.txt", content: "Die Kaution liegt auf meinem eigenen Konto." }
+      ]);
+      await putAgent(instance, ["eigen"], null);
+      const admin = await person(instance, "user-1", ["user", "admin", "superadmin"]);
+      const home = await instance.stores.workspaces.ensurePersonalWorkspace({
+        clientInstanceId,
+        userId: asUserId(admin.id)
+      });
+      // The person's own: owned by their Personal Workspace, as a project attaches it (PRJ-8).
+      await withTestSql(async (sql) => {
+        await sql`update config_assets set scope_kind = 'workspace', scope_id = ${home.id}
+          where kind = 'knowledge_base' and name = 'eigen'`;
+      });
+      const team = await instance.stores.workspaces.createWorkspace({
+        clientInstanceId,
+        kind: "shared",
+        name: "Nordlicht",
+        creatorUserId: asUserId(admin.id)
+      });
+      let call = 0;
+      const ask = async (conversationId: ConversationId) => {
+        call += 1;
+        return instance.execution.localAgentRuntimeOptions.runTool(
+          {
+            toolName: KNOWLEDGE_SEARCH_TOOL_NAME,
+            toolCallId: asToolCallId(`call-own-${call}`),
+            agentRunId: asAgentRunId(`run-own-${call}`),
+            conversationId,
+            agentName: "berater",
+            input: { query: "Kaution" }
+          },
+          { clientInstanceId, user: admin, locale: "en", correlationId: `corr_own_${call}` }
+        );
+      };
+      const markOf = async (conversationId: ConversationId) =>
+        (await instance.stores.conversations.getConversation(clientInstanceId, conversationId))
+          ?.personalDataAt;
+
+      // A private chat in a team, which only the person reads: marked, then answered.
+      const own = await conversationOf(instance, admin, team.id);
+      expect(await markOf(own.id)).toBeUndefined();
+      const answered = await ask(own.id);
+      expect(answered.status).toBe("success");
+      expect(
+        toolOutputSchema
+          .parse(answered.status === "success" ? answered.output : undefined)
+          .passages.map((passage) => passage.fileName)
+      ).toEqual(["Notiz.txt"]);
+      expect(await markOf(own.id)).toBeDefined();
+
+      // A chat the team reads cannot be marked: nothing of the person's own is read into it.
+      const open = await instance.stores.conversations.createConversation({
+        clientInstanceId,
+        collaborationWorkspaceId: team.id,
+        createdByUserId: admin.id,
+        createdByExternalUserId: admin.id,
+        visibility: "workspace",
+        title: "Team",
+        retainedUntil: new Date(Date.now() + 86_400_000).toISOString()
+      });
+      const refused = await ask(open.id);
+      expect(refused).toMatchObject({
+        status: "success",
+        output: { passages: [], skipped: [{ knowledgeBase: "eigen", reason: "failed" }] }
+      });
+      expect(JSON.stringify(refused)).not.toContain("Notiz.txt");
+      expect(await markOf(open.id)).toBeUndefined();
     });
   });
 });

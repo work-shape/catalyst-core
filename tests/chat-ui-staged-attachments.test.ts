@@ -25,7 +25,8 @@ const conversation = {
   status: "active",
   createdAt,
   updatedAt: createdAt,
-  retainedUntil: "2027-10-19T09:00:00.000Z"
+  retainedUntil: "2027-10-19T09:00:00.000Z",
+  people: []
 };
 const attachment = {
   id: "attachment_1",

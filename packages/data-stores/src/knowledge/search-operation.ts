@@ -18,6 +18,7 @@ import {
   type OperationResource
 } from "@work-shape/catalyst-core";
 import type { KnowledgeFilterDeclaration } from "./definition";
+import { markPersonalKnowledgeRead } from "./personal-read";
 import type { KnowledgeRuntime } from "./runtime";
 
 // `knowledge.<id>.search` (right `knowledge_base.use`, asked on every call): the passages of a
@@ -133,6 +134,7 @@ export function searchOperation(
     async execute(input, context) {
       const { query, limit, filters: values } = inputSchema.parse(input);
       const filters = searchFiltersOf(declared, values);
+      await markPersonalKnowledgeRead(runtime, knowledgeBase.resource, context);
       const started = performance.now();
       const embed = knowledgeBase.methods.includes("semantic")
         ? queryEmbedding(runtime, query, context)

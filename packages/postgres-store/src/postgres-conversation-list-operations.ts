@@ -15,6 +15,7 @@ import {
   conversationMessages
 } from "./postgres-conversation-operations";
 import type { PostgresConnection } from "./postgres-database";
+import { conversationFields, readsConversation } from "./postgres-conversation-people";
 import { mapConversation } from "./rows";
 import { agentRuns, agentTryConversations, conversations } from "./schema";
 
@@ -32,7 +33,7 @@ export async function listConversationsForWorkspace(
   input: ListConversationsInput
 ): Promise<Conversation[]> {
   const rows = await db
-    .select()
+    .select(conversationFields)
     .from(conversations)
     .where(listedConversations(db, input))
     .orderBy(desc(conversations.updatedAt), desc(conversations.id))
@@ -64,10 +65,8 @@ export function listedConversations(db: PostgresConnection, input: ListConversat
                 // A project is reached through membership alone (PRJ-1).
                 isNull(conversations.projectId)
               )
-            : or(
-                eq(conversations.visibility, "workspace"),
-                eq(conversations.createdByUserId, scope.userId)
-              ),
+            : // A member reads what the workspace reads, their own, and what names them.
+              readsConversation(scope.userId),
           // A Conversation without messages is an unsent draft: only its creator sees it,
           // and only while it still holds draft attachments.
           or(
@@ -100,7 +99,7 @@ export async function listConversationsWithActiveRun(
 ): Promise<ConversationListItem[]> {
   const rows = await db
     .select({
-      conversation: conversations,
+      conversation: conversationFields,
       activeRun: {
         id: agentRuns.id,
         agentName: agentRuns.agentName,

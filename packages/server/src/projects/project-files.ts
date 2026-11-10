@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
+  chatReadOnlyBy,
   AppError,
   asConversationId,
   asManagedArtifactId,
@@ -785,7 +786,17 @@ export class ProjectFileService implements ProjectFolderPort, ProjectCommandFold
       if (!own) throw new AppError("NOT_FOUND", "Conversation is not available");
       return this.readersOfProject(own);
     }
-    if (conversation.visibility === "private") return { kind: "person" };
+    // A private chat is one person's while it names nobody; one that names members of its
+    // workspace is held as read by the workspace, which holds them all (CHAT-SHARE).
+    const workspace = await this.options.stores.workspaces.getWorkspace(
+      this.options.clientInstanceId,
+      conversation.collaborationWorkspaceId
+    );
+    if (
+      chatReadOnlyBy({ ...conversation, kind: "chat" }, workspace, conversation.createdByUserId)
+    ) {
+      return { kind: "person" };
+    }
     return this.readersOfWorkspace(conversation.collaborationWorkspaceId);
   }
 

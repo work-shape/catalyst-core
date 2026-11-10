@@ -71,6 +71,20 @@ describe("a changing operation is registered or named as plain", () => {
   // EW-4 approves a Workflow's webhook: a public start whose signature establishes the
   // Workflow's account and whose run and `workflow_run.started` audit are its record.
   const approvedRunStarts = new Set<string>(["workflows.webhook_receive"]);
+  // CHAT-SHARE-1 approves who reads a private chat as plain operations: the person's own step in
+  // their own session, never an Operation Run an agent or a key could make (chat-sharing.md 3.1),
+  // with `conversation.person_added` and `conversation.person_removed` as their record.
+  const approvedShareControls = new Set<string>([
+    "conversations.add_person",
+    "conversations.remove_person"
+  ]);
+  it("keeps the approved share controls changing, plain and conversation-authorized", () => {
+    for (const name of approvedShareControls) {
+      expect(list.changing[name]).toMatchObject({ class: "conversation" });
+      expect(list.rightDecidedBy[name]).toBe("conversation_access");
+      expect(plainChanging).toContain(name);
+    }
+  });
   it("keeps the approved run starts public and identified by their signature", () => {
     for (const name of approvedRunStarts) {
       expect(list.changing[name]).toMatchObject({ class: "identity" });
@@ -91,7 +105,10 @@ describe("a changing operation is registered or named as plain", () => {
   it.each(classes)("counts the class %s as the baseline does", (kind) => {
     const counted = Object.entries(list.changing).filter(
       ([name, entry]) =>
-        entry.class === kind && !approvedFollowUpControls.has(name) && !approvedRunStarts.has(name)
+        entry.class === kind &&
+        !approvedFollowUpControls.has(name) &&
+        !approvedRunStarts.has(name) &&
+        !approvedShareControls.has(name)
     ).length;
     const recorded = baseline.entries
       .filter((entry) => entry.target === "operations" && entry.rule === "plain-changing")

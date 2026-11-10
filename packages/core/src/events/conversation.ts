@@ -1,4 +1,5 @@
 import { INSTANCE_TARGET_KINDS } from "../conversation";
+import { CONVERSATION_SHARE_REFUSALS } from "../conversation-people";
 import { LEGACY_AUDIT, type PlatformEventDefinition } from "./definition";
 
 export const conversationEvents = {
@@ -65,6 +66,43 @@ export const conversationEvents = {
   "conversation.moved": { ...LEGACY_AUDIT, name: "conversation.moved", subject: "conversation" },
   // A conversation was put into a project of its workspace or taken out (PRJ-1). Ids and
   // visibilities only: never a title.
+  // The creator named a member of the chat's workspace on their private chat, or was refused
+  // (CHAT-SHARE). Ids only: never the title, a name or an email.
+  "conversation.person_added": {
+    name: "conversation.person_added",
+    subject: "conversation",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["workspaceId", "personId"],
+      properties: {
+        workspaceId: { type: "string" },
+        personId: { type: "string" },
+        reason: { type: "string", enum: [...CONVERSATION_SHARE_REFUSALS] }
+      }
+    }
+  },
+  // A named person lost a private chat: its creator removed them, they left, their membership
+  // of its workspace ended, or the chat moved to another workspace. Ids only.
+  "conversation.person_removed": {
+    name: "conversation.person_removed",
+    subject: "conversation",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["personId", "reason"],
+      properties: {
+        personId: { type: "string" },
+        reason: { type: "string", enum: ["removed", "left", "membership_ended", "moved"] }
+      }
+    }
+  },
   "conversation.project_set": {
     name: "conversation.project_set",
     subject: "conversation",

@@ -35,7 +35,8 @@ function conversation(
     status: "active",
     createdAt: updatedAt,
     updatedAt,
-    retainedUntil: "2027-08-01T10:00:00.000Z"
+    retainedUntil: "2027-08-01T10:00:00.000Z",
+    people: []
   };
 }
 

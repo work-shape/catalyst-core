@@ -13,6 +13,10 @@ import {
   type ConversationDataDeletionTotals
 } from "./conversation-cleanup";
 import type { ChatServerOptions } from "../types";
+import {
+  recordMembershipEndedChats,
+  removePersonFromWorkspaceChats
+} from "../conversations/conversation-people-service";
 import { removeFeedbackOfAuthor } from "../feedback/feedback-jobs";
 import {
   deletePrivateProjectsOfUser,
@@ -139,6 +143,16 @@ export async function cleanupProductUserData(input: {
   totals.sharedMembershipCount = await options.stores.workspaces.removeMembershipsForUser({
     clientInstanceId: options.clientInstanceId,
     userId: input.userId
+  });
+  // And no longer a reader of the chats others named them on (CHAT-SHARE). The account's own
+  // private chats, shared ones too, are deleted below.
+  const chatsLost = await options.stores.transaction((stores) =>
+    removePersonFromWorkspaceChats(stores, options, { userId: input.userId })
+  );
+  await recordMembershipEndedChats(options.auditRecorder, {
+    personId: input.userId,
+    conversationIds: chatsLost,
+    correlationId: input.correlationId
   });
 
   for (const conversation of conversations) {

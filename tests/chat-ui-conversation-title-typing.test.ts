@@ -39,7 +39,8 @@ function conversation(title: string): ConversationListItem {
     status: "active",
     createdAt: "2026-08-01T10:00:00.000Z",
     updatedAt: "2026-08-01T10:00:00.000Z",
-    retainedUntil: "2027-08-01T10:00:00.000Z"
+    retainedUntil: "2027-08-01T10:00:00.000Z",
+    people: []
   };
 }
 

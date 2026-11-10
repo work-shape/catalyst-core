@@ -35,7 +35,8 @@ function conversation(id: string, title: string): ConversationListItem {
     status: "active",
     createdAt: "2026-08-01T10:00:00.000Z",
     updatedAt: "2026-08-01T10:00:00.000Z",
-    retainedUntil: "2027-08-01T10:00:00.000Z"
+    retainedUntil: "2027-08-01T10:00:00.000Z",
+    people: []
   };
 }
 
@@ -713,7 +714,8 @@ describe("workspace rail private conversation marker", () => {
     status: "active",
     createdAt: "2026-08-01T10:00:00.000Z",
     updatedAt: "2026-08-01T10:00:00.000Z",
-    retainedUntil: "2027-08-01T10:00:00.000Z"
+    retainedUntil: "2027-08-01T10:00:00.000Z",
+    people: []
   } as ConversationListItem;
 
   it("marks a private conversation with a labelled lock", () => {
@@ -747,7 +749,8 @@ describe("workspace rail run marker", () => {
     status: "active",
     createdAt: "2026-08-01T10:00:00.000Z",
     updatedAt: "2026-08-01T10:00:00.000Z",
-    retainedUntil: "2027-08-01T10:00:00.000Z"
+    retainedUntil: "2027-08-01T10:00:00.000Z",
+    people: []
   } as ConversationListItem;
   const runWith = (status: NonNullable<ConversationListItem["activeRun"]>["status"]) => ({
     ...conversation,
@@ -798,7 +801,8 @@ describe("workspace rail conversation rows", () => {
     status: "active",
     createdAt: "2026-08-01T10:00:00.000Z",
     updatedAt: "2026-08-01T10:00:00.000Z",
-    retainedUntil: retainedIn(3 * day)
+    retainedUntil: retainedIn(3 * day),
+    people: []
   } as ConversationListItem;
   const later = {
     ...conversation,
@@ -1041,6 +1045,7 @@ function projectChat(id: string, minute: number, projectId?: string): Conversati
     createdAt: at,
     updatedAt: at,
     retainedUntil: "2027-10-29T10:00:00.000Z",
+    people: [],
     ...(projectId ? { projectId } : {})
   };
 }

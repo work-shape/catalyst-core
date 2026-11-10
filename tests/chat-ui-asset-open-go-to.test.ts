@@ -31,7 +31,8 @@ const conversation: Conversation = {
   status: "active",
   createdAt: "2026-10-19T08:00:00.000Z",
   updatedAt: "2026-10-19T08:00:00.000Z",
-  retainedUntil: "2026-11-18T08:00:00.000Z"
+  retainedUntil: "2026-11-18T08:00:00.000Z",
+  people: []
 };
 
 async function mountChip() {

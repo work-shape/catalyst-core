@@ -7,6 +7,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { createConversation } from "./postgres-conversation-operations";
 import { type PostgresConnection } from "./postgres-database";
+import { conversationFields } from "./postgres-conversation-fields";
 import { mapConversation } from "./rows";
 import { agentTryConversations, conversations, configAssets } from "./schema";
 
@@ -47,7 +48,7 @@ async function openTryConversation(
       isNull(agentTryConversations.replacedAt)
     );
     const [found] = await tx
-      .select({ conversation: conversations })
+      .select({ conversation: conversationFields })
       .from(agentTryConversations)
       .innerJoin(conversations, eq(conversations.id, agentTryConversations.conversationId))
       .where(current)

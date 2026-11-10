@@ -42,6 +42,17 @@ import { type PostgresConnection, type PostgresTransaction } from "./postgres-da
 import { writeAssistantMessageContinuations } from "./postgres-model-provider-continuation-writes";
 import { mapAssetScope, mapConversation, mapMessage, type MessageRow } from "./rows";
 import {
+  addConversationPerson,
+  conversationFields,
+  listShareCandidates,
+  namesNobody,
+  removeConversationPeople,
+  removeConversationPerson,
+  removePersonFromWorkspaceConversations,
+  requireNamesNobody,
+  requireRunOwnerReads
+} from "./postgres-conversation-people";
+import {
   collaborationWorkspaces,
   configAssetRevisions,
   configAssets,
@@ -125,7 +136,8 @@ async function insertConversation(
       ...(input.projectId ? { projectId: input.projectId } : {})
     })
     .returning();
-  return mapConversation(row);
+  // A new chat names nobody.
+  return mapConversation(row && { ...row, people: [] });
 }
 
 async function getConversation(
@@ -134,7 +146,7 @@ async function getConversation(
   conversationId: ConversationId
 ): Promise<Conversation | undefined> {
   const [row] = await db
-    .select()
+    .select(conversationFields)
     .from(conversations)
     .where(
       and(
@@ -180,7 +192,7 @@ async function listPrivateConversationsCreatedByUser(
   input: { clientInstanceId: ClientInstanceId; userId: string }
 ): Promise<Conversation[]> {
   const rows = await db
-    .select()
+    .select(conversationFields)
     .from(conversations)
     .where(
       and(
@@ -203,7 +215,7 @@ async function listPrivateConversationsCreatedByUser(
 async function moveConversation(
   db: PostgresConnection,
   input: MoveConversationInput
-): Promise<Conversation> {
+): Promise<Conversation & { peopleRemoved: readonly string[] }> {
   return db.transaction(async (tx) => {
     if (
       !(await lockActiveConversation(
@@ -253,6 +265,12 @@ async function moveConversation(
 }
 
 async function moveLockedConversation(db: PostgresConnection, input: MoveConversationInput) {
+  // The people the creator named read the chat in its workspace only: they lose it (3.5).
+  const peopleRemoved = await removeConversationPeople(
+    db,
+    input.clientInstanceId,
+    input.conversationId
+  );
   const rows = await db
     .update(conversations)
     .set({
@@ -280,7 +298,7 @@ async function moveLockedConversation(db: PostgresConnection, input: MoveConvers
   if (!row) {
     throw new AppError("CONFLICT", "Conversation workspace changed during the move");
   }
-  return mapConversation(row);
+  return { ...mapConversation({ ...row, people: [] }), peopleRemoved };
 }
 
 /**
@@ -304,6 +322,8 @@ async function setConversationProject(
       throw new AppError("CONFLICT", "The conversation's project changed meanwhile");
     }
     if (input.projectId !== null) {
+      // Its readers would be the project's, not the ones the creator named (3.5).
+      requireNamesNobody(conversation);
       const project = await lockWorkspaceProject(tx, {
         clientInstanceId: input.clientInstanceId,
         projectId: input.projectId,
@@ -363,7 +383,7 @@ async function setConversationProject(
           eq(conversations.id, input.conversationId)
         )
       )
-      .returning();
+      .returning(conversationFields);
     return mapConversation(row);
   });
 }
@@ -388,7 +408,8 @@ export async function requireActiveConversationLock(
 
 /**
  * Refuses a write into a Conversation that a deletion is about to erase: its workspace is
- * marked, or the user it belongs to is. It belongs to its creator when it is private or in a
+ * marked, or the user it belongs to is. Refuses a run's write, too, where its person no longer
+ * reads the private chat. It belongs to its creator when it is private or in a
  * personal workspace, and for one write to the user whose run writes.
  *
  * The rows that carry the mark are read under a share lock, which the statement that sets the
@@ -440,6 +461,10 @@ async function requireNotInDeletion(
       .limit(1);
     if (thread) return;
     throw new AppError("NOT_FOUND", "Conversation is not available");
+  }
+  // A run of a person named on a private chat writes only while they still read it (CHAT-SHARE).
+  if (runOwnerUserId !== undefined) {
+    await requireRunOwnerReads(tx, clientInstanceId, conversationId, runOwnerUserId);
   }
   const ownerUserId =
     place.visibility === "private" || place.kind === "personal" ? place.createdByUserId : undefined;
@@ -517,7 +542,7 @@ async function updateConversationTitle(
         eq(conversations.status, "active")
       )
     )
-    .returning();
+    .returning(conversationFields);
   if (!row) {
     throw new AppError("NOT_FOUND", "Conversation is not available");
   }
@@ -535,10 +560,12 @@ async function setConversationSubject(
       and(
         eq(conversations.clientInstanceId, input.clientInstanceId),
         eq(conversations.id, input.conversationId),
-        eq(conversations.status, "active")
+        eq(conversations.status, "active"),
+        // The rights of the people named were checked on the chat without it (3.2).
+        namesNobody()
       )
     )
-    .returning();
+    .returning(conversationFields);
   return row ? mapConversation(row) : undefined;
 }
 
@@ -546,14 +573,19 @@ async function addConversationDataStore(
   db: PostgresConnection,
   input: AddConversationDataStoreInput
 ): Promise<boolean> {
-  // Under the conversation's row lock, which a move takes too: the row is written only while
-  // the conversation is active and nobody but its person reads it (STORE-USE-1).
+  // Under the conversation's row lock, which a move and a share take too: the row is written
+  // only while the conversation is active and nobody but its person reads it (STORE-USE-1),
+  // so not in a chat that names people (CHAT-SHARE 3.4).
   return db.transaction(async (tx) => {
     if (!(await lockActiveConversation(tx, input.clientInstanceId, input.conversationId))) {
       return false;
     }
     const [place] = await tx
-      .select({ visibility: conversations.visibility, kind: collaborationWorkspaces.kind })
+      .select({
+        visibility: conversations.visibility,
+        kind: collaborationWorkspaces.kind,
+        namesNobody: sql<boolean>`${namesNobody()}`
+      })
       .from(conversations)
       .innerJoin(
         collaborationWorkspaces,
@@ -568,7 +600,12 @@ async function addConversationDataStore(
           eq(conversations.id, input.conversationId)
         )
       );
-    if (!place || (place.visibility !== "private" && place.kind !== "personal")) return false;
+    if (
+      !place ||
+      (place.kind !== "personal" && (place.visibility !== "private" || !place.namesNobody))
+    ) {
+      return false;
+    }
     const added = await tx
       .insert(conversationDataStores)
       .values({
@@ -939,10 +976,20 @@ export function createPostgresConversationsStore(
           );
       });
     },
-    async moveConversation(
-      input: Parameters<ConversationStore["moveConversation"]>[0]
-    ): Promise<Conversation> {
+    async moveConversation(input: Parameters<ConversationStore["moveConversation"]>[0]) {
       return moveConversation(db, input);
+    },
+    addConversationPerson(input) {
+      return addConversationPerson(db, input);
+    },
+    removeConversationPerson(input) {
+      return removeConversationPerson(db, input);
+    },
+    removePersonFromWorkspaceConversations(input) {
+      return removePersonFromWorkspaceConversations(db, input);
+    },
+    listShareCandidates(input) {
+      return listShareCandidates(db, input);
     },
     setConversationProject(input: SetConversationProjectInput) {
       return setConversationProject(db, input);

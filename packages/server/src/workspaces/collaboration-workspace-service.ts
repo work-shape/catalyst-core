@@ -7,6 +7,7 @@ import {
   type AuthenticatedUser,
   type CollaborationWorkspace,
   type CollaborationWorkspaceId,
+  type ConversationId,
   type OperationAuthorization,
   type PermissionGrant,
   type PlatformStores,
@@ -18,6 +19,10 @@ import {
 } from "@work-shape/catalyst-core";
 import { withRightsHeld } from "../access/rights-held";
 import { assertConversationIdle } from "../conversations/conversation-idle";
+import {
+  recordMembershipEndedChats,
+  removePersonFromWorkspaceChats
+} from "../conversations/conversation-people-service";
 import type { DeletionOutcome } from "../deletion/subject-deletion";
 import {
   requestWorkspaceDeletion,
@@ -505,7 +510,7 @@ export class CollaborationWorkspaceWorkflow {
     if (actor.role === "admin" && target.role !== "member") {
       throw refusalError(call.operationId, "Workspace Admins may remove regular Members only");
     }
-    const { removed, bundles } = await this.underOwnerLock(
+    const { removed, bundles, chatsLost } = await this.underOwnerLock(
       collaborationWorkspaceId,
       target,
       (stores) => this.endMembership(stores, collaborationWorkspaceId, targetUserId)
@@ -514,6 +519,11 @@ export class CollaborationWorkspaceWorkflow {
       targetUserId
     });
     await recordBundlesEnded(call, bundles);
+    await recordMembershipEndedChats(call.audit, {
+      personId: targetUserId,
+      conversationIds: chatsLost,
+      correlationId: call.correlationId
+    });
     return removed;
   }
 
@@ -535,7 +545,7 @@ export class CollaborationWorkspaceWorkflow {
     if (!access.membershipRole) {
       throw new AppError("CONFLICT", "User is not a workspace member");
     }
-    const { removed, bundles } = await this.underOwnerLock(
+    const { removed, bundles, chatsLost } = await this.underOwnerLock(
       collaborationWorkspaceId,
       { userId: access.userId },
       (stores) => this.endMembership(stores, collaborationWorkspaceId, access.userId)
@@ -544,6 +554,11 @@ export class CollaborationWorkspaceWorkflow {
       targetUserId: access.userId
     });
     await recordBundlesEnded(call, bundles);
+    await recordMembershipEndedChats(call.audit, {
+      personId: access.userId,
+      conversationIds: chatsLost,
+      correlationId: call.correlationId
+    });
     return removed;
   }
 
@@ -556,7 +571,11 @@ export class CollaborationWorkspaceWorkflow {
     stores: PlatformStores,
     collaborationWorkspaceId: CollaborationWorkspaceId,
     userId: UserRecord["id"]
-  ): Promise<{ removed: WorkspaceMembership; bundles: PermissionGrant[] }> {
+  ): Promise<{
+    removed: WorkspaceMembership;
+    bundles: PermissionGrant[];
+    chatsLost: ConversationId[];
+  }> {
     const removed = await stores.workspaces.removeMembership({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
@@ -566,7 +585,13 @@ export class CollaborationWorkspaceWorkflow {
       workspaceId: collaborationWorkspaceId,
       userId
     });
-    return { removed, bundles };
+    // The chats of the workspace its creators named the member on (CHAT-SHARE): read only while
+    // a member, so they go with the membership.
+    const chatsLost = await removePersonFromWorkspaceChats(stores, this.options, {
+      userId,
+      collaborationWorkspaceId
+    });
+    return { removed, bundles, chatsLost };
   }
 
   async browseDirectory(user: AuthenticatedUser): Promise<WorkspaceDirectoryItem[]> {

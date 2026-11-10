@@ -66,7 +66,7 @@ import { ProjectSetupService } from "../projects/project-setup";
 
 /** The chat a run is for, as far as whether only its person reads it. */
 interface OwnChatCandidate {
-  conversation: Pick<Conversation, "kind" | "status" | "createdByUserId" | "visibility">;
+  conversation: Pick<Conversation, "kind" | "status" | "createdByUserId" | "visibility" | "people">;
   /** The stored chat, which a choice of the caller's own agent marks. Unset before it exists. */
   conversationId?: ConversationId;
 }
@@ -88,6 +88,8 @@ function newChatOf(
       kind: "chat",
       status: "active",
       createdByUserId: getSubjectUserId(user),
+      // A new chat names nobody.
+      people: [],
       visibility: project
         ? conversationVisibilityInProject(project.audience)
         : workspace.kind !== "personal" && (command.subject || command.visibility === "private")

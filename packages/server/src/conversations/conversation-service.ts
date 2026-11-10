@@ -1,5 +1,10 @@
 import type { AuditRecorder, StorePage } from "@work-shape/catalyst-core";
-import { auditActorFromUser, dataStoreConversationPrivateError } from "@work-shape/catalyst-core";
+import {
+  auditActorFromUser,
+  conversationHasPeopleError,
+  conversationShareRefusal,
+  dataStoreConversationPrivateError
+} from "@work-shape/catalyst-core";
 import {
   AppError,
   personalConversationPrivateError,
@@ -49,6 +54,7 @@ import {
 } from "./conversation-title";
 import { accessOf, requireOwnTranscript, requireReadableSubject } from "./platform-asset-subject";
 import { useDataStoreInConversation } from "./conversation-data-stores";
+import { recordPersonRemoved } from "./conversation-people-service";
 import { checkoutApp, requireAppToCheckOut } from "../platform/asset-calls/app-edit";
 import { modelBindingRefOf, reasoningEffortTheModelTakes } from "../guardrails/system-model-call";
 import type { ChatServerOptions } from "../types";
@@ -258,6 +264,8 @@ export class ConversationWorkflow {
           { exposeMessage: true }
         );
       }
+      // Its readers would be the project's, not the people its creator named (CHAT-SHARE).
+      if (conversation.people.length > 0) throw conversationHasPeopleError();
       if (
         await this.options.stores.agentTryConversations.get({
           clientInstanceId: this.options.clientInstanceId,
@@ -543,6 +551,8 @@ export class ConversationWorkflow {
     command: MoveConversationCommand
   ): Promise<Conversation> {
     const conversation = await this.requireChatConversationAccess(conversationId, user);
+    // A private chat moves only with its creator, also where it names people (CHAT-SHARE).
+    requireCreatorOfPrivateChat(conversation, user);
     if (
       await this.options.stores.agentTryConversations.get({
         clientInstanceId: this.options.clientInstanceId,
@@ -609,7 +619,7 @@ export class ConversationWorkflow {
       );
     }
     await assertConversationIdle(this.options, conversationId);
-    const moved = await this.options.stores.conversations.moveConversation({
+    const { peopleRemoved, ...moved } = await this.options.stores.conversations.moveConversation({
       clientInstanceId: this.options.clientInstanceId,
       conversationId,
       fromCollaborationWorkspaceId: conversation.collaborationWorkspaceId,
@@ -627,6 +637,16 @@ export class ConversationWorkflow {
         toCollaborationWorkspaceId: command.collaborationWorkspaceId
       }
     });
+    // The people named read it in its old workspace only: they lost it with the move.
+    for (const personId of peopleRemoved) {
+      await recordPersonRemoved(this.options.auditRecorder, {
+        actor: auditActorFromUser(user),
+        conversationId,
+        personId,
+        reason: "moved",
+        correlationId: context.correlationId
+      });
+    }
     return moved;
   }
 
@@ -799,7 +819,9 @@ export class ConversationWorkflow {
         "User conversation deletion is disabled for this client instance"
       );
     }
-    await this.requireChatConversationAccess(conversationId, user);
+    const conversation = await this.requireChatConversationAccess(conversationId, user);
+    // A private chat is deleted only by its creator, also where it names people (CHAT-SHARE).
+    requireCreatorOfPrivateChat(conversation, user);
     const deletedAt = new Date().toISOString();
     const deleted = await this.options.stores.conversations.deleteConversation({
       clientInstanceId: this.options.clientInstanceId,
@@ -915,4 +937,20 @@ function sharedProjectConversationError(): AppError {
 /** Projects exist only where the module is on; elsewhere nothing enters one. */
 function requireProjectsOn(options: Pick<ChatServerOptions, "modules">): void {
   if (!options.modules.isEnabled("projects")) throw moduleOffError("projects");
+}
+
+/**
+ * A private chat is moved and deleted by its creator alone. Before CHAT-SHARE nobody else read
+ * one; a person its creator named reads and writes in it, and still neither moves nor deletes
+ * it.
+ */
+function requireCreatorOfPrivateChat(conversation: Conversation, user: AuthenticatedUser): void {
+  if (conversation.visibility !== "private" || conversation.projectId !== undefined) return;
+  if (conversation.createdByUserId === getSubjectUserId(user)) return;
+  throw conversationShareRefusal(
+    "share_creator_only",
+    "Only the person who started the chat moves or deletes it",
+    {},
+    "FORBIDDEN"
+  );
 }

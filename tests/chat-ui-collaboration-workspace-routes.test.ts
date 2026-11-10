@@ -196,7 +196,8 @@ describe("conversation list cache targeting", () => {
       status: "active",
       createdAt: "2026-08-31T10:00:00.000Z",
       updatedAt: "2026-08-31T10:00:00.000Z",
-      retainedUntil: "2026-09-30T10:00:00.000Z"
+      retainedUntil: "2026-09-30T10:00:00.000Z",
+      people: []
     };
   }
 
@@ -404,7 +405,8 @@ describe("the rail's loaded conversations", () => {
     status: "active",
     createdAt: at(minute),
     updatedAt: at(minute),
-    retainedUntil: "2027-08-01T10:00:00.000Z"
+    retainedUntil: "2027-08-01T10:00:00.000Z",
+    people: []
   });
   const ids = (loaded: RailConversations | undefined) => loaded?.conversations.map(({ id }) => id);
 

@@ -248,7 +248,8 @@ const conversation = {
   status: "active",
   createdAt,
   updatedAt: createdAt,
-  retainedUntil: "2026-07-27T00:00:00.000Z"
+  retainedUntil: "2026-07-27T00:00:00.000Z",
+  people: []
 };
 
 function observation(sequence: number, delta = "Hello") {
