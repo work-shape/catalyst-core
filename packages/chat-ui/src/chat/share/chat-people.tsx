@@ -189,7 +189,12 @@ function AddPerson({ onError }: { onError(message: string | undefined): void }) 
   const [activeId, setActiveId] = useState<string>();
   const [adding, setAdding] = useState(false);
   const query = useDebounced(text, SEARCH_DELAY_MS);
-  const candidates = useShareCandidates({ chat: share?.chat, query, enabled: true });
+  // The panel's dialog stays mounted while closed: the people are asked for once it opens.
+  const candidates = useShareCandidates({
+    chat: share?.chat,
+    query,
+    enabled: share?.panelOpen === true
+  });
   const searching = query.trim() !== "";
   const options = useMemo(
     (): SuggestionListOption[] =>
