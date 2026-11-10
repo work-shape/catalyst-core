@@ -61,6 +61,44 @@ export function namesNobody() {
   return sql`not exists (select 1 from conversation_people cp where cp.client_instance_id = "conversations"."client_instance_id" and cp.conversation_id = coalesce("conversations"."parent_conversation_id", "conversations"."id"))`;
 }
 
+/**
+ * Refuses a run of a person who no longer reads the private chat it writes into: one named on
+ * it whom a removal, a leave or the end of their membership took off. Called under the
+ * conversation's lock, which those take too, so a turn whose access check passed just before
+ * cannot start or write after. A Workflow's thread, a Personal Workspace and a conversation of
+ * the whole workspace are not about named people.
+ */
+export async function requireRunOwnerReads(
+  tx: PostgresConnection,
+  clientInstanceId: ClientInstanceId,
+  conversationId: ConversationId,
+  ownerUserId: string
+): Promise<void> {
+  const [reads] = await tx
+    .select({ id: conversations.id })
+    .from(conversations)
+    .innerJoin(
+      collaborationWorkspaces,
+      and(
+        eq(collaborationWorkspaces.clientInstanceId, conversations.clientInstanceId),
+        eq(collaborationWorkspaces.id, conversations.collaborationWorkspaceId)
+      )
+    )
+    .where(
+      and(
+        eq(conversations.clientInstanceId, clientInstanceId),
+        eq(conversations.id, conversationId),
+        or(
+          isNotNull(conversations.workflowRunId),
+          eq(collaborationWorkspaces.kind, "personal"),
+          readsConversation(ownerUserId)
+        )
+      )
+    )
+    .limit(1);
+  if (!reads) throw new AppError("NOT_FOUND", "Conversation is not available");
+}
+
 async function readConversation(
   tx: PostgresConnection,
   clientInstanceId: ClientInstanceId,

@@ -1,3 +1,4 @@
+import { requireRunOwnerReads } from "./postgres-conversation-people";
 import { lockAgentRunConversations } from "./postgres-agent-run-locks";
 import { lockParentRunsOf, settleEndedAgentRuns } from "./postgres-agent-run-lineage";
 import { requestAgentRunCancellation } from "./postgres-agent-run-cancellation";
@@ -217,6 +218,8 @@ async function prepareConversationRunStart(
     if (!(await lockActiveConversation(tx, input.clientInstanceId, input.conversationId))) {
       throw new AppError("NOT_FOUND", "Conversation is not available");
     }
+    // Its person still reads the chat: a name taken off since their access check starts nothing.
+    await requireRunOwnerReads(tx, input.clientInstanceId, input.conversationId, input.ownerUserId);
 
     const [activeRun] = await tx
       .select()

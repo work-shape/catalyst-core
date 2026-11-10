@@ -49,7 +49,8 @@ import {
   removeConversationPeople,
   removeConversationPerson,
   removePersonFromWorkspaceConversations,
-  requireNamesNobody
+  requireNamesNobody,
+  requireRunOwnerReads
 } from "./postgres-conversation-people";
 import {
   collaborationWorkspaces,
@@ -407,7 +408,8 @@ export async function requireActiveConversationLock(
 
 /**
  * Refuses a write into a Conversation that a deletion is about to erase: its workspace is
- * marked, or the user it belongs to is. It belongs to its creator when it is private or in a
+ * marked, or the user it belongs to is. Refuses a run's write, too, where its person no longer
+ * reads the private chat. It belongs to its creator when it is private or in a
  * personal workspace, and for one write to the user whose run writes.
  *
  * The rows that carry the mark are read under a share lock, which the statement that sets the
@@ -459,6 +461,10 @@ async function requireNotInDeletion(
       .limit(1);
     if (thread) return;
     throw new AppError("NOT_FOUND", "Conversation is not available");
+  }
+  // A run of a person named on a private chat writes only while they still read it (CHAT-SHARE).
+  if (runOwnerUserId !== undefined) {
+    await requireRunOwnerReads(tx, clientInstanceId, conversationId, runOwnerUserId);
   }
   const ownerUserId =
     place.visibility === "private" || place.kind === "personal" ? place.createdByUserId : undefined;
