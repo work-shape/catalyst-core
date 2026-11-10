@@ -17,6 +17,16 @@ export interface KnowledgeSourceForm {
   exclude: string;
   /** When the source syncs by itself (SRC-SYNC); a field left out is the instance's default. */
   schedule?: KnowledgeSourceSchedule;
+  /**
+   * A source of public web pages (KB-WEB): it names addresses instead of folders, one per line,
+   * and its patterns are on the address's path.
+   */
+  web?: true;
+  pages?: string;
+  prefixes?: string;
+  sitemaps?: string;
+  /** A web source's `maxDepth`, which this page does not edit and a save keeps. */
+  maxDepth?: unknown;
 }
 
 /** A source's `schedule` as the page edits it: `off` starts no pass of that mode. */
@@ -48,6 +58,9 @@ function scheduleOf(value: unknown): KnowledgeSourceSchedule | undefined {
   return Object.keys(schedule).length > 0 ? schedule : undefined;
 }
 
+/** The Connector type whose sources name web addresses. */
+export const WEB_SOURCE_CONNECTOR_TYPE = "web";
+
 /** The longest source id the definition takes. */
 const SOURCE_ID_MAX_LENGTH = 63;
 
@@ -71,6 +84,8 @@ export function knowledgeSourcesFromConfig(value: unknown): KnowledgeSourceForm[
     const connection = member(entry, "connection");
     if (typeof id !== "string" || typeof connection !== "string") return [];
     const schedule = scheduleOf(member(entry, "schedule"));
+    const web = ["pages", "prefixes", "sitemaps"].some((key) => member(entry, key) !== undefined);
+    const maxDepth = member(entry, "maxDepth");
     return [
       {
         id,
@@ -78,7 +93,16 @@ export function knowledgeSourcesFromConfig(value: unknown): KnowledgeSourceForm[
         folders: lines(member(entry, "folders"), "\n"),
         include: lines(member(entry, "include"), "\n"),
         exclude: lines(member(entry, "exclude"), "\n"),
-        ...(schedule === undefined ? {} : { schedule })
+        ...(schedule === undefined ? {} : { schedule }),
+        ...(web
+          ? {
+              web: true as const,
+              pages: lines(member(entry, "pages"), "\n"),
+              prefixes: lines(member(entry, "prefixes"), "\n"),
+              sitemaps: lines(member(entry, "sitemaps"), "\n"),
+              ...(maxDepth === undefined ? {} : { maxDepth })
+            }
+          : {})
       }
     ];
   });
@@ -112,10 +136,20 @@ export function knowledgeSourcesToConfig(
     const include = patterns(source.include);
     const exclude = patterns(source.exclude);
     const schedule = scheduleConfig(source.schedule);
+    // A web source names its addresses by kind, each list only where it holds one.
+    const addresses = source.web
+      ? Object.fromEntries(
+          (["pages", "prefixes", "sitemaps"] as const).flatMap((key) => {
+            const urls = sourceFolderIds(source[key] ?? "");
+            return urls.length > 0 ? [[key, urls]] : [];
+          })
+        )
+      : { folders: sourceFolderIds(source.folders) };
     return {
       id: source.id,
       connection: source.connection,
-      folders: sourceFolderIds(source.folders),
+      ...addresses,
+      ...(source.web && source.maxDepth !== undefined ? { maxDepth: source.maxDepth } : {}),
       ...(include.length > 0 ? { include } : {}),
       ...(exclude.length > 0 ? { exclude } : {}),
       ...(schedule === undefined ? {} : { schedule })
@@ -154,10 +188,14 @@ export function newSourceId(connection: string, taken: readonly string[]): strin
   }
 }
 
-/** A new source through `connection`, with no folder yet. */
+/**
+ * A new source through `connection`, with no folder yet. One through a Connection of public web
+ * pages names addresses instead.
+ */
 export function newKnowledgeSource(
   connection: string,
-  sources: readonly KnowledgeSourceForm[]
+  sources: readonly KnowledgeSourceForm[],
+  connectorType?: string
 ): KnowledgeSourceForm {
   return {
     id: newSourceId(
@@ -167,6 +205,9 @@ export function newKnowledgeSource(
     connection,
     folders: "",
     include: "",
-    exclude: ""
+    exclude: "",
+    ...(connectorType === WEB_SOURCE_CONNECTOR_TYPE
+      ? { web: true as const, pages: "", prefixes: "", sitemaps: "" }
+      : {})
   };
 }

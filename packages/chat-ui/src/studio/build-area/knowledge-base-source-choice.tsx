@@ -55,7 +55,11 @@ export function KnowledgeSourceChoice({
     if (next === UPLOAD) return update({ holds: "documents", sources: [] });
     const connection = next.slice(CONNECTION.length);
     const kept = form.sources.find((entry) => entry.connection === connection);
-    update({ holds: "documents", sources: [kept ?? newKnowledgeSource(connection, [])] });
+    const type = connections.find((entry) => entry.name === connection)?.connectorType;
+    update({
+      holds: "documents",
+      sources: [kept ?? newKnowledgeSource(connection, [], type)]
+    });
   };
 
   return (
