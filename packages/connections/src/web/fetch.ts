@@ -1,25 +1,27 @@
 import { AppError, DocumentSourceError, type ConnectorContext } from "@work-shape/catalyst-core";
 import type { SourceHttpResponse, SourceHttpTransport } from "../document-source/http";
 import { retryAfterSeconds } from "../retry-after";
-import { ALLOW_ALL, DISALLOW_ALL, parseRobots, type RobotsRules } from "./robots";
+import { ALLOW_ALL, parseRobots, type RobotsRules } from "./robots";
 import { hostKeyOf, type WebSettings } from "./settings";
 
 // Every request of a web source, and the rules each one keeps (KB-WEB):
 // - Only `https`, only to a host the Connection lists, and only after the egress checker granted
-//   the host: the checker refuses an address that is not public unless the operator's list names
-//   it as private, so a page can never send the walk to an internal address.
+//   the host as a public one: the checker refuses an address that is not public unless the
+//   operator's list names it as private, and the walk refuses such a private grant as well, so a
+//   page can never send it to an internal address.
 // - No redirect is followed by the transport. Each one is a new address, checked as the first:
 //   listed host, egress, robots.txt. At most five.
-// - `robots.txt` of each host is read first and honoured. At most one request a second per host,
+// - `robots.txt` of each host is read first and honoured. One that cannot be read now makes the
+//   host unavailable, never closed: only a rule that disallows a page keeps it out. At most one
+//   request a second per host,
 //   slower where `Crawl-delay` asks, faster only where the Connection's `requestsPerSecond` says.
 // - A clear user agent; no cookie, no credential, no form post. A body is read only up to the
 //   cap its caller names.
 
 /** How many redirects one request follows. */
 const REDIRECTS_MAX = 5;
-/** How long a host's `robots.txt` is kept, and a failed read of it. */
+/** How long a host's `robots.txt` is kept. A failed read is not kept: the next request reads it again. */
 const ROBOTS_TTL_MS = 60 * 60_000;
-const ROBOTS_FAILED_TTL_MS = 10 * 60_000;
 const ROBOTS_MAX_BYTES = 512 * 1024;
 /** How many hosts' robots.txt and pacing one process remembers. */
 const HOSTS_REMEMBERED_MAX = 1_000;
@@ -110,8 +112,10 @@ export function statusFailure(response: WebResponse): DocumentSourceError {
   const { status } = response;
   if (status === 404 || status === 410)
     return new DocumentSourceError("not_found", "The page is gone");
+  // Only 404 and 410 say a page is gone. 401 and 403 may be a host's passing refusal, so the
+  // document is kept and read again later.
   if (status === 401 || status === 403)
-    return new DocumentSourceError("forbidden", "The page is not public");
+    return new DocumentSourceError("unavailable", "The page is not public now");
   if (status === 429 || status === 503) {
     const seconds = retryAfterSeconds(response.headers["retry-after"]);
     return new DocumentSourceError("rate_limited", "The host asked to wait", {
@@ -161,6 +165,9 @@ export function createWebSession(
       if (error instanceof AppError) throw new WebRefusal("egress");
       throw error;
     }
+    // A web source reads public HTTPS only: an entry of the operator's list that names a private
+    // network is for other Connections, never for pages.
+    if (grant.network !== "public") throw new WebRefusal("egress");
     try {
       return await deps.transport({
         url,
@@ -231,28 +238,27 @@ export function createWebSession(
     }
   }
 
-  /** The rules of the address's host, read once an hour. A host that cannot answer is closed. */
+  /**
+   * The rules of the address's host, read once an hour. A host whose robots.txt cannot be read
+   * now is unavailable: no page of it is read, and none is withdrawn for it.
+   */
   async function robotsOf(url: URL): Promise<RobotsRules> {
     const key = `${scope}\u0000${url.host}`;
     const now = Date.now();
     const known = robotsByHost.get(key);
     if (known && known.until > now) return known.rules;
     const rules = readRobots(url).catch((error: unknown) => {
-      // An ended call learnt nothing of the host; the next one reads it again.
-      // So did a refusal of the host itself, which then refuses the page as well.
+      robotsByHost.delete(key);
+      // A refusal of the host itself refuses the page as well.
       if (
         context.signal.aborted ||
         (error instanceof WebRefusal && (error.reason === "host" || error.reason === "egress")) ||
-        !(error instanceof WebRefusal || error instanceof DocumentSourceError)
-      ) {
-        robotsByHost.delete(key);
+        error instanceof DocumentSourceError
+      )
         throw error;
-      }
-      remember(robotsByHost, key, {
-        until: Date.now() + ROBOTS_FAILED_TTL_MS,
-        rules: Promise.resolve(DISALLOW_ALL)
-      });
-      return DISALLOW_ALL;
+      if (error instanceof WebRefusal)
+        throw new DocumentSourceError("unavailable", "robots.txt could not be read");
+      throw error;
     });
     remember(robotsByHost, key, { until: now + ROBOTS_TTL_MS, rules });
     return rules;

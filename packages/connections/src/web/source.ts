@@ -19,7 +19,7 @@ import {
   type WebResponse,
   type WebSession
 } from "./fetch";
-import { readHtmlPage } from "./html";
+import { elementsOf, readHtmlPage } from "./html";
 import { webSettingsSchema } from "./settings";
 
 // The `document_source` capability of the `web` Connector type (KB-WEB). Spec:
@@ -32,13 +32,18 @@ import { webSettingsSchema } from "./settings";
 // - `changes` walks the boundary again at most hourly, with `If-None-Match` and
 //   `If-Modified-Since` where an earlier walk of this process kept the validators. It answers the
 //   pages whose text changed and, as deleted, those that answer 404 or 410 or that robots.txt now
-//   keeps out. A page that left the boundary goes at the next full pass, which withdraws what it
-//   did not list.
+//   disallows. A page that left the boundary goes at the next full pass, which withdraws what it
+//   did not list. Nothing else withdraws a page: a robots.txt that cannot be read, a 401 or 403,
+//   or a host that does not answer keeps the document, and a page that keeps failing fails the
+//   pass. What a step of `changes` learnt is kept only once the sync comes back with the position
+//   it answered, so a step whose changes the sync did not take is walked again in full, and a
+//   page that was not read or was withdrawn is answered again whatever its validators say.
 // - An item's id is its address; its version is the hash of the main text (HTML) or the
 //   validators of the file (PDF, DOCX, TXT), so an unchanged page costs no extraction or embedding.
 // - `fetch` reads the page again and answers its main text as Markdown, or the file's bytes.
 // - Each document's `modifiedAt` is the date the page states of itself, else its
-//   `Last-Modified`, else the sitemap's `lastmod`, else when this version was first read.
+//   `Last-Modified`, else the sitemap's `lastmod`, else when this version was first read. Only
+//   the date the page states is its `statedAt`.
 
 /** How long one call walks, well inside its deadline. */
 const STEP_MS = 20_000;
@@ -144,6 +149,8 @@ interface Remembered {
 }
 
 const rememberedPages = new Map<string, Remembered>();
+/** How many feeds' unconfirmed steps one process keeps. */
+const FEEDS_REMEMBERED_MAX = 1_000;
 
 function recall(key: string): Remembered | undefined {
   const found = rememberedPages.get(key);
@@ -161,6 +168,51 @@ function keep(key: string, value: Remembered) {
     if (!oldest.done) rememberedPages.delete(oldest.value);
   }
   rememberedPages.set(key, value);
+}
+
+/** What a walk keeps of its pages: kept at once by a listing, or staged by a step of `changes`. */
+interface Memory {
+  recall(key: string): Remembered | undefined;
+  keep(key: string, value: Remembered): void;
+  forget(key: string): void;
+}
+
+const directMemory: Memory = {
+  recall,
+  keep,
+  forget: (key) => rememberedPages.delete(key)
+};
+
+/** A step's writes, applied once the sync confirms the step by coming back with its position. */
+type StagedWrites = Map<string, Remembered | undefined>;
+const stagedByFeed = new Map<string, { cursor: string; writes: StagedWrites }>();
+
+function stagedMemory(writes: StagedWrites): Memory {
+  return {
+    recall: (key) => (writes.has(key) ? writes.get(key) : recall(key)),
+    keep: (key, value) => writes.set(key, value),
+    forget: (key) => writes.set(key, undefined)
+  };
+}
+
+/** Applies the staged writes of a feed when `cursor` is the position its last step answered. */
+function confirmStep(feed: string, cursor: string) {
+  const staged = stagedByFeed.get(feed);
+  stagedByFeed.delete(feed);
+  if (staged?.cursor !== cursor) return;
+  for (const [key, value] of staged.writes) {
+    if (value) keep(key, value);
+    else rememberedPages.delete(key);
+  }
+}
+
+function stageStep(feed: string, cursor: string, writes: StagedWrites) {
+  if (writes.size === 0) return;
+  if (stagedByFeed.size >= FEEDS_REMEMBERED_MAX) {
+    const oldest = stagedByFeed.keys().next();
+    if (!oldest.done) stagedByFeed.delete(oldest.value);
+  }
+  stagedByFeed.set(feed, { cursor, writes });
 }
 
 /** A date header as an ISO time, or nothing. */
@@ -280,8 +332,16 @@ async function walkStep(
   session: WebSession,
   boundary: Boundary,
   walk: Walk,
-  options: { scope: string; onlyChanged: boolean; now: () => number; signal: AbortSignal }
+  options: {
+    scope: string;
+    onlyChanged: boolean;
+    now: () => number;
+    signal: AbortSignal;
+    memory: Memory;
+  }
 ): Promise<{ items: DocumentSourceItem[]; gone: string[] }> {
+  const { memory } = options;
+  const keyOf = (entry: Entry) => `${options.scope}\u0000${entry.u}`;
   const seen = new Set(walk.s);
   const items: DocumentSourceItem[] = [];
   const gone: string[] = [];
@@ -333,15 +393,18 @@ async function walkStep(
       }
     }
     const xml = new TextDecoder().decode(bytes);
-    const loc = (block: string) =>
-      /<loc>\s*(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?\s*<\/loc>/iu
-        .exec(block)?.[1]
-        ?.trim()
-        .replace(/&amp;/gu, "&");
+    // Each element is found in one forward pass, so a hostile sitemap costs its length only.
+    const text = (block: string, name: string) => {
+      const inner = elementsOf(block, name)[0]?.trim();
+      return inner?.startsWith("<![CDATA[") && inner.endsWith("]]>")
+        ? inner.slice(9, -3).trim()
+        : inner;
+    };
+    const loc = (block: string) => text(block, "loc")?.replace(/&amp;/gu, "&");
     if (/<sitemapindex\b/iu.test(xml)) {
       if ((entry.d ?? 0) >= SITEMAP_DEPTH_MAX) return;
-      for (const block of xml.matchAll(/<sitemap\b[\s\S]*?<\/sitemap>/giu)) {
-        const address = loc(block[0]);
+      for (const block of elementsOf(xml, "sitemap")) {
+        const address = loc(block);
         if (!address || !URL.canParse(address)) continue;
         const url = new URL(address);
         if (session.listed(url))
@@ -349,21 +412,21 @@ async function walkStep(
       }
       return;
     }
-    for (const block of xml.matchAll(/<url\b[\s\S]*?<\/url>/giu)) {
-      const address = loc(block[0]);
+    for (const block of elementsOf(xml, "url")) {
+      const address = loc(block);
       if (!address || !URL.canParse(address)) continue;
       const url = new URL(address);
       url.hash = "";
       if (!session.listed(url) || !boundary.wanted(url)) continue;
-      const lastmod = httpDate(/<lastmod>\s*([^<]+?)\s*<\/lastmod>/iu.exec(block[0])?.[1]);
+      const lastmod = httpDate(text(block, "lastmod"));
       enqueue({ u: url.href, k: "page", p: entry.p, ...(lastmod ? { m: lastmod } : {}) });
     }
   }
 
   async function page(entry: Entry) {
     const url = new URL(entry.u);
-    const key = `${options.scope}\u0000${entry.u}`;
-    const known = recall(key);
+    const key = keyOf(entry);
+    const known = memory.recall(key);
     const headers: Record<string, string> = { accept: ACCEPT };
     if (known?.etag) headers["if-none-match"] = known.etag;
     if (known?.lastModified) headers["if-modified-since"] = known.lastModified;
@@ -374,15 +437,22 @@ async function walkStep(
       const inside = entry.k === "page" ? session.listed(landed) : boundary.prefixOf(landed) !== -1;
       if (!inside || seen.has(seenKey(landed.href))) {
         response.body.close();
+        memory.forget(key);
         return;
       }
       seen.add(seenKey(landed.href));
       walk.s.push(seenKey(landed.href));
     }
-    if (response.status === 304 && known) {
+    // 304, or a page that is not public now (401, 403): the document stays as it was, and its
+    // links are walked as before. Unknown to this process, a closed page is passed over.
+    if ((response.status === 304 || response.status === 401 || response.status === 403) && known) {
       response.body.close();
       emit(entry, known.item, false);
       follow(entry, known.links);
+      return;
+    }
+    if (response.status === 401 || response.status === 403) {
+      response.body.close();
       return;
     }
     if (response.status < 200 || response.status >= 300) {
@@ -400,7 +470,7 @@ async function walkStep(
     if (HTML_TYPES.has(type)) {
       const bytes = await readCapped(response.body, PAGE_MAX_BYTES);
       const read = readHtmlPage(decodeText(bytes, response.headers["content-type"]), response.url);
-      const version = `h${sha(read.markdown).slice(0, 40)}`;
+      const version = `h${sha(`${read.markdown}\u0000${read.statedDate ?? ""}`).slice(0, 40)}`;
       const item = {
         id,
         version,
@@ -409,12 +479,13 @@ async function walkStep(
         mime: "text/markdown",
         size: Buffer.byteLength(read.markdown),
         modifiedAt: read.statedDate ?? httpDate(lastModified) ?? entry.m ?? firstSeen(version),
+        ...(read.statedDate ? { statedAt: read.statedDate } : {}),
         originLink: id
       };
       const links = read.links
         .filter((link) => boundary.prefixOf(new URL(link)) !== -1)
         .slice(0, LINKS_KEPT_MAX);
-      keep(key, {
+      memory.keep(key, {
         ...(etag ? { etag } : {}),
         ...(lastModified ? { lastModified } : {}),
         item,
@@ -452,7 +523,7 @@ async function walkStep(
       modifiedAt: httpDate(lastModified) ?? entry.m ?? firstSeen(version),
       originLink: id
     };
-    keep(key, {
+    memory.keep(key, {
       ...(etag ? { etag } : {}),
       ...(lastModified ? { lastModified } : {}),
       item,
@@ -471,13 +542,17 @@ async function walkStep(
     } catch (error) {
       options.signal.throwIfAborted();
       if (error instanceof WebRefusal) {
-        // robots.txt keeps it out now: it goes, as a deleted page does.
+        // robots.txt disallows it now: it goes, as a deleted page does. Read again later, any
+        // refused page is answered again, whatever its validators say.
         if (error.reason === "robots") gone.push(entry.u);
+        memory.forget(keyOf(entry));
         continue;
       }
       if (error instanceof DocumentSourceError) {
-        if (error.sourceCode === "not_found" || error.sourceCode === "forbidden") {
+        // 404 or 410.
+        if (error.sourceCode === "not_found") {
           gone.push(entry.u);
+          memory.forget(keyOf(entry));
           continue;
         }
         if (error.sourceCode === "rate_limited" || error.sourceCode === "unavailable") {
@@ -502,11 +577,12 @@ export function createWebSource(deps: WebFetchDeps): DocumentSourceCapability {
       throw new DocumentSourceError("unauthorized", "The web Connection's settings are invalid");
     return createWebSession(context, settings.data, deps);
   };
-  const options = (context: ConnectorContext, onlyChanged: boolean) => ({
+  const options = (context: ConnectorContext, onlyChanged: boolean, memory: Memory) => ({
     scope: context.connection.id,
     onlyChanged,
     now: deps.now,
-    signal: context.signal
+    signal: context.signal,
+    memory
   });
 
   return {
@@ -526,7 +602,12 @@ export function createWebSource(deps: WebFetchDeps): DocumentSourceCapability {
           );
         walk = token.w;
       }
-      const { items } = await walkStep(session, boundary, walk, options(context, false));
+      const { items } = await walkStep(
+        session,
+        boundary,
+        walk,
+        options(context, false, directMemory)
+      );
       return {
         items,
         ...(walk.q.length > 0
@@ -546,19 +627,27 @@ export function createWebSource(deps: WebFetchDeps): DocumentSourceCapability {
       const cursor = decoded(feedCursorSchema, input.cursor);
       if (!cursor || cursor.b !== boundary.key)
         throw new DocumentSourceError("cursor_expired", "The position is not this boundary's");
+      // The sync came back with this position, so it took the changes of the step that
+      // answered it.
+      const feed = `${context.connection.id}\u0000${boundary.key}`;
+      confirmStep(feed, input.cursor);
       if (!cursor.w && now - cursor.at < CHANGES_SETTLED_MS)
         return { kind: "changes", changes: [], nextCursor: input.cursor };
       const walk = cursor.w ?? boundary.start();
-      const { items, gone } = await walkStep(session, boundary, walk, options(context, true));
+      const writes: StagedWrites = new Map();
+      const { items, gone } = await walkStep(
+        session,
+        boundary,
+        walk,
+        options(context, true, stagedMemory(writes))
+      );
       const changes: DocumentSourceChange[] = [
         ...items.map((item) => ({ kind: "upsert" as const, item })),
         ...gone.map((id) => ({ kind: "delete" as const, item: { id } }))
       ];
-      return {
-        kind: "changes",
-        changes,
-        nextCursor: walk.q.length > 0 ? position(cursor.at, walk) : position(deps.now())
-      };
+      const nextCursor = walk.q.length > 0 ? position(cursor.at, walk) : position(deps.now());
+      stageStep(feed, nextCursor, writes);
+      return { kind: "changes", changes, nextCursor };
     },
 
     async *fetch(input, context) {

@@ -12,7 +12,6 @@ export interface RobotsRules {
 const CRAWL_DELAY_MAX_MS = 10_000;
 
 export const ALLOW_ALL: RobotsRules = { allows: () => true };
-export const DISALLOW_ALL: RobotsRules = { allows: () => false };
 
 interface Rule {
   allow: boolean;

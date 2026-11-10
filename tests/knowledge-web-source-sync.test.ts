@@ -76,7 +76,8 @@ describe("a web source through the sync engine", () => {
         id: "web-sync",
         settings: { hosts: [host], requestsPerSecond: 10 }
       },
-      checkEgress: (target) => checker.check(target)
+      // The fake site on 127.0.0.1 plays a public host: a web source refuses a private grant.
+      checkEgress: async (target) => ({ ...(await checker.check(target)), network: "public" })
     });
     const world = await setup(() => ({
       list: (input, context) => web.list(input, asWeb(context)),
@@ -89,9 +90,16 @@ describe("a web source through the sync engine", () => {
     await world.drain(await world.sync("full"));
 
     const items =
-      await world.sql`select item_id, name, mime, path, origin_link, modified_at from catalyst_kb.source_items order by item_id`;
+      await world.sql`select item_id, name, mime, path, origin_link, modified_at, stated_at from catalyst_kb.source_items order by item_id`;
     expect(items).toMatchObject([
-      { item_id: `https://${host}/law/`, name: "Law index", mime: "text/markdown", path: "/law/" },
+      {
+        item_id: `https://${host}/law/`,
+        name: "Law index",
+        mime: "text/markdown",
+        path: "/law/",
+        // The index states no date of its own, so it has none to cite as its "Stand".
+        stated_at: null
+      },
       {
         item_id: `https://${host}/law/s7`,
         name: "Section 7 Depreciation",
@@ -99,6 +107,7 @@ describe("a web source through the sync engine", () => {
       }
     ]);
     expect(items[1]?.modified_at).toEqual(new Date("2026-11-01T00:00:00.000Z"));
+    expect(items[1]?.stated_at).toEqual(new Date("2026-11-01T00:00:00.000Z"));
 
     const search = await world.instance.api.call("knowledge_bases.search", {
       params: { knowledgeBase: "sync-test" },
@@ -110,7 +119,8 @@ describe("a web source through the sync engine", () => {
         expect.objectContaining({
           originLink: `https://${host}/law/s7`,
           fileName: "Section 7 Depreciation",
-          modifiedAt: "2026-11-01T00:00:00Z",
+          statedAt: "2026-11-01T00:00:00Z",
+          retrievedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u),
           text: expect.stringContaining("two percent a year")
         })
       ])
@@ -120,8 +130,9 @@ describe("a web source through the sync engine", () => {
     stand = "05.11.2026";
     await world.drain(await world.sync("full"));
     const [changed] =
-      await world.sql`select modified_at from catalyst_kb.source_items where item_id = ${`https://${host}/law/s7`}`;
+      await world.sql`select modified_at, stated_at from catalyst_kb.source_items where item_id = ${`https://${host}/law/s7`}`;
     expect(changed?.modified_at).toEqual(new Date("2026-11-05T00:00:00.000Z"));
+    expect(changed?.stated_at).toEqual(new Date("2026-11-05T00:00:00.000Z"));
   }, 120_000);
 
   it("refuses a source that names folders and addresses, neither, or an address it may not hold", async () => {

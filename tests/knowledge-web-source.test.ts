@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   createEgressChecker,
   createWebConnectorType,
@@ -80,17 +80,17 @@ function requiredSource<Capability>(capability: Capability | undefined): Capabil
 
 /**
  * A context of a `web` Connection as the platform hands one out: the egress checker admits the
- * fake site as a private entry of the operator's list and judges everything else as public, as
- * `egress.allowPublicHttps` does. Each test gets a Connection of its own, so pacing and the kept
+ * fake site through an entry of the operator's list, whose grant is then read as a public one,
+ * and judges everything else as public, as `egress.allowPublicHttps` does. Each test gets a Connection of its own, so pacing and the kept
  * robots.txt of one never reach another.
  */
-function contextFor(settings: Record<string, unknown>): ConnectorContext {
+function contextFor(settings: Record<string, unknown>, on: Site = site): ConnectorContext {
   const checker = createEgressChecker({
     allow: [
       {
         protocol: "https",
         host: "127.0.0.1",
-        port: site.port,
+        port: on.port,
         network: "private",
         cidrs: ["127.0.0.1/32"]
       }
@@ -98,7 +98,7 @@ function contextFor(settings: Record<string, unknown>): ConnectorContext {
     allowPublicHttps: true
   });
   connectionNumber += 1;
-  const target = { protocol: "https" as const, host: "127.0.0.1", port: site.port };
+  const target = { protocol: "https" as const, host: "127.0.0.1", port: on.port };
   return {
     connection: {
       id: `web-${String(connectionNumber)}`,
@@ -109,7 +109,8 @@ function contextFor(settings: Record<string, unknown>): ConnectorContext {
       operations: []
     },
     target: { ...target, address: "127.0.0.1", family: 4, network: "private" },
-    checkEgress: (next) => checker.check(next),
+    // The fake site on 127.0.0.1 plays a public host: a web source refuses a private grant.
+    checkEgress: async (next) => ({ ...(await checker.check(next)), network: "public" }),
     credentialFor: () => undefined,
     signal: new AbortController().signal
   };
@@ -204,7 +205,7 @@ beforeAll(async () => {
   });
   site.routes.set(
     "/single",
-    html(LAYOUT(`<h1>Single page</h1><p>zuletzt geändert durch Art. 5 G v. 22.12.2023</p>`))
+    html(LAYOUT(`<h1>Single page</h1><p>Zuletzt geändert am 22.12.2023</p>`))
   );
 });
 
@@ -401,8 +402,8 @@ describe("what a web source never reaches", () => {
     other.routes.set("/page", html(LAYOUT("<h1>Kept out</h1>")));
     const context = {
       ...contextFor({ hosts: [other.host] }),
-      checkEgress: (next: Parameters<ConnectorContext["checkEgress"]>[0]) =>
-        createEgressChecker({
+      checkEgress: async (next: Parameters<ConnectorContext["checkEgress"]>[0]) => ({
+        ...(await createEgressChecker({
           allow: [
             {
               protocol: "https",
@@ -412,13 +413,175 @@ describe("what a web source never reaches", () => {
               cidrs: ["127.0.0.1/32"]
             }
           ]
-        }).check(next)
+        }).check(next)),
+        network: "public" as const
+      })
     };
     expect(await listAll(boundaryOf({ pages: [`https://${other.host}/page`] }), context)).toEqual(
       []
     );
     expect(other.requests.map((request) => request.path)).toEqual(["/robots.txt"]);
     await new Promise<void>((resolve) => other.server.close(() => resolve()));
+  });
+});
+
+describe("a private egress grant", () => {
+  it("is refused: a web source reads public HTTPS only, robots.txt included", async () => {
+    const context = contextFor({ hosts: [site.host] });
+    const checker = createEgressChecker({
+      allow: [
+        {
+          protocol: "https",
+          host: "127.0.0.1",
+          port: site.port,
+          network: "private",
+          cidrs: ["127.0.0.1/32"]
+        }
+      ]
+    });
+    const privateContext = {
+      ...context,
+      checkEgress: (next: Parameters<ConnectorContext["checkEgress"]>[0]) => checker.check(next)
+    };
+    const before = site.requests.length;
+    expect(await listAll(boundaryOf({ pages: [url("/single")] }), privateContext)).toEqual([]);
+    expect(
+      await failureOf(() => fetchText({ id: url("/single"), version: "v" }, privateContext))
+    ).toBe("unavailable");
+    expect(site.requests.length).toBe(before);
+  });
+});
+
+/** Polls the feed from `cursor` until it settles, as the sync does. */
+async function drainFeed(
+  boundary: DocumentSourceBoundary,
+  context: ConnectorContext,
+  cursor: string
+) {
+  const changes: DocumentSourceChange[] = [];
+  for (let calls = 0; calls < 20; calls++) {
+    const page = await source.changes({ boundary, cursor }, context);
+    if (page.kind !== "changes") throw new Error("A web source offers a change feed");
+    changes.push(...page.changes);
+    if (page.changes.length === 0 && page.nextCursor === cursor) return { changes, cursor };
+    cursor = page.nextCursor;
+  }
+  throw new Error("The feed never settled");
+}
+
+describe("what withdraws a page", () => {
+  let flaky: Site;
+  let robots: { status: number; body: string };
+  // robots.txt is kept an hour of real time, so the tests move the real clock as well.
+  let offset = 0;
+  const realNow = Date.now.bind(Date);
+  const later = (ms: number) => {
+    offset += ms;
+    clock += ms;
+  };
+
+  beforeAll(async () => {
+    flaky = await startSite();
+    vi.spyOn(Date, "now").mockImplementation(() => realNow() + offset);
+  });
+  afterAll(async () => {
+    vi.restoreAllMocks();
+    await new Promise<void>((resolve) => flaky.server.close(() => resolve()));
+  });
+
+  /** A site of two pages, `/b` answering 304 to its own validator. */
+  async function twoPages() {
+    robots = { status: 200, body: "User-agent: *\nAllow: /\n" };
+    flaky.routes.set("/robots.txt", (_request, response) => {
+      response.writeHead(robots.status, { "content-type": "text/plain" }).end(robots.body);
+    });
+    flaky.routes.set("/a", html(LAYOUT("<h1>A</h1><p>Alpha.</p>")));
+    flaky.routes.set("/b", (request, response) => {
+      if (request.headers["if-none-match"] === '"b-1"') {
+        response.writeHead(304).end();
+        return;
+      }
+      response
+        .writeHead(200, { "content-type": "text/html", etag: '"b-1"' })
+        .end(LAYOUT("<h1>B</h1><p>Beta.</p>"));
+    });
+    const context = contextFor({ hosts: [flaky.host] }, flaky);
+    const boundary = boundaryOf({
+      pages: [`https://${flaky.host}/a`, `https://${flaky.host}/b`]
+    });
+    expect(await listAll(boundary, context)).toHaveLength(2);
+    const start = await source.changes({ boundary }, context);
+    if (start.kind !== "changes") throw new Error("A web source offers a change feed");
+    return { context, boundary, cursor: start.nextCursor };
+  }
+
+  it("never withdraws for a robots.txt that cannot be read now: the pass fails instead", async () => {
+    const { context, boundary, cursor } = await twoPages();
+    for (const status of [503, 429, 500]) {
+      robots.status = status;
+      later(61 * 60_000);
+      expect(await failureOf(() => source.changes({ boundary, cursor }, context))).toBe(
+        "unavailable"
+      );
+      expect(await failureOf(() => listAll(boundary, context))).toBe("unavailable");
+    }
+    // Back again, the poll the sync repeats from its last position withdraws nothing.
+    robots.status = 200;
+    later(3 * 60_000);
+    expect((await drainFeed(boundary, context, cursor)).changes).toEqual([]);
+  });
+
+  it("keeps a page that answers 401 or 403, in the feed, the full pass and the fetch", async () => {
+    const { context, boundary, cursor } = await twoPages();
+    const b = `https://${flaky.host}/b`;
+    for (const status of [403, 401]) {
+      flaky.routes.set("/b", (_request, response) => {
+        response.writeHead(status, { "content-type": "text/plain" }).end("no");
+      });
+      later(3 * 60_000);
+      expect((await drainFeed(boundary, context, cursor)).changes).toEqual([]);
+      expect((await listAll(boundary, context)).map((item) => item.id)).toContain(b);
+      expect(await failureOf(() => fetchText({ id: b, version: "v" }, context))).toBe(
+        "unavailable"
+      );
+    }
+  });
+
+  it("withdraws a page robots.txt disallows, and answers it again when it is allowed again", async () => {
+    const { context, boundary, cursor } = await twoPages();
+    const b = `https://${flaky.host}/b`;
+    robots.body = "User-agent: *\nDisallow: /b\n";
+    later(61 * 60_000);
+    const gone = await drainFeed(boundary, context, cursor);
+    expect(gone.changes).toEqual([{ kind: "delete", item: { id: b } }]);
+    // Allowed again, `/b` would answer 304 to the validator kept before: it is read in full
+    // and answered, because the sync withdrew it.
+    robots.body = "User-agent: *\nAllow: /\n";
+    later(61 * 60_000);
+    const back = await drainFeed(boundary, context, gone.cursor);
+    expect(back.changes).toEqual([
+      expect.objectContaining({ kind: "upsert", item: expect.objectContaining({ id: b }) })
+    ]);
+    const lastB = flaky.requests.filter((request) => request.path === "/b").at(-1);
+    expect(lastB?.headers["if-none-match"]).toBeUndefined();
+  });
+
+  it("answers again what a failed step read, since the sync took none of it", async () => {
+    const { context, boundary, cursor } = await twoPages();
+    const a = `https://${flaky.host}/a`;
+    flaky.routes.set("/a", html(LAYOUT("<h1>A</h1><p>Alpha, changed.</p>")));
+    flaky.routes.set("/b", (_request, response) => {
+      response.writeHead(500, { "content-type": "text/plain" }).end("down");
+    });
+    later(3 * 60_000);
+    expect(await failureOf(() => source.changes({ boundary, cursor }, context))).toBe(
+      "unavailable"
+    );
+    flaky.routes.set("/b", html(LAYOUT("<h1>B</h1><p>Beta.</p>")));
+    const after = await drainFeed(boundary, context, cursor);
+    expect(after.changes).toContainEqual(
+      expect.objectContaining({ kind: "upsert", item: expect.objectContaining({ id: a }) })
+    );
   });
 });
 
