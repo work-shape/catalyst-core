@@ -352,6 +352,7 @@ async function checkBatch(
     entry.refusal = refusalOf(() =>
       assertUpsertWithinLimits(call.access, "sync", entry.kind, {
         name: entry.name,
+        resource: accessResource(entry.kind.kind, entry.name, entry.scope, entry.asset?.id),
         current: storedByName(entry.kind.kind).get(entry.name),
         next: acceptedByName(entry.kind.kind).get(entry.name),
         modelBindingsListed: listsModelBindings(changed.lists)

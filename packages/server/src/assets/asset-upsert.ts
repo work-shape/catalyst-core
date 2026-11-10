@@ -159,6 +159,7 @@ export async function upsertAsset(
   if (!write.releaseDraft)
     assertUpsertWithinLimits(call.access, surface, kind, {
       name,
+      resource: target.resource,
       current,
       next,
       modelBindingsListed: listsModelBindings(lists)

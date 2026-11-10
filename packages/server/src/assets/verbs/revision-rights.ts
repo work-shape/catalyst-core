@@ -111,8 +111,9 @@ async function furtherRight(
   if (right === "write" && config !== undefined && kind.representation !== "files") {
     const current = target.asset?.status === "active" ? target.asset.config : undefined;
     const check = beforeConfirmation ? assertUpsertPolicyAndMissingRight : missingUpsertRightOf;
-    const action = check(access, "put", kind, {
+    const missing = check(access, "put", kind, {
       name,
+      resource: target.resource,
       current,
       next: keptStored(kind, current, kind.prepareInteractiveUpsert({ current, next: config })),
       modelBindingsListed: listsModelBindings(
@@ -122,8 +123,8 @@ async function furtherRight(
         )
       )
     });
-    if (action !== undefined) {
-      return { allowed: false, action, reason: "no_grant" };
+    if (missing !== undefined) {
+      return { allowed: false, ...missing };
     }
   }
   // Only a holder of the write right on the instance changes its default, so only for

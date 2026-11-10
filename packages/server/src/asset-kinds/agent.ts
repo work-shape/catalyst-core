@@ -12,6 +12,7 @@ import {
   AppError,
   ASSET_OWNER_KINDS,
   defineAssetKind,
+  operationDenialError,
   KNOWLEDGE_BASE_ASSET_KIND,
   type AgentConfig,
   type AgentEditableField,
@@ -180,14 +181,16 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
       return withoutFastMode;
     },
 
-    missingUpsertRight({ access, current, next, modelBindingsListed }) {
-      return changedModelSettings(modelBindingsListed, current, next).length > 0 &&
-        !access.authorize(MODEL_SETTINGS_RIGHT).allowed
-        ? MODEL_SETTINGS_RIGHT
-        : undefined;
+    missingUpsertRight({ access, resource, current, next, modelBindingsListed }) {
+      if (changedModelSettings(modelBindingsListed, current, next).length === 0) return undefined;
+      // Asked with the agent: a personal key covers the right where it covers writing it.
+      const decision = access.authorize(MODEL_SETTINGS_RIGHT, resource);
+      return decision.allowed
+        ? undefined
+        : { action: MODEL_SETTINGS_RIGHT, reason: decision.reason };
     },
 
-    assertInteractiveUpsertAllowed({ access, current, next, modelBindingsListed }) {
+    assertInteractiveUpsertAllowed({ access, resource, current, next, modelBindingsListed }) {
       if (current === undefined && !policy().allowAgentCreation) {
         throw new AppError("FORBIDDEN", "Interactive agent creation is disabled");
       }
@@ -201,11 +204,19 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
         (field) => changed(field) || (field === "instructions" && changed("additionalInstructions"))
       );
       const changedSettings = changedModelSettings(modelBindingsListed, current, next);
-      if (changedSettings.length > 0 && !access.authorize(MODEL_SETTINGS_RIGHT).allowed) {
-        throw new AppError(
-          "FORBIDDEN",
-          `Changing agent model settings (${changedSettings.join(", ")}) requires '${MODEL_SETTINGS_RIGHT}' permission`
-        );
+      const modelRight =
+        changedSettings.length > 0 ? access.authorize(MODEL_SETTINGS_RIGHT, resource) : undefined;
+      if (modelRight?.allowed === false) {
+        throw modelRight.reason === "outside_key_scope"
+          ? operationDenialError({
+              kind: "forbidden",
+              action: MODEL_SETTINGS_RIGHT,
+              reason: modelRight.reason
+            })
+          : new AppError(
+              "FORBIDDEN",
+              `Changing agent model settings (${changedSettings.join(", ")}) requires '${MODEL_SETTINGS_RIGHT}' permission`
+            );
       }
       const protectedFields = changedFields.filter(
         (field) => !editableFields.has(field) && !isAgentModelSettingField(field)

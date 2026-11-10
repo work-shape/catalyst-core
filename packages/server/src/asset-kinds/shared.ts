@@ -1,5 +1,7 @@
 import type { StoredAgentReferences } from "@work-shape/catalyst-config-schema";
 import type {
+  AccessDecision,
+  AccessResource,
   ActorAccess,
   AssetScope,
   AuditActor,
@@ -17,6 +19,12 @@ import type {
   ToolPresentation,
   WorkflowAccountRights
 } from "@work-shape/catalyst-core";
+
+/** A right a save needs beside the kind's write right, and why the caller lacks it. */
+export interface MissingUpsertRight {
+  action: string;
+  reason: Extract<AccessDecision, { allowed: false }>["reason"];
+}
 
 /** What a kind's `withinWrite` leaves to do once the transaction ended. */
 export interface AssetWriteFollowUp {
@@ -179,17 +187,21 @@ export interface WorkflowAssetKind
   missingUpsertRight(input: {
     access: ActorAccess;
     name: string;
+    /** The asset written, which the personal key of a call may be narrowed to. */
+    resource: AccessResource;
     /** The stored definition, or undefined for a new asset. */
     current: unknown;
     next: unknown;
     /** A list names the model bindings the agent may use (`listsModelBindings`). */
     modelBindingsListed: boolean;
-  }): string | undefined;
+  }): MissingUpsertRight | undefined;
   /** Throws `FORBIDDEN` when the instance's editing policy refuses this interactive save. */
   assertInteractiveUpsertAllowed(input: {
     access: ActorAccess;
     surface: AssetWriteSurface;
     name: string;
+    /** The asset written, which the personal key of a call may be narrowed to. */
+    resource: AccessResource;
     /** The stored definition, or undefined for a new asset. */
     current: unknown;
     /** The validated definition. */
