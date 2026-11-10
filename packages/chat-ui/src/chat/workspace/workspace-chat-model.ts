@@ -97,6 +97,7 @@ import {
   isOwnChat,
   rateLimitContinueOffer,
   terminalRunNotice,
+  turnSenders,
   withRunUnderway,
   WORKSPACE_AUTH_SCOPE,
   workspaceScopedConfigFor
@@ -884,6 +885,11 @@ export function useWorkspaceChatModel({
     () => withRunUnderway(threadRunAgents ?? [], activeRunInput, activeRunAgent),
     [activeRunAgent, activeRunInput, threadRunAgents]
   );
+  const activeRunOwner = controller.activeRun?.run.ownerUserId;
+  const runSenders = useMemo(
+    () => turnSenders(threadRunAgents ?? [], activeRunInput, activeRunOwner),
+    [activeRunInput, activeRunOwner, threadRunAgents]
+  );
   const { selectableModels, selectedModel, noModelAllowed } = agentModelSelection(
     activeAgent,
     modelPicks.modelBindingId,
@@ -1284,6 +1290,8 @@ export function useWorkspaceChatModel({
         : undefined,
       selectedConversationTitle: selectedThread?.conversation.title,
       selectedConversationOwnerId: selectedThread?.conversation.createdByUserId,
+      selectedConversation: selectedThread?.conversation,
+      viewerId: meQuery.data?.id,
       tellConversation,
       // On its own route a conversation that is gone says so; the dock opens empty instead.
       conversationGone:
@@ -1345,6 +1353,7 @@ export function useWorkspaceChatModel({
       conversationRunning: selectedConversationRunning,
       activeRun: controller.activeRun,
       runAgents,
+      runSenders,
       followUpSource,
       sendBlock: workspaceSendBlock({
         attachmentBlockedReason: draftAttachmentController.sendBlockedReason,

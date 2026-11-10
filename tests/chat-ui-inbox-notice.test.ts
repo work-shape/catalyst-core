@@ -59,6 +59,19 @@ describe("inbox item of a notice", () => {
     );
   });
 
+  // CHAT-SHARE-2: the notice of a chat shared with the reader opens the chat in its workspace.
+  it("leads to the chat shared with the reader", () => {
+    const shared = notice({
+      title: "Ada shared “Quarter plan” with you",
+      text: "You can read the whole chat and write in it while you are a member of Team.",
+      link: { kind: "conversation", workspaceId: "cws_team", conversationId: "conv_1" }
+    });
+    expect(renderItem(shared, { locale: "en" })).toMatch(
+      /href="\/w\/cws_team\/c\/conv_1"[^>]*>Open chat<\/a>/u
+    );
+    expect(renderItem(shared)).toMatch(/>Chat öffnen<\/a>/u);
+  });
+
   // LU-6: the reader of a run's notice may tell the Workflow's builders about the result, once.
   describe("feedback on the result", () => {
     const runNotice = {

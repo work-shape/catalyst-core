@@ -189,6 +189,14 @@ export interface GalleryText
   instanceName: string;
   onlyMe: string;
   personName: string;
+  personNameSecond: string;
+  personNameThird: string;
+  personNameFourth: string;
+  suggestionLabel: string;
+  suggestionHeading: string;
+  suggestionHasAccess: string;
+  suggestionEmpty: string;
+  suggestionInline: string;
   groupEditors: string;
   readOnly: string;
   avatarPerson: string;
@@ -474,6 +482,14 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     instanceName: "Acme",
     onlyMe: "Only me",
     personName: "Maria Schmidt",
+    personNameSecond: "Jonas Weber",
+    personNameThird: "Lea Fischer",
+    personNameFourth: "Tom Becker",
+    suggestionLabel: "People",
+    suggestionHeading: "Likely people",
+    suggestionHasAccess: "has access",
+    suggestionEmpty: "No member of this workspace matches.",
+    suggestionInline: "Inline, in a panel",
     groupEditors: "Editors",
     readOnly: "Read-only",
     avatarPerson: "Person",
@@ -769,6 +785,14 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     instanceName: "Acme",
     onlyMe: "Nur ich",
     personName: "Maria Schmidt",
+    personNameSecond: "Jonas Weber",
+    personNameThird: "Lea Fischer",
+    personNameFourth: "Tom Becker",
+    suggestionLabel: "Personen",
+    suggestionHeading: "Wahrscheinliche Personen",
+    suggestionHasAccess: "hat Zugriff",
+    suggestionEmpty: "Kein Mitglied dieses Arbeitsbereichs passt.",
+    suggestionInline: "Eingebettet, in einem Bereich",
     groupEditors: "Redaktion",
     readOnly: "Schreibgeschützt",
     avatarPerson: "Person",

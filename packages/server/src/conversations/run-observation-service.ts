@@ -92,6 +92,7 @@ export class RunObservationWorkflow {
         clientInstanceId,
         conversationId
       });
+      const namesSenders = snapshotNamesSenders(conversation, runAgents);
       const serverTime = new Date().toISOString();
       const completedRunProjections = await this.createCompletedRunProjections(
         stores,
@@ -131,10 +132,20 @@ export class RunObservationWorkflow {
           : {}),
         ...(runAgents.length > 0
           ? {
-              runAgents: runAgents.map(({ inputMessageId, agentName }) => ({
-                inputMessageId,
-                agentName
-              }))
+              runAgents: runAgents.map(
+                ({ inputMessageId, agentName, ownerUserId, ownerDisplayLabel }) => ({
+                  inputMessageId,
+                  agentName,
+                  // Who sent each turn, by id and name (CHAT-SHARE-2), also once that person no
+                  // longer reads the chat.
+                  ...(namesSenders
+                    ? {
+                        ...(ownerUserId === undefined ? {} : { ownerUserId }),
+                        ...(ownerDisplayLabel === undefined ? {} : { ownerDisplayLabel })
+                      }
+                    : {})
+                })
+              )
             }
           : {}),
         // Synthetic until a backend read-marker mutation makes unread/read state product scope.
@@ -471,4 +482,18 @@ async function withDecidersNamedNow(
       };
     })
   );
+}
+
+/**
+ * A chat that names people, or that more than one person ever wrote in: its readers see who sent
+ * each turn, so a turn of someone who left or was removed never reads as another's. A chat only
+ * one person wrote in and nobody else reads carries nothing.
+ */
+function snapshotNamesSenders(
+  conversation: { people: readonly unknown[] },
+  runAgents: ReadonlyArray<{ ownerUserId?: string }>
+): boolean {
+  if (conversation.people.length > 0) return true;
+  const senders = new Set(runAgents.flatMap(({ ownerUserId }) => ownerUserId ?? []));
+  return senders.size > 1;
 }

@@ -42,6 +42,11 @@ import {
   type PickerOptionGroup
 } from "../overlays/picker";
 import { Popover, PopoverContent, PopoverTrigger, type PopoverSize } from "../overlays/popover";
+import {
+  nextSuggestion,
+  SuggestionList,
+  type SuggestionListOption
+} from "../overlays/suggestion-list";
 import { Avatar } from "../status/avatar";
 import { Badge } from "../status/badge";
 import { SkillIcon } from "../status/skill-icon";
@@ -690,6 +695,61 @@ function HeldTooltipSample({ text }: { text: GalleryText }) {
   );
 }
 
+function SuggestionListSamples({ text }: { text: GalleryText }) {
+  const names = [text.personName, text.personNameSecond, text.personNameThird];
+  const options: SuggestionListOption[] = names.map((name, index) => ({
+    id: String(index),
+    label: name,
+    leading: <Avatar kind="person" size="sm" name={name} />,
+    ...(index === 2 ? { trailing: text.suggestionHasAccess, disabled: true } : {})
+  }));
+  const [activeId, setActiveId] = useState(options[0]?.id);
+  return (
+    <>
+      <Samples>
+        <Input
+          aria-label={text.suggestionLabel}
+          aria-controls="gallery-suggestions"
+          defaultValue="@"
+          onKeyDown={(event) => {
+            if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+            event.preventDefault();
+            setActiveId(nextSuggestion(options, activeId, event.key === "ArrowDown" ? 1 : -1));
+          }}
+        />
+        <SuggestionList
+          id="gallery-suggestions"
+          label={text.suggestionLabel}
+          heading={text.suggestionHeading}
+          options={options}
+          activeId={activeId}
+          onActiveChange={setActiveId}
+          onSelect={setActiveId}
+        />
+        <SuggestionList
+          id="gallery-suggestions-empty"
+          label={text.suggestionLabel}
+          options={[]}
+          empty={text.suggestionEmpty}
+          onSelect={() => undefined}
+        />
+      </Samples>
+      <Samples label={text.suggestionInline}>
+        <SuggestionList
+          id="gallery-suggestions-inline"
+          surface="inline"
+          className="w-72"
+          label={text.suggestionLabel}
+          heading={text.suggestionHeading}
+          loading
+          options={options.slice(0, 2)}
+          onSelect={() => undefined}
+        />
+      </Samples>
+    </>
+  );
+}
+
 export const overlaysGallery: GalleryGroup = {
   id: "overlays",
   entries: [
@@ -741,6 +801,11 @@ export const overlaysGallery: GalleryGroup = {
       name: "Picker",
       components: ["Picker", "PickerButton"],
       render: (text) => <PickerSamples text={text} />
+    },
+    {
+      name: "SuggestionList",
+      components: ["SuggestionList"],
+      render: (text) => <SuggestionListSamples text={text} />
     },
     {
       name: "Tooltip",

@@ -64,6 +64,13 @@ export {
   type SidePanelTab
 } from "./side-panel";
 export {
+  nextSuggestion,
+  SuggestionList,
+  suggestionOptionId,
+  type SuggestionListOption,
+  type SuggestionListProps
+} from "./suggestion-list";
+export {
   Tooltip,
   TooltipContent,
   TooltipTrigger,

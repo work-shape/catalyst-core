@@ -82,7 +82,12 @@ export const conversationSchema = z.object({
    * while members (CHAT-SHARE). Empty on every other conversation; a run thread carries its
    * root's.
    */
-  people: z.array(conversationPersonSchema)
+  people: z.array(conversationPersonSchema),
+  /**
+   * The creator's name, on a chat that names people: its other readers see who started it and
+   * who wrote each turn. Missing on every other conversation.
+   */
+  createdByDisplayLabel: z.string().optional()
 });
 
 /** Names a member of the chat's workspace to read and write in it (CHAT-SHARE). */
@@ -1084,7 +1089,24 @@ export const conversationThreadSnapshotSchema = z.object({
    * The agent of each run the conversation held, oldest first, by the message that started the
    * run: where another agent answers from that message on, the history says so (T30).
    */
-  runAgents: z.array(z.object({ inputMessageId: z.string(), agentName: z.string() })).optional(),
+  runAgents: z
+    .array(
+      z.object({
+        inputMessageId: z.string(),
+        agentName: z.string(),
+        /**
+         * The person the run acts for, on a chat that names people or that more than one person
+         * wrote in (CHAT-SHARE-2).
+         */
+        ownerUserId: z.string().optional(),
+        /**
+         * That person's name, on the same chats: their turns stay attributed after they leave
+         * it or are removed. Missing where the account is gone.
+         */
+        ownerDisplayLabel: z.string().optional()
+      })
+    )
+    .optional(),
   /**
    * What the conversation's latest run was asked to use. Absent before the first run; a run that
    * followed the configured defaults leaves both fields out.

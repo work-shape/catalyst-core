@@ -153,6 +153,10 @@ interface WorkspaceRailProps {
   onReloadConversations: () => void;
   onRenameConversation: (conversationId: string, title: string) => Promise<void>;
   onMoveConversation: (conversationId: string, title: string) => void;
+  /** The person reading the rail, whose own chats offer "Share…" (CHAT-SHARE-2). */
+  viewerId?: string;
+  /** Opens a chat's panel "Who can see this chat". Absent where no chat is shared. */
+  onShareConversation?: (conversationId: string) => void;
   onDeleteConversation: (conversationId: string) => void;
 }
 
@@ -533,6 +537,16 @@ function ProjectChats({
   );
 }
 
+/** The creator's private chat outside a project: the one kind shared with single people. */
+function canShare(conversation: ConversationListItem, viewerId: string | undefined): boolean {
+  return (
+    viewerId !== undefined &&
+    conversation.createdByUserId === viewerId &&
+    conversation.visibility === "private" &&
+    conversation.projectId === undefined
+  );
+}
+
 function RecentConversations({
   config,
   conversations,
@@ -550,6 +564,8 @@ function RecentConversations({
   onReloadConversations,
   onRenameConversation,
   onMoveConversation,
+  viewerId,
+  onShareConversation,
   onDeleteConversation,
   projectActions,
   projects = false,
@@ -592,6 +608,12 @@ function RecentConversations({
             onMove={
               canMoveConversation
                 ? () => onMoveConversation(conversation.id, conversation.title)
+                : undefined
+            }
+            viewerId={viewerId}
+            onShare={
+              onShareConversation && canShare(conversation, viewerId)
+                ? () => onShareConversation(conversation.id)
                 : undefined
             }
             onMoveToProject={

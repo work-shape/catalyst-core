@@ -94,6 +94,8 @@ export interface ConversationPersonRow {
 /** A conversation's row with its named people, or those of its root (CHAT-SHARE-1). */
 export type ConversationWithPeopleRow = ConversationRow & {
   people: readonly ConversationPersonRow[];
+  /** The creator's name, read only where the chat names people. */
+  createdByDisplayLabel?: string | null;
 };
 export type CollaborationWorkspaceRow = typeof collaborationWorkspaces.$inferSelect;
 export type WorkspaceMembershipRow = typeof collaborationWorkspaceMemberships.$inferSelect;
@@ -161,7 +163,10 @@ export function mapConversation(row: ConversationWithPeopleRow | undefined): Con
       userId: person.userId,
       displayLabel: person.displayLabel,
       addedAt: new Date(person.addedAt).toISOString()
-    }))
+    })),
+    ...(row.people.length > 0 && typeof row.createdByDisplayLabel === "string"
+      ? { createdByDisplayLabel: row.createdByDisplayLabel }
+      : {})
   };
 }
 

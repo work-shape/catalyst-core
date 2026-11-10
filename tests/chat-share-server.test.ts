@@ -762,6 +762,92 @@ describe("CHAT-SHARE-1: named people on a private chat", () => {
     await app.close();
   });
 
+  it("names who started each turn on a shared chat, also once that person was removed", async () => {
+    const { app, ids, workspaceId, conversationId } = await createFixture();
+    type Thread = {
+      runAgents: Array<{
+        inputMessageId: string;
+        ownerUserId?: string;
+        ownerDisplayLabel?: string;
+      }>;
+    };
+    const sendersFor = async (actor: string, id = conversationId) => {
+      const thread = await app.call(
+        "conversations.thread.get",
+        { params: { conversationId: id } },
+        as(actor)
+      );
+      expect(thread.statusCode).toBe(200);
+      return thread.json<Thread>().runAgents.map(({ ownerUserId, ownerDisplayLabel }) => ({
+        ownerUserId,
+        ownerDisplayLabel
+      }));
+    };
+
+    // A chat that names nobody says nothing about who sent its turns.
+    await expect(sendersFor("creator")).resolves.toEqual([
+      { ownerUserId: undefined, ownerDisplayLabel: undefined }
+    ]);
+
+    expect((await share(app, conversationId, ids.named)).statusCode).toBe(200);
+    expect((await share(app, conversationId, ids.colleague)).statusCode).toBe(200);
+    await createRun(app, conversationId, ids.named, "completed");
+    const removed = await app.call(
+      "conversations.remove_person",
+      { params: { conversationId, userId: ids.named } },
+      as("creator")
+    );
+    expect(removed.statusCode).toBe(200);
+
+    // The removed person's turn stays attributed by name for the one who still reads.
+    await expect(sendersFor("colleague")).resolves.toEqual([
+      { ownerUserId: ids.creator, ownerDisplayLabel: "creator" },
+      { ownerUserId: ids.named, ownerDisplayLabel: "named" }
+    ]);
+
+    // With its only named person removed, the chat still holds turns of two people: neither
+    // reads as the other's, for the creator and, once the chat goes to the team, for the team.
+    const alone = await createChat(app, workspaceId, "Just us");
+    await createRun(app, alone, ids.creator, "completed");
+    expect((await share(app, alone, ids.named)).statusCode).toBe(200);
+    await createRun(app, alone, ids.named, "completed");
+    const removedAlone = await app.call(
+      "conversations.remove_person",
+      { params: { conversationId: alone, userId: ids.named } },
+      as("creator")
+    );
+    expect(removedAlone.statusCode).toBe(200);
+    const both = [
+      { ownerUserId: ids.creator, ownerDisplayLabel: "creator" },
+      { ownerUserId: ids.named, ownerDisplayLabel: "named" }
+    ];
+    await expect(sendersFor("creator", alone)).resolves.toEqual(both);
+    // The removed person reads it no more, names or not.
+    expect(
+      (
+        await app.call(
+          "conversations.thread.get",
+          { params: { conversationId: alone } },
+          as("named")
+        )
+      ).statusCode
+    ).toBe(404);
+    const team = await app.call("workspaces.create", { payload: { name: "Other" } }, as("owner"));
+    const teamId = team.json<{ id: string }>().id;
+    for (const actor of ["creator", "colleague"]) await addMember(app, teamId, actor);
+    const toTeam = await app.call(
+      "conversations.move",
+      {
+        params: { conversationId: alone },
+        payload: { collaborationWorkspaceId: teamId, visibility: "workspace" }
+      },
+      as("creator")
+    );
+    expect(toTeam.statusCode, toTeam.body).toBe(200);
+    await expect(sendersFor("colleague", alone)).resolves.toEqual(both);
+    await app.close();
+  });
+
   it("offers only people the creator knows from the workspace, the ones named before first, and files the notice with a conversation link", async () => {
     const { app, ids, workspaceId, conversationId } = await createFixture();
     type Offered = { userId: string; email?: string; hasAccess: boolean };

@@ -77,6 +77,7 @@ import {
   conversations,
   messages,
   platformJobs,
+  productUsers,
   runStartCommands
 } from "./schema";
 
@@ -562,9 +563,19 @@ async function listConversationRunAgents(
     .select({
       runId: agentRuns.id,
       inputMessageId: agentRuns.inputMessageId,
-      agentName: agentRuns.agentName
+      agentName: agentRuns.agentName,
+      ownerUserId: agentRuns.ownerUserId,
+      ownerDisplayLabel: productUsers.displayLabel
     })
     .from(agentRuns)
+    // The sender's name stays on their turns after they leave the chat; a deleted account has none.
+    .leftJoin(
+      productUsers,
+      and(
+        eq(productUsers.clientInstanceId, agentRuns.clientInstanceId),
+        eq(productUsers.id, agentRuns.ownerUserId)
+      )
+    )
     .where(
       and(
         eq(agentRuns.clientInstanceId, input.clientInstanceId),
@@ -576,7 +587,9 @@ async function listConversationRunAgents(
   return rows.map((row) => ({
     runId: asAgentRunId(row.runId),
     inputMessageId: asMessageId(row.inputMessageId),
-    agentName: row.agentName
+    agentName: row.agentName,
+    ...(row.ownerUserId === null ? {} : { ownerUserId: row.ownerUserId }),
+    ...(row.ownerDisplayLabel === null ? {} : { ownerDisplayLabel: row.ownerDisplayLabel })
   }));
 }
 

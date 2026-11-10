@@ -5,6 +5,7 @@ export {
   type AvatarProps,
   type AvatarSize
 } from "./avatar";
+export { AvatarStack, type AvatarStackPerson, type AvatarStackProps } from "./avatar-stack";
 export {
   Badge,
   type BadgeAppearance,
