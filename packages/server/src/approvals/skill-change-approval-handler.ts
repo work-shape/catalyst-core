@@ -85,7 +85,12 @@ const payloadSchema = z
       .regex(/^sha256:[a-f0-9]{64}$/u)
       .nullable(),
     preview: previewSchema,
-    subject: subjectSchema.optional()
+    subject: subjectSchema.optional(),
+    /**
+     * Filed from a marked conversation, which read what anyone could write, such as mail of a
+     * functional mailbox (MBX). A flag and no content: the Inbox says so to the approver.
+     */
+    markedConversation: z.literal(true).optional()
   })
   .superRefine((payload, context) => {
     const creation = payload.operations[0]?.type === "create_skill";
@@ -174,15 +179,16 @@ export function createSkillChangeApprovalHandler(
     },
     async preview(payload, context) {
       const data = validatePayload(payload);
+      const marked = data.markedConversation ? { markedConversation: true } : {};
       if (context.status !== "pending") {
-        return toJsonObject(data.preview);
+        return toJsonObject({ ...data.preview, ...marked });
       }
       // The live skill: an approval changes it, never a pending draft.
       const skill = await currentSkill(data.skillName);
       try {
-        return toJsonObject(createSkillChangePreview(skill, data.operations));
+        return toJsonObject({ ...createSkillChangePreview(skill, data.operations), ...marked });
       } catch {
-        return toJsonObject(data.preview);
+        return toJsonObject({ ...data.preview, ...marked });
       }
     },
     async isStale(payload, context) {

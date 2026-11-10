@@ -62,6 +62,11 @@ export function SkillChangeBody({
           ) : null}
         </Banner>
       )}
+      {change.markedConversation ? (
+        <Banner tone="warning" layout="line" data-skill-change-from-outside="">
+          {t("skillChangeFromOutside")}
+        </Banner>
+      ) : null}
       {heading ? (
         <p className="text-xs text-muted-foreground">
           {change.isNewSkill

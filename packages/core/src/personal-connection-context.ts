@@ -51,6 +51,24 @@ export async function personalDataConversation(
   }
 }
 
+/**
+ * Whether a conversation is marked: a call read what only its person may read, such as mail
+ * of a functional mailbox (`personal_data_at`). A subagent's thread answers for its root. A
+ * failed read counts as marked, so what was filed there is read as written in answer to it.
+ */
+export async function conversationMarked(
+  stores: Parameters<typeof rootConversationOf>[0],
+  clientInstanceId: ClientInstanceId,
+  conversationId: ConversationId
+): Promise<boolean> {
+  try {
+    const conversation = await rootConversationOf(stores, clientInstanceId, conversationId);
+    return conversation?.personalDataAt !== undefined;
+  } catch {
+    return true;
+  }
+}
+
 /** Refuse unattended work that could carry personal data beyond its conversation. */
 export async function requireUnmarkedConversation(
   stores: Parameters<typeof personalDataConversation>[0],

@@ -10,6 +10,7 @@ import {
 } from "@work-shape/catalyst-agent-runtime";
 import {
   RUN_AGENT_TOOL_NAME,
+  conversationMarked,
   StoreBackedAuditRecorder,
   type AgentConfig,
   type ApprovalRequestHandlerRegistry,
@@ -751,7 +752,9 @@ export async function createClientInstanceExecutionAssembly(
             createProposeSkillChangeTool({
               assetSource,
               policy: skillPolicy,
-              creator: approvalRequestCreator
+              creator: approvalRequestCreator,
+              // A change filed after mail was read says so in the Inbox (MBX).
+              markedConversation: (id) => conversationMarked(store, clientInstanceId, id)
             })
           ]
         : []),
