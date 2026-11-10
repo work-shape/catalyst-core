@@ -30,3 +30,8 @@ section: Fixed
   entry and no badge, and still decide it: "Auch Anfragen zeigen, die andere selbst freigeben
   können" in "Zu entscheiden" lists them (`approval_requests.list` with `scope=others_own`;
   `count_pending` gives `othersOwn`). Who may decide is unchanged.
+- **Studio:** A holder of `agent.approve` on a workspace, without the right on the instance,
+  publishes that workspace's agent with their own Publish click: it goes live at once and no
+  approval is filed, as for an instance approver. Their click, their confirmation of an agent's
+  publish and their Allow in the Inbox all ask the right on the agent's workspace. A call that
+  waited while its agent moved to another workspace ends as not found, unexecuted.

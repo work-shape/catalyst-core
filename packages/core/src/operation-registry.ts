@@ -71,8 +71,8 @@ export interface OperationApproval {
   /**
    * Where the filed request is decided, for a kind decided on its asset: an agent's held
    * publish by a holder of `agent.approve` on that agent, one in its workspace included
-   * (WS-PUB-1b). Its person's Allow of the call in the Inbox is asked `action` here. Left out,
-   * the instance.
+   * (WS-PUB-1b). The caller's own click, their confirmation and their Allow in the Inbox are
+   * asked `action` here. Left out, the instance.
    */
   resource?: AccessResource;
   /**

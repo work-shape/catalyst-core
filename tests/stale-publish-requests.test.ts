@@ -386,6 +386,95 @@ describe("a publish of what is live already", () => {
   });
 });
 
+// Who holds `agent.approve` only on the agent's workspace, and not on the instance, approves
+// their own publish with their own click: the Allow of their CLI call ("an owner's Allow that
+// is the approval" above) and their Publish in Studio. The right is asked where the agent is
+// when the call runs.
+describe("a workspace approver's own publish", () => {
+  const agentPublishes = (t: AccessInstance) =>
+    t.stores.approvals.countApprovalRequests({ clientInstanceId, kinds: ["agent_publish"] });
+
+  it("goes live on their Publish in Studio, with no agent_publish item", async () => {
+    const { t, team, live, create, push } = await setup();
+    await t.grant(t.kai.id, "agent.approve", { workspaceId: team });
+    await create(t.admin.id, "studio-own", team);
+    await push(t.kai.id, "studio-own", { instructions: "Draft.", toolNames: ["known.tool"] });
+    const before = await agentPublishes(t);
+    const published = await t.call(t.kai.id, "assets.publish", {
+      params: { kind: "agent", name: "studio-own" },
+      payload: { revision: 1, workspaceId: team }
+    });
+    expect(published.statusCode, published.body).toBe(200);
+    expect(await live("studio-own")).toMatchObject({ revision: 2 });
+    expect(await agentPublishes(t)).toBe(before);
+  });
+
+  it("files the item for an approver of another workspace only", async () => {
+    const { t, live, create, push, publishYes, decide, run: runOf, team } = await setup();
+    const other = await t.sharedWorkspace("Other");
+    await t.grant(t.kai.id, "agent.approve", { workspaceId: other });
+    await create(t.admin.id, "elsewhere", team);
+    await push(t.kai.id, "elsewhere", { instructions: "Draft.", toolNames: ["known.tool"] });
+    const waiting = waitingSchema.parse((await publishYes(t.kai.id, "elsewhere", 1)).json());
+    expect((await decide(t.kai.id, waiting.approvalRequestId)).statusCode).toBe(200);
+    expect(await runOf(waiting.id)).toMatchObject({ status: "pending_approval" });
+    expect(await live("elsewhere")).toMatchObject({ revision: 1 });
+    // Studio as well: the click waits for an approver.
+    const clicked = await t.call(t.kai.id, "assets.publish", {
+      params: { kind: "agent", name: "elsewhere" },
+      payload: { revision: 1, workspaceId: team }
+    });
+    expect(clicked.statusCode, clicked.body).toBe(202);
+  });
+
+  it("approves nothing where the agent moved to a workspace they do not approve in after the Allow", async () => {
+    const { t, team, live, create, push, publishYes, run: runOf } = await setup();
+    const other = await t.sharedWorkspace("Other");
+    await t.grant(t.kai.id, "agent.approve", { workspaceId: team });
+    // Kai may still publish where it moves; only the approve right stays behind.
+    for (const bundle of ["builder", "publisher"])
+      await t.grant(t.kai.id, bundle, { workspaceId: other });
+    await create(t.admin.id, "moving", team);
+    await push(t.kai.id, "moving", { instructions: "Draft.", toolNames: ["known.tool"] });
+    const waiting = waitingSchema.parse((await publishYes(t.kai.id, "moving", 1)).json());
+    // The Allow is recorded; before its job runs, the agent moves.
+    const allowed = await t.call(t.kai.id, "approval_requests.decide", {
+      params: { requestId: waiting.approvalRequestId },
+      payload: { decision: "approve" }
+    });
+    expect(allowed.statusCode, allowed.body).toBe(200);
+    const asset = await live("moving");
+    if (!asset) throw new Error("No agent 'moving'");
+    await t.stores.configAssets.moveConfigAssets({
+      clientInstanceId,
+      to: { kind: "workspace", workspaceId: other },
+      assets: [
+        {
+          id: asset.id,
+          from: { kind: "workspace", workspaceId: team },
+          activeRevisionId: asset.activeRevisionId,
+          ...(asset.publishedRevisionId ? { publishedRevisionId: asset.publishedRevisionId } : {})
+        }
+      ]
+    });
+    await getTestJobs(t.instance).runDue();
+    // The call named the agent in the workspace it left: it ends there, nothing published and
+    // nothing approved, and the agent's draft waits for a publish where it is now.
+    expect(await runOf(waiting.id)).toMatchObject({
+      status: "failed",
+      error: { code: "NOT_FOUND", unexecuted: true }
+    });
+    expect(await live("moving")).toMatchObject({ revision: 1 });
+    expect(
+      await t.stores.approvals.countApprovalRequests({
+        clientInstanceId,
+        kinds: ["agent_publish"],
+        status: "pending"
+      })
+    ).toBe(0);
+  });
+});
+
 // A request its requester may decide themselves is theirs in To decide: the other holders of
 // the right still decide it, and find it when they ask for the requests others may decide.
 describe("a request its requester may decide", () => {
@@ -401,10 +490,13 @@ describe("a request its requester may decide", () => {
       .items.map((entry) => [entry.id, entry.canDecide] as const);
   const counted = async (t: AccessInstance, userId: string) =>
     countSchema.parse((await t.expectOk(userId, "approval_requests.count_pending", {})).json());
+  // From the CLI: never its caller's own approval, so it waits also for a person who may
+  // approve it.
   const publish = (t: AccessInstance, team: string, userId: string, name: string) =>
     t.call(userId, "assets.publish", {
       params: { kind: "agent", name },
-      payload: { revision: 1, workspaceId: team }
+      payload: { revision: 1, workspaceId: team },
+      headers: { "x-test-key": "personal" }
     });
 
   it("is listed and counted for the requester alone, and another approver can still decide it", async () => {

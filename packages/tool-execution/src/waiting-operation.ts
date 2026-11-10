@@ -231,11 +231,7 @@ export async function executeInboxConfirmedOperation(
   const person: AuthenticatedIdentity = { ...context.call.actor };
   Reflect.deleteProperty(person, "keyScopes");
   const access = await deps.authorizer.forActor(person);
-  if (
-    confirmedByCaller &&
-    approval &&
-    approvedByCaller(context.call, policy, approval, access, true)
-  ) {
+  if (confirmedByCaller && approval && approvedByCaller(context.call, policy, approval, access)) {
     // An approver's own click is the approval, as when they click Publish themselves.
     return executeWaitingCall(
       context,
@@ -578,7 +574,27 @@ async function admitAgain(
   if (!right.allowed) {
     return refuse({ kind: "forbidden", action: right.action, reason: right.reason });
   }
-  const guarded = await resolveGuardedPolicy(context);
+  // The before-events read what the call names as it is now. One that is no longer where the
+  // call named it, such as an agent moved to another workspace while the call waited, is not
+  // found: the run ends with that, unexecuted, as for a resource that is gone.
+  const guarded = await resolveGuardedPolicy(context).catch((error: unknown) => {
+    if (error instanceof AppError && error.code === "NOT_FOUND") {
+      return { gone: { code: error.code, message: error.message } };
+    }
+    throw error;
+  });
+  if ("gone" in guarded) {
+    const { gone } = guarded;
+    const ended = await endWaiting({
+      status: "failed",
+      finishedAt: now().toISOString(),
+      error: { ...gone, unexecuted: true }
+    });
+    if (ended) {
+      await context.emit("operation.failed", "after", { status: "failed", reason: gone.code });
+    }
+    return refused(ended, () => gone);
+  }
   if ("denial" in guarded) {
     return refuse(guarded.denial);
   }
