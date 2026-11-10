@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { WORKSPACE_OWNED_RIGHT_KINDS } from "@work-shape/catalyst-asset-schemas";
 import {
   ACTIONS,
   AppError,
@@ -511,7 +512,7 @@ describe("workspace bundles (WS-BUILD-1)", () => {
   const publisher = grant({ action: "publisher", scopeKind: "workspace", scopeId: "kai" });
 
   it("lets Builder read and write every kind its workspace owns, and nothing elsewhere", () => {
-    for (const kind of ["agent", "skill", "app", "data_store", "knowledge_base", "guardrail"]) {
+    for (const kind of WORKSPACE_OWNED_RIGHT_KINDS) {
       for (const verb of ["read", "write"]) {
         const action = `${kind}.${verb}`;
         expect(decide({ grants: [builder], action, resource: inWorkspace })).toEqual(
@@ -567,6 +568,35 @@ describe("workspace bundles (WS-BUILD-1)", () => {
     expect(decide({ grants, resource: { ...inWorkspace, assetId: "asset-2" } })).toEqual(
       allowedByGrant
     );
+  });
+
+  it("carries no right on a Connection, which no workspace owns (PMCP-1, check 82)", () => {
+    const connectionIn: AccessResource = { kind: "connection", workspaceId: "kai" };
+    const access = createActorAccess(holder(), persisted([builder, publisher]));
+    for (const action of ACTIONS.filter((name) => name.startsWith("connection."))) {
+      for (const resource of [connectionIn, { workspaceId: "kai" }]) {
+        expect(access.authorize(action, resource), action).toEqual(noGrant);
+      }
+      expect(access.holdsGrantAt(action, ["workspace"]), action).toBe(false);
+    }
+    // What the workspace owns is unchanged: Builder still writes its agents, skills, Apps and
+    // Workflows, and Publisher still publishes them.
+    for (const kind of ["agent", "skill", "app", "workflow"]) {
+      const resource: AccessResource = { kind, assetId: `${kind}-1`, workspaceId: "kai" };
+      for (const verb of ["read", "write"]) {
+        expect(access.authorize(`${kind}.${verb}`, resource), kind).toEqual(allowedByGrant);
+        expect(access.holdsGrantAt(`${kind}.${verb}`, ["workspace"]), kind).toBe(true);
+      }
+    }
+    for (const action of ["agent.publish", "skill.publish", "app.publish"]) {
+      expect(access.authorize(action, { workspaceId: "kai" }), action).toEqual(allowedByGrant);
+    }
+    // A denied Builder is no denial of a Connection right, which the bundle never carried.
+    const refused = createActorAccess(holder(), persisted([{ ...builder, effect: "deny" }]));
+    expect(refused.denials("connection.write")).toEqual([]);
+    expect(refused.denials("agent.write")).toEqual([
+      expect.objectContaining({ action: "builder", scopeId: "kai" })
+    ]);
   });
 
   it("answers held rows and denials through the bundle", () => {

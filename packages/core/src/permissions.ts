@@ -9,6 +9,7 @@ import {
   GRANT_SCOPE_KINDS,
   PRINCIPAL_HOLDER_KINDS,
   PROJECT_ACTIONS,
+  WORKSPACE_OWNED_RIGHT_KINDS,
   type PlatformAction
 } from "@work-shape/catalyst-asset-schemas";
 import { resolveDataScope, type DataScope, type ScopeAssignmentInput } from "./data-scope";
@@ -140,8 +141,8 @@ export const WORKSPACE_MEMBER_ACTIONS = [
 ] as const satisfies readonly PlatformAction[];
 
 /**
- * The verbs each bundle of a workspace carries on every kind: Builder reads and writes,
- * Publisher publishes. Neither deletes.
+ * The verbs each bundle of a workspace carries on every kind a workspace can own: Builder reads
+ * and writes, Publisher publishes. Neither deletes.
  */
 const WORKSPACE_BUNDLE_VERBS: Readonly<Record<string, readonly string[]>> = {
   builder: ["read", "write"],
@@ -175,12 +176,19 @@ function rowGives(
   );
 }
 
-/** Whether the bundle carries the action on what its workspace owns: one of its verbs on a kind. */
+/**
+ * Whether the bundle carries the action on what its workspace owns: one of its verbs on a kind a
+ * workspace can own. A Connection is instance-owned, so no bundle names a right on one (PMCP-1).
+ */
 function bundleCarries(bundle: string, action: string): boolean {
   const verbs = WORKSPACE_BUNDLE_VERBS[bundle];
   if (verbs === undefined || BUNDLE_EXCLUDED_ACTIONS.includes(action)) return false;
   const dot = action.indexOf(".");
-  return dot > 0 && verbs.includes(action.slice(dot + 1));
+  return (
+    dot > 0 &&
+    WORKSPACE_OWNED_RIGHT_KINDS.some((kind) => kind === action.slice(0, dot)) &&
+    verbs.includes(action.slice(dot + 1))
+  );
 }
 
 export type AccessSource = (typeof ACCESS_SOURCES)[number];

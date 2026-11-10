@@ -1,5 +1,6 @@
 import { checkAssetMoveResponseSchema } from "@work-shape/catalyst-api-client";
 import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
+import { WORKSPACE_OWNED_RIGHT_KINDS } from "@work-shape/catalyst-core";
 import { Banner } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { personName } from "../../shared/person-name";
@@ -13,15 +14,7 @@ type Translate = TranslationContextValue["t"];
 // or declines. The request is `<kind>_move`, one per kind a workspace can own.
 
 /** The kinds a workspace can own, whose requests to move up the Inbox shows. */
-export const MOVABLE_KINDS = [
-  "agent",
-  "skill",
-  "guardrail",
-  "workflow",
-  "data_store",
-  "knowledge_base",
-  "app"
-] as const;
+export const MOVABLE_KINDS = WORKSPACE_OWNED_RIGHT_KINDS;
 
 /** What a request's preview says: the planned move, or why it no longer moves anything. */
 interface AssetMovePreview {

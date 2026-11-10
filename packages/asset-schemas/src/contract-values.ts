@@ -1272,6 +1272,23 @@ export type WorkflowDatasetDownloadFormat = (typeof WORKFLOW_DATASET_DOWNLOAD_FO
 /** Instance resources whose use may be inherited through workspace availability. */
 export const WORKSPACE_USE_ASSET_KINDS = ["knowledge_base", "connection"] as const;
 
+/**
+ * The kinds of right, the part of an action before its dot, of the asset kinds a workspace can
+ * own: those whose registered `owners` include `workspace`. A form page holds an App's rights,
+ * so `app` stands for it too. The workspace bundles expand their verbs on these alone, so a kind
+ * no workspace can own, such as a Connection, is in neither bundle (PMCP-1). A kind a later
+ * release lets a workspace own is added here, and a test holds this list to the registry.
+ */
+export const WORKSPACE_OWNED_RIGHT_KINDS = [
+  "agent",
+  "skill",
+  "app",
+  "workflow",
+  "data_store",
+  "knowledge_base",
+  "guardrail"
+] as const;
+
 /** Published assets that consume Connections or stored data. Agents hold tools separately. */
 export const PUBLISHED_DATA_CONSUMER_KINDS = ["app", "workflow", "knowledge_base"] as const;
 export type PublishedDataConsumerKind = (typeof PUBLISHED_DATA_CONSUMER_KINDS)[number];
