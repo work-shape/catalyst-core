@@ -8,12 +8,29 @@ import {
   type JobControl,
   type KnowledgeSyncJobPayload
 } from "@work-shape/catalyst-core";
-import { sourceBoundaryKey, withinSource, type SyncedSource } from "../source-boundary";
+import {
+  sourceBoundaryKey,
+  sourceExcludesFolder,
+  withinSource,
+  type SyncedSource
+} from "../source-boundary";
 import { createSourceStore, sourceTransaction, type SourceProgress } from "./source-store";
 import { sourceCall, sourceTarget, type SourceJobRuntime } from "./source-runtime";
 import { reconcileSource } from "./source-reconciliation";
 
-/** No outside call runs in the page transaction. The cursor commits with its effects. */
+/**
+ * A listing position up to this size is written with every page. A larger one, such as a walk
+ * that carries the folders still to list, is written at most every `POSITION_WRITE_MS` and when
+ * the listing ends or a call fails: a resume lists the pages since again, and every write of a
+ * page is idempotent.
+ */
+const POSITION_SMALL_CHARS = 16 * 1024;
+const POSITION_WRITE_MS = 30_000;
+
+/**
+ * No outside call runs in the page transaction. The cursor commits with its effects, or after
+ * them: a position is never ahead of what its pages wrote.
+ */
 export async function readSourcePages(
   runtime: SourceJobRuntime,
   payload: KnowledgeSyncJobPayload,
@@ -25,6 +42,7 @@ export async function readSourcePages(
 ) {
   const store = createSourceStore(runtime.data, payload.knowledgeBaseId, control.signal);
   const boundary = { folderIds: source.folders };
+  const excludesFolder = sourceExcludesFolder(source);
   const call = <T>(fn: Parameters<typeof sourceCall<T>>[4]) =>
     sourceCall(runtime, source.connection, payload.knowledgeBaseId, control.signal, fn);
   const current = async () => {
@@ -58,6 +76,18 @@ export async function readSourcePages(
       };
     }
   }
+  /** The position of the pages committed since it was last written, if any. */
+  let unwritten: SourceProgress | undefined;
+  let writtenAt: number | undefined;
+  /** A rate limit or an outage resumes from the last page, not from the last written position. */
+  const keepPosition = async (error: unknown): Promise<never> => {
+    const position = unwritten;
+    if (position)
+      await sourceTransaction(runtime.data, payload, control, (store) =>
+        store.position(payload, position)
+      ).catch(() => undefined);
+    throw error;
+  };
   while (!next.complete) {
     if (!next.listing && mode === "changes") {
       const page = await call(({ capability, context }) =>
@@ -77,26 +107,26 @@ export async function readSourcePages(
         complete: changes.length === 0 && page.nextCursor === next.feedCursor,
         listing: false,
         reconciled: true,
-        feedCursor: page.nextCursor
+        feedCursor: page.nextCursor,
+        ...(next.limited ? { limited: true } : {})
       };
       await current();
       const queued = await sourceTransaction(runtime.data, payload, control, async (store) => {
         const ids: string[] = [];
         const upserts: DocumentSourceItem[] = [];
+        let limited = false;
+        // The page's position is written once, after its last statement, in this transaction.
         async function flush() {
           if (!upserts.length) return;
           const page = await store.page(
             payload,
             upserts,
-            { ...after, complete: false },
+            undefined,
             runtime.input.documentFormats,
             runtime.input.maxDocuments
           );
-          if (page.limited)
-            throw new DocumentSourceError(
-              "over_limit",
-              "The source reached knowledge.maxDocuments"
-            );
+          // A new item held back at the limit holds back no deletion behind it.
+          limited ||= page.limited;
           ids.push(...page.queued);
           upserts.length = 0;
         }
@@ -125,21 +155,25 @@ export async function readSourcePages(
         await store.page(
           payload,
           [],
-          after,
+          limited ? { ...after, limited } : after,
           runtime.input.documentFormats,
           runtime.input.maxDocuments
         );
-        return ids;
+        return { ids, limited };
       });
-      await queue(queued);
-      next = after;
+      next = queued.limited ? { ...after, limited: true } : after;
+      await queue(queued.ids);
     } else {
       const page = await call(({ capability, context }) =>
         capability.list(
-          { boundary, ...(next?.pageToken ? { pageToken: next.pageToken } : {}) },
+          {
+            boundary,
+            ...(next?.pageToken ? { pageToken: next.pageToken } : {}),
+            ...(excludesFolder ? { excludesFolder } : {})
+          },
           context
         )
-      );
+      ).catch(keepPosition);
       const items: DocumentSourceItem[] = z
         .array(documentSourceItemSchema)
         .max(1000)
@@ -150,26 +184,29 @@ export async function readSourcePages(
         complete: page.nextPageToken === undefined,
         listing: true,
         ...(page.nextPageToken === undefined ? {} : { pageToken: page.nextPageToken }),
-        ...(next.feedCursor === undefined ? {} : { feedCursor: next.feedCursor })
+        ...(next.feedCursor === undefined ? {} : { feedCursor: next.feedCursor }),
+        ...(next.limited ? { limited: true } : {})
       };
+      const write =
+        after.complete ||
+        (after.pageToken?.length ?? 0) <= POSITION_SMALL_CHARS ||
+        writtenAt === undefined ||
+        Date.now() - writtenAt >= POSITION_WRITE_MS;
       await current();
       const result = await sourceTransaction(runtime.data, payload, control, (store) =>
         store.page(
           payload,
           items.filter((item) => withinSource(source, item)),
-          after,
+          write ? after : undefined,
           runtime.input.documentFormats,
           runtime.input.maxDocuments
         )
       );
+      // Past the limit the listing goes on: what it does not name is withdrawn at its end.
+      next = result.limited ? { ...after, limited: true } : after;
+      if (write) writtenAt = Date.now();
+      unwritten = write ? undefined : next;
       await queue(result.queued);
-      if (result.limited) {
-        await sourceTransaction(runtime.data, payload, control, (store) =>
-          store.finish(payload, "knowledge_source_limit_reached")
-        );
-        return;
-      }
-      next = after;
     }
   }
   if (next.listing && !next.reconciled && !(await reconcileSource(runtime, payload, control, next)))

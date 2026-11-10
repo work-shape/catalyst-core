@@ -21,7 +21,12 @@ import { sourceBoundaryKey, type SyncedSource } from "../source-boundary";
 import type { KnowledgeListingMode } from "../source-port";
 import { enqueueSourceSync, sourceSyncStarted } from "./source-lifecycle";
 import { sourceTarget, type SourceJobRuntime } from "./source-runtime";
-import { createSourceStore, RETRY_RUN_SQL, sourceTransaction } from "./source-store";
+import {
+  createSourceStore,
+  IMPORTED_RUN_SQL,
+  RETRY_RUN_SQL,
+  sourceTransaction
+} from "./source-store";
 
 // The source's own schedule (spec: Freshness). One tick a minute decides from the definition and
 // the clock which sources could be due, and reads only those from their stores, each on a
@@ -74,7 +79,7 @@ export function changesDueAt(
 export interface SourceTickState {
   /** A sync is running, waiting or stopped: whatever is due now joins it. */
   running: boolean;
-  /** A pass has ended `done`: the first import is behind it. */
+  /** A pass has ended `done`, or at the document limit: the first import is behind it. */
   imported: boolean;
   /** The source has a change feed for its boundary, or gets one from its next listing. */
   polled: boolean;
@@ -122,7 +127,7 @@ async function readTickState(
       sql.run(
         `select
           exists(select 1 from catalyst_kb.sync_runs where source_id=$1::text and state='running') as running,
-          exists(select 1 from catalyst_kb.sync_runs where source_id=$1::text and state='done' and not ${RETRY_RUN_SQL}) as imported,
+          exists(select 1 from catalyst_kb.sync_runs where source_id=$1::text and ${IMPORTED_RUN_SQL}) as imported,
           exists(select 1 from catalyst_kb.source_cursors c where c.source_id=$1::text and c.cursor<>''
             and (c.definition_key=$2::text or not exists(select 1 from catalyst_kb.sync_runs where source_id=$1::text and state='done' and definition_key=$2::text))) as polled,
           (select started_at from catalyst_kb.sync_runs where source_id=$1::text order by started_at desc limit 1) as last_started_at,
