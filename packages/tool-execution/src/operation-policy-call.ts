@@ -229,19 +229,22 @@ function policyDenial(policy: PolicyResolution, operation: string): OperationDen
 /**
  * Whether the caller's own call is the approval a guardrail asked for: they hold the right at
  * instance scope and clicked in the interface. A CLI origin never counts: the server cannot
- * tell a person at a terminal from an agent driving it.
+ * tell a person at a terminal from an agent driving it. `asDecider` asks the right where the
+ * filed request would be decided instead, on the approval's resource: the person's Allow of
+ * their own call in the Inbox, which counts where they may decide what it would file.
  */
 export function approvedByCaller(
   call: Pick<OperationCall, "origin" | "draft">,
   policy: PolicyResolution,
   approval: OperationApproval,
-  access: ActorAccess
+  access: ActorAccess,
+  asDecider = false
 ): boolean {
   return (
     policy.source === "guardrail" &&
     call.origin.kind === "user" &&
     call.draft === undefined &&
-    access.authorize(approval.action).allowed &&
+    access.authorize(approval.action, asDecider ? approval.resource : undefined).allowed &&
     (approval.alsoRequires ?? []).every(
       ({ action, resource }) => access.authorize(action, resource).allowed
     )

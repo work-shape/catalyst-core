@@ -264,6 +264,8 @@ export const operations = defineTranslations({
       "If you allow it, it runs once as you. If you deny it, nothing runs.",
     "operations.confirmPublishEffect":
       "Allow counts as your own click on Publish: where publishing needs an approval, Allow asks for it. Deny publishes nothing.",
+    "operations.confirmPublishApprovalFollows":
+      "You cannot approve this publish yourself. After your Allow, a person who may approve it decides; only then does it go live.",
     "operations.confirmOnlyYou":
       "Only you can decide this. It is in nobody else's Inbox, an admin's included.",
     "operations.confirmOutcomeDone": "Allowed. The call ran once.",
@@ -544,6 +546,8 @@ export const operations = defineTranslations({
       "Wenn du es erlaubst, läuft es einmal als du. Wenn du es verweigerst, läuft nichts.",
     "operations.confirmPublishEffect":
       "Erlauben zählt wie dein eigener Klick auf Veröffentlichen: Braucht die Veröffentlichung eine Freigabe, fragt Erlauben sie an. Verweigern veröffentlicht nichts.",
+    "operations.confirmPublishApprovalFollows":
+      "Du kannst diese Veröffentlichung nicht selbst freigeben. Nach deinem Erlauben entscheidet eine Person mit Freigaberecht; erst dann geht sie live.",
     "operations.confirmOnlyYou":
       "Nur du kannst das entscheiden. Es liegt in keinem anderen Eingang, auch nicht bei Admins.",
     "operations.confirmOutcomeDone": "Erlaubt. Der Aufruf lief einmal.",

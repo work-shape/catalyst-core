@@ -185,6 +185,32 @@ export async function executeInboxConfirmedOperation(
   ) {
     return readDecidedOperationEnd(waiting.runId, options.requestId, deps);
   }
+  if (decision.by !== run.actor.id) {
+    // A confirmation is its person's own: one recorded by anybody else runs nothing.
+    const ended = await deps.runs.endWaiting({
+      clientInstanceId: deps.clientInstanceId,
+      id: run.id,
+      end: deniedEnd(
+        { now: deps.now ?? (() => new Date()) },
+        {
+          kind: "forbidden",
+          action: run.operation,
+          reason: "no_grant"
+        }
+      ),
+      decision
+    });
+    return ended
+      ? {
+          execution: "refused",
+          run: ended,
+          error: {
+            code: "FORBIDDEN",
+            message: "Only the person this call acts for can confirm it. Nothing ran."
+          }
+        }
+      : readDecidedOperationEnd(run.id, options.requestId, deps);
+  }
   const asClicked: WaitingOperationCall = {
     ...waiting,
     call: { ...waiting.call, origin: { kind: "user" } }
@@ -198,15 +224,26 @@ export async function executeInboxConfirmedOperation(
     return executeWaitingCall(context, decision, options.signal);
   }
   const approval = await context.definition.approval?.(context.call.input, context.call.actor);
-  const access = await deps.authorizer.forActor(context.call.actor);
-  if (approval && approvedByCaller(context.call, policy, approval, access)) {
+  // The Allow is the approval where the person who confirmed may decide the approval it would
+  // file: asked with that person's own rights as they are now, never a key's, and only where
+  // that person is the one the call acts for.
+  const confirmedByCaller = decision.by === context.call.actor.id && decision.by === run.actor.id;
+  const person: AuthenticatedIdentity = { ...context.call.actor };
+  Reflect.deleteProperty(person, "keyScopes");
+  const access = await deps.authorizer.forActor(person);
+  if (
+    confirmedByCaller &&
+    approval &&
+    approvedByCaller(context.call, policy, approval, access, true)
+  ) {
     // An approver's own click is the approval, as when they click Publish themselves.
     return executeWaitingCall(
       context,
       {
         mode: "approved",
         reason: "approved_by_caller",
-        by: context.call.actor.id,
+        by: decision.by,
+        ...(decision.byLabel ? { byLabel: decision.byLabel } : {}),
         at: context.now().toISOString()
       },
       options.signal

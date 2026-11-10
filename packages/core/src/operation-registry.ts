@@ -66,8 +66,15 @@ export interface OperationResource extends AccessResource {
 export interface OperationApproval {
   /** The kind of the approval request, such as `app_publish`. */
   kind: string;
-  /** The instance-level right that decides it, such as `app.approve`. */
+  /** The right that decides it, such as `app.approve`: at instance level, or on `resource`. */
   action: string;
+  /**
+   * Where the filed request is decided, for a kind decided on its asset: an agent's held
+   * publish by a holder of `agent.approve` on that agent, one in its workspace included
+   * (WS-PUB-1b). Its person's Allow of the call in the Inbox is asked `action` here. Left out,
+   * the instance.
+   */
+  resource?: AccessResource;
   /**
    * Further rights who decides it must hold as well, each on its own resource: of an App's
    * publish that makes Workflows live with it, `workflow.approve` on each Workflow (DP-3). The

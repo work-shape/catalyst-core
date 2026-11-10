@@ -59,6 +59,11 @@ export function ConfirmationLead({ call }: { call: OperationCallPreview }) {
       <p className="text-foreground" data-testid="confirmation-waits">
         {t(WAITS[asker])}
       </p>
+      {asker === "publish" && call.approvalFollows ? (
+        <Banner layout="line" role="note" data-testid="confirmation-approval-follows">
+          {t("operations.confirmPublishApprovalFollows")}
+        </Banner>
+      ) : null}
       <p className="text-caption text-muted-foreground">{t(EFFECT[asker])}</p>
       <Banner layout="line" role="note" data-testid="confirmation-only-you">
         {t("operations.confirmOnlyYou")}

@@ -189,6 +189,28 @@ describe("a confirmation waiting in its person's Inbox", () => {
     expect(english).toContain("Nothing is published until you decide.");
   });
 
+  it("says first that another person decides after the Allow, where the reader may not approve", () => {
+    const plain = renderItem(
+      confirmation({ summary: "assets.publish", origin: undefined, preview: publishCall })
+    );
+    expect(plain).not.toContain('data-testid="confirmation-approval-follows"');
+
+    const markup = renderItem(
+      confirmation({
+        summary: "assets.publish",
+        origin: undefined,
+        preview: { ...publishCall, approvalFollows: true }
+      })
+    );
+    expect(markup).toMatch(
+      /data-testid="confirmation-approval-follows"[\s\S]*Du kannst diese Veröffentlichung nicht selbst freigeben\. Nach deinem Erlauben entscheidet eine Person mit Freigaberecht; erst dann geht sie live\./u
+    );
+    // It stands before what Allow does.
+    expect(markup.indexOf("confirmation-approval-follows")).toBeLessThan(
+      markup.indexOf("Erlauben zählt wie dein eigener Klick")
+    );
+  });
+
   it("says how it ended once allowed, denied, expired or withdrawn, and offers nothing to decide", () => {
     const states: [Partial<ApprovalRequestView>, string, string][] = [
       [allowed, "Erlaubt", "Erlaubt. Der Aufruf lief einmal."],

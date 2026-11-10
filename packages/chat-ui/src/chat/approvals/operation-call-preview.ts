@@ -276,6 +276,11 @@ export interface OperationCallPreview {
   /** The confirmation offers "Always allow": allowing can also stop it asking again (OP-6). */
   alwaysAllow?: true;
   /**
+   * Allowing the confirmation files an approval that another person decides: a guardrail
+   * asked for one, and the reader may not decide it.
+   */
+  approvalFollows?: true;
+  /**
    * What a call that hands a source's data on says to who decides it (DS-13c), one line each,
    * worded by the server with only the titles the reader may see.
    */
@@ -332,6 +337,9 @@ export function parseOperationCallPreview(preview: unknown): OperationCallPrevie
     ...(preview.mode === "confirmation" ? { confirmation: true as const } : {}),
     ...(preview.mode === "confirmation" && preview.alwaysAllow === true
       ? { alwaysAllow: true as const }
+      : {}),
+    ...(preview.mode === "confirmation" && preview.approvalFollows === true
+      ? { approvalFollows: true as const }
       : {}),
     ...(targetTitle ? { targetTitle } : {}),
     ...(handover.length > 0 ? { handover } : {}),
