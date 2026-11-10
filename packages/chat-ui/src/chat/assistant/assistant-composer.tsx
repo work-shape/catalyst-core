@@ -137,8 +137,7 @@ export function AssistantComposer({
   const queuesFollowUp = Boolean(conversationRunning && followUps);
   // The reader's own mode, or with the modifier the other one (FU-2). The server queues a
   // steer that cannot reach the run, such as one into someone else's run.
-  // Sends the message once the picked people read the chat; a message of chips alone is
-  // cleared instead, as it holds nothing to send. It goes through the runtime, not the form:
+  // Sends the message once the picked people read the chat. It goes through the runtime, not the form:
   // the form's handler of the last render still holds the share's block of Send.
   const resubmit = useCallback(() => {
     if (composerRuntime.getState().canSend) composerRuntime.send();
@@ -194,6 +193,12 @@ export function AssistantComposer({
     // The thread runtime's own send needs text; the ready attachments join the message.
     void threadRuntime.append({ role: "user", content: [] });
   }, [onSubmitMessage, threadRuntime]);
+  // A message of chips alone: its text goes, and the pictures and files waiting with it are
+  // sent on their own once the people read the chat.
+  const sendChipsOnly = useCallback(() => {
+    clearText();
+    if (attachmentsGoAlone) sendWithoutText();
+  }, [attachmentsGoAlone, clearText, sendWithoutText]);
   const queueSend = useCallback(() => {
     const { text } = composerRuntime.getState();
     if (shouldQueueSend({ sendBlock, sendQueued, text, runtimeReady: runtimeReady() })) {
@@ -205,7 +210,7 @@ export function AssistantComposer({
       if (
         !submitBlocked &&
         !queuesFollowUp &&
-        share?.beforeSend(composerRuntime.getState().text, resubmit, clearText)
+        share?.beforeSend(composerRuntime.getState().text, resubmit, sendChipsOnly)
       ) {
         event.preventDefault();
         event.stopPropagation();
@@ -233,12 +238,12 @@ export function AssistantComposer({
       }
     },
     [
-      clearText,
       composerRuntime,
       onSubmitMessage,
       queueFollowUp,
       queuesFollowUp,
       resubmit,
+      sendChipsOnly,
       share,
       submitBlocked
     ]
@@ -517,7 +522,7 @@ export function AssistantComposer({
               onSubmitMessage={
                 onSubmitMessage ??
                 (share && share.chips.length > 0
-                  ? (text) => share.beforeSend(text, resubmit, clearText)
+                  ? (text) => share.beforeSend(text, resubmit, sendChipsOnly)
                   : undefined)
               }
               onSendWithoutText={attachmentsGoAlone ? sendWithoutText : undefined}

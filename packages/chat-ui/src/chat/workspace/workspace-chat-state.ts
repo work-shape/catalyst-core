@@ -167,21 +167,39 @@ export function withRunUnderway(
     : [...runAgents, { inputMessageId, agentName }];
 }
 
+/** The person who sent a turn, with their name where the thread gives it. */
+export interface TurnSender {
+  userId: string;
+  label?: string;
+}
+
 /**
  * Who sent each turn, by the message that started its run, as the thread names them on a chat
  * that names people, with the run underway added (CHAT-SHARE-2).
  */
 export function turnSenders(
-  runAgents: ReadonlyArray<{ inputMessageId: string; ownerUserId?: string }>,
+  runAgents: ReadonlyArray<{
+    inputMessageId: string;
+    ownerUserId?: string;
+    ownerDisplayLabel?: string;
+  }>,
   activeInputMessageId: string | undefined,
   activeOwnerUserId: string | undefined
-): ReadonlyMap<string, string> {
-  const senders = new Map<string, string>();
+): ReadonlyMap<string, TurnSender> {
+  const senders = new Map<string, TurnSender>();
   for (const run of runAgents) {
-    if (run.ownerUserId !== undefined) senders.set(run.inputMessageId, run.ownerUserId);
+    if (run.ownerUserId === undefined) continue;
+    senders.set(run.inputMessageId, {
+      userId: run.ownerUserId,
+      ...(run.ownerDisplayLabel === undefined ? {} : { label: run.ownerDisplayLabel })
+    });
   }
-  if (activeInputMessageId !== undefined && activeOwnerUserId !== undefined) {
-    senders.set(activeInputMessageId, activeOwnerUserId);
+  if (
+    activeInputMessageId !== undefined &&
+    activeOwnerUserId !== undefined &&
+    !senders.has(activeInputMessageId)
+  ) {
+    senders.set(activeInputMessageId, { userId: activeOwnerUserId });
   }
   return senders;
 }

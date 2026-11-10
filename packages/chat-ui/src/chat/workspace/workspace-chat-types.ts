@@ -36,7 +36,7 @@ import { type AgentSelectableModel, type ReasoningEffort } from "./agent-model-s
 import { type WorkspaceDock } from "./use-workspace-dock";
 import type { WorkspaceView } from "./workspace-rail";
 import type { PlatformFailure } from "../platform-report/platform-report";
-import type { RunContinueOffer } from "./workspace-chat-state";
+import type { RunContinueOffer, TurnSender } from "./workspace-chat-state";
 
 export interface WorkspaceChatModelInput {
   administration: ChatShellAdministration | undefined;
@@ -365,7 +365,7 @@ export interface SelectedChatModel {
    * Who sent each turn, by the message that started its run, on a chat that names people
    * (CHAT-SHARE-2): the run underway too. Empty on every other conversation.
    */
-  runSenders: ReadonlyMap<string, string>;
+  runSenders: ReadonlyMap<string, TurnSender>;
   /** The open conversation's queue of follow-up messages. */
   followUpSource: FollowUpSource;
   sendBlock: SendBlock | undefined;

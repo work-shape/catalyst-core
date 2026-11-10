@@ -69,11 +69,11 @@ export interface ChatShareValue {
   /** A share before a send is under way. */
   sharing: boolean;
   /**
-   * Shares with the picked people before the message goes, then calls `send`, or `clear` for a
-   * message that holds only chips. True where it took the send over; nothing is sent where a
+   * Shares with the picked people before the message goes, then calls `send`, or `chipsOnly`
+   * for a message whose text holds only chips (its attachments may still go). True where it took the send over; nothing is sent where a
    * share is refused, and the chip says why.
    */
-  beforeSend(text: string, send: () => void, clear: () => void): boolean;
+  beforeSend(text: string, send: () => void, chipsOnly: () => void): boolean;
   /** The person's own skills or Connections run in this chat until it names someone. */
   ownStops: boolean;
   add(person: { userId: string; label: string }): Promise<ShareRefusal | undefined>;
@@ -155,7 +155,7 @@ export interface ChatShareProviderProps {
   onMove?(conversation: Conversation): void;
   onLeft(): void;
   /** Who sent each message that started a turn, by the message's id. */
-  runSenders?: ReadonlyMap<string, string>;
+  runSenders?: ReadonlyMap<string, { userId: string; label?: string }>;
   /** The rail's "Share…" asked for the open chat's panel. */
   panelRequested?: boolean;
   onPanelRequestHandled?(): void;
@@ -255,7 +255,7 @@ function useChatShareValue({
 }: {
   chat: ChatShareChat | undefined;
   base: { client: ApiClient; apiBaseUrl: string; authScope: string };
-  runSenders: ReadonlyMap<string, string> | undefined;
+  runSenders: ReadonlyMap<string, { userId: string; label?: string }> | undefined;
   panelRequested: boolean;
   onPanelRequestHandled: (() => void) | undefined;
 }): ChatShareValue | undefined {
@@ -394,7 +394,7 @@ function useChatShareValue({
   );
 
   const beforeSend = useCallback(
-    (text: string, send: () => void, clear: () => void) => {
+    (text: string, send: () => void, chipsOnly: () => void) => {
       const waiting = chipsNow();
       if (waiting.length === 0) return false;
       if (sharingRef.current || waiting.some((chip) => chip.refusal !== undefined)) return true;
@@ -414,14 +414,14 @@ function useChatShareValue({
             }
             updateChips((current) => current.filter((each) => each.userId !== chip.userId));
           }
-          // Shared with everyone picked: the message goes, unless it held only them.
+          // Shared with everyone picked: the message goes, or what it holds beside the chips.
           if (
             withoutMentions(
               text,
               waiting.map((chip) => chip.label)
             ) === ""
           )
-            clear();
+            chipsOnly();
           else send();
         } finally {
           sharingRef.current = false;
@@ -453,12 +453,13 @@ function useChatShareValue({
   const senderOf = useCallback(
     (messageId: string) => {
       if (readers.length < 2) return undefined;
-      const userId = runSenders?.get(messageId);
-      const reader = readers.find((each) => each.userId === userId);
-      if (!reader) return undefined;
-      return reader.you ? t("chatShare.senderYou") : reader.label;
+      const sender = runSenders?.get(messageId);
+      if (!sender) return undefined;
+      if (sender.userId === viewerId) return t("chatShare.senderYou");
+      // Someone who left or was removed keeps their name on what they wrote.
+      return readers.find((each) => each.userId === sender.userId)?.label ?? sender.label;
     },
-    [readers, runSenders, t]
+    [readers, runSenders, t, viewerId]
   );
 
   return useMemo(

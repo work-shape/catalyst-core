@@ -1,4 +1,7 @@
-export { ChatShareProvider } from "../../../packages/chat-ui/src/chat/share/chat-share";
+export {
+  ChatShareProvider,
+  useChatShare
+} from "../../../packages/chat-ui/src/chat/share/chat-share";
 export { ChatPeopleHead } from "../../../packages/chat-ui/src/chat/share/chat-people";
 export {
   findMentionTrigger,

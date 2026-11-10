@@ -190,17 +190,21 @@ function AddPerson({ onError }: { onError(message: string | undefined): void }) 
   const [adding, setAdding] = useState(false);
   const query = useDebounced(text, SEARCH_DELAY_MS);
   const candidates = useShareCandidates({ chat: share?.chat, query, enabled: true });
+  const searching = query.trim() !== "";
   const options = useMemo(
     (): SuggestionListOption[] =>
-      (candidates.data?.candidates ?? []).map((candidate) => ({
-        id: candidate.userId,
-        label: candidate.displayLabel,
-        ...(candidate.email === undefined ? {} : { description: candidate.email }),
-        leading: <Avatar kind="person" size="sm" name={candidate.displayLabel} />,
-        ...(candidate.hasAccess ? { trailing: t("chatShare.hasAccess") } : {}),
-        disabled: candidate.hasAccess || adding
-      })),
-    [adding, candidates.data, t]
+      (candidates.data?.candidates ?? [])
+        // Before a search the list offers only people who cannot read the chat yet.
+        .filter((candidate) => searching || !candidate.hasAccess)
+        .map((candidate) => ({
+          id: candidate.userId,
+          label: candidate.displayLabel,
+          ...(candidate.email === undefined ? {} : { description: candidate.email }),
+          leading: <Avatar kind="person" size="sm" name={candidate.displayLabel} />,
+          ...(candidate.hasAccess ? { trailing: t("chatShare.hasAccess") } : {}),
+          disabled: candidate.hasAccess || adding
+        })),
+    [adding, candidates.data, searching, t]
   );
   if (!share) return null;
   const refusal = candidates.error ? shareRefusal(candidates.error, t) : undefined;
@@ -288,12 +292,11 @@ function AddPerson({ onError }: { onError(message: string | undefined): void }) 
           choose(id).catch(() => undefined);
         }}
         loading={candidates.isFetching || adding}
+        // Nobody left to add says nothing; a search that finds nobody says so.
         empty={
-          candidates.isFetching && options.length === 0
+          !searching || (candidates.isFetching && options.length === 0)
             ? undefined
-            : query.trim() === ""
-              ? t("chatShare.noCandidates", { workspace })
-              : t("chatShare.noMatch", { workspace })
+            : t("chatShare.noMatch", { workspace })
         }
       />
     </div>

@@ -10,7 +10,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError, type ApiClient, type Conversation } from "@work-shape/catalyst-api-client";
+import {
+  ApiError,
+  type ApiClient,
+  type Conversation,
+  type DraftAttachment
+} from "@work-shape/catalyst-api-client";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 import {
   AssistantComposer,
@@ -23,6 +28,7 @@ import {
   mentionsName,
   shareRefusal,
   turnSenders,
+  useChatShare,
   withoutMentions
 } from "./support/chat-ui";
 import { TranslationProvider } from "./chat-ui-render-harness";
@@ -98,13 +104,16 @@ describe("the words of a share", () => {
 describe("who sent each message", () => {
   it("names the person of each turn, and the one under way", () => {
     const senders = turnSenders(
-      [{ inputMessageId: "msg_1", ownerUserId: "user-ada" }, { inputMessageId: "msg_2" }],
+      [
+        { inputMessageId: "msg_1", ownerUserId: "user-ada", ownerDisplayLabel: "Ada" },
+        { inputMessageId: "msg_2" }
+      ],
       "msg_3",
       "user-ben"
     );
     expect([...senders]).toEqual([
-      ["msg_1", "user-ada"],
-      ["msg_3", "user-ben"]
+      ["msg_1", { userId: "user-ada", label: "Ada" }],
+      ["msg_3", { userId: "user-ben" }]
     ]);
   });
 });
@@ -229,6 +238,7 @@ function mount(input: {
   conversation: Conversation;
   viewer?: { id: string; label: string };
   onLeft?: () => void;
+  runSenders?: ReadonlyMap<string, { userId: string; label?: string }>;
   children: ReactNode;
 }) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -251,6 +261,7 @@ function mount(input: {
               workspaceName: "Team",
               conversation: input.conversation,
               onLeft: input.onLeft ?? (() => undefined),
+              ...(input.runSenders ? { runSenders: input.runSenders } : {}),
               children: input.children
             })
           )
@@ -262,12 +273,28 @@ function mount(input: {
 
 type ComposerHandle = ReturnType<typeof useComposerRuntime>;
 
+const readyFile: DraftAttachment = {
+  id: "att_1",
+  conversationId: "conv_1",
+  fileId: "file_1",
+  filename: "figures.pdf",
+  byteSize: 1200,
+  status: "ready",
+  artifactRefs: {},
+  processingMetadata: {},
+  warnings: [],
+  createdAt: "2026-10-17T00:00:00.000Z",
+  updatedAt: "2026-10-17T00:00:00.000Z"
+};
+
 function Composer({
   sent,
-  onComposer
+  onComposer,
+  attachments = []
 }: {
   sent: string[];
   onComposer(composer: ComposerHandle): void;
+  attachments?: DraftAttachment[];
 }) {
   const runtime = useIdleRuntime(sent);
   return createElement(
@@ -276,10 +303,10 @@ function Composer({
     createElement(function Inner() {
       onComposer(useComposerRuntime());
       return createElement(AssistantComposer, {
-        attachments: [],
+        attachments,
         localUploadingAttachments: [],
         sendQueued: false,
-        attachmentsEnabled: false,
+        attachmentsEnabled: attachments.length > 0,
         attachmentAccept: "",
         selectableModels: [],
         selectedModelBindingId: undefined,
@@ -395,6 +422,32 @@ describe("the composer of a private chat's creator", () => {
     );
   });
 
+  it("shares a message of chips alone, then sends the files waiting with it", async () => {
+    const { client, changes } = shareClient();
+    const sent: string[] = [];
+    let composer: ComposerHandle | undefined;
+    mount({
+      client,
+      conversation: chat(),
+      children: createElement(Composer, {
+        sent,
+        attachments: [readyFile],
+        onComposer: (c) => (composer = c)
+      })
+    });
+    await type(required(composer), "@be");
+    await until(() => container.querySelectorAll('[role="option"]').length > 0);
+    key("Enter");
+    await until(() => container.querySelector('[data-testid="share-chips"]') !== null);
+    await act(async () => {
+      required(container.querySelector("form")).requestSubmit();
+    });
+    await until(() => sent.length === 1);
+    expect(changes()).toEqual(["share user-ben"]);
+    expect(sent).toEqual([""]);
+    expect(required(composer).getState().text).toBe("");
+  });
+
   it("closes the menu on Escape and leaves the @ as text", async () => {
     const { client } = shareClient();
     let composer: ComposerHandle | undefined;
@@ -448,9 +501,44 @@ describe("who reads the chat, in its head", () => {
     const remove = required(
       document.querySelector<HTMLButtonElement>('button[aria-label="Remove Ben Ito"]')
     );
+    // Before a search, "Add person" offers only people who cannot read the chat yet.
+    await until(() => document.querySelectorAll('[role="option"]').length > 0);
+    expect(
+      [...document.querySelectorAll('[role="option"]')].map((option) => option.textContent)
+    ).toEqual([expect.stringContaining("Ben Ito")]);
     await act(async () => remove.click());
     await until(() => changes().includes("remove user-ben"));
     expect(changes()).toEqual(["remove user-ben"]);
+  });
+
+  it("names who wrote each message, also someone who has since left", async () => {
+    const { client } = shareClient();
+    function Senders() {
+      const share = useChatShare();
+      return createElement(
+        "ul",
+        null,
+        ["msg_1", "msg_2", "msg_3", "msg_4"].map((id) =>
+          createElement("li", { key: id }, share?.senderOf(id) ?? "-")
+        )
+      );
+    }
+    mount({
+      client,
+      conversation: shared,
+      runSenders: new Map([
+        ["msg_1", { userId: creator.id, label: creator.label }],
+        ["msg_2", { userId: "user-ben", label: "Ben (old name)" }],
+        ["msg_3", { userId: "user-dee", label: "Dee Park" }]
+      ]),
+      children: createElement(Senders)
+    });
+    expect([...container.querySelectorAll("li")].map((item) => item.textContent)).toEqual([
+      "You",
+      "Ben Ito",
+      "Dee Park",
+      "-"
+    ]);
   });
 
   it("lets a named person leave, and goes elsewhere", async () => {
