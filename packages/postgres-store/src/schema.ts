@@ -14,6 +14,7 @@ import * as configAssetsTables from "./schema/configAssets";
 import * as connectionsTables from "./schema/connections";
 import * as conversationCreatedAssetsTables from "./schema/conversationCreatedAssets";
 import * as conversationDataStoresTables from "./schema/conversationDataStores";
+import * as conversationPeopleTables from "./schema/conversationPeople";
 import * as conversationsTables from "./schema/conversations";
 import * as dataScopesTables from "./schema/dataScopes";
 import * as dataStoresTables from "./schema/dataStores";
@@ -55,6 +56,7 @@ export * from "./schema/configAssets";
 export * from "./schema/connections";
 export * from "./schema/conversationCreatedAssets";
 export * from "./schema/conversationDataStores";
+export * from "./schema/conversationPeople";
 export * from "./schema/conversations";
 export * from "./schema/dataScopes";
 export * from "./schema/dataStores";
@@ -97,6 +99,7 @@ export const schema = {
   ...connectionsTables,
   ...conversationCreatedAssetsTables,
   ...conversationDataStoresTables,
+  ...conversationPeopleTables,
   ...conversationsTables,
   ...dataScopesTables,
   ...dataStoresTables,
