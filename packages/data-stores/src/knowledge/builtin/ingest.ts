@@ -943,6 +943,12 @@ async function writePage(
     store.change(async (sql) => {
       const run = await readIngestRun(sql, payload.syncRunId, true);
       if (!run || run.state !== "running") return undefined;
+      // Content locks first, as an index completion takes them, then the items lock: an
+      // index completion writes the items after its content, so the other order deadlocks.
+      await sql.run(
+        "select c.sha256 from catalyst_kb.contents c join catalyst_kb.documents d on d.content_sha256=c.sha256 join catalyst_kb.source_items i on i.document_id=d.id where i.source_id=$1::text and i.item_id=any($2::text[]) order by c.sha256 for share of c",
+        [payload.sourceId, valid.map((entry) => entry.item.itemId)]
+      );
       // Admission shares add_files' and the listing's writer lock: no source exceeds the cap.
       await sql.run("lock table catalyst_kb.source_items in share row exclusive mode");
       const [count] = z
@@ -952,12 +958,6 @@ async function writePage(
             `select ((select coalesce(sum(items),0) from catalyst_kb.source_counts where state <> 'withdrawn') + (select count(*) from catalyst_kb.documents where source_item_id is null and withdrawn_at is null))::int as n`
           )
         );
-      // Content locks first, as an index completion takes them: a count delta below cannot
-      // invert that order.
-      await sql.run(
-        "select c.sha256 from catalyst_kb.contents c join catalyst_kb.documents d on d.content_sha256=c.sha256 join catalyst_kb.source_items i on i.document_id=d.id where i.source_id=$1::text and i.item_id=any($2::text[]) order by c.sha256 for share of c",
-        [payload.sourceId, valid.map((entry) => entry.item.itemId)]
-      );
       let held = count?.n ?? 0;
       const counts = { discovered: 0, changed: 0, skipped: 0, accepted: 0 };
       const writes: Written[] = [];

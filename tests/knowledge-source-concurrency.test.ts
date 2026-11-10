@@ -151,6 +151,55 @@ describe("source concurrency (SRC-3a)", () => {
       { state: "withdrawn" }
     ]);
   });
+  it("a listing page follows the indexer's content-before-item lock order", async () => {
+    const world = await setup();
+    const item = world.world.put(file("page-lock-order.txt"));
+    await world.drain(await world.sync());
+    const url = new URL(await fileTestDatabaseUrl());
+    url.pathname = `/${world.record.location.database}`;
+    const blocker = postgres(url.toString(), { max: 1, onnotice() {} });
+    let advance = () => {},
+      locked = () => {};
+    const gate = new Promise<void>((resolve) => {
+      advance = resolve;
+    });
+    const ready = new Promise<void>((resolve) => {
+      locked = resolve;
+    });
+    // An index completion: its content first, then the content's state, whose trigger writes
+    // the source's items.
+    const blocking = blocker.begin(async (sql) => {
+      await sql`select sha256 from catalyst_kb.contents for update`;
+      locked();
+      await gate;
+      // NOWAIT makes a page that locked the items before the content fail here at once.
+      await sql`lock table catalyst_kb.source_items in row exclusive mode nowait`;
+      await sql`update catalyst_kb.contents set state=state`;
+    });
+    await ready;
+    world.world.write(item, new TextEncoder().encode("changed"));
+    const run = await world.sync("full");
+    const listing = world.worker.runDue();
+    try {
+      await eventually(async () => {
+        const [row] =
+          await world.sql`select count(*)::int as n from pg_stat_activity where datname=current_database() and wait_event_type='Lock'`;
+        expect(row?.n).toBeGreaterThan(0);
+      });
+    } finally {
+      advance();
+      try {
+        await blocking;
+      } finally {
+        await listing;
+        await blocker.end();
+      }
+    }
+    await world.drain(run);
+    expect(await world.sql`select state,version from catalyst_kb.source_items`).toEqual([
+      { state: "fetched", version: "v2" }
+    ]);
+  });
   it("does not borrow a platform transaction while waiting for a sync run row", async () => {
     const world = await setup();
     const run = await world.sync("full");
