@@ -56,6 +56,7 @@ import { listDocumentsOperation, retryDocumentsOperation } from "./document-oper
 import { checkKnowledgeBase, type CheckedKnowledgeState, type KnowledgeRuntime } from "./runtime";
 import { knowledgeSearchInputSchemaOf, searchOperation } from "./search-operation";
 import { setOriginLinkOperation } from "./origin-link";
+import { markPersonalKnowledgeRead } from "./personal-read";
 import {
   knowledgeEmbeddingState,
   knowledgeReindexJob,
@@ -346,6 +347,7 @@ function queryOperation(
       const statement = named
         ? namedQueryStatement(named, z.record(z.string(), z.json()).parse(asked.parameters ?? {}))
         : queryInputSchema.parse(asked);
+      await markPersonalKnowledgeRead(runtime, knowledgeBase.resource, context);
       try {
         const rows = await runtime.backend.query(
           knowledgeTargetOf(definition, knowledgeBase.asset.id),
