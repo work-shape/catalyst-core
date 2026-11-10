@@ -287,6 +287,7 @@ export { WORKSPACE_BUNDLES } from "@work-shape/catalyst-asset-schemas";
 export { WORKSPACE_COMMAND_STATUSES } from "@work-shape/catalyst-asset-schemas";
 export { WORKSPACE_FILE_KINDS } from "@work-shape/catalyst-asset-schemas";
 export { WORKSPACE_MEMBERSHIP_ROLES } from "@work-shape/catalyst-asset-schemas";
+export { WORKSPACE_OWNED_RIGHT_KINDS } from "@work-shape/catalyst-asset-schemas";
 export { WORKSPACE_SECTIONS } from "@work-shape/catalyst-asset-schemas";
 export { WORKSPACE_VISIBILITIES } from "@work-shape/catalyst-asset-schemas";
 export type { WorkspaceBundle } from "@work-shape/catalyst-asset-schemas";
