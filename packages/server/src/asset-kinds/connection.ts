@@ -701,14 +701,23 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
 
 /**
  * What a list says of a Connection a Knowledge Base can sync documents through: that it can,
- * and whether a person can choose its folders by name.
+ * whether a person can choose its folders by name, and the full pass and shortest poll its type
+ * gives a source (SRC-SYNC), so a source not yet published shows them.
  */
 function documentSourceAttributes(source: DocumentSourceCapability | undefined): {
   documentSource?: true;
   browsesFolders?: true;
+  sourceFull?: string;
+  /** Minutes as text: a list's attributes are text or flags. */
+  sourceMinChanges?: string;
 } {
   if (source === undefined) return {};
-  return source.folders === undefined
-    ? { documentSource: true }
-    : { documentSource: true, browsesFolders: true };
+  return {
+    documentSource: true,
+    ...(source.folders === undefined ? {} : { browsesFolders: true }),
+    ...(source.schedule?.full === undefined ? {} : { sourceFull: source.schedule.full }),
+    ...(source.schedule?.minChanges === undefined
+      ? {}
+      : { sourceMinChanges: String(source.schedule.minChanges) })
+  };
 }

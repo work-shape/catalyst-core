@@ -4,6 +4,7 @@ export {
   validateKnowledgeProcessingOutput
 } from "./knowledge/document-types";
 export { sourceExcludesFolder, withinSource } from "./knowledge/source-boundary";
+export { sourceDefaultsOfType, sourceScheduleOf } from "./knowledge/source-schedule";
 export { createSourceWithdrawalApproval } from "./knowledge/source-withdrawal-approval";
 export {
   changesDueAt,

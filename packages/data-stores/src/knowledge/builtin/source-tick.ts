@@ -16,7 +16,7 @@ import {
   type KnowledgeSyncJobPayload
 } from "@work-shape/catalyst-core";
 import { KNOWLEDGE_SOURCE_SYNC_OFF, knowledgeBaseDefinitionSchema } from "../definition";
-import { sourcePollMinutesOf, sourceScheduleOf } from "../source-schedule";
+import { sourceDefaultsOf, sourceScheduleOf, type SourceDefaults } from "../source-schedule";
 import { sourceBoundaryKey, type SyncedSource } from "../source-boundary";
 import type { KnowledgeListingMode } from "../source-port";
 import { enqueueSourceSync, sourceSyncStarted } from "./source-lifecycle";
@@ -220,10 +220,10 @@ export function createSourceTickHandler(runtime: SourceJobRuntime) {
     control: JobControl,
     knowledgeBase: { id: string; name: string },
     source: SyncedSource,
-    defaultPollMinutes: number,
+    defaults: SourceDefaults,
     now: Date
   ) {
-    const { full: fullText, changes: pollMinutes } = sourceScheduleOf(source, defaultPollMinutes);
+    const { full: fullText, changes: pollMinutes } = sourceScheduleOf(source, defaults);
     const full = fullText === KNOWLEDGE_SOURCE_SYNC_OFF ? undefined : parseCron(fullText);
     const changes =
       pollMinutes === KNOWLEDGE_SOURCE_SYNC_OFF
@@ -279,16 +279,14 @@ export function createSourceTickHandler(runtime: SourceJobRuntime) {
             ? [{ id: asset.id, name: asset.name, sources: definition.data.sources }]
             : [];
         });
-        const pollMinutes = await sourcePollMinutesOf(
-          runtime.data,
-          runtime.input.sourcePollMinutes,
-          [...new Set(bases.flatMap((base) => base.sources.map((source) => source.connection)))]
-        );
+        const defaultsOf = await sourceDefaultsOf(runtime.data, runtime.input.sourceDefaults, [
+          ...new Set(bases.flatMap((base) => base.sources.map((source) => source.connection)))
+        ]);
         for (const base of bases)
           for (const source of base.sources) {
             control.signal.throwIfAborted();
             try {
-              await tickSource(control, base, source, pollMinutes(source.connection), now);
+              await tickSource(control, base, source, defaultsOf(source.connection), now);
             } catch (error) {
               // This source looks again at its next due time, and the others go on.
               control.signal.throwIfAborted();

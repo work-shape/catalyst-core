@@ -24,7 +24,7 @@ import type { FirstPassWaiting, KnowledgeSources } from "./source-port";
 import { initialSyncIds } from "./builtin/source-lifecycle";
 import type { KnowledgeRuntime } from "./runtime";
 import type { KnowledgeBaseDefinition } from "./definition";
-import { sourcePollMinutesOf, sourceScheduleOf } from "./source-schedule";
+import { sourceDefaultsOf, sourceScheduleOf } from "./source-schedule";
 
 // The frozen SRC-0 contracts. Source content stays in unrecorded read answers only.
 const SOURCE_OPERATION_TIMEOUT_MS = 60_000;
@@ -137,17 +137,22 @@ export function sourceOperation(
             estimate(await limitBytes())
           );
           const defined = definition.sources ?? [];
-          const pollOf = await sourcePollMinutesOf(runtime, runtime.sourcePollMinutes, [
+          const defaultsOf = await sourceDefaultsOf(runtime, runtime.sourceDefaults, [
             ...new Set(defined.map((source) => source.connection))
           ]);
           return {
             sources: answer.sources.map((entry) => {
               const source = defined.find((candidate) => candidate.id === entry.id);
               if (!source || "workflowId" in entry) return entry;
-              const defaultChanges = pollOf(source.connection);
+              const defaults = defaultsOf(source.connection);
               return {
                 ...entry,
-                schedule: { ...sourceScheduleOf(source, defaultChanges), defaultChanges }
+                schedule: {
+                  ...sourceScheduleOf(source, defaults),
+                  defaultChanges: defaults.changes,
+                  defaultFull: defaults.full,
+                  ...(defaults.minChanges === undefined ? {} : { minChanges: defaults.minChanges })
+                }
               };
             })
           };

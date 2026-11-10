@@ -28860,12 +28860,21 @@
                                     "type": "integer",
                                     "minimum": 1,
                                     "maximum": 9007199254740991
+                                  },
+                                  "defaultFull": {
+                                    "type": "string"
+                                  },
+                                  "minChanges": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 9007199254740991
                                   }
                                 },
                                 "required": [
                                   "changes",
                                   "full",
-                                  "defaultChanges"
+                                  "defaultChanges",
+                                  "defaultFull"
                                 ]
                               },
                               "lastChangeAt": {
@@ -29265,12 +29274,21 @@
                                     "type": "integer",
                                     "minimum": 1,
                                     "maximum": 9007199254740991
+                                  },
+                                  "defaultFull": {
+                                    "type": "string"
+                                  },
+                                  "minChanges": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 9007199254740991
                                   }
                                 },
                                 "required": [
                                   "changes",
                                   "full",
-                                  "defaultChanges"
+                                  "defaultChanges",
+                                  "defaultFull"
                                 ]
                               },
                               "lastChangeAt": {

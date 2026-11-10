@@ -77,6 +77,8 @@ function sourceWith(
     title: string;
     connectorType?: string;
     browsesFolders?: true;
+    sourceFull?: string;
+    sourceMinChanges?: number;
   }[],
   sourceTypes: readonly string[] | undefined
 ): KnowledgeBaseSource {
@@ -142,6 +144,8 @@ function render(
       title: string;
       connectorType?: string;
       browsesFolders?: true;
+      sourceFull?: string;
+      sourceMinChanges?: number;
     }[];
     /** The titles of the Connector types the instance can sync documents from. */
     sourceTypes?: readonly string[];
@@ -664,8 +668,18 @@ describe("folders chosen by name (KB-FOLDERS-1)", () => {
 
 describe("when a source syncs by itself (SRC-SYNC)", () => {
   const off: KnowledgeSourceForm = { ...handbookSource, schedule: { changes: "off", full: "off" } };
-  const schedule = (changes: number | "off", full: string) => ({
-    sources: [{ ...running, running: undefined, schedule: { changes, full, defaultChanges: 15 } }]
+  const schedule = (
+    changes: number | "off",
+    full: string,
+    type: { defaultFull?: string; minChanges?: number } = {}
+  ) => ({
+    sources: [
+      {
+        ...running,
+        running: undefined,
+        schedule: { changes, full, defaultChanges: 15, defaultFull: "0 2 * * *", ...type }
+      }
+    ]
   });
 
   it("writes both fields off and reads them back, and leaves out what is the default", () => {
@@ -685,18 +699,44 @@ describe("when a source syncs by itself (SRC-SYNC)", () => {
     expect(syncsByItself(undefined)).toBe(true);
   });
 
-  it("offers the switch, the interval and the full sync, with the instance's default named", () => {
+  it("offers the switch, the interval and the full sync, with the default named", () => {
     const page = render("de", { status: schedule(30, "0 2 * * *") });
     expect(page).toContain('data-knowledge-source-schedule="on"');
     expect(page).toContain("Automatisch synchronisieren");
     expect(page).toContain("Änderungen abrufen");
-    expect(page).toContain("Wie die Instanz es vorgibt (alle 15 Minuten)");
+    expect(page).toContain("Standard (alle 15 Minuten)");
     expect(page).toContain("Vollständig synchronisieren");
-    expect(page).toContain("In der Zeitzone der Instanz.");
+    expect(page).toContain("In der Standardzeitzone für alle Arbeitsbereiche.");
     // The published source says how it syncs now.
     expect(page).toContain("Ruft Änderungen ab");
     expect(page).toContain("Alle 30 Minuten");
     expect(page).not.toContain("Zeitzone</");
+  });
+
+  it("offers no interval below its type's floor, and shows its type's full sync as the default", () => {
+    const page = render("en", {
+      status: schedule(60, "0 3 * * 1", { defaultFull: "0 3 * * 1", minChanges: 60 })
+    });
+    expect(page).toContain("At most every hour for this kind of source.");
+    expect(page).not.toContain('value="15"');
+    expect(page).toContain('value="60"');
+    expect(page).toContain('value="240"');
+    // Weekly on Monday, as the type gives it, where the source sets nothing.
+    expect(page).toMatch(/>Monday</u);
+    // Before its first publish the Connection's list says the same.
+    const draft = render("en", {
+      unpublished: true,
+      connections: [
+        {
+          name: "handbook-folders",
+          title: "Handbook folders",
+          sourceFull: "0 3 * * 1",
+          sourceMinChanges: 60
+        }
+      ]
+    });
+    expect(draft).toContain("At most every hour for this kind of source.");
+    expect(draft).not.toContain('value="15"');
   });
 
   it("says a source switched off syncs only by hand, and keeps Sync now", () => {
@@ -706,8 +746,13 @@ describe("when a source syncs by itself (SRC-SYNC)", () => {
     expect(page).not.toContain("Änderungen abrufen");
     expect(page).toContain("Automatische Synchronisierung aus");
     expect(page).toContain("Jetzt synchronisieren");
-    expect(render("en", { sources: [off], status: schedule("off", "off") })).toContain(
-      "Automatic sync off"
+    expect(page).toContain(
+      "Dateien, die in der Quelle gelöscht oder nicht mehr freigegeben sind, bleiben bis zur nächsten Synchronisierung durchsuchbar."
+    );
+    const english = render("en", { sources: [off], status: schedule("off", "off") });
+    expect(english).toContain("Automatic sync off");
+    expect(english).toContain(
+      "Files deleted or made private in the source stay searchable until the next sync."
     );
   });
 

@@ -76,7 +76,8 @@ export function useKnowledgeSync({
   pageCacheBytes,
   methods = ["keyword", "semantic"],
   sourceTick,
-  maxDocuments = 10000
+  maxDocuments = 10000,
+  sourceDefaults
 }: {
   /** `knowledge.maxDocuments`, smaller than the default. */
   maxDocuments?: number;
@@ -92,9 +93,12 @@ export function useKnowledgeSync({
   /** The clock and the settings of the source tick (SRC-3). */
   sourceTick?: {
     now: () => Date;
-    sourcePollMinutes?: Readonly<Record<string, number>>;
     timeZone?: string;
   };
+  /** What a source that sets nothing takes, by connector type (SRC-SYNC); the fixture's is `fixture`. */
+  sourceDefaults?: Readonly<
+    Record<string, import("@work-shape/catalyst-core").DocumentSourceSchedule>
+  >;
 } = {}) {
   const { start } = useDataStoreInstance();
   const cleanups: (() => Promise<unknown>)[] = [];
@@ -321,6 +325,7 @@ export function useKnowledgeSync({
       embedding,
       documentFormats: extractor ? KNOWLEDGE_DOCUMENT_FORMATS : KNOWLEDGE_TEXT_FORMATS,
       maxDocuments,
+      ...(sourceDefaults ? { sourceDefaults } : {}),
       logger
     });
     const fileJobs = knowledge.fileJobs(
@@ -335,6 +340,7 @@ export function useKnowledgeSync({
       ...(firstPassStop === undefined ? {} : { firstPassStop }),
       ...(fetchWindow === undefined ? {} : { fetchWindow }),
       ...sourceTick,
+      ...(sourceDefaults ? { sourceDefaults } : {}),
       openSource
     });
     const worker = createJobWorker({

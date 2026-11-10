@@ -40,7 +40,8 @@ import type {
   DocumentSourceFolderPage,
   DocumentSourceFoldersInput,
   DocumentSourceListInput,
-  DocumentSourceListPage
+  DocumentSourceListPage,
+  DocumentSourceSchedule
 } from "./document-source";
 import { AppError } from "./errors";
 import { createPlatformId, type ClientInstanceId } from "./ids";
@@ -912,6 +913,8 @@ export interface DocumentSourceCapability {
     input: DocumentSourceFoldersInput,
     context: ConnectorContext
   ): Promise<DocumentSourceFolderPage>;
+  /** When the type's sources sync where they set nothing, and the shortest poll it allows. */
+  schedule?: DocumentSourceSchedule;
 }
 
 /**

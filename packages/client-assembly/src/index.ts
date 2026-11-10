@@ -150,6 +150,7 @@ export {
   type CreateClientInstanceKnowledgeWorkerInput,
   type KnowledgeWorkerPlacement
 } from "./knowledge-worker";
+export { knowledgeSourceDefaults } from "./knowledge";
 export { capabilityStoresOf, createCapabilityBrand } from "./capability-ports";
 
 export {

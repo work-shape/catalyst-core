@@ -11,6 +11,7 @@ import {
 import { requireSourceUse, type SourceAuthority } from "../source-principal";
 import type { DataStoreRuntime } from "../../runtime";
 import { knowledgeBaseDefinitionSchema } from "../definition";
+import type { SourceDefaultsByType } from "../source-schedule";
 
 // A deadline covers opening credentials and consuming the stream, not just its first byte.
 const SOURCE_CALL_TIMEOUT_MS = 60_000;
@@ -20,8 +21,8 @@ export interface KnowledgeSourceJobsInput {
   documentFormats: readonly KnowledgeDocumentFormat[];
   maxDocuments: number;
   withdrawShareConfirm?: number;
-  /** `knowledge.sourcePollMinutes`: minutes between `changes` polls, by connector type. */
-  sourcePollMinutes?: Readonly<Record<string, number>>;
+  /** What a source sets nothing for takes, by connector type (`SourceDefaultsByType`). */
+  sourceDefaults?: SourceDefaultsByType;
   /** The zone `schedule.full` is read in: the instance's, UTC unless set. */
   timeZone?: string;
   /** The clock of the source tick, which a test sets. */

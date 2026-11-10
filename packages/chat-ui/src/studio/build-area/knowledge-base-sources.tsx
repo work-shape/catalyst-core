@@ -51,7 +51,12 @@ import {
   type KnowledgeSourceForm
 } from "./knowledge-sources-model";
 import { KnowledgeSourceFolderPicker } from "./knowledge-source-folder-picker";
-import { intervalWords, KnowledgeSourceSchedule } from "./knowledge-source-schedule";
+import {
+  intervalWords,
+  KnowledgeSourceSchedule,
+  scheduleDefaults,
+  type SourceScheduleDefaults
+} from "./knowledge-source-schedule";
 import { scheduleInWords } from "../workflows/schedule-words";
 import type { ActionNotice } from "./build-model";
 import { useOptionalBuildNavigation } from "../../shared/build-route";
@@ -189,7 +194,7 @@ export function KnowledgeSourcesSection({
               source={source}
               entry={entry}
               choice={choiceOf(entry.connection)}
-              defaultChanges={statusOf(entry.id)?.schedule?.defaultChanges}
+              defaults={scheduleDefaults(statusOf(entry.id)?.schedule, choiceOf(entry.connection))}
               canWrite={canWrite}
               onPick={() => setPicking(entry.id)}
               onChange={(patch) => change(entry.id, patch)}
@@ -261,7 +266,7 @@ function SourceItem({
   source,
   entry,
   choice,
-  defaultChanges,
+  defaults,
   canWrite,
   onPick,
   onChange,
@@ -272,8 +277,8 @@ function SourceItem({
   entry: KnowledgeSourceForm;
   /** The Connection as the list names it, once read. */
   choice: KnowledgeChoice | undefined;
-  /** How often the instance fetches the source's changes where it sets nothing, once published. */
-  defaultChanges: number | undefined;
+  /** What the source takes where it sets nothing, as far as it is known. */
+  defaults: SourceScheduleDefaults;
   canWrite: boolean;
   /** Opens the folder chooser of this source. */
   onPick(): void;
@@ -407,7 +412,7 @@ function SourceItem({
       )}
       <KnowledgeSourceSchedule
         schedule={entry.schedule}
-        defaultChanges={defaultChanges}
+        defaults={defaults}
         readOnly={!canWrite}
         onChange={(schedule) => onChange({ schedule })}
       />

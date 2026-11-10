@@ -9,6 +9,7 @@ import {
 } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { cronSchedule, scheduleCron } from "../workflows/schedule-cron";
+import type { KnowledgeChoice, KnowledgeSourceStatus } from "./knowledge-base-source";
 import {
   FULL_SYNC_DEFAULT,
   SYNC_OFF,
@@ -28,6 +29,28 @@ const DEFAULT_CHOICE = "default";
 /** The zone the field carries but never shows: cron has none, the instance gives it. */
 const NO_ZONE = "UTC";
 
+/**
+ * What a source takes where it sets nothing: its connector type's full pass and shortest poll,
+ * and, once published, the poll the instance gives it. A type that names none takes nightly.
+ */
+export interface SourceScheduleDefaults {
+  changes?: number;
+  full: string;
+  minChanges?: number;
+}
+
+export function scheduleDefaults(
+  published: KnowledgeSourceStatus["schedule"] | undefined,
+  choice: KnowledgeChoice | undefined
+): SourceScheduleDefaults {
+  const minChanges = published?.minChanges ?? choice?.sourceMinChanges;
+  return {
+    ...(published ? { changes: published.defaultChanges } : {}),
+    full: published?.defaultFull ?? choice?.sourceFull ?? FULL_SYNC_DEFAULT,
+    ...(minChanges === undefined ? {} : { minChanges })
+  };
+}
+
 /** An interval in words: every 15 minutes, every hour, every 4 hours, once a day. */
 export function intervalWords(minutes: number, t: TranslationContextValue["t"]): string {
   if (minutes === 1_440) return t("knowledgeSources.everyDay");
@@ -43,13 +66,13 @@ function lowerFirst(text: string, locale: string): string {
 
 export function KnowledgeSourceSchedule({
   schedule,
-  defaultChanges,
+  defaults,
   readOnly,
   onChange
 }: {
   schedule: KnowledgeSourceSchedule | undefined;
-  /** How often the instance fetches this source's changes where it sets nothing, once known. */
-  defaultChanges: number | undefined;
+  /** What the source takes where it sets nothing, as far as it is known. */
+  defaults: SourceScheduleDefaults;
   readOnly: boolean;
   onChange(schedule: KnowledgeSourceSchedule | undefined): void;
 }) {
@@ -75,11 +98,12 @@ export function KnowledgeSourceSchedule({
     setBefore(schedule);
     onChange({ changes: SYNC_OFF, full: SYNC_OFF });
   };
-  const intervals: number[] = [...CHANGE_INTERVALS];
+  const floor = defaults.minChanges ?? 0;
+  const intervals: number[] = CHANGE_INTERVALS.filter((minutes) => minutes >= floor);
   if (typeof changes === "number" && !intervals.includes(changes)) intervals.push(changes);
   intervals.sort((a, b) => a - b);
   const fullOn = full !== SYNC_OFF;
-  const fullCron = full === undefined || full === SYNC_OFF ? FULL_SYNC_DEFAULT : full;
+  const fullCron = full === undefined || full === SYNC_OFF ? defaults.full : full;
   // A schedule being filled in that is no whole one yet stays as it is, and the full sync keeps
   // the one it had until it is.
   const [shown, setShown] = useState<{ cron: string; value: ScheduleValue }>();
@@ -103,7 +127,16 @@ export function KnowledgeSourceSchedule({
         <div className="grid min-w-0 gap-3 sm:grid-cols-2">
           <Field
             label={t("knowledgeSources.syncChanges")}
-            hint={t("knowledgeSources.syncChangesHint")}
+            hint={
+              defaults.minChanges === undefined
+                ? t("knowledgeSources.syncChangesHint")
+                : `${t("knowledgeSources.syncChangesHint")} ${t(
+                    "knowledgeSources.syncChangesFloor",
+                    {
+                      interval: lowerFirst(intervalWords(defaults.minChanges, t), locale)
+                    }
+                  )}`
+            }
           >
             <Select
               value={changes === undefined ? DEFAULT_CHOICE : String(changes)}
@@ -122,10 +155,10 @@ export function KnowledgeSourceSchedule({
               }}
             >
               <option value={DEFAULT_CHOICE}>
-                {defaultChanges === undefined
+                {defaults.changes === undefined
                   ? t("knowledgeSources.syncChangesDefault")
                   : t("knowledgeSources.syncChangesDefaultIs", {
-                      interval: lowerFirst(intervalWords(defaultChanges, t), locale)
+                      interval: lowerFirst(intervalWords(defaults.changes, t), locale)
                     })}
               </option>
               {intervals.map((minutes) => (
@@ -164,7 +197,7 @@ export function KnowledgeSourceSchedule({
                   const cron = scheduleCron(value);
                   setShown({ cron: cron ?? fullCron, value });
                   if (cron !== undefined)
-                    write({ full: cron === FULL_SYNC_DEFAULT ? undefined : cron });
+                    write({ full: cron === defaults.full ? undefined : cron });
                 }}
               />
             ) : (

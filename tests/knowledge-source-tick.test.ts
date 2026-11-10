@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { DocumentSourceError, type DocumentSourceCapability } from "@work-shape/catalyst-core";
-import { changesDueAt, scheduledPass, sourceTickJob } from "@work-shape/catalyst-data-stores";
+import { knowledgeSourceDefaults } from "@work-shape/catalyst-client-assembly";
+import {
+  changesDueAt,
+  scheduledPass,
+  sourceDefaultsOfType,
+  sourceScheduleOf,
+  sourceTickJob
+} from "@work-shape/catalyst-data-stores";
 import { required } from "./support/assertions";
 import { clientInstanceId } from "./support/data-store-instance";
 import { useKnowledgeSync } from "./support/knowledge-sync";
@@ -437,7 +444,8 @@ describe("the source tick keeps a source current (SRC-3, KB 79)", () => {
 
 describe("the source's cron and the poll setting (SRC-3)", () => {
   const { setup } = useKnowledgeSync({
-    sourceTick: { now: () => clock, sourcePollMinutes: { fixture: 720 } }
+    sourceTick: { now: () => clock },
+    sourceDefaults: { fixture: { changes: 720 } }
   });
 
   it("runs a custom full pass at its due time only, and polls by the connector type's setting", async () => {
@@ -604,7 +612,8 @@ describe("a source's own sync settings (SRC-SYNC)", () => {
     expect(sources.json<{ sources: { schedule?: unknown }[] }>().sources[0]?.schedule).toEqual({
       changes: "off",
       full: "off",
-      defaultChanges: 15
+      defaultChanges: 15,
+      defaultFull: "0 2 * * *"
     });
 
     // Sync now still works while it is off.
@@ -656,5 +665,61 @@ describe("a source's own sync settings (SRC-SYNC)", () => {
     expect((await passes(world, "full")).length).toBe(0);
     // The source's minute of the hour before 01:00, caught a quarter later, and the four after it.
     expect(calls.changes).toBe(5);
+  });
+});
+
+describe("a connector type's own defaults and floor (SRC-SYNC)", () => {
+  const { setup } = useKnowledgeSync({
+    sourceTick: { now: () => clock },
+    sourceDefaults: { fixture: { changes: 60, full: "0 3 * * 1", minChanges: 60 } }
+  });
+
+  it("refuses a poll below the type's floor, and runs the type's full pass, not the nightly one", async () => {
+    const world = await setup();
+    world.world.put(file("one.txt"));
+    await imported(world, "2025-01-06T08:00:00Z");
+    const source = { id: SOURCE, connection: "fixture", folders: ["folder", "other"] };
+    await expect(
+      world.publishSources([{ ...source, schedule: { changes: 30 } }])
+    ).rejects.toMatchObject({
+      code: "VALIDATION_FAILED",
+      details: { reason: "knowledge_source_changes_below_floor" }
+    });
+    await world.publishSources([source]);
+    // The API process of the fixture has no such type, so the tick shows what it applies.
+    // 02:00 on Tuesday is the platform's nightly pass, not this type's weekly one.
+    await tick(world, "2025-01-07T02:00:00Z");
+    expect((await passes(world, "full")).length).toBe(0);
+  });
+});
+
+describe("the defaults a source takes (SRC-SYNC)", () => {
+  it("holds a published poll below a later floor at the floor, and leaves off off", () => {
+    const source = { id: SOURCE, connection: "fixture", folders: ["folder"] };
+    const defaults = sourceDefaultsOfType({ web: { full: "0 3 * * 1", minChanges: 60 } }, "web");
+    expect(defaults).toEqual({ changes: 15, full: "0 3 * * 1", minChanges: 60 });
+    expect(sourceScheduleOf({ ...source, schedule: { changes: 15 } }, defaults)).toEqual({
+      changes: 60,
+      full: "0 3 * * 1"
+    });
+    expect(sourceScheduleOf({ ...source, schedule: { changes: "off" } }, defaults).changes).toBe(
+      "off"
+    );
+    expect(sourceDefaultsOfType({}, undefined)).toEqual({ changes: 15, full: "0 2 * * *" });
+  });
+
+  it("lets the release setting replace a type's poll, never below its floor", () => {
+    const web = {
+      type: "web",
+      documentSource: { schedule: { changes: 60, full: "0 3 * * 1", minChanges: 60 } }
+    };
+    const registry = [web];
+    expect(knowledgeSourceDefaults({ web: 120, box: 5 }, registry)).toEqual({
+      web: { changes: 120, full: "0 3 * * 1", minChanges: 60 },
+      box: { changes: 5 }
+    });
+    expect(() => knowledgeSourceDefaults({ web: 30 }, registry)).toThrow(
+      /polls no more often than every 60 minutes/u
+    );
   });
 });

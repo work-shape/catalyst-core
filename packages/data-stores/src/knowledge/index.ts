@@ -18,6 +18,7 @@ import { sourceBoundaryKey, type SyncedSource } from "./source-boundary";
 import { sourcePolicyJob } from "./builtin/source-policy-job";
 import { knowledgePublishQuestion } from "./publish-question";
 import type { KnowledgeSources } from "./source-port";
+import type { SourceDefaultsByType } from "./source-schedule";
 import { publishSourcePrincipal } from "./source-principal";
 import { enqueueSourceSync, initialSyncIds } from "./builtin/source-lifecycle";
 import {
@@ -206,8 +207,11 @@ export function createKnowledgeBases(input: {
   documentFormats: readonly KnowledgeDocumentFormat[];
   /** `knowledge.maxDocuments` of release config. */
   maxDocuments: number;
-  /** `knowledge.sourcePollMinutes` of release config: a source's default `changes` poll. */
-  sourcePollMinutes?: Readonly<Record<string, number>>;
+  /**
+   * What a source sets nothing for takes, by connector type: the type's own defaults and floor,
+   * its `changes` replaced by `knowledge.sourcePollMinutes` of release config where that names it.
+   */
+  sourceDefaults?: SourceDefaultsByType;
   maxPages?: number;
   /** `knowledge.indexConcurrency` of release config. */
   indexConcurrency?: { perWorker: number; total: number };
@@ -224,7 +228,7 @@ export function createKnowledgeBases(input: {
     embedding: input.embedding,
     documentFormats: input.documentFormats,
     maxDocuments: input.maxDocuments,
-    ...(input.sourcePollMinutes ? { sourcePollMinutes: input.sourcePollMinutes } : {}),
+    ...(input.sourceDefaults ? { sourceDefaults: input.sourceDefaults } : {}),
     ...(input.maxPages === undefined ? {} : { maxPages: input.maxPages }),
     ...(input.indexConcurrency ? { indexConcurrency: input.indexConcurrency } : {}),
     logger: input.logger,
@@ -377,6 +381,7 @@ export function createKnowledgeBases(input: {
         access,
         sources: definition.sources ?? [],
         documentSourceOffered: input.documentSourceOffered,
+        ...(input.sourceDefaults ? { sourceDefaults: input.sourceDefaults } : {}),
         previous: before.success ? (before.data.sources ?? []) : []
       });
       const result = await runtime.backend.publish(stores, { target, replaced: previous, access });
