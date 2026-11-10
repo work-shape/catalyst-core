@@ -1242,6 +1242,8 @@ describe("Connection page", () => {
     expect(markup).toContain("Tools to approve");
     expect(markup).toContain('data-approval-tool="get_message"');
     expect(markup).not.toContain('data-approval-tool="search_messages"');
+    // The type declares what each tool does: no server hint to set right.
+    expect(markup).not.toContain("hint proposes whether a tool reads or changes");
     expect(
       [...markup.matchAll(/data-approval-surface="([a-z]+)"/gu)].map((match) => match[1])
     ).toEqual(["agent"]);

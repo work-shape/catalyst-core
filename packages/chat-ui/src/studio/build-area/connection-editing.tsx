@@ -465,6 +465,7 @@ export function TypeTools({
         key={candidates.map((candidate) => candidate.name).join("|")}
         candidates={candidates}
         surfaces={surfaces}
+        fixedEffects
         saving={write.saving === "approve"}
         blocked={frame.saveBlocked === true || write.saving !== undefined}
         approve={(chosen, chosenSurfaces) =>
@@ -486,6 +487,7 @@ export function TypeTools({
 function DiscoveredApproval({
   candidates,
   surfaces,
+  fixedEffects = false,
   saving,
   blocked,
   approve
@@ -493,6 +495,8 @@ function DiscoveredApproval({
   candidates: ApprovalCandidate[];
   /** Where the "may use" row offers the tools, where the type allows fewer than all. */
   surfaces?: readonly ApprovalSurface[];
+  /** The type declares what each tool does, so no server hint is set right here. */
+  fixedEffects?: boolean;
   saving: boolean;
   blocked: boolean;
   approve(chosen: ApprovalCandidate[], surfaces: string[]): Promise<boolean>;
@@ -507,7 +511,7 @@ function DiscoveredApproval({
         choice={approval.choice}
         onSelectedChange={approval.setSelected}
         onSurfacesChange={approval.setSurfaces}
-        onEffectsChange={approval.setEffects}
+        {...(fixedEffects ? {} : { onEffectsChange: approval.setEffects })}
         {...(surfaces === undefined ? {} : { surfaces })}
         disabled={blocked}
       />
