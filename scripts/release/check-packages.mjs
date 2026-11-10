@@ -45,8 +45,8 @@ const MAX_TARBALL_BYTES_BY_DIR = {
   "postgres-store": 850_000,
   // Pinned view runtime and released App Kit versions; each new App Kit version adds its bundle.
   server: 3_500_000,
-  // Source and compiled components for Tailwind scanning; the chat, project and file views grew it to 540,000.
-  ui: 600_000
+  // Source and compiled components for Tailwind scanning; the rc.32 cut took it to 601,743.
+  ui: 700_000
 };
 const FORBIDDEN_FILES = [
   [/\.map$/u, "source map"],
