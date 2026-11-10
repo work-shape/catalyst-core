@@ -13,6 +13,7 @@ import {
   newSourceId,
   publishQuestionHolds,
   sourceStateView,
+  syncsByItself,
   type KnowledgeBaseSource,
   type KnowledgeRead,
   type KnowledgeSourceForm,
@@ -203,7 +204,7 @@ describe("the synced sources of a Knowledge Base's definition", () => {
     expect(knowledgeBaseFormToConfig(knowledgeBaseConfigToForm(stored))).toEqual(stored);
   });
 
-  it("keeps the schedule of a source, which the page does not edit, through a save", () => {
+  it("keeps the schedule of a source through a save", () => {
     const source = {
       id: "objekte",
       connection: "box",
@@ -658,5 +659,72 @@ describe("folders chosen by name (KB-FOLDERS-1)", () => {
     expect(page).toContain("Tabellen eines Datenspeichers");
     // Box has a Connection; Dropbox has none yet.
     expect(page).toContain("Noch nicht verbunden: Dropbox.");
+  });
+});
+
+describe("when a source syncs by itself (SRC-SYNC)", () => {
+  const off: KnowledgeSourceForm = { ...handbookSource, schedule: { changes: "off", full: "off" } };
+  const schedule = (changes: number | "off", full: string) => ({
+    sources: [{ ...running, running: undefined, schedule: { changes, full, defaultChanges: 15 } }]
+  });
+
+  it("writes both fields off and reads them back, and leaves out what is the default", () => {
+    expect(knowledgeSourcesToConfig([off])).toEqual([
+      {
+        id: "handbook-folders",
+        connection: "handbook-folders",
+        folders: ["100"],
+        schedule: { changes: "off", full: "off" }
+      }
+    ]);
+    expect(knowledgeSourcesToConfig([{ ...handbookSource, schedule: {} }])).toEqual([
+      { id: "handbook-folders", connection: "handbook-folders", folders: ["100"] }
+    ]);
+    expect(syncsByItself(off.schedule)).toBe(false);
+    expect(syncsByItself({ changes: "off" })).toBe(true);
+    expect(syncsByItself(undefined)).toBe(true);
+  });
+
+  it("offers the switch, the interval and the full sync, with the instance's default named", () => {
+    const page = render("de", { status: schedule(30, "0 2 * * *") });
+    expect(page).toContain('data-knowledge-source-schedule="on"');
+    expect(page).toContain("Automatisch synchronisieren");
+    expect(page).toContain("Änderungen abrufen");
+    expect(page).toContain("Wie die Instanz es vorgibt (alle 15 Minuten)");
+    expect(page).toContain("Vollständig synchronisieren");
+    expect(page).toContain("In der Zeitzone der Instanz.");
+    // The published source says how it syncs now.
+    expect(page).toContain("Ruft Änderungen ab");
+    expect(page).toContain("Alle 30 Minuten");
+    expect(page).not.toContain("Zeitzone</");
+  });
+
+  it("says a source switched off syncs only by hand, and keeps Sync now", () => {
+    const page = render("de", { sources: [off], status: schedule("off", "off") });
+    expect(page).toContain('data-knowledge-source-schedule="off"');
+    expect(page).toContain("Aus: Die Quelle synchronisiert nur, wenn jemand");
+    expect(page).not.toContain("Änderungen abrufen");
+    expect(page).toContain("Automatische Synchronisierung aus");
+    expect(page).toContain("Jetzt synchronisieren");
+    expect(render("en", { sources: [off], status: schedule("off", "off") })).toContain(
+      "Automatic sync off"
+    );
+  });
+
+  it("shows a full sync it cannot put in its fields as the cron it is, and one switched off as never", () => {
+    const custom = render("en", {
+      sources: [{ ...handbookSource, schedule: { full: "*/30 1-5 * * *" } }],
+      status: schedule(60, "off")
+    });
+    expect(custom).toContain('value="*/30 1-5 * * *"');
+    expect(custom).toContain("Every hour");
+    expect(custom).toMatch(/>Full sync<\/dt>.*?>Never</su);
+  });
+
+  it("gives a reader who may not change it the settings to read, not to change", () => {
+    const page = render("de", { canWrite: false, sources: [off], status: schedule("off", "off") });
+    expect(page).toMatch(
+      /data-knowledge-source-sync-auto=""[^>]*disabled=""|disabled=""[^>]*data-knowledge-source-sync-auto=""/u
+    );
   });
 });

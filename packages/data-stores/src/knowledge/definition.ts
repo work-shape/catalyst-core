@@ -75,6 +75,14 @@ const KNOWLEDGE_SOURCE_PATTERN_MAX_CHARS = 500;
 
 /** How long a source's cron expression may be. */
 const KNOWLEDGE_SOURCE_CRON_MAX_CHARS = 200;
+/** A source's `schedule.changes` or `schedule.full` that starts no pass of its mode. */
+export const KNOWLEDGE_SOURCE_SYNC_OFF = "off";
+/** The range of a source's own `schedule.changes`, in minutes. */
+const KNOWLEDGE_SOURCE_CHANGES_MIN_MINUTES = 5;
+const KNOWLEDGE_SOURCE_CHANGES_MAX_MINUTES = 1_440;
+const SOURCE_FULL_RULE =
+  "'schedule.full' is a cron expression of five fields, such as '0 2 * * *', or 'off'";
+const SOURCE_CHANGES_RULE = `'schedule.changes' is a number of minutes from ${String(KNOWLEDGE_SOURCE_CHANGES_MIN_MINUTES)} to ${String(KNOWLEDGE_SOURCE_CHANGES_MAX_MINUTES)}, or 'off'`;
 
 const sourcePatternsSchema = z
   .array(z.string().trim().min(1).max(KNOWLEDGE_SOURCE_PATTERN_MAX_CHARS))
@@ -108,16 +116,42 @@ const sourceSchema = z.strictObject({
   include: sourcePatternsSchema.max(KNOWLEDGE_SOURCE_INCLUDE_MAX_COUNT).optional(),
   /** Patterns on the path below the boundary, such as `**\/Personal/**`. */
   exclude: sourcePatternsSchema.max(KNOWLEDGE_SOURCE_EXCLUDE_MAX_COUNT).optional(),
-  /** When the full pass runs. Without it nightly at 02:00, in the instance's time zone. */
+  /**
+   * When the source syncs by itself (SRC-SYNC). `changes`: minutes between `changes` polls,
+   * `knowledge.sourcePollMinutes` of its connector type unless set. `full`: the full pass,
+   * nightly at 02:00 in the instance's time zone unless set. Either `off` starts no pass of that
+   * mode; both `off` is a source synced by hand, whose documents stay as they are.
+   */
   schedule: z
     .strictObject({
+      changes: z
+        .union(
+          [
+            z.literal(KNOWLEDGE_SOURCE_SYNC_OFF, { error: SOURCE_CHANGES_RULE }),
+            z
+              .number({ error: SOURCE_CHANGES_RULE })
+              .int({ error: SOURCE_CHANGES_RULE })
+              .min(KNOWLEDGE_SOURCE_CHANGES_MIN_MINUTES, { error: SOURCE_CHANGES_RULE })
+              .max(KNOWLEDGE_SOURCE_CHANGES_MAX_MINUTES, { error: SOURCE_CHANGES_RULE })
+          ],
+          { error: SOURCE_CHANGES_RULE }
+        )
+        .optional(),
       full: z
-        .string()
-        .trim()
-        .max(KNOWLEDGE_SOURCE_CRON_MAX_CHARS)
-        .refine((text) => parseCron(text) !== undefined, {
-          error: "'schedule.full' is a cron expression of five fields, such as '0 2 * * *'"
-        })
+        .union(
+          [
+            z.literal(KNOWLEDGE_SOURCE_SYNC_OFF, { error: SOURCE_FULL_RULE }),
+            z
+              .string()
+              .trim()
+              .max(KNOWLEDGE_SOURCE_CRON_MAX_CHARS)
+              .refine((text) => parseCron(text) !== undefined, {
+                error: SOURCE_FULL_RULE
+              })
+          ],
+          { error: SOURCE_FULL_RULE }
+        )
+        .optional()
     })
     .optional()
 });

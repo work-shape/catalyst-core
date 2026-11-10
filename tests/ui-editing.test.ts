@@ -926,6 +926,23 @@ describe("ScheduleField", () => {
     expect(isScheduleZone("Mars/Olympus")).toBe(false);
     expect(isScheduleZone("")).toBe(false);
   });
+  it("shows no zone where the zone is not the person's to choose, and keeps it", () => {
+    let changed: ScheduleValue | undefined;
+    render(
+      createElement(ScheduleField, {
+        label: "Full pass",
+        value: { kind: "day", time: "02:00", zone: "Europe/Berlin" },
+        zonePicker: false,
+        onChange: (value: ScheduleValue) => {
+          changed = value;
+        }
+      })
+    );
+    expect(host?.querySelector('[aria-haspopup="dialog"]')).toBeNull();
+    expect(find('[data-slot="schedule-field"]').textContent).not.toContain("Time zone");
+    input("select", "weekday");
+    expect(changed).toEqual({ kind: "weekday", time: "02:00", zone: "Europe/Berlin" });
+  });
   it("links its own error to the schedule", () => {
     render(
       createElement(ScheduleField, {

@@ -565,3 +565,96 @@ describe("a first import that waits for its confirmation (SRC-3, KB-ISO-1b)", ()
     expect(await stopped()).toEqual([before]);
   });
 });
+
+describe("a source's own sync settings (SRC-SYNC)", () => {
+  const { setup } = useKnowledgeSync({ sourceTick: { now: () => clock } });
+
+  it("starts nothing for a source switched off, keeps its documents, and picks it up when on again", async () => {
+    const calls = noCalls();
+    const world = await setup(counting(calls));
+    world.world.put(file("one.txt"));
+    world.world.put(file("two.txt"));
+    await imported(world, "2025-01-06T08:00:00Z");
+    const off = { id: SOURCE, connection: "fixture", folders: ["folder", "other"] };
+    await world.publishSources([{ ...off, schedule: { changes: "off", full: "off" } }]);
+    const audited = await world.platform<{ metadata: Record<string, unknown> }[]>`
+      select metadata from audit_events where type='knowledge_base.source_schedule_changed'`;
+    expect(audited.map((event) => event.metadata)).toEqual([
+      { source: SOURCE, changes: "off", full: "off" }
+    ]);
+    const runs = await runCount(world);
+    Object.assign(calls, noCalls());
+
+    // A day and a night of ticks, the nightly full pass's time among them.
+    for (const at of [
+      "2025-01-06T08:15:00Z",
+      "2025-01-06T12:00:00Z",
+      "2025-01-07T02:00:00Z",
+      "2025-01-07T02:15:00Z",
+      "2025-01-07T09:00:00Z"
+    ])
+      await tick(world, at);
+    expect(calls).toEqual(noCalls());
+    expect(await runCount(world)).toBe(runs);
+    expect(await itemStates(world)).toEqual([{ state: "fetched", n: 2 }]);
+    const sources = await world.instance.api.call("knowledge_bases.sources", {
+      params: { knowledgeBase: "sync-test" }
+    });
+    expect(sources.statusCode, sources.body).toBe(200);
+    expect(sources.json<{ sources: { schedule?: unknown }[] }>().sources[0]?.schedule).toEqual({
+      changes: "off",
+      full: "off",
+      defaultChanges: 15
+    });
+
+    // Sync now still works while it is off.
+    await world.sync("changes");
+    await runJobs(world);
+    expect(await lastRun(world)).toMatchObject({ mode: "changes", state: "done" });
+
+    // Switched on again with its own interval: the full pass it missed runs once, at the first
+    // pass the tick starts, and then the changes come every 30 minutes.
+    await world.publishSources([{ ...off, schedule: { changes: 30 } }]);
+    const firstSlot = changesDueAt(world.record.id, SOURCE, 30, new Date("2025-01-07T10:29:00Z"));
+    const slot = (n: number) => addMinutes(firstSlot, 30 * n);
+    await tick(world, slot(1));
+    expect((await passes(world, "full")).length).toBe(1);
+    const polls = (await passes(world, "changes")).length;
+    await tick(world, addMinutes(slot(1), 10));
+    await tick(world, slot(2));
+    await tick(world, addMinutes(slot(2), 1));
+    await tick(world, slot(3));
+    expect((await passes(world, "changes")).length - polls).toBe(2);
+    expect(
+      (
+        await world.platform<{ n: number }[]>`
+          select count(*)::int as n from audit_events where type='knowledge_base.source_schedule_changed'`
+      )[0]?.n
+    ).toBe(2);
+  });
+
+  it("polls a source at its own interval, and runs no full pass where that is off", async () => {
+    const calls = noCalls();
+    const world = await setup(counting(calls));
+    world.world.put(file("one.txt"));
+    await imported(world, "2025-01-06T08:00:00Z");
+    await world.publishSources([
+      {
+        id: SOURCE,
+        connection: "fixture",
+        folders: ["folder", "other"],
+        schedule: { changes: 60, full: "off" }
+      }
+    ]);
+    Object.assign(calls, noCalls());
+    // Ticks every quarter hour through the night: one poll an hour, where the default would
+    // poll every quarter, and no listing at 02:00.
+    const first = changesDueAt(world.record.id, SOURCE, 60, new Date("2025-01-07T00:59:00Z"));
+    for (let quarter = 1; quarter <= 16; quarter += 1)
+      await tick(world, addMinutes(first, quarter * 15));
+    expect(calls.list).toBe(0);
+    expect((await passes(world, "full")).length).toBe(0);
+    // The source's minute of the hour before 01:00, caught a quarter later, and the four after it.
+    expect(calls.changes).toBe(5);
+  });
+});

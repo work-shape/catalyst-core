@@ -504,6 +504,27 @@ describe("the sources entry of a Knowledge Base", () => {
     expect(written.statusCode, written.body).toBe(200);
   });
 
+  it("takes a source's own sync settings, each a value or off (SRC-SYNC)", async () => {
+    const instance = await start(true, undefined, undefined, undefined, true);
+    const schedules: JsonObject[] = [
+      { changes: "off", full: "off" },
+      { changes: 5 },
+      { changes: 1440, full: "0 3 * * 1" },
+      { full: "off" }
+    ];
+    const written = await put(
+      instance,
+      definition({
+        sources: schedules.map((schedule, index) => ({
+          ...source,
+          id: `source-${String(index + 1)}`,
+          schedule
+        }))
+      })
+    );
+    expect(written.statusCode, written.body).toBe(200);
+  });
+
   it("refuses a malformed source on push", async () => {
     const instance = await start(true, undefined, undefined, undefined, true);
 
@@ -514,6 +535,15 @@ describe("the sources entry of a Knowledge Base", () => {
       [definition({ sources: [{ ...source, path: "/Objekte" }] }), "path"],
       [definition({ sources: [{ ...source, schedule: "daily" }] }), "schedule"],
       [definition({ sources: [{ ...source, schedule: { full: "nightly" } }] }), "schedule.full"],
+      [
+        definition({ sources: [{ ...source, schedule: { changes: 3 } }] }),
+        "'schedule.changes' is a number of minutes from 5 to 1440, or 'off'"
+      ],
+      [
+        definition({ sources: [{ ...source, schedule: { changes: "never" } }] }),
+        "schedule.changes"
+      ],
+      [definition({ sources: [{ ...source, schedule: { full: false } }] }), "or 'off'"],
       [
         definition({
           methods: ["structured"],

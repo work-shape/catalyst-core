@@ -120,12 +120,14 @@ function ScheduleSample({
   initial,
   text,
   readOnly = false,
-  invalid = false
+  invalid = false,
+  zonePicker = true
 }: {
   initial: ScheduleValue;
   text: GalleryText;
   readOnly?: boolean;
   invalid?: boolean;
+  zonePicker?: boolean;
 }) {
   const [value, setValue] = useState(initial);
   return (
@@ -134,6 +136,7 @@ function ScheduleSample({
       value={value}
       onChange={setValue}
       readOnly={readOnly}
+      zonePicker={zonePicker}
       error={invalid ? text.scheduleIncomplete : undefined}
     />
   );
@@ -161,6 +164,11 @@ function ScheduleSamples({ text }: { text: GalleryText }) {
         text={text}
         initial={{ kind: "week", days: [], time: "", zone: "" }}
         invalid
+      />
+      <ScheduleSample
+        text={text}
+        initial={{ kind: "day", time: "02:00", zone: "UTC" }}
+        zonePicker={false}
       />
     </div>
   );

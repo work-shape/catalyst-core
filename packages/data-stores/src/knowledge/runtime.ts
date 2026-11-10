@@ -57,6 +57,8 @@ export interface KnowledgeRuntime {
   documentFormats: readonly KnowledgeDocumentFormat[];
   /** How many documents one Knowledge Base holds at most (`knowledge.maxDocuments`). */
   maxDocuments: number;
+  /** `knowledge.sourcePollMinutes`: a source's default `changes` poll, by connector type. */
+  sourcePollMinutes?: Readonly<Record<string, number>>;
   maxPages?: number;
   /** How many contents are indexed side by side (`knowledge.indexConcurrency`). */
   indexConcurrency?: { perWorker: number; total: number };

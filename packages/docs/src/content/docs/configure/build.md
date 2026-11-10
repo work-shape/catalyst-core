@@ -165,6 +165,10 @@ If you may read an asset but not change it, the page says so and has no save bar
 
 A Knowledge Base of documents made on its page with **New knowledge base** (**Neue Wissensbasis**) is published when it is created, where you may publish it, and is available in no workspace, so you can add files under **Documents** (**Dokumente**) at once and choose its workspaces under **Available in** when it is ready. Later changes of its definition are saved as a draft and need **Publish**. One that syncs from a source, one of tables, and one written by `catalyst config push` or by an agent start as a draft. Before its first publish the page says under its head what publishing opens. Where no Connection can sync folders yet, its **Synced sources** (**Synchronisierte Quellen**) section names the systems the instance can sync folders from and offers **New connection** (**Neue Verbindung**).
 
+### When a synced source syncs
+
+Each source under **Synced sources** has **Sync** (**Synchronisierung**). **Sync automatically** (**Automatisch synchronisieren**) switches it on or off. On, **Fetch changes** (**Änderungen abrufen**) says how often new, changed and deleted files are fetched, as the instance sets it unless you choose an interval or **Never**, and **Full sync** (**Vollständig synchronisieren**) says when the whole source is read again, nightly at 02:00 in the instance's time zone unless you choose another time. Off, the source syncs only when someone clicks **Sync now** (**Jetzt synchronisieren**), and every document stays searchable. Switched on again, it fetches what changed in the meantime. Like the folders, the setting is part of the draft and takes effect when you publish. In `kb.yaml` it is the source's `schedule`: `changes` in minutes (5 to 1440) or `off`, and `full` as a cron expression or `off`.
+
 ### The files of a skill
 
 Keep instructions, small fixed reference files and offline calculators in the folder. A corpus such as statutes or manuals goes into a Knowledge Base, records into a Data Store, and a call with a credential into a Connection: [Where data belongs](/configure/where-data-belongs/).

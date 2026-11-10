@@ -1,0 +1,5 @@
+---
+section: Added
+---
+
+- Each synced source of a Knowledge Base sets its own sync, and can switch it off (SRC-SYNC). Its `schedule` now takes `changes`, the minutes between change polls (5 to 1440; `knowledge.sourcePollMinutes` unless set), and both `changes` and `full` take `off`. A source with both off runs no pass by itself. Its documents stay searchable, and **Sync now**, **Try again** and the first-import confirmation still work. When switched on again, it fetches the changes since its cursor, and a full pass that fell due in the meantime runs once. On the Knowledge Base page each source has **Sync** with **Sync automatically**, **Fetch changes** and **Full sync**, and a published source shows how it syncs now. `knowledge_bases.sources` answers each source's `schedule` as it applies. A publish that changes a schedule writes the audit event `knowledge_base.source_schedule_changed` with the source and its new values. `ScheduleField` takes `zonePicker={false}` for a schedule that runs in the instance's own time zone.

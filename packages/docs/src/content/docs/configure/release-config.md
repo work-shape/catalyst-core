@@ -873,10 +873,12 @@ first. The API reads the setting, so restart it after changing it.
 
 `knowledge.sourcePollMinutes` is how often a synced source is asked for its changes, in minutes by
 connector type, such as `{ box: 30 }` (1 to 1440; a type it does not name is asked every 15
-minutes). A source whose connector offers no change feed is listed only at its full pass, which
-runs at `schedule.full` of the source in the Knowledge Base's definition: a cron expression in the
-instance's time zone, `0 2 * * *` unless set. Restart the knowledge workers after changing the
-setting.
+minutes). A source that sets `schedule.changes` in the Knowledge Base's definition is asked at
+that interval instead (5 to 1440 minutes, or `off`). A source whose connector offers no change
+feed is listed only at its full pass, which runs at `schedule.full` of the source: a cron
+expression in the instance's time zone, `0 2 * * *` unless set, or `off`. A source with both set
+to `off` syncs only when someone clicks **Sync now**, and its documents stay searchable. Restart
+the knowledge workers after changing the setting.
 
 Startup stops, naming the binding, when:
 

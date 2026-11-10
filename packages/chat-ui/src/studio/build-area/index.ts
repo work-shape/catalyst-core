@@ -202,7 +202,9 @@ export {
   newKnowledgeSource,
   newSourceId,
   sourceFolderIds,
-  type KnowledgeSourceForm
+  syncsByItself,
+  type KnowledgeSourceForm,
+  type KnowledgeSourceSchedule
 } from "./knowledge-sources-model";
 export { sourceFailureText, sourceItemCounts, sourceStateView } from "./knowledge-source-status";
 export { KnowledgeSourcesSection } from "./knowledge-base-sources";

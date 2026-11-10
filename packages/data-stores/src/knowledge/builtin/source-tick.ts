@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
-  CONNECTION_ASSET_KIND,
   KNOWLEDGE_BASE_ASSET_KIND,
   KNOWLEDGE_JOB_KINDS,
   defineJobHandler,
@@ -16,7 +15,8 @@ import {
   type JobControl,
   type KnowledgeSyncJobPayload
 } from "@work-shape/catalyst-core";
-import { knowledgeBaseDefinitionSchema } from "../definition";
+import { KNOWLEDGE_SOURCE_SYNC_OFF, knowledgeBaseDefinitionSchema } from "../definition";
+import { sourcePollMinutesOf, sourceScheduleOf } from "../source-schedule";
 import { sourceBoundaryKey, type SyncedSource } from "../source-boundary";
 import type { KnowledgeListingMode } from "../source-port";
 import { enqueueSourceSync, sourceSyncStarted } from "./source-lifecycle";
@@ -32,14 +32,14 @@ import {
 // the clock which sources could be due, and reads only those from their stores, each on a
 // connection of its own for that read. It writes nothing for a source with nothing due, and a
 // due source gets a job: the tick calls no source and holds nothing between sources. A tick after
-// a start or after downtime reads every source, and a time it missed is made up for once.
+// a start or after downtime reads every source, and a time it missed is made up for once. A mode
+// the source switched off has no due time, and a source with both off is not read at all
+// (SRC-SYNC): it syncs only when a person asks.
 
 const MINUTE_MS = 60_000;
 const SOURCE_TICK_INTERVAL_MS = MINUTE_MS;
 /** Knowledge Bases read at a time. */
 const SOURCE_TICK_PAGE = 100;
-const SOURCE_POLL_MINUTES_DEFAULT = 15;
-const SOURCE_FULL_PASS_DEFAULT = "0 2 * * *";
 
 export const sourceTickJob = defineJobKind({
   kind: KNOWLEDGE_JOB_KINDS.sourceTick,
@@ -88,22 +88,27 @@ export interface SourceTickState {
   lastPassEndedAt?: Date | undefined;
 }
 
-/** The pass a source is due, if any, with the time it is due for. */
+/**
+ * The pass a source is due, if any, with the time it is due for. A mode the source switched off
+ * has no due time: `full` absent runs no full pass, `changesDueAt` absent polls no changes.
+ */
 export function dueSourcePass(
   state: SourceTickState,
-  schedule: { full: CronExpression; timeZone: string; changesDueAt: Date; now: Date }
+  schedule: { full?: CronExpression; timeZone: string; changesDueAt?: Date; now: Date }
 ): { mode: KnowledgeListingMode; scheduledFor: Date } | undefined {
   // A running sync may wait for a person, a confirmation or a provider; only they move it on.
   // A `full` pass here would also skip the stop an `initial` one waits at for a first import
   // that failed or was superseded. That source waits for a person's sync.
   if (state.running || !state.imported) return undefined;
-  // Of the times since the last pass, the latest alone: downtime makes up for one.
-  const full = lastDueWithin([schedule.full], new Date(0), schedule.now, schedule.timeZone);
+  // Of the times since the last pass, the latest alone: downtime makes up for one, and so does
+  // a full pass switched back on.
+  const full =
+    schedule.full && lastDueWithin([schedule.full], new Date(0), schedule.now, schedule.timeZone);
   if (full && (!state.lastPassEndedAt || state.lastPassEndedAt < full))
     return { mode: "full", scheduledFor: full };
   // A `changes` pass of a source without a feed would be a full listing, so its only listing is
   // at `schedule.full`.
-  if (!state.polled) return undefined;
+  if (!state.polled || !schedule.changesDueAt) return undefined;
   if (state.lastStartedAt && state.lastStartedAt >= schedule.changesDueAt) return undefined;
   return { mode: "changes", scheduledFor: schedule.changesDueAt };
 }
@@ -206,24 +211,6 @@ async function startScheduledPass(
   });
 }
 
-/** How often each Connection's source is polled. Reads nothing unless the setting names a type. */
-async function pollMinutesOf(runtime: SourceJobRuntime, connections: readonly string[]) {
-  const setting = runtime.input.sourcePollMinutes ?? {};
-  const byConnection = new Map<string, number>();
-  if (connections.length && Object.keys(setting).length) {
-    const rows = await runtime.data.stores.configAssets.listConfigAssetsByKey({
-      clientInstanceId: runtime.data.clientInstanceId,
-      keys: connections.map((name) => ({ kind: CONNECTION_ASSET_KIND, name }))
-    });
-    for (const row of rows) {
-      const parsed = z.object({ connectorType: z.string() }).safeParse(row.config);
-      const minutes = parsed.success ? setting[parsed.data.connectorType] : undefined;
-      if (minutes !== undefined) byConnection.set(row.name, minutes);
-    }
-  }
-  return (connection: string) => byConnection.get(connection) ?? SOURCE_POLL_MINUTES_DEFAULT;
-}
-
 export function createSourceTickHandler(runtime: SourceJobRuntime) {
   const timeZone = runtime.input.timeZone ?? "UTC";
   /** When this process last looked at every source. Unset, the next tick reads them all. */
@@ -233,15 +220,20 @@ export function createSourceTickHandler(runtime: SourceJobRuntime) {
     control: JobControl,
     knowledgeBase: { id: string; name: string },
     source: SyncedSource,
-    pollMinutes: number,
+    defaultPollMinutes: number,
     now: Date
   ) {
-    const full = parseCron(source.schedule?.full ?? SOURCE_FULL_PASS_DEFAULT);
-    if (!full) return;
-    const changes = changesDueAt(knowledgeBase.id, source.id, pollMinutes, now);
+    const { full: fullText, changes: pollMinutes } = sourceScheduleOf(source, defaultPollMinutes);
+    const full = fullText === KNOWLEDGE_SOURCE_SYNC_OFF ? undefined : parseCron(fullText);
+    const changes =
+      pollMinutes === KNOWLEDGE_SOURCE_SYNC_OFF
+        ? undefined
+        : changesDueAt(knowledgeBase.id, source.id, pollMinutes, now);
+    // A source synced by hand alone is not read: nothing is due for it.
+    if (!full && !changes) return;
     if (lookedAt) {
-      const nextFull = nextDueAfter([full], lookedAt, timeZone);
-      if (changes <= lookedAt && !(nextFull && nextFull <= now)) return;
+      const nextFull = full && nextDueAfter([full], lookedAt, timeZone);
+      if (!(changes && changes > lookedAt) && !(nextFull && nextFull <= now)) return;
     }
     const target = await sourceTarget(runtime, {
       knowledgeBaseId: knowledgeBase.id,
@@ -251,9 +243,9 @@ export function createSourceTickHandler(runtime: SourceJobRuntime) {
     });
     if (!target) return;
     const due = dueSourcePass(await readTickState(runtime, control, knowledgeBase.id, source), {
-      full,
+      ...(full ? { full } : {}),
       timeZone,
-      changesDueAt: changes,
+      ...(changes ? { changesDueAt: changes } : {}),
       now
     });
     if (due)
@@ -287,9 +279,11 @@ export function createSourceTickHandler(runtime: SourceJobRuntime) {
             ? [{ id: asset.id, name: asset.name, sources: definition.data.sources }]
             : [];
         });
-        const pollMinutes = await pollMinutesOf(runtime, [
-          ...new Set(bases.flatMap((base) => base.sources.map((source) => source.connection)))
-        ]);
+        const pollMinutes = await sourcePollMinutesOf(
+          runtime.data,
+          runtime.input.sourcePollMinutes,
+          [...new Set(bases.flatMap((base) => base.sources.map((source) => source.connection)))]
+        );
         for (const base of bases)
           for (const source of base.sources) {
             control.signal.throwIfAborted();

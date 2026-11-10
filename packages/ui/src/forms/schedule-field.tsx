@@ -21,6 +21,11 @@ export interface ScheduleFieldProps {
   onChange(value: ScheduleValue): void;
   error?: ReactNode;
   readOnly?: boolean;
+  /**
+   * Whether the person chooses the zone. Where it is not theirs to choose, such as a schedule
+   * the instance runs in its own time zone, the field shows no zone and keeps `value.zone`.
+   */
+  zonePicker?: boolean;
 }
 
 const weekdays: readonly ScheduleWeekday[] = [1, 2, 3, 4, 5, 6, 7];
@@ -83,7 +88,8 @@ export function ScheduleField({
   value,
   onChange,
   error,
-  readOnly = false
+  readOnly = false,
+  zonePicker = true
 }: ScheduleFieldProps) {
   const labels = useUiLabels("ScheduleField");
   const errorId = useId();
@@ -196,25 +202,30 @@ export function ScheduleField({
           />
         </Field>
       )}
-      <Field label={labels.scheduleZone} error={zoneValid ? undefined : labels.scheduleZoneInvalid}>
-        {readOnly ? (
-          <Input readOnly value={zoneLabel ?? ""} />
-        ) : (
-          <Picker
-            label={labels.scheduleZone}
-            options={zones}
-            value={zoneValid ? value.zone : undefined}
-            search
-            onValueChange={(zone) => onChange({ ...value, zone })}
-          >
-            <PickerButton
+      {zonePicker ? (
+        <Field
+          label={labels.scheduleZone}
+          error={zoneValid ? undefined : labels.scheduleZoneInvalid}
+        >
+          {readOnly ? (
+            <Input readOnly value={zoneLabel ?? ""} />
+          ) : (
+            <Picker
               label={labels.scheduleZone}
-              value={zoneLabel}
-              placeholder={labels.scheduleZoneChoose}
-            />
-          </Picker>
-        )}
-      </Field>
+              options={zones}
+              value={zoneValid ? value.zone : undefined}
+              search
+              onValueChange={(zone) => onChange({ ...value, zone })}
+            >
+              <PickerButton
+                label={labels.scheduleZone}
+                value={zoneLabel}
+                placeholder={labels.scheduleZoneChoose}
+              />
+            </Picker>
+          )}
+        </Field>
+      ) : null}
       {error ? (
         <p id={errorId} role="alert" className="text-caption text-destructive">
           {error}

@@ -398,7 +398,7 @@ export function useKnowledgeSync({
         folders: string[];
         include?: string[];
         exclude?: string[];
-        schedule?: { full: string };
+        schedule?: { changes?: number | "off"; full?: string };
       }[],
       extra: { extraction?: { budget: { perMonth?: number; maxTokensPerDocument: number } } } = {}
     ) {

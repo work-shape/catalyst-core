@@ -58,6 +58,12 @@ export const knowledgeBaseEvents = {
   },
   "knowledge_base.source_narrowed": { ...LIVE_ONCE_AUDIT, name: "knowledge_base.source_narrowed" },
   "knowledge_base.source_removed": { ...LIVE_ONCE_AUDIT, name: "knowledge_base.source_removed" },
+  // A publish changed when a source syncs by itself (SRC-SYNC): the source and the `changes` and
+  // `full` it now has, minutes, a cron expression or `off`, each absent for the default.
+  "knowledge_base.source_schedule_changed": {
+    ...LIVE_ONCE_AUDIT,
+    name: "knowledge_base.source_schedule_changed"
+  },
   "knowledge_base.files_added": {
     name: "knowledge_base.files_added",
     subject: "config_asset",

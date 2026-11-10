@@ -117,7 +117,8 @@ describe("reading connector sources during initial provisioning", () => {
           id: "source",
           connection: "fixture",
           items: { discovered: 0, fetched: 0, indexed: 0, failed: 0, withdrawn: 0 },
-          failures: []
+          failures: [],
+          schedule: { changes: 15, full: "0 2 * * *", defaultChanges: 15 }
         }
       ]
     };

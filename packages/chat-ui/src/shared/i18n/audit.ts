@@ -151,6 +151,8 @@ export const audit = defineTranslations({
     "audit.event.knowledge_base.source_added": "Added a source to a knowledge base",
     "audit.event.knowledge_base.source_narrowed": "Narrowed a knowledge base's source",
     "audit.event.knowledge_base.source_removed": "Removed a source from a knowledge base",
+    "audit.event.knowledge_base.source_schedule_changed":
+      "Changed when a knowledge base's source syncs",
     "audit.event.knowledge_base.sync_finished": "Finished updating a knowledge base",
     "audit.event.knowledge_base.sync_started": "Started updating a knowledge base",
     "audit.event.live_once.cleared": "Switched off “Run live once”",
@@ -485,6 +487,8 @@ export const audit = defineTranslations({
     "audit.event.knowledge_base.source_added": "Quelle zu einer Wissensbasis hinzugefügt",
     "audit.event.knowledge_base.source_narrowed": "Quelle einer Wissensbasis eingegrenzt",
     "audit.event.knowledge_base.source_removed": "Quelle aus einer Wissensbasis entfernt",
+    "audit.event.knowledge_base.source_schedule_changed":
+      "Geändert, wann eine Quelle einer Wissensbasis synchronisiert",
     "audit.event.knowledge_base.sync_finished": "Abgleich einer Wissensbasis beendet",
     "audit.event.knowledge_base.sync_started": "Abgleich einer Wissensbasis begonnen",
     "audit.event.live_once.cleared": "„Einmal live ausführen“ ausgeschaltet",
