@@ -30,6 +30,11 @@ const linkedWorkspacePath = apiOperations["workspaces.get"].path.replace(
 
 const ensurePersonalPath = apiOperations["workspaces.ensure_personal"].path;
 
+const readerOfferPath = apiOperations["conversations.reader_offer.get"].path.replace(
+  ":conversationId",
+  "c_1"
+);
+
 async function openLink(
   memberships: ReturnType<typeof sharedWorkspace>[],
   /** The owners and admins the instance names when it refuses the linked workspace. */
@@ -43,7 +48,9 @@ async function openLink(
       conversationId: "c_1"
     },
     buildingWorkspaces: []
-  }
+  },
+  /** What the chat's own offer answers, where the person reads it as a named person. */
+  readerOffer?: unknown
 ) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const reads: string[] = [];
@@ -58,6 +65,12 @@ async function openLink(
           { error: { code: "NOT_FOUND", message: "none", details: { administrators } } },
           { status: 404 }
         );
+      }
+      if (url.pathname === readerOfferPath) {
+        reads.push(url.pathname);
+        return readerOffer === undefined
+          ? Response.json({ error: { code: "NOT_FOUND", message: "none" } }, { status: 404 })
+          : Response.json(readerOffer);
       }
       if (url.pathname === ensurePersonalPath && ensured !== undefined) {
         listed = ensured;
@@ -110,7 +123,10 @@ describe("a link into a workspace the person is no member of", () => {
   it("leads to their own workspace and says why, until dismissed", async () => {
     const opened = await openLink([personalWorkspace()]);
     try {
-      expect(opened.goTo).toHaveBeenCalledWith("cw_personal", { replace: true });
+      await vi.waitFor(
+        () => expect(opened.goTo).toHaveBeenCalledWith("cw_personal", { replace: true }),
+        { timeout: CONDITION_WAIT_MS }
+      );
       await vi.waitFor(() => expect(opened.model()?.closedLink).toEqual({ administrators: [] }), {
         timeout: CONDITION_WAIT_MS
       });
@@ -177,7 +193,8 @@ describe("a link into a workspace the person is no member of", () => {
           }),
         { timeout: CONDITION_WAIT_MS }
       );
-      expect(opened.reads).toEqual([linkedWorkspacePath]);
+      // The chat's own offer is asked first: it would have opened the chat for a named person.
+      expect(opened.reads).toEqual([readerOfferPath, linkedWorkspacePath]);
     } finally {
       await opened.unmount();
     }
@@ -282,11 +299,59 @@ describe("an address into a workspace the person builds in without membership", 
     for (const input of cases) {
       const opened = await openLink([personalWorkspace()], [], undefined, input);
       try {
-        expect(opened.goTo).toHaveBeenCalledWith("cw_personal", { replace: true });
+        await vi.waitFor(
+          () => expect(opened.goTo).toHaveBeenCalledWith("cw_personal", { replace: true }),
+          { timeout: CONDITION_WAIT_MS }
+        );
         expect(opened.model()?.buildingCollaborationWorkspace).toBeUndefined();
       } finally {
         await opened.unmount();
       }
+    }
+  });
+});
+
+// CHAT-SHARE-6: a chat's creator named Alex, who is no member of its workspace. Alex's link to
+// the chat opens it where Alex is: the rail stays on Alex's own workspace, nothing of the chat's
+// workspace is read, and no closed link is reported.
+describe("a link to a chat the person reads from outside its workspace", () => {
+  const offer = {
+    workspace: { id: "cw_nordlicht", name: "Team T" },
+    outside: true,
+    defaultAgentName: "assistant",
+    agents: []
+  };
+
+  it("opens the chat in place, on the person's own workspace", async () => {
+    const opened = await openLink([personalWorkspace()], [], undefined, undefined, offer);
+    try {
+      await vi.waitFor(() => expect(opened.model()?.outsideChat).toBeDefined(), {
+        timeout: CONDITION_WAIT_MS
+      });
+      expect(opened.model()?.outsideChat).toEqual({ conversationId: "c_1", offer });
+      expect(opened.model()?.activeCollaborationWorkspaceId).toBe("cw_personal");
+      expect(opened.goTo).not.toHaveBeenCalled();
+      expect(opened.model()?.closedLink).toBeUndefined();
+      expect(opened.reads).toEqual([readerOfferPath]);
+    } finally {
+      await opened.unmount();
+    }
+  });
+
+  it("asks no offer of a chat in the person's own workspace", async () => {
+    const opened = await openLink(
+      [personalWorkspace(), sharedWorkspace({ id: "cw_nordlicht" })],
+      [],
+      undefined,
+      undefined,
+      offer
+    );
+    try {
+      expect(opened.model()?.outsideChat).toBeUndefined();
+      expect(opened.model()?.activeCollaborationWorkspaceId).toBe("cw_nordlicht");
+      expect(opened.reads).toEqual([]);
+    } finally {
+      await opened.unmount();
     }
   });
 });

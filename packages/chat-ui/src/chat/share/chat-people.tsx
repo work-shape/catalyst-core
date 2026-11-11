@@ -1,10 +1,11 @@
-import { Search, Users } from "lucide-react";
+import { Building2, Search, Users } from "lucide-react";
 import { useId, useMemo, useState, type KeyboardEvent } from "react";
 import {
   Avatar,
   AvatarStack,
   Banner,
   Button,
+  Chip,
   ConfirmDialog,
   Dialog,
   FormNotice,
@@ -17,13 +18,14 @@ import {
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import { useChatShare, useShareCandidates, type ChatReader } from "./chat-share";
-import { SEARCH_DELAY_MS, useDebounced } from "./share-menu";
-import { listNames, shareRefusal } from "./share-words";
+import { candidateOption, SEARCH_DELAY_MS, useDebounced } from "./share-menu";
+import { listNames, noMatchWords, shareRefusal } from "./share-words";
 
 // Who reads the open chat (CHAT-SHARE-2): a row of avatars in the chat's head and, for its
 // creator, a Share button. Both open the panel "Who can see this chat": the creator, each person
 // named with Remove or Leave, and for the creator "Add person" with the same people the @ menu
-// offers.
+// offers. A reader from outside the chat's workspace sees the workspace's name on a chip before
+// the avatars (CHAT-SHARE-6), and nothing else of it.
 
 /** The chat head's people, at its end. Nothing on a chat no one else reads and no one shares. */
 export function ChatPeopleHead() {
@@ -33,8 +35,21 @@ export function ChatPeopleHead() {
   const shared = share.readers.length > 1;
   if (!shared && !share.canAdd) return null;
   const others = share.readers.filter((reader) => !reader.you).map((reader) => reader.label);
+  const workspace = share.chat.workspaceName;
   return (
     <>
+      {share.chat.outside ? (
+        <span
+          className="inline-flex min-w-0 max-w-48"
+          data-testid="chat-outside-workspace"
+          title={t("chatShare.outsideChipLabel", { workspace })}
+        >
+          <Chip size="sm" leading={<Building2 aria-hidden="true" />}>
+            <span className="sr-only">{t("chatShare.outsideChipLabel", { workspace })}</span>
+            <span aria-hidden="true">{workspace}</span>
+          </Chip>
+        </span>
+      ) : null}
       {shared ? (
         <Button
           variant="ghost"
@@ -201,15 +216,15 @@ function AddPerson({ onError }: { onError(message: string | undefined): void }) 
       (candidates.data?.candidates ?? [])
         // Before a search the list offers only people who cannot read the chat yet.
         .filter((candidate) => searching || !candidate.hasAccess)
-        .map((candidate) => ({
-          id: candidate.userId,
-          label: candidate.displayLabel,
-          ...(candidate.email === undefined ? {} : { description: candidate.email }),
-          leading: <Avatar kind="person" size="sm" name={candidate.displayLabel} />,
-          ...(candidate.hasAccess ? { trailing: t("chatShare.hasAccess") } : {}),
-          disabled: candidate.hasAccess || adding
-        })),
-    [adding, candidates.data, searching, t]
+        .map((candidate) =>
+          candidateOption(
+            candidate,
+            share?.chat.workspaceName ?? "",
+            t,
+            candidate.hasAccess || adding
+          )
+        ),
+    [adding, candidates.data, searching, share?.chat.workspaceName, t]
   );
   if (!share) return null;
   const refusal = candidates.error ? shareRefusal(candidates.error, t) : undefined;
@@ -301,7 +316,7 @@ function AddPerson({ onError }: { onError(message: string | undefined): void }) 
         empty={
           !searching || (candidates.isFetching && options.length === 0)
             ? undefined
-            : t("chatShare.noMatch", { workspace })
+            : noMatchWords(query, workspace, t)
         }
       />
     </div>

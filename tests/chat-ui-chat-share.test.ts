@@ -26,6 +26,9 @@ import {
   insertMention,
   listNames,
   mentionsName,
+  noMatchWords,
+  outsideReaderNote,
+  outsideWords,
   shareRefusal,
   turnSenders,
   useChatShare,
@@ -99,6 +102,104 @@ describe("the words of a share", () => {
       message: "Offline"
     });
   });
+
+  // CHAT-SHARE-6: the search spans the instance, and the words say how it searches.
+  it("says how to find someone where nobody matches, and that a second letter searches everyone", () => {
+    expect(noMatchWords("", "Team T", t)).toBe(
+      "Nobody to offer yet. People you work with in Team T show up here."
+    );
+    expect(noMatchWords("j", "Team T", t)).toBe("Type one more letter to search everyone.");
+    expect(noMatchWords("ja", "Team T", t)).toBe(
+      "Nobody matches. To find someone by email, type the whole address."
+    );
+    const de = createTranslationContext("de").t;
+    expect(noMatchWords("j", "Team T", de)).toBe(
+      "Tippe einen Buchstaben mehr, um alle zu durchsuchen."
+    );
+  });
+
+  it("words a search over its limit and a person who cannot be added", () => {
+    const limited = new ApiError(429, "Too many requests", {
+      error: { code: "RATE_LIMITED", message: "Too many requests" }
+    });
+    expect(shareRefusal(limited, t).message).toBe("Too many searches. Wait a moment.");
+    const unavailable = new ApiError(409, "Refused", {
+      error: {
+        code: "CONFLICT",
+        message: "Refused",
+        details: { reason: "share_person_unavailable" }
+      }
+    });
+    expect(shareRefusal(unavailable, t, "Alex").message).toBe("Alex cannot be added.");
+  });
+
+  it("says in one line that people outside the workspace see only this chat", () => {
+    expect(outsideWords(["Alex"], "Team T", t)).toBe(
+      "Alex is not in Team T: they see only this chat, and their turns run with their own rights."
+    );
+    expect(outsideWords(["Alex", "Sam"], "Team T", t)).toBe(
+      "Alex and Sam are not in Team T: they see only this chat, and their turns run with their own rights."
+    );
+  });
+});
+
+describe("the composer of a reader from outside the workspace", () => {
+  const { t } = createTranslationContext("en");
+  const outside = {
+    workspace: { name: "Team T" },
+    agents: [{ name: "assistant" }]
+  };
+
+  it("names the agent their turns use where the chat's own is not open to them", () => {
+    expect(
+      outsideReaderNote({
+        outside,
+        chatAgentName: "team-agent",
+        activeAgent: { name: "assistant", displayName: "Assistant" },
+        creator: "Robin",
+        t
+      })
+    ).toEqual({
+      text: "Team T’s own agent works only for its members. Your turns use Assistant.",
+      blocksSend: false
+    });
+    expect(
+      outsideReaderNote({
+        outside,
+        chatAgentName: "assistant",
+        activeAgent: { name: "assistant", displayName: "Assistant" },
+        creator: "Robin",
+        t
+      })
+    ).toBeUndefined();
+  });
+
+  it("holds Send where no agent is open to them, and says who can go on", () => {
+    expect(
+      outsideReaderNote({
+        outside: { workspace: { name: "Team T" }, agents: [] },
+        chatAgentName: "team-agent",
+        activeAgent: undefined,
+        creator: "Robin",
+        t
+      })
+    ).toEqual({
+      text: "No agent here is open to you. You can read this chat, and Robin can continue it.",
+      blocksSend: true
+    });
+  });
+
+  it("says nothing to a member", () => {
+    expect(
+      outsideReaderNote({
+        outside: undefined,
+        chatAgentName: "team-agent",
+        activeAgent: undefined,
+        creator: "Robin",
+        t
+      })
+    ).toBeUndefined();
+  });
 });
 
 describe("who sent each message", () => {
@@ -171,21 +272,22 @@ function personOf(body: string): string {
 }
 
 /** The instance as the share reads it: who it offers, and what it answers to a share or a removal. */
-function shareClient(refuse?: string) {
+const memberCandidates = [
+  {
+    userId: "user-ben",
+    displayLabel: "Ben Ito",
+    email: "ben@example.com",
+    hasAccess: false,
+    member: true
+  },
+  { userId: "user-cy", displayLabel: "Cy Ota", hasAccess: true, member: true }
+];
+
+function shareClient(refuse?: string, candidates = memberCandidates) {
   const recorded = recordedApiClient((call) => {
     switch (call.operation) {
       case "conversations.share_candidates":
-        return {
-          candidates: [
-            {
-              userId: "user-ben",
-              displayLabel: "Ben Ito",
-              email: "ben@example.com",
-              hasAccess: false
-            },
-            { userId: "user-cy", displayLabel: "Cy Ota", hasAccess: true }
-          ]
-        };
+        return { candidates };
       case "conversations.add_person":
         return refuse
           ? Response.json(
@@ -237,6 +339,7 @@ function mount(input: {
   client: ApiClient;
   conversation: Conversation;
   viewer?: { id: string; label: string };
+  outside?: boolean;
   onLeft?: () => void;
   runSenders?: ReadonlyMap<string, { userId: string; label?: string }>;
   children: ReactNode;
@@ -259,6 +362,7 @@ function mount(input: {
               authScope: "workspace",
               viewer: input.viewer ?? creator,
               workspaceName: "Team",
+              ...(input.outside ? { outside: true } : {}),
               conversation: input.conversation,
               onLeft: input.onLeft ?? (() => undefined),
               ...(input.runSenders ? { runSenders: input.runSenders } : {}),
@@ -448,6 +552,55 @@ describe("the composer of a private chat's creator", () => {
     expect(required(composer).getState().text).toBe("");
   });
 
+  it("marks a person outside the workspace, and says in a second line what they will see", async () => {
+    const { client, changes } = shareClient(undefined, [
+      { userId: "user-sam", displayLabel: "Sam Rowe", hasAccess: false, member: false }
+    ]);
+    const sent: string[] = [];
+    let composer: ComposerHandle | undefined;
+    mount({
+      client,
+      conversation: chat(),
+      children: createElement(Composer, { sent, onComposer: (c) => (composer = c) })
+    });
+    await type(required(composer), "@sa");
+    await until(() => container.querySelectorAll('[role="option"]').length === 1);
+    expect(container.querySelector('[role="option"]')?.textContent).toContain("not in Team");
+    key("Enter");
+    await until(() => container.querySelector('[data-testid="share-outside-line"]') !== null);
+    expect(container.querySelector('[data-testid="share-confirm-line"]')?.textContent).toBe(
+      "Sam Rowe will see the whole chat, files included, and can write in it."
+    );
+    expect(container.querySelector('[data-testid="share-outside-line"]')?.textContent).toBe(
+      "Sam Rowe is not in Team: they see only this chat, and their turns run with their own rights."
+    );
+    await act(async () => {
+      required(container.querySelector("form")).requestSubmit();
+    });
+    await until(() => changes().length === 1);
+    expect(changes()).toEqual(["share user-sam"]);
+  });
+
+  it("says that one letter searches only the people offered", async () => {
+    const { client } = shareClient(undefined, []);
+    let composer: ComposerHandle | undefined;
+    mount({
+      client,
+      conversation: chat(),
+      children: createElement(Composer, { sent: [], onComposer: (c) => (composer = c) })
+    });
+    await type(required(composer), "@j");
+    await until(() =>
+      (container.textContent ?? "").includes("Type one more letter to search everyone.")
+    );
+    await type(required(composer), "@ja");
+    await until(() =>
+      (container.textContent ?? "").includes(
+        "Nobody matches. To find someone by email, type the whole address."
+      )
+    );
+  });
+
   it("closes the menu on Escape and leaves the @ as text", async () => {
     const { client } = shareClient();
     let composer: ComposerHandle | undefined;
@@ -558,6 +711,22 @@ describe("who reads the chat, in its head", () => {
       children: createElement(Senders)
     });
     expect(sendersShown()).toEqual(["-", "-", "-", "-"]);
+  });
+
+  it("names the workspace to a reader from outside it, and offers them no share", () => {
+    const { client, calls } = shareClient();
+    mount({
+      client,
+      conversation: shared,
+      viewer: { id: "user-ben", label: "Ben Ito" },
+      outside: true,
+      children: createElement(ChatPeopleHead)
+    });
+    const chip = required(container.querySelector('[data-testid="chat-outside-workspace"]'));
+    expect(chip.getAttribute("title")).toBe("This chat is in Team. You see nothing else of it.");
+    expect(container.querySelector('[data-testid="chat-share-button"]')).toBeNull();
+    expect(container.querySelector('[data-testid="chat-people"]')).not.toBeNull();
+    expect(calls).toEqual([]);
   });
 
   it("lets a named person leave, and goes elsewhere", async () => {

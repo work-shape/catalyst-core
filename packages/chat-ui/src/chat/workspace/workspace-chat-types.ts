@@ -392,6 +392,12 @@ export interface SelectedChatModel {
   startsPrivate?: boolean;
   /** The project the start page's first message starts its chat in, on the project's page. */
   startProjectId?: string;
+  /**
+   * The line above the composer of a chat read from outside its workspace (CHAT-SHARE-6): the
+   * agent the reader's turns use instead of the chat's, or, where `blocksSend`, that no agent is
+   * open to them, and Send waits.
+   */
+  readerNote?: { text: string; blocksSend: boolean };
 }
 
 export interface ToolDisplayModel {

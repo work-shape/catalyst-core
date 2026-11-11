@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode
 } from "react";
-import type { ApiClient, Conversation } from "@work-shape/catalyst-api-client";
+import { ApiError, type ApiClient, type Conversation } from "@work-shape/catalyst-api-client";
 import { useTranslation } from "../../shared/i18n";
 import { useOwnChatSkillsQuery } from "../../shared/api/personal-chat-skills";
 import { usePersonalConnectionsQuery } from "../../shared/api/personal-connections";
@@ -17,7 +17,8 @@ import { retryUnlessRefused } from "../../shared/api/workspace-queries";
 import { mentionsName, withoutMentions } from "./mention-trigger";
 import { shareRefusal, type ShareRefusal } from "./share-words";
 
-// One private chat shared with named members of its workspace (CHAT-SHARE-2). The provider
+// One private chat shared with named people (CHAT-SHARE-2), members of its workspace or, from
+// CHAT-SHARE-6, anyone active on the instance, who then reads it from outside. The provider
 // stands around the open chat on its route: the composer's @ menu, the head's people and the
 // panel "Who can see this chat" read it. The instance decides every share: the interface only
 // offers what it answers and words its refusals.
@@ -31,6 +32,11 @@ export interface ChatShareChat {
   viewer: { id: string; label: string };
   /** The chat's workspace by the name the interface gives it. */
   workspaceName: string;
+  /**
+   * The reader is no member of the chat's workspace and reads this chat alone in it
+   * (CHAT-SHARE-6): the head names the workspace.
+   */
+  outside: boolean;
   /** Opens the dialog that moves this chat to another workspace. */
   onMove?(): void;
   /** The reader left the chat: the interface goes elsewhere. */
@@ -49,6 +55,8 @@ export interface ChatReader {
 interface ShareChip {
   userId: string;
   label: string;
+  /** False for a person outside the chat's workspace, who would read this chat alone. */
+  member: boolean;
   /** Why the instance refused to share with them: Send waits until the chip is removed. */
   refusal?: string;
 }
@@ -62,7 +70,7 @@ export interface ChatShareValue {
   canAdd: boolean;
   readers: readonly ChatReader[];
   chips: readonly ShareChip[];
-  pick(person: { userId: string; label: string }): void;
+  pick(person: { userId: string; label: string; member: boolean }): void;
   drop(userId: string): void;
   /** Drops the chips whose "@Name" the text no longer holds. */
   syncChips(text: string): void;
@@ -137,7 +145,10 @@ export function useShareCandidates(input: {
     enabled: input.enabled && chat !== undefined,
     placeholderData: keepPreviousData,
     staleTime: 15_000,
-    retry: retryUnlessRefused
+    // A search over its rate limit waits for the person: trying again would only count more.
+    retry: (failureCount, error) =>
+      !(error instanceof ApiError && error.code === "RATE_LIMITED") &&
+      retryUnlessRefused(failureCount, error)
   });
 }
 
@@ -147,8 +158,10 @@ export interface ChatShareProviderProps {
   apiBaseUrl: string;
   authScope: string;
   viewer: { id: string; label: string };
-  /** The open workspace by the name the interface gives it, once it is known. */
+  /** The open chat's workspace by the name the interface gives it, once it is known. */
   workspaceName: string | undefined;
+  /** The reader opened the chat from outside its workspace (CHAT-SHARE-6). */
+  outside?: boolean;
   /** The open chat: nothing is shared from here without one. */
   conversation: Conversation | undefined;
   /** Opens the dialog that moves the chat to another workspace, where the person may. */
@@ -173,6 +186,7 @@ export function ChatShareProvider({
   authScope,
   viewer,
   workspaceName,
+  outside = false,
   conversation,
   onMove,
   onLeft,
@@ -193,6 +207,7 @@ export function ChatShareProvider({
             conversation,
             viewer: { id: viewerId, label: viewerLabel },
             workspaceName,
+            outside,
             ...(onMove ? { onMove: () => onMove(conversation) } : {}),
             onLeft
           }
@@ -204,6 +219,7 @@ export function ChatShareProvider({
       conversation,
       onLeft,
       onMove,
+      outside,
       viewerId,
       viewerLabel,
       workspaceName
@@ -373,11 +389,11 @@ function useChatShareValue({
   );
 
   const pick = useCallback(
-    (person: { userId: string; label: string }) =>
+    (person: { userId: string; label: string; member: boolean }) =>
       updateChips((current) =>
         current.some((chip) => chip.userId === person.userId)
           ? current
-          : [...current, { userId: person.userId, label: person.label }]
+          : [...current, { userId: person.userId, label: person.label, member: person.member }]
       ),
     [updateChips]
   );

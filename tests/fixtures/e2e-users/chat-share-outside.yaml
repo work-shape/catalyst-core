@@ -1,0 +1,18 @@
+# The two people of the CHAT-SHARE-6a spec: the creator makes a team and shares a private chat
+# of it with the reader, who is in no team with them and reads the chat from outside.
+- email: e2e-chat-share-outside@example.test
+  displayLabel: E2E Zz Outside Creator
+  passwordEnvName: E2E_CHAT_SHARE_OUTSIDE_PASSWORD
+  developmentPassword: e2e-chat-share-outside-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
+- email: e2e-chat-share-qxana@example.test
+  displayLabel: E2E Zz Qxana Outside
+  passwordEnvName: E2E_CHAT_SHARE_QXANA_PASSWORD
+  developmentPassword: e2e-chat-share-qxana-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

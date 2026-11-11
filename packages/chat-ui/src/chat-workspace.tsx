@@ -589,6 +589,13 @@ function ChatWorkspaceContent({
 
   // The open chat, as its sharing reads it (CHAT-SHARE-2).
   const sharedConversation = chat.selectedConversation;
+  // A chat read from outside its workspace names that workspace, and nothing else of it
+  // (CHAT-SHARE-6).
+  const outsideWorkspace =
+    collaborationWorkspace.outsideChat !== undefined &&
+    collaborationWorkspace.outsideChat.conversationId === chat.selectedConversationId
+      ? collaborationWorkspace.outsideChat.offer.workspace
+      : undefined;
   const resourcesToggleShown =
     resourcesAvailable &&
     Boolean(resourcesConversationId) &&
@@ -607,9 +614,10 @@ function ChatWorkspaceContent({
   const pageHost = {
     viewer: { kind: "member" as const, id: model.auth.user.id, displayName: userLabel },
     workspace:
-      activeWorkspace && activeWorkspaceName !== undefined
+      outsideWorkspace ??
+      (activeWorkspace && activeWorkspaceName !== undefined
         ? { id: activeWorkspace.id, name: activeWorkspaceName }
-        : null,
+        : null),
     theme: model.config.theme ?? DEFAULT_THEME_INPUTS[themeMode],
     mode: themeMode,
     feedbackModule: model.config.config.modules.feedback?.enabled === true
@@ -890,7 +898,8 @@ function ChatWorkspaceContent({
             apiBaseUrl={model.auth.apiBaseUrl}
             authScope={WORKSPACE_AUTH_SCOPE}
             viewer={{ id: model.auth.user.id, label: userLabel }}
-            workspaceName={activeWorkspaceName}
+            workspaceName={outsideWorkspace?.name ?? activeWorkspaceName}
+            outside={outsideWorkspace !== undefined}
             conversation={sharedConversation}
             {...(rail.canMoveConversation
               ? {
