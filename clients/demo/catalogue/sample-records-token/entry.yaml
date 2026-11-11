@@ -1,0 +1,22 @@
+# A sample service a person adds as their own MCP server with a token they make there
+# (PMCP-CAT, PMCP-6). The address is a placeholder; the browser suite points it at its sample
+# server (src/e2e-server.ts).
+id: sample-records-token
+version: 1
+service: sample-records-token
+title: { en: Sample records with a token, de: Beispiel-Datensätze mit Token }
+description:
+  en: Invented customers, orders and invoices, read with a personal token.
+  de: Erfundene Kunden, Aufträge und Rechnungen, gelesen mit einem persönlichen Token.
+category: other
+examplePrompts:
+  - { en: Find my largest sample customer., de: Such meinen größten Beispielkunden. }
+mark: { color: "#2f6b4f" }
+ownServer:
+  url: https://records-token.example.com/mcp
+  signIn: token
+  token:
+    help:
+      en: Make a personal token in the sample service under Settings > Integrations.
+      de: Erstell im Beispieldienst unter Einstellungen > Integrationen einen persönlichen Token.
+    link: https://records-token.example.com/help/tokens

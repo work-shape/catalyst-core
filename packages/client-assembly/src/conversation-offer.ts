@@ -66,6 +66,7 @@ import {
   createConnectionDraftTool,
   createConnectionOfferTool,
   createConnectionProposeTool,
+  type OwnServerProposalEntry,
   CONNECTION_DRAFT_TOOL_NAME,
   CONNECTION_OFFER_TOOL_NAME,
   CONNECTION_PROPOSE_TOOL_NAME,
@@ -853,6 +854,7 @@ export function createPlatformTools(
             createConnectionProposeTool({
               connectorTypes: input.connections.connectorTypes,
               ...(catalogue ? { catalogue } : {}),
+              ownServerEntries: ownServerProposalEntries(input.connections.catalogue),
               access: {
                 of: (context) => proposalAccessOf(offerInput, input.agentOf, context)
               }
@@ -885,4 +887,19 @@ export function createPlatformTools(
       return attached.tools;
     }
   };
+}
+
+/**
+ * The own-server entries the instance offers (PMCP-CAT), as the propose tool names them: id,
+ * English name and address. The tool's description lists them, and only them.
+ */
+function ownServerProposalEntries(catalogue: Catalogue | undefined): OwnServerProposalEntry[] {
+  return (catalogue?.ownServers ?? []).map((entry) => ({
+    id: entry.id,
+    title:
+      typeof entry.title === "string"
+        ? entry.title
+        : (entry.title.en ?? entry.title.de ?? entry.id),
+    url: entry.url
+  }));
 }

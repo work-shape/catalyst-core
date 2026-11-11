@@ -10,6 +10,8 @@ import {
   Badge,
   Button,
   Card,
+  Choice,
+  ChoiceList,
   ConfirmDialog,
   Dialog,
   EmptyState,
@@ -20,7 +22,8 @@ import {
   Section,
   ServiceMark,
   SkeletonList,
-  Spinner
+  Spinner,
+  TextLink
 } from "@work-shape/catalyst-ui";
 import {
   useOwnOperationSettingsQuery,
@@ -56,9 +59,12 @@ import {
   useConnectionSignIn,
   type SignInBrowser
 } from "./connection-sign-in";
+import { offerText } from "./connection-typed-model";
 import {
+  entryToolStart,
   ownServerAddedMessage,
   ownServerAddressIssue,
+  ownServerEntryOf,
   ownServerConfig,
   ownServerHostOf,
   ownServerName,
@@ -68,6 +74,7 @@ import {
   ownServerViewOf,
   withKeptOperations,
   type OwnServerAddressIssue,
+  type OwnServerEntry,
   type OwnServerProbeStep,
   type OwnServerRow
 } from "./own-server-model";
@@ -146,10 +153,13 @@ export interface OwnServerAdded {
 export function OwnServersSection({
   rows,
   mayAdd,
+  entries = [],
   browser
 }: {
   rows: readonly OwnServerRow[];
   mayAdd: boolean;
+  /** The catalogue entries the person may add as their own server (PMCP-CAT). */
+  entries?: readonly OwnServerEntry[];
   browser?: SignInBrowser;
 }) {
   const { t } = useTranslation();
@@ -192,7 +202,11 @@ export function OwnServersSection({
         <ul className="grid min-w-0 gap-3" aria-label={t("ownServers.title")}>
           {rows.map((row) => (
             <li key={row.name} className="min-w-0">
-              <OwnServerCard row={row} {...(browser ? { browser } : {})} />
+              <OwnServerCard
+                row={row}
+                entry={ownServerEntryOf(row, entries)}
+                {...(browser ? { browser } : {})}
+              />
             </li>
           ))}
         </ul>
@@ -201,7 +215,16 @@ export function OwnServersSection({
         <OwnServerAddDialog
           key={adding.key}
           onClose={() => setAdding(undefined)}
-          {...(proposed ? { initial: { url: proposed.url, title: proposed.title } } : {})}
+          entries={entries}
+          {...(proposed
+            ? {
+                initial: {
+                  url: proposed.url,
+                  title: proposed.title,
+                  ...(proposed.entry === undefined ? {} : { entry: proposed.entry })
+                }
+              }
+            : {})}
           {...(from && tellConversation
             ? {
                 // The conversation whose agent proposed the server hears once that it is added.
@@ -218,7 +241,16 @@ export function OwnServersSection({
 }
 
 /** One own server: name, host, state, its tools, and what its owner does with it. */
-function OwnServerCard({ row, browser }: { row: OwnServerRow; browser?: SignInBrowser }) {
+function OwnServerCard({
+  row,
+  entry,
+  browser
+}: {
+  row: OwnServerRow;
+  /** The catalogue entry it was added from, while it is still at the entry's host. */
+  entry: OwnServerEntry | undefined;
+  browser?: SignInBrowser;
+}) {
   const { apiBaseUrl, authScope, client } = useSettingsPage();
   const { t } = useTranslation();
   const invalidate = useInvalidatePersonalConnections({ apiBaseUrl, authScope, client });
@@ -278,7 +310,7 @@ function OwnServerCard({ row, browser }: { row: OwnServerRow; browser?: SignInBr
   return (
     <Card padding="md" className="grid min-w-0 gap-3 p-3" data-own-server-card={name}>
       <div className="flex min-w-0 flex-wrap items-center gap-3">
-        <ServiceMark name={title} size="lg" showName={false} />
+        <ServiceMark name={title} size="lg" showName={false} {...markProps(entry)} />
         <div className="grid min-w-0 flex-1 basis-48 gap-1">
           <span className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="text-label wrap-anywhere">{title}</span>
@@ -399,7 +431,13 @@ type AddStage =
   | { step: "sign-in" }
   | { step: "token" }
   | { step: "reading" }
-  | { step: "tools"; candidates: ApprovalCandidate[]; late: boolean };
+  | {
+      step: "tools";
+      candidates: ApprovalCandidate[];
+      late: boolean;
+      /** Tools the entry says only read that the server does not mark so. */
+      entryReads: ReadonlySet<string>;
+    };
 
 /**
  * Adds an MCP server: one address and Verbinden, the sign-in in another tab, the tools to
@@ -410,21 +448,34 @@ export function OwnServerAddDialog({
   onClose,
   onAdded,
   initial,
+  entries = [],
   browser
 }: {
   onClose(): void;
   /** Fertig: the server is added with the chosen tools. */
   onAdded?: (added: OwnServerAdded) => void;
-  /** What the dialog starts with, such as an agent's proposal in a chat. */
-  initial?: { url?: string; title?: string };
+  /**
+   * What the dialog starts with, such as an agent's proposal in a chat. An `entry` the
+   * instance offers starts at its tile, with the entry's address.
+   */
+  initial?: { url?: string; title?: string; entry?: string };
+  /** The catalogue entries offered as tiles above the address (PMCP-CAT). */
+  entries?: readonly OwnServerEntry[];
   browser?: SignInBrowser;
 }) {
   const { apiBaseUrl, authScope, client } = useSettingsPage();
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const invalidate = useInvalidatePersonalConnections({ apiBaseUrl, authScope, client });
   const [stage, setStage] = useState<AddStage>({ step: "address" });
-  const [address, setAddress] = useState(initial?.url ?? "");
-  const [title, setTitle] = useState(initial?.title ?? "");
+  const initialEntry = entries.find((candidate) => candidate.id === initial?.entry);
+  // A tile chosen: its address is the entry's and cannot be typed over.
+  const [entry, setEntry] = useState<OwnServerEntry | undefined>(initialEntry);
+  const [address, setAddress] = useState(initialEntry?.url ?? initial?.url ?? "");
+  const [title, setTitle] = useState(
+    initialEntry ? offerText(initialEntry.title, locale) : (initial?.title ?? "")
+  );
+  const entryTitle = entry ? offerText(entry.title, locale) : "";
+  const entryToken = entry?.signIn === "token" ? entry.token : undefined;
   const [addressError, setAddressError] = useState<string>();
   const [problem, setProblem] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -501,6 +552,23 @@ export function OwnServerAddDialog({
     return { problem: t("ownServers.failed") };
   };
 
+  /** A tile: the entry's address and name, the address locked. */
+  const chooseEntry = (chosen: OwnServerEntry) => {
+    setEntry(chosen);
+    setAddress(chosen.url);
+    setTitle(offerText(chosen.title, locale));
+    setAddressError(undefined);
+    setProblem(undefined);
+  };
+  /** "Andere Adresse": the free field again, empty. */
+  const otherAddress = () => {
+    setEntry(undefined);
+    setAddress("");
+    setTitle("");
+    setAddressError(undefined);
+    setProblem(undefined);
+  };
+
   const connect = async () => {
     const issue = ownServerAddressIssue(address);
     setProblem(undefined);
@@ -514,7 +582,12 @@ export function OwnServerAddDialog({
     const startTitle = title.trim() || ownServerTitle(host);
     setTitle(startTitle);
     const nextName = ownServerName(host, ownServerSuffix());
-    const config = ownServerConfig({ name: nextName, url: address, title: startTitle });
+    const config = ownServerConfig({
+      name: nextName,
+      url: address,
+      title: startTitle,
+      ...(entry ? { service: entry.service } : {})
+    });
     try {
       const { revision } = completedOutput(
         await client.assets.put({
@@ -543,6 +616,8 @@ export function OwnServerAddDialog({
     } catch {
       step = "unreachable";
     }
+    // An entry that takes a token goes to it once the host answered and is admitted.
+    if (entryToken && (step === "sign_in" || step === "no_sign_in")) step = "token";
     if (step !== "sign_in" && step !== "token") {
       await discard();
       setAddressError(t(PROBE_REFUSALS[step], { host }));
@@ -564,7 +639,7 @@ export function OwnServerAddDialog({
   const sendToken = async () => {
     const current = saved.current;
     if (!current) return;
-    const found = ownTokenIssuesOf(token, true, t);
+    const found = ownTokenIssuesOf(token, entryToken === undefined, t);
     setProblem(undefined);
     if (found) {
       setTokenIssues(found);
@@ -578,7 +653,8 @@ export function OwnServerAddDialog({
       await saveOwnToken(client, {
         name: current.name,
         token: value,
-        header: token.header,
+        // An entry names the header itself; the person chooses it only on a pasted address.
+        header: entryToken ? (entryToken.header ?? "") : token.header,
         version: null
       });
       const stored = await readStored(client, current.name);
@@ -624,8 +700,15 @@ export function OwnServerAddDialog({
 
   const enterTools = (detail: ConnectionDetail | undefined) => {
     const candidates = discoveredCandidates(detail?.discovered ?? []);
-    approval.reset(candidates);
-    setStage({ step: "tools", candidates, late: detail?.discoveredAt === undefined });
+    // An entry's word on its tools starts the list; the person's choice decides.
+    const start = entry ? entryToolStart(candidates, entry.tools) : undefined;
+    approval.reset(candidates, start);
+    setStage({
+      step: "tools",
+      candidates,
+      late: detail?.discoveredAt === undefined,
+      entryReads: start?.entryReads ?? new Set()
+    });
     invalidate().catch(() => undefined);
   };
 
@@ -700,9 +783,43 @@ export function OwnServerAddDialog({
               connect().catch(() => setBusy(false));
             }}
           >
+            {entries.length === 0 ? null : (
+              <div className="grid min-w-0 gap-2" data-own-server-entries="">
+                <ChoiceList label={t("ownServers.entriesLabel")}>
+                  {entries.map((candidate) => (
+                    <Choice
+                      key={candidate.id}
+                      title={offerText(candidate.title, locale)}
+                      hint={offerText(candidate.description, locale)}
+                      chosen={entry?.id === candidate.id}
+                      disabled={busy}
+                      leading={
+                        <ServiceMark
+                          name={offerText(candidate.title, locale)}
+                          size="md"
+                          showName={false}
+                          {...markProps(candidate)}
+                        />
+                      }
+                      data-own-server-entry={candidate.id}
+                      onClick={() => chooseEntry(candidate)}
+                    />
+                  ))}
+                </ChoiceList>
+                {entry ? null : (
+                  <p className="text-caption text-muted-foreground">
+                    {t("ownServers.entriesHint")}
+                  </p>
+                )}
+              </div>
+            )}
             <Field
               label={t("ownServers.addressLabel")}
-              hint={t("ownServers.addressHint")}
+              hint={
+                entry
+                  ? t("ownServers.entryAddressHint", { title: entryTitle })
+                  : t("ownServers.addressHint")
+              }
               error={addressError}
               required
             >
@@ -715,13 +832,27 @@ export function OwnServerAddDialog({
                 placeholder={t("ownServers.addressPlaceholder")}
                 value={address}
                 disabled={busy}
+                readOnly={entry !== undefined}
                 data-own-server-field="address"
                 onChange={(event) => {
+                  if (entry) return;
                   setAddress(event.target.value);
                   setAddressError(undefined);
                 }}
               />
             </Field>
+            {entry ? (
+              <Button
+                className="justify-self-start"
+                size="sm"
+                variant="link"
+                disabled={busy}
+                data-own-server-other-address=""
+                onClick={otherAddress}
+              >
+                {t("ownServers.otherAddress")}
+              </Button>
+            ) : null}
             {stage.step === "checking" ? (
               <p
                 className="flex items-center gap-2 text-body text-muted-foreground"
@@ -765,7 +896,28 @@ export function OwnServerAddDialog({
               sendToken().catch(() => setBusy(false));
             }}
           >
-            <p className="text-body text-muted-foreground">{t("ownServers.tokenText", { host })}</p>
+            {entryToken ? (
+              <p className="text-body text-muted-foreground" data-own-server-entry-help="">
+                {offerText(entryToken.help, locale)}
+                {entryToken.link === undefined ? null : (
+                  <>
+                    {" "}
+                    <TextLink
+                      href={entryToken.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      data-own-server-entry-link=""
+                    >
+                      {t("ownServers.entryTokenLink")}
+                    </TextLink>
+                  </>
+                )}
+              </p>
+            ) : (
+              <p className="text-body text-muted-foreground">
+                {t("ownServers.tokenText", { host })}
+              </p>
+            )}
             <OwnTokenFields
               host={host}
               draft={token}
@@ -773,7 +925,7 @@ export function OwnServerAddDialog({
                 setToken(draft);
                 setTokenIssues({});
               }}
-              chooseHeader
+              chooseHeader={entryToken === undefined}
               issues={tokenIssues}
               disabled={busy}
             />
@@ -812,6 +964,20 @@ export function OwnServerAddDialog({
                   candidates={stage.candidates}
                   approval={approval}
                   disabled={busy}
+                  alsoReadable={stage.entryReads}
+                  {...(stage.entryReads.size === 0
+                    ? {}
+                    : {
+                        aside: (candidate: ApprovalCandidate) =>
+                          stage.entryReads.has(candidate.name) ? (
+                            <p
+                              className="text-caption text-muted-foreground"
+                              data-own-server-entry-reads={candidate.name}
+                            >
+                              {t("ownServers.entryReads", { title: entryTitle })}
+                            </p>
+                          ) : null
+                      })}
                 />
               </>
             )}
@@ -888,18 +1054,22 @@ function OwnServerApprovalList({
   candidates,
   approval,
   disabled,
-  aside
+  aside,
+  alsoReadable
 }: {
   candidates: readonly ApprovalCandidate[];
   approval: ReturnType<typeof useApprovalChoice>;
   disabled: boolean;
   aside?: Parameters<typeof ConnectionApprovalList>[0]["aside"];
+  /** Tools the person may also mark `liest`: those a catalogue entry says only read. */
+  alsoReadable?: ReadonlySet<string>;
 }) {
-  const proposedReading = new Set(
-    candidates
+  const proposedReading = new Set([
+    ...candidates
       .filter((candidate) => candidate.effect === "reading")
-      .map((candidate) => candidate.name)
-  );
+      .map((candidate) => candidate.name),
+    ...(alsoReadable ?? [])
+  ]);
   return (
     <ConnectionApprovalList
       candidates={candidates}
@@ -1152,4 +1322,13 @@ function OwnServerToolsDialog({
       </div>
     </Dialog>
   );
+}
+
+/** The mark of a catalogue entry for a service mark: its logo, or its colour. */
+function markProps(
+  entry: Pick<OwnServerEntry, "mark"> | undefined
+): { logo: string } | { color: string } | Record<never, never> {
+  if (entry?.mark.logo !== undefined) return { logo: entry.mark.logo };
+  if (entry?.mark.color !== undefined) return { color: entry.mark.color };
+  return {};
 }

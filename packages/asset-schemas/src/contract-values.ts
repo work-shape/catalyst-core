@@ -757,6 +757,9 @@ export type ConnectionOwnTokenState = (typeof CONNECTION_OWN_TOKEN_STATES)[numbe
 /** How a person's own token is sent: as a Bearer token, or under a header the Connection names. */
 export const CONNECTION_OWN_TOKEN_SCHEMES = ["bearer", "header"] as const;
 export type ConnectionOwnTokenScheme = (typeof CONNECTION_OWN_TOKEN_SCHEMES)[number];
+/** How a person signs in to an own-server catalogue entry (PMCP-CAT): at the service, or a token. */
+export const OWN_SERVER_SIGN_INS = ["oauth", "token"] as const;
+export type OwnServerSignIn = (typeof OWN_SERVER_SIGN_INS)[number];
 
 export const CONNECTOR_TEST_STATUSES = [
   "ready",

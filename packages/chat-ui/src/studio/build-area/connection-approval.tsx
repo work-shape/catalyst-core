@@ -66,10 +66,16 @@ export function useApprovalChoice(candidates: readonly ApprovalCandidate[]) {
     setSelected,
     setSurfaces,
     setEffects,
-    /** Starts again from the tools that only read, as for a new list. */
-    reset(next: readonly ApprovalCandidate[]) {
-      setSelected(new Set(readingNames(next)));
-      setEffects(new Map());
+    /**
+     * Starts again from the tools that only read, as for a new list, or from `start`, such as
+     * what a catalogue entry says of the tools.
+     */
+    reset(
+      next: readonly ApprovalCandidate[],
+      start?: { selected: ReadonlySet<string>; effects: ReadonlyMap<string, Effect> }
+    ) {
+      setSelected(new Set(start?.selected ?? readingNames(next)));
+      setEffects(new Map(start?.effects ?? []));
     }
   };
 }

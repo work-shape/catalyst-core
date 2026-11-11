@@ -518,8 +518,11 @@ export function createConnectionManagement(
     Pick<ConnectionSignInDeps, "publicUrl" | "oauth"> & {
       /** The keys of the Secret Store. Without them no secret is stored. */
       keyring?: SecretKeyring;
-      /** The catalogue's entries, which New connection shows in "Dienste". */
-      catalogue?: Pick<Catalogue, "entries">;
+      /**
+       * The catalogue's entries, which New connection shows in "Dienste", and those a person
+       * adds as their own server, which their add screen shows.
+       */
+      catalogue?: Pick<Catalogue, "entries"> & Partial<Pick<Catalogue, "ownServers">>;
       now?: () => Date;
     }
 ): ConnectionManagement {
@@ -657,7 +660,7 @@ export function createConnectionManagement(
 
   return {
     ...createConnectionPersonContextManagement(deps),
-    ...createPersonalConnectionManagement(deps),
+    ...createPersonalConnectionManagement(deps, deps.catalogue?.ownServers),
     async resource(name) {
       const connection = await readConnection(deps, name);
       return connection ? connectionResourceOf(connection) : undefined;

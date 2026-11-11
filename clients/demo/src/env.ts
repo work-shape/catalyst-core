@@ -38,3 +38,8 @@ export function readSampleMcpEnvironment() {
 export function hostEnvironment(): Readonly<Record<string, string | undefined>> {
   return process.env;
 }
+
+/** The loopback ports the browser suite's runner reserved for sample MCP servers, comma-separated. */
+export function e2eSampleMcpPorts(): string | undefined {
+  return process.env.E2E_SAMPLE_MCP_PORTS;
+}

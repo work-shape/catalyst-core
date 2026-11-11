@@ -332,7 +332,9 @@ function startApiServer() {
       E2E_USER_EMAIL: "e2e-user@example.test",
       CHAT_SESSION_TOKEN_SECRET: e2eSessionTokenSecret,
       CHAT_SERVER_CREDENTIAL: e2eServerCredential,
-      SERVICE_ACCESS_TOKEN_SECRET: e2eServiceAccessTokenSecret
+      SERVICE_ACCESS_TOKEN_SECRET: e2eServiceAccessTokenSecret,
+      // The demo's own-server entries point at the last of these (clients/demo/src/e2e-server.ts).
+      E2E_SAMPLE_MCP_PORTS: sampleMcpPorts.join(",")
     }
   });
 }

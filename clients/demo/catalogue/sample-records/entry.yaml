@@ -1,0 +1,22 @@
+# A sample service a person adds as their own MCP server (PMCP-CAT): they sign in at the
+# service, which registers the client itself. The address is a placeholder; the browser suite
+# points it at its sample server (src/e2e-server.ts).
+id: sample-records
+version: 1
+service: sample-records
+title: { en: Sample records, de: Beispiel-Datensätze }
+description:
+  en: Invented customers, orders and invoices, read after you sign in.
+  de: Erfundene Kunden, Aufträge und Rechnungen, gelesen nach deiner Anmeldung.
+category: other
+examplePrompts:
+  - { en: List my sample customers., de: Zeig meine Beispielkunden. }
+mark: { color: "#5b4b8a" }
+ownServer:
+  url: https://records.example.com/mcp
+  signIn: oauth
+  # What the service's documentation says of two of its tools. The others keep the server's
+  # own hints.
+  tools:
+    - { name: list_customers, effect: reading }
+    - { name: get_customer, effect: changing }

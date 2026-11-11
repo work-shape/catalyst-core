@@ -1,19 +1,60 @@
 import { Plug } from "lucide-react";
-import { Button, Card, IconTile } from "@work-shape/catalyst-ui";
+import { Button, Card, IconTile, ServiceMark } from "@work-shape/catalyst-ui";
+import { usePersonalConnectionsQuery } from "../../shared/api/personal-connections";
 import { useTranslation } from "../../shared/i18n";
-import { useConnectionDraftHost } from "./connection-draft-host";
-import { ownServerHostOf } from "./own-server-model";
+import { useConnectionDraftHost, type ConnectionDraftHost } from "./connection-draft-host";
+import { offerText } from "./connection-typed-model";
+import { ownServerHostOf, type OwnServerEntry, type OwnServerProposal } from "./own-server-model";
 
 // The card of an agent's proposal of a person's own MCP server (PMCP-CHAT): "Add MCP server",
 // the name and the host. Its button opens the add screen of Settings > You > Connections filled
 // with the name and the address; nothing is saved before the person presses Connect there. Only
-// the person whose chat it is gets the button.
+// the person whose chat it is gets the button. A proposal of a catalogue entry (PMCP-CAT) shows
+// the service's mark and "Connect <service>", read from the person's own list of entries.
 
-export function OwnServerProposalCard({ proposal }: { proposal: { title: string; url: string } }) {
-  const { t } = useTranslation();
+export function OwnServerProposalCard({ proposal }: { proposal: OwnServerProposal }) {
   const host = useConnectionDraftHost();
+  return host?.ownsConversation && proposal.entry !== undefined ? (
+    <EntryProposalCard host={host} proposal={proposal} />
+  ) : (
+    <ProposalCardView proposal={proposal} host={host} />
+  );
+}
+
+/** The card of a proposed catalogue entry, with the entry's mark once the person's list says it. */
+function EntryProposalCard({
+  host,
+  proposal
+}: {
+  host: ConnectionDraftHost;
+  proposal: OwnServerProposal;
+}) {
+  const query = usePersonalConnectionsQuery({
+    apiBaseUrl: host.apiBaseUrl,
+    authScope: host.authScope,
+    client: host.client
+  });
+  const entry = query.data?.ownServers?.entries?.find(
+    (candidate) => candidate.id === proposal.entry
+  );
+  return <ProposalCardView proposal={proposal} host={host} entry={entry} />;
+}
+
+function ProposalCardView({
+  proposal,
+  host,
+  entry
+}: {
+  proposal: OwnServerProposal;
+  host: ConnectionDraftHost | undefined;
+  entry?: OwnServerEntry | undefined;
+}) {
+  const { locale, t } = useTranslation();
   const openOwnServer = host?.ownsConversation ? host.openOwnServer : undefined;
-  const label = t("ownServers.proposalLabel");
+  const entryTitle = entry ? offerText(entry.title, locale) : undefined;
+  const label = entryTitle
+    ? t("ownServers.proposalService", { title: entryTitle })
+    : t("ownServers.proposalLabel");
   return (
     <div className="chat-tool-part my-3 max-w-3xl" data-testid="tool-call-card">
       <Card
@@ -21,12 +62,25 @@ export function OwnServerProposalCard({ proposal }: { proposal: { title: string;
         className="min-w-0 overflow-hidden"
         role="group"
         aria-label={`${label}: ${proposal.title}`}
-        data-own-server-proposal=""
+        data-own-server-proposal={proposal.entry ?? ""}
       >
         <div className="flex min-w-0 items-center gap-3 p-4">
-          <IconTile>
-            <Plug aria-hidden="true" />
-          </IconTile>
+          {entry && entryTitle ? (
+            <ServiceMark
+              name={entryTitle}
+              size="lg"
+              showName={false}
+              {...(entry.mark.logo === undefined
+                ? entry.mark.color === undefined
+                  ? {}
+                  : { color: entry.mark.color }
+                : { logo: entry.mark.logo })}
+            />
+          ) : (
+            <IconTile>
+              <Plug aria-hidden="true" />
+            </IconTile>
+          )}
           <div className="grid min-w-0 flex-1 gap-0.5">
             <p className="text-caption text-muted-foreground">{label}</p>
             <p className="break-words text-label text-foreground">{proposal.title}</p>

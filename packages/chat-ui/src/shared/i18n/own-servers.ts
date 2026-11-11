@@ -79,7 +79,16 @@ export const ownServers = defineTranslations({
     "ownServers.useToken": "Paste a token instead",
     "ownServers.setToken": "Set token",
     "ownServers.replaceToken": "Replace token",
-    "ownServers.stateNoToken": "Token missing"
+    "ownServers.stateNoToken": "Token missing",
+    "ownServers.entriesLabel": "Services",
+    "ownServers.entriesHint": "Choose a service, or enter another server's address below.",
+    "ownServers.otherAddress": "Other address",
+    "ownServers.entryAddressHint":
+      "The address of {title}. Choose Other address for another server.",
+    "ownServers.entryTokenLink": "Where to get the token",
+    "ownServers.entryReads":
+      "{title} says this tool only reads; the server does not mark it so. You decide.",
+    "ownServers.proposalService": "Connect {title}"
   },
   de: {
     "ownServers.title": "Deine MCP-Server",
@@ -165,6 +174,16 @@ export const ownServers = defineTranslations({
     "ownServers.useToken": "Stattdessen Token einfügen",
     "ownServers.setToken": "Token setzen",
     "ownServers.replaceToken": "Token ersetzen",
-    "ownServers.stateNoToken": "Token fehlt"
+    "ownServers.stateNoToken": "Token fehlt",
+    "ownServers.entriesLabel": "Dienste",
+    "ownServers.entriesHint":
+      "Wähl einen Dienst oder gib unten die Adresse eines anderen Servers ein.",
+    "ownServers.otherAddress": "Andere Adresse",
+    "ownServers.entryAddressHint":
+      "Die Adresse von {title}. Für einen anderen Server wähl Andere Adresse.",
+    "ownServers.entryTokenLink": "Wo du den Token bekommst",
+    "ownServers.entryReads":
+      "Laut {title} liest dieses Tool nur; der Server markiert es nicht so. Du entscheidest.",
+    "ownServers.proposalService": "{title} verbinden"
   }
 });

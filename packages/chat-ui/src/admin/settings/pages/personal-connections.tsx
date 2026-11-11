@@ -38,7 +38,11 @@ export function PersonalConnectionsPage() {
         description={t("personalConnections.description")}
       />
       {query.data ? (
-        <OwnServersSection rows={rows.own} mayAdd={query.data.ownServers?.mayAdd === true} />
+        <OwnServersSection
+          rows={rows.own}
+          mayAdd={query.data.ownServers?.mayAdd === true}
+          entries={query.data.ownServers?.entries ?? []}
+        />
       ) : null}
       <Section layout="stacked" title={t("personalConnections.yourAccounts")}>
         {query.isPending ? (

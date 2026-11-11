@@ -19,7 +19,8 @@ import {
   CONNECTION_TEST_CREDENTIAL_STATES,
   CONNECTOR_TEST_STATUSES,
   operationPagingSchema,
-  OPERATION_EFFECTS
+  OPERATION_EFFECTS,
+  OWN_SERVER_SIGN_INS
 } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { timestampSchema } from "../shared";
@@ -592,7 +593,37 @@ export const personalConnectionsSchema = z.object({
    * Whether the caller may add an MCP server for themselves: the operator's switch is on, they
    * hold `connection.add_own`, and they are signed in to the instance in a first-party session.
    */
-  ownServers: z.object({ mayAdd: z.boolean() }).optional()
+  ownServers: z
+    .object({
+      mayAdd: z.boolean(),
+      /**
+       * The catalogue entries a person adds as their own server (PMCP-CAT), listed while they may
+       * add one: a tile each on the add screen. No credential, client or scope.
+       */
+      entries: z
+        .array(
+          z.object({
+            id: z.string(),
+            version: z.number().int(),
+            service: z.string(),
+            title: localizedTextSchema,
+            description: localizedTextSchema,
+            mark: z.object({ color: z.string().optional(), logo: z.string().optional() }),
+            url: z.string(),
+            signIn: z.enum(OWN_SERVER_SIGN_INS),
+            token: z
+              .object({
+                help: localizedTextSchema,
+                link: z.string().optional(),
+                header: z.string().optional()
+              })
+              .optional(),
+            tools: z.array(z.object({ name: z.string(), effect: connectionOperationEffectSchema }))
+          })
+        )
+        .optional()
+    })
+    .optional()
 });
 export const connectionPeopleSchema = z.object({
   people: z.array(

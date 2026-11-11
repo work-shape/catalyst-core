@@ -18,6 +18,7 @@ import {
   type StoredConnection
 } from "./connection-reads";
 import { connectionOriginOf, connectionTargetOriginOf, takesOwnSecret } from "./connector-context";
+import type { OwnServerEntryView } from "./catalogue/catalogue";
 
 /** A sign-in's binding, or a person's own token's (PMCP-6), as the lists below show it. */
 type ShownBinding = Pick<ConnectionBindingRecord, "state" | "connectedAt" | "origin"> &
@@ -66,7 +67,14 @@ function ownServerOf(connection: StoredConnection, switchOn: boolean) {
   };
 }
 
-export function createPersonalConnectionManagement(deps: ConnectionOperationSourceDeps) {
+/**
+ * `ownServerEntries`: the offered catalogue entries a person adds as their own server
+ * (PMCP-CAT), shown to whoever may add one.
+ */
+export function createPersonalConnectionManagement(
+  deps: ConnectionOperationSourceDeps,
+  ownServerEntries: readonly OwnServerEntryView[] = []
+) {
   return {
     async credentialMode(name: string) {
       const connection = await readConnection(deps, name);
@@ -151,7 +159,10 @@ export function createPersonalConnectionManagement(deps: ConnectionOperationSour
                 : {})
             };
           }),
-        ownServers: { mayAdd: mayAddOwn && switchOn }
+        ownServers:
+          mayAddOwn && switchOn
+            ? { mayAdd: true, entries: ownServerEntries.map((entry) => structuredClone(entry)) }
+            : { mayAdd: false }
       };
     },
     async connectionPeople(name: string) {

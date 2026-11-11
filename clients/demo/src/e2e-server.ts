@@ -1,7 +1,9 @@
+import { e2eSampleMcpPorts } from "./env";
 import { sampleResultShapers } from "./result-shapers";
 import {
   defineClientInstance,
   loadCatalogueEntries,
+  type CatalogueEntry,
   type ClientInstanceApp,
   type ClientInstanceCapability,
   type ConnectorTypeDefinition
@@ -171,6 +173,22 @@ const generalSkills: ClientInstanceCapability = {
   create: () => ({})
 };
 
+/**
+ * The suite's own sample MCP server for the demo's own-server entries (PMCP-CAT): the last of the
+ * loopback ports the runner reserved, which a spec starts the sample on. `/dcr/mcp` signs in by
+ * Dynamic Client Registration, `/mcp` takes a token. The suite's egress list names the port.
+ */
+const SUITE_SAMPLE_PORT = (e2eSampleMcpPorts() ?? "4219").split(",").at(-1) ?? "4219";
+
+function atSuiteSampleServer(entry: CatalogueEntry): CatalogueEntry {
+  if (entry.ownServer === undefined) return entry;
+  const path = entry.ownServer.signIn === "oauth" ? "/dcr/mcp" : "/mcp";
+  return {
+    ...entry,
+    ownServer: { ...entry.ownServer, url: `http://127.0.0.1:${SUITE_SAMPLE_PORT}${path}` }
+  };
+}
+
 const client = defineClientInstance({
   rootDir: new URL("..", import.meta.url),
   resultShapers: sampleResultShapers,
@@ -178,7 +196,7 @@ const client = defineClientInstance({
   connectorTypes: [testConnector, folderSourceConnector],
   // The demo's entry, and one of the suite's own that its config does not offer.
   catalogue: [
-    ...loadCatalogueEntries(new URL("../catalogue", import.meta.url)),
+    ...loadCatalogueEntries(new URL("../catalogue", import.meta.url)).map(atSuiteSampleServer),
     ...loadCatalogueEntries(new URL("../e2e-catalogue", import.meta.url))
   ],
   capabilities: [generalSkills]

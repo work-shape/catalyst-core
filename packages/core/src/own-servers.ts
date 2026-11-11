@@ -16,7 +16,9 @@ export const OWN_SERVER_REFUSALS = {
   /** A write would change `ownerOnly`, which the self-add create fixes. */
   ownerOnlyFixed: "owner_only_fixed",
   /** The right is the owner's alone, and the caller is somebody else. */
-  notOwner: "not_owner"
+  notOwner: "not_owner",
+  /** A proposal names an own-server catalogue entry the instance does not offer (PMCP-CAT). */
+  entryUnknown: "own_server_entry_unknown"
 } as const;
 
 /**

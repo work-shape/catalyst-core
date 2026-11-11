@@ -240,6 +240,8 @@ export { OPERATIONS_AUDIENCES } from "@work-shape/catalyst-asset-schemas";
 export type { OperationSourceKind } from "@work-shape/catalyst-asset-schemas";
 export { operationSourceSchema } from "@work-shape/catalyst-asset-schemas";
 export type { OperationSourceView } from "@work-shape/catalyst-asset-schemas";
+export { OWN_SERVER_SIGN_INS } from "@work-shape/catalyst-asset-schemas";
+export type { OwnServerSignIn } from "@work-shape/catalyst-asset-schemas";
 export { PERSON_POLICY_SETTINGS } from "@work-shape/catalyst-asset-schemas";
 export { POLICY_VALUES } from "@work-shape/catalyst-asset-schemas";
 export { PREVIEW_CAPTURE_MAX_BYTES } from "@work-shape/catalyst-asset-schemas";
