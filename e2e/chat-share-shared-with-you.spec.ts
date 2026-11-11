@@ -205,6 +205,11 @@ test(TITLE, async ({ page, browser, baseURL, pageErrors }) => {
     const palette = readerPage.getByRole("dialog", { name: "Search" });
     const field = palette.getByRole("combobox", { name: "Search" });
     const openPalette = async () => {
+      // The keys toggle it, so an open palette is closed first: each call starts it afresh.
+      if (await palette.isVisible()) {
+        await readerPage.keyboard.press("Escape");
+        await expect(palette).toBeHidden();
+      }
       // The keys reach it at every width; at 390 the rail's Search stands in the closed drawer.
       await readerPage.keyboard.press("ControlOrMeta+k");
       await expect(palette).toBeVisible();
