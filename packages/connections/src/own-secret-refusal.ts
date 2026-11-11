@@ -13,7 +13,7 @@ import {
 // one transaction; the person pastes a new one. Nothing of the token is written anywhere.
 
 /** Why a person's own token was refused, as the binding's reason and the audit's. */
-export const OWN_TOKEN_REFUSED_REASON = "unauthorized";
+const OWN_TOKEN_REFUSED_REASON = "unauthorized";
 
 /**
  * Refuses the person's stored token where it is still the one the server refused: read again,

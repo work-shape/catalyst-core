@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createApiClient } from "@work-shape/catalyst-api-client";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   ownTokenHeaderOf,
   ownTokenIssuesOf,
@@ -214,10 +215,16 @@ describe("a pasted token (PMCP-6)", () => {
         version: 3
       })
     ).toBe(1);
+    const asset = apiOperations["assets.get"].buildPath({
+      params: { kind: "connection", name: "notes" }
+    });
+    const ownSecret = apiOperations["connections.set_own_secret"].buildPath({
+      params: { name: "notes" }
+    });
     expect(sent.map((entry) => `${entry.method} ${entry.path}`)).toEqual([
-      "GET /api/v1/assets/connection/notes",
-      "PUT /api/v1/assets/connection/notes",
-      "PUT /api/v1/connections/notes/own-secret"
+      `GET ${asset}`,
+      `PUT ${asset}`,
+      `PUT ${ownSecret}`
     ]);
     expect(sent[1]?.body).toMatchObject({
       expectedRevision: 4,
@@ -235,7 +242,7 @@ describe("a pasted token (PMCP-6)", () => {
     expect(sent).toEqual([
       {
         method: "PUT",
-        path: "/api/v1/connections/notes/own-secret",
+        path: ownSecret,
         body: { value: secret, expectedVersion: 2 }
       }
     ]);

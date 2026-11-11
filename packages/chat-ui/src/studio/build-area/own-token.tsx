@@ -83,7 +83,7 @@ export function OwnTokenFields({
                 className="font-mono"
                 autoComplete="off"
                 spellCheck={false}
-                placeholder="Authorization"
+                placeholder={t("ownServers.headerPlaceholder")}
                 value={draft.header}
                 disabled={disabled}
                 data-own-token-field="header"
@@ -145,7 +145,7 @@ export async function saveOwnToken(
 }
 
 /** The header a stored server sends its token in, for the field. Empty where it is unread. */
-export async function ownTokenHeader(client: ApiClient, name: string): Promise<string> {
+async function ownTokenHeader(client: ApiClient, name: string): Promise<string> {
   const stored = await client.assets
     .get({ params: { kind: "connection", name } })
     .catch(() => undefined);

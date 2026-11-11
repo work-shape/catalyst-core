@@ -22,6 +22,7 @@ export const connectionsModule = defineModule({
     "connections.test",
     "connections.set_secret",
     "connections.set_test_credential",
+    "connections.set_own_secret",
     "connections.remove_test_credential",
     "connections.discover",
     "connections.source_folders",

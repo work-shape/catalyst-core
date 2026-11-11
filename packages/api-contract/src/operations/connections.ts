@@ -12,6 +12,8 @@ import {
   CONNECTION_NAME_PATTERN,
   CONNECTION_OAUTH_REGISTRATIONS,
   CONNECTION_OPERATION_STATUSES,
+  CONNECTION_OWN_TOKEN_SCHEMES,
+  CONNECTION_OWN_TOKEN_STATES,
   CONNECTION_PROVIDER_REVOCATIONS,
   CONNECTION_SECRET_STATES,
   CONNECTION_TEST_CREDENTIAL_STATES,
@@ -156,8 +158,8 @@ const connectionTestCredentialSchema = z.object({
  * Never its value.
  */
 const connectionOwnTokenSchema = z.object({
-  state: z.enum(["set", "not_set", "needs_reconnect"]),
-  scheme: z.enum(["bearer", "header"]),
+  state: z.enum(CONNECTION_OWN_TOKEN_STATES),
+  scheme: z.enum(CONNECTION_OWN_TOKEN_SCHEMES),
   since: timestampSchema.optional(),
   version: z.number().int().positive().optional()
 });

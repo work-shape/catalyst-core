@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { asClientInstanceId, asUserId } from "@work-shape/catalyst-core";
 import {
   createOAuthWorld,
@@ -576,10 +577,13 @@ async function keyOf(cookie: string): Promise<string> {
     expiresAt: new Date(Date.now() + 86_400_000).toISOString()
   });
   const secret = z.object({ secret: z.string() }).parse(await issued.json()).secret;
-  const exchanged = await fetch(`${world.api}/api/v1/auth/access-token`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${secret}` }
-  });
+  const exchanged = await fetch(
+    `${world.api}${apiOperations["access_tokens.exchange"].buildPath({})}`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${secret}` }
+    }
+  );
   return z.object({ accessToken: z.string() }).parse(await exchanged.json()).accessToken;
 }
 

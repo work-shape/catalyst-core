@@ -45,7 +45,11 @@ import {
   createConnectionPersonContextManagement,
   resolveConnectionPersonContext
 } from "./person-context";
-import type { AuthenticatedIdentity } from "@work-shape/catalyst-core";
+import type {
+  AuthenticatedIdentity,
+  ConnectionOwnTokenScheme,
+  ConnectionOwnTokenState
+} from "@work-shape/catalyst-core";
 import { connectionCallLimits } from "./call";
 import { egressOfConnection } from "./egress";
 import { connectionOperationStatus, type ConnectionOperationState } from "./catalog";
@@ -193,8 +197,8 @@ export interface ConnectionView {
 
 /** The reader's own token (PMCP-6). Never its value or a handle of it. */
 export interface ConnectionOwnTokenView {
-  state: "set" | "not_set" | "needs_reconnect";
-  scheme: "bearer" | "header";
+  state: ConnectionOwnTokenState;
+  scheme: ConnectionOwnTokenScheme;
   since?: string;
   version?: number;
 }

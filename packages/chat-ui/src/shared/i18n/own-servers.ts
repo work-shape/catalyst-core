@@ -70,6 +70,7 @@ export const ownServers = defineTranslations({
     "ownServers.tokenEmpty": "Paste the token.",
     "ownServers.tokenDetails": "Technical details",
     "ownServers.headerLabel": "Header",
+    "ownServers.headerPlaceholder": "Authorization",
     "ownServers.headerHint":
       "Empty or Authorization: the token goes the usual way. Otherwise the header the service names for it.",
     "ownServers.headerInvalid": "A header name has letters, digits and hyphens, a letter first.",
@@ -153,6 +154,7 @@ export const ownServers = defineTranslations({
     "ownServers.tokenEmpty": "Füg den Token ein.",
     "ownServers.tokenDetails": "Technische Details",
     "ownServers.headerLabel": "Header",
+    "ownServers.headerPlaceholder": "Authorization",
     "ownServers.headerHint":
       "Leer oder Authorization: Der Token geht auf dem üblichen Weg mit. Sonst der Header, den der Dienst dafür nennt.",
     "ownServers.headerInvalid":
