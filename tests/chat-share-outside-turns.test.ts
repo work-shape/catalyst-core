@@ -14,6 +14,10 @@ import {
   setupAccessInstance,
   type AccessInstance
 } from "./support/access-instance";
+import {
+  createMultipartFilePayload,
+  createTestAttachmentService
+} from "./support/chat-server-attachment-harness";
 import { withTestSql } from "./support/test-sql";
 
 // CHAT-SHARE-6a (chat-sharing.md 3.9, ADR-0034): a turn of a person who reads a shared chat
@@ -99,10 +103,27 @@ async function teamAsset(
  * A team with its own agent beside the instance's `assistant`, a creator and a member of it,
  * and a reader who is in another team only; the creator's private chat names the reader.
  */
+/** What each upload asked for: whether the chat's agent imports files into its workspace. */
+const workspaceToolsAsked: (boolean | undefined)[] = [];
+const workspaceTools = ["workspace.import_files", "workspace.exec"];
+
 async function setup() {
+  workspaceToolsAsked.length = 0;
+  const attachments = createTestAttachmentService(clientInstanceId);
   const t = await setupAccessInstance({
     storedAssetSource: true,
-    server: () => ({ agentRuntime: queuedRuntime })
+    furtherToolNames: workspaceTools,
+    server: (_stores, config) => ({
+      agentRuntime: queuedRuntime,
+      config: { ...config, executionWorkspaces: { ...config.executionWorkspaces, enabled: true } },
+      attachments: {
+        ...attachments,
+        uploadDraftAttachment: (input) => {
+          workspaceToolsAsked.push(input.workspaceToolsAvailable);
+          return attachments.uploadDraftAttachment(input);
+        }
+      }
+    })
   });
   instances.push(t);
   const team = await t.sharedWorkspace("Team T");
@@ -124,7 +145,7 @@ async function setup() {
   await join(reader.id, elsewhere);
   await t.expectOk(t.admin.id, "assets.put", {
     params: { kind: "agent", name: "team-agent" },
-    payload: { config: agent("team-agent"), workspaceId: team }
+    payload: { config: agent("team-agent", { toolNames: workspaceTools }), workspaceId: team }
   });
   const chat = z.object({ id: z.string() }).parse(
     (
@@ -294,5 +315,45 @@ describe("CHAT-SHARE-6a: one answer to whether a named person reads from outside
     const turn = await start(reader.id, "team-agent");
     expect(turn.statusCode, turn.body).toBe(200);
     expect(startedSchema.parse(turn.json()).run.agentName).toBe("assistant");
+  });
+
+  it("answers an upload of a named holder of a Builder bundle as for an outside reader: the team's agent and its file tools are not theirs", async () => {
+    const { t, team, creator, member, reader, chat } = await setup();
+    const upload = (userId: string, filename: string) => {
+      const body = createMultipartFilePayload({
+        fieldName: "file",
+        filename,
+        contentType: "text/plain",
+        content: "figures"
+      });
+      return t.call(userId, "conversations.draft_attachments.upload", {
+        params: { conversationId: chat },
+        query: { agentName: "team-agent" },
+        headers: body.headers,
+        payload: body.payload
+      });
+    };
+    await t.expectOk(creator.id, "conversations.add_person", {
+      params: { conversationId: chat },
+      payload: { userId: member.id }
+    });
+    await t.expectOk(creator.id, "conversations.add_person", {
+      params: { conversationId: chat },
+      payload: { userId: reader.id }
+    });
+    // A member uploads for the team's agent; so does the outside reader, whose turn would run
+    // the instance agent in its place.
+    const byMember = await upload(member.id, "member.txt");
+    expect(byMember.statusCode, byMember.body).toBe(200);
+    const byReader = await upload(reader.id, "reader.txt");
+    expect(byReader.statusCode, byReader.body).toBe(200);
+    // A bundle opens the workspace's building rooms; it does not make them a member, so the
+    // upload asks for the agents as an outside reader's turn does, never for the team's own.
+    await t.grant(reader.id, "builder", { workspaceId: team });
+    const byHolder = await upload(reader.id, "holder.txt");
+    expect(byHolder.statusCode, byHolder.body).toBe(200);
+    // The team's agent imports files into its workspace for the member's turn only; the
+    // instance agent that runs the reader's turns has no such tools, bundle or not.
+    expect(workspaceToolsAsked).toEqual([true, false, false]);
   });
 });
