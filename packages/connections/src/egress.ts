@@ -4,11 +4,13 @@ import {
   EGRESS_DENIED,
   EGRESS_PROTOCOLS,
   EGRESS_UNRESOLVED,
+  egressRuleOf,
   egressSettingFor,
   normalizeEgressHost,
   type EgressChecker,
   type EgressGrant,
   type EgressProtocol,
+  type EgressRule,
   type EgressTarget
 } from "@work-shape/catalyst-core";
 import {
@@ -50,6 +52,13 @@ import { BlockList, isIP } from "node:net";
 //   public address. The Platform Store's host is refused on every port, by name and by
 //   address. Plain `http`, `postgres`, `imaps` and every other port still need an entry.
 // - A refusal says which setting would let the target through, or that none would.
+// - A Connection a person added for themselves (`ownerOnly`) is judged by the rule
+//   `own_server` (PMCP-3), never by the operator's list alone: `https` only, on port 443 with
+//   every answer public, also where `allowPublicHttps` is off, or on another port as a
+//   `public` entry names it. A `private` entry never admits it. `ownServers.publicHttps: false`
+//   leaves the `public` entries only. The Platform Store's host and the host of
+//   `instance.publicUrl` are refused on every port, by name and by every address they resolve
+//   to, so nobody adds the instance itself, or a host behind its address, as their server.
 
 /** One entry of release config `egress.allow`, as the schema reads it. */
 export interface EgressAllowEntry {
@@ -104,6 +113,16 @@ export interface EgressCheckerOptions {
    * which database target is the Store, so every `postgres` target is refused.
    */
   platformStoreUnknown?: boolean;
+  /**
+   * Release config `modules.connections.ownServers.publicHttps`: whether a self-added
+   * Connection reaches a public `https` host on port 443 that no entry names. On unless set.
+   */
+  ownServersPublicHttps?: boolean;
+  /**
+   * Release config `instance.publicUrl`. Its host is refused, by name and by address, to
+   * every self-added Connection.
+   */
+  instanceUrl?: string;
   /** Resolves a host name to every address it has. The system resolver unless given. */
   resolve?: EgressAddressResolver;
   /** The clock of the answer cache, in milliseconds. */
@@ -121,9 +140,32 @@ export interface EgressCheckerOptions {
  * - `never`: no setting reaches it: link-local, the Platform Store, an answer that is no
  *   routable address, a target that cannot be read.
  */
-type EgressDenial = "unlisted" | "not_public" | "outside_ranges" | "store_unresolved" | "never";
+type EgressDenial =
+  "unlisted" | "not_public" | "outside_ranges" | "store_unresolved" | "never" | OwnServerDenial;
+
+/**
+ * Why a self-added Connection's target was refused:
+ * - `own_unlisted`: `https` on another port than 443, or on 443 with `ownServers.publicHttps`
+ *   off, and no `public` entry names it. A `public` entry would.
+ * - `own_not_public`: an answer is not a public address. No setting reaches it.
+ * - `own_protocol`: not `https`. No setting reaches it.
+ * - `own_instance`: the instance's own host or an address it resolves to. No setting reaches it.
+ * - `instance_unresolved`: the instance's host gave no address, so the target cannot be told
+ *   apart from it.
+ */
+type OwnServerDenial =
+  "own_unlisted" | "own_not_public" | "own_protocol" | "own_instance" | "instance_unresolved";
 
 const DENIAL_HINTS: Record<Exclude<EgressDenial, "unlisted">, string> = {
+  own_unlisted:
+    "A server a person adds for themselves reaches a public HTTPS host on port 443. An operator adds another port under 'egress.allow' with 'network: public'",
+  own_not_public:
+    "It resolves to an address that is not public. No setting lets a server a person adds for themselves reach it",
+  own_protocol:
+    "A server a person adds for themselves is reached over https only. No setting allows another protocol",
+  own_instance: "It is this instance's own address. No setting allows it",
+  instance_unresolved:
+    "The instance's own host did not resolve, so the target cannot be told apart from it",
   not_public:
     "It resolves to an address that is not public. Only an entry under 'egress.allow' with 'network: private' and the 'cidrs' it lies in reaches it",
   outside_ranges: "It resolves to an address outside the 'cidrs' of its entry under 'egress.allow'",
@@ -261,8 +303,26 @@ interface ListedEntry {
   entry: EgressAllowEntry;
   host: string;
   ranges: BlockList;
-  /** Named by no entry, let through by `egress.allowPublicHttps`. */
+  /** Named by no entry, let through by `egress.allowPublicHttps` or the rule `own_server`. */
   opened?: true;
+  /** Judged by the rule `own_server`: public answers only, never the instance's own. */
+  own?: true;
+}
+
+/** A name that always means this machine, refused to a self-added Connection by name. */
+function isLocalHostName(host: string): boolean {
+  return host === "localhost" || host.endsWith(".localhost");
+}
+
+/** The host of `instance.publicUrl`, or nothing where it is unset or cannot be read. */
+function instanceHostOf(instanceUrl: string | undefined): string | undefined {
+  if (instanceUrl === undefined) return undefined;
+  try {
+    const host = normalizeEgressHost(new URL(instanceUrl).hostname);
+    return host === "" ? undefined : host;
+  } catch {
+    return undefined;
+  }
 }
 
 /** How many judged targets are held at once. Only a list opened by the opt-in comes near. */
@@ -323,6 +383,8 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
     host: normalizeEgressHost(target.host),
     port: target.port
   }));
+  const instanceHost = instanceHostOf(options.instanceUrl);
+  const ownPublicHttps = options.ownServersPublicHttps !== false;
   // Holds the answer for each target that was asked. A refusal by a rule is held as long as a
   // grant, one that came from the resolver for `EGRESS_RESOLUTION_FAILURE_TTL_MS`. Without
   // `allowPublicHttps` there is at most one entry per line of `egress.allow`; with it any host
@@ -394,10 +456,22 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
     let store: string[];
     try {
       // A target no entry names is kept off the Store on every port, not only on its own.
-      store = await storeAddressesOn(listed.opened ? "any" : target.port);
+      store = await storeAddressesOn(listed.opened || listed.own ? "any" : target.port);
     } catch {
       // The Platform Store's name gave no address: the target cannot be told apart from it.
       throw briefly(egressDenied(target, "store_unresolved"));
+    }
+    // A self-added server is kept off every address of the instance's own host, resolved at
+    // the same moment as the target, like the Store's. Where that host gives no address,
+    // nobody can say the target is not the instance, and it is refused.
+    let instance: string[] = [];
+    if (listed.own && instanceHost !== undefined) {
+      try {
+        instance = (await addressesOf(instanceHost)).map((entry) => entry.address);
+      } catch {
+        throw briefly(egressDenied(target, "instance_unresolved"));
+      }
+      if (instance.length === 0) throw briefly(egressDenied(target, "instance_unresolved"));
     }
     for (const answer of addresses) {
       // An answer this check cannot read as an address is never connected to.
@@ -406,6 +480,9 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
       }
       if (store.includes(answer.address)) {
         throw egressDenied(target);
+      }
+      if (instance.includes(answer.address)) {
+        throw egressDenied(target, "own_instance");
       }
       const family = answer.family === 4 ? "ipv4" : "ipv6";
       // Link-local as itself, and as the IPv4 address an IPv6 one carries: a `private` range
@@ -421,7 +498,7 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
           throw egressDenied(target, "outside_ranges");
         }
       } else if (isBlockedIpAddress(answer.address)) {
-        throw egressDenied(target, "not_public");
+        throw egressDenied(target, listed.own ? "own_not_public" : "not_public");
       }
     }
     // Every answer passed. The first IPv4 one is pinned, else the first.
@@ -443,7 +520,7 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
    * The entry of the list that names the target, or the one `allowPublicHttps` stands for,
    * decided without an address. Otherwise why there is none.
    */
-  const listedEntryOf = (target: EgressTarget): ListedEntry | EgressDenial => {
+  const listedEntryOf = (target: EgressTarget, rule: EgressRule): ListedEntry | EgressDenial => {
     if (
       !isEgressProtocol(target.protocol) ||
       !isPort(target.port) ||
@@ -451,6 +528,7 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
     ) {
       return "never";
     }
+    if (rule === "own_server") return ownServerEntryOf(target);
     if (options.platformStoreUnknown === true && target.protocol === "postgres") {
       return "never";
     }
@@ -479,6 +557,43 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
       opened: true
     };
   };
+  /**
+   * The rule `own_server`, decided without an address: `https`, never the Store's or the
+   * instance's host by name on any port, a `public` entry that names it exactly, else port 443
+   * while `ownServers.publicHttps` is on. A `private` entry is not looked at.
+   */
+  const ownServerEntryOf = (target: EgressTarget): ListedEntry | EgressDenial => {
+    if (target.protocol !== "https") return "own_protocol";
+    if (platformStore.some((store) => store.host === target.host)) return "never";
+    if (target.host === instanceHost) return "own_instance";
+    if (isLocalHostName(target.host)) return "own_not_public";
+    const literal = canonicalAddress(target.host);
+    // An address written as the host is judged now, so a save already says no setting would.
+    if (
+      literal &&
+      (isNeverRoutable(literal) ||
+        isBlockedIpAddress(literal.address) ||
+        LINK_LOCAL.check(literal.address, literal.family === 4 ? "ipv4" : "ipv6"))
+    ) {
+      return "own_not_public";
+    }
+    const listed = entries.find(
+      (candidate) =>
+        candidate.entry.protocol === "https" &&
+        candidate.entry.network === "public" &&
+        candidate.host === target.host &&
+        candidate.entry.port === target.port
+    );
+    if (listed) return { ...listed, own: true };
+    if (target.port !== 443 || !ownPublicHttps) return "own_unlisted";
+    return {
+      entry: { protocol: "https", host: target.host, port: 443, network: "public", cidrs: [] },
+      host: target.host,
+      ranges: NO_RANGES,
+      opened: true,
+      own: true
+    };
+  };
   const normalized = (input: EgressTarget): EgressTarget => ({
     protocol: input.protocol,
     host: normalizeEgressHost(input.host),
@@ -486,14 +601,22 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
   });
 
   return {
-    admits: (input) => typeof listedEntryOf(normalized(input)) !== "string",
-    async check(input) {
+    admits: (input, rule = "operator") =>
+      typeof listedEntryOf(normalized(input), rule) !== "string",
+    refusal(input, rule = "operator") {
       const target = normalized(input);
-      const listed = listedEntryOf(target);
+      const listed = listedEntryOf(target, rule);
+      return typeof listed === "string" ? egressDenied(target, listed) : undefined;
+    },
+    async check(input, rule = "operator") {
+      const target = normalized(input);
+      const listed = listedEntryOf(target, rule);
       if (typeof listed === "string") {
         throw egressDenied(target, listed);
       }
-      const key = `${target.protocol}|${target.host}|${target.port}`;
+      // One host is judged by each rule apart: a private entry's grant is never a self-added
+      // server's.
+      const key = `${rule}|${target.protocol}|${target.host}|${target.port}`;
       let held = answers.get(key);
       if (!held || held.until <= now()) {
         const asked = now();
@@ -510,6 +633,23 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
       }
       return held.answer;
     }
+  };
+}
+
+/**
+ * The checker as one Connection's targets are judged: by the Connection's own rule
+ * (`egressRuleOf`), whatever rule a caller asks for. Its target, every redirect, every further
+ * address and every address of its sign-in pass through this.
+ */
+export function egressOfConnection(
+  egress: EgressChecker,
+  config: { ownerOnly?: boolean | undefined }
+): EgressChecker {
+  const rule = egressRuleOf(config);
+  return {
+    check: (target) => egress.check(target, rule),
+    admits: (target) => egress.admits(target, rule),
+    refusal: (target) => egress.refusal(target, rule)
   };
 }
 

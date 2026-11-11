@@ -15,6 +15,7 @@ import {
   createConnectionSecretHandle,
   defineAssetKind,
   egressOriginOf,
+  egressRuleOf,
   egressSettingFor,
   findConnectorTypeIssues,
   findPersonContextAppIssue,
@@ -58,8 +59,11 @@ import {
 export interface ConnectionAssetKindOptions {
   /** The Connector types of this build. A Connection of another type is refused. */
   connectorTypes: ConnectorTypeRegistry;
-  /** Asked on a save whether the operator's egress list names the Connection's target. */
-  egress: Pick<EgressChecker, "admits">;
+  /**
+   * Asked on a save whether the operator's egress list names the Connection's target, and for
+   * a self-added one whether the rule `own_server` admits it.
+   */
+  egress: Pick<EgressChecker, "admits" | "refusal">;
   /**
    * Ends a sign-in a write makes useless and tells the provider once the write committed.
    * Left out, where the instance has no Secret Store, the sign-in ends on the instance only.
@@ -277,10 +281,26 @@ function egressIssue(
   if (!options.connectorTypes.get(connection.connectorType)) return undefined;
   const target = targetOf(options, connection);
   const endpoints = oauthEndpointsOf(options, connection);
+  const rule = egressRuleOf(connection);
+  const candidates = target
+    ? [target, ...(endpoints ? connectionOAuthTargets(endpoints) : [])]
+    : [];
+  if (rule === "own_server") {
+    // A self-added server's refusal says why in the checker's own words: whether an operator's
+    // `public` entry would admit the host, or that no setting would (PMCP-3).
+    for (const candidate of candidates) {
+      const refusal = options.egress.refusal(candidate, rule);
+      if (refusal) {
+        return {
+          message: refusal.message,
+          path: candidate === target ? ["settings"] : ["settings", "oauth"],
+          code: EGRESS_DENIED
+        };
+      }
+    }
+  }
   const refused = target
-    ? [target, ...(endpoints ? connectionOAuthTargets(endpoints) : [])].find(
-        (candidate) => !options.egress.admits(candidate)
-      )
+    ? candidates.find((candidate) => !options.egress.admits(candidate, rule))
     : undefined;
   if (target && refused === undefined) return undefined;
   const place = refused ? ` ${refused.host}:${refused.port}` : "";

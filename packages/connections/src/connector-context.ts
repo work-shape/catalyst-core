@@ -24,7 +24,7 @@ import {
   type JsonObject,
   type JsonValue
 } from "@work-shape/catalyst-core";
-import { isSameEgressOrigin } from "./egress";
+import { egressOfConnection, isSameEgressOrigin } from "./egress";
 import { credentialSubject } from "./personal-bindings";
 import {
   createTokenCache,
@@ -299,8 +299,10 @@ export function takesTestCredential(
 export async function openConnectorContext(
   input: OpenConnectorContextInput
 ): Promise<ConnectorContext> {
-  const { type, connection, egress, credentials, signal } = input;
+  const { type, connection, credentials, signal } = input;
   const { config } = connection;
+  // Every target of this context, redirects and a token address included, by its own rule.
+  const egress = egressOfConnection(input.egress, config);
   if (config.credentialMode === "user" && !input.personalCall && !input.personalDiscovery) {
     throw personalConnectionContextError(
       "personal credentials are available only through the owner's agent call or the owner's own discovery, never a test"

@@ -1,5 +1,5 @@
 import { createServer, type IncomingHttpHeaders, type Server } from "node:http";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { asClientInstanceId } from "@work-shape/catalyst-core";
 import { z } from "zod";
@@ -14,6 +14,14 @@ import {
 // `connection.add_own` and no Connection right adds an `mcp` Connection in mode `user` that only
 // they read, use, change and delete. An instance admin reads it, switches it off and deletes
 // it, and nothing more. Nobody else reaches it, a key with every scope included.
+
+// The sample servers listen on 127.0.0.1 over plain http, which the egress rule of a self-added
+// server never reaches (PMCP-3, tests/own-server-egress.test.ts). This file is about rights, so
+// here a self-added server is judged by the operator's list, whose private entries name them.
+vi.mock("@work-shape/catalyst-core", async (importOriginal) => {
+  const core = await importOriginal<typeof import("@work-shape/catalyst-core")>();
+  return { ...core, egressRuleOf: () => "operator" };
+});
 
 const clientInstanceId = asClientInstanceId("demo-local");
 const PUBLIC_URL = "http://localhost:5173";

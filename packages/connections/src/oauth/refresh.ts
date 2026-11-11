@@ -20,6 +20,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { readConnections, type StoredConnection } from "../connection-reads";
 import { connectionOriginOf } from "../connector-context";
+import { egressOfConnection } from "../egress";
 import { createSecretStore, openSignInTokenSet, type SecretKeyring } from "../secret-store";
 import { scopesOf } from "./checks";
 import { bindingAuditSubject } from "../personal-bindings";
@@ -342,7 +343,10 @@ export function createSignInTokens(deps: SignInTokensDeps): SignInTokens {
     // of them ended the sign-in in its transaction; nothing is sent.
     if (connectionOriginOf(connection.type, connection.config) !== origin) throw notConnected();
     const signal = AbortSignal.timeout(SIGN_IN_REFRESH_TIMEOUT_MS);
-    const fetch = createOAuthFetch({ egress: deps.egress, signal });
+    const fetch = createOAuthFetch({
+      egress: egressOfConnection(deps.egress, connection.config),
+      signal
+    });
     let tokens;
     try {
       const { server, endpoints } = await signInServerOf({

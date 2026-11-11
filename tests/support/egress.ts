@@ -19,6 +19,8 @@ export function checkerOf(
     allowPublicHttps?: boolean;
     platformStore?: { host: string; port: number }[];
     platformStoreUnknown?: boolean;
+    ownServersPublicHttps?: boolean;
+    instanceUrl?: string;
     now?: () => number;
   } = {}
 ) {

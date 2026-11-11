@@ -401,13 +401,33 @@ export interface EgressGrant extends EgressTarget {
  * `egress_unresolved`: nothing is contacted, and the refusal says the list is not the cause.
  */
 export interface EgressChecker {
-  check(target: EgressTarget): Promise<EgressGrant>;
+  check(target: EgressTarget, rule?: EgressRule): Promise<EgressGrant>;
   /**
    * Whether the target passes the rules that need no address: the protocol, the operator's
    * list and the Platform Store by name. A save of a Connection asks this, so a write never
    * waits for DNS; every connection still passes `check` before it is opened.
    */
-  admits(target: EgressTarget): boolean;
+  admits(target: EgressTarget, rule?: EgressRule): boolean;
+  /**
+   * The refusal `admits` stands for, as `check` would throw it, or nothing where the target
+   * passes the rules that need no address. A save repeats its sentence.
+   */
+  refusal(target: EgressTarget, rule?: EgressRule): AppError | undefined;
+}
+
+/**
+ * Which rule judges a target (PMCP-3):
+ * - `operator`: the operator's `egress.allow` and `egress.allowPublicHttps`. The default.
+ * - `own_server`: a Connection a person added for themselves (`ownerOnly`). `https` only:
+ *   on port 443 with every answer public, unless `ownServers.publicHttps` is off, or as a
+ *   `public` entry names it. A `private` entry never admits it, and the instance's own host
+ *   is refused by name and by address.
+ */
+export type EgressRule = "operator" | "own_server";
+
+/** The rule every target of this Connection is judged by, its redirects and sign-in included. */
+export function egressRuleOf(config: { ownerOnly?: boolean | undefined }): EgressRule {
+  return config.ownerOnly === true ? "own_server" : "operator";
 }
 
 /** The reason and the code of a refused target. */

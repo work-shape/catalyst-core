@@ -80,13 +80,14 @@ describe("an approved OAuth call whose sign-in changes while it waits", () => {
           ]),
           credentials: wrapped,
           egress: {
-            admits: (target) => connections.egress.admits(target),
-            async check(target) {
+            admits: (target, rule) => connections.egress.admits(target, rule),
+            refusal: (target, rule) => connections.egress.refusal(target, rule),
+            async check(target, rule) {
               if (pauseAt === "egress") {
                 paused.resolve();
                 await resume.promise;
               }
-              return connections.egress.check(target);
+              return connections.egress.check(target, rule);
             }
           }
         },

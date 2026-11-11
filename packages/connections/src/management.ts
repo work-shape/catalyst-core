@@ -45,6 +45,7 @@ import {
 } from "./person-context";
 import type { AuthenticatedIdentity } from "@work-shape/catalyst-core";
 import { connectionCallLimits } from "./call";
+import { egressOfConnection } from "./egress";
 import { connectionOperationStatus, type ConnectionOperationState } from "./catalog";
 import {
   connectionResourceOf,
@@ -449,7 +450,9 @@ async function probeOwnServer(
   let status: ConnectorTestStatus;
   let reason: ConnectionCallReason | undefined;
   try {
-    const target = await deps.egress.check(type.target(settings.data));
+    const target = await egressOfConnection(deps.egress, connection.config).check(
+      type.target(settings.data)
+    );
     status = await type.probe({ target, settings: settings.data, signal });
   } catch (error) {
     reason = connectionCallReasonOf(error);
@@ -825,7 +828,7 @@ export function createConnectionManagement(
             { reason: "invalid_endpoint" }
           );
         }
-        if (!deps.egress.admits(target)) {
+        if (!egressOfConnection(deps.egress, config).admits(target)) {
           throw new AppError(
             "VALIDATION_FAILED",
             `${EGRESS_DENIED}: the address ${target.host}:${target.port} is not on this instance's egress list. ${egressSettingFor(target)}`,
