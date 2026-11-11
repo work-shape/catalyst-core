@@ -1,5 +1,7 @@
 import type { ConnectionTestResult, PersonalConnections } from "@work-shape/catalyst-api-client";
 import { CONNECTION_NAME_MAX_LENGTH } from "@work-shape/catalyst-core";
+import { toolAnswer } from "../../chat/conversation/subject-run";
+import type { TranslationContextValue } from "../../shared/i18n";
 import { personalViewOf, type PersonalView } from "./connection-people-model";
 
 // A person's own MCP server (PMCP-5): what You > Connections reads and writes for it. Pure:
@@ -7,6 +9,9 @@ import { personalViewOf, type PersonalView } from "./connection-people-model";
 // decides every write; these decide only what is shown and sent.
 
 type PersonalRow = PersonalConnections["connections"][number];
+
+/** Settings > You > Connections, where a person's own servers are added. */
+export const OWN_SERVERS_ROUTE = { kind: "settings", group: "you", page: "connections" } as const;
 
 /** A row of the person's list that is an MCP server they added for themselves. */
 export type OwnServerRow = PersonalRow & { ownServer: NonNullable<PersonalRow["ownServer"]> };
@@ -162,4 +167,36 @@ export function withKeptOperations(
       return [effect === undefined ? operation : { ...operation, effect }];
     })
   };
+}
+
+/**
+ * An agent's proposal of a person's own MCP server (PMCP-CHAT), as its tool answered: the name
+ * in words and the address its add screen starts with. Nothing for any other answer.
+ */
+export function readOwnServerProposal(result: unknown): { title: string; url: string } | undefined {
+  const answer = toolAnswer(result);
+  if (answer?.mode !== "own_server") return undefined;
+  const proposal: unknown = answer.ownServer;
+  if (typeof proposal !== "object" || proposal === null) return undefined;
+  const title: unknown = Reflect.get(proposal, "title");
+  const url: unknown = Reflect.get(proposal, "url");
+  return typeof title === "string" && typeof url === "string" && url !== ""
+    ? { title, url }
+    : undefined;
+}
+
+/**
+ * The person's message to the conversation whose agent proposed the server, once it is added:
+ * its name and the tools they accepted, or that they accepted none.
+ */
+export function ownServerAddedMessage(
+  added: { title: string; tools: readonly string[] },
+  t: TranslationContextValue["t"]
+): string {
+  if (added.tools.length === 0) return t("ownServers.toldNoTools", { title: added.title });
+  const named = added.tools.slice(0, 10);
+  const tools = named.join(", ") + (added.tools.length > named.length ? ", …" : "");
+  return added.tools.length === 1
+    ? t("ownServers.toldOne", { title: added.title, tools })
+    : t("ownServers.toldTools", { title: added.title, count: added.tools.length, tools });
 }

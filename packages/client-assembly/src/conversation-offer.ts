@@ -34,6 +34,7 @@ import {
   type Authorizer,
   type Conversation,
   type ConversationOfferSource,
+  CONNECTION_ACTIONS,
   type ModuleSnapshot,
   type PlatformStores,
   type ProjectFolderPort,
@@ -322,6 +323,24 @@ async function ownServerToolNames(
 }
 
 /**
+ * Whether this run may propose the person's own MCP server (PMCP-CHAT): its agent lets own
+ * servers in, the operator's switch is on, the run may be offered what is the person's alone
+ * (the rules of `personalSkillNames`) and the person holds `connection.add_own`. Any agent may,
+ * not only one that holds the platform's tools.
+ */
+async function ownServerProposalAllowed(
+  input: ConversationOfferInput,
+  request: OfferRequest,
+  conversation: OfferedConversation
+): Promise<boolean> {
+  if (request.agentOwnServers !== true || input.ownServerTools?.isOn() !== true) return false;
+  const person = await ownRunPerson(input, request, conversation);
+  const authorizer = input.authorizer?.();
+  if (person === undefined || !request.user || !authorizer) return false;
+  return (await authorizer.forActor(request.user)).authorize(CONNECTION_ACTIONS.addOwn).allowed;
+}
+
+/**
  * The Knowledge Bases of the chat's project (PRJ-8): those every reader of the chat may search,
  * and the person's own only where the run may be offered what is theirs alone. Nothing where
  * the module `knowledge` is off.
@@ -485,6 +504,12 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
       const folder = await projectFolderOf(input, request);
       const knowledgeBases = await projectKnowledgeBaseNames(input, request, conversation);
       const ownServerNames = await ownServerToolNames(input, request, conversation);
+      // An agent without the platform's tools is offered the proposal for its own-server
+      // mode alone, where that is allowed; the tool refuses it every other mode.
+      const proposes =
+        holds ||
+        (input.hasTool(CONNECTION_PROPOSE_TOOL_NAME) &&
+          (await ownServerProposalAllowed(input, request, conversation)));
       // A self-added server is on no agent: an agent's listing of one of its tools is withheld,
       // whoever's run it is, unless this run is offered it as its person's own.
       const listedOwnServerNames = (
@@ -501,7 +526,7 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
               ...SCHEDULED_START_TOOL_NAMES
             ]
           : []),
-        ...(holds ? [CONNECTION_PROPOSE_TOOL_NAME] : []),
+        ...(proposes ? [CONNECTION_PROPOSE_TOOL_NAME] : []),
         ...(holds || subject?.kind === "connection"
           ? [CONNECTION_DRAFT_TOOL_NAME, CONNECTION_OFFER_TOOL_NAME]
           : []),
@@ -636,6 +661,70 @@ async function projectFolderOf(
  * asset tools and those no call of the run may make, and those the conversation is offered,
  * which holds the asset tools the agent lists.
  */
+/**
+ * The modes a call of `platform.connections.propose` may use (PMCP-CHAT), asked again at the
+ * call: the offer named the tool, the call names a mode. The own-server mode as the offer
+ * allows it, for the run, the chat and the person of the call, and never for a subagent, a
+ * Workflow step, an unattended start or a call for someone else. The other modes for an agent
+ * that holds the platform's tools or lists the tool itself, and as before where the agent is no
+ * agent asset.
+ */
+async function proposalAccessOf(
+  input: ConversationOfferInput,
+  agentOf:
+    | ((
+        agentName: string
+      ) => Promise<{ toolNames: readonly string[]; ownServers?: boolean } | undefined>)
+    | undefined,
+  context: ToolExecutionContext
+): Promise<{ ownServer: boolean; otherModes: boolean }> {
+  const call = context.toolRequest;
+  const agent = call && agentOf ? await agentOf(call.agentName) : undefined;
+  const run =
+    call && input.stores.agentRuns
+      ? await input.stores.agentRuns.getAgentRun({
+          clientInstanceId: context.clientInstanceId,
+          runId: call.agentRunId
+        })
+      : undefined;
+  // An agent that lists the tool itself has always had every mode.
+  const otherModes =
+    agent === undefined ||
+    holdsPlatformTools(agent.toolNames) ||
+    agent.toolNames.includes(CONNECTION_PROPOSE_TOOL_NAME) ||
+    Boolean(run?.workflowStepRunId);
+  if (
+    !call ||
+    !agent ||
+    context.subagent ||
+    context.workflowAgent ||
+    context.workflowDraft ||
+    context.unattended ||
+    context.delegatedActor
+  ) {
+    return { ownServer: false, otherModes };
+  }
+  const conversation = await input.stores.conversations.getConversation(
+    context.clientInstanceId,
+    call.conversationId
+  );
+  const ownServer =
+    conversation !== undefined &&
+    (await ownServerProposalAllowed(
+      input,
+      {
+        clientInstanceId: context.clientInstanceId,
+        conversationId: call.conversationId,
+        agentToolNames: agent.toolNames,
+        agentOwnServers: agent.ownServers !== false,
+        user: context.user,
+        runId: call.agentRunId
+      },
+      conversation
+    ));
+  return { ownServer, otherModes };
+}
+
 export async function conversationToolNames(
   listed: readonly string[],
   offer: Awaited<ReturnType<ConversationOfferSource["offerOf"]>>
@@ -686,9 +775,20 @@ export function createPlatformTools(
      */
     catalogueStores?: PlatformStores;
     workspaceObjects?: ObjectStorage;
+    /**
+     * The agent of a name as its definition lists it: whether it holds the platform's tools and
+     * lets own servers in, which decides the modes of its proposal of a Connection (PMCP-CHAT).
+     */
+    agentOf?: (
+      agentName: string
+    ) => Promise<{ toolNames: readonly string[]; ownServers?: boolean } | undefined>;
+    /** The instance's authorizer before `bind` gives the process its own, where it is known. */
+    authorizer?: Authorizer;
   }
 ) {
-  const attached: { tools?: ToolRegistry; authorizer?: Authorizer } = {};
+  const attached: { tools?: ToolRegistry; authorizer?: Authorizer } = {
+    ...(input.authorizer ? { authorizer: input.authorizer } : {})
+  };
   const catalogue =
     input.connections?.catalogue && input.catalogueStores
       ? connectionProposalCatalogue({
@@ -699,6 +799,24 @@ export function createPlatformTools(
         })
       : undefined;
   const platformAssets: PlatformAssetBinding = createPlatformAssetBinding();
+  const offerInput: ConversationOfferInput = {
+    stores: input.stores,
+    ...(input.connections?.ownServerTools
+      ? { ownServerTools: input.connections.ownServerTools }
+      : {}),
+    modules: input.modules,
+    ...(input.dataTools ? { dataTools: input.dataTools } : {}),
+    ...(input.dataToolDescribeTimeoutMs === undefined
+      ? {}
+      : { dataToolDescribeTimeoutMs: input.dataToolDescribeTimeoutMs }),
+    ...(input.policy ? { policy: input.policy } : {}),
+    ...(input.toolRights ? { toolRights: input.toolRights } : {}),
+    ...(input.projectFolder ? { projectFolder: input.projectFolder } : {}),
+    ...(input.projectSkills ? { projectSkills: input.projectSkills } : {}),
+    ...(input.audit ? { audit: input.audit } : {}),
+    authorizer: () => attached.authorizer,
+    hasTool: (toolName) => attached.tools?.has(toolName) ?? false
+  };
   return {
     /**
      * Binds the tools to the workflow of the asset operations of this process: the one the
@@ -734,7 +852,10 @@ export function createPlatformTools(
         ? [
             createConnectionProposeTool({
               connectorTypes: input.connections.connectorTypes,
-              ...(catalogue ? { catalogue } : {})
+              ...(catalogue ? { catalogue } : {}),
+              access: {
+                of: (context) => proposalAccessOf(offerInput, input.agentOf, context)
+              }
             }),
             createConnectionDraftTool({
               connectorTypes: input.connections.connectorTypes,
@@ -744,24 +865,7 @@ export function createPlatformTools(
           ]
         : [])
     ],
-    conversationOffer: createConversationOffer({
-      stores: input.stores,
-      ...(input.connections?.ownServerTools
-        ? { ownServerTools: input.connections.ownServerTools }
-        : {}),
-      modules: input.modules,
-      ...(input.dataTools ? { dataTools: input.dataTools } : {}),
-      ...(input.dataToolDescribeTimeoutMs === undefined
-        ? {}
-        : { dataToolDescribeTimeoutMs: input.dataToolDescribeTimeoutMs }),
-      ...(input.policy ? { policy: input.policy } : {}),
-      ...(input.toolRights ? { toolRights: input.toolRights } : {}),
-      ...(input.projectFolder ? { projectFolder: input.projectFolder } : {}),
-      ...(input.projectSkills ? { projectSkills: input.projectSkills } : {}),
-      ...(input.audit ? { audit: input.audit } : {}),
-      authorizer: () => attached.authorizer,
-      hasTool: (toolName) => attached.tools?.has(toolName) ?? false
-    }),
+    conversationOffer: createConversationOffer(offerInput),
     /**
      * The tool registry of the process. The platform's tools are the platform's, so no release
      * names them: they are enabled beside the tools the release names, an agent's definition

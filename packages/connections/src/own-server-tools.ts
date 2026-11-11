@@ -32,10 +32,13 @@ export interface OwnServerTools {
   toolNamesOf(ownerUserId: string): Promise<string[]>;
   /** Of the names, those of an operation of anybody's own server. */
   ownServerToolNames(toolNames: readonly string[]): Promise<string[]>;
+  /** Whether the operator's switch lets people add and use their own servers. */
+  isOn(): boolean;
 }
 
 export function createOwnServerTools(deps: ConnectionOperationSourceDeps): OwnServerTools {
   return {
+    isOn: () => ownServersOn(deps.ownServers),
     async toolNamesOf(ownerUserId) {
       if (!ownServersOn(deps.ownServers)) return [];
       return (await readConnections(deps))

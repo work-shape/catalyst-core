@@ -6,7 +6,8 @@ import { join } from "node:path";
 import type { BrowserContext, Page } from "@playwright/test";
 import { z } from "zod";
 import { availableSamplePort } from "./sample-port.mjs";
-import { assetRevision, requestWithOrigin } from "./request-with-origin";
+import { sendToolCall } from "./page-surface-fixtures";
+import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
 // A person's own MCP server (PMCP-5, connections acceptance check 81) against the demo's sample
@@ -285,5 +286,113 @@ test("en: an address with a password, or one that is no MCP server, is refused a
     expect((await mine(page)).connections.filter((row) => row.ownServer)).toEqual([]);
   } finally {
     await removeOwnServers(page);
+  }
+});
+
+const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
+const PROPOSE_TOOL = "platform.connections.propose";
+
+test("de: an agent without the platform's tools proposes the person's own server in their chat, the add screen opens filled, and Fertig tells the chat", async ({
+  page,
+  browser,
+  baseURL,
+  releaseConnections: _releaseConnections,
+  instanceAgentsChange: _instanceAgentsChange
+}) => {
+  test.setTimeout(shotsDir ? 300_000 : 180_000);
+  const agent = `e2e_own_server_${randomUUID().slice(0, 8)}`;
+  const agentUrl = `${apiBaseUrl}/api/v1/assets/agent/${agent}`;
+  const adminContext = await browser.newContext({ baseURL });
+  const admin = await adminContext.newPage();
+  const adminIn = await requestWithOrigin(admin, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
+    data: { ...superadmin, rememberMe: true }
+  });
+  expect(adminIn.ok()).toBe(true);
+  await routeProvider(page.context());
+  await signIn(page, "de");
+  await removeOwnServers(page);
+  try {
+    // An agent that holds no tool of the platform, available to everyone.
+    const stored = await requestWithOrigin(admin, "put", agentUrl, {
+      data: {
+        expectedRevision: await assetBaseRevision(admin, agentUrl),
+        availableIn: "all",
+        config: {
+          name: agent,
+          displayName: `Notiz-Hilfe ${agent.slice(-8)}`,
+          description: "Hilft beim Einrichten.",
+          instructions: "Hilf beim Einrichten.",
+          toolNames: []
+        }
+      }
+    });
+    expect(stored.ok(), await stored.text()).toBe(true);
+
+    // A new chat of the person's own with it.
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/w\/[^/]+/u);
+    await page
+      .getByRole("navigation", { name: "Hauptnavigation" })
+      .getByRole("button", { name: "Agenten", exact: true })
+      .click();
+    await page
+      .getByRole("region", { name: "Agenten" })
+      .getByRole("listitem")
+      .filter({ has: page.getByRole("heading", { name: `Notiz-Hilfe ${agent.slice(-8)}` }) })
+      .getByRole("button", { name: "Chat starten" })
+      .click();
+    await expect(page).toHaveURL(/\/w\/[^/]+$/u);
+
+    // Its proposal: the card in the chat, and the add screen opens beside it, filled.
+    await sendToolCall(page, PROPOSE_TOOL, {
+      mode: "own_server",
+      connectorType: "mcp",
+      title: "Meine Notizen",
+      url: "https://notes.example.test/mcp"
+    });
+    const card = page.locator("[data-own-server-proposal]");
+    await expect(card).toContainText("MCP-Server hinzufügen");
+    await expect(card).toContainText("Meine Notizen");
+    await expect(card).toContainText("notes.example.test");
+    await expect(page).toHaveURL(/\/settings\/you\/connections/u);
+    const dialog = page.getByRole("dialog");
+    const address = dialog.locator('[data-own-server-field="address"]');
+    await expect(address).toHaveValue("https://notes.example.test/mcp");
+    // Nothing is saved before Verbinden.
+    expect((await mine(page)).connections.filter((row) => row.ownServer)).toEqual([]);
+    await shoot(page, "chat-proposal");
+
+    // The person points it at the suite's server, connects, signs in and accepts its tools.
+    await address.fill(`${sampleBase}/dcr/mcp`);
+    await dialog.getByRole("button", { name: "Verbinden" }).click();
+    await expect(dialog.locator("[data-sign-in-open]")).toBeVisible({ timeout: 30_000 });
+    const opened = page.waitForEvent("popup");
+    await dialog.locator("[data-sign-in-open]").click();
+    await (await opened).waitForEvent("close");
+    await expect(dialog.locator("li[data-approval-tool]")).toHaveCount(6, {
+      timeout: DISCOVERY_TIMEOUT_MS
+    });
+    await expect(dialog.locator('[data-own-server-field="title"]')).toHaveValue("Meine Notizen");
+    await dialog.getByRole("button", { name: "Fertig" }).click();
+    await expect(dialog).toBeHidden();
+
+    // The chat hears it as the person's own message, with the tools accepted.
+    await expect(
+      page.getByText(
+        /^Ich habe meinen MCP-Server Meine Notizen hinzugefügt\. 6 Tools akzeptiert: /u
+      )
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator("[data-own-server-card]")).toContainText("Meine Notizen");
+    await shoot(page, "chat-told");
+  } finally {
+    await removeOwnServers(page);
+    const found = await admin.request.get(agentUrl);
+    if (found.status() !== 404) {
+      const removed = await requestWithOrigin(admin, "post", `${agentUrl}/delete`, {
+        data: { expectedRevision: await assetRevision(admin, agentUrl) }
+      });
+      expect(removed.ok(), `Delete agent during cleanup: ${removed.status()}`).toBe(true);
+    }
+    await adminContext.close();
   }
 });

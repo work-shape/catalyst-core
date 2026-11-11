@@ -671,6 +671,8 @@ export async function createClientInstanceExecutionAssembly(
     stores: store,
     catalogueStores: store,
     workspaceObjects: workspaceObjectStore,
+    agentOf: async (agentName) =>
+      (await assetSource.getSnapshot()).agents.find((agent) => agent.name === agentName),
     modules,
     connections,
     dataTools: () => configAssets.dataTools,
