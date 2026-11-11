@@ -90,6 +90,7 @@ export interface ConversationPersonRow {
   userId: string;
   displayLabel: string;
   addedAt: string;
+  deactivated: boolean;
 }
 /** A conversation's row with its named people, or those of its root (CHAT-SHARE-1). */
 export type ConversationWithPeopleRow = ConversationRow & {
@@ -162,7 +163,8 @@ export function mapConversation(row: ConversationWithPeopleRow | undefined): Con
     people: row.people.map((person) => ({
       userId: person.userId,
       displayLabel: person.displayLabel,
-      addedAt: new Date(person.addedAt).toISOString()
+      addedAt: new Date(person.addedAt).toISOString(),
+      ...(person.deactivated ? { deactivated: true as const } : {})
     })),
     ...(row.people.length > 0 && typeof row.createdByDisplayLabel === "string"
       ? { createdByDisplayLabel: row.createdByDisplayLabel }

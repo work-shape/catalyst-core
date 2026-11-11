@@ -18,6 +18,7 @@ conversations.runs.create  POST /api/v1/conversations/runs
 conversations.runs.observe  GET /api/v1/conversations/:conversationId/runs/:runId/events
 conversations.runs.start  POST /api/v1/conversations/:conversationId/runs
 conversations.share_candidates  GET /api/v1/conversations/:conversationId/share-candidates
+conversations.shared_from_outside.list  GET /api/v1/conversations/shared-from-outside
 conversations.structured_data.get  GET /api/v1/conversations/:conversationId/structured-data/:structuredDataResourceId
 conversations.subagents.list  GET /api/v1/conversations/:conversationId/subagents
 conversations.subject.open  PUT /api/v1/conversations/:conversationId/subject

@@ -29,6 +29,7 @@ import {
   unknownRunObservationSchema,
   startConversationRunRequestSchema,
   startConversationRunResponseSchema,
+  sharedFromOutsideListItemSchema,
   structuredDataResourceResponseSchema
 } from "../conversations";
 import { defineOperation, defineRegisteredOperation, json, page, sse } from "./define-operation";
@@ -59,6 +60,24 @@ export const conversationOperations = {
     }),
     response: page(conversationListItemSchema, ["updatedAt", "id"], true),
     errors: ["NOT_FOUND"],
+    rateClass: "read"
+  }),
+  "conversations.shared_from_outside.list": defineOperation({
+    id: "conversations.shared_from_outside.list",
+    method: "GET",
+    path: "/api/v1/conversations/shared-from-outside",
+    summary: "List the chats shared with the caller from workspaces they are no member of",
+    tag: "Conversations",
+    auth: "user",
+    scope: "conversation:read",
+    requires: [],
+    effect: "reading",
+    query: listQuerySchema.extend({
+      /** Keeps the chats whose title contains this text, without regard to case. */
+      query: z.string().trim().min(1).max(CONVERSATION_TITLE_QUERY_MAX_CHARS).optional()
+    }),
+    response: page(sharedFromOutsideListItemSchema, ["updatedAt", "id"], true),
+    errors: [],
     rateClass: "read"
   }),
   "conversations.create": defineOperation({

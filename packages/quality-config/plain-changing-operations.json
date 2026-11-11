@@ -202,6 +202,7 @@
     "conversations.runs.observe": "conversation_access",
     "conversations.runs.start": "conversation_access",
     "conversations.share_candidates": "conversation_access",
+    "conversations.shared_from_outside.list": "own",
     "conversations.structured_data.get": "conversation_access",
     "conversations.subagents.list": "conversation_access",
     "conversations.thread.get": "conversation_access",
