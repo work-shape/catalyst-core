@@ -354,6 +354,12 @@ interface OperationDefinitionBase<Input, Output> {
   /** The release's own policy value. Without one the instance default of the effect applies. */
   defaultPolicy?: PolicyValue;
   /**
+   * The person who owns the self-added server this is a tool of (PMCP): set on every operation
+   * of such a Connection, `""` where its definition names no owner. A changing one asks before
+   * each call and only its owner's own "Always allow" waives that (`resolvePolicy`).
+   */
+  ownServerOwnerId?: string;
+  /**
    * A value no call of the operation is looser than, whatever a central setting says. See
    * `policyFloor` of the policy's input.
    */

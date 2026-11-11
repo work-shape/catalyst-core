@@ -66,9 +66,12 @@ export function createOwnServerTools(deps: ConnectionOperationSourceDeps): OwnSe
 }
 
 /**
- * The floor of one call of a person's own server: `confirm` for a changing tool always; for a
- * reading tool of an agent, `confirm` where an operation of another Connection ran in the
- * conversation or one of its threads, or where that cannot be read. Nothing else.
+ * The floor of one call of a person's own server (ruling 10): for an agent's call, reading or
+ * changing, `confirm` where an operation of another Connection ran in the conversation or one
+ * of its threads, or where that cannot be read; a tool its owner always allows asks there too.
+ * Outside an agent's run a changing call is `confirm`. Nothing else: that an agent's change
+ * asks in a chat where only this server ran is the policy's, which the owner's "Always allow"
+ * lowers (PMCP-4b).
  */
 export async function ownServerPolicyFloor(
   deps: OwnServerFloorDeps,
@@ -76,8 +79,8 @@ export async function ownServerPolicyFloor(
   operation: Pick<ConnectionOperationConfig, "effect">,
   origin: OperationOrigin
 ): Promise<PolicyValue | undefined> {
-  if (operation.effect === "changing") return "confirm";
-  if (origin.kind !== "agent") return undefined;
+  // Outside an agent's run no person's setting applies, and a change asks all the same.
+  if (origin.kind !== "agent") return operation.effect === "changing" ? "confirm" : undefined;
   return (await otherConnectionRan(deps, connectionName, origin.conversationId))
     ? "confirm"
     : undefined;

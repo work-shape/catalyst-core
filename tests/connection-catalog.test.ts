@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildConnectionCatalog,
+  changedAcceptedOperations,
   compileJsonSchema,
   connectionOperationStatus,
   fingerprintOperation,
@@ -138,6 +139,45 @@ describe("the catalog of a Connection", () => {
     expect(revenue.discoveredFingerprint).toBe(fingerprintOperation(changed));
     expect(revenue.discoveredFingerprint).not.toBe(first.pinned.revenue);
     expect(statusOf(accepted("costs"), second).status).toBe("ready");
+  });
+
+  it("names the accepted operations a discovery found changed, and no other", () => {
+    const first = buildConnectionCatalog({
+      discovered: [descriptor("revenue"), descriptor("costs"), descriptor("margin")],
+      accepted: [accepted("revenue"), accepted("costs"), accepted("margin")],
+      previous: undefined,
+      now: NOW
+    });
+    const discovered = [
+      descriptor("revenue", { description: "Reads revenue, and more." }),
+      descriptor("costs", {
+        inputSchema: { type: "object", properties: { year: { type: "string" } } }
+      }),
+      descriptor("margin"),
+      descriptor("new_one", { description: "Not accepted." })
+    ];
+    const second = buildConnectionCatalog({
+      discovered,
+      accepted: [accepted("revenue"), accepted("costs"), accepted("margin")],
+      previous: first,
+      now: LATER
+    });
+    const changed = (operations: ConnectionOperationConfig[], previous?: ConnectionCatalog) =>
+      changedAcceptedOperations({ accepted: operations, previous, next: second });
+
+    // A changed description and a changed input schema; the unchanged tool and the one nobody
+    // accepted are not named.
+    expect(
+      changed([accepted("revenue"), accepted("costs"), accepted("margin"), accepted("gone")], first)
+    ).toEqual(["revenue", "costs"]);
+    // Nothing was accepted before the first discovery pinned it.
+    expect(changed([accepted("revenue")])).toEqual([]);
+    // A fingerprint config names is what was accepted.
+    const named = fingerprintOperation(required(discovered[0]));
+    expect(changed([accepted("revenue", { schemaFingerprint: named })], first)).toEqual([]);
+    expect(changed([accepted("margin", { schemaFingerprint: "0".repeat(64) })])).toEqual([
+      "margin"
+    ]);
   });
 
   it("stops an operation whose schema or proposed effect changed", () => {

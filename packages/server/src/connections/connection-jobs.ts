@@ -235,6 +235,7 @@ export function createConnectionDiscoveryJobs(options: ConnectionDiscoveryJobOpt
     const outcome = await discover(connectionName, {
       signal: control.signal,
       transaction: (write) => control.transaction(write),
+      correlationId: job.correlationId,
       ...(personalOwner === undefined ? {} : { personalOwner })
     });
     if (outcome.superseded === true) {

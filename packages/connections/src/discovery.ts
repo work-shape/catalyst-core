@@ -5,7 +5,9 @@ import {
   checkStorableTexts,
   connectionCallError,
   connectionCallReasonOf,
+  connectionOperationName,
   isStorableText,
+  ownerOnlyOwnerOf,
   type ClientInstanceId,
   type ConnectionCallReason,
   type ConnectionCatalog,
@@ -19,10 +21,11 @@ import {
   type Logger,
   type OwnServersSettings,
   type PlatformStores,
+  createPlatformId,
   ownServersOn
 } from "@work-shape/catalyst-core";
 import { holdsSecret } from "./call";
-import { buildConnectionCatalog } from "./catalog";
+import { buildConnectionCatalog, changedAcceptedOperations } from "./catalog";
 import { readConnection, type StoredConnection } from "./connection-reads";
 import { NO_CREDENTIALS, openConnectorContext } from "./connector-context";
 import {
@@ -136,6 +139,8 @@ export interface DiscoverConnectionInput {
   personalOwner?: string;
   /** `modules.connections.ownServers`: off, a person's own server is not contacted. */
   ownServers?: Pick<OwnServersSettings, "enabled">;
+  /** The correlation of the job the discovery runs in, for the events its write records. */
+  correlationId?: string;
 }
 
 /**
@@ -507,7 +512,8 @@ export async function discoverConnection(
     state: Pick<
       Parameters<PlatformStores["connections"]["putConnectionState"]>[0],
       "health" | "lastErrorCode" | "catalog"
-    >
+    >,
+    also?: (tx: PlatformStores) => Promise<void>
   ): Promise<boolean> =>
     write(async (tx) => {
       // Held at this revision until the write is committed: an edit of the Connection waits,
@@ -523,6 +529,7 @@ export async function discoverConnection(
         connectionAssetId: connection.assetId,
         ...state
       });
+      await also?.(tx);
       return true;
     });
 
@@ -541,18 +548,41 @@ export async function discoverConnection(
     return { status: "failed", ...(reason === undefined ? {} : { reason }) };
   }
   const { catalog, leftOut, rejected, schemaRefused, schemaRefusal } = found;
+  // A tool of a person's own server that changed since its owner accepted it asks again: the
+  // owner's "Always allow" of it goes in the same write (PMCP-4b).
+  const owner = ownerOnlyOwnerOf(connection.config);
+  const changed =
+    owner === undefined || owner === ""
+      ? []
+      : changedAcceptedOperations({
+          accepted: connection.config.operations,
+          previous: connection.catalog,
+          next: catalog
+        });
   // A discovery that listed its tools reached the system with the credential. The code names
   // why an operation was left out: for the credential first, else for its schema.
-  const written = await writeState({
-    health: "ok",
-    lastErrorCode: rejected > 0 ? CONNECTION_DISCOVERY_REJECTED_CODE : (schemaRefusal ?? null),
-    catalog: {
-      version: catalog.version,
-      discoveredAt: catalog.discoveredAt,
-      entries: catalog.entries.map((entry) => ({ ...entry })),
-      pinned: catalog.pinned
-    }
-  });
+  const written = await writeState(
+    {
+      health: "ok",
+      lastErrorCode: rejected > 0 ? CONNECTION_DISCOVERY_REJECTED_CODE : (schemaRefusal ?? null),
+      catalog: {
+        version: catalog.version,
+        discoveredAt: catalog.discoveredAt,
+        entries: catalog.entries.map((entry) => ({ ...entry })),
+        pinned: catalog.pinned
+      }
+    },
+    owner === undefined || changed.length === 0
+      ? undefined
+      : (tx) =>
+          removeAlwaysAllows(tx, {
+            clientInstanceId,
+            userId: owner,
+            operations: changed.map((name) => connectionOperationName(connectionName, name)),
+            at: catalog.discoveredAt,
+            correlationId: input.correlationId ?? createPlatformId("corr")
+          })
+  );
   if (!written) return { status: "skipped", superseded: true };
   if (leftOut > 0) {
     input.logger?.warn(
@@ -567,4 +597,42 @@ export async function discoverConnection(
     ...(rejected > 0 ? { rejectedCount: rejected } : {}),
     ...(schemaRefusal === undefined ? {} : { schemaRefusedCount: schemaRefused, schemaRefusal })
   };
+}
+
+/**
+ * Removes the owner's "Always allow" of each tool of their own server that changed, with the
+ * setting's audit event and nothing of the tool but its operation name: the next call asks.
+ * Ask me and Never stay as the owner set them.
+ */
+async function removeAlwaysAllows(
+  tx: PlatformStores,
+  input: {
+    clientInstanceId: ClientInstanceId;
+    userId: string;
+    operations: readonly string[];
+    at: string;
+    correlationId: string;
+  }
+): Promise<void> {
+  const { clientInstanceId, userId } = input;
+  for (const operation of input.operations) {
+    const value = await tx.userOperationSettings.get({ clientInstanceId, userId, operation });
+    if (value !== "always_allow") continue;
+    await tx.userOperationSettings.set({
+      clientInstanceId,
+      userId,
+      operation,
+      value: null,
+      at: input.at
+    });
+    await tx.audit.appendAuditEvent({
+      clientInstanceId,
+      type: "user.operation_setting_changed",
+      status: "success",
+      subject: userId,
+      reason: "tool_changed",
+      correlationId: input.correlationId,
+      metadata: { operation, value: "default" }
+    });
+  }
 }
