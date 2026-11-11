@@ -572,7 +572,7 @@ export function createToolOperationRunner(
  */
 async function calledTool(
   request: ToolExecutionRequest,
-  context: Pick<ToolExecutionContext, "correlationId" | "locale">,
+  context: Pick<ToolExecutionContext, "correlationId" | "locale" | "user">,
   tools: ToolRegistry,
   dataTools: DataToolRunnerOptions | undefined,
   deps: RunOperationDeps
@@ -598,7 +598,16 @@ async function calledTool(
   if (!dataTools || !isDataToolName(toolName)) {
     return { refusal: failed("not_allowed", `Tool '${toolName}' is not registered`) };
   }
-  const listed = (await deps.agentToolNames?.(agentName, request.conversationId)) ?? [];
+  // The run and its person are asked too: a run of its person's own private chat holds the
+  // tools of the servers they added for themselves (PMCP-4), which no agent lists.
+  const listed =
+    (await deps.agentToolNames?.(
+      agentName,
+      request.conversationId,
+      isAuthenticatedServicePrincipal(context.user)
+        ? undefined
+        : { runId: request.agentRunId, user: context.user }
+    )) ?? [];
   if (!listed.includes(toolName)) {
     const action = `${AGENT_TOOL_ACTION_PREFIX}${toolName}`;
     return {

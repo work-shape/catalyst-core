@@ -1,4 +1,5 @@
 import {
+  isAuthenticatedServicePrincipal,
   AGENT_TOOL_ACTION_PREFIX,
   AppError,
   INTERRUPTED_RUN_ERROR,
@@ -419,7 +420,16 @@ async function admitAgain(
   // waited is refused here, and a source that is down is never asked about it.
   const { origin } = waiting.call;
   if (origin.kind === "agent" && isDataToolName(origin.toolName)) {
-    const listed = (await deps.agentToolNames?.(origin.agentName, origin.conversationId)) ?? [];
+    // Asked for the run and its person, as where the call was made (PMCP-4).
+    const { actor } = waiting.call;
+    const listed =
+      (await deps.agentToolNames?.(
+        origin.agentName,
+        origin.conversationId,
+        actor === undefined || isAuthenticatedServicePrincipal(actor)
+          ? undefined
+          : { runId: origin.agentRunId, user: actor }
+      )) ?? [];
     if (!listed.includes(origin.toolName)) {
       const ended = await endWaiting(
         deniedEnd(
