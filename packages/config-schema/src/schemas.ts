@@ -335,7 +335,7 @@ const moduleSwitchSchema = z.object({ enabled: z.boolean() }).strict();
  * startup instead.
  *
  * `modules.connections.ownServers` governs a person's own MCP server (PMCP): `enabled` (default
- * off until PMCP-5 turns it on) lets a holder of `connection.add_own` add one, and off stops
+ * on) lets a holder of `connection.add_own` add one, and off stops
  * every self-added server, its calls, tests, discovery and sign-in, without deleting it;
  * `perPerson` (default 10) bounds how many one person adds; `publicHttps` (default on) lets a
  * self-added server reach a public `https` host on port 443 without an entry of `egress.allow`.

@@ -110,7 +110,7 @@ export default defineConfig({
         },
         {
           label: "Connect systems",
-          items: ["connect/connect-a-system"]
+          items: ["connect/connect-a-system", "connect/your-own-mcp-server"]
         },
         {
           label: "How it works",

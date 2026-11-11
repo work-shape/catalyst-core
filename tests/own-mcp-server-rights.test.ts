@@ -67,7 +67,6 @@ beforeAll(async () => {
   world = await createOAuthWorld({
     plainPeople: true,
     extraPort: probe.port,
-    // On, as an operator or PMCP-5 turns it on: the release default is off.
     ownServers: { enabled: true, perPerson: 3 }
   });
   alice = await world.signIn("alice");
@@ -472,5 +471,56 @@ describe("the owner's probe (check 78)", () => {
 
   it("refuses another person's test", async () => {
     expect(await world.test("dave-ok", carol)).toMatchObject({ status: 403 });
+  });
+});
+
+describe("the owner's list (PMCP-5)", () => {
+  const mineSchema = z.object({
+    connections: z.array(
+      z.object({
+        name: z.string(),
+        ownServer: z
+          .object({ host: z.string(), enabled: z.boolean(), tools: z.number() })
+          .optional()
+      })
+    ),
+    ownServers: z.object({ mayAdd: z.boolean() })
+  });
+  const mine = async (headers: Record<string, string>) => {
+    const answer = await request("GET", apiOperations["connections.mine"].buildPath({}), headers);
+    expect(answer.status).toBe(200);
+    return mineSchema.parse(JSON.parse(answer.text));
+  };
+
+  it("lists a person's own servers to them alone, also switched off, and whether they may add one", async () => {
+    const carols = await mine({ cookie: carol });
+    expect(carols.ownServers.mayAdd).toBe(true);
+    const host = new URL(world.sample).host;
+    // Switched off by the admin above, with the one tool the admin's write kept.
+    expect(carols.connections.find((row) => row.name === "carol-notes")?.ownServer).toEqual({
+      host,
+      enabled: false,
+      tools: 1
+    });
+    expect(carols.connections.find((row) => row.name === "carol-probe")?.ownServer).toEqual({
+      host,
+      enabled: true,
+      tools: 0
+    });
+    expect(carols.connections.map((row) => row.name)).not.toContain("dave-ok");
+    const daves = await mine({ cookie: dave });
+    expect(daves.connections.map((row) => row.name)).toContain("dave-ok");
+    expect(daves.connections.map((row) => row.name)).not.toContain("carol-probe");
+    // The admin is listed nobody's own server, and an admin-made one is no own server.
+    const alices = await mine({ cookie: alice });
+    expect(alices.connections.filter((row) => row.ownServer !== undefined)).toEqual([]);
+    expect(alices.connections.map((row) => row.name)).not.toContain("carol-probe");
+  });
+
+  it("never offers the add to a key", async () => {
+    const keyed = await mine({
+      authorization: `Bearer ${await bearerOf(carol, ["account.manage"])}`
+    });
+    expect(keyed.ownServers.mayAdd).toBe(false);
   });
 });

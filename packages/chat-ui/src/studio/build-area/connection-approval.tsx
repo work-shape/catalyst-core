@@ -89,6 +89,8 @@ export function ConnectionApprovalList({
   source,
   groups,
   surfaces: offered = APPROVAL_SURFACES,
+  mayRead,
+  aside,
   disabled = false
 }: {
   candidates: readonly ApprovalCandidate[];
@@ -114,6 +116,13 @@ export function ConnectionApprovalList({
    * its caller may read. Left out, agents, Apps and Workflows.
    */
   surfaces?: readonly ApprovalSurface[];
+  /**
+   * Which tools may be accepted as reading, such as only those a person's own server marks
+   * read-only. Left out, every tool.
+   */
+  mayRead?: (name: string) => boolean;
+  /** What a row shows under its description, such as the person's own setting of the tool. */
+  aside?: (candidate: ApprovalCandidate) => ReactNode;
   disabled?: boolean;
 }) {
   const { t } = useTranslation();
@@ -182,6 +191,8 @@ export function ConnectionApprovalList({
           }
           onCheckedChange={(on) => onSelectedChange(toggle(selected, candidate.name, on))}
         />
+        {/* Under the description, in line with the tool's name (the box and its gap). */}
+        {aside ? <div className="pl-6 empty:hidden">{aside(candidate)}</div> : null}
       </div>
       {onEffectsChange && candidate.request === undefined ? (
         <Select
@@ -197,7 +208,9 @@ export function ConnectionApprovalList({
             onEffectsChange(next);
           }}
         >
-          <option value="reading">{t("connectionCreate.reads")}</option>
+          <option value="reading" disabled={mayRead?.(candidate.name) === false}>
+            {t("connectionCreate.reads")}
+          </option>
           <option value="changing">{t("connectionCreate.changes")}</option>
         </Select>
       ) : (
@@ -219,25 +232,27 @@ export function ConnectionApprovalList({
   const outsideCut = rows.filter(outsideReadingCut).length;
   return (
     <div className="grid min-w-0 gap-4" data-connection-approval="">
-      <div
-        role="group"
-        aria-labelledby={surfacesLabel}
-        className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2"
-      >
-        <span id={surfacesLabel} className="mr-1 text-label">
-          {t("connectionCreate.mayUse")}
-        </span>
-        {offered.map((surface) => (
-          <Checkbox
-            key={surface}
-            label={t(SURFACE_LABELS[surface])}
-            checked={surfaces.has(surface)}
-            disabled={disabled}
-            data-approval-surface={surface}
-            onCheckedChange={(on) => onSurfacesChange(toggle(surfaces, surface, on))}
-          />
-        ))}
-      </div>
+      {offered.length === 0 ? null : (
+        <div
+          role="group"
+          aria-labelledby={surfacesLabel}
+          className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2"
+        >
+          <span id={surfacesLabel} className="mr-1 text-label">
+            {t("connectionCreate.mayUse")}
+          </span>
+          {offered.map((surface) => (
+            <Checkbox
+              key={surface}
+              label={t(SURFACE_LABELS[surface])}
+              checked={surfaces.has(surface)}
+              disabled={disabled}
+              data-approval-surface={surface}
+              onCheckedChange={(on) => onSurfacesChange(toggle(surfaces, surface, on))}
+            />
+          ))}
+        </div>
+      )}
       <div className="grid min-w-0 overflow-hidden rounded-md border">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b bg-muted/50 px-3 py-1 text-caption text-muted-foreground">
           <span data-approval-count="">

@@ -10,9 +10,8 @@ import { z } from "zod";
 import { createOAuthWorld, type OAuthWorld } from "./support/oauth-sign-in-world";
 
 // The operator's switch `modules.connections.ownServers.enabled` (PMCP-2, connections
-// acceptance check 76), here as a release leaves it: off until PMCP-5 turns it on, so a
-// release with PMCP-2 and without the egress rule (PMCP-3) contacts no self-added server.
-// Off, a person's create answers `own_servers_off`, and a server added before stops: its
+// acceptance check 76): on where release config leaves it out since PMCP-5, and here turned
+// off by the operator. Off, a person's create answers `own_servers_off`, and a server added before stops: its
 // calls, its test, its discovery and its sign-in answer `own_servers_off`, and nothing is
 // deleted.
 
@@ -24,8 +23,8 @@ let world: OAuthWorld;
 let carol: string;
 
 beforeAll(async () => {
-  // No `ownServers` in release config: the release default.
-  world = await createOAuthWorld({ plainPeople: true });
+  // The operator turns the switch off.
+  world = await createOAuthWorld({ plainPeople: true, ownServers: { enabled: false } });
   carol = await world.signIn("carol");
 }, 60_000);
 afterAll(async () => {
@@ -63,9 +62,9 @@ async function post(operation: "connections.discover" | "connections.oauth_start
   };
 }
 
-describe("people's own servers with the release default", () => {
-  it("are off until an operator or PMCP-5 turns them on", () => {
-    expect(DEFAULT_OWN_SERVERS.enabled).toBe(false);
+describe("people's own servers with the switch off", () => {
+  it("are on where release config leaves the switch out", () => {
+    expect(DEFAULT_OWN_SERVERS.enabled).toBe(true);
     const config = parseClientInstanceConfig({
       version: 1,
       clientInstance: { id: "own-servers-test", displayName: "Test", environment: "development" },
@@ -74,7 +73,7 @@ describe("people's own servers with the release default", () => {
       infrastructure: { models: { local: { provider: "deterministic", model: "local" } } },
       modules: { connections: { enabled: true } }
     });
-    expect(getOwnServers(config)).toMatchObject({ enabled: false });
+    expect(getOwnServers(config)).toMatchObject({ enabled: true });
   });
 
   it("answers `own_servers_off` to the create and stores nothing", async () => {

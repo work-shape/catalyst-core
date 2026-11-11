@@ -2,6 +2,9 @@ import {
   AppError,
   asUserId,
   endConnectionSignIn,
+  isOwnServerOwner,
+  ownServersOn,
+  ownerOnlyOwnerOf,
   type AuditActor,
   type ConnectionBindingRecord,
   type OperationResource
@@ -13,7 +16,7 @@ import {
   type ConnectionOperationSourceDeps,
   type StoredConnection
 } from "./connection-reads";
-import { connectionOriginOf } from "./connector-context";
+import { connectionOriginOf, connectionTargetOriginOf } from "./connector-context";
 
 /** The intentional display projection. No scope, secret handle, or token-set metadata. */
 function displayBinding(binding: ConnectionBindingRecord | undefined) {
@@ -36,6 +39,28 @@ function atCurrentOrigin(
   return origin !== undefined && binding?.origin === origin ? binding : undefined;
 }
 
+/**
+ * What the owner's list shows of their own server: the host it is at, whether it is on, which
+ * the operator's switch off also ends, and how many tools they accepted. Nothing for any other.
+ */
+function ownServerOf(connection: StoredConnection, switchOn: boolean) {
+  if (ownerOnlyOwnerOf(connection.config) === undefined) return undefined;
+  const origin = connection.type
+    ? connectionTargetOriginOf(connection.type, connection.config)
+    : undefined;
+  let host = "";
+  try {
+    host = origin === undefined ? "" : new URL(origin).host;
+  } catch {
+    host = "";
+  }
+  return {
+    host,
+    enabled: switchOn && connection.config.enabled,
+    tools: connection.config.operations.length
+  };
+}
+
 export function createPersonalConnectionManagement(deps: ConnectionOperationSourceDeps) {
   return {
     async credentialMode(name: string) {
@@ -50,7 +75,17 @@ export function createPersonalConnectionManagement(deps: ConnectionOperationSour
       const { credentialMode, connectorType, ownerPrincipalId } = connection.config;
       return { credentialMode, connectorType, ownerPrincipalId };
     },
-    async myConnections(userId: string, usable: (resource: OperationResource) => boolean) {
+    /**
+     * The personal Connections the person may use, each with only their own sign-in, and the
+     * MCP servers they added for themselves, which nobody else is listed, also while switched
+     * off. `mayAddOwn` is whether they hold the right to add one in a first-party session; the
+     * operator's switch is read here.
+     */
+    async myConnections(
+      userId: string,
+      usable: (resource: OperationResource) => boolean,
+      mayAddOwn = false
+    ) {
       const [connections, bindings] = await Promise.all([
         readConnections(deps),
         deps.stores.connections.listConnectionBindings({
@@ -63,25 +98,33 @@ export function createPersonalConnectionManagement(deps: ConnectionOperationSour
           .filter((binding) => binding.subject === `user:${userId}`)
           .map((binding) => [binding.connectionAssetId, binding])
       );
+      const switchOn = ownServersOn(deps.ownServers);
       return {
         connections: connections
-          .filter(
-            (connection) =>
-              connection.config.credentialMode === "user" &&
-              connection.config.enabled &&
-              usable(connectionResourceOf(connection))
-          )
-          .map((connection) => ({
-            name: connection.config.name,
-            title: connection.config.displayName,
-            ...(connection.config.service === undefined
-              ? {}
-              : { service: connection.config.service }),
-            ...(connection.config.catalogue === undefined
-              ? {}
-              : { catalogue: connection.config.catalogue }),
-            ...displayBinding(atCurrentOrigin(connection, byConnection.get(connection.assetId)))
-          }))
+          .filter((connection) => {
+            if (connection.config.credentialMode !== "user") return false;
+            // A self-added server is its owner's alone, and listed to them also while off.
+            if (ownerOnlyOwnerOf(connection.config) !== undefined) {
+              return isOwnServerOwner({ id: userId }, connection.config);
+            }
+            return connection.config.enabled && usable(connectionResourceOf(connection));
+          })
+          .map((connection) => {
+            const ownServer = ownServerOf(connection, switchOn);
+            return {
+              name: connection.config.name,
+              title: connection.config.displayName,
+              ...(connection.config.service === undefined
+                ? {}
+                : { service: connection.config.service }),
+              ...(connection.config.catalogue === undefined
+                ? {}
+                : { catalogue: connection.config.catalogue }),
+              ...displayBinding(atCurrentOrigin(connection, byConnection.get(connection.assetId))),
+              ...(ownServer === undefined ? {} : { ownServer })
+            };
+          }),
+        ownServers: { mayAdd: mayAddOwn && switchOn }
       };
     },
     async connectionPeople(name: string) {

@@ -186,6 +186,8 @@ interface InstanceConnectionParts {
   secrets: SecretResolver;
   stores: PlatformStores;
   logger: Logger;
+  /** For a test build only: see `CreateClientInstanceAppInput.ownServersByOperatorListForTests`. */
+  ownServersByOperatorListForTests?: boolean;
 }
 
 async function buildInstanceConnections(
@@ -268,6 +270,14 @@ async function buildInstanceConnections(
     );
   }
   const ownServers = getOwnServers(config);
+  const ownServersByOperatorList = input.ownServersByOperatorListForTests === true;
+  if (ownServersByOperatorList) {
+    // Said once, at start: no release build sets it.
+    logger.warn(
+      { module: "connections" },
+      "A test build: people's own MCP servers are judged by egress.allow alone, not by their own egress rule"
+    );
+  }
   const egress = createEgressChecker({
     // The hosts of an offered entry join the operator's list; an entry only names them.
     allow: [...config.egress.allow, ...catalogue.egress],
@@ -276,6 +286,7 @@ async function buildInstanceConnections(
     platformStoreUnknown: platformStore === undefined,
     // A server a person adds for themselves never reaches the instance itself (PMCP-3).
     ownServersPublicHttps: ownServers.publicHttps,
+    ...(ownServersByOperatorList ? { ownServersByOperatorListForTests: true } : {}),
     ...(config.instance.publicUrl === undefined ? {} : { instanceUrl: config.instance.publicUrl })
   });
   const ownSecrets = keyring

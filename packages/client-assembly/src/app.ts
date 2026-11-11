@@ -164,6 +164,12 @@ export interface CreateClientInstanceAppInput {
   approvalRequestHandlers?: ApprovalRequestHandlerRegistry;
   /** What the calls of operations run with beyond the instance's own defaults. For tests. */
   operations?: ChatServerOptions["operations"];
+  /**
+   * For a test build only, never set by a deployment: people's own MCP servers are judged by
+   * `egress.allow` alone, so a browser suite adds its sample server on the loopback. Their own
+   * egress rule (`own_server`) refuses every private address.
+   */
+  ownServersByOperatorListForTests?: boolean;
   allowedOrigins?: string | string[];
   agentRunWorker?: AgentRunWorkerPlacement;
   /** Where Knowledge Base ingestion executes. Search and operations stay in the API. */
@@ -388,7 +394,12 @@ export async function createClientInstanceExecutionAssembly(
   });
   const connectionParts = { config, modules, clientInstanceId, secrets, stores: store, logger };
   const connections = await createInstanceConnections(
-    connectionParts,
+    {
+      ...connectionParts,
+      ...(input.ownServersByOperatorListForTests === true
+        ? { ownServersByOperatorListForTests: true }
+        : {})
+    },
     input.connectorTypes,
     input.catalogue,
     input.resultShapers
