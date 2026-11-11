@@ -51,6 +51,8 @@ export const configAssets = defineTranslations({
     configAvailabilityMissingPersonal: "personal workspaces",
     configAvailabilityMissingText: "Members in some of this agent's workspaces cannot use:",
     configAvailabilityMissingTitle: "Not available everywhere this agent is",
+    configAvailabilityNoExcludableWorkspaces:
+      "This agent is the default agent in every shared workspace. To leave one out, choose another default agent in that workspace's settings.",
     configAvailabilityNoSharedWorkspaces: "There are no shared workspaces yet.",
     configAvailabilityPersonal: "Personal workspaces",
     configAvailabilityPersonalHint: "Every user's own personal workspace.",
@@ -265,6 +267,8 @@ export const configAssets = defineTranslations({
     configAvailabilityMissingText:
       "In einigen Arbeitsbereichen dieses Agenten können Mitglieder Folgendes nicht verwenden:",
     configAvailabilityMissingTitle: "Nicht überall verfügbar, wo dieser Agent ist",
+    configAvailabilityNoExcludableWorkspaces:
+      "Dieser Agent ist in jedem geteilten Arbeitsbereich der Standardagent. Um einen auszunehmen, lege in dessen Einstellungen einen anderen Standardagenten fest.",
     configAvailabilityNoSharedWorkspaces: "Es gibt noch keine geteilten Arbeitsbereiche.",
     configAvailabilityPersonal: "Persönliche Arbeitsbereiche",
     configAvailabilityPersonalHint: "Der eigene persönliche Arbeitsbereich jedes Benutzers.",
