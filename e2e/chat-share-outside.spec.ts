@@ -37,11 +37,11 @@ test.use({
         name: "team-not-there",
         reason:
           "Chromium's own log line: the reader follows a link to the team's chat list, the " +
-          "page asks for its chats, its agents and the team itself before it knows the link is " +
+          "page asks for its chats, its agents, its projects and the team itself before it knows the link is " +
           "closed, the instance answers 404 for a team they are no member of, and the page goes " +
           "to their own workspace, which the test asserts.",
         matches: requestAnswered(404),
-        path: /^\/api\/v1\/(?:conversations|workspaces\/[^/]+(?:\/agents)?)$/u,
+        path: /^\/api\/v1\/(?:conversations|workspaces\/[^/]+(?:\/agents|\/projects)?)$/u,
         tests: [TITLE]
       }
     ]
@@ -108,6 +108,14 @@ test(TITLE, async ({ page, browser, baseURL, pageErrors }) => {
   expect(chat.ok(), await chat.text()).toBe(true);
   const chatId = idSchema.parse(await chat.json()).id;
   const chatPath = `/w/${team}/c/${chatId}`;
+  // Another chat of the team, never shared, which the reader never sees.
+  const otherTitle = `Team only ${suffix}`;
+  const other = await requestWithOrigin(page, "post", `${apiOrigin}/api/v1/conversations`, {
+    data: { collaborationWorkspaceId: team, title: otherTitle, visibility: "private" }
+  });
+  expect(other.ok(), await other.text()).toBe(true);
+  await page.goto(`/w/${team}/c/${idSchema.parse(await other.json()).id}`);
+  await send(page, "Only for the team");
   await page.goto(chatPath);
   await send(page, "The plan for the quarter");
 
@@ -194,7 +202,25 @@ test(TITLE, async ({ page, browser, baseURL, pageErrors }) => {
   expect(workspace.status()).toBe(404);
   await readerPage.goto(`/w/${team}`);
   await expect(readerPage).not.toHaveURL(new RegExp(`/w/${team}`, "u"));
-  await expect(readerPage.getByText(chatTitle)).toHaveCount(0);
+  // Back in their own workspace, the shared chat stands once, under "Shared with you" with the
+  // team's name (CHAT-SHARE-6b); the team's other chat, its Recent and its selector entry do not.
+  const shared = readerPage.getByTestId("rail-shared-with-you");
+  await expect(shared.getByTestId("rail-shared-chat")).toHaveCount(1);
+  await expect(readerPage.getByText(chatTitle)).toHaveCount(1);
+  await expect(shared.getByText(chatTitle)).toHaveCount(1);
+  await expect(readerPage.getByText(workspaceName)).toHaveCount(1);
+  await expect(shared.getByTestId("rail-shared-chat-workspace")).toHaveText(workspaceName);
+  await expect(
+    readerPage.getByTestId("conversation-row").filter({ hasText: chatTitle })
+  ).toHaveCount(0);
+  await expect(readerPage.getByText(otherTitle)).toHaveCount(0);
+  // Its selector lists the reader's own workspaces only: the team's name stays on the row.
+  await readerPage.getByTestId("collaboration-workspace-selector-trigger").click();
+  const rows = readerPage.getByTestId("collaboration-workspace-row");
+  await expect(rows.first()).toBeVisible();
+  await expect(rows.filter({ hasText: workspaceName })).toHaveCount(0);
+  await expect(readerPage.getByText(workspaceName)).toHaveCount(1);
+  await readerPage.keyboard.press("Escape");
 
   await readerContext.close();
 });
