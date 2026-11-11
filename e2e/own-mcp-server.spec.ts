@@ -8,7 +8,28 @@ import { z } from "zod";
 import { availableSamplePort } from "./sample-port.mjs";
 import { sendToolCall } from "./page-surface-fixtures";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
+import { requestAnswered } from "./allowed-page-errors";
 import { expect, test } from "./test";
+
+// The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
+test.use({
+  allowedPageErrors: {
+    errors: [
+      {
+        name: "own-server-names-no-sign-in",
+        reason:
+          "Chromium's own log line: the key-guarded sample answers a Bearer challenge without a " +
+          "sign-in to be found, the sign-in start is answered with 409, and the test asserts " +
+          "that the dialog asks for a token instead.",
+        matches: requestAnswered(409),
+        path: /^\/api\/v1\/connections\/[^/]+\/oauth\/start$/u,
+        tests: [
+          "en: a person adds their own MCP server with a pasted token instead of a sign-in, replaces the token, and removes it"
+        ]
+      }
+    ]
+  }
+});
 
 // A person's own MCP server (PMCP-5, connections acceptance check 81) against the demo's sample
 // MCP server in its Dynamic Client Registration mode, whose small authorization server signs
@@ -47,6 +68,8 @@ const settingsSchema = z.object({
 });
 
 let sampleBase: string;
+/** The key that guards the sample's `/mcp`: the token a person pastes for it. */
+let sampleKey: string;
 let sampleServer: ChildProcess | undefined;
 
 test.beforeEach(async () => {
@@ -54,10 +77,11 @@ test.beforeEach(async () => {
     (process.env.E2E_SAMPLE_MCP_PORTS ?? "4219").split(",").map(Number)
   );
   sampleBase = `http://127.0.0.1:${samplePort}`;
+  sampleKey = randomUUID() + randomUUID();
   sampleServer = spawn(process.execPath, ["clients/demo/dist/sample-mcp-server.js"], {
     env: {
       ...process.env,
-      DEMO_SAMPLE_MCP_KEY: randomUUID() + randomUUID(),
+      DEMO_SAMPLE_MCP_KEY: sampleKey,
       HOST: "127.0.0.1",
       PORT: String(samplePort),
       SAMPLE_OAUTH_ISSUER_BASE: sampleBase
@@ -284,6 +308,74 @@ test("en: an address with a password, or one that is no MCP server, is refused a
     await expect(dialog).toContainText("did not answer as an MCP server", { timeout: 30_000 });
     await shoot(page, "unreachable");
     expect((await mine(page)).connections.filter((row) => row.ownServer)).toEqual([]);
+  } finally {
+    await removeOwnServers(page);
+  }
+});
+
+test("en: a person adds their own MCP server with a pasted token instead of a sign-in, replaces the token, and removes it", async ({
+  page,
+  releaseConnections: _releaseConnections
+}) => {
+  test.setTimeout(shotsDir ? 300_000 : 180_000);
+  await signIn(page, "en");
+  await removeOwnServers(page);
+  try {
+    await page.goto("/settings/you/connections");
+    const section = page.locator("[data-own-servers]");
+    await section.getByRole("button", { name: "Add MCP server" }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.locator('[data-own-server-field="address"]').fill(`${sampleBase}/mcp`);
+    await dialog.getByRole("button", { name: "Connect" }).click();
+
+    // The server's key guard asks for a Bearer token and names no sign-in: the dialog asks for
+    // the token.
+    await expect(dialog.getByRole("heading", { name: "Token for 127.0.0.1" })).toBeVisible({
+      timeout: 30_000
+    });
+    const field = dialog.locator('[data-own-token-field="token"]');
+    await expect(field).toHaveAttribute("type", "password");
+    await field.fill(sampleKey);
+    await dialog.getByRole("button", { name: "Technical details" }).click();
+    await expect(dialog.locator('[data-own-token-field="header"]')).toBeVisible();
+    await shoot(page, "token");
+    await dialog.getByRole("button", { name: "Set token" }).click();
+
+    // The tools the token read.
+    await expect(dialog.locator("li[data-approval-tool]")).toHaveCount(6, {
+      timeout: DISCOVERY_TIMEOUT_MS
+    });
+    await dialog.locator('[data-own-server-field="title"]').fill("My notes");
+    await dialog.getByRole("button", { name: "Done" }).click();
+    await expect(dialog).toBeHidden();
+
+    const card = page.locator("[data-own-server-card]");
+    await expect(card).toContainText("My notes");
+    await expect(card.locator('[data-own-server-state="connected"]')).toBeVisible();
+    const replace = card.locator('[data-own-server-replace-token="replace"]');
+    await expect(replace).toHaveText("Replace token");
+    // Nothing the browser reads holds the token.
+    const name = (await card.getAttribute("data-own-server-card")) ?? "";
+    const detail = await page.request.get(`${apiBaseUrl}/api/v1/connections/${name}`);
+    const detailText = await detail.text();
+    expect(detailText).toContain('"ownToken"');
+    expect(detailText).not.toContain(sampleKey);
+    expect(JSON.stringify(await mine(page))).not.toContain(sampleKey);
+    await shoot(page, "token-card");
+
+    // Token ersetzen: the same field, in a dialog of its own.
+    await replace.click();
+    const replacing = page.getByRole("dialog", { name: "Token for My notes" });
+    await replacing.locator('[data-own-token-field="token"]').fill(sampleKey);
+    await shoot(page, "token-replace");
+    await replacing.getByRole("button", { name: "Replace token" }).click();
+    await expect(replacing).toBeHidden();
+    await expect(card.locator('[data-own-server-state="connected"]')).toBeVisible();
+
+    await card.getByRole("button", { name: "Remove" }).click();
+    const confirm = page.getByRole("dialog", { name: "Remove My notes?" });
+    await confirm.getByRole("button", { name: "Remove" }).click();
+    await expect(page.locator("[data-own-server-card]")).toHaveCount(0);
   } finally {
     await removeOwnServers(page);
   }

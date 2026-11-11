@@ -89,6 +89,8 @@ import {
 
 /** Only agents use a self-added server's tools, in the owner's private chats. */
 const OWN_SERVER_EXPOSURE = ["agent"] as const;
+/** The start's refusal where the server names no sign-in the instance can read. */
+const NO_SIGN_IN_FOUND = "oauth_discovery_failed";
 /** How often the dialog reads the server again while its tools are read. */
 const TOOLS_READ_MS = 1_000;
 
@@ -458,6 +460,15 @@ export function OwnServerAddDialog({
       }
     }
   );
+
+  // A server whose challenge names no sign-in that can be found takes a token: the dialog goes
+  // on to it at once, as it does where the probe said so.
+  const signInFailure = signIn.state.phase === "failed" ? signIn.state.error.failure : undefined;
+  useEffect(() => {
+    if (stage.step === "sign-in" && signInFailure === NO_SIGN_IN_FOUND) {
+      setStage({ step: "token" });
+    }
+  }, [stage.step, signInFailure]);
 
   /** Deletes what Verbinden saved, after the probe turned the server away. */
   const discard = async () => {
