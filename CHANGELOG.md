@@ -7,6 +7,87 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.33 — 2026-11-11
+
+### Added
+
+- **Chat:** Sharing a private chat finds anyone active on the instance, not only members of
+  the team. From two letters the @ menu and "Add person" search the instance by name, members
+  first; an email address finds a person only when typed in full. People outside the team are
+  marked "not in" the team, and the confirm line says they see only this chat and their turns
+  run with their own rights. Searches of two letters or more are limited to 30 a minute.
+- **Chat:** A person outside the team who is named on a chat reads and continues that one chat
+  and nothing else of the workspace: every route of the workspace and every other chat of it
+  answers them as missing. Their turns use an instance agent open to them in place of the
+  team's own, with their own rights only; with none open they read along. The chat opens in
+  place from the Inbox and its link, with the workspace's name in its head, and Leave.
+- **API:** `conversations.reader_offer.get` answers a chat's workspace, whether the caller
+  reads it from outside, and the agents their turns may run there. Share candidates carry
+  `member`, and `conversation.person_added` audits `outside: true` for a person outside the
+  team.
+- **Chat:** Chats shared with you from a team you are not in stand under "Shared with you"
+  below Recent, in every workspace, each with its team's name, and the search palette finds
+  them by title. A click opens the chat in place, without switching workspace. The group
+  shows only while it holds a chat.
+- **Chat:** The panel "Who can see this chat" marks a deactivated person as deactivated, and
+  the creator can still remove them.
+- **API:** `conversations.shared_from_outside.list` lists the chats that name the caller from
+  workspaces they are no member of, each with its workspace's name and nothing else of it.
+  A named person in a chat's `people` carries `deactivated: true` while deactivated or while
+  their deletion is pending.
+- **Connections:** You > Connections has "Your MCP servers": a person adds an MCP server for
+  themselves with its address and Connect, signs in to it in another tab, chooses its tools
+  (reads or changes) and clicks Done. Each server shows as a card with its host, state and
+  number of tools, "Change tools", "Sign in again" and "Remove". Under "Change tools" a changing
+  tool the owner always allows says "Always allow", and "Ask again" takes it back. A tool the
+  server does not mark read-only cannot be accepted as reading. English and German.
+- **Connections:** `modules.connections.ownServers.enabled` is on by default. An operator whose
+  contract forbids people's own servers sets it to `false`.
+- **API:** `connections.mine` lists the caller's own servers, also while switched off, with
+  `ownServer: { host, enabled, tools }`, and answers `ownServers.mayAdd`: whether the switch is
+  on and the caller holds `connection.add_own` in a first-party session.
+- **Docs:** "Add your own MCP server" under Connect systems.
+- **Connections:** The owner of a self-added MCP server can answer a changing tool's
+  confirmation with "Always allow", or choose it on Settings > You > Confirmations, although the
+  tool declares no change class. The next call of that tool in a chat where only that server
+  ran goes without asking; every other changing tool still asks, and an admin's `allow` still
+  does not lower one. In a chat where another Connection's operation ran, the tool asks again.
+  Only the owner sets it, in their own signed-in session: a personal key, the CLI, an embedding
+  host's session or a Service Principal is refused with `user_only`, and for anyone else the
+  operation does not exist. A discovery that finds the tool's description or input schema
+  changed since it was accepted removes the owner's "Always allow" in the same write and
+  records `user.operation_setting_changed` with reason `tool_changed`, the operation and nothing
+  else; Ask me and Never stay. Ask me takes it back.
+- **Connections:** A Connection a person adds for themselves (`ownerOnly`) is judged by its own
+  egress rule. It reaches a public `https` host on port 443, also where
+  `egress.allowPublicHttps` is off, or another port that a `public` entry of `egress.allow`
+  names. A `network: private` entry never admits it. Every DNS answer must be public, and the
+  host of `instance.publicUrl` and the Platform Store are refused by name and by every address
+  they resolve to. Its redirects, sign-in addresses and token refreshes are judged by the same
+  rule. `modules.connections.ownServers.publicHttps: false` leaves only the `public` entries. A
+  save refuses plain `http`, another port without an entry, the instance's own host and a private
+  address, and says whether an operator entry would admit it. The add stays off until PMCP-5.
+- **Connections:** An agent can propose a person's own MCP server in a chat only that person
+  reads (PMCP-CHAT). `platform.connections.propose` takes a mode `own_server` with the type
+  `mcp`, a name and an https address, and nothing else. It is offered to any agent there, not
+  only one with the platform's tools, while own servers are on and the person holds
+  `connection.add_own`, and never in a shared chat, a Workflow, a subagent or a key's run. The
+  agent's `ownServers: false` withholds it. The card "Add MCP server" opens You > Connections
+  with the add dialog filled; nothing is saved before the person presses Connect. On Done the
+  chat gets their message naming the server and the tools accepted. The audit names the mode,
+  never the address or name. English and German.
+- **Agents:** A run its person starts in their own private chat is offered the accepted tools
+  of the MCP servers that person added for themselves, where the agent lets them in. The agent
+  setting `ownServers` ("Your MCP servers" on the agent's page) is on unless set to `false`.
+  Nobody else's run, no chat with a named person or a team, no subagent, no Workflow step and
+  no run started with a key is offered them. An agent's save that lists such a tool is refused
+  (`own_server_tool_on_agent`), and no call of a run that is not offered one may make it.
+- **Connections:** A changing tool of a person's own server asks before every call. A reading
+  tool asks in a chat where an operation of another Connection ran, in the chat or in one of
+  its run threads, and where that cannot be read. An admin's `allow` and the person's "Always
+  allow" lower neither. The delete of a person's own server is never refused by an agent that
+  lists its tools. The add stays off until PMCP-5.
+
 ## 0.8.0-rc.32 — 2026-11-10
 
 ### Added
