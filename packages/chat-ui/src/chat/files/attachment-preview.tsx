@@ -42,46 +42,81 @@ export function AttachmentPreview({
   const filename = attachment.name || "Attached file";
   const previewAvailable = Boolean(!removable && managedFileId && client && conversationId);
 
-  async function openPreview() {
+  function openPreview() {
     if (!managedFileId || !client || !conversationId || opening) {
       return;
     }
     setOpening(true);
-    try {
-      await openConversationFile({ client, conversationId, fileId: managedFileId, filename });
-    } finally {
+    const done = () => {
       if (mounted.current) {
         setOpening(false);
       }
-    }
+    };
+    openConversationFile({ client, conversationId, fileId: managedFileId, filename }).then(
+      done,
+      done
+    );
   }
 
   // An image that does not decode is shown as the file it is, which opens like any other.
   if (isImageAttachment(attachment) && !image.failed) {
+    const cardClassName = "grid gap-1 overflow-hidden rounded-md border bg-card p-1 shadow-xs";
+    const picture = imageUrl ? (
+      <img
+        src={imageUrl}
+        alt={attachment.name || t("attachmentImageFallbackAlt")}
+        className="max-h-72 w-auto max-w-full rounded object-contain"
+        onError={image.onError}
+      />
+    ) : (
+      <span className="flex min-h-20 items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
+        <FileTypeIcon type={resolveFileType({ kind: "image" })} />
+        <span className="min-w-0 truncate">
+          <AttachmentPrimitive.Name />
+        </span>
+      </span>
+    );
+    const captionClassName = "truncate px-1 pb-1 text-xs text-muted-foreground";
     return (
       <AttachmentPrimitive.Root className="group/attachment relative max-w-xs">
-        <figure className="grid gap-1 overflow-hidden rounded-md border bg-card p-1 shadow-xs">
-          {imageUrl ? (
-            <img
-              src={imageUrl}
-              alt={attachment.name || t("attachmentImageFallbackAlt")}
-              className="max-h-72 w-auto max-w-full rounded object-contain"
-              onError={image.onError}
-            />
-          ) : (
-            <div className="flex min-h-20 items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
-              <FileTypeIcon type={resolveFileType({ kind: "image" })} />
-              <span className="min-w-0 truncate">
+        {previewAvailable ? (
+          // The thumbnail opens the picture in the preview panel, as a file chip opens its file.
+          <button
+            type="button"
+            className={cn(
+              cardClassName,
+              "relative max-w-full cursor-zoom-in text-left transition-colors",
+              "hover:bg-muted focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40",
+              opening && "cursor-progress"
+            )}
+            title={t("openArtifactPreview", { filename })}
+            aria-label={t("openArtifactPreview", { filename })}
+            aria-busy={opening}
+            disabled={opening}
+            onClick={openPreview}
+          >
+            {picture}
+            {attachment.name ? (
+              <span className={captionClassName}>
                 <AttachmentPrimitive.Name />
               </span>
-            </div>
-          )}
-          {attachment.name ? (
-            <figcaption className="truncate px-1 pb-1 text-xs text-muted-foreground">
-              <AttachmentPrimitive.Name />
-            </figcaption>
-          ) : null}
-        </figure>
+            ) : null}
+            {opening ? (
+              <span className="absolute inset-0 grid place-items-center bg-background/50">
+                <Spinner size="sm" />
+              </span>
+            ) : null}
+          </button>
+        ) : (
+          <figure className={cardClassName}>
+            {picture}
+            {attachment.name ? (
+              <figcaption className={captionClassName}>
+                <AttachmentPrimitive.Name />
+              </figcaption>
+            ) : null}
+          </figure>
+        )}
         <RemoveAttachmentButton removable={removable} />
       </AttachmentPrimitive.Root>
     );
@@ -128,7 +163,7 @@ export function AttachmentPreview({
           aria-label={t("openArtifactPreview", { filename })}
           aria-busy={opening}
           disabled={opening}
-          onClick={() => void openPreview()}
+          onClick={openPreview}
         >
           {fileContents}
         </button>

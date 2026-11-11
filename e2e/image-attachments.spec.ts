@@ -95,6 +95,37 @@ test("a picture goes with its message, with text and alone, the model sees it, a
   await expectPicture(userMessages(page).last(), "alone.png");
 });
 
+test("a sent picture opens in the preview panel by click and by keyboard, on a phone too", async ({
+  page
+}) => {
+  test.setTimeout(90_000);
+  await page.goto("/");
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
+  await attach(page, "screenshot.png");
+  const send = page.getByRole("button", { name: "Send message" });
+  await expect(send).toBeEnabled();
+  await send.click();
+  const message = userMessages(page).last();
+  await expectPicture(message, "screenshot.png");
+  await expect(assistantMessages(page).last()).toContainText(received("screenshot.png"));
+
+  const thumbnail = message.getByRole("button", { name: "Open preview for screenshot.png" });
+  const viewer = page.locator('aside[data-surface-kind="file_preview"]');
+  await thumbnail.click();
+  await expect(viewer).toContainText("screenshot.png");
+  await expectPicture(viewer, "screenshot.png");
+  await viewer.getByRole("button", { name: "Close display panel" }).click();
+  await expect(viewer).toHaveCount(0);
+
+  // On a phone the panel is a sheet over the chat; the keyboard opens it the same way.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await thumbnail.focus();
+  await page.keyboard.press("Enter");
+  await expectPicture(viewer, "screenshot.png");
+  const sheet = await viewer.boundingBox();
+  expect(sheet?.width).toBeGreaterThanOrEqual(389);
+});
+
 test("a picture sent during a run waits in the queue with its message, and Edit brings it back", async ({
   page
 }) => {
