@@ -1,7 +1,6 @@
 import {
   Blocks,
   ChevronRight,
-  Folder,
   Lock,
   PanelLeft,
   Plus,
@@ -121,6 +120,12 @@ interface WorkspaceRailProps {
   /** "Show more" under an open project shows its next chats in place. */
   onShowMoreProjectChats?: (projectId: string) => void;
   onOpenProject?: (project: string) => void;
+  /**
+   * The plus on a project's label starts a new chat in it: its page, the chat's start (PRJ-1).
+   * Every project the rail lists is one the person reads, and reading one is the right to
+   * start a chat in it (`project.read`), so each listed project carries it while this is given.
+   */
+  onNewChatInProject?: (project: string) => void;
   /** The address of a project's page: its label links to it. */
   projectHref?: (project: string) => string;
   /** The address of the Projects page of the open workspace: the group's label links to it. */
@@ -383,9 +388,12 @@ function RailBranding({ config }: { config: SafeConfig }) {
 /**
  * The projects of the open workspace used last, above "Recent", under a label that links to the
  * Projects page with all of them (PRJ-5, Felix 2026-10-29: no "All projects" row). The active
- * project stands among them even when it was used earlier. Each project is a small label with
- * its folder, which opens its page, and a caret right after it, which folds its chats away
- * (Felix, 2026-11-04). A private project carries the lock a private conversation carries.
+ * project stands among them even when it was used earlier. Each project is a group label like
+ * "Recent", which opens its page, with a caret right after it, which folds its chats away
+ * (Felix, 2026-11-04), and the plus at its right edge that starts a new chat in it. All labels
+ * keep one colour and its chats stand at its left edge (Felix, 2026-11-11: calmer); the open
+ * chat's row says where the person is. A private project carries the lock a private
+ * conversation carries.
  * Without a project the group shows its label with the plus alone, so a person finds where
  * projects are made. Nothing shows while projects are off, or in the collapsed strip.
  */
@@ -398,6 +406,7 @@ function RecentProjects(props: WorkspaceRailProps) {
     openProjects,
     onToggleProject,
     onOpenProject,
+    onNewChatInProject,
     projectHref,
     onCreateProject,
     onViewChange,
@@ -434,15 +443,15 @@ function RecentProjects(props: WorkspaceRailProps) {
         ) : undefined
       }
     >
-      {rows.map((project) => {
+      {rows.map((project, index) => {
         const fold = openProjects?.get(project.id);
         return (
           <NavGroup
             key={project.id}
-            // The space between two projects, as between two groups of the rail.
-            className="mt-2"
+            // Two projects stand as far apart as two groups of the rail (its `gap-4`, with the
+            // group's own `gap-0.5`); the first follows the heading as an item follows it.
+            className={index === 0 ? undefined : "mt-3.5"}
             label={project.title}
-            labelIcon={<Folder aria-hidden="true" />}
             labelMark={
               project.audience === "private" ? (
                 <span
@@ -467,6 +476,18 @@ function RecentProjects(props: WorkspaceRailProps) {
               }
             }}
             labelCurrent={project.name === openProjectName}
+            labelAction={
+              onNewChatInProject ? (
+                <IconButton
+                  size="sm"
+                  label={t("projects.railNewChat")}
+                  data-testid="rail-project-new-chat"
+                  onClick={() => onNewChatInProject(project.name)}
+                >
+                  <Plus aria-hidden="true" />
+                </IconButton>
+              ) : undefined
+            }
             collapsible
             open={fold !== undefined}
             onOpenChange={() => onToggleProject?.(project.id)}

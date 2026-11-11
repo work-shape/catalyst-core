@@ -307,11 +307,16 @@ function NavItemSamples({ text }: { text: GalleryText }) {
         <NavGroup label={text.navGroupFolding} collapsible defaultOpen={false}>
           <NavItem>{text.navConversationLease}</NavItem>
         </NavGroup>
-        {/* The label opens the folder's page; the caret right after it folds the items. */}
+        {/* The label opens the folder's page; the caret right after it folds the items, and the
+            plus at its right edge, shown on the label, adds one. */}
         <NavGroup
           label={text.navGroupFoldingLink}
           labelLink={{ href: "#", onClick: (event) => event.preventDefault() }}
-          labelIcon={<Folder aria-hidden="true" />}
+          labelAction={
+            <IconButton size="sm" label={text.navNewChat}>
+              <Plus aria-hidden="true" />
+            </IconButton>
+          }
           collapsible
         >
           <NavItem>{text.navConversationTax}</NavItem>

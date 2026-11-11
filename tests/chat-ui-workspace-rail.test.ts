@@ -1239,7 +1239,7 @@ describe("the Projects group", () => {
     ).toEqual(["Alt", "Äpfel", "Beta", "Mitte", "Omega", "Zeta"]);
   });
 
-  it("gives each project a label with its folder that links to its page, and a caret", () => {
+  it("gives each project a quiet label that links to its page, and a caret", () => {
     const html = renderProjectRail({
       recentProjects: [nord, railProject("prj_notiz", "Notizen", "private")],
       openProjectName: "prj_nord",
@@ -1247,9 +1247,11 @@ describe("the Projects group", () => {
     });
     const label = projectGroup(html, "Projekt Nord");
     expect(label).toMatch(/<a [^>]*href="\/w\/ws_1\/p\/prj_nord"[^>]*>Projekt Nord<\/a>/u);
-    expect(label).toContain("lucide-folder");
-    // The project on screen is the current label; there is no box around it.
+    // A group label like "Recent": no folder, and its name on its chats' left edge.
+    expect(label).not.toContain("lucide-folder");
+    // The project on screen is the current label, in the colour of every label; no box.
     expect(label).toMatch(/<a [^>]*aria-current="page"[^>]*>Projekt Nord<\/a>/u);
+    expect(label).not.toMatch(/<a [^>]*[" ]text-foreground[" ][^>]*>Projekt Nord<\/a>/u);
     expect(label).not.toContain("bg-state-selected");
     // The caret right after the name folds it, and says what it folds.
     expect(label).toMatch(
@@ -1257,6 +1259,39 @@ describe("the Projects group", () => {
     );
     expect(projectGroup(html, "Notizen")).toContain('data-testid="rail-project-private"');
     expect(projectGroup(html, "Notizen")).not.toContain("aria-current");
+  });
+
+  it("gives each project a plus after its caret that starts a new chat in it", () => {
+    const html = renderProjectRail({
+      recentProjects: [nord, railProject("prj_notiz", "Notizen", "private")],
+      projectHref: (project) => `/w/ws_1/p/${project}`,
+      onNewChatInProject: () => {}
+    });
+    for (const title of ["Projekt Nord", "Notizen"]) {
+      const label = projectGroup(html, title);
+      // At the label's right edge, after the caret and outside it, so it folds nothing.
+      expect(label).toMatch(
+        /aria-label="Chats in [^"]+"[^]*?<\/button><span data-nav-group-action=""[^>]*><button [^>]*aria-label="Neuer Chat in diesem Projekt"/u
+      );
+      // Unseen at rest, shown on the label, to the keyboard and on a touch screen.
+      expect(label).toMatch(
+        /data-nav-group-action="" class="[^"]*opacity-0[^"]*group-hover\/nav-group-row:opacity-100[^"]*focus-within:opacity-100[^"]*pointer-coarse:opacity-100/u
+      );
+    }
+    expect(html.match(/data-testid="rail-project-new-chat"/gu)).toHaveLength(2);
+    // In English too.
+    expect(
+      renderProjectRail(
+        { recentProjects: [nord], onNewChatInProject: () => {} },
+        "en"
+      )
+    ).toContain('aria-label="New chat in this project"');
+  });
+
+  it("has no plus on a project where the rail is given no way to start a chat", () => {
+    const html = renderProjectRail({ recentProjects: [nord] });
+    expect(html).not.toContain("rail-project-new-chat");
+    expect(html).not.toContain("Neuer Chat in diesem Projekt");
   });
 
   it("shows its label and plus without a project", () => {

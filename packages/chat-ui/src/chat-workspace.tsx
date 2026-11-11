@@ -586,6 +586,22 @@ function ChatWorkspaceContent({
     </ProjectChatStart>
   );
   const closeDrawer = model.chrome.closeSidebarDrawer;
+  // A project's page, from its label or its plus in the rail: the start of a chat in it.
+  const openProjectStart = (project: string) => {
+    if (railAppsWorkspaceId) {
+      closeDrawer();
+      model.route.showRoute({
+        kind: "project",
+        collaborationWorkspaceId: railAppsWorkspaceId,
+        project
+      });
+    }
+  };
+  // The plus on a project's label: its page, with the focus in the composer of the new chat.
+  const startChatInProject = (project: string) => {
+    openProjectStart(project);
+    model.chrome.requestComposerFocus();
+  };
   const startNewChat = () => {
     closeDrawer();
     rail.startNewConversation();
@@ -841,16 +857,9 @@ function ChatWorkspaceContent({
                     })
                 : undefined
             }
-            onOpenProject={(project) => {
-              if (railAppsWorkspaceId) {
-                closeDrawer();
-                model.route.showRoute({
-                  kind: "project",
-                  collaborationWorkspaceId: railAppsWorkspaceId,
-                  project
-                });
-              }
-            }}
+            onOpenProject={openProjectStart}
+            // The project's page is the start of a chat in it (PRJ-1).
+            onNewChatInProject={railAppsWorkspaceId ? startChatInProject : undefined}
             projectsHref={
               railAppsWorkspaceId
                 ? workspaceRoutePath({

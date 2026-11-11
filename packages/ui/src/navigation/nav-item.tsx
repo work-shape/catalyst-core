@@ -185,7 +185,10 @@ export interface NavGroupProps extends HTMLAttributes<HTMLDivElement> {
    * One small action of the group at the right end of its label, such as an `IconButton` of
    * size `sm` that adds an item. It shows while the pointer is over the group, while the
    * keyboard is in the action and on a screen without hover, and keeps its room otherwise, so
-   * the label never moves. Needs a `label`; a collapsed sidebar and a group that folds show none.
+   * the label never moves. In a group that folds and whose label links, it shows while the
+   * pointer or the keyboard is on the label itself, in the column of its items' trailing
+   * actions, and folds nothing. Needs a `label`; a collapsed sidebar and a group that folds
+   * without a link show none.
    */
   labelAction?: ReactNode;
   /**
@@ -198,7 +201,8 @@ export interface NavGroupProps extends HTMLAttributes<HTMLDivElement> {
   /**
    * For a group that folds and whose label links: a 14 px icon before the label, a mark after
    * it (such as a lock), the caret's name for assistive technology, and whether the label's
-   * page is the one on screen, which reads the label in the foreground.
+   * page is the one on screen. That label keeps the colour of every other label: the selected
+   * item below carries where the reader is.
    */
   labelIcon?: ReactNode;
   labelMark?: ReactNode;
@@ -321,7 +325,15 @@ export function NavGroup({
         onOpenChange={onOpenChange}
         {...props}
       >
-        <div data-nav-group-label="" className={cn(labelClassName, "gap-1")}>
+        <div
+          data-nav-group-label=""
+          className={cn(
+            labelClassName,
+            "group/nav-group-row gap-1",
+            // The action stands where the items' trailing actions stand.
+            labelAction !== undefined && "pr-0.5"
+          )}
+        >
           {labelIcon === undefined ? null : (
             <span className="flex shrink-0 [&_svg]:size-3.5">{labelIcon}</span>
           )}
@@ -332,10 +344,7 @@ export function NavGroup({
             aria-current={labelCurrent ? "page" : undefined}
             // The label is cut at the sidebar's edge; the whole of it shows on the pointer.
             title={label}
-            className={cn(
-              "min-w-0 truncate rounded-sm underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
-              labelCurrent && "text-foreground"
-            )}
+            className="min-w-0 truncate rounded-sm underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
           >
             {label}
           </a>
@@ -349,6 +358,14 @@ export function NavGroup({
               className="size-3 group-data-[state=open]/nav-group-caret:rotate-90"
             />
           </Collapsible.Trigger>
+          {labelAction === undefined ? null : (
+            <span
+              data-nav-group-action=""
+              className="ml-auto flex shrink-0 opacity-0 transition-opacity group-hover/nav-group-row:opacity-100 focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100 pointer-coarse:opacity-100"
+            >
+              {labelAction}
+            </span>
+          )}
         </div>
         <Collapsible.Content className="grid min-w-0 gap-0.5">
           <NavGroupLabelPinnedContext value={false}>{children}</NavGroupLabelPinnedContext>
