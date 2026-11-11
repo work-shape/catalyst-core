@@ -729,6 +729,49 @@ describe("who reads the chat, in its head", () => {
     expect(calls).toEqual([]);
   });
 
+  it("shows a deactivated person as deactivated, and keeps Remove for the creator", async () => {
+    const { client, changes } = shareClient();
+    mount({
+      client,
+      conversation: chat({
+        createdByDisplayLabel: creator.label,
+        people: [
+          {
+            userId: "user-ben",
+            displayLabel: "Ben Ito",
+            addedAt: "2026-10-17T00:00:00.000Z",
+            deactivated: true
+          },
+          { userId: "user-cy", displayLabel: "Cy Ota", addedAt: "2026-10-17T00:00:00.000Z" }
+        ]
+      }),
+      children: createElement(ChatPeopleHead)
+    });
+    act(() =>
+      required(container.querySelector<HTMLButtonElement>('[data-testid="chat-people"]')).click()
+    );
+    await until(() => document.querySelector('[data-testid="chat-people-panel"]') !== null);
+    const rows = [...document.querySelectorAll('[data-testid="chat-reader"]')];
+    expect(rows.map((row) => row.textContent)).toEqual([
+      expect.stringContaining("Ada Lovelace (you)Started the chat"),
+      expect.stringContaining("Ben ItoDeactivated"),
+      expect.stringContaining("Cy OtaCan read and write")
+    ]);
+    expect(rows.map((row) => row.getAttribute("data-deactivated"))).toEqual([null, "true", null]);
+    expect(rows[1]?.querySelector(".text-muted-foreground")?.textContent).toBe("Ben Ito");
+    await act(async () =>
+      required(
+        document.querySelector<HTMLButtonElement>('button[aria-label="Remove Ben Ito"]')
+      ).click()
+    );
+    await until(() => changes().includes("remove user-ben"));
+  });
+
+  it("marks a deactivated person in German too", async () => {
+    const { t } = createTranslationContext("de");
+    expect(t("chatShare.deactivated")).toBe("Deaktiviert");
+  });
+
   it("lets a named person leave, and goes elsewhere", async () => {
     const { client, changes } = shareClient();
     const onLeft = vi.fn();

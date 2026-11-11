@@ -1,0 +1,27 @@
+# The three people of the CHAT-SHARE-6b spec: the creator makes a team and shares a private chat
+# of it with the reader, who is in no team with them and finds it under "Shared with you", and
+# with a third person, whom the spec deactivates and the creator's panel then marks.
+- email: e2e-chat-share-swy-creator@example.test
+  displayLabel: E2E Zz Swy Creator
+  passwordEnvName: E2E_CHAT_SHARE_SWY_CREATOR_PASSWORD
+  developmentPassword: e2e-chat-share-swy-creator-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
+- email: e2e-chat-share-swy-reader@example.test
+  displayLabel: E2E Zz Swy Reader
+  passwordEnvName: E2E_CHAT_SHARE_SWY_READER_PASSWORD
+  developmentPassword: e2e-chat-share-swy-reader-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
+- email: e2e-chat-share-swy-paused@example.test
+  displayLabel: E2E Zz Swy Paused
+  passwordEnvName: E2E_CHAT_SHARE_SWY_PAUSED_PASSWORD
+  developmentPassword: e2e-chat-share-swy-paused-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

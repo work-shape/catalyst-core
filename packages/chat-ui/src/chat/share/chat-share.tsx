@@ -49,6 +49,11 @@ export interface ChatReader {
   label: string;
   creator: boolean;
   you: boolean;
+  /**
+   * Deactivated, or their deletion was requested: they read nothing while they cannot sign in,
+   * and the creator can still remove them (CHAT-SHARE-6b).
+   */
+  deactivated: boolean;
 }
 
 /** A person picked in the composer, shared with when the message is sent. */
@@ -323,13 +328,15 @@ function useChatShareValue({
         userId: conversation.createdByUserId,
         label: creatorLabel,
         creator: true,
-        you: isCreator
+        you: isCreator,
+        deactivated: false
       },
       ...conversation.people.map((person) => ({
         userId: person.userId,
         label: person.displayLabel,
         creator: false,
-        you: person.userId === viewerId
+        you: person.userId === viewerId,
+        deactivated: person.deactivated === true
       }))
     ];
   }, [conversation, isCreator, t, viewerId, viewerLabel]);
