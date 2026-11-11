@@ -5,6 +5,7 @@ import { buildRouteOfLocation } from "../../shared/build-route";
 import { showOwnerInStudio } from "../../shared/build-rights";
 import { CONNECTIONS_BUILD_PATH } from "../../studio/build-area/connection-tools";
 import { connectCardOfProposal } from "../../studio/build-area/connection-connect-card-model";
+import { OWN_SERVERS_ROUTE, readOwnServerProposal } from "../../studio/build-area/own-server-model";
 import { workspaceRoutePath, type WorkspaceRoute } from "../../shared/routes";
 import type { WorkspaceDock } from "../workspace/use-workspace-dock";
 import {
@@ -90,6 +91,14 @@ export function useAgentOpens(input: {
     proposal: ConnectionDraft,
     from: { conversationId: string; agentName?: string }
   ): void;
+  /**
+   * Opens the add screen of the person's own MCP servers an agent's proposal fills
+   * (PMCP-CHAT), under the same rule of an open.
+   */
+  openOwnServerProposal?(
+    proposal: { title: string; url: string },
+    from: { conversationId: string; agentName?: string }
+  ): void;
 }): AgentOpens {
   const {
     activeRun,
@@ -103,7 +112,8 @@ export function useAgentOpens(input: {
     client,
     onSubjectChanged,
     onError,
-    openProposal
+    openProposal,
+    openOwnServerProposal
   } = input;
   const sentRuns = useRef(new Set<string>());
   // The runs seen going while their conversation was on the screen. A run seen only after it
@@ -183,16 +193,20 @@ export function useAgentOpens(input: {
       movedTo.current.set(conversationId, conversationMoves);
       routeRef.current = move.page;
     }
-    if (openProposal === undefined) return;
-    // The agent's proposal of a new Connection opens its dialog under the same rule.
+    if (openProposal === undefined && openOwnServerProposal === undefined) return;
+    // The agent's proposal of a new Connection opens its dialog under the same rule, and its
+    // proposal of the person's own MCP server their add screen.
     const subjectPage =
       storedSubject === undefined ? undefined : assetPageRoute(storedSubject, workspaceId);
     for (const [index, part] of parts.entries()) {
-      const proposal =
-        part.toolName === CONNECTION_PROPOSE_TOOL_NAME && part.state === "output_available"
-          ? readConnectionProposal(part.output)
-          : undefined;
-      if (proposal === undefined || signsInFromCard(proposal)) continue;
+      const answered =
+        part.toolName === CONNECTION_PROPOSE_TOOL_NAME && part.state === "output_available";
+      const proposal = answered && openProposal ? readConnectionProposal(part.output) : undefined;
+      const ownServer =
+        answered && openOwnServerProposal ? readOwnServerProposal(part.output) : undefined;
+      if ((proposal === undefined || signsInFromCard(proposal)) && ownServer === undefined) {
+        continue;
+      }
       const key = `proposal:${part.toolCallId ?? `${runId}:${index}`}`;
       if (handledOpens.current.has(key)) continue;
       handledOpens.current.add(key);
@@ -207,20 +221,25 @@ export function useAgentOpens(input: {
           ...(newFrom === undefined ? {} : { startedFrom: newFrom })
         });
       if (!follows) continue;
-      openProposal(proposal, {
-        conversationId,
-        ...(runAgent === undefined ? {} : { agentName: runAgent })
-      });
-      // A later open of the run takes the person on from the Connections.
-      conversationMoves.add(
-        workspaceRoutePath(buildRouteOfLocation({ kindPath: CONNECTIONS_BUILD_PATH }))
-      );
+      const from = { conversationId, ...(runAgent === undefined ? {} : { agentName: runAgent }) };
+      if (ownServer !== undefined) {
+        openOwnServerProposal?.(ownServer, from);
+        // A later open of the run takes the person on from their Connections.
+        conversationMoves.add(workspaceRoutePath(OWN_SERVERS_ROUTE));
+      } else if (proposal !== undefined) {
+        openProposal?.(proposal, from);
+        // A later open of the run takes the person on from the Connections.
+        conversationMoves.add(
+          workspaceRoutePath(buildRouteOfLocation({ kindPath: CONNECTIONS_BUILD_PATH }))
+        );
+      }
       movedTo.current.set(conversationId, conversationMoves);
     }
   }, [
     conversationId,
     openPage,
     openProposal,
+    openOwnServerProposal,
     parts,
     runAgent,
     runId,

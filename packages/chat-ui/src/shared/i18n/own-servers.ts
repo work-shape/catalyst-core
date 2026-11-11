@@ -54,6 +54,16 @@ export const ownServers = defineTranslations({
     "ownServers.readAgain": "Read tools again",
     "ownServers.save": "Save",
     "ownServers.saveFailed": "Saving did not work.",
+    "ownServers.proposalLabel": "Add MCP server",
+    "ownServers.proposalOpen": "Open",
+    "ownServers.proposalNote":
+      "You connect, sign in and choose its tools there. Nothing is saved before.",
+    "ownServers.proposalReader": "Only the person whose chat this is adds their own MCP server.",
+    "ownServers.toldTools": "I added my MCP server {title}. {count} tools accepted: {tools}.",
+    "ownServers.toldOne": "I added my MCP server {title}. 1 tool accepted: {tools}.",
+    "ownServers.toldNoTools": "I added my MCP server {title}, with no tools accepted yet.",
+    "ownServers.toldName": "“{name}”",
+    "ownServers.toldMore": "+ {count} more",
     "ownServers.loadFailed": "The tools could not be loaded."
   },
   de: {
@@ -107,6 +117,20 @@ export const ownServers = defineTranslations({
     "ownServers.readAgain": "Tools neu lesen",
     "ownServers.save": "Speichern",
     "ownServers.saveFailed": "Das Speichern hat nicht geklappt.",
+    "ownServers.proposalLabel": "MCP-Server hinzufügen",
+    "ownServers.proposalOpen": "Öffnen",
+    "ownServers.proposalNote":
+      "Dort verbindest du, meldest dich an und wählst die Tools. Vorher wird nichts gespeichert.",
+    "ownServers.proposalReader":
+      "Nur die Person, deren Chat das ist, fügt ihren eigenen MCP-Server hinzu.",
+    "ownServers.toldTools":
+      "Ich habe meinen MCP-Server {title} hinzugefügt. {count} Tools akzeptiert: {tools}.",
+    "ownServers.toldOne":
+      "Ich habe meinen MCP-Server {title} hinzugefügt. 1 Tool akzeptiert: {tools}.",
+    "ownServers.toldNoTools":
+      "Ich habe meinen MCP-Server {title} hinzugefügt, noch ohne akzeptierte Tools.",
+    "ownServers.toldName": "„{name}“",
+    "ownServers.toldMore": "+ {count} weitere",
     "ownServers.loadFailed": "Die Tools ließen sich nicht laden."
   }
 });

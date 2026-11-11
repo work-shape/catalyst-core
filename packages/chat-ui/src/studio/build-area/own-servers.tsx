@@ -30,6 +30,11 @@ import { useInvalidatePersonalConnections } from "../../shared/api/personal-conn
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { readRefusalDetails } from "./build-refusals";
+import {
+  takeOwnServerAdd,
+  useRequestedOwnServerAdd,
+  type OwnServerAddRequest
+} from "./own-server-request";
 import { ConnectionApprovalList, useApprovalChoice } from "./connection-approval";
 import {
   discoveredCandidates,
@@ -52,6 +57,7 @@ import {
   type SignInBrowser
 } from "./connection-sign-in";
 import {
+  ownServerAddedMessage,
   ownServerAddressIssue,
   ownServerConfig,
   ownServerHostOf,
@@ -113,6 +119,13 @@ async function readToolsSince(
   }
 }
 
+/** What Fertig added: the server's id and name, and the names of the tools accepted. */
+export interface OwnServerAdded {
+  name: string;
+  title: string;
+  tools: string[];
+}
+
 /**
  * "Your MCP servers": the person's own servers as cards and the button that adds one, which
  * shows while they may add one. Nothing while they have none and may add none.
@@ -127,7 +140,18 @@ export function OwnServersSection({
   browser?: SignInBrowser;
 }) {
   const { t } = useTranslation();
-  const [adding, setAdding] = useState(false);
+  const { tellConversation } = useSettingsPage();
+  const [adding, setAdding] = useState<{ proposed?: OwnServerAddRequest; key: number }>();
+  // An agent's proposal from a chat (PMCP-CHAT) opens the add screen filled, once, where the
+  // person may add a server; nothing is saved before they press Connect.
+  const requested = useRequestedOwnServerAdd();
+  useEffect(() => {
+    if (requested === undefined) return;
+    takeOwnServerAdd(requested);
+    if (mayAdd) setAdding((current) => ({ proposed: requested, key: (current?.key ?? 0) + 1 }));
+  }, [requested, mayAdd]);
+  const proposed = adding?.proposed;
+  const from = proposed?.from;
   if (rows.length === 0 && !mayAdd) return null;
   return (
     <Section
@@ -136,7 +160,11 @@ export function OwnServersSection({
       description={t("ownServers.description")}
       action={
         mayAdd ? (
-          <Button size="sm" data-own-server-add="" onClick={() => setAdding(true)}>
+          <Button
+            size="sm"
+            data-own-server-add=""
+            onClick={() => setAdding((current) => ({ key: (current?.key ?? 0) + 1 }))}
+          >
             {t("ownServers.add")}
           </Button>
         ) : undefined
@@ -157,7 +185,20 @@ export function OwnServersSection({
         </ul>
       )}
       {adding ? (
-        <OwnServerAddDialog onClose={() => setAdding(false)} {...(browser ? { browser } : {})} />
+        <OwnServerAddDialog
+          key={adding.key}
+          onClose={() => setAdding(undefined)}
+          {...(proposed ? { initial: { url: proposed.url, title: proposed.title } } : {})}
+          {...(from && tellConversation
+            ? {
+                // The conversation whose agent proposed the server hears once that it is added.
+                onAdded: (added: OwnServerAdded) => {
+                  tellConversation(from, ownServerAddedMessage(added, t)).catch(() => undefined);
+                }
+              }
+            : {})}
+          {...(browser ? { browser } : {})}
+        />
       ) : null}
     </Section>
   );
@@ -338,7 +379,7 @@ export function OwnServerAddDialog({
 }: {
   onClose(): void;
   /** Fertig: the server is added with the chosen tools. */
-  onAdded?: (name: string) => void;
+  onAdded?: (added: OwnServerAdded) => void;
   /** What the dialog starts with, such as an agent's proposal in a chat. */
   initial?: { url?: string; title?: string };
   browser?: SignInBrowser;
@@ -536,7 +577,11 @@ export function OwnServerAddDialog({
     }
     setBusy(false);
     await invalidate();
-    onAdded?.(current.name);
+    onAdded?.({
+      name: current.name,
+      title: typeof config.displayName === "string" ? config.displayName : current.name,
+      tools: chosen.map((candidate) => candidate.title || candidate.name)
+    });
     onClose();
   };
 

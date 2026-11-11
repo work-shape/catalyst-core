@@ -16,6 +16,7 @@ import {
   type ConnectorTypeDefinition,
   type ConnectorTypeRegistry,
   type ToolExecutionContext,
+  type ToolHandlerResult,
   type JsonObject
 } from "@work-shape/catalyst-core";
 import {
@@ -122,7 +123,26 @@ const customInputSchema = z.strictObject({
 });
 
 const entrySchema = z.strictObject({ id: z.string().min(1), part: z.enum(CATALOGUE_PARTS) });
-const inputSchema = z.union([z.strictObject({ entry: entrySchema }), customInputSchema]);
+
+/** The mode in which an agent proposes a person's own MCP server (PMCP-CHAT). */
+export const OWN_SERVER_PROPOSAL_MODE = "own_server";
+
+/**
+ * A person's own MCP server: its name in words and its address, nothing else. No id, auth
+ * scheme, header, scope or tool: the person's add screen takes everything after.
+ */
+const ownServerInputSchema = z.strictObject({
+  mode: z.literal(OWN_SERVER_PROPOSAL_MODE),
+  connectorType: z.literal(MCP),
+  title: customInputSchema.shape.title,
+  url: z.string().min(1).max(2_048)
+});
+
+const inputSchema = z.union([
+  z.strictObject({ entry: entrySchema }),
+  ownServerInputSchema,
+  customInputSchema
+]);
 
 // What the model is shown: one object, since some model providers refuse a union at the root of
 // a tool's input, and the operations without the field notes of draft_tools, said once instead.
@@ -134,6 +154,12 @@ const modelParameterSchema = z.strictObject({
 });
 const modelInputSchema = customInputSchema.extend({
   entry: entrySchema.optional().describe("An offered catalogue entry, given alone."),
+  mode: z
+    .enum([OWN_SERVER_PROPOSAL_MODE])
+    .optional()
+    .describe(
+      "'own_server': an MCP server the person adds for themselves and alone uses, given with connectorType 'mcp', title and url only."
+    ),
   connectorType: customInputSchema.shape.connectorType.optional(),
   connection: customInputSchema.shape.connection.optional(),
   title: customInputSchema.shape.title.optional(),
@@ -208,8 +234,25 @@ const outputSchema = z.object({
   })
 });
 
+/** What the card of an own server shows and its add screen starts with. */
+const ownServerOutputSchema = z.object({
+  mode: z.literal(OWN_SERVER_PROPOSAL_MODE),
+  ownServer: z.object({ title: z.string(), url: z.string() })
+});
+
 type ProposalInput = z.infer<typeof customInputSchema>;
 type Proposal = z.infer<typeof outputSchema>;
+type OwnServerProposal = z.infer<typeof ownServerOutputSchema>;
+
+/**
+ * Which modes this call may use (PMCP-CHAT). The own-server mode only in a run its person
+ * started in a chat only they read, while their own servers are on, they hold
+ * `connection.add_own` and the agent lets own servers in; the other modes only for an agent
+ * that holds the platform's tools.
+ */
+export interface ConnectionProposalAccess {
+  of(context: ToolExecutionContext): Promise<{ ownServer: boolean; otherModes: boolean }>;
+}
 
 interface ProposalIssue {
   path: string;
@@ -516,6 +559,8 @@ function setAt(target: Record<string, unknown>, path: readonly string[], value: 
 export function createConnectionProposeTool(input: {
   connectorTypes: ConnectorTypeRegistry;
   catalogue?: ConnectionProposalCatalogue;
+  /** Without it, no own-server proposal and every other mode, as before PMCP-CHAT. */
+  access?: ConnectionProposalAccess;
 }): AnyToolDefinition {
   return defineTool({
     name: CONNECTION_PROPOSE_TOOL_NAME,
@@ -532,6 +577,7 @@ export function createConnectionProposeTool(input: {
       "Read catalogue.entries in platform.context first. If an entry fits, pass only entry: { id, part }; do not web-search the provider or draft tools against its hosts. Otherwise name the type, an id, a title and, for 'mcp' or 'http_api', the url, authScheme, credentialMode (user for mail, calendar and personal files), OAuth endpoints, scopes and public clientId, and GET read operations. A shared functional mailbox, such as a feedback address, is 'imap' with settings host, port, username and folders; a person's own mailbox is no 'imap' Connection.",
       "Issues in the answer are fixed before you call again. A passing proposal shows as a card; the person's screen opens the New connection dialog filled with it, where they enter the key or sign in and press Connect. Nothing is saved before.",
       "Never ask for a key, token or password, nor put one into the proposal: say in one sentence that they enter it in the dialog. Never ask a question in the same turn as an approval card. Never say a service is unsupported: build the custom path and name the one step you cannot do.",
+      "Mode 'own_server', where offered: an MCP server the person adds for themselves, such as their own notes service. Give mode 'own_server', connectorType 'mcp', its name in words as title and its https address as url, nothing else. The card opens their own Settings > You > Connections with the add screen filled; there they press Connect, sign in and choose its tools, and nothing is saved before. You never receive a token, never save the server, never accept its tools. Without the platform's tools this is the only mode you may use.",
       "A message from the person says when it is connected and which tools they approved. Then draft any missing reads of a REST API with " +
         CONNECTION_DRAFT_TOOL_NAME +
         ", offer the tools with " +
@@ -540,8 +586,20 @@ export function createConnectionProposeTool(input: {
     ].join(" "),
     inputSchema,
     inputJsonSchema: deriveInputJsonSchema(modelInputSchema),
-    outputSchema,
+    outputSchema: z.union([outputSchema, ownServerOutputSchema]),
     async execute(proposal, context) {
+      const access = (await input.access?.of(context)) ?? { ownServer: false, otherModes: true };
+      if ("mode" in proposal) return proposeOwnServer(proposal, access.ownServer);
+      if (!access.otherModes) {
+        return {
+          status: "failed",
+          error: {
+            code: "not_allowed",
+            message: `Without the platform's tools you propose only a person's own MCP server: mode '${OWN_SERVER_PROPOSAL_MODE}', connectorType 'mcp', title and url.`
+          },
+          auditSummary: { action: CONNECTION_PROPOSE_TOOL_NAME, metadata: { mode: "refused" } }
+        };
+      }
       const entries = (await input.catalogue?.read(context)) ?? [];
       const mayWrite = async (connectionName: string) =>
         (await input.catalogue?.mayWrite(context, connectionName)) ?? false;
@@ -614,4 +672,50 @@ export function createConnectionProposeTool(input: {
       );
     }
   });
+}
+
+/**
+ * The own-server mode (PMCP-CHAT): checks the address as the add screen does before it saves,
+ * without resolving or reaching it, and answers the card. It reads nothing of the instance and
+ * saves nothing. Its audit names the mode alone, never the address or the name.
+ */
+function proposeOwnServer(
+  proposal: z.infer<typeof ownServerInputSchema>,
+  offered: boolean
+): ToolHandlerResult<OwnServerProposal> {
+  const auditSummary = {
+    action: CONNECTION_PROPOSE_TOOL_NAME,
+    metadata: { mode: OWN_SERVER_PROPOSAL_MODE }
+  };
+  if (!offered) {
+    return {
+      status: "failed",
+      error: {
+        code: "not_allowed",
+        message:
+          "A person's own MCP server is proposed only in their own chat that no one else reads, where they may add one. Tell them they add it themselves under Settings > You > Connections."
+      },
+      auditSummary
+    };
+  }
+  const url = proposal.url.trim();
+  const issues = addressIssues(url);
+  if (issues.length > 0) {
+    const details: JsonObject = { issues: issues.map((issue) => ({ ...issue })) };
+    return {
+      status: "failed",
+      error: {
+        code: "validation_failed",
+        message: `The proposal is refused, so no card shows. Fix each issue and call ${CONNECTION_PROPOSE_TOOL_NAME} again: ${issues
+          .map((issue) => `${issue.path}: ${issue.message}`)
+          .join("; ")}`,
+        details
+      },
+      auditSummary
+    };
+  }
+  return toolSuccess<OwnServerProposal>(
+    { mode: OWN_SERVER_PROPOSAL_MODE, ownServer: { title: proposal.title.trim(), url } },
+    { auditSummary }
+  );
 }

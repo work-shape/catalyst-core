@@ -19,6 +19,8 @@ import {
   readConnectionProposal
 } from "../../studio/build-area/connection-draft";
 import { ConnectionDraftCard } from "../../studio/build-area/connection-draft-card";
+import { readOwnServerProposal } from "../../studio/build-area/own-server-model";
+import { OwnServerProposalCard } from "../../studio/build-area/own-server-proposal-card";
 import { useConnectionDraftHost } from "../../studio/build-area/connection-draft-host";
 import { ConnectionConnectCard } from "../../studio/build-area/connection-connect-card";
 import { GuardrailAnswer } from "../guardrails/guardrail-answer";
@@ -275,6 +277,14 @@ export function ToolCallPart({
           : undefined;
   if (connectionDraft) {
     return <ConnectionDraftCard draft={connectionDraft} />;
+  }
+  // Its proposal of the person's own MCP server: a card whose button opens their add screen.
+  const ownServerProposal =
+    state === "completed" && toolName === CONNECTION_PROPOSE_TOOL_NAME
+      ? readOwnServerProposal(result)
+      : undefined;
+  if (ownServerProposal) {
+    return <OwnServerProposalCard proposal={ownServerProposal} />;
   }
 
   // The agent's question to the person: a card whose options answer it (ASK-1).

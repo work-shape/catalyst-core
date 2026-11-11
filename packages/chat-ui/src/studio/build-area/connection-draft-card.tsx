@@ -23,6 +23,8 @@ import {
 import { CONNECTIONS_BUILD_PATH } from "./connection-tools";
 import { ConnectionConnectCard } from "./connection-connect-card";
 import { connectCardOfProposal } from "./connection-connect-card-model";
+import { OWN_SERVERS_ROUTE } from "./own-server-model";
+import { requestOwnServerAdd } from "./own-server-request";
 
 // The card of the agent's draft of the tools of a REST API (CS-5c), in the conversation: what
 // the tools are for and their names. Its button opens the Connection's approval list with the
@@ -118,6 +120,10 @@ export function connectionDraftHost(input: {
             tellConversation(agentName === undefined ? from : { ...from, agentName }, text)
         }
       : {})
+  };
+  host.openOwnServer = (proposal) => {
+    requestOwnServerAdd({ ...proposal, ...(from ? { from } : {}) });
+    input.showRoute(OWN_SERVERS_ROUTE);
   };
   if (input.mayWriteConnections) {
     host.open = (draft) =>

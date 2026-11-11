@@ -105,7 +105,14 @@ export * from "./connection-operation-schema";
 export * from "./connection-sign-in-model";
 export * from "./connection-people-model";
 export * from "./own-server-model";
-export { OwnServersSection, OwnServerAddDialog } from "./own-servers";
+export { OwnServersSection, OwnServerAddDialog, type OwnServerAdded } from "./own-servers";
+export { OwnServerProposalCard } from "./own-server-proposal-card";
+export {
+  requestOwnServerAdd,
+  takeOwnServerAdd,
+  useRequestedOwnServerAdd,
+  type OwnServerAddRequest
+} from "./own-server-request";
 export {
   SignInActions,
   SignInBody,

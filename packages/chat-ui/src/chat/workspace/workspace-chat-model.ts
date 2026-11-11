@@ -15,6 +15,8 @@ import {
   sendProductConversationMessage
 } from "../assistant/product-run-transport";
 import { openConnectionDraftIn } from "../../studio/build-area/connection-draft-card";
+import { OWN_SERVERS_ROUTE } from "../../studio/build-area/own-server-model";
+import { requestOwnServerAdd } from "../../studio/build-area/own-server-request";
 import type { ConnectionDraft } from "../../studio/build-area/connection-draft";
 import { dockBuildKind } from "../dock/subject-starters";
 import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
@@ -876,6 +878,18 @@ export function useWorkspaceChatModel({
     },
     [client, openDockedPage]
   );
+  // Its proposal of the person's own MCP server opens their add screen beside the conversation
+  // (PMCP-CHAT); the page decides whether they may add one.
+  const openOwnServerProposal = useCallback(
+    (
+      proposal: { title: string; url: string },
+      from: { conversationId: string; agentName?: string }
+    ) => {
+      requestOwnServerAdd({ ...proposal, from });
+      openDockedPage(OWN_SERVERS_ROUTE, from.conversationId);
+    },
+    [openDockedPage]
+  );
   const agentOpens = useAgentOpens({
     activeRun: controller.activeRun,
     messages,
@@ -888,7 +902,8 @@ export function useWorkspaceChatModel({
     client,
     onSubjectChanged: workspaceCache.invalidateConversationStarted,
     onError: setNotice,
-    ...(controlPlane.mayWriteConnections ? { openProposal } : {})
+    ...(controlPlane.mayWriteConnections ? { openProposal } : {}),
+    openOwnServerProposal
   });
   const modelPicks = conversationModelPicks({
     agent: activeAgent,

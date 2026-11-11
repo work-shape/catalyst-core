@@ -50,7 +50,9 @@ export {
 } from "./conversation-rename-tool";
 export {
   CONNECTION_PROPOSE_TOOL_NAME,
+  OWN_SERVER_PROPOSAL_MODE,
   createConnectionProposeTool,
+  type ConnectionProposalAccess,
   type ConnectionProposalCatalogue,
   type ConnectionProposalCatalogueEntry
 } from "./connection-propose-tool";

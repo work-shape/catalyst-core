@@ -1,5 +1,7 @@
 import type { ConnectionTestResult, PersonalConnections } from "@work-shape/catalyst-api-client";
 import { CONNECTION_NAME_MAX_LENGTH } from "@work-shape/catalyst-core";
+import { toolAnswer } from "../../chat/conversation/subject-run";
+import type { TranslationContextValue } from "../../shared/i18n";
 import { personalViewOf, type PersonalView } from "./connection-people-model";
 
 // A person's own MCP server (PMCP-5): what You > Connections reads and writes for it. Pure:
@@ -7,6 +9,9 @@ import { personalViewOf, type PersonalView } from "./connection-people-model";
 // decides every write; these decide only what is shown and sent.
 
 type PersonalRow = PersonalConnections["connections"][number];
+
+/** Settings > You > Connections, where a person's own servers are added. */
+export const OWN_SERVERS_ROUTE = { kind: "settings", group: "you", page: "connections" } as const;
 
 /** A row of the person's list that is an MCP server they added for themselves. */
 export type OwnServerRow = PersonalRow & { ownServer: NonNullable<PersonalRow["ownServer"]> };
@@ -162,4 +167,71 @@ export function withKeptOperations(
       return [effect === undefined ? operation : { ...operation, effect }];
     })
   };
+}
+
+/**
+ * An agent's proposal of a person's own MCP server (PMCP-CHAT), as its tool answered: the name
+ * in words and the address its add screen starts with. Nothing for any other answer.
+ */
+export function readOwnServerProposal(result: unknown): { title: string; url: string } | undefined {
+  const answer = toolAnswer(result);
+  if (answer?.mode !== "own_server") return undefined;
+  const proposal: unknown = answer.ownServer;
+  if (typeof proposal !== "object" || proposal === null) return undefined;
+  const title: unknown = Reflect.get(proposal, "title");
+  const url: unknown = Reflect.get(proposal, "url");
+  return typeof title === "string" && typeof url === "string" && url !== ""
+    ? { title, url }
+    : undefined;
+}
+
+/** The longest a server's or tool's name is quoted in the person's message. */
+export const OWN_SERVER_TOLD_NAME_MAX = 80;
+/** The most tools the person's message names; the rest it counts. */
+export const OWN_SERVER_TOLD_TOOLS_MAX = 5;
+
+/**
+ * A name as the person's message quotes it. Tool titles are chosen by the server, so a title
+ * must read as a name and never as text the person wrote: one line with no control, format or
+ * separator characters, no quote mark of its own to close the quote with, and at most
+ * {@link OWN_SERVER_TOLD_NAME_MAX} characters.
+ */
+export function ownServerToldName(raw: string): string {
+  const line = raw
+    .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, " ")
+    .replace(/["\u201C\u201D\u201E\u201F\u00AB\u00BB\u2039\u203A\u300C\u300D\uFF02]/gu, "'")
+    .replace(/\s+/gu, " ")
+    .trim();
+  const chars = Array.from(line);
+  return chars.length > OWN_SERVER_TOLD_NAME_MAX
+    ? `${chars
+        .slice(0, OWN_SERVER_TOLD_NAME_MAX - 1)
+        .join("")
+        .trimEnd()}\u2026`
+    : line;
+}
+
+/**
+ * The person's message to the conversation whose agent proposed the server, once it is added:
+ * its name and the tools they accepted, or that they accepted none. Every name is quoted as
+ * {@link ownServerToldName} makes it, at most {@link OWN_SERVER_TOLD_TOOLS_MAX} are listed and
+ * the rest counted.
+ */
+export function ownServerAddedMessage(
+  added: { title: string; tools: readonly string[] },
+  t: TranslationContextValue["t"]
+): string {
+  const quote = (raw: string) => t("ownServers.toldName", { name: ownServerToldName(raw) });
+  const title = quote(added.title);
+  const names = added.tools.map(ownServerToldName).filter((name) => name !== "");
+  if (names.length === 0) return t("ownServers.toldNoTools", { title });
+  const listed = names
+    .slice(0, OWN_SERVER_TOLD_TOOLS_MAX)
+    .map((name) => t("ownServers.toldName", { name }));
+  const rest = names.length - listed.length;
+  const tools =
+    listed.join(", ") + (rest > 0 ? ` ${t("ownServers.toldMore", { count: rest })}` : "");
+  return names.length === 1
+    ? t("ownServers.toldOne", { title, tools })
+    : t("ownServers.toldTools", { title, count: names.length, tools });
 }

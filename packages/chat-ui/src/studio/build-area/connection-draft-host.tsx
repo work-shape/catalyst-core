@@ -36,6 +36,12 @@ export interface ConnectionDraftHost {
    */
   openExisting?(draft: ConnectionDraft): Promise<ConnectionDraftOpening>;
   /**
+   * Opens the add screen of the person's own MCP servers on Settings > You > Connections,
+   * filled with an agent's proposal (PMCP-CHAT), the conversation docked beside it. The page
+   * decides whether the person may add one.
+   */
+  openOwnServer?(proposal: { title: string; url: string }): void;
+  /**
    * The Connection of an id as the instance holds it, or nothing where there is none: the card
    * names an existing Connection by its own title, never by the agent's.
    */
