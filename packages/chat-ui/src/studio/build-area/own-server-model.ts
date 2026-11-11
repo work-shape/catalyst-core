@@ -185,18 +185,53 @@ export function readOwnServerProposal(result: unknown): { title: string; url: st
     : undefined;
 }
 
+/** The longest a server's or tool's name is quoted in the person's message. */
+export const OWN_SERVER_TOLD_NAME_MAX = 80;
+/** The most tools the person's message names; the rest it counts. */
+export const OWN_SERVER_TOLD_TOOLS_MAX = 5;
+
+/**
+ * A name as the person's message quotes it. Tool titles are chosen by the server, so a title
+ * must read as a name and never as text the person wrote: one line with no control, format or
+ * separator characters, no quote mark of its own to close the quote with, and at most
+ * {@link OWN_SERVER_TOLD_NAME_MAX} characters.
+ */
+export function ownServerToldName(raw: string): string {
+  const line = raw
+    .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, " ")
+    .replace(/["\u201C\u201D\u201E\u201F\u00AB\u00BB\u2039\u203A\u300C\u300D\uFF02]/gu, "'")
+    .replace(/\s+/gu, " ")
+    .trim();
+  const chars = Array.from(line);
+  return chars.length > OWN_SERVER_TOLD_NAME_MAX
+    ? `${chars
+        .slice(0, OWN_SERVER_TOLD_NAME_MAX - 1)
+        .join("")
+        .trimEnd()}\u2026`
+    : line;
+}
+
 /**
  * The person's message to the conversation whose agent proposed the server, once it is added:
- * its name and the tools they accepted, or that they accepted none.
+ * its name and the tools they accepted, or that they accepted none. Every name is quoted as
+ * {@link ownServerToldName} makes it, at most {@link OWN_SERVER_TOLD_TOOLS_MAX} are listed and
+ * the rest counted.
  */
 export function ownServerAddedMessage(
   added: { title: string; tools: readonly string[] },
   t: TranslationContextValue["t"]
 ): string {
-  if (added.tools.length === 0) return t("ownServers.toldNoTools", { title: added.title });
-  const named = added.tools.slice(0, 10);
-  const tools = named.join(", ") + (added.tools.length > named.length ? ", …" : "");
-  return added.tools.length === 1
-    ? t("ownServers.toldOne", { title: added.title, tools })
-    : t("ownServers.toldTools", { title: added.title, count: added.tools.length, tools });
+  const quote = (raw: string) => t("ownServers.toldName", { name: ownServerToldName(raw) });
+  const title = quote(added.title);
+  const names = added.tools.map(ownServerToldName).filter((name) => name !== "");
+  if (names.length === 0) return t("ownServers.toldNoTools", { title });
+  const listed = names
+    .slice(0, OWN_SERVER_TOLD_TOOLS_MAX)
+    .map((name) => t("ownServers.toldName", { name }));
+  const rest = names.length - listed.length;
+  const tools =
+    listed.join(", ") + (rest > 0 ? ` ${t("ownServers.toldMore", { count: rest })}` : "");
+  return names.length === 1
+    ? t("ownServers.toldOne", { title, tools })
+    : t("ownServers.toldTools", { title, count: names.length, tools });
 }

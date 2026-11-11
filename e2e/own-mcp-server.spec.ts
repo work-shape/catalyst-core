@@ -375,11 +375,11 @@ test("de: an agent without the platform's tools proposes the person's own server
     await expect(dialog.locator('[data-own-server-field="title"]')).toHaveValue("Meine Notizen");
     await dialog.getByRole("button", { name: "Fertig" }).click();
     await expect(dialog).toBeHidden();
-
+    // The chat hears it from the person, every server and tool name quoted.
     // The chat hears it as the person's own message, with the tools accepted.
     await expect(
       page.getByText(
-        /^Ich habe meinen MCP-Server Meine Notizen hinzugefügt\. 6 Tools akzeptiert: /u
+        /^Ich habe meinen MCP-Server „Meine Notizen“ hinzugefügt\. 6 Tools akzeptiert: „[^“]+“(, „[^“]+“){4} \+ 1 weitere\.$/u
       )
     ).toBeVisible({ timeout: 30_000 });
     await expect(page.locator("[data-own-server-card]")).toContainText("Meine Notizen");

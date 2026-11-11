@@ -62,6 +62,8 @@ export const ownServers = defineTranslations({
     "ownServers.toldTools": "I added my MCP server {title}. {count} tools accepted: {tools}.",
     "ownServers.toldOne": "I added my MCP server {title}. 1 tool accepted: {tools}.",
     "ownServers.toldNoTools": "I added my MCP server {title}, with no tools accepted yet.",
+    "ownServers.toldName": "“{name}”",
+    "ownServers.toldMore": "+ {count} more",
     "ownServers.loadFailed": "The tools could not be loaded."
   },
   de: {
@@ -127,6 +129,8 @@ export const ownServers = defineTranslations({
       "Ich habe meinen MCP-Server {title} hinzugefügt. 1 Tool akzeptiert: {tools}.",
     "ownServers.toldNoTools":
       "Ich habe meinen MCP-Server {title} hinzugefügt, noch ohne akzeptierte Tools.",
+    "ownServers.toldName": "„{name}“",
+    "ownServers.toldMore": "+ {count} weitere",
     "ownServers.loadFailed": "Die Tools ließen sich nicht laden."
   }
 });
