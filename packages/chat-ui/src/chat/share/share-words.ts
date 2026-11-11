@@ -35,6 +35,11 @@ export interface ShareRefusal {
  * the instance's message for any other refusal. `name` is the person it was about.
  */
 export function shareRefusal(error: unknown, t: Translate, name?: string): ShareRefusal {
+  // A search of the instance's people is rate limited (CHAT-SHARE-6): the interface says so in
+  // its own words, as it does every refusal it knows.
+  if (error instanceof ApiError && error.code === "RATE_LIMITED") {
+    return { reason: undefined, message: t("chatShare.searchLimited") };
+  }
   const details = detailsOf(error);
   const reason = CONVERSATION_SHARE_REFUSALS.find((known) => known === details?.reason);
   if (reason === undefined) {
@@ -51,6 +56,27 @@ export function shareRefusal(error: unknown, t: Translate, name?: string): Share
       right: text(details?.right)
     })
   };
+}
+
+/**
+ * What a search for people says where it found nobody (CHAT-SHARE-6): with nothing typed, that
+ * nobody is offered yet; with one letter, which searches only the people offered, that a second
+ * one searches everyone; else how to find someone by email.
+ */
+export function noMatchWords(query: string, workspace: string, t: Translate): string {
+  const typed = query.trim();
+  if (typed === "") return t("chatShare.noCandidates", { workspace });
+  return Array.from(typed).length === 1 ? t("chatShare.oneMoreLetter") : t("chatShare.noMatch");
+}
+
+/**
+ * The line for the picked people who are no member of the chat's workspace: they read this
+ * chat alone, and their turns run with their own rights. Several share one line.
+ */
+export function outsideWords(names: readonly string[], workspace: string, t: Translate): string {
+  return names.length === 1
+    ? t("chatShare.outsideOne", { name: names[0] ?? "", workspace })
+    : t("chatShare.outsideMany", { names: listNames(names, t), workspace });
 }
 
 /** Names as a sentence lists them: "A", "A and B", "A, B and C". */

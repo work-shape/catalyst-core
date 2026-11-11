@@ -191,6 +191,11 @@ export interface RunOperationDeps {
   worksInWorkspace?(input: {
     actor: AuthenticatedIdentity;
     workspaceId: CollaborationWorkspaceId;
+    /**
+     * The chat of an agent's call: a person named on it from outside the workspace acts there
+     * in that chat alone, with their own rights (CHAT-SHARE-6).
+     */
+    conversationId?: ConversationId;
   }): Promise<boolean>;
   /**
    * Whether an agent is available in a workspace now, by the rule a new run of it is started
@@ -207,6 +212,11 @@ export interface RunOperationDeps {
     actor?: AuthenticatedIdentity;
     correlationId?: string;
     conversationId?: ConversationId;
+    /**
+     * The chat the call is made from, its root for a subagent's thread. A person who reads it
+     * from outside its workspace (`readsChatFromOutside`) runs only the instance's agents there.
+     */
+    chatId?: ConversationId;
   }): Promise<boolean>;
   logger: Logger;
   now?: () => Date;

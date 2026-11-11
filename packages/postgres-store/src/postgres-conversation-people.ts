@@ -15,6 +15,7 @@ import {
   ACTIVE_AGENT_RUN_STATUSES,
   AppError,
   CONVERSATION_PEOPLE_MAX,
+  SHARE_SEARCH_INSTANCE_MIN_CHARS,
   asConversationId,
   conversationHasPeopleError,
   conversationShareRefusal,
@@ -52,8 +53,13 @@ export function readsConversation(userId: string | SQLWrapper) {
   return or(
     sql`"conversations"."visibility" = 'workspace'`,
     sql`"conversations"."created_by_user_id" = ${userId}`,
-    sql`exists (select 1 from conversation_people cp where cp.client_instance_id = "conversations"."client_instance_id" and cp.conversation_id = coalesce("conversations"."parent_conversation_id", "conversations"."id") and cp.user_id = ${userId})`
+    namesPerson(userId)
   );
+}
+
+/** Whether the conversation of the enclosing statement names `userId`. */
+export function namesPerson(userId: string | SQLWrapper) {
+  return sql`exists (select 1 from conversation_people cp where cp.client_instance_id = "conversations"."client_instance_id" and cp.conversation_id = coalesce("conversations"."parent_conversation_id", "conversations"."id") and cp.user_id = ${userId})`;
 }
 
 /** Whether the conversation of the enclosing statement names nobody. */
@@ -136,7 +142,7 @@ function checksChanged(): AppError {
 export async function addConversationPerson(
   db: PostgresConnection,
   input: AddConversationPersonInput
-): Promise<{ added: boolean; conversation: Conversation }> {
+): Promise<{ added: boolean; outside: boolean; conversation: Conversation }> {
   return db.transaction(async (tx) => {
     const { clientInstanceId, conversationId } = input;
     // The row lock the personal-data mark takes too: whichever comes first wins (3.2).
@@ -198,27 +204,28 @@ export async function addConversationPerson(
     ) {
       throw checksChanged();
     }
-    if (conversation.people.some((person) => person.userId === input.userId)) {
-      return { added: false, conversation };
+    // The person's row is held until the row is in: a deactivation or a deletion request
+    // waits, and the deletion then takes the row.
+    const [person] = await tx
+      .select({ id: productUsers.id })
+      .from(productUsers)
+      .where(
+        and(
+          eq(productUsers.clientInstanceId, clientInstanceId),
+          eq(productUsers.id, input.userId),
+          eq(productUsers.status, "active"),
+          isNull(productUsers.deletionRequestedAt)
+        )
+      )
+      .for("share");
+    if (!person || input.userId === conversation.createdByUserId) {
+      throw personUnavailable();
     }
-    if (conversation.people.length >= CONVERSATION_PEOPLE_MAX) {
-      throw conversationShareRefusal(
-        "share_people_limit",
-        `A chat names at most ${CONVERSATION_PEOPLE_MAX} people. Share it with the team, or use a project`,
-        { limit: String(CONVERSATION_PEOPLE_MAX) }
-      );
-    }
-    // The membership is held until the row is in: an end of it waits, and then takes the row.
+    // A membership is held too: an end of it waits, and then takes the row. Anyone active on
+    // the instance may be named; one who holds none reads this chat from outside (ADR-0034).
     const [member] = await tx
       .select({ userId: collaborationWorkspaceMemberships.userId })
       .from(collaborationWorkspaceMemberships)
-      .innerJoin(
-        productUsers,
-        and(
-          eq(productUsers.clientInstanceId, collaborationWorkspaceMemberships.clientInstanceId),
-          eq(productUsers.id, collaborationWorkspaceMemberships.userId)
-        )
-      )
       .where(
         and(
           eq(collaborationWorkspaceMemberships.clientInstanceId, clientInstanceId),
@@ -226,14 +233,20 @@ export async function addConversationPerson(
             collaborationWorkspaceMemberships.collaborationWorkspaceId,
             conversation.collaborationWorkspaceId
           ),
-          eq(collaborationWorkspaceMemberships.userId, input.userId),
-          eq(productUsers.status, "active"),
-          isNull(productUsers.deletionRequestedAt)
+          eq(collaborationWorkspaceMemberships.userId, input.userId)
         )
       )
-      .for("share", { of: collaborationWorkspaceMemberships });
-    if (!member || input.userId === conversation.createdByUserId) {
-      throw personUnavailable();
+      .for("share");
+    const outside = member === undefined;
+    if (conversation.people.some((named) => named.userId === input.userId)) {
+      return { added: false, outside, conversation };
+    }
+    if (conversation.people.length >= CONVERSATION_PEOPLE_MAX) {
+      throw conversationShareRefusal(
+        "share_people_limit",
+        `A chat names at most ${CONVERSATION_PEOPLE_MAX} people. Share it with the team, or use a project`,
+        { limit: String(CONVERSATION_PEOPLE_MAX) }
+      );
     }
     await tx.insert(conversationPeople).values({
       clientInstanceId,
@@ -244,15 +257,15 @@ export async function addConversationPerson(
     });
     const updated = await readConversation(tx, clientInstanceId, conversationId);
     if (!updated) throw new AppError("NOT_FOUND", "Conversation is not available");
-    return { added: true, conversation: updated };
+    return { added: true, outside, conversation: updated };
   });
 }
 
-/** The person cannot be named: no active member of the chat's workspace, or its creator. */
+/** The person cannot be named: not active on the instance, or the chat's creator. */
 function personUnavailable(): AppError {
   return conversationShareRefusal(
     "share_person_unavailable",
-    "Only an active member of the chat's workspace can be named"
+    "Only an active person of the instance can be named"
   );
 }
 
@@ -416,66 +429,78 @@ export async function listShareCandidates(
     .groupBy(agentRuns.ownerUserId)
     .as("wrote");
   const query = input.query?.trim();
+  const namedHere = sql`exists (select 1 from ${conversationPeople} where ${conversationPeople.clientInstanceId} = ${clientInstanceId} and ${conversationPeople.conversationId} = ${input.conversationId} and ${conversationPeople.userId} = ${productUsers.id})`;
+  const member = sql`exists (select 1 from ${collaborationWorkspaceMemberships} where ${collaborationWorkspaceMemberships.clientInstanceId} = ${clientInstanceId} and ${collaborationWorkspaceMemberships.collaborationWorkspaceId} = ${collaborationWorkspaceId} and ${collaborationWorkspaceMemberships.userId} = ${productUsers.id})`;
+  // Those the creator knows from this workspace: the preselection, which a bare @ shows.
+  const known = or(isNotNull(namedAt.at), isNotNull(wroteAt.at), namedHere);
+  const byName = query
+    ? or(
+        ilike(productUsers.displayLabel, prefixPattern(query)),
+        ilike(productUsers.displayLabel, sql`${"% "} || ${prefixPattern(query)}`)
+      )
+    : undefined;
+  // One letter, or none, filters the preselection only. From two letters a name prefix finds
+  // anyone active on the instance, and an address the person whose whole address it is: the
+  // field finds a colleague whose address one knows, never pages through the addresses
+  // (CHAT-SHARE-6, section 3.9).
+  const searchesInstance = query !== undefined && query.length >= SHARE_SEARCH_INSTANCE_MIN_CHARS;
+  const found = !query
+    ? known
+    : searchesInstance
+      ? or(
+          and(known, or(byName, ilike(productUsers.email, prefixPattern(query)))),
+          byName,
+          sql`lower(${productUsers.email}) = ${query.toLocaleLowerCase()}`
+        )
+      : and(known, or(byName, ilike(productUsers.email, prefixPattern(query))));
   const rows = await db
     .select({
       userId: productUsers.id,
       displayLabel: productUsers.displayLabel,
       email: productUsers.email,
-      namedAt: namedAt.at,
-      wroteAt: wroteAt.at,
-      named: sql<boolean>`exists (select 1 from ${conversationPeople} where ${conversationPeople.clientInstanceId} = ${clientInstanceId} and ${conversationPeople.conversationId} = ${input.conversationId} and ${conversationPeople.userId} = ${productUsers.id})`
+      named: sql<boolean>`${namedHere}`,
+      member: sql<boolean>`${member}`,
+      known: sql<boolean>`${known ?? sql`false`}`
     })
-    .from(collaborationWorkspaceMemberships)
-    .innerJoin(
-      productUsers,
-      and(
-        eq(productUsers.clientInstanceId, collaborationWorkspaceMemberships.clientInstanceId),
-        eq(productUsers.id, collaborationWorkspaceMemberships.userId)
-      )
-    )
+    .from(productUsers)
     .leftJoin(namedAt, eq(namedAt.userId, productUsers.id))
     .leftJoin(wroteAt, eq(wroteAt.userId, productUsers.id))
     .where(
       and(
-        eq(collaborationWorkspaceMemberships.clientInstanceId, clientInstanceId),
-        eq(collaborationWorkspaceMemberships.collaborationWorkspaceId, collaborationWorkspaceId),
+        eq(productUsers.clientInstanceId, clientInstanceId),
         eq(productUsers.status, "active"),
         isNull(productUsers.deletionRequestedAt),
         // The creator reads it already.
         ne(productUsers.id, creatorUserId),
-        // Only people the creator knows from this workspace, with a query or without: a member
-        // cannot list the members (only an Owner or Admin can), and a search must not do so
-        // a letter at a time (spec section 5: "among the offered people only").
-        or(
-          isNotNull(namedAt.at),
-          isNotNull(wroteAt.at),
-          sql`exists (select 1 from ${conversationPeople} where ${conversationPeople.clientInstanceId} = ${clientInstanceId} and ${conversationPeople.conversationId} = ${input.conversationId} and ${conversationPeople.userId} = ${productUsers.id})`
-        ),
-        query
-          ? or(
-              ilike(productUsers.displayLabel, prefixPattern(query)),
-              ilike(productUsers.displayLabel, sql`${"% "} || ${prefixPattern(query)}`),
-              ilike(productUsers.email, prefixPattern(query))
-            )
-          : undefined
+        found
       )
     )
     .orderBy(
+      sql`case when ${known} then 0 else 1 end`,
       sql`${namedAt.at} desc nulls last`,
       sql`${wroteAt.at} desc nulls last`,
+      sql`case when ${member} then 0 else 1 end`,
       asc(productUsers.displayLabel),
       asc(productUsers.id)
     )
     .limit(input.limit);
-  // An email is shown only to a search that typed its start: the bare list and a search by
-  // name answer names alone.
+  // An email is shown only to a search that typed its start among the people the creator knows,
+  // or the whole of it, or to tell two people of one name apart: the bare list and a search by
+  // name answer names alone, and a name search across the instance never shows an address.
   const emailQuery = query?.toLocaleLowerCase();
+  const labels = new Map<string, number>();
+  for (const row of rows) labels.set(row.displayLabel, (labels.get(row.displayLabel) ?? 0) + 1);
   return rows.map((row) => ({
     userId: row.userId,
     displayLabel: row.displayLabel,
-    ...(row.email && emailQuery && row.email.toLocaleLowerCase().startsWith(emailQuery)
+    ...(row.email &&
+    ((emailQuery &&
+      (row.email.toLocaleLowerCase() === emailQuery ||
+        (row.known && row.email.toLocaleLowerCase().startsWith(emailQuery)))) ||
+      (labels.get(row.displayLabel) ?? 0) > 1)
       ? { email: row.email }
       : {}),
-    hasAccess: row.named
+    hasAccess: row.named,
+    member: row.member
   }));
 }

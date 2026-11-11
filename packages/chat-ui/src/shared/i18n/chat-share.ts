@@ -1,20 +1,29 @@
 import { defineTranslations } from "./translation-area";
 
-// One private chat shared with named members of its workspace (CHAT-SHARE-2): the @ menu in the
-// composer, the chips and the line above it, who sees the chat in its head, the rail's mark and
-// the Inbox notice. The refusals are worded by their reason, one sentence each.
+// One private chat shared with named people (CHAT-SHARE-2), members of its workspace or anyone
+// active on the instance (CHAT-SHARE-6): the @ menu in the composer, the chips and the lines
+// above it, who sees the chat in its head, the rail's mark and the Inbox notice, and what an
+// outside reader's composer says of their agent. The refusals are worded by their reason, one
+// sentence each.
 export const chatShare = defineTranslations({
   en: {
     "chatShare.menuLabel": "People to share this chat with",
     "chatShare.menuHeading": "Share this chat with",
     "chatShare.hasAccess": "has access",
-    "chatShare.noMatch": "No member of {workspace} matches.",
+    "chatShare.noMatch": "Nobody matches. To find someone by email, type the whole address.",
+    "chatShare.oneMoreLetter": "Type one more letter to search everyone.",
+    "chatShare.searchLimited": "Too many searches. Wait a moment.",
+    "chatShare.notIn": "not in {workspace}",
     "chatShare.noCandidates":
       "Nobody to offer yet. People you work with in {workspace} show up here.",
     "chatShare.loadFailed": "The people could not be loaded. Type @ again to retry.",
     "chatShare.chipsLabel": "Shared when you send",
     "chatShare.willSee": "{names} will see the whole chat, files included, and can write in it.",
     "chatShare.ownStop": "Your own skills and Connections stop working in this chat.",
+    "chatShare.outsideOne":
+      "{name} is not in {workspace}: they see only this chat, and their turns run with their own rights.",
+    "chatShare.outsideMany":
+      "{names} are not in {workspace}: they see only this chat, and their turns run with their own rights.",
     "chatShare.sharing": "Sharing the chat…",
     "chatShare.removeChipFirst": "Remove the person first: the chat cannot be shared with them.",
     "chatShare.and": "{first} and {last}",
@@ -43,6 +52,11 @@ export const chatShare = defineTranslations({
     "chatShare.senderYou": "You",
     "chatShare.someone": "Someone",
     "chatShare.openChat": "Open chat",
+    "chatShare.outsideChipLabel": "This chat is in {workspace}. You see nothing else of it.",
+    "chatShare.outsideAgent":
+      "{workspace}’s own agent works only for its members. Your turns use {agent}.",
+    "chatShare.outsideNoAgent":
+      "No agent here is open to you. You can read this chat, and {creator} can continue it.",
     "chatShare.refusal.personal_conversation_private":
       "This chat used something only you can use (your mail, your own skill or agent). It stays yours. Start a new chat to work on it together.",
     "chatShare.refusal.data_store_conversation_private":
@@ -59,7 +73,7 @@ export const chatShare = defineTranslations({
       "Only the person who started this chat chooses who sees it.",
     "chatShare.refusal.share_first_party_only":
       "Only you, signed in yourself, change who sees a chat.",
-    "chatShare.refusal.share_person_unavailable": "{name} is no active member of this workspace.",
+    "chatShare.refusal.share_person_unavailable": "{name} cannot be added.",
     "chatShare.refusal.share_people_limit":
       "A chat is shared with 20 people at most. For more, make it a team chat or a project.",
     "chatShare.refusal.share_checks_changed": "The chat changed meanwhile. Try again.",
@@ -70,7 +84,11 @@ export const chatShare = defineTranslations({
     "chatShare.menuLabel": "Personen, mit denen du diesen Chat teilst",
     "chatShare.menuHeading": "Diesen Chat teilen mit",
     "chatShare.hasAccess": "hat Zugriff",
-    "chatShare.noMatch": "Kein Mitglied von {workspace} passt.",
+    "chatShare.noMatch":
+      "Niemand passt. Um jemanden per E-Mail zu finden, tippe die ganze Adresse.",
+    "chatShare.oneMoreLetter": "Tippe einen Buchstaben mehr, um alle zu durchsuchen.",
+    "chatShare.searchLimited": "Zu viele Suchen. Warte einen Moment.",
+    "chatShare.notIn": "nicht in {workspace}",
     "chatShare.noCandidates":
       "Noch niemand zum Anbieten. Personen, mit denen du in {workspace} arbeitest, erscheinen hier.",
     "chatShare.loadFailed":
@@ -80,6 +98,10 @@ export const chatShare = defineTranslations({
       "{names} sieht den ganzen Chat, auch die Dateien, und kann darin schreiben.",
     "chatShare.ownStop":
       "Deine eigenen Skills und Verbindungen funktionieren in diesem Chat nicht mehr.",
+    "chatShare.outsideOne":
+      "{name} ist nicht in {workspace}: {name} sieht nur diesen Chat, und was {name} schreibt, läuft mit eigenen Rechten.",
+    "chatShare.outsideMany":
+      "{names} sind nicht in {workspace}: sie sehen nur diesen Chat, und was sie schreiben, läuft mit ihren eigenen Rechten.",
     "chatShare.sharing": "Chat wird geteilt…",
     "chatShare.removeChipFirst":
       "Entferne die Person zuerst: Der Chat lässt sich nicht mit ihr teilen.",
@@ -110,6 +132,11 @@ export const chatShare = defineTranslations({
     "chatShare.senderYou": "Du",
     "chatShare.someone": "Jemand",
     "chatShare.openChat": "Chat öffnen",
+    "chatShare.outsideChipLabel": "Dieser Chat liegt in {workspace}. Sonst siehst du nichts davon.",
+    "chatShare.outsideAgent":
+      "Der eigene Agent von {workspace} arbeitet nur für dessen Mitglieder. Was du schreibst, beantwortet {agent}.",
+    "chatShare.outsideNoAgent":
+      "Kein Agent hier steht dir offen. Du kannst diesen Chat lesen, und {creator} kann ihn fortsetzen.",
     "chatShare.refusal.personal_conversation_private":
       "Dieser Chat hat etwas genutzt, das nur du nutzen kannst (deine Mails, deinen eigenen Skill oder Agenten). Er bleibt deiner. Starte einen neuen Chat, um gemeinsam daran zu arbeiten.",
     "chatShare.refusal.data_store_conversation_private":
@@ -126,8 +153,7 @@ export const chatShare = defineTranslations({
       "Nur wer diesen Chat begonnen hat, bestimmt, wer ihn sieht.",
     "chatShare.refusal.share_first_party_only":
       "Nur du selbst, angemeldet, änderst, wer einen Chat sieht.",
-    "chatShare.refusal.share_person_unavailable":
-      "{name} ist kein aktives Mitglied dieses Arbeitsbereichs.",
+    "chatShare.refusal.share_person_unavailable": "{name} kann nicht hinzugefügt werden.",
     "chatShare.refusal.share_people_limit":
       "Ein Chat wird mit höchstens 20 Personen geteilt. Für mehr mach ihn zum Team-Chat oder zu einem Projekt.",
     "chatShare.refusal.share_checks_changed":

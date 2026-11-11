@@ -192,6 +192,7 @@
     "conversations.messages.list": "conversation_access",
     "conversations.move": "conversation_access",
     "conversations.project_instructions.get": "conversation_access",
+    "conversations.reader_offer.get": "conversation_access",
     "conversations.remove_person": "conversation_access",
     "conversations.rename": "conversation_access",
     "conversations.resources.list": "conversation_access",

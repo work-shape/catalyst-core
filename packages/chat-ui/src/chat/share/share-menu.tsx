@@ -23,12 +23,13 @@ import {
 import { useTranslation } from "../../shared/i18n";
 import { useChatShare, type ChatShareValue } from "./chat-share";
 import { findMentionTrigger, insertMention, type MentionTrigger } from "./mention-trigger";
-import { listNames, shareRefusal } from "./share-words";
+import { listNames, noMatchWords, outsideWords, shareRefusal } from "./share-words";
 
 // The @ menu of the composer and the chips above it (CHAT-SHARE-2). An @ at the start of the
 // text or after a space opens the menu for the creator of a private chat: up to five likely
-// people on a bare @, and the letters after it search them. A picked person becomes a chip and
-// "@Name" in the text; Send shares with them first, then sends.
+// people on a bare @, and the letters after it search them; from two letters the instance adds
+// everyone active on it, those outside the workspace marked (CHAT-SHARE-6). A picked person
+// becomes a chip and "@Name" in the text; Send shares with them first, then sends.
 
 /** How long the search waits for the next letter before it asks the instance. */
 export const SEARCH_DELAY_MS = 120;
@@ -120,17 +121,18 @@ export function useComposerMention(
     searchMenu?.(searching ? query : undefined);
   }, [query, searchMenu, searching]);
   const chips = share?.chips;
+  const workspaceName = share?.chat.workspaceName ?? "";
   const options = useMemo((): SuggestionListOption[] => {
     const picked = new Set(chips?.map((chip) => chip.userId));
-    return (candidates?.candidates ?? []).map((candidate) => ({
-      id: candidate.userId,
-      label: candidate.displayLabel,
-      ...(candidate.email === undefined ? {} : { description: candidate.email }),
-      leading: <Avatar kind="person" size="sm" name={candidate.displayLabel} />,
-      ...(candidate.hasAccess ? { trailing: t("chatShare.hasAccess") } : {}),
-      disabled: candidate.hasAccess || picked.has(candidate.userId)
-    }));
-  }, [candidates?.candidates, chips, t]);
+    return (candidates?.candidates ?? []).map((candidate) =>
+      candidateOption(
+        candidate,
+        workspaceName,
+        t,
+        candidate.hasAccess || picked.has(candidate.userId)
+      )
+    );
+  }, [candidates?.candidates, chips, t, workspaceName]);
   const [activeId, setActiveId] = useState<string>();
   const active =
     activeId !== undefined && options.some((option) => option.id === activeId && !option.disabled)
@@ -144,7 +146,9 @@ export function useComposerMention(
       if (!share || !option || option.disabled || !trigger || !input) return;
       const caret = input.selectionStart ?? input.value.length;
       const next = insertMention(input.value, trigger, caret, option.label);
-      share.pick({ userId: option.id, label: option.label });
+      const member =
+        candidates?.candidates.find((candidate) => candidate.userId === id)?.member ?? true;
+      share.pick({ userId: option.id, label: option.label, member });
       // The "@Name" just placed is no new search, wherever the caret lands in it.
       dismissedAt.current = trigger.at;
       composer.setText(next.text);
@@ -154,7 +158,7 @@ export function useComposerMention(
         input.setSelectionRange(next.caret, next.caret);
       });
     },
-    [composer, inputRef, options, share, trigger]
+    [candidates?.candidates, composer, inputRef, options, share, trigger]
   );
 
   const onKeyDown = useCallback(
@@ -227,9 +231,7 @@ export function ShareMenu({ menu }: { menu: ShareMenuState }) {
     ? refusal.message
     : menu.loading && menu.options.length === 0
       ? undefined
-      : menu.query === ""
-        ? t("chatShare.noCandidates", { workspace })
-        : t("chatShare.noMatch", { workspace });
+      : noMatchWords(menu.query, workspace, t);
   return (
     <SuggestionList
       id={menu.listId}
@@ -267,6 +269,7 @@ export function ShareChips() {
   const { t } = useTranslation();
   if (!share || share.chips.length === 0) return null;
   const refused = share.chips.find((chip) => chip.refusal !== undefined);
+  const outside = share.chips.filter((chip) => !chip.member).map((chip) => chip.label);
   return (
     <div className="grid gap-1.5 px-1" data-testid="share-chips">
       <div className="flex flex-wrap items-center gap-1.5">
@@ -297,6 +300,11 @@ export function ShareChips() {
           {share.ownStops ? ` ${t("chatShare.ownStop")}` : ""}
         </p>
       )}
+      {refused === undefined && outside.length > 0 ? (
+        <p className="text-caption text-muted-foreground" data-testid="share-outside-line">
+          {outsideWords(outside, share.chat.workspaceName, t)}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -311,6 +319,39 @@ export function useShareSendBlock(): { reason: string; loading: boolean } | unde
     return { reason: t("chatShare.removeChipFirst"), loading: false };
   }
   return undefined;
+}
+
+type Translate = ReturnType<typeof useTranslation>["t"];
+
+/**
+ * A person a search offers, as a list shows them: "has access" for one who reads the chat
+ * already, else "not in {workspace}" for one outside its workspace (CHAT-SHARE-6).
+ */
+export function candidateOption(
+  candidate: {
+    userId: string;
+    displayLabel: string;
+    email?: string | undefined;
+    hasAccess: boolean;
+    member: boolean;
+  },
+  workspace: string,
+  t: Translate,
+  disabled: boolean
+): SuggestionListOption {
+  const trailing = candidate.hasAccess
+    ? t("chatShare.hasAccess")
+    : candidate.member
+      ? undefined
+      : t("chatShare.notIn", { workspace });
+  return {
+    id: candidate.userId,
+    label: candidate.displayLabel,
+    ...(candidate.email === undefined ? {} : { description: candidate.email }),
+    leading: <Avatar kind="person" size="sm" name={candidate.displayLabel} />,
+    ...(trailing === undefined ? {} : { trailing }),
+    disabled
+  };
 }
 
 export function useDebounced(value: string, delay: number): string {

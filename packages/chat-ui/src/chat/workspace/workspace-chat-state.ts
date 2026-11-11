@@ -303,3 +303,39 @@ export function terminalRunNotice(
     return t("runToolSilent", { tool: error.tool });
   return t("runInterrupted");
 }
+
+/**
+ * The line above an outside reader's composer: where the chat's agent is not open to them, the
+ * one their turns use; where no agent is, that they read along and the creator can go on.
+ */
+export function outsideReaderNote(input: {
+  outside: { workspace: { name: string }; agents: readonly { name: string }[] } | undefined;
+  chatAgentName: string | undefined;
+  activeAgent: { name: string; displayName?: string | undefined } | undefined;
+  creator: string | undefined;
+  t: TranslationContextValue["t"];
+}): { text: string; blocksSend: boolean } | undefined {
+  const { outside, t } = input;
+  if (outside === undefined) return undefined;
+  if (outside.agents.length === 0) {
+    return {
+      text: t("chatShare.outsideNoAgent", { creator: input.creator ?? t("chatShare.someone") }),
+      blocksSend: true
+    };
+  }
+  const { chatAgentName, activeAgent } = input;
+  if (
+    chatAgentName === undefined ||
+    activeAgent === undefined ||
+    outside.agents.some((agent) => agent.name === chatAgentName)
+  ) {
+    return undefined;
+  }
+  return {
+    text: t("chatShare.outsideAgent", {
+      workspace: outside.workspace.name,
+      agent: activeAgent.displayName || activeAgent.name
+    }),
+    blocksSend: false
+  };
+}

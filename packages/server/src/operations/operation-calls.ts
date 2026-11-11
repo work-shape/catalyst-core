@@ -1,5 +1,4 @@
 import {
-  asUserId,
   personalDataConversation,
   createOperationRegistry,
   getSubjectUserId,
@@ -34,10 +33,12 @@ import type { ChatServerOptions, OperationCalls, ResolvedChatServerOptions } fro
 import { resolveOperationResource } from "./operation-resource";
 import { readAlwaysAllowLocks, readCentralPolicySettings } from "./central-policy";
 import { createAuditingEventEmitter } from "./event-emitter";
-import { holdsWorkspaceBundle } from "../workspaces/workspace-access";
+import { worksInWorkspace } from "../workspaces/workspace-access";
+import { readsChatFromOutside } from "../conversations/conversation-access";
 import {
   agentUseRefusal,
   callerAccess,
+  isInstanceAgent,
   ownedByPersonalWorkspaceOf,
   recordAgentUseRefusal
 } from "../workspaces/agent-availability";
@@ -251,14 +252,10 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
       const asset = action === "connection.use" ? "this Connection" : "this Knowledge Base";
       return `You do not have permission to use ${asset}. ${admin ? `Ask an instance admin, for example ${admin}.` : "Ask an instance admin."}`;
     },
-    worksInWorkspace: async ({ actor, workspaceId }) =>
-      (await options.stores.workspaces.getMembership({
-        clientInstanceId,
-        collaborationWorkspaceId: workspaceId,
-        userId: asUserId(actor.id)
-      })) !== undefined ||
-      (!isAuthenticatedServicePrincipal(actor) &&
-        (await holdsWorkspaceBundle(options, actor, workspaceId))),
+    worksInWorkspace: async ({ actor, workspaceId, conversationId }) =>
+      (await worksInWorkspace(options, actor, workspaceId)) ||
+      (conversationId !== undefined &&
+        (await namedOnChatIn(options, actor, workspaceId, conversationId))),
     agentAvailable: (input) => agentAvailableTo(options, input),
     logger: options.logger,
     now: options.operations?.now
@@ -319,6 +316,46 @@ async function ownAgentInOwnChat(
 }
 
 /**
+ * Whether the person is named on this chat of the workspace, which they then read and write in
+ * from outside it with their own rights (CHAT-SHARE-6): a private chat outside any project, as
+ * `requireConversationAccess` admits them. A subagent's thread is its root chat's.
+ */
+async function namedOnChatIn(
+  options: Pick<OperationCallsOptions, "clientInstanceId" | "stores">,
+  actor: AuthenticatedIdentity,
+  workspaceId: CollaborationWorkspaceId,
+  conversationId: ConversationId
+): Promise<boolean> {
+  if (isAuthenticatedServicePrincipal(actor)) return false;
+  const read = (id: ConversationId) =>
+    options.stores.conversations.getConversation(options.clientInstanceId, id);
+  let conversation = await read(conversationId);
+  if (conversation?.kind === "run_thread" && conversation.parentConversationId) {
+    conversation = await read(conversation.parentConversationId);
+  }
+  const person = getSubjectUserId(actor);
+  return (
+    conversation?.status === "active" &&
+    conversation.kind === "chat" &&
+    conversation.visibility === "private" &&
+    conversation.projectId === undefined &&
+    conversation.collaborationWorkspaceId === workspaceId &&
+    conversation.people.some((named) => named.userId === person)
+  );
+}
+
+/** `readsChatFromOutside` for the chat a call is made from, where it names one. */
+async function readsFromOutsideChat(
+  options: Pick<OperationCallsOptions, "clientInstanceId" | "stores">,
+  actor: AuthenticatedIdentity,
+  chatId: ConversationId | undefined
+): Promise<boolean> {
+  if (chatId === undefined) return false;
+  const chat = await options.stores.conversations.getConversation(options.clientInstanceId, chatId);
+  return chat !== undefined && (await readsChatFromOutside(options, chat, actor));
+}
+
+/**
  * Whether an agent is available in a workspace now, by the rule a new run is started under
  * (`getWorkspaceAssetSnapshot`), and with an actor whether that person may use it there
  * (`agent.use`, AGENT-USE-1). With a correlation id, a refusal of `agent.use` is recorded as a
@@ -332,6 +369,7 @@ async function agentAvailableTo(
     actor?: AuthenticatedIdentity;
     correlationId?: string;
     conversationId?: ConversationId;
+    chatId?: ConversationId;
   }
 ): Promise<boolean> {
   const { clientInstanceId } = options;
@@ -359,6 +397,17 @@ async function agentAvailableTo(
     })
   ]);
   const keys = new Map(asset ? [[asset.name, { id: asset.id, scope: asset.scope }]] : []);
+  // A person who reads a chat of the workspace from outside it runs only the instance's agents
+  // there (CHAT-SHARE-6): never the team's own, also where set to Everyone. One who does not
+  // work in the workspace at all is held to the same.
+  if (
+    !isInstanceAgent({ agentKeys: keys }, input.agentName) &&
+    !isAuthenticatedServicePrincipal(input.actor) &&
+    ((await readsFromOutsideChat(options, input.actor, input.chatId)) ||
+      !(await worksInWorkspace(options, input.actor, workspace.id)))
+  ) {
+    return false;
+  }
   const toolNames = (await options.agentToolNames?.(input.agentName)) ?? [];
   const refusal = agentUseRefusal(
     access,

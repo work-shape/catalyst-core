@@ -178,8 +178,11 @@ function AssistantRuntimePane({
     },
     [chatInputDelivered, onRunStarted]
   );
-  const noAgentsMessage =
-    config && config.agents.length === 0 && !agentsLoading
+  const readerNote = chat.readerNote;
+  // A reader from outside the workspace with no agent open to them reads along (CHAT-SHARE-6).
+  const noAgentsMessage = readerNote?.blocksSend
+    ? readerNote.text
+    : config && config.agents.length === 0 && !agentsLoading
       ? t(agentsWorkspaceScoped ? "workspaceNoAgents" : "instanceNotConfigured")
       : undefined;
   const sendBlock = useMemo(
@@ -534,6 +537,7 @@ function AssistantRuntimePane({
                 noticeReport={visibleNotice === notice ? noticeReport : undefined}
                 noticeContinue={visibleNotice === notice ? noticeContinue : undefined}
                 usageNote={usageNote}
+                readerNote={readerNote?.text}
                 usageLimit={usageLimit}
                 onNewConversationForPersonalData={
                   noModelForPersonalData ? chat.startNewConversation : undefined

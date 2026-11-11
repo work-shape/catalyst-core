@@ -10,10 +10,11 @@ import { ConversationPeopleWorkflow } from "../conversations/conversation-people
 import { ConversationWorkflow } from "../conversations/conversation-service";
 import { RunObservationWorkflow } from "../conversations/run-observation-service";
 import type { Route } from "../http/route";
-import { conversationIdParam, withRequestLocale } from "./request-context";
-import type { ChatServerOptions } from "../types";
+import { conversationReaderOffer } from "../conversations/reader-offer";
+import { conversationIdParam, resolveRequestLocale, withRequestLocale } from "./request-context";
+import type { ResolvedChatServerOptions } from "../types";
 
-export function registerConversationRoutes(route: Route, options: ChatServerOptions): void {
+export function registerConversationRoutes(route: Route, options: ResolvedChatServerOptions): void {
   const conversations = new ConversationWorkflow(options);
   const runObservation = new RunObservationWorkflow(options);
   const people = new ConversationPeopleWorkflow(options);
@@ -122,6 +123,18 @@ export function registerConversationRoutes(route: Route, options: ChatServerOpti
       ...(query.query === undefined ? {} : { query: query.query }),
       limit: query.limit
     })
+  );
+
+  // The workspace and agents a reader of the chat is offered in it, reached through the chat:
+  // a named person outside its workspace cannot list the workspace's agents (CHAT-SHARE-6).
+  route(
+    apiOperations["conversations.reader_offer.get"],
+    ({ user, access, params, request, query }) =>
+      conversationReaderOffer(
+        options,
+        { user, access, locale: resolveRequestLocale(options, request, query.locale) },
+        conversationIdParam(params)
+      )
   );
 
   route(apiOperations["conversations.delete"], ({ user, context, params, query }) =>

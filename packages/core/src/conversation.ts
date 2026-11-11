@@ -269,16 +269,19 @@ export interface AddConversationPersonInput {
 }
 
 /**
- * A person a chat's creator may name, as the share picker offers them: only one the creator
- * knows from the workspace, never a list of its members.
+ * A person a chat's creator may name, as the share picker offers them: one the creator knows
+ * from the workspace, or one a search of two letters or more found on the instance by name or
+ * by the whole address (CHAT-SHARE-6). Never a list of members or of the instance.
  */
 export interface ConversationShareCandidate {
   userId: string;
   displayLabel: string;
-  /** Only where the search typed the start of it. */
+  /** Only where the search typed the start of it, or to tell two of the same name apart. */
   email?: string;
   /** Named on the chat already: shown, never named again. The creator is never offered. */
   hasAccess: boolean;
+  /** A member of the chat's workspace; one who is not would read this chat alone. */
+  member: boolean;
 }
 
 export interface ConversationListItem extends Conversation {
@@ -491,12 +494,14 @@ export interface ConversationStore extends ConversationHistoryStore {
    * Names a person on an active private chat of a Shared Workspace outside any project, under
    * its row lock (CHAT-SHARE): the personal-data mark refuses it, as a share first refuses the
    * personal call; so do a project, a Data Store or a subject beyond `checked`, the limit, and
-   * a person who is no active member, whose membership is held until the row is in. `added`
-   * is false where the person was named already.
+   * a person who is not active on the instance or is its creator. The person's row, and their
+   * membership where they hold one, are held until the row is in. `added` is false where the
+   * person was named already; `outside` says they are no member of the chat's workspace
+   * (CHAT-SHARE-6).
    */
   addConversationPerson(
     input: AddConversationPersonInput
-  ): Promise<{ added: boolean; conversation: Conversation }>;
+  ): Promise<{ added: boolean; outside: boolean; conversation: Conversation }>;
   /**
    * Takes a person off a chat under its row lock, refused with `person_run_active` while a run
    * of theirs goes. False where they were not named.
@@ -516,10 +521,12 @@ export interface ConversationStore extends ConversationHistoryStore {
     collaborationWorkspaceId?: CollaborationWorkspaceId;
   }): Promise<ConversationId[]>;
   /**
-   * The members of the chat's workspace its creator may name, active people only, the
-   * creator's likely ones first: those they named on a chat of this workspace most recently,
-   * then those who most recently sent a message in a chat of it the creator reads. With
-   * `query`, those whose name or address starts with it, among the members only.
+   * The people the chat's creator may name, active people only, the creator's likely ones
+   * first: those they named on a chat of this workspace most recently, then those who most
+   * recently sent a message in a chat of it the creator reads. With a `query` of one letter,
+   * those of them whose name or address starts with it. From two letters also the active people
+   * of the instance whose name or a word of it starts with it, members of the workspace first,
+   * and the person whose whole address it is (CHAT-SHARE-6).
    */
   listShareCandidates(input: {
     clientInstanceId: ClientInstanceId;

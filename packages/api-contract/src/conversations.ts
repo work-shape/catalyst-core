@@ -28,7 +28,7 @@ import {
   WEB_SOURCE_PROVIDERS
 } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
-import { reasoningEffortSchema } from "./configuration";
+import { reasoningEffortSchema, safeConfigSchema } from "./configuration";
 import { chatInputCheckSchema, guardrailAnswerRefSchema } from "./guardrail-answers";
 import { projectFileChangeSchema } from "./projects";
 import { localeCodeSchema, timestampSchema } from "./shared";
@@ -106,22 +106,44 @@ export const SHARE_CANDIDATES_QUERY_MAX_CHARS = 200;
 export const SHARE_CANDIDATES_LIMIT_MAX = 50;
 
 export const shareCandidatesQuerySchema = z.object({
-  /** A prefix of a name, of a word of the name, or of an email, among the people offered. */
+  /**
+   * A prefix of a name or of a word of it, or an email. Among the people offered, a prefix of
+   * an email matches too. From two letters a name prefix also finds active people of the
+   * instance, and an email the person whose whole address it is (CHAT-SHARE-6).
+   */
   query: z.string().trim().min(1).max(SHARE_CANDIDATES_QUERY_MAX_CHARS).optional(),
   limit: z.coerce.number().int().min(1).max(SHARE_CANDIDATES_LIMIT_MAX).default(5)
 });
 
 /**
- * A member of the chat's workspace its creator knows from it: one they named before in this
- * workspace, then one who last wrote in a chat of it the creator reads. A search filters these
- * people only, never the workspace's members. `email` is present only where the query typed
- * its start; `hasAccess` marks those already named.
+ * A person the chat's creator may name. Without a search, or with one letter: those they know
+ * from the workspace, one they named before in it, then one who last wrote in a chat of it the
+ * creator reads. From two letters the search adds active people of the instance whose name or a
+ * word of it starts so, members of the workspace first, and the person whose whole email it is
+ * (CHAT-SHARE-6). `email` is present only where the query typed its start or where two people
+ * share a name; `hasAccess` marks those already named; `member` is false for a person outside
+ * the workspace, who would read this chat alone.
  */
 export const conversationShareCandidateSchema = z.object({
   userId: z.string(),
   displayLabel: z.string(),
   email: z.string().optional(),
-  hasAccess: z.boolean()
+  hasAccess: z.boolean(),
+  member: z.boolean()
+});
+
+/**
+ * What the caller is offered in a chat they read: its workspace by name, whether they read it
+ * from outside that workspace (CHAT-SHARE-6), and the agents their turns may run there, with
+ * the one a turn runs where the chat's agent is not among them. A reader from outside is
+ * offered the instance's agents only; with none, they read along.
+ */
+export const conversationReaderOfferSchema = z.object({
+  workspace: z.object({ id: z.string(), name: z.string() }),
+  outside: z.boolean(),
+  defaultAgentName: z.string().optional(),
+  /** As `workspaces.agents.list` lists them: those the caller's own turns here may run. */
+  agents: safeConfigSchema.shape.agents
 });
 
 export const conversationShareCandidatesSchema = z.object({

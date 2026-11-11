@@ -25,6 +25,7 @@ import { useOwnUsageQuery } from "../../shared/api/usage-limits";
 import { useUsageNote } from "./usage-note";
 import { usageLimitBlockReason } from "./usage-limit-block";
 import { useRailConversations } from "../../shared/api/rail-conversations";
+import { readerOfferAgents } from "../../shared/api/reader-offer";
 import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
 import {
   useCancelRunMutation,
@@ -95,6 +96,7 @@ import {
   activeAgentNameFor,
   conversationAgentPickFor,
   isOwnChat,
+  outsideReaderNote,
   rateLimitContinueOffer,
   terminalRunNotice,
   turnSenders,
@@ -282,6 +284,7 @@ export function useWorkspaceChatModel({
     isAuthenticated,
     enabled: collaborationWorkspacesAvailable,
     userId: meQuery.data?.id,
+    localePreference,
     route,
     buildingWorkspaces,
     loadedConversationCollaborationWorkspaceId: loadedConversation?.collaborationWorkspaceId,
@@ -292,6 +295,15 @@ export function useWorkspaceChatModel({
     showSettings: routeState.showSettings
   });
   const activeCollaborationWorkspaceId = collaborationWorkspace.activeCollaborationWorkspaceId;
+  // A chat read from outside its workspace offers the agents its offer names (CHAT-SHARE-6).
+  const outsideChat =
+    collaborationWorkspace.outsideChat?.conversationId === selectedConversationId
+      ? collaborationWorkspace.outsideChat
+      : undefined;
+  const outsideAgents = useMemo(
+    () => (outsideChat === undefined ? undefined : readerOfferAgents(outsideChat.offer)),
+    [outsideChat]
+  );
   // The workspace whose next new conversation starts private, after "Continue privately".
   const [privateStartIn, setPrivateStartIn] = useState<string | undefined>();
   const startsPrivate =
@@ -412,6 +424,8 @@ export function useWorkspaceChatModel({
     localePreference,
     enabled: isAuthenticated && collaborationWorkspacesAvailable
   });
+  // The rail keeps the open workspace's agents; the chat on screen offers its own reader's.
+  const chatAgents = outsideAgents ?? workspaceAgentsQuery.data;
   // The person's own agents ("Nur ich") are chosen only in a chat nobody else reads, and not
   // from an embedding host's session, which the server refuses them.
   const embedded = isEmbeddedSession(meQuery.data);
@@ -435,7 +449,7 @@ export function useWorkspaceChatModel({
       workspaceScopedConfigFor({
         config: configQuery.data,
         collaborationWorkspacesAvailable,
-        workspaceAgents: workspaceAgentsQuery.data,
+        workspaceAgents: chatAgents,
         instanceViewApplies:
           docked ||
           workspaceAgentsQuery.isError ||
@@ -452,7 +466,7 @@ export function useWorkspaceChatModel({
       embedded,
       ownChat,
       view,
-      workspaceAgentsQuery.data,
+      chatAgents,
       workspaceAgentsQuery.isError
     ]
   );
@@ -831,6 +845,15 @@ export function useWorkspaceChatModel({
   const activeAgent = config?.agents.find((agent) => agent.name === activeAgentName);
   const selectedThread =
     threadQuery.data?.conversation.id === selectedConversationId ? threadQuery.data : undefined;
+  // What an outside reader's composer says of their agent (CHAT-SHARE-6): the agent their turns
+  // use where the chat's own is not open to them, or that none is, and Send waits.
+  const readerNote = outsideReaderNote({
+    outside: outsideChat?.offer,
+    chatAgentName: selectedThread?.agentName,
+    activeAgent,
+    creator: selectedThread?.conversation.createdByDisplayLabel,
+    t: createTranslationContext(activeLocale).t
+  });
   // A run the model provider stopped for too many requests offers its conversation's owner to go
   // on once the wait is over (T6), beside the notice of that run only.
   const noticeContinue =
@@ -1388,7 +1411,8 @@ export function useWorkspaceChatModel({
         }
       },
       startsPrivate,
-      ...(startProjectId === undefined ? {} : { startProjectId })
+      ...(startProjectId === undefined ? {} : { startProjectId }),
+      ...(readerNote === undefined ? {} : { readerNote })
     },
     controlPlane,
     toolDisplay: {

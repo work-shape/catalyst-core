@@ -771,13 +771,15 @@ export class ProjectFileService implements ProjectFolderPort, ProjectCommandFold
     // One person reads the chat, and the person asking reads the project: the asking person is
     // that one, as nobody else reaches a chat only one person reads.
     if (chat.kind === "person") return true;
+    // Read by someone outside every workspace's audience: no project holds them (CHAT-SHARE-6).
+    if (chat.kind === "beyond") return false;
     const readers = await this.readersOfProject(project);
     return readers.kind === "workspace" && readers.workspaceId === chat.workspaceId;
   }
 
   private async readersOfConversation(
     conversation: Conversation
-  ): Promise<{ kind: "person" } | { kind: "workspace"; workspaceId: string }> {
+  ): Promise<{ kind: "person" } | { kind: "workspace"; workspaceId: string } | { kind: "beyond" }> {
     if (conversation.projectId !== undefined) {
       const own = await this.options.stores.projects.getProject({
         clientInstanceId: this.options.clientInstanceId,
@@ -786,8 +788,17 @@ export class ProjectFileService implements ProjectFolderPort, ProjectCommandFold
       if (!own) throw new AppError("NOT_FOUND", "Conversation is not available");
       return this.readersOfProject(own);
     }
-    // A private chat is one person's while it names nobody; one that names members of its
-    // workspace is held as read by the workspace, which holds them all (CHAT-SHARE).
+    // A private chat is one person's while it names nobody; one that names only members of its
+    // workspace is held as read by the workspace, which holds them all (CHAT-SHARE). One that
+    // names a person outside the workspace is read beyond it (CHAT-SHARE-6).
+    for (const person of conversation.people) {
+      const membership = await this.options.stores.workspaces.getMembership({
+        clientInstanceId: this.options.clientInstanceId,
+        collaborationWorkspaceId: conversation.collaborationWorkspaceId,
+        userId: asUserId(person.userId)
+      });
+      if (!membership) return { kind: "beyond" };
+    }
     const workspace = await this.options.stores.workspaces.getWorkspace(
       this.options.clientInstanceId,
       conversation.collaborationWorkspaceId

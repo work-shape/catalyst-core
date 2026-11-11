@@ -5,7 +5,7 @@ import {
   useAuiState,
   useThreadViewportStore
 } from "@assistant-ui/react";
-import { ArrowDown, CircleAlert, Lock } from "lucide-react";
+import { ArrowDown, CircleAlert, Info, Lock } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, type ReactNode, type RefObject } from "react";
 import type { DraftAttachment, SafeConfig } from "@work-shape/catalyst-api-client";
 import {
@@ -81,6 +81,7 @@ export function AssistantThread({
   noticeReport,
   noticeContinue,
   usageNote,
+  readerNote,
   usageLimit,
   onNewConversationForPersonalData,
   newConversationPrivate,
@@ -141,6 +142,8 @@ export function AssistantThread({
   noticeContinue?: RunContinue;
   /** The quiet note at 80 percent of the person's own spend limit. */
   usageNote?: { text: string; dismiss(): void };
+  /** What the composer of a chat read from outside its workspace says of the agent. */
+  readerNote?: string;
   /**
    * The sentence of a spend limit that stops the person: which limit, when it resets and who
    * can raise it. The send button is closed by it as well; this is where it is read.
@@ -390,6 +393,15 @@ export function AssistantThread({
                   <Banner tone="warning" className="mb-2" data-testid="usage-limit-block">
                     {usageLimit}
                   </Banner>
+                ) : null}
+                {readerNote ? (
+                  <p
+                    className="mb-2 flex items-center gap-1.5 px-1 text-xs text-muted-foreground"
+                    data-testid="outside-reader-note"
+                  >
+                    <Info size={12} className="shrink-0" aria-hidden="true" />
+                    <span className="min-w-0">{readerNote}</span>
+                  </p>
                 ) : null}
                 {usageNote ? (
                   <p

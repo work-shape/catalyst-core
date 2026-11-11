@@ -8,6 +8,7 @@ conversations.follow_ups.withdraw  POST /api/v1/conversations/:conversationId/fo
 conversations.list  GET /api/v1/conversations
 conversations.messages.list  GET /api/v1/conversations/:conversationId/messages
 conversations.move  POST /api/v1/conversations/:conversationId/move
+conversations.reader_offer.get  GET /api/v1/conversations/:conversationId/reader-offer
 conversations.remove_person  DELETE /api/v1/conversations/:conversationId/people/:userId
 conversations.rename  PATCH /api/v1/conversations/:conversationId/title
 conversations.resources.list  GET /api/v1/conversations/:conversationId/resources

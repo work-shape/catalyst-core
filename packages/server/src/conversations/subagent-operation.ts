@@ -39,6 +39,11 @@ export interface SubagentOperationOptions {
     actor: AuthenticatedIdentity;
     correlationId: string;
     conversationId?: ConversationId;
+    /**
+     * The chat the call is made from, its root for a subagent's thread. A person who reads it
+     * from outside its workspace (`readsChatFromOutside`) runs only the instance's agents there.
+     */
+    chatId?: ConversationId;
   }): Promise<boolean>;
 }
 
@@ -116,7 +121,8 @@ export function subagentOperation(
           correlationId: context.correlationId,
           // The subagent's thread belongs to this chat, so a person's own agent that runs
           // itself there is judged by the chat's audience. Another agent it names never is.
-          ...(agentName === parent.agentName ? { conversationId: root.id } : {})
+          ...(agentName === parent.agentName ? { conversationId: root.id } : {}),
+          chatId: root.id
         }))
       ) {
         return refused(

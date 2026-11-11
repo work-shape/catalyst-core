@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   ApiClient,
   CollaborationWorkspaceWithRole,
-  ConversationListItem
+  ConversationListItem,
+  LocaleCode
 } from "@work-shape/catalyst-api-client";
 import { useCollaborationWorkspacesQuery } from "../api/workspace-queries";
+import { useConversationReaderOfferQuery, type ConversationReaderOffer } from "../api/reader-offer";
 import { useClosedWorkspaceLinkQuery } from "../api/closed-workspace-link";
 import { canManageCollaborationWorkspace } from "./collaboration-workspace-selector";
 import {
@@ -40,6 +42,12 @@ export interface CollaborationWorkspaceModel {
    * opens nothing of the kind.
    */
   buildingCollaborationWorkspace: BuildingWorkspace | undefined;
+  /**
+   * The chat the address opens that the person reads from outside its workspace, as a named
+   * person who is no member (CHAT-SHARE-6), with what they are offered in it. The rail and the
+   * selector stay on the person's own workspace meanwhile. Absent otherwise.
+   */
+  outsideChat: OutsideChat | undefined;
   personalCollaborationWorkspaceId: string | undefined;
   loading: boolean;
   loadFailed: boolean;
@@ -113,6 +121,12 @@ export interface BuildingWorkspace {
   actions: readonly string[];
 }
 
+/** A chat the person reads from outside its workspace, and what they are offered in it. */
+interface OutsideChat {
+  conversationId: string;
+  offer: ConversationReaderOffer;
+}
+
 export interface CollaborationWorkspaceModelInput {
   apiBaseUrl: string;
   authScope: string;
@@ -125,6 +139,8 @@ export interface CollaborationWorkspaceModelInput {
    */
   enabled: boolean;
   userId: string | undefined;
+  /** The language the agents of an outside chat's offer are named in. */
+  localePreference?: LocaleCode | undefined;
   route: WorkspaceRoute;
   /**
    * The workspaces the person builds in without being a member; undefined until known. An
@@ -154,6 +170,7 @@ export function useCollaborationWorkspaceModel(
     isAuthenticated,
     enabled,
     userId,
+    localePreference,
     route,
     buildingWorkspaces,
     loadedConversationCollaborationWorkspaceId,
@@ -184,6 +201,8 @@ export function useCollaborationWorkspaceModel(
     [collaborationWorkspacesQuery.data, listedForAnother]
   );
   const collaborationWorkspacesLoaded = collaborationWorkspacesQuery.isSuccess && !listedForAnother;
+  const listLoading =
+    (collaborationWorkspacesQuery.isPending || listedForAnother) && isAuthenticated && enabled;
   const closedLinkAdministrators = useClosedWorkspaceLinkQuery({
     apiBaseUrl,
     authScope,
@@ -199,10 +218,48 @@ export function useCollaborationWorkspaceModel(
   // rail still shows the workspace the user came from, so its conversations
   // stay in reach; the membership check keeps a stale stored id out.
   const routedCollaborationWorkspaceId = routeCollaborationWorkspaceId(route);
+  // A chat of a workspace the person is no member of opens where they read it as a named person
+  // (CHAT-SHARE-6). Only the chat's own offer says so: nothing of the workspace is read for it.
+  const routedChatId = chatRouteConversationId(route);
+  const routedWorkspaceForeign =
+    collaborationWorkspacesLoaded &&
+    routedCollaborationWorkspaceId !== undefined &&
+    !collaborationWorkspaces.some((candidate) => candidate.id === routedCollaborationWorkspaceId);
+  const readerOfferQuery = useConversationReaderOfferQuery({
+    apiBaseUrl,
+    authScope,
+    client,
+    conversationId: routedWorkspaceForeign ? routedChatId : undefined,
+    localePreference,
+    enabled: isAuthenticated && enabled
+  });
+  const readerOffer = readerOfferQuery.data;
+  const outsideChat = useMemo(
+    (): OutsideChat | undefined =>
+      routedWorkspaceForeign &&
+      routedChatId !== undefined &&
+      readerOffer?.outside === true &&
+      readerOffer.workspace.id === routedCollaborationWorkspaceId
+        ? { conversationId: routedChatId, offer: readerOffer }
+        : undefined,
+    [readerOffer, routedChatId, routedCollaborationWorkspaceId, routedWorkspaceForeign]
+  );
+  // Until the list says whether the person is a member of a chat's workspace, and for one they
+  // are not until its offer arrives, no workspace is open: nothing of it is asked meanwhile.
+  const outsideUnknown =
+    routedChatId !== undefined &&
+    routedCollaborationWorkspaceId !== undefined &&
+    (listLoading || (routedWorkspaceForeign && readerOfferQuery.isPending));
   const activeCollaborationWorkspaceId = useMemo(() => {
-    if (routedCollaborationWorkspaceId || !isPageOutsideCollaborationWorkspace(route)) {
+    if (outsideUnknown) return undefined;
+    if (
+      outsideChat === undefined &&
+      (routedCollaborationWorkspaceId || !isPageOutsideCollaborationWorkspace(route))
+    ) {
       return routedCollaborationWorkspaceId;
     }
+    // Pages outside any workspace, and a chat read from outside its own, keep the rail on the
+    // workspace the person came from.
     const storedCollaborationWorkspaceId = userId
       ? readStoredCollaborationWorkspaceId(apiBaseUrl, userId)
       : undefined;
@@ -214,6 +271,8 @@ export function useCollaborationWorkspaceModel(
     apiBaseUrl,
     collaborationWorkspaces,
     fallbackCollaborationWorkspaceId,
+    outsideChat,
+    outsideUnknown,
     route,
     routedCollaborationWorkspaceId,
     userId
@@ -400,9 +459,9 @@ export function useCollaborationWorkspaceModel(
     activeCollaborationWorkspaceId,
     activeCollaborationWorkspace,
     buildingCollaborationWorkspace,
+    outsideChat,
     personalCollaborationWorkspaceId,
-    loading:
-      (collaborationWorkspacesQuery.isPending || listedForAnother) && isAuthenticated && enabled,
+    loading: listLoading,
     loadFailed: Boolean(collaborationWorkspacesQuery.error),
     dialog,
     canMoveConversation: enabled && collaborationWorkspaces.length > 1,
@@ -461,6 +520,13 @@ function routedBuildingWorkspace(
       workspace.id === workspaceId &&
       workspace.actions.some((action) => action.startsWith(`${kind}.`))
   );
+}
+
+/** The conversation a route of the chat column opens, its subagent threads included. */
+function chatRouteConversationId(route: WorkspaceRoute): string | undefined {
+  return route.kind === "conversation" || route.kind === "subagent-thread"
+    ? route.conversationId
+    : undefined;
 }
 
 function isPageOutsideCollaborationWorkspace(route: WorkspaceRoute): boolean {

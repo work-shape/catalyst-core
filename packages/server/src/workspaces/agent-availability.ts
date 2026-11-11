@@ -127,14 +127,17 @@ export function agentUseRefusal(
 export async function getWorkspaceAssetSnapshot(
   options: SnapshotOptions,
   workspace: WorkspaceRef,
-  access: ActorAccess
+  access: ActorAccess,
+  reader: { outside?: boolean } = {}
 ): Promise<RuntimeAssetSnapshot> {
   const { assets, available, limited, workspaceDefaultAgentName } = await offeredAgents(
     options,
     workspace
   );
   const agents = available.filter(
-    (agent) => agentUseRefusal(access, assets, limited, agent.name, workspace) === undefined
+    (agent) =>
+      (!reader.outside || isInstanceAgent(assets, agent.name)) &&
+      agentUseRefusal(access, assets, limited, agent.name, workspace) === undefined
   );
   return {
     ...assets,
@@ -144,6 +147,18 @@ export async function getWorkspaceAssetSnapshot(
       instance: assets.defaultAgentName
     })
   };
+}
+
+/**
+ * Whether the instance owns the agent, not a workspace. A person who reads one chat of a
+ * workspace from outside it is offered only these there (CHAT-SHARE-6, ADR-0034): a team's own
+ * agent, and one another team owns, work for members alone, even where set to Everyone.
+ */
+export function isInstanceAgent(
+  assets: Pick<RuntimeAssetSnapshot, "agentKeys">,
+  agentName: string
+): boolean {
+  return (assets.agentKeys?.get(agentName)?.scope ?? INSTANCE_ASSET_SCOPE).kind === "instance";
 }
 
 /**

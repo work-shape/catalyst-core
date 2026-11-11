@@ -5,9 +5,11 @@ import {
   explainAccessEntries,
   getSubjectUserId,
   isAppError,
+  isAuthenticatedServicePrincipal,
   isSuperadmin,
   listAccessEntries,
   WORKSPACE_BUNDLES,
+  type AuthenticatedIdentity,
   type AuthenticatedUser,
   type CollaborationWorkspace,
   type CollaborationWorkspaceId,
@@ -81,11 +83,32 @@ export async function requireWorkspaceToWorkIn(
 }
 
 /**
+ * Whether a person or service works in a workspace now: as its member, or as a holder of
+ * Builder or Publisher there. A person named on one chat of it from outside does not
+ * (CHAT-SHARE-6): they act there in that chat alone.
+ */
+export async function worksInWorkspace(
+  options: Pick<ChatServerOptions, "stores" | "clientInstanceId">,
+  actor: AuthenticatedIdentity,
+  workspaceId: CollaborationWorkspaceId
+): Promise<boolean> {
+  return (
+    (await options.stores.workspaces.getMembership({
+      clientInstanceId: options.clientInstanceId,
+      collaborationWorkspaceId: workspaceId,
+      userId: asUserId(actor.id)
+    })) !== undefined ||
+    (!isAuthenticatedServicePrincipal(actor) &&
+      (await holdsWorkspaceBundle(options, actor, workspaceId)))
+  );
+}
+
+/**
  * A bundle of a Shared Workspace given as a grant row, to the user or a group of theirs, read
  * anew on every call, so a revoked one ends at once. The bundles an instance admin holds by
  * role open no workspace's conversations.
  */
-export async function holdsWorkspaceBundle(
+async function holdsWorkspaceBundle(
   options: Pick<ChatServerOptions, "stores" | "clientInstanceId">,
   user: AuthenticatedUser,
   workspaceId: CollaborationWorkspaceId
