@@ -4,6 +4,7 @@ import {
   inProjectAudience,
   isAppError,
   type AuthenticatedUser,
+  type CollaborationWorkspace,
   type Conversation,
   type ConversationId
 } from "@work-shape/catalyst-core";
@@ -12,16 +13,31 @@ import { requireWorkspaceToWorkIn } from "../workspaces/workspace-access";
 
 /**
  * The single read check of a Conversation: it is active, the user reaches its Collaboration
- * Workspace, and a private one is its author's and the members they named. One in a project
+ * Workspace, and a private one is its author's and the people they named. One in a project
  * is read by the project's audience. A holder of a bundle who is no member reaches only their
- * own private ones outside any project. Every refusal reads as a Conversation that does not
- * exist, so an answer never tells a closed one from one that never was.
+ * own private ones outside any project. A named person who is no member reads that one chat
+ * and nothing else of the workspace (ADR-0034). Every refusal reads as a Conversation that
+ * does not exist, so an answer never tells a closed one from one that never was.
  */
 export async function requireConversationAccess(
   options: Pick<ChatServerOptions, "stores" | "clientInstanceId">,
   conversationId: ConversationId,
   user: AuthenticatedUser
 ): Promise<Conversation> {
+  return (await requireConversationReach(options, conversationId, user)).conversation;
+}
+
+/**
+ * `requireConversationAccess`, saying how the user reaches the chat: `outside` for a named
+ * person who neither is a member of its workspace nor holds a bundle there (CHAT-SHARE-6). Such
+ * a reader reaches the workspace only through this conversation, and their turns run with
+ * their own rights as a non-member: only the conversation's own paths take this answer.
+ */
+export async function requireConversationReach(
+  options: Pick<ChatServerOptions, "stores" | "clientInstanceId">,
+  conversationId: ConversationId,
+  user: AuthenticatedUser
+): Promise<{ conversation: Conversation; outside: boolean }> {
   const conversation = await options.stores.conversations.getConversation(
     options.clientInstanceId,
     conversationId
@@ -35,9 +51,14 @@ export async function requireConversationAccess(
     if (!conversation.parentConversationId) {
       throw new AppError("NOT_FOUND", "Conversation is not available");
     }
-    await requireConversationAccess(options, conversation.parentConversationId, user);
-    return conversation;
+    const { outside } = await requireConversationReach(
+      options,
+      conversation.parentConversationId,
+      user
+    );
+    return { conversation, outside };
   }
+  const userId = getSubjectUserId(user);
   let member: boolean;
   try {
     ({ member } = await requireWorkspaceToWorkIn(
@@ -47,6 +68,16 @@ export async function requireConversationAccess(
     ));
   } catch (error) {
     if (isAppError(error) && error.code === "NOT_FOUND") {
+      // A named person reads the chat, member or not: a private chat outside any project, which
+      // only a Shared Workspace's chat can name people on (CHAT-SHARE-6).
+      if (
+        conversation.kind === "chat" &&
+        conversation.visibility === "private" &&
+        conversation.projectId === undefined &&
+        conversation.people.some((person) => person.userId === userId)
+      ) {
+        return { conversation, outside: true };
+      }
       throw new AppError("NOT_FOUND", "Conversation is not available");
     }
     throw error;
@@ -68,17 +99,17 @@ export async function requireConversationAccess(
     ) {
       throw new AppError("NOT_FOUND", "Conversation is not available");
     }
-    return conversation;
+    return { conversation, outside: false };
   }
-  const userId = getSubjectUserId(user);
   const ownPrivate =
     conversation.visibility === "private" && conversation.createdByUserId === userId;
-  // A member its creator named reads it too while a member, and nobody else does (CHAT-SHARE).
-  const named = member && conversation.people.some((person) => person.userId === userId);
-  if (member ? conversation.visibility === "private" && !ownPrivate && !named : !ownPrivate) {
+  // A person its creator named reads it too, and nobody else does (CHAT-SHARE). A holder of a
+  // bundle who is no member is named like anyone outside the workspace: their own rights.
+  const named = conversation.people.some((person) => person.userId === userId);
+  if (conversation.visibility === "private" ? !ownPrivate && !named : !member) {
     throw new AppError("NOT_FOUND", "Conversation is not available");
   }
-  return conversation;
+  return { conversation, outside: !member && !ownPrivate };
 }
 
 /**
@@ -96,6 +127,54 @@ export async function requireChatConversationAccess(
     throw runThreadIsReadOnly();
   }
   return conversation;
+}
+
+/** `requireChatConversationAccess`, saying whether the user reads the chat from outside. */
+export async function requireChatConversationReach(
+  options: Pick<ChatServerOptions, "stores" | "clientInstanceId">,
+  conversationId: ConversationId,
+  user: AuthenticatedUser
+): Promise<{ conversation: Conversation; outside: boolean }> {
+  const reach = await requireConversationReach(options, conversationId, user);
+  if (reach.conversation.kind === "run_thread") {
+    throw runThreadIsReadOnly();
+  }
+  return reach;
+}
+
+/**
+ * The workspace of a conversation the caller passed `requireConversationAccess` for. An in-chat
+ * path reaches the workspace only through the conversation (CHAT-SHARE-6): it asks no
+ * membership, which a named person outside the workspace does not hold.
+ */
+export async function workspaceOfConversation(
+  options: Pick<ChatServerOptions, "stores" | "clientInstanceId">,
+  conversation: Pick<Conversation, "collaborationWorkspaceId">
+): Promise<CollaborationWorkspace> {
+  const workspace = await options.stores.workspaces.getWorkspace(
+    options.clientInstanceId,
+    conversation.collaborationWorkspaceId
+  );
+  if (!workspace) throw new AppError("NOT_FOUND", "Conversation is not available");
+  return workspace;
+}
+
+/**
+ * Whether the user, who passed `requireConversationAccess` for this conversation, reads it from
+ * outside its workspace: no member and no holder of a bundle there (CHAT-SHARE-6).
+ */
+export async function readsFromOutside(
+  options: Pick<ChatServerOptions, "stores" | "clientInstanceId">,
+  conversation: Pick<Conversation, "collaborationWorkspaceId">,
+  user: AuthenticatedUser
+): Promise<boolean> {
+  try {
+    await requireWorkspaceToWorkIn(options, user, conversation.collaborationWorkspaceId);
+    return false;
+  } catch (error) {
+    if (isAppError(error) && error.code === "NOT_FOUND") return true;
+    throw error;
+  }
 }
 
 /** The refusal of a write to a run thread. An agent reads it too, so it says what it refuses. */

@@ -12,6 +12,7 @@ import {
   type LocaleCode
 } from "@work-shape/catalyst-core";
 import { ConversationWorkflow } from "../conversations/conversation-service";
+import { readsFromOutside } from "../conversations/conversation-access";
 import { readMultipartFile, stageMultipartFile } from "../http/multipart-upload";
 import type { Route } from "../http/route";
 import { conversationIdParam, requirePathParam, resolveRequestLocale } from "./request-context";
@@ -134,16 +135,18 @@ async function workspaceToolsFor(
   agentName: string | undefined
 ): Promise<boolean> {
   if (agentName === undefined) return false;
-  const workspace = await conversations.resolveTargetWorkspace(
-    user,
-    conversation.collaborationWorkspaceId
-  );
-  const assets = await getWorkspaceAssetSnapshot(options, workspace, access);
+  // Through the chat alone: a named person outside its workspace holds no membership there,
+  // and their turn runs the first agent open to them where the chat's is not (CHAT-SHARE-6).
+  const workspace = await conversations.workspaceOfConversation(conversation);
+  const outside = await readsFromOutside(options, conversation, user);
+  const assets = await getWorkspaceAssetSnapshot(options, workspace, access, { outside });
   const agent =
     assets.agents.find((candidate) => candidate.name === agentName) ??
-    (mayUseOwnInChat(user, conversation, workspace)
-      ? (await ownAgents(options, { user, access }, agentName))[0]
-      : undefined);
+    (outside
+      ? assets.agents.find((candidate) => candidate.name === assets.defaultAgentName)
+      : mayUseOwnInChat(user, conversation, workspace)
+        ? (await ownAgents(options, { user, access }, agentName))[0]
+        : undefined);
   if (!agent) throw new AppError("NOT_FOUND", "The selected agent is not available");
   return (
     options.config.executionWorkspaces?.enabled === true &&

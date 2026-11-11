@@ -507,7 +507,11 @@ async function admitAgain(
     membershipIsTheRule &&
     call.workspaceId !== undefined &&
     deps.worksInWorkspace &&
-    !(await deps.worksInWorkspace({ actor: call.actor, workspaceId: call.workspaceId }))
+    !(await deps.worksInWorkspace({
+      actor: call.actor,
+      workspaceId: call.workspaceId,
+      ...(call.origin.kind === "agent" ? { conversationId: call.origin.conversationId } : {})
+    }))
   ) {
     return refuse(
       {

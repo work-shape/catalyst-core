@@ -13419,6 +13419,80 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/conversations/{conversationId}/reader-offer": {
+      "get": {
+        "operationId": "conversations.reader_offer.get",
+        "summary": "What the caller is offered in a chat they read: its workspace, and their agents",
+        "tags": [
+          "Conversations"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "conversation:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "conversation:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationReaderOffer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/conversations/{conversationId}/resources": {
       "get": {
         "operationId": "conversations.resources.list",
@@ -14002,7 +14076,7 @@
     "/api/v1/conversations/{conversationId}/share-candidates": {
       "get": {
         "operationId": "conversations.share_candidates",
-        "summary": "The members of the chat's workspace its creator may name, preselected or searched",
+        "summary": "The people of the instance the chat's creator may name, preselected or searched",
         "tags": [
           "Conversations"
         ],
@@ -53085,6 +53159,217 @@
           "changed"
         ]
       },
+      "ConversationReaderOffer": {
+        "type": "object",
+        "properties": {
+          "workspace": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "outside": {
+            "type": "boolean"
+          },
+          "defaultAgentName": {
+            "type": "string"
+          },
+          "agents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "defaultModelBindingId": {
+                  "type": "string"
+                },
+                "selectableModels": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "bindingId": {
+                        "type": "string"
+                      },
+                      "model": {
+                        "type": "string"
+                      },
+                      "compactThresholdTokens": {
+                        "type": "number"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "vendor": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      },
+                      "region": {
+                        "$ref": "#/components/schemas/ModelRegion"
+                      },
+                      "personalDataBlocked": {
+                        "type": "boolean",
+                        "const": true
+                      },
+                      "usageTier": {
+                        "$ref": "#/components/schemas/ModelUsageTier"
+                      },
+                      "reasoningEffort": {
+                        "$ref": "#/components/schemas/ReasoningEffort"
+                      },
+                      "selectableReasoningEfforts": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/ReasoningEffort"
+                        }
+                      }
+                    },
+                    "required": [
+                      "model",
+                      "selectableReasoningEfforts"
+                    ]
+                  }
+                },
+                "compactThresholdTokens": {
+                  "type": "number"
+                },
+                "buildsAssets": {
+                  "type": "boolean"
+                },
+                "welcomeMessage": {
+                  "type": "string"
+                },
+                "welcomeSubtitle": {
+                  "type": "string"
+                },
+                "initialPrompts": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "title": {
+                        "type": "string"
+                      },
+                      "prompt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "title",
+                      "prompt"
+                    ]
+                  }
+                },
+                "starters": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "skillName": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "hint": {
+                        "type": "string"
+                      },
+                      "prompt": {
+                        "type": "string"
+                      },
+                      "icon": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "skillName",
+                      "title",
+                      "prompt"
+                    ]
+                  }
+                },
+                "connections": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "service": {
+                        "type": "string"
+                      },
+                      "connectorType": {
+                        "type": "string"
+                      },
+                      "tools": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "toolName": {
+                              "type": "string"
+                            },
+                            "effect": {
+                              "type": "string",
+                              "enum": [
+                                "reading",
+                                "changing"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "toolName",
+                            "effect"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "title",
+                      "tools"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "name",
+                "displayName",
+                "selectableModels",
+                "initialPrompts"
+              ]
+            }
+          }
+        },
+        "required": [
+          "workspace",
+          "outside",
+          "agents"
+        ]
+      },
       "ConversationResourceListItem": {
         "oneOf": [
           {
@@ -53443,12 +53728,16 @@
           },
           "hasAccess": {
             "type": "boolean"
+          },
+          "member": {
+            "type": "boolean"
           }
         },
         "required": [
           "userId",
           "displayLabel",
-          "hasAccess"
+          "hasAccess",
+          "member"
         ]
       },
       "ConversationShareCandidates": {

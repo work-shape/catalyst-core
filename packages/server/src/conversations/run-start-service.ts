@@ -188,7 +188,13 @@ export class RunStartWorkflow {
     requestedAgentName: string | undefined,
     requestedModelBindingId: string | undefined,
     requestedReasoningEffort: ReasoningEffortConfig | undefined,
-    caller: { user: AuthenticatedUser; access?: ActorAccess; correlationId: string },
+    caller: {
+      user: AuthenticatedUser;
+      access?: ActorAccess;
+      correlationId: string;
+      /** The caller reads this chat from outside its workspace (CHAT-SHARE-6). */
+      outside?: boolean;
+    },
     acceptedFollowUp = false,
     preview?: AgentPreview,
     /** The conversation carries the personal-data mark (MODEL-REGION-3). */
@@ -204,7 +210,22 @@ export class RunStartWorkflow {
     reasoningEffort?: ReasoningEffortConfig;
   }> {
     const access = await callerAccess(this.options, caller.user, caller.access);
-    const assets = await getWorkspaceAssetSnapshot(this.options, workspace, access);
+    const assets = await getWorkspaceAssetSnapshot(this.options, workspace, access, {
+      outside: caller.outside === true
+    });
+    // A reader from outside the workspace runs the chat's agent where it is open to them, and
+    // otherwise the first that is, in the usual order; with none, they only read.
+    if (caller.outside === true) {
+      if (!assets.defaultAgentName) throw noAgentOpenError();
+      if (
+        requestedAgentName !== undefined &&
+        !assets.agents.some((candidate) => candidate.name === requestedAgentName)
+      ) {
+        requestedAgentName = undefined;
+        requestedModelBindingId = undefined;
+        requestedReasoningEffort = undefined;
+      }
+    }
     const agentName = preview?.config.name ?? requestedAgentName ?? assets.defaultAgentName;
     if (!agentName) {
       throw new AppError(
@@ -352,7 +373,7 @@ export class RunStartWorkflow {
     context: RuntimeCallContext,
     command: SendConversationMessageCommand
   ): Promise<ConversationMessageRunResult> {
-    const conversation = await this.conversations.requireChatConversationAccess(
+    const { conversation, outside } = await this.conversations.requireChatConversationReach(
       conversationId,
       user
     );
@@ -372,15 +393,13 @@ export class RunStartWorkflow {
     }
 
     try {
+      // The workspace through the chat alone: a named person outside it holds no membership.
       const { agentName, modelBindingId, reasoningEffort } = await this.resolveRunSelection(
-        await this.conversations.resolveTargetWorkspace(
-          user,
-          conversation.collaborationWorkspaceId
-        ),
+        await this.conversations.workspaceOfConversation(conversation),
         command.agentName,
         command.modelBindingId,
         command.reasoningEffort,
-        { user, access: command.access, correlationId: context.correlationId },
+        { user, access: command.access, correlationId: context.correlationId, outside },
         Boolean(command.dispatchFollowUpId),
         preview,
         conversation.personalDataAt !== undefined,
@@ -846,4 +865,17 @@ function requireMessageText(text: string): void {
   if (!text.trim()) {
     throw new AppError("VALIDATION_FAILED", "A message needs text or an attachment.");
   }
+}
+
+/**
+ * No agent of the chat's workspace is open to a person who reads it from outside: they read
+ * along, and a member continues it (CHAT-SHARE-6).
+ */
+function noAgentOpenError(): AppError {
+  return new AppError(
+    "CONFLICT",
+    "No agent of this chat's workspace is open to you. You can read the chat",
+    { reason: "no_agent_open" },
+    { exposeMessage: true }
+  );
 }

@@ -130,7 +130,9 @@ export function createFollowUpDispatchHandler(options: ChatServerOptions) {
           scope.conversationId,
           user
         );
-        await conversations.resolveTargetWorkspace(user, conversation.collaborationWorkspaceId);
+        // Reached through the chat alone: a named person outside its workspace holds no
+        // membership there (CHAT-SHARE-6).
+        await conversations.workspaceOfConversation(conversation);
         step = "start";
         await new RunStartWorkflow(options, (fn) => control.transaction(fn)).startMessageRun(
           scope.conversationId,

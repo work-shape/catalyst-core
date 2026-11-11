@@ -5,6 +5,9 @@ import {
   NOTICE_KIND,
   NOTICE_TEXT_MAX_LENGTH,
   NOTICE_TITLE_MAX_LENGTH,
+  AppError,
+  SHARE_SEARCHES_PER_MINUTE,
+  SHARE_SEARCH_INSTANCE_MIN_CHARS,
   asUserId,
   auditActorFromUser,
   conversationShareRefusal,
@@ -29,13 +32,14 @@ import {
 } from "@work-shape/catalyst-core";
 import { accessResource } from "../assets/asset-access";
 import { noticeContentSchema } from "../notices/notice-kind";
-import type { ChatServerOptions } from "../types";
+import type { ChatServerOptions, ResolvedChatServerOptions } from "../types";
 import { requireChatConversationAccess } from "./conversation-access";
 import { accessOf } from "./platform-asset-subject";
 
 // Named people on one private chat (CHAT-SHARE-1, `chat-sharing.md`). The creator of a
-// private chat in a Shared Workspace, outside any project, names active members of that
-// workspace; each reads and writes in it while a member. Only the creator, in their own
+// private chat in a Shared Workspace, outside any project, names active people of the
+// instance; each reads and writes in it, and one who is no member of the workspace reaches
+// nothing else of it (CHAT-SHARE-6, ADR-0034). Only the creator, in their own
 // session, changes who reads it: no agent tool calls these, and a key, a delegated actor or
 // an embedding host is refused. The store checks the share guard again under the chat's row
 // lock, the lock the personal-data mark takes: whichever comes first wins.
@@ -46,17 +50,18 @@ interface CallContext {
   correlationId: string;
 }
 
-type ShareOptions = ChatServerOptions;
+type ShareOptions = ResolvedChatServerOptions;
 
 export class ConversationPeopleWorkflow {
   constructor(private readonly options: ShareOptions) {}
 
   /**
    * Names `userId` on the creator's private chat. Refused, with a stable reason, where the
-   * caller is not the creator in their own session, the person is no active member of the
-   * chat's workspace, or the share guard holds: the personal-data mark, a project, a Personal
-   * Workspace, or a Data Store or subject the person holds no right on. Naming a person
-   * already named changes nothing. The person gets an Inbox notice.
+   * caller is not the creator in their own session, the person is not active on the instance,
+   * or the share guard holds: the personal-data mark, a project, a Personal Workspace, or a
+   * Data Store or subject the person holds no right on by their own rights. Naming a person
+   * already named changes nothing. The person gets an Inbox notice; the audit row says
+   * `outside` where they are no member of the chat's workspace (CHAT-SHARE-6).
    */
   async addPerson(
     conversationId: ConversationId,
@@ -65,7 +70,11 @@ export class ConversationPeopleWorkflow {
     command: { userId: string }
   ): Promise<Conversation> {
     const conversation = await requireChatConversationAccess(this.options, conversationId, user);
-    const audit = (status: "success" | "denied", reason?: ConversationShareRefusal) =>
+    const audit = (
+      status: "success" | "denied",
+      reason?: ConversationShareRefusal,
+      outside?: boolean
+    ) =>
       this.options.auditRecorder.record({
         type: "conversation.person_added",
         status,
@@ -75,17 +84,18 @@ export class ConversationPeopleWorkflow {
         metadata: {
           workspaceId: conversation.collaborationWorkspaceId,
           personId: command.userId,
+          ...(outside ? { outside: true } : {}),
           ...(reason ? { reason } : {})
         }
       });
-    let added: { added: boolean; conversation: Conversation };
+    let added: { added: boolean; outside: boolean; conversation: Conversation };
     let workspace: CollaborationWorkspace;
     let person: UserRecord;
     try {
       requireOwnSession(user);
       requireCreator(conversation, user);
       workspace = await this.requireShareable(conversation);
-      person = await this.requireNameable(conversation, user, command.userId);
+      person = await this.requireNameable(user, command.userId);
       const checked = await this.requirePersonReads(conversation, person);
       added = await this.options.stores.transaction(async (stores) => {
         const result = await stores.conversations.addConversationPerson({
@@ -101,7 +111,8 @@ export class ConversationPeopleWorkflow {
             conversation: result.conversation,
             workspace,
             person,
-            from: user
+            from: user,
+            outside: result.outside
           });
         }
         return result;
@@ -111,7 +122,7 @@ export class ConversationPeopleWorkflow {
       if (reason) await audit("denied", reason);
       throw error;
     }
-    if (added.added) await audit("success");
+    if (added.added) await audit("success", undefined, added.outside);
     return added.conversation;
   }
 
@@ -160,7 +171,10 @@ export class ConversationPeopleWorkflow {
     return { conversationId, userId: personId, removed };
   }
 
-  /** The members of the chat's workspace its creator may name: preselected, or searched. */
+  /**
+   * The people the chat's creator may name: preselected, or searched. A search of two letters
+   * or more spans the instance and is rate limited per person (CHAT-SHARE-6).
+   */
   async shareCandidates(
     conversationId: ConversationId,
     user: AuthenticatedUser,
@@ -170,6 +184,7 @@ export class ConversationPeopleWorkflow {
     requireOwnSession(user);
     requireCreator(conversation, user);
     await this.requireShareable(conversation);
+    await this.requireSearchWithinLimit(user, query.query);
     const candidates = await this.options.stores.conversations.listShareCandidates({
       clientInstanceId: this.options.clientInstanceId,
       conversationId,
@@ -179,6 +194,31 @@ export class ConversationPeopleWorkflow {
       limit: query.limit
     });
     return { candidates };
+  }
+
+  /** 30 searches of the instance a minute per person, under the existing rate limiter. */
+  private async requireSearchWithinLimit(
+    user: AuthenticatedUser,
+    query: string | undefined
+  ): Promise<void> {
+    const { config, rateLimiter } = this.options;
+    if (!config.rateLimits.enabled) return;
+    if ((query?.trim().length ?? 0) < SHARE_SEARCH_INSTANCE_MIN_CHARS) return;
+    const decision = await rateLimiter.consume(`share-search:${getSubjectUserId(user)}`, {
+      limit: SHARE_SEARCHES_PER_MINUTE,
+      windowMs: 60_000
+    });
+    if (!decision.allowed) {
+      throw new AppError(
+        "RATE_LIMITED",
+        "Too many searches. Wait a moment.",
+        {
+          reason: "rate_limited",
+          retryAfterSeconds: Math.max(1, Math.ceil(decision.retryAfterMs / 1000))
+        },
+        { exposeMessage: true }
+      );
+    }
   }
 
   /** The share guard as far as the chat itself decides it; the store asks it again. */
@@ -214,16 +254,16 @@ export class ConversationPeopleWorkflow {
     return workspace;
   }
 
-  /** An active member of the chat's workspace, not the creator. */
-  private async requireNameable(
-    conversation: Conversation,
-    user: AuthenticatedUser,
-    userId: string
-  ): Promise<UserRecord> {
+  /**
+   * An active person of the instance, not the creator: member of the chat's workspace or not
+   * (ADR-0034). A user record is a person; service principals and keys have none. The store
+   * asks it again under the person's row.
+   */
+  private async requireNameable(user: AuthenticatedUser, userId: string): Promise<UserRecord> {
     const unavailable = () =>
       conversationShareRefusal(
         "share_person_unavailable",
-        "Only an active member of the chat's workspace can be named"
+        "Only an active person of the instance can be named"
       );
     if (userId === getSubjectUserId(user)) throw unavailable();
     const person = await this.options.stores.users.getUser({
@@ -233,16 +273,11 @@ export class ConversationPeopleWorkflow {
     if (
       !person ||
       person.clientInstanceId !== this.options.clientInstanceId ||
+      // "deleting" is a person whose deletion was requested.
       person.status !== "active"
     ) {
       throw unavailable();
     }
-    const membership = await this.options.stores.workspaces.getMembership({
-      clientInstanceId: this.options.clientInstanceId,
-      collaborationWorkspaceId: conversation.collaborationWorkspaceId,
-      userId: asUserId(userId)
-    });
-    if (!membership) throw unavailable();
     return person;
   }
 
@@ -446,6 +481,7 @@ async function fileShareNotice(
     workspace: CollaborationWorkspace;
     person: UserRecord;
     from: AuthenticatedUser;
+    outside: boolean;
   }
 ): Promise<void> {
   const locale = input.person.locale ?? options.config.localization.defaultLocale;
@@ -453,7 +489,8 @@ async function fileShareNotice(
     ...shareNoticeContent(locale, {
       from: input.from.displayLabel,
       title: input.conversation.title,
-      workspace: input.workspace.name
+      workspace: input.workspace.name,
+      outside: input.outside
     }),
     link: {
       kind: "conversation",
@@ -473,7 +510,7 @@ async function fileShareNotice(
 
 function shareNoticeContent(
   locale: LocaleCode,
-  input: { from: string; title: string; workspace: string }
+  input: { from: string; title: string; workspace: string; outside: boolean }
 ): { title: string; text: string } {
   const german = locale.toLowerCase().startsWith("de");
   const from = oneLine(input.from);
@@ -482,9 +519,14 @@ function shareNoticeContent(
   const title = german
     ? `${from} hat „${chat}“ mit dir geteilt`
     : `${from} shared “${chat}” with you`;
-  const text = german
-    ? `Du kannst den ganzen Chat lesen und darin schreiben, solange du Mitglied von ${workspace} bist.`
-    : `You can read the whole chat and write in it while you are a member of ${workspace}.`;
+  // One outside the workspace reads this chat and nothing else of it (CHAT-SHARE-6).
+  const text = input.outside
+    ? german
+      ? `Du kannst den ganzen Chat lesen und darin schreiben. Von ${workspace} siehst du sonst nichts.`
+      : `You can read the whole chat and write in it. You see nothing else of ${workspace}.`
+    : german
+      ? `Du kannst den ganzen Chat lesen und darin schreiben, solange du Mitglied von ${workspace} bist.`
+      : `You can read the whole chat and write in it while you are a member of ${workspace}.`;
   return { title: cut(title, NOTICE_TITLE_MAX_LENGTH), text: cut(text, NOTICE_TEXT_MAX_LENGTH) };
 }
 

@@ -41,7 +41,12 @@ import { CollaborationWorkspaceWorkflow } from "../workspaces/collaboration-work
 import { requireWorkspaceToWorkIn } from "../workspaces/workspace-access";
 import { projectNotAvailable, requireProjectAccess } from "../projects/project-access";
 import { attemptConversationDataCleanup } from "../deletion/conversation-cleanup";
-import { requireChatConversationAccess, requireConversationAccess } from "./conversation-access";
+import {
+  requireChatConversationAccess,
+  requireChatConversationReach,
+  requireConversationAccess,
+  workspaceOfConversation
+} from "./conversation-access";
 import { assertConversationIdle } from "./conversation-idle";
 import { renameChatConversation } from "./conversation-rename";
 import {
@@ -861,6 +866,19 @@ export class ConversationWorkflow {
     user: AuthenticatedUser
   ): Promise<Conversation> {
     return requireChatConversationAccess(this.options, conversationId, user);
+  }
+
+  /** `requireChatConversationAccess`, saying whether the user reads the chat from outside. */
+  requireChatConversationReach(
+    conversationId: ConversationId,
+    user: AuthenticatedUser
+  ): Promise<{ conversation: Conversation; outside: boolean }> {
+    return requireChatConversationReach(this.options, conversationId, user);
+  }
+
+  /** The workspace of a conversation whose access was checked, reached through it alone. */
+  workspaceOfConversation(conversation: Conversation): Promise<CollaborationWorkspace> {
+    return workspaceOfConversation(this.options, conversation);
   }
 
   async resolveTargetWorkspace(

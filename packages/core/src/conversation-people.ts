@@ -6,13 +6,24 @@ import {
 } from "./identity";
 
 // Named people on one private chat (CHAT-SHARE, `chat-sharing.md`). The creator of a private
-// chat in a Shared Workspace, outside any project, names members of that workspace; each reads
-// and writes in the chat while a member. Nobody else gains anything: a Workspace Owner, Admin
-// or the superadmin still does not see it. Only the creator changes who reads it, from their
-// own session: never an agent, a key, an embedding host or another person named.
+// chat in a Shared Workspace, outside any project, names active people of the instance; each
+// reads and writes in the chat, and one who is no member of the workspace reaches nothing else
+// of it (CHAT-SHARE-6, ADR-0034). Nobody else gains anything: a Workspace Owner, Admin or the
+// superadmin still does not see it. Only the creator changes who reads it, from their own
+// session: never an agent, a key, an embedding host or another person named.
 
-/** The most people one chat names. More is a team chat or a project. */
+/** The most people one chat names, members and people outside the workspace together. */
 export const CONVERSATION_PEOPLE_MAX = 20;
+
+/**
+ * The fewest letters a search for people takes before it looks beyond those the creator knows:
+ * from two, active people of the instance by name, and one by their whole address
+ * (CHAT-SHARE-6).
+ */
+export const SHARE_SEARCH_INSTANCE_MIN_CHARS = 2;
+
+/** Searches for people of two letters or more one person may make in a minute (CHAT-SHARE-6). */
+export const SHARE_SEARCHES_PER_MINUTE = 30;
 
 /**
  * Why adding a person to a chat, or taking one off, was refused: `details.reason` of the

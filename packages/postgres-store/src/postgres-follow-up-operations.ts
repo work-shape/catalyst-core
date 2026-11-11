@@ -1,5 +1,17 @@
-import { and, asc, desc, eq, exists, getTableColumns, inArray, isNull, ne, sql } from "drizzle-orm";
-import { readsConversation } from "./postgres-conversation-people";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  getTableColumns,
+  inArray,
+  isNull,
+  ne,
+  or,
+  sql
+} from "drizzle-orm";
+import { namesPerson, readsConversation } from "./postgres-conversation-people";
 import {
   ACTIVE_AGENT_RUN_STATUSES,
   AppError,
@@ -49,25 +61,34 @@ function followUpsWithAuthors(db: PostgresConnection) {
           db
             .select({ id: conversations.id })
             .from(conversations)
-            .innerJoin(
-              collaborationWorkspaceMemberships,
-              and(
-                eq(
-                  collaborationWorkspaceMemberships.clientInstanceId,
-                  conversations.clientInstanceId
-                ),
-                eq(
-                  collaborationWorkspaceMemberships.collaborationWorkspaceId,
-                  conversations.collaborationWorkspaceId
-                ),
-                eq(collaborationWorkspaceMemberships.userId, productUsers.id)
-              )
-            )
             .where(
               and(
                 eq(conversations.clientInstanceId, conversationFollowUps.clientInstanceId),
                 eq(conversations.id, conversationFollowUps.conversationId),
-                readsConversation(productUsers.id)
+                readsConversation(productUsers.id),
+                // A member, or a person named on the chat from outside its workspace
+                // (CHAT-SHARE-6).
+                or(
+                  exists(
+                    db
+                      .select({ userId: collaborationWorkspaceMemberships.userId })
+                      .from(collaborationWorkspaceMemberships)
+                      .where(
+                        and(
+                          eq(
+                            collaborationWorkspaceMemberships.clientInstanceId,
+                            conversations.clientInstanceId
+                          ),
+                          eq(
+                            collaborationWorkspaceMemberships.collaborationWorkspaceId,
+                            conversations.collaborationWorkspaceId
+                          ),
+                          eq(collaborationWorkspaceMemberships.userId, productUsers.id)
+                        )
+                      )
+                  ),
+                  namesPerson(productUsers.id)
+                )
               )
             )
         )

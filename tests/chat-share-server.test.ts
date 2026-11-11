@@ -3,283 +3,33 @@ import { z } from "zod";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { agentListableToolNames } from "@work-shape/catalyst-client-assembly";
 import {
-  StoreBackedAuditRecorder,
-  asApiCredentialId,
-  asClientInstanceId,
   asCollaborationWorkspaceId,
   asConversationId,
-  asServicePrincipalId,
+  asUserId,
   createPlatformId
 } from "@work-shape/catalyst-core";
-import { createTestInstanceWith, type TestInstance } from "./support/test-instance";
-import { testOperations, type TestCallInput, type TestOperationName } from "./support/operations";
-import type { TestStore } from "./support/test-store";
+import {
+  MISSING,
+  addMember,
+  as,
+  auditRows,
+  clientInstanceId,
+  createChat,
+  createFixture,
+  createRun,
+  errorSchema,
+  operationName,
+  readingRoutes,
+  reasonOf,
+  required,
+  share,
+  workspaceOf
+} from "./support/chat-share-server";
 import { withTestSql } from "./support/test-sql";
-import { createTestConfig } from "./support/fixtures";
 
 // CHAT-SHARE-1: the creator of a private chat in a Shared Workspace names members of it, who
 // then read and write in it while members. Nobody else gains anything, and only the creator in
 // their own session changes who reads it.
-
-const clientInstanceId = asClientInstanceId("demo-local");
-
-/** Who calls: a person in their own session, or through a key, an embedding host or a service. */
-const viaSchema = z.enum(["session", "key", "embed", "service"]);
-type Via = z.infer<typeof viaSchema>;
-
-const errorSchema = z.object({
-  error: z.object({
-    code: z.string(),
-    message: z.string(),
-    details: z.record(z.string(), z.unknown()).optional()
-  })
-});
-
-const MISSING = { code: "NOT_FOUND", message: "Conversation is not available" };
-
-async function createShareInstance(): Promise<TestInstance<TestStore>> {
-  const config = createTestConfig();
-  // Projects for the guard; apps so their routes answer past the module switch.
-  config.modules.projects = { enabled: true };
-  config.modules.apps = { enabled: true };
-  return createTestInstanceWith((stores) => ({
-    config,
-    auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: stores.audit }),
-    authAdapter: {
-      id: "share-test",
-      credentialMode: "ambient",
-      async authenticate(request) {
-        const header = (name: string) => {
-          const value = request.headers[name];
-          return typeof value === "string" ? value : undefined;
-        };
-        const via = viaSchema.parse(header("x-share-via") ?? "session");
-        if (via === "service") {
-          return {
-            kind: "service",
-            id: asServicePrincipalId("sp_share_test"),
-            credentialId: asApiCredentialId("cred_share_test"),
-            displayLabel: "Service",
-            permissionRefs: [],
-            permissions: [],
-            clientInstanceId,
-            authSource: "test",
-            scopes: ["*"]
-          };
-        }
-        const actor = header("x-dev-user-id") ?? "creator";
-        const user = await stores.users.resolveUserIdentity({
-          clientInstanceId,
-          authSource: "test",
-          externalUserId: actor,
-          displayLabel: actor,
-          email: `${actor}@example.test`,
-          roles: actor === "owner" ? ["user", "admin", "superadmin"] : ["user"],
-          permissionRefs: ["demo-tools"],
-          permissions: [],
-          correlationId: "test"
-        });
-        return {
-          ...user,
-          scopes: ["*"],
-          ...(via === "key"
-            ? {
-                delegatedActor: {
-                  kind: "api_key" as const,
-                  id: asApiCredentialId("key_share_test"),
-                  displayLabel: "Key",
-                  authSource: "test"
-                }
-              }
-            : via === "embed"
-              ? {
-                  delegatedActor: {
-                    kind: "service_principal" as const,
-                    id: "sp_embedding_host",
-                    authSource: "test"
-                  }
-                }
-              : {})
-        };
-      }
-    }
-  }));
-}
-
-function as(actor: string, via: Via = "session") {
-  return { headers: { "x-dev-user-id": actor, "x-share-via": via } };
-}
-
-/**
- * A team with an owner, the creator of a private chat, a member to be named and a member who
- * is not: the chat holds a message and a finished run of its creator.
- */
-async function createFixture() {
-  const app = await createShareInstance();
-  const ids: Record<string, string> = {};
-  for (const actor of ["owner", "creator", "named", "colleague", "outsider"]) {
-    const me = await app.call("me.get", {}, as(actor));
-    expect(me.statusCode).toBe(200);
-    ids[actor] = me.json<{ id: string }>().id;
-  }
-  const created = await app.call(
-    "workspaces.create",
-    { payload: { name: "Team", defaultConversationVisibility: "private" } },
-    as("owner")
-  );
-  expect(created.statusCode).toBe(200);
-  const workspaceId = created.json<{ id: string }>().id;
-  for (const actor of ["creator", "named", "colleague"]) await addMember(app, workspaceId, actor);
-  const conversationId = await createChat(app, workspaceId, "Quarter figures");
-  const runId = await createRun(app, conversationId, required(ids.creator), "completed");
-  return {
-    app,
-    ids: ids as Record<"owner" | "creator" | "named" | "colleague" | "outsider", string>,
-    workspaceId,
-    conversationId,
-    runId
-  };
-}
-
-async function addMember(app: TestInstance<TestStore>, workspaceId: string, actor: string) {
-  const added = await app.call(
-    "workspaces.members.add",
-    {
-      params: { collaborationWorkspaceId: workspaceId },
-      payload: { email: `${actor}@example.test` }
-    },
-    as("owner")
-  );
-  expect(added.statusCode).toBe(200);
-}
-
-async function createChat(
-  app: TestInstance<TestStore>,
-  workspaceId: string,
-  title: string,
-  actor = "creator"
-): Promise<string> {
-  const created = await app.call(
-    "conversations.create",
-    { payload: { title, collaborationWorkspaceId: workspaceId, visibility: "private" } },
-    as(actor)
-  );
-  expect(created.statusCode).toBe(200);
-  const id = created.json<{ id: string }>().id;
-  await app.stores.conversations.appendMessage({
-    clientInstanceId,
-    conversationId: asConversationId(id),
-    role: "user",
-    text: "private content"
-  });
-  return id;
-}
-
-async function createRun(
-  app: TestInstance<TestStore>,
-  conversationId: string,
-  ownerUserId: string,
-  status: "running" | "completed"
-) {
-  const message = await app.stores.conversations.appendMessage({
-    clientInstanceId,
-    conversationId: asConversationId(conversationId),
-    role: "user",
-    text: "a turn"
-  });
-  const run = await app.stores.agentRuns.createAgentRun({
-    id: createPlatformId<"AgentRunId">("run"),
-    clientInstanceId,
-    conversationId: asConversationId(conversationId),
-    ownerUserId,
-    inputMessageId: message.id,
-    agentName: "default",
-    correlationId: "corr_share"
-  });
-  if (status === "completed") {
-    const completedAt = new Date().toISOString();
-    await app.stores.agentRuns.updateAgentRunStatus({
-      clientInstanceId,
-      runId: run.id,
-      status: "completed",
-      updatedAt: completedAt,
-      completedAt,
-      lastSequence: 0
-    });
-  }
-  return run.id;
-}
-
-function isOperationName(name: string): name is TestOperationName {
-  return Object.hasOwn(testOperations, name);
-}
-
-function operationName(name: string): TestOperationName {
-  if (!isOperationName(name)) throw new Error(`no operation ${name}`);
-  return name;
-}
-
-function required<T>(value: T | undefined): T {
-  if (value === undefined) throw new Error("expected a value");
-  return value;
-}
-
-async function share(
-  app: TestInstance<TestStore>,
-  conversationId: string,
-  userId: string,
-  actor = "creator",
-  via: Via = "session"
-) {
-  return app.call(
-    "conversations.add_person",
-    { params: { conversationId }, payload: { userId } },
-    as(actor, via)
-  );
-}
-
-function reasonOf(response: { json<T>(): T }) {
-  return errorSchema.parse(response.json()).error.details?.reason;
-}
-
-async function auditRows(type: string) {
-  return withTestSql(
-    (sql) => sql`
-      select subject, status, metadata from audit_events
-      where client_instance_id = ${clientInstanceId} and type = ${type}
-      order by created_at, id`
-  );
-}
-
-/** Every reading route of a conversation, with what it needs beside the conversation id. */
-function readingRoutes(runId: string): Record<string, TestCallInput> {
-  return {
-    "conversations.share_candidates": {},
-    "conversations.thread.get": {},
-    "conversations.messages.list": {},
-    "conversations.resources.list": {},
-    "conversations.subagents.list": {},
-    "conversations.structured_data.get": { params: { structuredDataResourceId: "sdr_missing" } },
-    "conversations.runs.observe": { params: { runId } },
-    "conversations.draft_attachments.list": {},
-    "conversations.files.get_content": { params: { fileId: "file_missing" } },
-    "conversations.artifacts.get_content": { params: { artifactId: "artifact_missing" } },
-    "conversations.artifacts.get_preview": { params: { artifactId: "artifact_missing" } },
-    "conversations.attachments.get_preview": { params: { attachmentId: "attachment_missing" } },
-    "pages.list": {},
-    "pages.get": { params: { pageId: "page_missing" } },
-    "pages.files.list": { params: { pageId: "page_missing", fileSetId: "fs_missing" } },
-    "pages.files.get": {
-      params: { pageId: "page_missing", fileSetId: "fs_missing" },
-      query: { path: "index.html" }
-    },
-    "pages.preview": { params: { pageId: "page_missing" }, payload: {} },
-    "apps.get_from_page": { params: { pageId: "page_missing" }, query: { app: "missing" } },
-    "apps.preview_captures.pending": {},
-    "feedback.list_own": {},
-    "conversations.project_instructions.get": {}
-  };
-}
 
 describe("CHAT-SHARE-1: named people on a private chat", () => {
   it("lets a named member read on every reading route, and answers every other member as if the chat were missing", async () => {
@@ -459,7 +209,12 @@ describe("CHAT-SHARE-1: named people on a private chat", () => {
       reasons[label] = response.statusCode === 200 ? "shared" : reasonOf(response);
     };
     await tryShare("self", conversationId, ids.creator);
-    await tryShare("outsider", conversationId, ids.outsider);
+    await app.stores.users.updateUser({
+      clientInstanceId,
+      userId: asUserId(ids.outsider),
+      status: "disabled"
+    });
+    await tryShare("deactivated", conversationId, ids.outsider);
     await tryShare("unknown user", conversationId, "usr_missing");
     await tryShare("by a member who is not the creator", conversationId, ids.named, "colleague");
 
@@ -521,7 +276,7 @@ describe("CHAT-SHARE-1: named people on a private chat", () => {
 
     expect(reasons).toEqual({
       self: "share_person_unavailable",
-      outsider: "share_person_unavailable",
+      deactivated: "share_person_unavailable",
       "unknown user": "share_person_unavailable",
       "by a member who is not the creator": undefined,
       "data store": "data_store_conversation_private",
@@ -882,10 +637,11 @@ describe("CHAT-SHARE-1: named people on a private chat", () => {
 
     const offered = await offer("creator", conversationId);
     expect(offered).toEqual([
-      { userId: ids.colleague, displayLabel: "colleague", hasAccess: false },
-      { userId: ids.named, displayLabel: "named", hasAccess: false }
+      { userId: ids.colleague, displayLabel: "colleague", hasAccess: false, member: true },
+      { userId: ids.named, displayLabel: "named", hasAccess: false, member: true }
     ]);
-    // The Workspace Owner, who wrote nowhere the creator reads, and the outsider are not.
+    // The Workspace Owner, who wrote nowhere the creator reads, and the outsider are not: one
+    // letter filters the preselection only (CHAT-SHARE-6).
     for (const letter of letters) {
       for (const candidate of await offer("creator", conversationId, letter)) {
         expect([ids.colleague, ids.named], letter).toContain(candidate.userId);
@@ -896,7 +652,13 @@ describe("CHAT-SHARE-1: named people on a private chat", () => {
     }
     // The bare list answers names alone; a search that typed the start of an email shows it.
     await expect(offer("creator", conversationId, "named@")).resolves.toEqual([
-      { userId: ids.named, displayLabel: "named", email: "named@example.test", hasAccess: false }
+      {
+        userId: ids.named,
+        displayLabel: "named",
+        email: "named@example.test",
+        hasAccess: false,
+        member: true
+      }
     ]);
 
     expect((await share(app, conversationId, ids.named)).statusCode).toBe(200);
@@ -928,15 +690,3 @@ describe("CHAT-SHARE-1: named people on a private chat", () => {
     await app.close();
   });
 });
-
-async function workspaceOf(
-  app: TestInstance<TestStore>,
-  conversationId: string
-): Promise<string | undefined> {
-  return (
-    await app.stores.conversations.getConversation(
-      clientInstanceId,
-      asConversationId(conversationId)
-    )
-  )?.collaborationWorkspaceId;
-}
