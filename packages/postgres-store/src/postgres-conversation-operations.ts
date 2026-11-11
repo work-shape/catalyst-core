@@ -22,6 +22,7 @@ import {
   type ConversationDataStore,
   type ConversationId,
   type ConversationListItem,
+  type SharedFromOutsideListItem,
   type ConversationsStore,
   type ConversationStore,
   type CreateConversationInput,
@@ -899,6 +900,7 @@ export function createPostgresConversationsStore(
     ConversationsStore,
     | "listConversationsForWorkspace"
     | "listConversationsWithActiveRun"
+    | "listConversationsSharedFromOutside"
     | "searchWorkspaceFiles"
     | "deleteModelProviderContinuation"
     | "getModelProviderContinuation"
@@ -926,6 +928,11 @@ export function createPostgresConversationsStore(
       input: Parameters<ConversationStore["listConversationsWithActiveRun"]>[0]
     ): Promise<ConversationListItem[]> {
       return deps.listConversationsWithActiveRun(input);
+    },
+    async listConversationsSharedFromOutside(
+      input: Parameters<ConversationStore["listConversationsSharedFromOutside"]>[0]
+    ): Promise<SharedFromOutsideListItem[]> {
+      return deps.listConversationsSharedFromOutside(input);
     },
     async searchWorkspaceFiles(
       input: Parameters<ConversationsStore["searchWorkspaceFiles"]>[0]

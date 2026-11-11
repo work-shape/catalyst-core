@@ -126,9 +126,25 @@ function ChatPeoplePanel() {
               <ListRow
                 key={reader.userId}
                 data-testid="chat-reader"
+                data-deactivated={reader.deactivated ? "true" : undefined}
                 leading={<Avatar kind="person" size="sm" name={reader.label} />}
-                title={reader.you ? t("chatShare.you", { name: reader.label }) : reader.label}
-                description={reader.creator ? t("chatShare.startedChat") : t("chatShare.named")}
+                title={
+                  reader.deactivated ? (
+                    // Muted: they read nothing while they cannot sign in.
+                    <span className="text-muted-foreground">{reader.label}</span>
+                  ) : reader.you ? (
+                    t("chatShare.you", { name: reader.label })
+                  ) : (
+                    reader.label
+                  )
+                }
+                description={
+                  reader.creator
+                    ? t("chatShare.startedChat")
+                    : reader.deactivated
+                      ? t("chatShare.deactivated")
+                      : t("chatShare.named")
+                }
                 actionsVisible
                 actions={
                   reader.creator ? undefined : isCreator ? (

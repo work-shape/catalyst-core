@@ -13,7 +13,8 @@ import { useEffect, useId, useRef, type MouseEvent, type ReactNode } from "react
 import type {
   ConversationListItem,
   ProjectView,
-  SafeConfig
+  SafeConfig,
+  SharedFromOutsideListItem
 } from "@work-shape/catalyst-api-client";
 import {
   Avatar,
@@ -35,6 +36,7 @@ import {
 } from "../../studio/apps/rail-apps";
 import { railProjectRows, type RailProjectFold } from "../projects/rail-project-chats";
 import { ConversationButton } from "../conversation/conversation-button";
+import { conversationTitle } from "../../shared/conversation-title";
 import { useTranslation } from "../../shared/i18n";
 import { ClientBrandingLogo, clientBrandingFrom } from "./client-branding";
 import {
@@ -158,6 +160,13 @@ interface WorkspaceRailProps {
   /** Opens a chat's panel "Who can see this chat". Absent where no chat is shared. */
   onShareConversation?: (conversationId: string) => void;
   onDeleteConversation: (conversationId: string) => void;
+  /**
+   * The chats shared with the person from workspaces they are no member of, latest activity
+   * first (CHAT-SHARE-6b): the group "Shared with you" below "Recent", in every workspace.
+   */
+  sharedWithYou?: readonly SharedFromOutsideListItem[];
+  /** Opens such a chat in place: the rail stays on the open workspace. */
+  onSelectSharedConversation?: (conversation: SharedFromOutsideListItem) => void;
 }
 
 /**
@@ -187,6 +196,7 @@ export function WorkspaceRail(props: WorkspaceRailProps) {
     >
       <RecentProjects {...props} />
       <RecentConversations {...props} />
+      <SharedWithYou {...props} />
     </Sidebar>
   );
 }
@@ -657,6 +667,50 @@ function RecentConversations({
           onLoad={onLoadMoreConversations}
         />
       ) : null}
+    </NavGroup>
+  );
+}
+
+/**
+ * The chats shared with the person from workspaces they are no member of (CHAT-SHARE-6b), below
+ * "Recent", each with its workspace's name. Members find a shared chat in that workspace's
+ * "Recent". The group shows only while it holds a chat, and not in the collapsed strip. A row
+ * has no menu: Share, Move and Delete are the creator's, and Leave stands in the chat's panel.
+ */
+function SharedWithYou({
+  sharedWithYou = [],
+  selectedConversationId,
+  onSelectSharedConversation
+}: WorkspaceRailProps) {
+  const { t } = useTranslation();
+  if (useSidebarCollapsed() || sharedWithYou.length === 0) {
+    return null;
+  }
+  return (
+    <NavGroup label={t("nav.sharedWithYou")} data-testid="rail-shared-with-you">
+      {sharedWithYou.map((conversation) => {
+        const title = conversationTitle(conversation.title, t);
+        return (
+          <NavItem
+            key={conversation.id}
+            data-testid="rail-shared-chat"
+            selected={conversation.id === selectedConversationId}
+            // Both are cut at the rail's edge; the whole of each shows on the pointer.
+            title={t("nav.sharedWithYouRow", { title, workspace: conversation.workspaceName })}
+            onClick={() => onSelectSharedConversation?.(conversation)}
+          >
+            <span className="flex min-w-0 items-baseline gap-1.5">
+              <span className="min-w-0 truncate">{title}</span>
+              <span
+                className="max-w-1/2 shrink-0 truncate text-caption text-muted-foreground"
+                data-testid="rail-shared-chat-workspace"
+              >
+                {conversation.workspaceName}
+              </span>
+            </span>
+          </NavItem>
+        );
+      })}
     </NavGroup>
   );
 }

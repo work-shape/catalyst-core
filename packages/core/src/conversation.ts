@@ -252,6 +252,11 @@ export interface ConversationPerson {
   /** The person's name as the instance holds it now, for the chat's other readers. */
   displayLabel: string;
   addedAt: ISODateString;
+  /**
+   * The person is deactivated, or their deletion was requested: they read nothing while they
+   * cannot sign in, and the panel shows them so, with Remove (CHAT-SHARE-6b).
+   */
+  deactivated?: true;
 }
 
 /**
@@ -289,6 +294,14 @@ export interface ConversationListItem extends Conversation {
   activeRun?: ActiveRunSummary;
   unread?: boolean;
   lastViewedAt?: ISODateString;
+}
+
+/**
+ * A chat shared with a person from a workspace they hold no membership of (CHAT-SHARE-6b): the
+ * chat as its readers see it, and the workspace's name, which is all they see of it.
+ */
+export interface SharedFromOutsideListItem extends ConversationListItem {
+  workspaceName: string;
 }
 
 export type ChatMessageRole = (typeof CHAT_MESSAGE_ROLES)[number];
@@ -471,6 +484,18 @@ export interface ConversationStore extends ConversationHistoryStore {
   listConversationsWithActiveRun(
     input: Parameters<ConversationStore["listConversationsForWorkspace"]>[0]
   ): Promise<ConversationListItem[]>;
+  /**
+   * The chats that name the person from workspaces they hold no membership of, latest activity
+   * first (CHAT-SHARE-6b). Nothing else of those workspaces: a chat that does not name them is
+   * never in it, whoever else reads it.
+   */
+  listConversationsSharedFromOutside(input: {
+    clientInstanceId: ClientInstanceId;
+    userId: string;
+    /** Keeps the chats whose title contains this text, without regard to case. */
+    titleQuery?: string;
+    page?: StorePage;
+  }): Promise<SharedFromOutsideListItem[]>;
   /** Lifecycle only: every active private Conversation the user created, in any workspace. */
   listPrivateConversationsCreatedByUser(input: {
     clientInstanceId: ClientInstanceId;

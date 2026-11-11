@@ -10205,6 +10205,105 @@
         "x-catalyst-rate-class": "write"
       }
     },
+    "/api/v1/conversations/shared-from-outside": {
+      "get": {
+        "operationId": "conversations.shared_from_outside.list",
+        "summary": "List the chats shared with the caller from workspaces they are no member of",
+        "tags": [
+          "Conversations"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "conversation:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "conversation:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of the list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SharedFromOutsideListItem"
+                      }
+                    },
+                    "nextCursor": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/conversations/{conversationId}": {
       "delete": {
         "operationId": "conversations.delete",
@@ -53105,6 +53204,10 @@
           },
           "addedAt": {
             "$ref": "#/components/schemas/Timestamp"
+          },
+          "deactivated": {
+            "type": "boolean",
+            "const": true
           }
         },
         "required": [
@@ -61890,6 +61993,95 @@
         "required": [
           "level",
           "limits"
+        ]
+      },
+      "SharedFromOutsideListItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "clientInstanceId": {
+            "type": "string"
+          },
+          "collaborationWorkspaceId": {
+            "type": "string"
+          },
+          "createdByUserId": {
+            "type": "string"
+          },
+          "createdByExternalUserId": {
+            "type": "string"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/ConversationVisibility"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "retainedUntil": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "deletedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/ConversationSubject"
+          },
+          "creationTarget": {
+            "$ref": "#/components/schemas/ConversationCreationTarget"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "people": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConversationPerson"
+            }
+          },
+          "createdByDisplayLabel": {
+            "type": "string"
+          },
+          "latestMessageAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "activeRun": {
+            "$ref": "#/components/schemas/ActiveRunSummary"
+          },
+          "unread": {
+            "type": "boolean"
+          },
+          "lastViewedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "workspaceName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "clientInstanceId",
+          "collaborationWorkspaceId",
+          "createdByUserId",
+          "createdByExternalUserId",
+          "visibility",
+          "title",
+          "status",
+          "createdAt",
+          "updatedAt",
+          "retainedUntil",
+          "people",
+          "workspaceName"
         ]
       },
       "SkillDraft": {

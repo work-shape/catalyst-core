@@ -2,6 +2,7 @@ import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   asCollaborationWorkspaceId,
+  getSubjectUserId,
   type AuthenticatedIdentity,
   type AuthenticatedUser,
   isAuthenticatedServicePrincipal
@@ -34,6 +35,17 @@ export function registerConversationRoutes(route: Route, options: ResolvedChatSe
       query.projectId
     );
   });
+
+  // The chats shared with the caller from workspaces they are no member of (CHAT-SHARE-6b):
+  // only chats that name them, each with its workspace's name and nothing else of it.
+  route(apiOperations["conversations.shared_from_outside.list"], ({ user, query, paging }) =>
+    options.stores.conversations.listConversationsSharedFromOutside({
+      clientInstanceId: options.clientInstanceId,
+      userId: getSubjectUserId(user),
+      titleQuery: query.query,
+      page: paging
+    })
+  );
 
   route(apiOperations["conversations.create"], ({ user, access, context, body, request }) => {
     const command = {

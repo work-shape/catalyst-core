@@ -19,6 +19,12 @@ export const workspaceQueryKeys = {
     authScope: string,
     collaborationWorkspaceId: string | undefined
   ) => ["conversations", apiBaseUrl, authScope, collaborationWorkspaceId] as const,
+  /**
+   * The chats shared with the person from workspaces they are no member of (CHAT-SHARE-6b),
+   * under the conversations' scope: whatever marks the lists as changed reads it again too.
+   */
+  sharedFromOutside: (apiBaseUrl: string, authScope: string, titleQuery: string) =>
+    ["conversations", apiBaseUrl, authScope, "shared-from-outside", titleQuery] as const,
   conversationSearch: (
     apiBaseUrl: string,
     authScope: string,

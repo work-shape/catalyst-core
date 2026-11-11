@@ -11,7 +11,7 @@ import {
 import { cn, SkipLink, Spinner, UiRoot, useExit } from "@work-shape/catalyst-ui";
 import { DocsAddressProvider } from "@work-shape/catalyst-ui";
 import { DEFAULT_THEME_INPUTS } from "@work-shape/catalyst-ui/theme";
-import type { Conversation } from "@work-shape/catalyst-api-client";
+import type { Conversation, SharedFromOutsideListItem } from "@work-shape/catalyst-api-client";
 import { CONNECTION_OAUTH_ADMIN_CONSENTED } from "@work-shape/catalyst-core";
 import { startNewAgent } from "./studio/agents/agents-model";
 import { AgentsPage } from "./studio/agents/agents-page";
@@ -61,6 +61,7 @@ import { NewProjectDialog, ProjectsArea } from "./chat/projects/projects-area";
 import { ProjectChatStart } from "./chat/projects/project-chat-start";
 import { AddFromProjectProvider } from "./chat/projects/add-from-project";
 import { useProjectsQuery } from "./shared/api/projects";
+import { useSharedFromOutsideQuery } from "./shared/api/shared-from-outside";
 import { useRailProjectFolds } from "./chat/projects/rail-project-chats";
 import { ProjectChangeDialogs, type ProjectChange } from "./chat/projects/project-move-dialog";
 import { LoginPanel } from "./chat/login-panel";
@@ -295,6 +296,15 @@ function ChatWorkspaceContent({
     openProjectName: projectStartRoute?.project,
     openConversation: onChatRoute ? model.conversationRail.openConversation : undefined,
     loaded: model.conversationRail.conversations
+  });
+  // The chats shared with the person from workspaces they are no member of, in every workspace's
+  // rail and in the palette (CHAT-SHARE-6b).
+  const sharedWithYou = useSharedFromOutsideQuery({
+    apiBaseUrl: model.auth.apiBaseUrl,
+    authScope: WORKSPACE_AUTH_SCOPE,
+    client: model.selectedChat.client,
+    enabled: collaborationWorkspacesAvailable && model.auth.user !== undefined,
+    openOutsideConversationId: model.collaborationWorkspace.outsideChat?.conversationId
   });
   // The plus of the rail's Projects group asked to make a project in the open workspace.
   const [creatingProject, setCreatingProject] = useState(false);
@@ -584,6 +594,17 @@ function ChatWorkspaceContent({
   const openConversation = (conversationId: string) => {
     closeDrawer();
     rail.selectConversation(conversationId);
+    model.chrome.requestComposerFocus();
+  };
+
+  // A chat shared from outside opens in place: the rail stays on the open workspace.
+  const openSharedConversation = (conversation: SharedFromOutsideListItem) => {
+    closeDrawer();
+    model.route.showRoute({
+      kind: "conversation",
+      collaborationWorkspaceId: conversation.collaborationWorkspaceId,
+      conversationId: conversation.id
+    });
     model.chrome.requestComposerFocus();
   };
 
@@ -891,6 +912,8 @@ function ChatWorkspaceContent({
                 }
               : {})}
             onDeleteConversation={rail.deleteConversation}
+            sharedWithYou={sharedWithYou.data}
+            onSelectSharedConversation={openSharedConversation}
           />
 
           <ChatShareProvider
@@ -1314,9 +1337,11 @@ function ChatWorkspaceContent({
           collaborationWorkspacesAvailable={collaborationWorkspacesAvailable}
           searchedWorkspaceName={activeWorkspaceName}
           recentConversations={rail.conversations}
+          sharedWithYou={sharedWithYou.data}
           goToTargets={model.controlPlane.goToTargets}
           onNewChat={startNewChat}
           onSelectConversation={openConversation}
+          onSelectSharedConversation={openSharedConversation}
           onGoTo={(targetId) => {
             const target = model.controlPlane.goToTargets.find(({ id }) => id === targetId);
             if (target) {

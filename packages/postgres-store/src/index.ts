@@ -36,6 +36,7 @@ import {
 import { searchWorkspaceFiles as searchPostgresWorkspaceFiles } from "./postgres-file-search-operations";
 import {
   listConversationsForWorkspace as listPostgresConversationsForWorkspace,
+  listConversationsSharedFromOutside as listPostgresConversationsSharedFromOutside,
   listConversationsWithActiveRun as listPostgresConversationsWithActiveRun
 } from "./postgres-conversation-list-operations";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -165,6 +166,8 @@ function bindStores(
     conversations: createPostgresConversationsStore(db, {
       listConversationsForWorkspace: (input) => listPostgresConversationsForWorkspace(db, input),
       listConversationsWithActiveRun: (input) => listPostgresConversationsWithActiveRun(db, input),
+      listConversationsSharedFromOutside: (input) =>
+        listPostgresConversationsSharedFromOutside(db, input),
       searchWorkspaceFiles: (input) => searchPostgresWorkspaceFiles(db, input),
       deleteModelProviderContinuation: (input) =>
         deletePostgresModelProviderContinuation(db, input),

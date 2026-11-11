@@ -55,7 +55,12 @@ export const conversationCreationTargetSchema = z.literal("instance");
 export const conversationPersonSchema = z.object({
   userId: z.string(),
   displayLabel: z.string(),
-  addedAt: timestampSchema
+  addedAt: timestampSchema,
+  /**
+   * Deactivated, or their deletion was requested: they read nothing while they cannot sign in,
+   * and the panel shows them so, with Remove (CHAT-SHARE-6b).
+   */
+  deactivated: z.literal(true).optional()
 });
 
 export const conversationSchema = z.object({
@@ -1081,6 +1086,14 @@ export const conversationListItemSchema = conversationSchema.extend({
   lastViewedAt: timestampSchema.optional()
 });
 
+/**
+ * A chat shared with the caller from a workspace they are no member of (CHAT-SHARE-6b), with
+ * that workspace's name: the one thing of the workspace they see.
+ */
+export const sharedFromOutsideListItemSchema = conversationListItemSchema.extend({
+  workspaceName: z.string()
+});
+
 export const conversationUserStateSchema = z.object({
   clientInstanceId: z.string(),
   conversationId: z.string(),
@@ -1157,6 +1170,7 @@ export const cancelRunResponseSchema = z.object({
 export type Conversation = z.infer<typeof conversationSchema>;
 export type ConversationVisibility = z.infer<typeof conversationVisibilitySchema>;
 export type ConversationListItem = z.infer<typeof conversationListItemSchema>;
+export type SharedFromOutsideListItem = z.infer<typeof sharedFromOutsideListItemSchema>;
 export type RenameConversationRequest = z.infer<typeof renameConversationRequestSchema>;
 export type OpenConversationSubjectRequest = z.infer<typeof openConversationSubjectRequestSchema>;
 export type AddConversationDataStoreRequest = z.infer<typeof addConversationDataStoreRequestSchema>;

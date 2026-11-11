@@ -35,3 +35,4 @@ export {
   workspaceConfigQueryOptions
 } from "../../../packages/chat-ui/src/shared/api/workspace-queries";
 export { workspaceQueryKeys } from "../../../packages/chat-ui/src/shared/api/workspace-query-keys";
+export { useSharedFromOutsideQuery } from "../../../packages/chat-ui/src/shared/api/shared-from-outside";

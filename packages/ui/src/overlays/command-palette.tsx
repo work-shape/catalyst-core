@@ -10,6 +10,8 @@ export interface CommandPaletteItem {
   value: string;
   /** The name of the command or the object. It is shown as text. */
   label: string;
+  /** Where the object is, such as its workspace: muted after the name, and cut before it is. */
+  description?: string;
   /** An icon or an avatar before the name. */
   leading?: ReactNode;
   /** The keys that do the same, shown at the row's trailing edge. */
@@ -67,6 +69,11 @@ export function CommandPalette({
     >
       {item.leading}
       <span className="min-w-0 flex-1 truncate">{item.label}</span>
+      {item.description === undefined ? null : (
+        <span className="max-w-1/2 shrink-0 truncate text-caption text-muted-foreground">
+          {item.description}
+        </span>
+      )}
       {item.shortcut === undefined ? null : (
         <kbd className="font-sans text-caption text-muted-foreground">{item.shortcut}</kbd>
       )}

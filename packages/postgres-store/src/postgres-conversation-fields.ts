@@ -13,7 +13,8 @@ const conversationPeopleColumn = sql<ConversationPersonRow[]>`coalesce((
     json_build_object(
       'userId', cp.user_id,
       'displayLabel', u.display_label,
-      'addedAt', cp.added_at
+      'addedAt', cp.added_at,
+      'deactivated', u.status <> 'active' or u.deletion_requested_at is not null
     ) order by cp.added_at, cp.user_id
   )
   from conversation_people cp

@@ -1,8 +1,13 @@
 import { SquarePen } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { ApiClient, ConversationListItem } from "@work-shape/catalyst-api-client";
+import type {
+  ApiClient,
+  ConversationListItem,
+  SharedFromOutsideListItem
+} from "@work-shape/catalyst-api-client";
 import { CommandPalette, type CommandPaletteGroup } from "@work-shape/catalyst-ui";
 import { useConversationSearchQuery } from "../../shared/api/conversation-search-query";
+import { useSharedFromOutsideSearchQuery } from "../../shared/api/shared-from-outside";
 import { conversationTitle } from "../../shared/conversation-title";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { workspaceShortcutLabel } from "./workspace-shortcuts";
@@ -23,6 +28,8 @@ const PALETTE_RECENT_LIMIT = 8;
 // A conversation id never equals these, so a command or a place cannot be taken for one.
 const NEW_CHAT_VALUE = "command:new-chat";
 const GO_TO_PREFIX = "go-to:";
+// A chat shared from outside opens in its own workspace, so its value says which list it is of.
+const SHARED_PREFIX = "shared-from-outside:";
 
 /** One place of the "Go to" group: a Settings page the viewer may open, or Build. */
 interface PaletteGoToTarget {
@@ -33,7 +40,8 @@ interface PaletteGoToTarget {
 }
 
 /**
- * The command palette: New chat, the conversations of the active workspace and the places the
+ * The command palette: New chat, the conversations of the active workspace, the chats shared
+ * with the person from workspaces they are no member of (CHAT-SHARE-6b) and the places the
  * viewer may go to. Before anything is typed it shows the conversations the rail has loaded
  * and asks the server nothing; a typed text is searched on the server, and narrows the places
  * here.
@@ -47,9 +55,11 @@ export function ConversationPalette({
   collaborationWorkspacesAvailable,
   searchedWorkspaceName,
   recentConversations,
+  sharedWithYou = [],
   goToTargets,
   onNewChat,
   onSelectConversation,
+  onSelectSharedConversation,
   onGoTo,
   onClose
 }: {
@@ -62,10 +72,14 @@ export function ConversationPalette({
   /** The shown name of the workspace the search is limited to. An answer without a match names it. */
   searchedWorkspaceName: string | undefined;
   recentConversations: readonly ConversationListItem[];
+  /** The chats shared from outside that the rail has loaded, under "Shared with you". */
+  sharedWithYou?: readonly SharedFromOutsideListItem[];
   /** The caller lists only what the viewer may open. */
   goToTargets: readonly PaletteGoToTarget[];
   onNewChat(): void;
   onSelectConversation(conversationId: string): void;
+  /** Opens a chat shared from outside in place. */
+  onSelectSharedConversation?(conversation: SharedFromOutsideListItem): void;
   onGoTo(targetId: string): void;
   onClose(): void;
 }) {
@@ -81,6 +95,13 @@ export function ConversationPalette({
     collaborationWorkspacesAvailable,
     titleQuery: open ? searched : ""
   });
+  const sharedSearch = useSharedFromOutsideSearchQuery({
+    apiBaseUrl,
+    authScope,
+    client,
+    enabled: collaborationWorkspacesAvailable,
+    titleQuery: open ? searched : ""
+  });
 
   // Every opening starts empty.
   useEffect(() => {
@@ -94,7 +115,16 @@ export function ConversationPalette({
       value: conversation.id,
       label: conversationTitle(conversation.title, t)
     }));
+  const sharedItems = (conversations: readonly SharedFromOutsideListItem[]) =>
+    conversations.map((conversation) => ({
+      value: `${SHARED_PREFIX}${conversation.id}`,
+      label: conversationTitle(conversation.title, t),
+      description: conversation.workspaceName
+    }));
   const results = searched === "" ? undefined : search.data;
+  // A search of them that fails leaves the workspace's own results as they are.
+  const sharedResults = searched === "" ? undefined : sharedSearch.data;
+  const sharedWithYouHeading = t("nav.sharedWithYou");
   const needle = typed.toLocaleLowerCase();
   const goTo: CommandPaletteGroup = {
     heading: t("nav.paletteGoTo"),
@@ -126,6 +156,10 @@ export function ConversationPalette({
         heading: t("nav.recent"),
         items: conversationItems(recentConversations.slice(0, PALETTE_RECENT_LIMIT))
       },
+      {
+        heading: sharedWithYouHeading,
+        items: sharedItems(sharedWithYou.slice(0, PALETTE_RECENT_LIMIT))
+      },
       goTo
     ];
   } else if (search.isError) {
@@ -134,11 +168,17 @@ export function ConversationPalette({
   } else {
     groups = [
       { heading: t("nav.paletteConversations"), items: conversationItems(results ?? []) },
+      { heading: sharedWithYouHeading, items: sharedItems(sharedResults ?? []) },
       goTo
     ];
     // The sentence names the text the shown answer belongs to, not what is typed since.
     message =
-      results?.length === 0 && !search.isPlaceholderData && goTo.items.length === 0
+      results?.length === 0 &&
+      !search.isPlaceholderData &&
+      // The chats shared from outside have answered too, so their match never follows it.
+      !sharedSearch.isFetching &&
+      (sharedResults ?? []).length === 0 &&
+      goTo.items.length === 0
         ? searchedWorkspaceName !== undefined
           ? t("nav.paletteNoMatchInWorkspace", {
               query: searched,
@@ -162,6 +202,12 @@ export function ConversationPalette({
           onNewChat();
         } else if (value.startsWith(GO_TO_PREFIX)) {
           onGoTo(value.slice(GO_TO_PREFIX.length));
+        } else if (value.startsWith(SHARED_PREFIX)) {
+          const id = value.slice(SHARED_PREFIX.length);
+          const conversation = [...(sharedResults ?? []), ...sharedWithYou].find(
+            (candidate) => candidate.id === id
+          );
+          if (conversation) onSelectSharedConversation?.(conversation);
         } else {
           onSelectConversation(value);
         }
