@@ -15,6 +15,7 @@ import {
   alwaysAllowRefusal,
   isFirstPartyPerson,
   recordOperationSettingChanged,
+  requireOwnServerSetter,
   setOwnOperationSetting
 } from "../users/operation-settings-service";
 import { operationSettingsDeps } from "./operation-setting-routes";
@@ -36,7 +37,7 @@ export function registerOperationDecisionRoutes(
    * "Always allow" with a confirmation (OP-6): only on a call whose card offered it, and only
    * while the admin still permits it. Checked before the decision, so a refusal decides nothing.
    */
-  const checkAlwaysAllow = async (runId: string): Promise<string> => {
+  const checkAlwaysAllow = async (runId: string, actor: AuthenticatedIdentity): Promise<string> => {
     const call = await stores.operationRuns.get({ clientInstanceId, id: runId });
     const definition = call
       ? await settings.registry.resolve(call.operation).catch(() => undefined)
@@ -46,6 +47,7 @@ export function registerOperationDecisionRoutes(
         reason: "always_allow_not_permitted"
       });
     }
+    requireOwnServerSetter(actor, definition, "always_allow");
     const refusal = await alwaysAllowRefusal(settings, definition);
     if (refusal) {
       throw new AppError("FORBIDDEN", refusal.message, { reason: "always_allow_not_permitted" });
@@ -90,9 +92,11 @@ export function registerOperationDecisionRoutes(
       }
       // Only the person's own click sets it: never a delegated or other caller.
       if (alwaysAllow && (!isFirstPartyPerson(actor) || context.origin.kind !== "user")) {
-        throw new AppError("FORBIDDEN", "Only you set Always allow, in the interface");
+        throw new AppError("FORBIDDEN", "Only you set Always allow, in the interface", {
+          reason: "user_only"
+        });
       }
-      const alwaysAllowed = alwaysAllow ? await checkAlwaysAllow(runId) : undefined;
+      const alwaysAllowed = alwaysAllow ? await checkAlwaysAllow(runId, actor) : undefined;
       const at = new Date().toISOString();
       const comment = reason === undefined ? {} : { comment: reason };
       const mode = decision === "confirm" ? "confirmed" : "declined";

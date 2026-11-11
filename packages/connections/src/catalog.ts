@@ -170,6 +170,27 @@ export function buildConnectionCatalog(input: {
 }
 
 /**
+ * The accepted operations whose tool a discovery found changed: it lists the tool, and not as
+ * it was accepted, by the fingerprint config names or else the pin of an earlier discovery. Its
+ * description and its input schema are in that fingerprint. A tool it does not list is not
+ * among them, nor one accepted before any discovery pinned it.
+ */
+export function changedAcceptedOperations(input: {
+  accepted: readonly ConnectionOperationConfig[];
+  previous: ConnectionCatalog | undefined;
+  next: ConnectionCatalog;
+}): string[] {
+  const pinned = input.previous?.pinned ?? {};
+  return input.accepted.flatMap((operation) => {
+    const accepted = operation.schemaFingerprint ?? pinOf(pinned, operation.name);
+    const entry = input.next.entries.find((candidate) => candidate.name === operation.name);
+    return accepted !== undefined && entry !== undefined && entry.fingerprint !== accepted
+      ? [operation.name]
+      : [];
+  });
+}
+
+/**
  * Whether both schemas of a descriptor of the release can be checked. One that cannot is not
  * callable. They are the release's own, so they are compiled here.
  */

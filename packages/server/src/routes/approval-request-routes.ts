@@ -15,6 +15,7 @@ import {
   alwaysAllowRefusal,
   isFirstPartyPerson,
   recordOperationSettingChanged,
+  requireOwnServerSetter,
   setOwnOperationSetting
 } from "../users/operation-settings-service";
 import { operationSettingsDeps } from "./operation-setting-routes";
@@ -80,7 +81,9 @@ export function registerApprovalRequestRoutes(
       throw new AppError("VALIDATION_FAILED", "Always allow comes only with allowing the call");
     }
     if (!isFirstPartyPerson(user)) {
-      throw refused();
+      throw new AppError("FORBIDDEN", "Only you set Always allow, in the interface", {
+        reason: "user_only"
+      });
     }
     const request = await options.approvalRequests?.store.getApprovalRequest({
       clientInstanceId: options.clientInstanceId,
@@ -104,6 +107,7 @@ export function registerApprovalRequestRoutes(
     if (!call || call.status !== "pending_confirmation" || !call.offersAlwaysAllow || !definition) {
       throw refused();
     }
+    requireOwnServerSetter(user, definition, "always_allow");
     const refusal = await alwaysAllowRefusal(settings, definition);
     if (refusal) throw refused(refusal.message);
     return call.operation;

@@ -297,11 +297,13 @@ function definitionOf(
           }
         }
       : {}),
-    // A person's own server asks before every change, and before a read where another
-    // Connection's operation ran in the conversation (PMCP-4). It is a floor: an admin's `allow`
-    // does not lower it, an admin's `deny` still raises it.
+    // A person's own server asks before every change, which only its owner's "Always allow"
+    // waives (PMCP-4b): an admin's `allow` does not lower it, an admin's `deny` still raises it.
+    // Before any call, a waived change included, where another Connection's operation ran in
+    // the conversation (PMCP-4): that is a floor.
     ...(ownerOnlyOwnerOf(connection.config) !== undefined
       ? {
+          ownServerOwnerId: ownerOnlyOwnerOf(connection.config) ?? "",
           policyFloorOf: (origin: OperationOrigin) =>
             ownServerPolicyFloor(deps, connection.config.name, operation, origin)
         }

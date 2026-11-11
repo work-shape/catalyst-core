@@ -55,16 +55,24 @@ export const ALWAYS_ALLOW_BY_CLASS: Readonly<Record<OperationChangeClass, boolea
 
 /**
  * Whether people may set "Always allow" for an operation: only a change, only where its class
- * allows it, and only where no lock of the admin names it, by its name or by a pattern such as
+ * allows it or it is a tool of a person's own server, and only where no lock of the admin names it, by its name or by a pattern such as
  * `connection.crm.*`. The strictest of what matches wins, so a lock only ever takes it away.
  */
 export function mayAlwaysAllow(
-  definition: { name: string; effect: OperationEffect; changeClass?: OperationChangeClass },
+  definition: {
+    name: string;
+    effect: OperationEffect;
+    changeClass?: OperationChangeClass;
+    ownServerOwnerId?: string;
+  },
   locked: readonly string[] = []
 ): boolean {
   return (
     definition.effect === "changing" &&
-    ALWAYS_ALLOW_BY_CLASS[definition.changeClass ?? "irreversible"] &&
+    // A self-added server's tool declares no class; its owner may always allow it all the same
+    // (PMCP ruling 9). Who may set it is the owner alone, checked where it is set.
+    (definition.ownServerOwnerId !== undefined ||
+      ALWAYS_ALLOW_BY_CLASS[definition.changeClass ?? "irreversible"]) &&
     !locked.some((pattern) => namesOperation(pattern, definition.name))
   );
 }
@@ -89,6 +97,13 @@ export interface PolicyInput {
      * Connection, carries here what that operation asks. A setting can tighten it further.
      */
     policyFloor?: PolicyValue;
+    /**
+     * Set on a tool of a person's own server (PMCP ruling 9). A changing one is at least
+     * `confirm` whatever the defaults and the central settings say, before the person's own
+     * setting: an admin's `allow` does not lower it, a stricter value still raises it, and its
+     * person's "Always allow" does. Only the owner's agents call it.
+     */
+    ownServerOwnerId?: string;
   };
   origin: OperationOrigin;
   instanceDefaults: PolicyDefaults;
@@ -172,7 +187,8 @@ export type PolicyResolution = { source: PolicySource } & (
  * declared default or, without one, the instance default of its effect. An operation whose
  * answer holds a secret takes an instance default of `approval` as `confirm`. A central setting
  * replaces the base, and of several that match the strictest wins. A call with several targets
- * takes the strictest of what each target resolves to. An operation's `policyFloor` then
+ * takes the strictest of what each target resolves to. A changing tool of a person's own
+ * server is then at least `confirm`, which only that person's "Always allow" lowers. An operation's `policyFloor` then
  * tightens what came of it and never loosens it. A guardrail can only tighten. Reading
  * operations ignore waiting defaults and settings unless an explicit `confirm` or `approval`
  * floor makes the call able to wait. A step of a run of a published Workflow revision runs
@@ -228,6 +244,16 @@ export function resolvePolicy(input: PolicyInput): PolicyResolution {
   ({ value, source } = perTarget.reduce((left, right) =>
     stricter(left.value, right.value) === left.value ? left : right
   ));
+  if (
+    definition.ownServerOwnerId !== undefined &&
+    definition.effect === "changing" &&
+    value === "allow"
+  ) {
+    // A changing tool of a server nobody vetted asks its person: no default and no admin's
+    // `allow` lowers that, only the person's own "Always allow" below.
+    value = "confirm";
+    source = "declared_default";
+  }
   // The person's own setting comes after what the admin and the operation say and before the
   // floors: it raises any value and lowers only `confirm`, and only where the admin permits.
   const person = input.person;

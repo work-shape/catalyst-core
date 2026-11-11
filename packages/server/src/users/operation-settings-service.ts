@@ -3,6 +3,7 @@ import {
   auditActorFromIdentity,
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
+  isFirstPartyPerson as isSignedInFirstParty,
   mayAlwaysAllow,
   resolvePolicy,
   type AuditRecorder,
@@ -65,9 +66,44 @@ export function isFirstPartyPerson(actor: AuthenticatedIdentity): actor is Authe
 /** The person a setting belongs to: a signed-in person in their own session. */
 function settingOwner(actor: AuthenticatedIdentity): string {
   if (!isFirstPartyPerson(actor)) {
-    throw new AppError("FORBIDDEN", "Only you read and set your confirmations, in the interface");
+    throw new AppError("FORBIDDEN", "Only you read and set your confirmations, in the interface", {
+      reason: "user_only"
+    });
   }
   return getSubjectUserId(actor);
+}
+
+/**
+ * Who sets a value for a tool of a person's own server (PMCP-4b): its owner alone. For anyone
+ * else it is no operation of theirs, and nothing says it exists. "Always allow" is set only in
+ * the owner's own signed-in session, never with a key, the CLI, an embedding host's session or
+ * by an agent: `user_only`. Nothing to check for any other operation.
+ */
+export function requireOwnServerSetter(
+  actor: AuthenticatedIdentity,
+  definition: Pick<OperationDefinition, "name" | "ownServerOwnerId">,
+  value: PersonPolicySetting
+): void {
+  const owner = definition.ownServerOwnerId;
+  if (owner === undefined) return;
+  if (isAuthenticatedServicePrincipal(actor) || owner === "" || actor.id !== owner) {
+    throw unknownOperation(definition.name);
+  }
+  if (value === "always_allow" && !isSignedInFirstParty(actor)) {
+    throw new AppError(
+      "FORBIDDEN",
+      "Only you set Always allow for your own server, in the interface",
+      {
+        reason: "user_only"
+      }
+    );
+  }
+}
+
+function unknownOperation(operation: string): AppError {
+  return new AppError("VALIDATION_FAILED", `There is no operation '${operation}'`, {
+    reason: "unknown_operation"
+  });
 }
 
 /** Why "Always allow" cannot be set for an operation; `locked` where an admin's lock names it. */
@@ -211,11 +247,9 @@ export async function setOwnOperationSetting(
 ): Promise<{ view: OperationSettingView; changed: boolean }> {
   const userId = settingOwner(input.actor);
   const definition = await deps.registry.resolve(input.operation).catch(() => undefined);
-  if (!definition && input.value !== null) {
-    throw new AppError("VALIDATION_FAILED", `There is no operation '${input.operation}'`, {
-      reason: "unknown_operation"
-    });
-  }
+  if (!definition && input.value !== null) throw unknownOperation(input.operation);
+  if (definition && input.value !== null)
+    requireOwnServerSetter(input.actor, definition, input.value);
   if (input.value === "always_allow" && definition) {
     const refusal = await alwaysAllowRefusal(deps, definition);
     if (refusal) {

@@ -23,6 +23,7 @@ import {
   createModuleRegistry,
   createPlatformId,
   createUserPrincipal,
+  mayAlwaysAllow,
   resolvePolicy,
   type AgentRun,
   type AuthenticatedUser,
@@ -43,8 +44,9 @@ import { connection, fixtureConnectionKind } from "./support/connections";
 // The tools of a person's own MCP server (PMCP-4, connections acceptance check 80). Such a
 // server is on no agent: its accepted tools join the runs its owner starts in their own private
 // chats, where the agent lets them in (`ownServers`), and nobody else's. A changing tool asks
-// before every call and a reading tool asks where another Connection's operation ran in the
-// chat; an admin's `allow` and a person's "Always allow" lower neither.
+// before every call, which an admin's `allow` does not lower and only its owner's "Always allow"
+// does (PMCP-4b); every tool asks where another Connection's operation ran in the chat, which
+// nothing lowers.
 
 const KAI_NOTES = "kai_notes";
 const SEARCH = `connection.${KAI_NOTES}.search`;
@@ -369,7 +371,7 @@ describe("the tools of a person's own MCP server", () => {
     });
   });
 
-  it("asks before every change, and before a read where another Connection ran, whatever an admin or the person allows", async () => {
+  it("asks before every change unless its owner always allows it, and before any call where another Connection ran", async () => {
     const { t, deps, home } = await setup();
     const chat = await chatOf(t, t.kai, home);
     const source = createConnectionOperationSource(deps);
@@ -412,8 +414,8 @@ describe("the tools of a person's own MCP server", () => {
       });
     };
 
-    // A change asks from every origin.
-    expect(await floorOf(SAVE, agentOrigin(chat.id, SAVE))).toBe("confirm");
+    // Outside an agent's run a change asks by its floor; in one, by the policy (below).
+    expect(await floorOf(SAVE, agentOrigin(chat.id, SAVE))).toBeUndefined();
     expect(await floorOf(SAVE, { kind: "cli" })).toBe("confirm");
     // A read asks nothing while only this server ran in the chat.
     expect(await floorOf(SEARCH, agentOrigin(chat.id))).toBeUndefined();
@@ -424,6 +426,7 @@ describe("the tools of a person's own MCP server", () => {
     expect(await floorOf(SEARCH, agentOrigin(chat.id))).toBeUndefined();
     await record("connection.crm.echo", chat.id, "done");
     expect(await floorOf(SEARCH, agentOrigin(chat.id))).toBe("confirm");
+    expect(await floorOf(SAVE, agentOrigin(chat.id, SAVE))).toBe("confirm");
     // Another chat is not this one.
     expect(await floorOf(SEARCH, agentOrigin((await chatOf(t, t.kai, home)).id))).toBeUndefined();
     // An admin's own Connection keeps no such floor.
@@ -431,25 +434,51 @@ describe("the tools of a person's own MCP server", () => {
       await floorOf("connection.crm.echo", agentOrigin(chat.id, "connection.crm.echo"))
     ).toBeUndefined();
 
-    // The floor is applied last: an admin's `allow` and the person's "Always allow" do not lower
-    // it, and an admin's `deny` still raises it.
-    const resolved = (
-      policyFloor: "confirm",
-      effect: "reading" | "changing",
-      value: "allow" | "deny"
-    ) =>
+    // The tools name their owner. A change may be always allowed despite its undeclared class,
+    // unless an admin's lock names it.
+    const save = await source.resolve(SAVE);
+    if (!save) throw new Error("No save");
+    expect(save).toMatchObject({ effect: "changing", ownServerOwnerId: t.kai.id });
+    expect(save.changeClass).toBeUndefined();
+    expect(mayAlwaysAllow(save)).toBe(true);
+    expect(mayAlwaysAllow(save, [`connection.${KAI_NOTES}.*`])).toBe(false);
+    expect(mayAlwaysAllow({ name: SAVE, effect: "changing" })).toBe(false);
+    expect((await source.resolve(SEARCH))?.ownServerOwnerId).toBe(t.kai.id);
+
+    // An admin's `allow` does not lower a change, and an admin's `deny` still raises it. The
+    // owner's "Always allow" lowers it, never below the floor of a chat where another
+    // Connection ran, which holds a read as well.
+    const resolved = (input: {
+      effect: "reading" | "changing";
+      central?: "allow" | "deny";
+      alwaysAllow?: true;
+      floor?: "confirm";
+    }) =>
       resolvePolicy({
-        definition: { name: SAVE, effect, policyFloor },
+        definition: {
+          name: SAVE,
+          effect: input.effect,
+          ownServerOwnerId: t.kai.id,
+          ...(input.floor ? { policyFloor: input.floor } : {})
+        },
         origin: agentOrigin(chat.id, SAVE),
         instanceDefaults: { reading: "allow", changing: "allow" },
-        centralSettings: [{ operation: `connection.${KAI_NOTES}.*`, value }],
-        person: { setting: "always_allow", mayAlwaysAllow: true },
-        callerCanConfirm: true,
+        centralSettings: input.central
+          ? [{ operation: `connection.${KAI_NOTES}.*`, value: input.central }]
+          : [],
+        ...(input.alwaysAllow ? { person: { setting: "always_allow", mayAlwaysAllow: true } } : {}),
+        callerCanConfirm: false,
         canPause: true
       }).value;
-    expect(resolved("confirm", "changing", "allow")).toBe("confirm");
-    expect(resolved("confirm", "reading", "allow")).toBe("confirm");
-    expect(resolved("confirm", "changing", "deny")).toBe("deny");
+    expect(resolved({ effect: "changing" })).toBe("confirm");
+    expect(resolved({ effect: "changing", central: "allow" })).toBe("confirm");
+    expect(resolved({ effect: "changing", central: "deny" })).toBe("deny");
+    expect(resolved({ effect: "changing", alwaysAllow: true })).toBe("allow");
+    expect(resolved({ effect: "changing", central: "allow", alwaysAllow: true })).toBe("allow");
+    expect(resolved({ effect: "changing", central: "deny", alwaysAllow: true })).toBe("deny");
+    expect(resolved({ effect: "changing", alwaysAllow: true, floor: "confirm" })).toBe("confirm");
+    expect(resolved({ effect: "reading", central: "allow", floor: "confirm" })).toBe("confirm");
+    expect(resolved({ effect: "reading" })).toBe("allow");
   });
 
   it("asks before a read where another Connection ran in a run thread, and where that cannot be read", async () => {

@@ -44,7 +44,7 @@ export function registerOperationSettingRoutes(
         ? {
             allowed: false,
             action: setOwn.id,
-            reason: "no_grant",
+            reason: "user_only",
             message: "Only a person signed in themself sets their own confirmations"
           }
         : { allowed: true },

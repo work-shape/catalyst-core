@@ -71,6 +71,8 @@ interface ConnectionDiscoveryAttempt {
    * that queued the discovery was admitted (`requirePersonalDiscoveryContext`).
    */
   personalOwner?: string;
+  /** The job's correlation, for the events the discovery's write records. */
+  correlationId?: string;
 }
 
 /**
