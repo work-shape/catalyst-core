@@ -12,6 +12,7 @@ import {
   connectionOAuthReasonOf,
   isAppError,
   isAuthenticatedServicePrincipal,
+  isFirstPartyPerson,
   isOutsideCall,
   personalConnectionContextError,
   requirePersonalDiscoveryContext,
@@ -117,7 +118,11 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
     execute: (_input, context) =>
       required().myConnections(
         context.actor.id,
-        (resource) => context.access.authorize(CONNECTION_ACTIONS.use, resource).allowed
+        (resource) => context.access.authorize(CONNECTION_ACTIONS.use, resource).allowed,
+        // Who may add an MCP server for themselves, as the self-add create decides it; the
+        // operator's switch is read with the list.
+        isFirstPartyPerson(context.actor) &&
+          context.access.authorize(CONNECTION_ACTIONS.addOwn).allowed
       )
   });
   route.operation(apiOperations["connections.people"], {

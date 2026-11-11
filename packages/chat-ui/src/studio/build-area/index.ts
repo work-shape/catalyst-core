@@ -104,6 +104,8 @@ export {
 export * from "./connection-operation-schema";
 export * from "./connection-sign-in-model";
 export * from "./connection-people-model";
+export * from "./own-server-model";
+export { OwnServersSection, OwnServerAddDialog } from "./own-servers";
 export {
   SignInActions,
   SignInBody,

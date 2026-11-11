@@ -1,0 +1,9 @@
+# The person of the own MCP server spec (PMCP-5), who adds a server for themselves with the role
+# `user` alone, which holds `connection.add_own`, and no Connection right. No other spec uses
+# this person: their servers and sign-ins are theirs alone.
+- email: e2e-own-mcp-server@example.test
+  displayLabel: E2E Zz Own MCP Server
+  passwordEnvName: E2E_OWN_MCP_SERVER_PASSWORD
+  developmentPassword: e2e-own-mcp-server-password
+  roles:
+    - user

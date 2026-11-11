@@ -91,9 +91,11 @@ export interface ConnectionManagementPort {
     connectorType: string;
     ownerPrincipalId: string;
   }>;
+  /** `mayAddOwn`: the caller holds `connection.add_own` in a first-party session. */
   myConnections(
     userId: string,
-    usable: (resource: OperationResource) => boolean
+    usable: (resource: OperationResource) => boolean,
+    mayAddOwn?: boolean
   ): Promise<PersonalConnections>;
   connectionPeople(name: string): Promise<ConnectionPeople>;
   revokePerson(

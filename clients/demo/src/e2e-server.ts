@@ -194,7 +194,10 @@ const app = await client.listen({
       { operation: ALWAYS_ALLOWABLE_TOOL, value: "confirm" },
       ...(await heldSkillSaves(running.app, HELD_WORKSPACE))
     ]
-  }
+  },
+  // A person's own MCP server is the sample on the loopback, which the suite's egress list
+  // names: their own egress rule would refuse every private address (PMCP-5's browser spec).
+  ownServersByOperatorListForTests: true
 });
 running.app = app;
 

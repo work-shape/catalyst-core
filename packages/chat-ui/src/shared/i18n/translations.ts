@@ -58,6 +58,7 @@ import { navigation } from "./navigation";
 import { operations } from "./operations";
 import { pages } from "./pages";
 import { personalApiKeys } from "./personal-api-keys";
+import { ownServers } from "./own-servers";
 import { personalConnections } from "./personal-connections";
 import { projectFiles } from "./project-files";
 import { projectInstructions } from "./project-instructions";
@@ -151,6 +152,7 @@ export const translations = combineTranslations(common)
   .and(pages)
   .and(personalApiKeys)
   .and(personalConnections)
+  .and(ownServers)
   .and(projects)
   .and(projectFiles)
   .and(projectInstructions)

@@ -86,7 +86,7 @@ const EXCEPTIONS: { keys: RegExp; words: readonly string[]; reason: string }[] =
       "The System group: Jobs, Operations, Modules and Infrastructure are shown only to the team that runs the instance (ruling 2 of section 4.16)."
   },
   {
-    keys: /^(?:connectionCreate\.(?:mcpTitle|mcpHeading|proposalCardMcp)|connections\.(?:serverDescription|urlHint|exposeOutside)|guardrails\.runs\.byMcp|workflows\.workflowSettings\.byOutside|rights\.actionConnectionAddOwn|configOwnServers(?:Text)?)$/u,
+    keys: /^(?:connectionCreate\.(?:mcpTitle|mcpHeading|proposalCardMcp)|connections\.(?:serverDescription|urlHint|exposeOutside)|guardrails\.runs\.byMcp|workflows\.workflowSettings\.byOutside|rights\.actionConnectionAddOwn|configOwnServers(?:Text)?|ownServers\.\w+)$/u,
     words: ["MCP"],
     reason:
       "MCP server is the kind of Connection a builder picks, the client an outside tool connects as, and what a person adds as their own (PMCP), and the group of those on an agent's page; the provider names it so."

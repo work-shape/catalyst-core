@@ -20,12 +20,11 @@ export const OWN_SERVER_REFUSALS = {
 } as const;
 
 /**
- * `modules.connections.ownServers` where release config leaves a value out. Off until the
- * egress rule for self-added servers (PMCP-3) and their tools in chats (PMCP-4) are in, and the
- * interface that adds one (PMCP-5) turns it on.
+ * `modules.connections.ownServers` where release config leaves a value out. On since the
+ * interface that adds one (PMCP-5): an operator whose contract forbids it turns it off.
  */
 export const DEFAULT_OWN_SERVERS = Object.freeze({
-  enabled: false,
+  enabled: true,
   perPerson: 10,
   publicHttps: true
 });

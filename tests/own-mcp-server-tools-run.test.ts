@@ -74,7 +74,6 @@ async function putOwn(operations: unknown[] = []) {
 beforeAll(async () => {
   world = await createOAuthWorld({
     plainPeople: true,
-    // On, as an operator or PMCP-5 turns it on: the release default is off.
     ownServers: { enabled: true, perPerson: 3 }
   });
   carol = await world.signIn("carol");

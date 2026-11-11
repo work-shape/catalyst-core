@@ -17,22 +17,29 @@ import {
   useOwnConnectionControls,
   usePersonalSignInFacts
 } from "../../../studio/build-area/connection-people";
+import { splitOwnServers } from "../../../studio/build-area/own-server-model";
+import { OwnServersSection } from "../../../studio/build-area/own-servers";
 
 /**
- * You > Connections: one card per personal Connection the person may use, with their own
- * account's state, since when it is connected, and Connect or Disconnect. An administrator sets
- * the Connections up; nobody else sees or uses the person's account.
+ * You > Connections: the MCP servers the person added for themselves, with the button that adds
+ * one (PMCP-5), and one card per personal Connection an administrator set up that the person
+ * may use, with their own account's state, since when it is connected, and Connect or
+ * Disconnect. Nobody else sees or uses the person's account or their own servers.
  */
 export function PersonalConnectionsPage() {
   const { apiBaseUrl, authScope, client } = useSettingsPage();
   const { t } = useTranslation();
   const query = usePersonalConnectionsQuery({ apiBaseUrl, authScope, client });
+  const rows = splitOwnServers(query.data?.connections ?? []);
   return (
     <>
       <PageHeader
         title={t("settings.personalConnections")}
         description={t("personalConnections.description")}
       />
+      {query.data ? (
+        <OwnServersSection rows={rows.own} mayAdd={query.data.ownServers?.mayAdd === true} />
+      ) : null}
       <Section layout="stacked" title={t("personalConnections.yourAccounts")}>
         {query.isPending ? (
           <SkeletonList rows={3} />
@@ -49,13 +56,13 @@ export function PersonalConnectionsPage() {
               {t("tryAgain")}
             </Button>
           </InlineError>
-        ) : query.data.connections.length === 0 ? (
+        ) : rows.personal.length === 0 ? (
           <EmptyState layout="inline" data-personal-connections-empty="">
             {t("personalConnections.empty")}
           </EmptyState>
         ) : (
           <ul className="grid min-w-0 gap-3" aria-label={t("settings.personalConnections")}>
-            {query.data.connections.map((connection) => (
+            {rows.personal.map((connection) => (
               <li key={connection.name} className="min-w-0">
                 <OwnConnectionCard connection={connection} />
               </li>

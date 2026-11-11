@@ -119,6 +119,12 @@ export interface EgressCheckerOptions {
    */
   ownServersPublicHttps?: boolean;
   /**
+   * For a test build only, never from release config: a self-added Connection is judged by
+   * the operator's list as an admin's Connection is, instead of the rule `own_server`, so a
+   * browser suite reaches its sample server on the loopback through the suite's own entry.
+   */
+  ownServersByOperatorListForTests?: boolean;
+  /**
    * Release config `instance.publicUrl`. Its host is refused, by name and by address, to
    * every self-added Connection.
    */
@@ -528,7 +534,9 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
     ) {
       return "never";
     }
-    if (rule === "own_server") return ownServerEntryOf(target);
+    if (rule === "own_server" && options.ownServersByOperatorListForTests !== true) {
+      return ownServerEntryOf(target);
+    }
     if (options.platformStoreUnknown === true && target.protocol === "postgres") {
       return "never";
     }

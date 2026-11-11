@@ -92,6 +92,8 @@ export interface DefinedClientInstance {
     allowedOrigins?: string | string[];
     /** What the calls of operations run with beyond the instance's own defaults. For tests. */
     operations?: CreateClientInstanceAppInput["operations"];
+    /** For a test build only: see `CreateClientInstanceAppInput`. */
+    ownServersByOperatorListForTests?: boolean;
   }): Promise<ClientInstanceApp>;
   createKnowledgeWorker(
     input?: OfThisBuild<CreateClientInstanceKnowledgeWorkerInput>
@@ -252,7 +254,10 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
         env: listenInput.env,
         configPath: listenInput.configPath,
         allowedOrigins: listenInput.allowedOrigins,
-        operations: listenInput.operations
+        operations: listenInput.operations,
+        ...(listenInput.ownServersByOperatorListForTests === true
+          ? { ownServersByOperatorListForTests: true }
+          : {})
       });
       await app.listen({
         host: listenInput.host,
