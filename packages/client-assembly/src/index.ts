@@ -57,7 +57,7 @@ export {
 } from "./modules";
 export { createInstanceConnections, type InstanceConnections } from "./connections";
 export { createConfigAssetSource } from "./config-asset-source";
-export { createPlatformTools } from "./conversation-offer";
+export { conversationToolNames, createPlatformTools } from "./conversation-offer";
 export { mailSendToolRights, mailSendersOf, outboundMailOf, releaseToolNames } from "./mail";
 export {
   PLATFORM_ORIENTATION,

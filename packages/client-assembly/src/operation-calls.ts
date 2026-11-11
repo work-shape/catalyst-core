@@ -121,6 +121,7 @@ export function createInstanceOperationCalls(
             clientInstanceId,
             conversationId,
             agentToolNames: listed,
+            agentOwnServers: agent !== undefined && agent.ownServers !== false,
             ...(call ? { user: call.user, runId: call.runId } : {})
           })
         : undefined;

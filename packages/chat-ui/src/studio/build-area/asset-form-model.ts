@@ -35,6 +35,8 @@ export interface AgentFormState {
   modelReasoningEfforts: Record<string, string>;
   maxSteps: string;
   toolNames: string[];
+  /** Off only where the agent keeps its people's own MCP servers out (PMCP-4); unset is on. */
+  ownServers: boolean;
   skillNames: string[];
   /** The Knowledge Bases the agent answers from, by id. */
   knowledgeBases: string[];
@@ -167,6 +169,7 @@ export function agentConfigToForm(config: Record<string, unknown>): AgentFormSta
     modelReasoningEfforts: stringRecord(config.modelReasoningEfforts),
     maxSteps: typeof config.maxSteps === "number" ? String(config.maxSteps) : "",
     toolNames: stringArray(config.toolNames),
+    ownServers: config.ownServers !== false,
     skillNames: stringArray(config.skillNames),
     knowledgeBases: stringArray(config.knowledgeBases),
     initialPrompts: initialPrompts.map((prompt) => {
@@ -256,6 +259,7 @@ export function agentFormToConfig(
     ...(maxSteps === undefined ? {} : { maxSteps }),
     // The tools the agent holds because of something else are saved with it.
     toolNames: withImpliedTools(form.toolNames, form.skillNames, offeredToolNames),
+    ...(form.ownServers ? {} : { ownServers: false }),
     skillNames: form.skillNames,
     ...(form.knowledgeBases.length ? { knowledgeBases: form.knowledgeBases } : {}),
     initialPrompts: form.initialPrompts
@@ -395,6 +399,7 @@ export function emptyAgentForm(): AgentFormState {
     modelReasoningEfforts: {},
     maxSteps: "",
     toolNames: [],
+    ownServers: true,
     skillNames: [],
     knowledgeBases: [],
     initialPrompts: [],

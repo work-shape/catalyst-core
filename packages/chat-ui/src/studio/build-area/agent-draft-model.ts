@@ -46,7 +46,7 @@ const FIELD_PARTS: readonly (readonly [DraftAgentField, readonly (keyof AgentFor
   ["model", MODEL_PARTS],
   ["skillNames", ["skillNames"]],
   ["knowledgeBases", ["knowledgeBases"]],
-  ["toolNames", ["toolNames"]],
+  ["toolNames", ["toolNames", "ownServers"]],
   ["initialPrompts", ["initialPrompts"]]
 ];
 

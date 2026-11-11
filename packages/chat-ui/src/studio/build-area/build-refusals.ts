@@ -275,6 +275,7 @@ export function instanceSentence(error: unknown, t: Translate): string | undefin
 /** The fields of a definition whose refusal belongs to one field of the page. */
 const FIELD_OF_CONFIG_KEY = new Map<string, BuildRefusalField>([
   ["toolNames", "tools"],
+  ["ownServers", "tools"],
   ["skillNames", "skills"],
   ["modelBindingId", "model"],
   ["modelProviderId", "model"],

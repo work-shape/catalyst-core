@@ -8,7 +8,11 @@ import {
 import { describeAgentDataTools } from "@work-shape/catalyst-agent-runtime";
 import { createPlatformAssetCalls, type AssetWorkflowOptions } from "@work-shape/catalyst-server";
 import { connectionProposalCatalogue } from "./connection-proposal-catalogue";
-import { HTTP_API_CONNECTOR_TYPE, type Catalogue } from "@work-shape/catalyst-connections";
+import {
+  HTTP_API_CONNECTOR_TYPE,
+  type Catalogue,
+  type OwnServerTools
+} from "@work-shape/catalyst-connections";
 import {
   ASK_QUESTION_TOOL_NAME,
   DATA_STORE_ASSET_KIND,
@@ -165,6 +169,12 @@ interface ConversationOfferInput {
   };
   /** Whether this process has a tool: registered, enabled and of no module that is off. */
   hasTool(toolName: string): boolean;
+  /**
+   * The tools of people's own MCP servers (PMCP-4), where the module `connections` is on: a
+   * run of its person's own private chat is offered theirs where its agent lets them in, and
+   * every other listing of one is withheld.
+   */
+  ownServerTools?: OwnServerTools;
   /** The folder of the project a chat is in (PRJ-2): its manifest goes into the run's prompt. */
   projectFolder?: () => ProjectFolderPort | undefined;
   /**
@@ -292,6 +302,23 @@ async function ownRunPerson(
     return undefined;
   }
   return person;
+}
+
+/**
+ * The tools of the person's own MCP servers this run is offered (PMCP-4): only where its agent
+ * lets them in (`ownServers`), and only for a run that may be offered what is the person's
+ * alone, the rules of `personalSkillNames`. A subagent, a Workflow step, another member's run
+ * and a run started with a key get none. Each call still passes the personal Connection's
+ * context gate and the owner's right.
+ */
+async function ownServerToolNames(
+  input: ConversationOfferInput,
+  request: OfferRequest,
+  conversation: OfferedConversation
+): Promise<string[]> {
+  if (request.agentOwnServers !== true || !input.ownServerTools) return [];
+  const person = await ownRunPerson(input, request, conversation);
+  return person === undefined ? [] : input.ownServerTools.toolNamesOf(person);
 }
 
 /**
@@ -457,6 +484,12 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
       );
       const folder = await projectFolderOf(input, request);
       const knowledgeBases = await projectKnowledgeBaseNames(input, request, conversation);
+      const ownServerNames = await ownServerToolNames(input, request, conversation);
+      // A self-added server is on no agent: an agent's listing of one of its tools is withheld,
+      // whoever's run it is, unless this run is offered it as its person's own.
+      const listedOwnServerNames = (
+        (await input.ownServerTools?.ownServerToolNames(agentToolNames)) ?? []
+      ).filter((toolName) => !ownServerNames.includes(toolName));
       const toolNames = [
         ...PLATFORM_TOOL_NAMES.filter((toolName) => agentToolNames.includes(toolName)),
         ...(holds
@@ -481,8 +514,10 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
         ...(skillNames.length > 0 || ownSkillNames.length > 0 ? [READ_SKILL_TOOL] : [])
       ]
         .filter((toolName) => input.hasTool(toolName))
-        .concat(offeredRowTools.map((tool) => tool.name));
+        .concat(offeredRowTools.map((tool) => tool.name))
+        .concat(ownServerNames);
       const withheld = [
+        ...listedOwnServerNames,
         ...(await withheldToolNames(
           input,
           agentToolNames,
@@ -499,6 +534,7 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
       return {
         ...(subject ? { subject } : {}),
         ...(withheld.length > 0 ? { withheldToolNames: withheld } : {}),
+        ...(listedOwnServerNames.length > 0 ? { refusedToolNames: listedOwnServerNames } : {}),
         toolNames,
         skillNames,
         ...(ownSkillNames.length > 0 ? { personalSkillNames: ownSkillNames } : {}),
@@ -597,19 +633,20 @@ async function projectFolderOf(
 
 /**
  * The tools an agent may call in one conversation: those its definition lists, without the
- * asset tools, and those the conversation is offered, which holds the asset tools the agent
- * lists.
+ * asset tools and those no call of the run may make, and those the conversation is offered,
+ * which holds the asset tools the agent lists.
  */
 export async function conversationToolNames(
   listed: readonly string[],
   offer: Awaited<ReturnType<ConversationOfferSource["offerOf"]>>
 ): Promise<string[]> {
+  const refused = new Set(offer?.refusedToolNames ?? []);
   return [
     ...new Set([
       ...listed.filter((toolName) => !toolName.startsWith(SUBJECT_TOOL_PREFIX)),
       ...(offer?.toolNames ?? [])
     ])
-  ];
+  ].filter((toolName) => !refused.has(toolName));
 }
 
 /**
@@ -636,7 +673,13 @@ export function createPlatformTools(
      * The Connections of the instance, where the module `connections` is on: the agent's draft
      * of a REST API's tools is checked against their Connector types.
      */
-    connections?: { connectorTypes: ConnectorTypeRegistry; catalogue?: Catalogue } | undefined;
+    connections?:
+      | {
+          connectorTypes: ConnectorTypeRegistry;
+          catalogue?: Catalogue;
+          ownServerTools?: OwnServerTools;
+        }
+      | undefined;
     /**
      * The process's stores, from which the agent's proposal of a catalogue entry reads the
      * instance's Connections and the person's sign-in. Without them it proposes no entry.
@@ -703,6 +746,9 @@ export function createPlatformTools(
     ],
     conversationOffer: createConversationOffer({
       stores: input.stores,
+      ...(input.connections?.ownServerTools
+        ? { ownServerTools: input.connections.ownServerTools }
+        : {}),
       modules: input.modules,
       ...(input.dataTools ? { dataTools: input.dataTools } : {}),
       ...(input.dataToolDescribeTimeoutMs === undefined

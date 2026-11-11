@@ -232,6 +232,18 @@ export function createMemoryOperationRunStore(): OperationRunStore & { runs: Ope
     deleteOrphanedRequests() {
       return Promise.resolve(0);
     },
+    connectionOperationsIn({ clientInstanceId, conversationId }) {
+      // This store knows no conversations, so a run thread under the chat is not walked.
+      const ran = runs.filter(
+        (run) =>
+          run.clientInstanceId === clientInstanceId &&
+          run.conversationId === conversationId &&
+          run.operation.startsWith("connection.") &&
+          ["running", "done", "failed"].includes(run.status) &&
+          !(run.status === "failed" && run.error?.unexecuted === true)
+      );
+      return Promise.resolve([...new Set(ran.map((run) => run.operation))]);
+    },
     markInterrupted({ clientInstanceId, id }) {
       const run = find(clientInstanceId, id);
       if (run?.status !== "running") return Promise.resolve(undefined);

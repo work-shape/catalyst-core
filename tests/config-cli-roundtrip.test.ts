@@ -67,6 +67,7 @@ const agentEdits = {
   modelReasoningEfforts: { primary: "low" },
   maxSteps: 9,
   toolNames: [],
+  ownServers: false,
   subagentNames: [],
   skillNames: [],
   knowledgeBases: [],

@@ -10,6 +10,8 @@ import {
   withSignInRefresh,
   createConnectionOperationSource,
   createConnectionToolSource,
+  createOwnServerTools,
+  type OwnServerTools,
   createCatalogue,
   createResultShaperRegistry,
   createEgressChecker,
@@ -93,6 +95,8 @@ export interface InstanceConnections {
   readonly operationSource: OperationSource;
   /** The same operations as the tools an agent may carry. */
   readonly toolSource: DataToolSource;
+  /** The tools of people's own MCP servers, which their own chats are offered (PMCP-4). */
+  readonly ownServerTools: OwnServerTools;
   /** What the Connection routes of the API read and test through. */
   readonly management: NonNullable<ChatServerOptions["connections"]>;
 }
@@ -331,6 +335,7 @@ async function buildInstanceConnections(
     ownServers,
     operationSource: createConnectionOperationSource(operations, slots),
     toolSource: createConnectionToolSource(operations),
+    ownServerTools: createOwnServerTools(operations),
     management: {
       ...createConnectionManagement({
         ...operations,

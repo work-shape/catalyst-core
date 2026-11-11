@@ -92,6 +92,11 @@ export interface ConversationOffer {
    */
   withheldToolNames?: readonly string[];
   /**
+   * Tools the agent's definition lists that no call of this run may make: a tool of a person's
+   * own MCP server the run is not offered (PMCP-4). They are withheld as well.
+   */
+  refusedToolNames?: readonly string[];
+  /**
    * The folder of the project the chat is in, as a section of the system prompt (PRJ-2): how
    * the agent reaches it and which files it holds, never their content. Only where the person
    * of the run reads the project.
@@ -138,6 +143,11 @@ export interface ConversationOfferSource {
     conversationId: ConversationId;
     /** The tools the agent's own definition lists: they decide whether it holds the platform's. */
     agentToolNames: readonly string[];
+    /**
+     * Whether the agent lets its person's own MCP servers in (`ownServers`, PMCP-4). Only `true`
+     * offers them: a caller that does not say offers none.
+     */
+    agentOwnServers?: boolean;
     /** The person the run acts for; the tools they may not call are withheld. */
     user?: AuthenticatedUser;
     /**
