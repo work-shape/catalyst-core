@@ -32,7 +32,9 @@ import {
   type OperationPaging,
   type SecretState,
   type ConnectorTypeDefinition,
-  requireOwnServersOn
+  requireOwnServersOn,
+  endConnectionOwnSecrets,
+  ownSecretSubject
 } from "@work-shape/catalyst-core";
 import {
   connectorTypeOffers,
@@ -43,7 +45,11 @@ import {
   createConnectionPersonContextManagement,
   resolveConnectionPersonContext
 } from "./person-context";
-import type { AuthenticatedIdentity } from "@work-shape/catalyst-core";
+import type {
+  AuthenticatedIdentity,
+  ConnectionOwnTokenScheme,
+  ConnectionOwnTokenState
+} from "@work-shape/catalyst-core";
 import { connectionCallLimits } from "./call";
 import { egressOfConnection } from "./egress";
 import { connectionOperationStatus, type ConnectionOperationState } from "./catalog";
@@ -59,6 +65,7 @@ import {
   NO_CREDENTIALS,
   connectionOriginOf,
   openConnectorContext,
+  takesOwnSecret,
   takesTestCredential,
   testCredentialSettings
 } from "./connector-context";
@@ -184,6 +191,16 @@ export interface ConnectionView {
   oauth?: ConnectionOAuthView;
   /** Only for a shared Connection that takes one, or where one is stored. */
   testCredential?: ConnectionTestCredentialView;
+  /** Only for a personal MCP Connection that takes each person's own token: the reader's. */
+  ownToken?: ConnectionOwnTokenView;
+}
+
+/** The reader's own token (PMCP-6). Never its value or a handle of it. */
+export interface ConnectionOwnTokenView {
+  state: ConnectionOwnTokenState;
+  scheme: ConnectionOwnTokenScheme;
+  since?: string;
+  version?: number;
 }
 
 export interface ConnectionTestView {
@@ -269,6 +286,17 @@ export interface ConnectionManagement
     audit: { actor: AuditActor; correlationId: string }
   ): Promise<{ state: "set"; version: number }>;
   /**
+   * Sets or replaces the actor's own token on a personal MCP Connection that sends a bearer
+   * token or a header (PMCP-6), as the next version, bound to the Connection's address. The
+   * actor is a person; an own server's owner alone. The value is never answered, logged,
+   * audited or read back. `expectedVersion` refuses a write that crossed another.
+   */
+  setOwnSecret(
+    name: string,
+    input: { value: string; expectedVersion: number | null },
+    audit: { actor: AuditActor; correlationId: string }
+  ): Promise<{ state: "set"; version: number }>;
+  /**
    * Removes the test credential and its secret: a draft's changing calls are simulated again,
    * its reading calls go live. CONFLICT `test_credential_not_set` where there is none.
    */
@@ -323,6 +351,17 @@ function discoveredOf(connection: StoredConnection): ConnectionDiscoveredToolVie
 
 function secretWriteRefusal(reason: string, sentence: string): AppError {
   return new AppError("CONFLICT", `${reason}: ${sentence}`, { reason });
+}
+
+/** A person's own token is set by a person, never by a key's principal or a service. */
+function ownSecretPersonError(): AppError {
+  return new AppError(
+    "FORBIDDEN",
+    "user_only: a person sets their own token in their own session",
+    {
+      reason: "user_only"
+    }
+  );
 }
 
 /** The origin the test credential is set for and sent to, or nothing where none fits. */
@@ -501,6 +540,44 @@ export function createConnectionManagement(
           ...(deps.managedClients === undefined ? {} : { managedClients: deps.managedClients })
         });
 
+  /**
+   * The reader's own token on a personal MCP Connection that takes one (PMCP-6): set, refused
+   * by the server, or not set, since when and the scheme. A token set for another address of
+   * the Connection is none for this one.
+   */
+  async function ownTokenOf(
+    connection: StoredConnection,
+    origin: string | undefined,
+    reader: string | undefined
+  ): Promise<ConnectionOwnTokenView | undefined> {
+    const { authScheme } = connection.config;
+    if (
+      !takesOwnSecret(connection.config) ||
+      (authScheme !== "bearer" && authScheme !== "header")
+    ) {
+      return undefined;
+    }
+    const stored =
+      reader === undefined
+        ? undefined
+        : await deps.stores.connections.getConnectionOwnSecret({
+            clientInstanceId: deps.clientInstanceId,
+            connectionAssetId: connection.assetId,
+            subject: `user:${reader}`
+          });
+    if (stored === undefined || origin === undefined || stored.origin !== origin) {
+      return { state: "not_set", scheme: authScheme };
+    }
+    return stored.state === "connected"
+      ? {
+          state: "set",
+          scheme: authScheme,
+          since: stored.connectedAt,
+          version: stored.secretVersion
+        }
+      : { state: "needs_reconnect", scheme: authScheme, since: stored.stateChangedAt };
+  }
+
   /** The binding of the Connection's address, as its page shows it. */
   async function bindingOf(
     connection: StoredConnection,
@@ -612,6 +689,7 @@ export function createConnectionManagement(
         ? connectionOriginOf(connection.type, connection.config)
         : undefined;
       const binding = await bindingOf(connection, origin);
+      const ownToken = await ownTokenOf(connection, origin, reader);
       const oauth = oauthOf(connection);
       const testCredential = testCredentialViewOf(
         connection,
@@ -645,7 +723,8 @@ export function createConnectionManagement(
         ...(catalog && seesDiscovered ? { discoveredAt: catalog.discoveredAt } : {}),
         ...(binding === undefined ? {} : { binding }),
         ...(oauth === undefined ? {} : { oauth }),
-        ...(testCredential === undefined ? {} : { testCredential })
+        ...(testCredential === undefined ? {} : { testCredential }),
+        ...(ownToken === undefined ? {} : { ownToken })
       };
     },
 
@@ -903,6 +982,112 @@ export function createConnectionManagement(
       });
     },
 
+    async setOwnSecret(name, input, audit) {
+      const { value, expectedVersion } = input;
+      const userId = audit.actor.userId;
+      if (userId === undefined) throw ownSecretPersonError();
+      return deps.stores.transaction(async (stores) => {
+        // Held until the end: a write of the Connection waits, so its address cannot move
+        // between the check below and the write of the token.
+        const connection = await readConnection({ ...deps, stores }, name, { held: true });
+        if (!connection) throw notFound(name);
+        const { config, type } = connection;
+        requireOwnServersOn(config, deps.ownServers);
+        if (!type || !takesOwnSecret(config)) {
+          throw secretWriteRefusal(
+            CONNECTION_REFUSALS.ownSecretUnsupported,
+            "a person's own token is set on a personal MCP Connection that sends a bearer token or a header"
+          );
+        }
+        // An own server is its owner's alone, whatever right reached here.
+        if (config.ownerOnly === true && config.ownerPrincipalId !== userId) throw notFound(name);
+        if (!deps.keyring) {
+          throw secretWriteRefusal(
+            CONNECTION_REFUSALS.secretStoreUnavailable,
+            "this instance names no key of the Secret Store. An operator names one under 'secretStore.keys'"
+          );
+        }
+        // The token is only kept for an address its calls may reach, by the Connection's own
+        // egress rule (PMCP-3 for an own server).
+        const target = testCredentialTargetOf(connection, undefined);
+        if (target === undefined || !egressOfConnection(deps.egress, config).admits(target)) {
+          throw new AppError(
+            "VALIDATION_FAILED",
+            `${EGRESS_DENIED}: the Connection's address may not be reached from here`,
+            { reason: EGRESS_DENIED, ...(target === undefined ? {} : { host: target.host }) }
+          );
+        }
+        const origin = connectionOriginOf(type, config);
+        if (origin === undefined) {
+          throw secretWriteRefusal(
+            CREDENTIAL_REFUSALS.notConfigured,
+            "the Connection's settings name no address its connector type reads. Fix the settings first"
+          );
+        }
+        const key = {
+          clientInstanceId: deps.clientInstanceId,
+          connectionAssetId: connection.assetId,
+          subject: `user:${userId}`
+        };
+        // Locked: a 401 that refuses the token waits, and refuses only the version it met.
+        const stored = await stores.connections.getConnectionOwnSecret({ ...key, lock: "update" });
+        const seen = stored?.state === "connected" ? stored.secretVersion : null;
+        if (seen !== expectedVersion) {
+          throw new AppError(
+            "CONFLICT",
+            `${SECRET_WRITE_CONFLICT}: your token was changed since it was read. Nothing was stored; read the Connection again`,
+            { reason: SECRET_WRITE_CONFLICT }
+          );
+        }
+        const written = await createSecretStore({
+          clientInstanceId: deps.clientInstanceId,
+          keyring: deps.keyring,
+          store: stores.connections
+        }).put({
+          binding: {
+            connectionAssetId: connection.assetId,
+            subject: ownSecretSubject(key.subject)
+          },
+          value,
+          source: "runtime",
+          origin
+        });
+        const record = await stores.connections.putConnectionOwnSecret({
+          ...key,
+          userId,
+          secretHandle: written.handle,
+          secretVersion: written.version,
+          origin,
+          expectedRowVersion: stored?.rowVersion ?? null
+        });
+        if (!record) {
+          throw new AppError(
+            "CONFLICT",
+            `${SECRET_WRITE_CONFLICT}: your token was written at the same time elsewhere. Nothing was stored; try again`,
+            { reason: SECRET_WRITE_CONFLICT }
+          );
+        }
+        await stores.audit.appendAuditEvent({
+          clientInstanceId: deps.clientInstanceId,
+          type: "connection.binding_connected",
+          status: "success",
+          ...audit,
+          subject: config.name,
+          metadata: {
+            connectionName: config.name,
+            connectionRevision: connection.revision,
+            personal: true,
+            scheme: "static",
+            subjectKind: "user",
+            userId,
+            version: written.version,
+            rotated: stored !== undefined
+          }
+        });
+        return { state: "set" as const, version: written.version };
+      });
+    },
+
     async removeTestCredential(name, audit) {
       return deps.stores.transaction(async (stores) => {
         const connection = await readConnection({ ...deps, stores }, name, { held: true });
@@ -937,6 +1122,45 @@ export function createConnectionManagement(
     },
 
     async disconnect(name, audit) {
+      // A person's own token (PMCP-6): binding and secret are deleted. There is no provider
+      // to tell.
+      const ownToken = await deps.stores.transaction(async (stores) => {
+        const connection = await readConnection({ ...deps, stores }, name, { held: true });
+        if (!connection) throw notFound(name);
+        if (!takesOwnSecret(connection.config)) return undefined;
+        const userId = audit.actor.userId;
+        if (userId === undefined) throw ownSecretPersonError();
+        const ended = await endConnectionOwnSecrets(stores.connections, {
+          clientInstanceId: deps.clientInstanceId,
+          connectionAssetId: connection.assetId,
+          userId
+        });
+        if (ended.length === 0) {
+          throw new AppError(
+            "CONFLICT",
+            `${CREDENTIAL_REFUSALS.notConnected}: you have set no token for the Connection`,
+            { reason: CREDENTIAL_REFUSALS.notConnected }
+          );
+        }
+        await stores.audit.appendAuditEvent({
+          clientInstanceId: deps.clientInstanceId,
+          type: "connection.binding_revoked",
+          status: "success",
+          ...audit,
+          subject: connection.config.name,
+          reason: "disconnect",
+          metadata: {
+            connectionName: connection.config.name,
+            connectionRevision: connection.revision,
+            personal: true,
+            scheme: "static",
+            subjectKind: "user",
+            userId
+          }
+        });
+        return { state: "revoked" as const, providerRevocation: "not_offered" as const };
+      });
+      if (ownToken !== undefined) return ownToken;
       const ended = await deps.stores.transaction(async (stores) => {
         // Held until the end: a write of the Connection waits, and ends nothing twice.
         const connection = await readConnection({ ...deps, stores }, name, { held: true });

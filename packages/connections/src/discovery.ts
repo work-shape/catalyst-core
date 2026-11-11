@@ -27,7 +27,8 @@ import {
 import { holdsSecret } from "./call";
 import { buildConnectionCatalog, changedAcceptedOperations } from "./catalog";
 import { readConnection, type StoredConnection } from "./connection-reads";
-import { NO_CREDENTIALS, openConnectorContext } from "./connector-context";
+import { NO_CREDENTIALS, openConnectorContext, takesOwnSecret } from "./connector-context";
+import { refuseOwnToken } from "./own-secret-refusal";
 import {
   outsideSchemaChecker,
   type OutsideSchemaChecker,
@@ -394,7 +395,8 @@ async function discoverOperations(
   connection: StoredConnection,
   discover: NonNullable<NonNullable<StoredConnection["type"]>["discover"]>,
   type: NonNullable<StoredConnection["type"]>,
-  deadline: DiscoveryDeadline
+  deadline: DiscoveryDeadline,
+  held: { secret?: string }
 ): Promise<{ discovered: readonly ConnectorOperationDescriptor[]; secret: string | undefined }> {
   // The one way to a context: settings, then egress, then the credential.
   const opening = openConnectorContext({
@@ -413,6 +415,8 @@ async function discoverOperations(
   });
   opening.catch(() => undefined);
   const context = await Promise.race([opening, deadline.passed]);
+  // Known before the server answers: a 401 names the token it refused (PMCP-6).
+  held.secret = context.credentialFor(context.target)?.secret;
   const discovering = discover(context);
   discovering.catch(() => undefined);
   return {
@@ -478,8 +482,9 @@ export async function discoverConnection(
       }
     | undefined;
   let reason: ConnectionCallReason | undefined;
+  const held: { secret?: string } = {};
   try {
-    const answer = await discoverOperations(input, connection, discover, type, deadline);
+    const answer = await discoverOperations(input, connection, discover, type, deadline, held);
     const { operations, ...counts } = await boundedOperations(
       answer.discovered,
       answer.secret,
@@ -500,6 +505,26 @@ export async function discoverConnection(
   } finally {
     deadline.close();
   }
+  // The owner's own token the server refused (PMCP-6): deleted, and the binding asks for a new
+  // one, as a call's 401 does.
+  if (
+    reason === "upstream_unauthorized" &&
+    held.secret !== undefined &&
+    input.personalOwner !== undefined &&
+    takesOwnSecret(connection.config) &&
+    !input.signal.aborted
+  ) {
+    await refuseOwnToken(input, {
+      connectionAssetId: connection.assetId,
+      connectionName: connection.config.name,
+      connectionRevision: connection.revision,
+      subject: `user:${input.personalOwner}`,
+      refused: held.secret,
+      correlationId: input.correlationId ?? "connection_discovery"
+    }).catch(() => false);
+    reason = CREDENTIAL_REFUSALS.needsReconnect;
+  }
+  held.secret = undefined;
   // A discovery its caller stopped says nothing about the Connection: no failure is written.
   if (input.signal.aborted) return { status: "failed", stopped: true };
 

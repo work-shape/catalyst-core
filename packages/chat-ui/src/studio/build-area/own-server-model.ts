@@ -235,3 +235,56 @@ export function ownServerAddedMessage(
     ? t("ownServers.toldOne", { title, tools })
     : t("ownServers.toldTools", { title, count: names.length, tools });
 }
+
+/** How a person's own token is sent (PMCP-6): as a bearer token, or in a header of its own. */
+export type OwnTokenScheme =
+  { authScheme: "bearer" } | { authScheme: "header"; headerName: string };
+
+/** A header name as the MCP type takes one: letters, digits and hyphens, a letter first. */
+const OWN_TOKEN_HEADER_PATTERN = /^[A-Za-z][A-Za-z0-9-]{0,63}$/u;
+
+/**
+ * The scheme a typed header name asks for: none, or `Authorization` in any case, is a bearer
+ * token; any other name puts the token in that header. `undefined` for a name that is none.
+ */
+export function ownTokenSchemeOf(header: string): OwnTokenScheme | undefined {
+  const name = header.trim();
+  if (name === "" || name.toLowerCase() === "authorization") return { authScheme: "bearer" };
+  return OWN_TOKEN_HEADER_PATTERN.test(name)
+    ? { authScheme: "header", headerName: name }
+    : undefined;
+}
+
+/** The header name a stored definition sends its token in, for the field: empty for a bearer. */
+export function ownTokenHeaderOf(config: Record<string, unknown>): string {
+  if (config.authScheme !== "header") return "";
+  const settings = config.settings;
+  if (typeof settings !== "object" || settings === null) return "";
+  const name: unknown = Reflect.get(settings, "headerName");
+  return typeof name === "string" ? name : "";
+}
+
+/**
+ * The definition that sends the token as `scheme` asks, or `undefined` where it does so
+ * already. A change of scheme deletes every person's stored token on the instance's side.
+ */
+export function withOwnTokenScheme(
+  config: Record<string, unknown>,
+  scheme: OwnTokenScheme
+): Record<string, unknown> | undefined {
+  const raw = config.settings;
+  const settings: Record<string, unknown> =
+    typeof raw === "object" && raw !== null ? Object.fromEntries(Object.entries(raw)) : {};
+  const sameScheme = config.authScheme === scheme.authScheme;
+  if (scheme.authScheme === "bearer") {
+    if (sameScheme && !("headerName" in settings)) return undefined;
+    delete settings.headerName;
+    return { ...config, authScheme: "bearer", settings };
+  }
+  if (sameScheme && settings.headerName === scheme.headerName) return undefined;
+  return {
+    ...config,
+    authScheme: "header",
+    settings: { ...settings, headerName: scheme.headerName }
+  };
+}

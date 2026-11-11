@@ -12,6 +12,7 @@ import {
   type ConnectorContext
 } from "@work-shape/catalyst-core";
 import { createConnectionAssetKind } from "@work-shape/catalyst-server";
+import { required } from "./support/assertions";
 import { checkerOf, denied, https, type Dns } from "./support/egress";
 import { connection } from "./support/connections";
 
@@ -327,6 +328,86 @@ describe("a self-added Connection's context", () => {
     expect(bound.refusal(https("notes.example.com", 8443))?.message).toContain("'network: public'");
     const plain = egressOfConnection(checker, {});
     expect(await plain.check(https("inside.example.com"))).toMatchObject({ network: "private" });
+  });
+});
+
+describe("a self-added Connection that takes the person's own token (PMCP-6)", () => {
+  const type = createMcpConnectorType();
+  const dns: Dns = {
+    "notes.example.com": [PUBLIC],
+    "elsewhere.example.com": ["93.184.216.35"],
+    "inside.example.com": ["10.0.0.5"]
+  };
+  const allow = [
+    { host: "inside.example.com", network: "private" as const, cidrs: ["10.0.0.0/8"] }
+  ];
+
+  function openFor(
+    url: string,
+    scheme: { authScheme: "bearer" } | { authScheme: "header"; headerName: string }
+  ) {
+    const { checker } = checkerOf(allow, dns, { allowPublicHttps: true });
+    const reads: string[] = [];
+    const config = connectionConfigSchema.parse(
+      connection("notes", {
+        connectorType: "mcp",
+        credentialMode: "user",
+        authScheme: scheme.authScheme,
+        settings: {
+          url,
+          ...(scheme.authScheme === "header" ? { headerName: scheme.headerName } : {})
+        },
+        ownerPrincipalId: "user:carol",
+        ownerOnly: true
+      })
+    );
+    return {
+      reads,
+      open: (): Promise<ConnectorContext> =>
+        openConnectorContext({
+          type,
+          connection: { id: "asset-1", revision: 1, config },
+          egress: checker,
+          credentials: {
+            resolve: () => Promise.reject(new Error("never the Connection's own secret")),
+            resolveSignIn: () => Promise.reject(new Error("no sign-in here")),
+            resolveOwnSecret: (input) => {
+              reads.push(`${input.subject} ${input.origin}`);
+              return Promise.resolve({ value: "own-token", secretVersion: 1 });
+            }
+          },
+          personalDiscovery: { userId: "carol" },
+          signal: new AbortController().signal
+        })
+    };
+  }
+
+  it("is refused for a private host the operator lists, before the token is read", async () => {
+    const own = openFor("https://inside.example.com/mcp", { authScheme: "bearer" });
+    await denied(own.open());
+    expect(own.reads).toEqual([]);
+  });
+
+  it("puts the token on its own origin alone, in the header the Connection names", async () => {
+    const bearer = openFor("https://notes.example.com/mcp", { authScheme: "bearer" });
+    const context = await bearer.open();
+    expect(bearer.reads).toEqual(["user:carol https://notes.example.com:443"]);
+    expect({ ...required(context.credentialFor(context.target)).headers }).toEqual({
+      authorization: "Bearer own-token"
+    });
+    // A redirect's target is another origin: checked by the own rule, and sent no token.
+    const elsewhere = await context.checkEgress(https("elsewhere.example.com"));
+    expect(() => context.credentialFor(elsewhere)).toThrow();
+    await denied(context.checkEgress(https("inside.example.com")));
+    await denied(context.checkEgress({ protocol: "http", host: "notes.example.com", port: 80 }));
+
+    const header = await openFor("https://notes.example.com/mcp", {
+      authScheme: "header",
+      headerName: "X-Notes-Key"
+    }).open();
+    expect({ ...required(header.credentialFor(header.target)).headers }).toEqual({
+      "x-notes-key": "own-token"
+    });
   });
 });
 

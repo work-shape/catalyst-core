@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { createApiClient } from "@work-shape/catalyst-api-client";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
+  ownTokenHeaderOf,
+  ownTokenIssuesOf,
+  ownTokenSchemeOf,
+  saveOwnToken,
+  withOwnTokenScheme,
   ownServerAddressIssue,
   ownServerConfig,
   ownServerHostOf,
@@ -69,7 +76,7 @@ describe("the name the dialog writes", () => {
 });
 
 describe("what the probe's answer leads to", () => {
-  it("goes on only to the sign-in", () => {
+  it("goes on to the sign-in, or to a pasted token where the server asks for one", () => {
     expect(ownServerProbeStep("oauth_required")).toBe("sign_in");
     expect(ownServerProbeStep("ready")).toBe("no_sign_in");
     expect(ownServerProbeStep("token_required")).toBe("token");
@@ -125,5 +132,119 @@ describe("Tools ändern", () => {
         { name: "create_page", effect: "changing", exposure: ["agent"] }
       ]
     });
+  });
+});
+
+describe("a pasted token (PMCP-6)", () => {
+  const signIn = ownServerConfig({
+    name: "notes_example_com_abc123",
+    url: "https://notes.example.com/mcp",
+    title: "notes.example.com"
+  });
+
+  it("goes as a Bearer token unless a header is named, and only under a header name", () => {
+    expect(ownTokenSchemeOf("")).toEqual({ authScheme: "bearer" });
+    expect(ownTokenSchemeOf(" Authorization ")).toEqual({ authScheme: "bearer" });
+    expect(ownTokenSchemeOf("X-Notes-Key")).toEqual({
+      authScheme: "header",
+      headerName: "X-Notes-Key"
+    });
+    for (const invalid of ["X Notes", "1-key", "X-Key:", "X-Key\nHost", "x".repeat(65)]) {
+      expect(ownTokenSchemeOf(invalid)).toBeUndefined();
+    }
+  });
+
+  it("writes how it is sent into the definition, and nothing where it is unchanged", () => {
+    const bearer = withOwnTokenScheme(signIn, { authScheme: "bearer" });
+    expect(bearer).toMatchObject({
+      authScheme: "bearer",
+      settings: { url: "https://notes.example.com/mcp" }
+    });
+    expect(bearer?.settings).not.toHaveProperty("headerName");
+    expect(bearer && withOwnTokenScheme(bearer, { authScheme: "bearer" })).toBeUndefined();
+    const header = withOwnTokenScheme(signIn, { authScheme: "header", headerName: "X-Notes-Key" });
+    expect(header).toMatchObject({ authScheme: "header", settings: { headerName: "X-Notes-Key" } });
+    expect(header && ownTokenHeaderOf(header)).toBe("X-Notes-Key");
+    expect(ownTokenHeaderOf(signIn)).toBe("");
+    // Back to a Bearer token, the header's name goes.
+    expect(
+      header && withOwnTokenScheme(header, { authScheme: "bearer" })?.settings
+    ).not.toHaveProperty("headerName");
+  });
+
+  it("is asked for before anything is sent, and the header only where the person names it", () => {
+    const t = (key: string) => key;
+    expect(ownTokenIssuesOf({ token: " ", header: "" }, true, t)).toEqual({
+      token: "ownServers.tokenEmpty"
+    });
+    expect(ownTokenIssuesOf({ token: "abc", header: "X Key" }, true, t)).toEqual({
+      header: "ownServers.headerInvalid"
+    });
+    expect(ownTokenIssuesOf({ token: "abc", header: "X Key" }, false, t)).toBeUndefined();
+    expect(ownTokenIssuesOf({ token: "abc", header: "" }, true, t)).toBeUndefined();
+  });
+
+  it("is sent once, through set_own_secret alone, after how it is sent where that changed", async () => {
+    const sent: { method: string; path: string; body: unknown }[] = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const request = new Request(input, init);
+      const path = new URL(request.url).pathname;
+      const body: unknown = request.method === "GET" ? undefined : await request.json();
+      sent.push({ method: request.method, path, body });
+      if (path.endsWith("/own-secret")) return Response.json({ state: "set", version: 1 });
+      if (request.method === "GET") {
+        return Response.json({
+          id: "asset-1",
+          kind: "connection",
+          name: "notes",
+          scope: { kind: "instance" },
+          revision: 4,
+          updatedAt: "2026-11-11T10:00:00.000Z",
+          config: { name: "notes", ...signIn }
+        });
+      }
+      return Response.json({ version: 9, revision: 5, warnings: [] });
+    };
+    const client = createApiClient({ baseUrl: "http://chat.instance.test", fetchImpl });
+    const secret = "pasted-token-value";
+    expect(
+      await saveOwnToken(client, {
+        name: "notes",
+        token: secret,
+        header: "X-Notes-Key",
+        version: 3
+      })
+    ).toBe(1);
+    const asset = apiOperations["assets.get"].buildPath({
+      params: { kind: "connection", name: "notes" }
+    });
+    const ownSecret = apiOperations["connections.set_own_secret"].buildPath({
+      params: { name: "notes" }
+    });
+    expect(sent.map((entry) => `${entry.method} ${entry.path}`)).toEqual([
+      `GET ${asset}`,
+      `PUT ${asset}`,
+      `PUT ${ownSecret}`
+    ]);
+    expect(sent[1]?.body).toMatchObject({
+      expectedRevision: 4,
+      config: { authScheme: "header", settings: { headerName: "X-Notes-Key" } }
+    });
+    // A changed scheme ends every token, so the token is a first one.
+    expect(sent[2]?.body).toEqual({ value: secret, expectedVersion: null });
+    // The token travels in the one request that stores it.
+    expect(sent.filter((entry) => JSON.stringify(entry.body ?? "").includes(secret))).toHaveLength(
+      1
+    );
+
+    sent.length = 0;
+    await saveOwnToken(client, { name: "notes", token: secret, version: 2 });
+    expect(sent).toEqual([
+      {
+        method: "PUT",
+        path: ownSecret,
+        body: { value: secret, expectedVersion: 2 }
+      }
+    ]);
   });
 });

@@ -1,5 +1,7 @@
 import {
+  ownSecretSubject,
   signInSecretSubject,
+  type ConnectionOwnSecretRecord,
   type ConnectionBindingEndReason,
   type ConnectionBindingRecord,
   type ConnectionProviderRevocation
@@ -47,6 +49,31 @@ export async function endConnectionSignIn(
   }
   await store.deleteSecrets({ ...key, subject: signInSecretSubject(bindingKey.subject) });
   return ended;
+}
+
+/**
+ * Ends people's own tokens (PMCP-6): of one Connection, of one person, or one person's on one
+ * Connection. Each binding row and its secret are deleted, so nothing of the token is left and
+ * a revert or a return to the old address finds none. There is no provider to tell. Answers the
+ * bindings that were there, for the caller's audit.
+ */
+export async function endConnectionOwnSecrets(
+  store: Pick<
+    ConnectionsStore,
+    "listConnectionOwnSecrets" | "deleteConnectionOwnSecret" | "deleteSecrets"
+  >,
+  scope: { clientInstanceId: ClientInstanceId; connectionAssetId?: string; userId?: string }
+): Promise<ConnectionOwnSecretRecord[]> {
+  const found = await store.listConnectionOwnSecrets(scope);
+  for (const binding of found) {
+    await store.deleteConnectionOwnSecret(binding);
+    await store.deleteSecrets({
+      clientInstanceId: binding.clientInstanceId,
+      connectionAssetId: binding.connectionAssetId,
+      subject: ownSecretSubject(binding.subject)
+    });
+  }
+  return found;
 }
 
 /**

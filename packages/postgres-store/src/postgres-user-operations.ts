@@ -4,6 +4,7 @@ import { keysetFilter } from "./paging";
 import {
   AppError,
   endConnectionSignIn,
+  endConnectionOwnSecrets,
   asUserId,
   type AuditEvent,
   type AuditEventInput,
@@ -534,17 +535,28 @@ async function markUserDeletionRequested(
   });
 }
 
-/** Deactivation is atomic with local token deletion. This path has no Secret Store key. */
+/**
+ * Deactivation is atomic with local token deletion: the token sets of the person's sign-ins and
+ * the tokens they set themselves (PMCP-6). This path has no Secret Store key.
+ */
 async function revokePersonalSignIns(
   db: PostgresConnection,
   input: { clientInstanceId: ClientInstanceId; userId: string }
 ) {
   const store = createPostgresConnectionsStore(db);
   const bindings = await store.listConnectionBindings(input);
-  for (const binding of bindings) {
-    if (binding.subject !== `user:${input.userId}`) continue;
-    const ended = await endConnectionSignIn(store, binding, { reason: "user_deactivated" });
-    if (!ended) continue;
+  const ownSecrets = await endConnectionOwnSecrets(store, input);
+  for (const binding of [
+    ...bindings.map((found) => ({ found, scheme: "oauth" as const })),
+    ...ownSecrets.map((found) => ({ found, scheme: "static" as const }))
+  ]) {
+    if (binding.found.subject !== `user:${input.userId}`) continue;
+    if (binding.scheme === "oauth") {
+      const ended = await endConnectionSignIn(store, binding.found, {
+        reason: "user_deactivated"
+      });
+      if (!ended) continue;
+    }
     const [asset] = await db
       .select({ name: configAssets.name, revision: configAssetRevisions.revision })
       .from(configAssets)
@@ -552,7 +564,7 @@ async function revokePersonalSignIns(
       .where(
         and(
           eq(configAssets.clientInstanceId, input.clientInstanceId),
-          eq(configAssets.id, binding.connectionAssetId)
+          eq(configAssets.id, binding.found.connectionAssetId)
         )
       );
     await appendPostgresAuditEvent(db, {
@@ -565,6 +577,7 @@ async function revokePersonalSignIns(
       metadata: {
         subjectKind: "user",
         userId: input.userId,
+        ...(binding.scheme === "static" ? { personal: true, scheme: "static" } : {}),
         ...(asset === undefined
           ? {}
           : { connectionName: asset.name, connectionRevision: asset.revision })

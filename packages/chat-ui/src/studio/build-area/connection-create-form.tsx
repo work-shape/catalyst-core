@@ -1,4 +1,8 @@
-import { CONNECTION_ASSET_KIND, assetAddressFromName } from "@work-shape/catalyst-core";
+import {
+  CONNECTION_ASSET_KIND,
+  assetAddressFromName,
+  type ConnectionOwnTokenScheme
+} from "@work-shape/catalyst-core";
 import type { ReactNode } from "react";
 import {
   Banner,
@@ -53,7 +57,8 @@ export interface CreateFields {
   form: ConnectionFormState;
   /** The key, in this browser only until the dialog closes. */
   key: string;
-  sendAs: "bearer" | "header";
+  /** How the key is sent: the same two ways a person's own token goes. */
+  sendAs: ConnectionOwnTokenScheme;
   /** For a REST API: a key, or an OAuth choice whose client secret is `key`. */
   auth: CreateAuth;
   /**

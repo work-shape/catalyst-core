@@ -56,6 +56,15 @@ export function signInSecretSubject(bindingSubject: string): string {
   return `oauth:${bindingSubject}`;
 }
 
+/**
+ * The subject of the secret that holds a person's own token for a personal `mcp` Connection
+ * that sends a bearer token or a header (PMCP-6): `static:user:<id>`. Disjoint from the token
+ * set's `oauth:` subject, the Connection's own secret and the test credential.
+ */
+export function ownSecretSubject(bindingSubject: string): string {
+  return `static:${bindingSubject}`;
+}
+
 /** Which binding: one per Connection and credential subject. */
 export interface ConnectionBindingKey {
   clientInstanceId: ClientInstanceId;
@@ -173,6 +182,31 @@ export interface ConnectionTestCredentialRecord {
   rowVersion: number;
 }
 
+/**
+ * A person's own token on a personal `mcp` Connection that sends a bearer token or a header
+ * (PMCP-6): a binding with subject `user:<id>` and scheme `static`. The token is a Secret Store
+ * row under {@link ownSecretSubject}, set for `origin` only. The record holds no value.
+ */
+export interface ConnectionOwnSecretRecord {
+  clientInstanceId: ClientInstanceId;
+  connectionAssetId: string;
+  /** `user:<id>`, derived from the person who set it. */
+  subject: string;
+  userId: string;
+  /** `needs_reconnect` after the server refused it; its value is deleted then. */
+  state: Exclude<ConnectionBindingState, "revoked">;
+  secretHandle: string;
+  secretVersion: number;
+  /** The origin (`egressOriginOf`) the token was set for. It is sent nowhere else. */
+  origin: string;
+  /** When it was set or replaced last. */
+  connectedAt: string;
+  stateChangedAt: string;
+  /** Why it left `connected`, as a reason code. */
+  stateReason?: string;
+  rowVersion: number;
+}
+
 /** The rows of bindings and setup sessions. Times are the database's. */
 export interface ConnectionPersonContextSubject {
   subjectKind: Extract<GrantHolderKind, "user" | "service_principal">;
@@ -237,6 +271,40 @@ export interface ConnectionBindingsStore {
     clientInstanceId: ClientInstanceId;
     connectionAssetId: string;
   }): Promise<boolean>;
+  /** A person's own token's binding (PMCP-6), if they set one. */
+  getConnectionOwnSecret(
+    key: ConnectionBindingKey & { lock?: "update" }
+  ): Promise<ConnectionOwnSecretRecord | undefined>;
+  /** The own tokens' bindings of a Connection, of a person, or both. */
+  listConnectionOwnSecrets(input: {
+    clientInstanceId: ClientInstanceId;
+    connectionAssetId?: string;
+    userId?: string;
+  }): Promise<ConnectionOwnSecretRecord[]>;
+  /**
+   * Writes a person's own token's binding as connected, at the row version the writer read:
+   * `null` creates it, a number replaces that version of it. Answers the stored binding, or
+   * `undefined` and writes nothing where the row is not what the writer read. Refuses an
+   * owner who is not active, so a deactivated person never keeps a new token.
+   */
+  putConnectionOwnSecret(
+    input: ConnectionBindingKey & {
+      userId: string;
+      secretHandle: string;
+      secretVersion: number;
+      origin: string;
+      expectedRowVersion: number | null;
+    }
+  ): Promise<ConnectionOwnSecretRecord | undefined>;
+  /**
+   * Sets a connected own token's binding `needs_reconnect` with `reason`, where it still names
+   * `secretVersion`. Answers the changed binding, or `undefined` where it does not.
+   */
+  refuseConnectionOwnSecret(
+    input: ConnectionBindingKey & { secretVersion: number; reason: string }
+  ): Promise<ConnectionOwnSecretRecord | undefined>;
+  /** Deletes a person's own token's binding. `false` where there was none. */
+  deleteConnectionOwnSecret(key: ConnectionBindingKey): Promise<boolean>;
   /**
    * Writes a completed sign-in as a connected binding. `expectedRowVersion` is the version the
    * writer read: `null` creates the binding, a number replaces that version of it, as a new

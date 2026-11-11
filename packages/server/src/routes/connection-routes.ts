@@ -286,6 +286,30 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
         { actor: auditActorFromIdentity(context.actor), correlationId: context.correlationId }
       )
   });
+  route.operation(apiOperations["connections.set_own_secret"], {
+    // Each person's own token on a personal Connection: the right to use it, which on an own
+    // server only its owner holds (PMCP-6).
+    authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.use, input.name),
+    resource: connectionResource,
+    // A token that was replaced cannot be brought back.
+    inputWithoutSecrets: (input) => ({ ...input, value: SECRET_MARK }),
+    module: CONNECTIONS_MODULE,
+    execute: (input, context) => {
+      // A person in their own signed-in browser: no key, CLI, service or embedding host.
+      if (!isFirstPartyPerson(context.actor)) {
+        throw new AppError(
+          "FORBIDDEN",
+          "user_only: a person sets their own token in their own signed-in session",
+          { reason: "user_only" }
+        );
+      }
+      return required().setOwnSecret(
+        input.name,
+        { value: input.value, expectedVersion: input.expectedVersion },
+        { actor: auditActorFromIdentity(context.actor), correlationId: context.correlationId }
+      );
+    }
+  });
   route.operation(apiOperations["connections.remove_test_credential"], {
     authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.write, input.name),
     resource: connectionResource,

@@ -42,6 +42,7 @@ import {
   useConnectionSignIn,
   type SignInBrowser
 } from "./connection-sign-in";
+import { OwnTokenDialog } from "./own-token";
 
 // Personal connections (CS-9a-UI): the person's own sign-in on a personal Connection, as You >
 // Connections and the Connection's page show it, and the People section where who may change
@@ -60,15 +61,27 @@ const VIEWS: Record<PersonalView, { tone: BadgeTone; label: TranslationKey }> = 
   not_connected: { tone: "neutral", label: "personalConnections.stateNotConnected" }
 };
 
-/** The state of a personal sign-in: Connected as the account, Not connected, Sign in again. */
-export function PersonalStateBadge({ signIn }: { signIn: PersonalSignIn }) {
+/**
+ * The state of a personal sign-in: Connected as the account, Not connected, Sign in again. On a
+ * server that takes the person's own token (PMCP-6), Token fehlt while there is none: a token
+ * the server refused is deleted, so it is missing again too.
+ */
+export function PersonalStateBadge({
+  signIn,
+  token = false
+}: {
+  signIn: PersonalSignIn;
+  token?: boolean;
+}) {
   const { t } = useTranslation();
   const view = personalViewOf(signIn);
   return (
     <Badge tone={VIEWS[view].tone} dot data-personal-state={view}>
       {view === "connected" && signIn.account
         ? t("personalConnections.stateConnected", { account: signIn.account })
-        : t(VIEWS[view].label)}
+        : token && view !== "connected"
+          ? t("ownServers.stateNoToken")
+          : t(VIEWS[view].label)}
     </Badge>
   );
 }
@@ -100,13 +113,21 @@ export function usePersonalSignInFacts(): (signIn: PersonalSignIn) => string | u
  * permissions asked for.
  */
 export function useOwnConnectionControls(
-  connection: { name: string; title: string; state: PersonalSignIn["state"] },
+  connection: {
+    name: string;
+    title: string;
+    state: PersonalSignIn["state"];
+    /** Present where the server takes the person's own token instead of a sign-in. */
+    token?: { version?: number };
+  },
   browser: SignInBrowser = popupSignInBrowser
 ): { buttons: ReactNode; below: ReactNode } {
   const { apiBaseUrl, authScope, client } = useSettingsPage();
   const { t } = useTranslation();
   const invalidate = useInvalidatePersonalConnections({ apiBaseUrl, authScope, client });
   const [asking, setAsking] = useState(false);
+  const [pasting, setPasting] = useState(false);
+  const { token } = connection;
   const [disconnecting, setDisconnecting] = useState(false);
   const [notice, setNotice] = useState<{ tone: "error" | "info"; text: string }>();
   const actions = ownActions(connection);
@@ -133,7 +154,8 @@ export function useOwnConnectionControls(
     setNotice(undefined);
     try {
       const answer = completedOutput(await client.connections.disconnect({ params: { name } }));
-      if (answer.providerRevocation !== "confirmed") {
+      // A token is deleted here and has no provider to tell.
+      if (token === undefined && answer.providerRevocation !== "confirmed") {
         setNotice({ tone: "info", text: t("personalConnections.providerKept") });
       }
     } catch {
@@ -152,7 +174,19 @@ export function useOwnConnectionControls(
       </Button>
     ) : (
       <span className="flex flex-wrap items-center gap-2">
-        {actions.connect ? (
+        {token ? (
+          <Button
+            size="sm"
+            variant={actions.connect === undefined ? "outline" : "primary"}
+            data-personal-token={token.version === undefined ? "set" : "replace"}
+            onClick={() => {
+              setNotice(undefined);
+              setPasting(true);
+            }}
+          >
+            {t(token.version === undefined ? "ownServers.setToken" : "ownServers.replaceToken")}
+          </Button>
+        ) : actions.connect ? (
           <Button
             size="sm"
             variant={actions.connect === "connect" ? "primary" : "outline"}
@@ -208,6 +242,17 @@ export function useOwnConnectionControls(
       >
         {t("personalConnections.disconnectText", { title: connection.title })}
       </ConfirmDialog>
+      {pasting && token ? (
+        <OwnTokenDialog
+          name={name}
+          title={connection.title}
+          host={connection.title}
+          version={token.version}
+          // An administrator chose how the token is sent; the person pastes theirs.
+          chooseHeader={false}
+          onClose={() => setPasting(false)}
+        />
+      ) : null}
     </>
   );
   return { buttons, below };

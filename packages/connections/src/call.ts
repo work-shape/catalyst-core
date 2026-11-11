@@ -36,8 +36,10 @@ import {
 import {
   NO_CREDENTIALS,
   openConnectorContext,
+  takesOwnSecret,
   type OpenConnectorContextInput
 } from "./connector-context";
+import { ownTokenRefusedError, refuseOwnToken } from "./own-secret-refusal";
 import { compileJsonSchema } from "./json-schema";
 import { jsonOfCheckedValue, outsideSchemaChecker } from "./schema-check";
 
@@ -984,6 +986,29 @@ async function call(
       try {
         result = await attempt();
       } catch (error) {
+        // A person's own token the server refused (PMCP-6) is deleted and its binding asks for
+        // a new one. No call is made again: there is no other token to make it with.
+        if (
+          takesOwnSecret(connection.config) &&
+          secret !== undefined &&
+          !deadline.signal.aborted &&
+          connectionCallReasonOf(error) === "upstream_unauthorized"
+        ) {
+          await refuseOwnToken(deps, {
+            connectionAssetId: connection.assetId,
+            connectionName: connection.config.name,
+            connectionRevision: connection.revision,
+            subject: credentialSubject(connection.config, context.actor),
+            refused: secret,
+            correlationId: context.runId ?? "connection_call"
+          }).catch(() => {
+            deps.logger.warn(
+              { connection: connection.config.name },
+              "A refused own token of a Connection was not recorded"
+            );
+          });
+          throw ownTokenRefusedError();
+        }
         // A sign-in's token, or one of the client credentials grant, the outside system refused
         // although it was believed valid is obtained anew once. A reading call is made once more
         // with the new token; a changing call is never made again, since the system may have

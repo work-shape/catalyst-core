@@ -291,6 +291,20 @@ export function takesTestCredential(
 }
 
 /**
+ * Whether each person sets their own token on the Connection (PMCP-6): a personal MCP
+ * Connection that sends a bearer token or a header.
+ */
+export function takesOwnSecret(
+  config: Pick<ConnectionConfig, "credentialMode" | "authScheme" | "connectorType">
+): boolean {
+  return (
+    config.credentialMode === "user" &&
+    config.connectorType === "mcp" &&
+    (config.authScheme === "bearer" || config.authScheme === "header")
+  );
+}
+
+/**
  * Opens the context of one test, discovery or call. The caller has authorized the call
  * already. The order is fixed: the settings are read by the type's schema, the target is
  * checked, and only then the credential is resolved. A refusal at any step throws, so the
@@ -353,30 +367,49 @@ export async function openConnectorContext(
         binding: { connectionAssetId: connection.id, subject: SHARED_CREDENTIAL_SUBJECT },
         origin
       });
+    // A person's own token (PMCP-6): each person's, on their binding, never the Connection's.
+    const personalSubject = () =>
+      input.personalDiscovery
+        ? `user:${input.personalDiscovery.userId}`
+        : credentialSubject(config, input.actor);
+    // A personal Connection never falls back to a secret of the Connection's own.
+    const ownToken = async () => {
+      if (!takesOwnSecret(config) || credentials.resolveOwnSecret === undefined) {
+        throw connectionCallError(CREDENTIAL_REFUSALS.notConnected);
+      }
+      const own = await credentials.resolveOwnSecret({
+        subject: personalSubject(),
+        connectionAssetId: connection.id,
+        origin
+      });
+      return own.value;
+    };
     const secret = test
       ? await testSecret(test.secretHandle)
-      : config.authScheme === AUTH_SCHEME_OAUTH
-        ? await credentials.resolveSignIn({
-            subject:
-              config.credentialMode === "user" && input.personalDiscovery
-                ? `user:${input.personalDiscovery.userId}`
-                : credentialSubject(config, input.actor),
-            connectionAssetId: connection.id,
-            origin,
-            ...(input.refused === undefined ? {} : { refused: input.refused }),
-            signal
-          })
-        : config.authScheme === AUTH_SCHEME_OAUTH_CLIENT
-          ? await clientCredentialToken({
-              type,
-              settings: settings.data,
-              connection,
+      : config.credentialMode === "user" && config.authScheme !== AUTH_SCHEME_OAUTH
+        ? await ownToken()
+        : config.authScheme === AUTH_SCHEME_OAUTH
+          ? await credentials.resolveSignIn({
+              subject:
+                config.credentialMode === "user"
+                  ? personalSubject()
+                  : credentialSubject(config, input.actor),
+              connectionAssetId: connection.id,
               origin,
-              egress,
-              clientSecret: await ownSecret(),
-              ...(input.refused === undefined ? {} : { refused: input.refused })
+              ...(input.refused === undefined ? {} : { refused: input.refused }),
+              signal
             })
-          : await ownSecret();
+          : config.authScheme === AUTH_SCHEME_OAUTH_CLIENT
+            ? await clientCredentialToken({
+                type,
+                settings: settings.data,
+                connection,
+                origin,
+                egress,
+                clientSecret: await ownSecret(),
+                ...(input.refused === undefined ? {} : { refused: input.refused })
+              })
+            : await ownSecret();
     // A call that ended while its credential was read is handed none: the secret stays where
     // it was resolved and no type sees it.
     if (signal.aborted) throw connectionCallError("upstream_timeout");

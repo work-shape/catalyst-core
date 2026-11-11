@@ -75,6 +75,8 @@ export interface OAuthWorld {
   readonly api: string;
   /** The sample MCP server's base, as the instance reaches it. */
   readonly sample: string;
+  /** The key that guards the sample's `/mcp`, sent as a Bearer token. */
+  readonly sampleKey: string;
   readonly trap: TrapServer;
   /** Every code, verifier and token the authorization server issued or received. */
   readonly secrets: string[];
@@ -194,6 +196,8 @@ export const MANAGED_CLIENT_SECRET_NAME = "SAMPLE_MANAGED_CLIENT_SECRET";
 export async function createOAuthWorld(
   options: {
     extraPort?: number;
+    /** `extraPort` by the name `localhost` too: another origin of the same server. */
+    extraPortAlias?: true;
     /** An `imaps` entry of the egress list for 127.0.0.1 on this port. */
     imapsPort?: number;
     personalModelRegions?: string[];
@@ -360,7 +364,18 @@ export async function createOAuthWorld(
                 port: options.extraPort,
                 network: "private",
                 cidrs: ["127.0.0.1/32"]
-              }
+              },
+              ...(options.extraPortAlias
+                ? [
+                    {
+                      protocol: "http",
+                      host: "localhost",
+                      port: options.extraPort,
+                      network: "private",
+                      cidrs: ["127.0.0.1/32", "::1/128"]
+                    }
+                  ]
+                : [])
             ]),
         {
           protocol: "http",
@@ -482,6 +497,7 @@ export async function createOAuthWorld(
     worker,
     api,
     sample: sampleBase,
+    sampleKey,
     trap: trap.trap,
     secrets,
     clientSecret,
@@ -766,7 +782,8 @@ export async function createOAuthWorld(
 }
 
 /** A free port on the loopback address, so the issuer's address is known before it listens. */
-async function reservePort(): Promise<number> {
+/** A free port on 127.0.0.1, for a server a test starts after the world names it. */
+export async function reservePort(): Promise<number> {
   const server = createServer();
   const base = await listen(server);
   await new Promise<void>((resolve) => server.close(() => resolve()));

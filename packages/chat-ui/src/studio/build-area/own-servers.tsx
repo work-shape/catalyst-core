@@ -71,14 +71,26 @@ import {
   type OwnServerProbeStep,
   type OwnServerRow
 } from "./own-server-model";
+import {
+  OwnTokenDialog,
+  OwnTokenFields,
+  ownTokenIssuesOf,
+  saveOwnToken,
+  type OwnTokenDraft,
+  type OwnTokenIssues
+} from "./own-token";
 
 // A person's own MCP server (PMCP-5, connections-and-secrets.md, point 6): the section on You >
 // Connections with one card per server, the add dialog and the tools dialog. The person adds
 // it alone, in their own session; the instance decides every write, every contact of the
-// server and every sign-in. The dialog never sees a token: the sign-in runs in another tab.
+// server and every sign-in. The dialog never sees a sign-in's token: the sign-in runs in another
+// tab. A server that takes a pasted token instead (PMCP-6) gets it once, through
+// `connections.set_own_secret`; nothing reads it back.
 
 /** Only agents use a self-added server's tools, in the owner's private chats. */
 const OWN_SERVER_EXPOSURE = ["agent"] as const;
+/** The start's refusal where the server names no sign-in the instance can read. */
+const NO_SIGN_IN_FOUND = "oauth_discovery_failed";
 /** How often the dialog reads the server again while its tools are read. */
 const TOOLS_READ_MS = 1_000;
 
@@ -89,9 +101,8 @@ const ADDRESS_ISSUES: Record<OwnServerAddressIssue, TranslationKey> = {
   query: "ownServers.addressQuery"
 };
 
-const PROBE_REFUSALS: Record<Exclude<OwnServerProbeStep, "sign_in">, TranslationKey> = {
+const PROBE_REFUSALS: Record<Exclude<OwnServerProbeStep, "sign_in" | "token">, TranslationKey> = {
   no_sign_in: "ownServers.noSignIn",
-  token: "ownServers.tokenRequired",
   egress: "ownServers.egress",
   unreachable: "ownServers.unreachable"
 };
@@ -113,6 +124,8 @@ async function readToolsSince(
   for (;;) {
     const detail = await client.connections.get({ params: { name } }).catch(() => undefined);
     if (cancelled()) return undefined;
+    // The server refused the person's token: no tools come, and the token is to be pasted again.
+    if (detail?.ownToken?.state === "needs_reconnect") return detail;
     if (detail?.discoveredAt !== undefined && detail.discoveredAt !== before) return detail;
     if (Date.now() - since >= DISCOVERY_WAIT_MS) return detail;
     await new Promise((resolve) => setTimeout(resolve, TOOLS_READ_MS));
@@ -213,8 +226,10 @@ function OwnServerCard({ row, browser }: { row: OwnServerRow; browser?: SignInBr
   const [asking, setAsking] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [problem, setProblem] = useState<string>();
+  const [pasting, setPasting] = useState(false);
   const title = row.title.trim() || row.ownServer.host || row.name;
   const view = ownServerViewOf(row);
+  const token = row.token;
   const { name } = row;
   const signIn = useConnectionSignIn(
     {
@@ -273,7 +288,7 @@ function OwnServerCard({ row, browser }: { row: OwnServerRow; browser?: SignInBr
               </Badge>
             ) : (
               <span data-own-server-state={view}>
-                <PersonalStateBadge signIn={row} />
+                <PersonalStateBadge signIn={row} token={token !== undefined} />
               </span>
             )}
           </span>
@@ -295,6 +310,15 @@ function OwnServerCard({ row, browser }: { row: OwnServerRow; browser?: SignInBr
           {signIn.state.phase === "waiting" ? (
             <Button size="sm" variant="outline" data-sign-in-cancel="" onClick={signIn.cancel}>
               {t("connectionSignIn.cancel")}
+            </Button>
+          ) : token && view !== "off" ? (
+            <Button
+              size="sm"
+              variant={connect === undefined ? "outline" : "primary"}
+              data-own-server-replace-token={token.version === undefined ? "set" : "replace"}
+              onClick={() => setPasting(true)}
+            >
+              {t(token.version === undefined ? "ownServers.setToken" : "ownServers.replaceToken")}
             </Button>
           ) : connect ? (
             <Button
@@ -355,6 +379,16 @@ function OwnServerCard({ row, browser }: { row: OwnServerRow; browser?: SignInBr
       {changing ? (
         <OwnServerToolsDialog name={name} title={title} onClose={() => setChanging(false)} />
       ) : null}
+      {pasting && token ? (
+        <OwnTokenDialog
+          name={name}
+          title={title}
+          host={row.ownServer.host || title}
+          version={token.version}
+          chooseHeader
+          onClose={() => setPasting(false)}
+        />
+      ) : null}
     </Card>
   );
 }
@@ -363,6 +397,7 @@ type AddStage =
   | { step: "address" }
   | { step: "checking" }
   | { step: "sign-in" }
+  | { step: "token" }
   | { step: "reading" }
   | { step: "tools"; candidates: ApprovalCandidate[]; late: boolean };
 
@@ -393,6 +428,8 @@ export function OwnServerAddDialog({
   const [addressError, setAddressError] = useState<string>();
   const [problem, setProblem] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [token, setToken] = useState<OwnTokenDraft>({ token: "", header: "" });
+  const [tokenIssues, setTokenIssues] = useState<OwnTokenIssues>({});
   const approval = useApprovalChoice([]);
   const saved = useRef<{ name: string; revision: number; config: Record<string, unknown> }>(
     undefined
@@ -423,6 +460,15 @@ export function OwnServerAddDialog({
       }
     }
   );
+
+  // A server whose challenge names no sign-in that can be found takes a token: the dialog goes
+  // on to it at once, as it does where the probe said so.
+  const signInFailure = signIn.state.phase === "failed" ? signIn.state.error.failure : undefined;
+  useEffect(() => {
+    if (stage.step === "sign-in" && signInFailure === NO_SIGN_IN_FOUND) {
+      setStage({ step: "token" });
+    }
+  }, [stage.step, signInFailure]);
 
   /** Deletes what Verbinden saved, after the probe turned the server away. */
   const discard = async () => {
@@ -497,7 +543,7 @@ export function OwnServerAddDialog({
     } catch {
       step = "unreachable";
     }
-    if (step !== "sign_in") {
+    if (step !== "sign_in" && step !== "token") {
       await discard();
       setAddressError(t(PROBE_REFUSALS[step], { host }));
       setBusy(false);
@@ -508,7 +554,42 @@ export function OwnServerAddDialog({
       await client.connections.get({ params: { name: nextName } }).catch(() => undefined)
     )?.discoveredAt;
     setBusy(false);
-    setStage({ step: "sign-in" });
+    setStage({ step: step === "token" ? "token" : "sign-in" });
+  };
+
+  /**
+   * A pasted token instead of a sign-in: how it is sent, then the token once, then the tools
+   * read with it. The field is emptied as it is sent; a token the server refuses is asked again.
+   */
+  const sendToken = async () => {
+    const current = saved.current;
+    if (!current) return;
+    const found = ownTokenIssuesOf(token, true, t);
+    setProblem(undefined);
+    if (found) {
+      setTokenIssues(found);
+      return;
+    }
+    setTokenIssues({});
+    setBusy(true);
+    const value = token.token;
+    setToken((draft) => ({ ...draft, token: "" }));
+    try {
+      await saveOwnToken(client, {
+        name: current.name,
+        token: value,
+        header: token.header,
+        version: null
+      });
+      const stored = await readStored(client, current.name);
+      saved.current = { name: current.name, revision: stored.revision, config: stored.config };
+    } catch {
+      setBusy(false);
+      setProblem(t("ownServers.tokenFailed"));
+      return;
+    }
+    setBusy(false);
+    await readTools();
   };
 
   /** After the sign-in: the owner's own sign-in reads the tools (CS-9b exception). */
@@ -531,7 +612,14 @@ export function OwnServerAddDialog({
       toolsBefore.current,
       () => !open.current
     );
-    if (open.current) enterTools(detail);
+    if (!open.current) return;
+    if (detail?.ownToken?.state === "needs_reconnect") {
+      setTokenIssues({ token: t("ownServers.tokenRefused", { host }) });
+      setStage({ step: "token" });
+      invalidate().catch(() => undefined);
+      return;
+    }
+    enterTools(detail);
   };
 
   const enterTools = (detail: ConnectionDetail | undefined) => {
@@ -592,7 +680,12 @@ export function OwnServerAddDialog({
     onClose();
   };
 
-  const heading = stage.step === "sign-in" ? signInHeading(signIn, t) : t("ownServers.add");
+  const heading =
+    stage.step === "sign-in"
+      ? signInHeading(signIn, t)
+      : stage.step === "token"
+        ? t("ownServers.tokenTitle", { host })
+        : t("ownServers.add");
 
   const body = (() => {
     switch (stage.step) {
@@ -642,7 +735,50 @@ export function OwnServerAddDialog({
           </form>
         );
       case "sign-in":
-        return <SignInBody signIn={signIn} />;
+        return (
+          <div className="grid min-w-0 gap-3">
+            <SignInBody signIn={signIn} />
+            {signIn.state.phase === "waiting" ? null : (
+              <Button
+                className="justify-self-start"
+                size="sm"
+                variant="link"
+                data-own-server-use-token=""
+                onClick={() => {
+                  setProblem(undefined);
+                  setStage({ step: "token" });
+                }}
+              >
+                {t("ownServers.useToken")}
+              </Button>
+            )}
+          </div>
+        );
+      case "token":
+        return (
+          <form
+            id="own-server-token"
+            className="grid min-w-0 gap-4"
+            data-own-server-token=""
+            onSubmit={(event) => {
+              event.preventDefault();
+              sendToken().catch(() => setBusy(false));
+            }}
+          >
+            <p className="text-body text-muted-foreground">{t("ownServers.tokenText", { host })}</p>
+            <OwnTokenFields
+              host={host}
+              draft={token}
+              onChange={(draft) => {
+                setToken(draft);
+                setTokenIssues({});
+              }}
+              chooseHeader
+              issues={tokenIssues}
+              disabled={busy}
+            />
+          </form>
+        );
       case "reading":
         return (
           <p
@@ -701,6 +837,17 @@ export function OwnServerAddDialog({
         );
       case "sign-in":
         return <SignInActions signIn={signIn} />;
+      case "token":
+        return (
+          <Button
+            type="submit"
+            form="own-server-token"
+            loading={busy}
+            data-own-server-token-save=""
+          >
+            {t("ownServers.setToken")}
+          </Button>
+        );
       case "reading":
         return undefined;
       case "tools":
