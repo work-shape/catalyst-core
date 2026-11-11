@@ -1408,6 +1408,20 @@
       "when": 1794318801585,
       "tag": "0200_approval_request_requester_decides",
       "breakpoints": true
+    },
+    {
+      "idx": 201,
+      "version": "7",
+      "when": 1794407615409,
+      "tag": "0201_connection_own_secret",
+      "breakpoints": true
+    },
+    {
+      "idx": 202,
+      "version": "7",
+      "when": 1794409930635,
+      "tag": "0202_validate_connection_own_secret",
+      "breakpoints": true
     }
   ]
 }

@@ -93,7 +93,8 @@ export const connectionState = pgTable(
 /**
  * The sign-in of a Connection at its outside system, one per Connection and credential
  * subject. It names the secret that holds the token set and never holds a token itself. A
- * binding is used for the origin it was made for only.
+ * binding is used for the origin it was made for only. A `static` row is a test credential
+ * (subject `test`) or a person's own token (subject `user:<id>`, PMCP-6).
  */
 export const connectionBindings = pgTable(
   "connection_bindings",
@@ -143,7 +144,8 @@ export const connectionBindings = pgTable(
       "connection_bindings_scheme_check",
       sql`(${table.scheme} = 'oauth' and ${table.secretHandle} is not null and ${table.secretVersion} is not null and ${table.contextHeader} is null and ${table.contextValue} is null and ${table.endpoint} is null)
         or (${table.scheme} = 'person_context' and ${table.secretHandle} is null and ${table.secretVersion} is null and ${table.contextHeader} is not null and (${table.contextValue} is not null or ${table.state} = 'revoked') and ${table.subject} ~ '^person_context:(user|service_principal):.+$' and ${table.endpoint} is null)
-        or (${table.scheme} = 'static' and ${table.subject} = 'test' and ${table.userId} is null and ${table.secretHandle} is not null and ${table.secretVersion} is not null and ${table.contextHeader} is null and ${table.contextValue} is null)`
+        or (${table.scheme} = 'static' and ${table.subject} = 'test' and ${table.userId} is null and ${table.secretHandle} is not null and ${table.secretVersion} is not null and ${table.contextHeader} is null and ${table.contextValue} is null)
+        or (${table.scheme} = 'static' and ${table.userId} is not null and ${table.subject} = 'user:' || ${table.userId} and ${table.state} in ('connected', 'needs_reconnect') and ${table.secretHandle} is not null and ${table.secretVersion} is not null and ${table.contextHeader} is null and ${table.contextValue} is null and ${table.endpoint} is null)`
     ),
     check("connection_bindings_row_version_check", sql`${table.rowVersion} >= 1`),
     check(

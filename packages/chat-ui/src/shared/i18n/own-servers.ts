@@ -24,8 +24,6 @@ export const ownServers = defineTranslations({
       "Your own MCP servers may not reach {host} here. Use a public https address, or ask an administrator.",
     "ownServers.noSignIn":
       "{host} asks for no sign-in. A server without a sign-in cannot be added yet.",
-    "ownServers.tokenRequired":
-      "{host} asks for a token. A server that takes a token cannot be added yet.",
     "ownServers.limit":
       "You have added {limit} MCP servers, the most allowed here. Remove one first.",
     "ownServers.off": "Adding your own MCP servers is switched off here.",
@@ -64,7 +62,23 @@ export const ownServers = defineTranslations({
     "ownServers.toldNoTools": "I added my MCP server {title}, with no tools accepted yet.",
     "ownServers.toldName": "“{name}”",
     "ownServers.toldMore": "+ {count} more",
-    "ownServers.loadFailed": "The tools could not be loaded."
+    "ownServers.loadFailed": "The tools could not be loaded.",
+    "ownServers.tokenTitle": "Token for {host}",
+    "ownServers.tokenText": "{host} takes a token from you. Paste the one the service gave you.",
+    "ownServers.tokenLabel": "Token",
+    "ownServers.tokenHint": "It is stored encrypted, sent only to {host} and never shown again.",
+    "ownServers.tokenEmpty": "Paste the token.",
+    "ownServers.tokenDetails": "Technical details",
+    "ownServers.headerLabel": "Header",
+    "ownServers.headerHint":
+      "Empty or Authorization: the token goes the usual way. Otherwise the header the service names for it.",
+    "ownServers.headerInvalid": "A header name has letters, digits and hyphens, a letter first.",
+    "ownServers.tokenRefused": "{host} refused the token. Check it and paste it again.",
+    "ownServers.tokenFailed": "The token could not be saved.",
+    "ownServers.useToken": "Paste a token instead",
+    "ownServers.setToken": "Set token",
+    "ownServers.replaceToken": "Replace token",
+    "ownServers.stateNoToken": "Token missing"
   },
   de: {
     "ownServers.title": "Deine MCP-Server",
@@ -87,8 +101,6 @@ export const ownServers = defineTranslations({
       "Eigene MCP-Server dürfen {host} hier nicht erreichen. Nutze eine öffentliche https-Adresse oder frag eine Administratorin oder einen Administrator.",
     "ownServers.noSignIn":
       "{host} verlangt keine Anmeldung. Ein Server ohne Anmeldung lässt sich noch nicht hinzufügen.",
-    "ownServers.tokenRequired":
-      "{host} verlangt einen Token. Ein Server mit Token lässt sich noch nicht hinzufügen.",
     "ownServers.limit":
       "Du hast {limit} MCP-Server hinzugefügt, mehr sind hier nicht erlaubt. Entferne zuerst einen.",
     "ownServers.off": "Eigene MCP-Server sind hier abgeschaltet.",
@@ -131,6 +143,26 @@ export const ownServers = defineTranslations({
       "Ich habe meinen MCP-Server {title} hinzugefügt, noch ohne akzeptierte Tools.",
     "ownServers.toldName": "„{name}“",
     "ownServers.toldMore": "+ {count} weitere",
-    "ownServers.loadFailed": "Die Tools ließen sich nicht laden."
+    "ownServers.loadFailed": "Die Tools ließen sich nicht laden.",
+    "ownServers.tokenTitle": "Token für {host}",
+    "ownServers.tokenText":
+      "{host} nimmt einen Token von dir. Füg den ein, den dir der Dienst gegeben hat.",
+    "ownServers.tokenLabel": "Token",
+    "ownServers.tokenHint":
+      "Er wird verschlüsselt gespeichert, nur an {host} gesendet und nie wieder angezeigt.",
+    "ownServers.tokenEmpty": "Füg den Token ein.",
+    "ownServers.tokenDetails": "Technische Details",
+    "ownServers.headerLabel": "Header",
+    "ownServers.headerHint":
+      "Leer oder Authorization: Der Token geht auf dem üblichen Weg mit. Sonst der Header, den der Dienst dafür nennt.",
+    "ownServers.headerInvalid":
+      "Ein Header-Name besteht aus Buchstaben, Ziffern und Bindestrichen, vorn ein Buchstabe.",
+    "ownServers.tokenRefused":
+      "{host} hat den Token abgelehnt. Prüf ihn und füg ihn noch einmal ein.",
+    "ownServers.tokenFailed": "Der Token ließ sich nicht speichern.",
+    "ownServers.useToken": "Stattdessen Token einfügen",
+    "ownServers.setToken": "Token setzen",
+    "ownServers.replaceToken": "Token ersetzen",
+    "ownServers.stateNoToken": "Token fehlt"
   }
 });

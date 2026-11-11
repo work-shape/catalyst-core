@@ -13,6 +13,7 @@ import {
   SHARED_CREDENTIAL_SUBJECT,
   SecretNotResolvedError,
   createConnectionSecretHandle,
+  ownSecretSubject,
   signInSecretSubject,
   type ClientInstanceId,
   type ConnectionBindingRecord,
@@ -469,6 +470,46 @@ export function createConnectionCredentialResolver(
       }
       const tokenSet = await openSignInTokenSet(options, { ...binding, origin });
       return tokenSet.accessToken;
+    },
+    async resolveOwnSecret({ connectionAssetId, origin, subject }) {
+      const binding = await store.getConnectionOwnSecret({
+        clientInstanceId,
+        connectionAssetId,
+        subject
+      });
+      if (binding?.state === "needs_reconnect" && binding.origin === origin) {
+        throw new AppError(
+          "CONFLICT",
+          `${CREDENTIAL_REFUSALS.needsReconnect}: the server refused the person's token. They paste a new one`,
+          {
+            reason: CREDENTIAL_REFUSALS.needsReconnect,
+            state: "needs_reconnect",
+            ...(binding.stateReason === undefined ? {} : { cause: binding.stateReason })
+          }
+        );
+      }
+      // A token set for another origin is none for this one, even where the clean-up after
+      // the change of the Connection's address did not run.
+      if (binding?.state !== "connected" || binding.origin !== origin) {
+        throw new AppError(
+          "CONFLICT",
+          `${CREDENTIAL_REFUSALS.notConnected}: the person has set no token for the Connection's address`,
+          { reason: CREDENTIAL_REFUSALS.notConnected }
+        );
+      }
+      const opened = await open(
+        {
+          handle: binding.secretHandle,
+          binding: { connectionAssetId, subject: ownSecretSubject(subject) },
+          origin
+        },
+        CREDENTIAL_REFUSALS.notConnected
+      );
+      try {
+        return { value: opened.toString("utf8"), secretVersion: binding.secretVersion };
+      } finally {
+        opened.fill(0);
+      }
     }
   };
 }

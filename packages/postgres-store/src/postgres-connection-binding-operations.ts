@@ -18,6 +18,7 @@ import type {
   ConnectionBindingKey,
   ConnectionBindingRecord,
   ConnectionBindingsStore,
+  ConnectionOwnSecretRecord,
   ConnectionSetupSessionRecord,
   ConnectionTestCredentialRecord
 } from "@work-shape/catalyst-core";
@@ -90,6 +91,34 @@ function mapTestCredential(row: BindingRow): ConnectionTestCredentialRecord | un
   };
 }
 
+/** A person's own token's binding (PMCP-6): a `static` row of subject `user:<id>`. */
+function mapOwnSecret(row: BindingRow): ConnectionOwnSecretRecord | undefined {
+  if (
+    row.scheme !== "static" ||
+    row.userId === null ||
+    row.subject !== `user:${row.userId}` ||
+    row.state === "revoked" ||
+    row.secretHandle === null ||
+    row.secretVersion === null
+  ) {
+    return undefined;
+  }
+  return {
+    clientInstanceId: row.clientInstanceId,
+    connectionAssetId: row.connectionAssetId,
+    subject: row.subject,
+    userId: row.userId,
+    state: row.state,
+    secretHandle: row.secretHandle,
+    secretVersion: row.secretVersion,
+    origin: row.origin,
+    connectedAt: row.connectedAt.toISOString(),
+    stateChangedAt: row.stateChangedAt.toISOString(),
+    ...(row.stateReason === null ? {} : { stateReason: row.stateReason }),
+    rowVersion: row.rowVersion
+  };
+}
+
 /** The session of a row, or nothing for a row without the resource or client it was started with. */
 function mapSession(row: SessionRow): ConnectionSetupSessionRecord | undefined {
   if (row.resource === null || row.clientId === null) return undefined;
@@ -130,6 +159,13 @@ export function createPostgresConnectionBindingOperations(
 ): ConnectionBindingsStore {
   const oauthBindingOf = (key: ConnectionBindingKey) =>
     and(bindingOf(key), eq(connectionBindings.scheme, "oauth"));
+  // A person's own token is never the test credential, whose subject is `test`.
+  const ownSecretOf = (key: ConnectionBindingKey) =>
+    and(
+      bindingOf(key),
+      eq(connectionBindings.scheme, "static"),
+      ne(connectionBindings.subject, TEST_CREDENTIAL_SUBJECT)
+    );
   const testCredentialOf = (key: Omit<ConnectionBindingKey, "subject">) =>
     and(
       bindingOf({ ...key, subject: TEST_CREDENTIAL_SUBJECT }),
@@ -288,6 +324,120 @@ export function createPostgresConnectionBindingOperations(
       const rows = await db
         .delete(connectionBindings)
         .where(testCredentialOf(input))
+        .returning({ subject: connectionBindings.subject });
+      return rows.length > 0;
+    },
+    async getConnectionOwnSecret(key) {
+      const query = db.select().from(connectionBindings).where(ownSecretOf(key)).limit(1);
+      const [row] = await (key.lock === "update" ? query.for("update") : query);
+      return row ? mapOwnSecret(row) : undefined;
+    },
+    async listConnectionOwnSecrets({ clientInstanceId, connectionAssetId, userId }) {
+      const rows = await db
+        .select()
+        .from(connectionBindings)
+        .where(
+          and(
+            eq(connectionBindings.clientInstanceId, clientInstanceId),
+            eq(connectionBindings.scheme, "static"),
+            ne(connectionBindings.subject, TEST_CREDENTIAL_SUBJECT),
+            connectionAssetId === undefined
+              ? undefined
+              : eq(connectionBindings.connectionAssetId, connectionAssetId),
+            userId === undefined ? undefined : eq(connectionBindings.userId, userId)
+          )
+        );
+      return rows.flatMap((row) => mapOwnSecret(row) ?? []);
+    },
+    async putConnectionOwnSecret({ expectedRowVersion, ...input }) {
+      // Serializes with deactivation's row update, as a sign-in's callback does: its enclosing
+      // transaction also writes the secret, so a deactivated owner never keeps a new token.
+      const [user] = await db
+        .select({
+          status: productUsers.status,
+          deletionRequestedAt: productUsers.deletionRequestedAt
+        })
+        .from(productUsers)
+        .where(
+          and(
+            eq(productUsers.clientInstanceId, input.clientInstanceId),
+            eq(productUsers.id, input.userId)
+          )
+        )
+        .for("share");
+      if (!user || user.status !== "active" || user.deletionRequestedAt !== null) {
+        throw new AppError("FORBIDDEN", "user_only: the owner is inactive", {
+          reason: "user_only"
+        });
+      }
+      const values = {
+        userId: input.userId,
+        state: "connected" as const,
+        scheme: "static" as const,
+        accountId: null,
+        accountLabel: null,
+        grantedScopes: [],
+        secretHandle: input.secretHandle,
+        secretVersion: input.secretVersion,
+        contextHeader: null,
+        contextValue: null,
+        endpoint: null,
+        accessExpiresAt: null,
+        lastRefreshedAt: null,
+        connectedAt: statementTime,
+        connectedBy: input.userId,
+        stateChangedAt: statementTime,
+        stateChangedBy: input.userId,
+        stateReason: null,
+        origin: input.origin,
+        leaseOwner: null,
+        leaseExpiresAt: null
+      };
+      if (expectedRowVersion === null) {
+        const [row] = await db
+          .insert(connectionBindings)
+          .values({
+            clientInstanceId: input.clientInstanceId,
+            connectionAssetId: input.connectionAssetId,
+            subject: input.subject,
+            ...values,
+            rowVersion: 1
+          })
+          .onConflictDoNothing()
+          .returning();
+        return row ? mapOwnSecret(row) : undefined;
+      }
+      const [row] = await db
+        .update(connectionBindings)
+        .set({ ...values, rowVersion: sql`${connectionBindings.rowVersion} + 1` })
+        .where(and(ownSecretOf(input), eq(connectionBindings.rowVersion, expectedRowVersion)))
+        .returning();
+      return row ? mapOwnSecret(row) : undefined;
+    },
+    async refuseConnectionOwnSecret({ secretVersion, reason, ...key }) {
+      const [row] = await db
+        .update(connectionBindings)
+        .set({
+          state: "needs_reconnect",
+          stateReason: reason,
+          stateChangedAt: statementTime,
+          stateChangedBy: null,
+          rowVersion: sql`${connectionBindings.rowVersion} + 1`
+        })
+        .where(
+          and(
+            ownSecretOf(key),
+            eq(connectionBindings.state, "connected"),
+            eq(connectionBindings.secretVersion, secretVersion)
+          )
+        )
+        .returning();
+      return row ? mapOwnSecret(row) : undefined;
+    },
+    async deleteConnectionOwnSecret(key) {
+      const rows = await db
+        .delete(connectionBindings)
+        .where(ownSecretOf(key))
         .returning({ subject: connectionBindings.subject });
       return rows.length > 0;
     },

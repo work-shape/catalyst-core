@@ -119,7 +119,10 @@ export function withSignInRefresh(
 ): ConnectionCredentialResolver {
   return {
     resolve: (input) => base.resolve(input),
-    resolveSignIn: (input) => tokens.accessToken(input)
+    resolveSignIn: (input) => tokens.accessToken(input),
+    ...(base.resolveOwnSecret === undefined
+      ? {}
+      : { resolveOwnSecret: base.resolveOwnSecret.bind(base) })
   };
 }
 

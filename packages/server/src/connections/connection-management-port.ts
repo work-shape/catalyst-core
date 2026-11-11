@@ -173,6 +173,17 @@ export interface ConnectionManagementPort {
     },
     audit: { actor: AuditActor; correlationId: string }
   ): Promise<{ state: "set"; version: number }>;
+  /**
+   * Sets or replaces the actor's own token on a personal MCP Connection that sends a bearer
+   * token or a header (PMCP-6), as the next version, bound to the Connection's address. The
+   * actor is a person; an own server's owner alone. The value is never answered, logged,
+   * audited or read back. `expectedVersion` refuses a write that crossed another.
+   */
+  setOwnSecret(
+    name: string,
+    input: { value: string; expectedVersion: number | null },
+    audit: { actor: AuditActor; correlationId: string }
+  ): Promise<{ state: "set"; version: number }>;
   /** Removes the test credential and its secret. */
   removeTestCredential(
     name: string,

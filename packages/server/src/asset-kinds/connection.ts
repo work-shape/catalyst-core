@@ -21,6 +21,7 @@ import {
   findPersonContextAppIssue,
   parseConnectionOperationName,
   endConnectionSignIn,
+  endConnectionOwnSecrets,
   DEFAULT_OWN_SERVERS,
   isFirstPartyPerson,
   operationDenialError,
@@ -32,6 +33,10 @@ import {
   type AccessResource,
   type ActorAccess,
   type AssetValidationIssue,
+  type AuditActor,
+  type AuditEventStore,
+  type ClientInstanceId,
+  type ConnectionsStore,
   type ConnectionBindingEndReason,
   type ConnectionCatalogueLink,
   type ConnectionConfig,
@@ -384,14 +389,18 @@ function withServerFields(
   const storedHandle = readDefinitionField(current, "secretHandle");
   const owner = typeof storedOwner === "string" ? storedOwner : principalId;
   const authenticates = typeof next.authScheme === "string" && next.authScheme !== AUTH_SCHEME_NONE;
+  const credentialMode =
+    next.credentialMode ?? readDefinitionField(current, "credentialMode") ?? "shared";
+  // A personal token is each person's own, on their binding (PMCP-6): the Connection has no
+  // secret of its own to name.
+  const ownSecret = credentialMode === "user" && next.authScheme !== AUTH_SCHEME_OAUTH;
   return {
     ...rest,
     ...(owner === undefined ? {} : { ownerPrincipalId: owner }),
     ...(ownerOnly ? { ownerOnly: true } : {}),
-    credentialMode:
-      next.credentialMode ?? readDefinitionField(current, "credentialMode") ?? "shared",
+    credentialMode,
     origin: "runtime",
-    ...(authenticates
+    ...(authenticates && !ownSecret
       ? {
           secretHandle:
             typeof storedHandle === "string" ? storedHandle : createConnectionSecretHandle()
@@ -530,10 +539,9 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
           connection.operations.length === 0
             ? { withoutTools: true }
             : {}),
-          // Each person signs in with their own account: no key or shared sign-in to set.
-          ...(connection.authScheme === AUTH_SCHEME_OAUTH && connection.credentialMode === "user"
-            ? { personalSignIn: true }
-            : {}),
+          // Each person signs in with their own account, or sets their own token: no key or
+          // shared sign-in to set.
+          ...(connection.credentialMode === "user" ? { personalSignIn: true } : {}),
           // The catalogue entry it was installed from, by id.
           ...(connection.catalogue === undefined
             ? {}
@@ -697,6 +705,16 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
         ...(header === undefined ? {} : { header })
       });
       const reason = signInEndOf(options, previous, config);
+      if (config === undefined) {
+        await endOwnSecrets(stores, {
+          clientInstanceId,
+          connectionAssetId: assetId,
+          connectionName: input.name,
+          reason: "deleted",
+          actor: input.actor,
+          correlationId: input.correlationId
+        });
+      }
       let after: AssetWriteFollowUp | undefined;
       if (reason !== undefined) {
         const ending = options.signInEnding;
@@ -766,6 +784,19 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
             clientInstanceId,
             connectionAssetId: assetId,
             subject: TEST_CREDENTIAL_SUBJECT
+          });
+        }
+        // People's own tokens were set for the address and scheme as they were (PMCP-6): once
+        // either moves, binding and secret go in this transaction, and a revert brings none
+        // back.
+        if (moved || readDefinitionField(previous, "authScheme") !== next.data.authScheme) {
+          await endOwnSecrets(stores, {
+            clientInstanceId,
+            connectionAssetId: assetId,
+            connectionName: input.name,
+            reason: moved ? "origin_changed" : "scheme_changed",
+            actor: input.actor,
+            correlationId: input.correlationId
           });
         }
         if (moved) {
@@ -842,8 +873,13 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
     // with a Connection made again under its name, and they were not made on that one.
     async onRemove({ clientInstanceId, assetId, stores }) {
       await stores.connections.deleteSecrets({ clientInstanceId, connectionAssetId: assetId });
-      // The test credential's secret went with the line above; its binding goes with it.
+      // The test credential's secret went with the line above; its binding goes with it, and
+      // so do people's own tokens' bindings (PMCP-6).
       await stores.connections.deleteConnectionTestCredential({
+        clientInstanceId,
+        connectionAssetId: assetId
+      });
+      await endConnectionOwnSecrets(stores.connections, {
         clientInstanceId,
         connectionAssetId: assetId
       });
@@ -881,4 +917,40 @@ function documentSourceAttributes(source: DocumentSourceCapability | undefined):
       ? {}
       : { sourceMinChanges: String(source.schedule.minChanges) })
   };
+}
+
+/**
+ * Ends people's own tokens on a Connection (PMCP-6) inside the write's transaction, binding and
+ * secret, each audited as a revoked personal binding of scheme `static`. Never the token.
+ */
+async function endOwnSecrets(
+  stores: { connections: ConnectionsStore; audit: Pick<AuditEventStore, "appendAuditEvent"> },
+  input: {
+    clientInstanceId: ClientInstanceId;
+    connectionAssetId: string;
+    connectionName: string;
+    reason: ConnectionBindingEndReason;
+    actor: AuditActor;
+    correlationId: string;
+  }
+): Promise<void> {
+  const ended = await endConnectionOwnSecrets(stores.connections, input);
+  for (const binding of ended) {
+    await stores.audit.appendAuditEvent({
+      clientInstanceId: input.clientInstanceId,
+      type: "connection.binding_revoked",
+      status: "success",
+      actor: input.actor,
+      subject: input.connectionName,
+      reason: input.reason,
+      correlationId: input.correlationId,
+      metadata: {
+        connectionName: input.connectionName,
+        personal: true,
+        scheme: "static",
+        subjectKind: "user",
+        userId: binding.userId
+      }
+    });
+  }
 }

@@ -93,7 +93,7 @@ function OwnConnectionCard({
         <div className="grid min-w-0 flex-1 gap-1">
           <span className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="text-label wrap-anywhere">{title}</span>
-            <PersonalStateBadge signIn={connection} />
+            <PersonalStateBadge signIn={connection} token={connection.token !== undefined} />
           </span>
           {facts ? <span className="text-caption text-muted-foreground">{facts}</span> : null}
         </div>

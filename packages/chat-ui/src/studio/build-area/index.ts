@@ -107,6 +107,7 @@ export * from "./connection-people-model";
 export * from "./own-server-model";
 export { OwnServersSection, OwnServerAddDialog, type OwnServerAdded } from "./own-servers";
 export { OwnServerProposalCard } from "./own-server-proposal-card";
+export { OwnTokenDialog, ownTokenIssuesOf, saveOwnToken } from "./own-token";
 export {
   requestOwnServerAdd,
   takeOwnServerAdd,

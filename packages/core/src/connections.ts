@@ -578,6 +578,20 @@ export interface ConnectionCredentialResolver {
     /** Ends a wait for another process's refresh, as the call that waits ends. */
     signal?: AbortSignal;
   }): Promise<string>;
+  /**
+   * A person's own token for a personal `mcp` Connection that sends a bearer token or a header
+   * (PMCP-6), with the secret version it was read at. It reads the person's binding first and
+   * opens the token only where the binding is connected and was set for `origin`. It throws
+   * `connection_needs_reconnect` where the server refused the token, `connection_not_connected`
+   * where there is none for `origin`, and `secret_unreadable` where it cannot be opened. Left
+   * out, a resolver hands out no such token and the call answers `connection_not_connected`.
+   */
+  resolveOwnSecret?(input: {
+    /** `user:<id>`, selected internally from the acting person; never an API parameter. */
+    subject: string;
+    connectionAssetId: string;
+    origin: string;
+  }): Promise<{ value: string; secretVersion: number }>;
 }
 
 export { CONNECTION_HEALTH_STATES, type ConnectionHealth };
@@ -1158,6 +1172,11 @@ export const CONNECTION_REFUSALS = {
    * not send a typed secret, or the test credential names an address its type has no setting for.
    */
   testCredentialUnsupported: "test_credential_unsupported",
+  /**
+   * A person's own token is set on a personal MCP Connection that sends a bearer token or a
+   * header (PMCP-6), and nowhere else.
+   */
+  ownSecretUnsupported: "own_secret_unsupported",
   /** The Connection holds no test credential to remove. */
   testCredentialNotSet: "test_credential_not_set"
 } as const;

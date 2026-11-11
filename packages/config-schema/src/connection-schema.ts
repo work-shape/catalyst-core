@@ -345,14 +345,17 @@ export const storedConnectionConfigSchema = z
   })
   .strict()
   .superRefine((connection, context) => {
-    if (
-      connection.credentialMode === "user" &&
-      (connection.authScheme !== "oauth" || !["http_api", "mcp"].includes(connection.connectorType))
-    ) {
+    // Each person signs in, or on an MCP server pastes their own token (PMCP-6).
+    const personalScheme =
+      (connection.authScheme === "oauth" &&
+        ["http_api", "mcp"].includes(connection.connectorType)) ||
+      (connection.connectorType === "mcp" && ["bearer", "header"].includes(connection.authScheme));
+    if (connection.credentialMode === "user" && !personalScheme) {
       context.addIssue({
         code: "custom",
         path: ["credentialMode"],
-        message: "personal_oauth_required: personal Connections require OAuth on http_api or mcp"
+        message:
+          "personal_oauth_required: personal Connections require OAuth on http_api or mcp, or a bearer token or header on mcp"
       });
     }
     // A person's own server is an MCP server each person signs in to (PMCP).
