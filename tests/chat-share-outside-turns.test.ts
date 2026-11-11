@@ -278,3 +278,21 @@ describe("CHAT-SHARE-6a: an outside reader's turns run with their own rights", (
     expect(skill.statusCode).toBeGreaterThanOrEqual(400);
   });
 });
+
+describe("CHAT-SHARE-6a: one answer to whether a named person reads from outside", () => {
+  it("keeps a named holder of a Builder bundle of the team outside: the instance agent runs their turn", async () => {
+    const { t, team, creator, reader, chat, start, readerOffer } = await setup();
+    await t.expectOk(creator.id, "conversations.add_person", {
+      params: { conversationId: chat },
+      payload: { userId: reader.id }
+    });
+    // A bundle opens the workspace's building rooms; it does not make them a member.
+    await t.grant(reader.id, "builder", { workspaceId: team });
+    const offer = await readerOffer(reader.id);
+    expect(offer.outside).toBe(true);
+    expect(offer.agents.map((offered) => offered.name)).toEqual(["assistant"]);
+    const turn = await start(reader.id, "team-agent");
+    expect(turn.statusCode, turn.body).toBe(200);
+    expect(startedSchema.parse(turn.json()).run.agentName).toBe("assistant");
+  });
+});

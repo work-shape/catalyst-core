@@ -1,8 +1,11 @@
 import {
   AppError,
+  asUserId,
   getSubjectUserId,
   inProjectAudience,
   isAppError,
+  isAuthenticatedServicePrincipal,
+  type AuthenticatedIdentity,
   type AuthenticatedUser,
   type CollaborationWorkspace,
   type Conversation,
@@ -76,7 +79,7 @@ export async function requireConversationReach(
         conversation.projectId === undefined &&
         conversation.people.some((person) => person.userId === userId)
       ) {
-        return { conversation, outside: true };
+        return { conversation, outside: await readsChatFromOutside(options, conversation, user) };
       }
       throw new AppError("NOT_FOUND", "Conversation is not available");
     }
@@ -109,7 +112,10 @@ export async function requireConversationReach(
   if (conversation.visibility === "private" ? !ownPrivate && !named : !member) {
     throw new AppError("NOT_FOUND", "Conversation is not available");
   }
-  return { conversation, outside: !member && !ownPrivate };
+  return {
+    conversation,
+    outside: !member && !ownPrivate && (await readsChatFromOutside(options, conversation, user))
+  };
 }
 
 /**
@@ -160,21 +166,35 @@ export async function workspaceOfConversation(
 }
 
 /**
- * Whether the user, who passed `requireConversationAccess` for this conversation, reads it from
- * outside its workspace: no member and no holder of a bundle there (CHAT-SHARE-6).
+ * The one answer to "does this person read the chat from outside its workspace" (CHAT-SHARE-6,
+ * ADR-0034): a person named on it who is no member of its workspace. Holding a Builder or
+ * Publisher bundle there does not make them a member: such a person is outside too, the safer
+ * answer. Its creator, a member and a service principal are not. A subagent's thread is read as
+ * its root chat. Every path that treats an outside reader apart asks this.
  */
-export async function readsFromOutside(
+export async function readsChatFromOutside(
   options: Pick<ChatServerOptions, "stores" | "clientInstanceId">,
-  conversation: Pick<Conversation, "collaborationWorkspaceId">,
-  user: AuthenticatedUser
+  conversation: Conversation,
+  actor: AuthenticatedIdentity
 ): Promise<boolean> {
-  try {
-    await requireWorkspaceToWorkIn(options, user, conversation.collaborationWorkspaceId);
-    return false;
-  } catch (error) {
-    if (isAppError(error) && error.code === "NOT_FOUND") return true;
-    throw error;
-  }
+  if (isAuthenticatedServicePrincipal(actor)) return false;
+  const root =
+    conversation.kind === "run_thread" && conversation.parentConversationId
+      ? await options.stores.conversations.getConversation(
+          options.clientInstanceId,
+          conversation.parentConversationId
+        )
+      : conversation;
+  if (!root) return false;
+  const userId = getSubjectUserId(actor);
+  if (root.createdByUserId === userId) return false;
+  if (!root.people.some((person) => person.userId === userId)) return false;
+  const membership = await options.stores.workspaces.getMembership({
+    clientInstanceId: options.clientInstanceId,
+    collaborationWorkspaceId: root.collaborationWorkspaceId,
+    userId: asUserId(userId)
+  });
+  return membership === undefined;
 }
 
 /** The refusal of a write to a run thread. An agent reads it too, so it says what it refuses. */

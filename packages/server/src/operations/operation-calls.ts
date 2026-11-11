@@ -34,6 +34,7 @@ import { resolveOperationResource } from "./operation-resource";
 import { readAlwaysAllowLocks, readCentralPolicySettings } from "./central-policy";
 import { createAuditingEventEmitter } from "./event-emitter";
 import { worksInWorkspace } from "../workspaces/workspace-access";
+import { readsChatFromOutside } from "../conversations/conversation-access";
 import {
   agentUseRefusal,
   callerAccess,
@@ -343,6 +344,17 @@ async function namedOnChatIn(
   );
 }
 
+/** `readsChatFromOutside` for the chat a call is made from, where it names one. */
+async function readsFromOutsideChat(
+  options: Pick<OperationCallsOptions, "clientInstanceId" | "stores">,
+  actor: AuthenticatedIdentity,
+  chatId: ConversationId | undefined
+): Promise<boolean> {
+  if (chatId === undefined) return false;
+  const chat = await options.stores.conversations.getConversation(options.clientInstanceId, chatId);
+  return chat !== undefined && (await readsChatFromOutside(options, chat, actor));
+}
+
 /**
  * Whether an agent is available in a workspace now, by the rule a new run is started under
  * (`getWorkspaceAssetSnapshot`), and with an actor whether that person may use it there
@@ -357,6 +369,7 @@ async function agentAvailableTo(
     actor?: AuthenticatedIdentity;
     correlationId?: string;
     conversationId?: ConversationId;
+    chatId?: ConversationId;
   }
 ): Promise<boolean> {
   const { clientInstanceId } = options;
@@ -385,11 +398,13 @@ async function agentAvailableTo(
   ]);
   const keys = new Map(asset ? [[asset.name, { id: asset.id, scope: asset.scope }]] : []);
   // A person who reads a chat of the workspace from outside it runs only the instance's agents
-  // there (CHAT-SHARE-6): never the team's own, also where set to Everyone.
+  // there (CHAT-SHARE-6): never the team's own, also where set to Everyone. One who does not
+  // work in the workspace at all is held to the same.
   if (
     !isInstanceAgent({ agentKeys: keys }, input.agentName) &&
     !isAuthenticatedServicePrincipal(input.actor) &&
-    !(await worksInWorkspace(options, input.actor, workspace.id))
+    ((await readsFromOutsideChat(options, input.actor, input.chatId)) ||
+      !(await worksInWorkspace(options, input.actor, workspace.id)))
   ) {
     return false;
   }

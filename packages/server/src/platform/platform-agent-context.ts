@@ -3,7 +3,6 @@ import {
   AppError,
   assetPagePath,
   asUserId,
-  isAuthenticatedServicePrincipal,
   type Conversation,
   type ToolExecutionContext
 } from "@work-shape/catalyst-core";
@@ -16,7 +15,7 @@ import type { AssetCall } from "../assets/asset-access";
 import { AssetWorkflow } from "../assets/asset-service";
 import type { AssetWorkflowOptions } from "../types";
 import { getWorkspaceAssetSnapshot } from "../workspaces/agent-availability";
-import { worksInWorkspace } from "../workspaces/workspace-access";
+import { readsChatFromOutside } from "../conversations/conversation-access";
 import { ownerOf } from "../conversations/platform-asset-subject";
 import { readPlatformContext } from "./platform-context";
 import { workflowAuthoringContext } from "./workflow-authoring-context";
@@ -46,10 +45,9 @@ export async function readAgentPlatformContext(
   // (CHAT-SHARE-6).
   const available =
     workspace &&
+    conversation &&
     (await getWorkspaceAssetSnapshot(options, workspace, call.access, {
-      outside:
-        !isAuthenticatedServicePrincipal(call.actor) &&
-        !(await worksInWorkspace(options, call.actor, workspace.id))
+      outside: await readsChatFromOutside(options, conversation, call.actor)
     }));
   const { reads } = new AssetWorkflow(options);
   const apps =

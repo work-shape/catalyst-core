@@ -212,6 +212,11 @@ export interface RunOperationDeps {
     actor?: AuthenticatedIdentity;
     correlationId?: string;
     conversationId?: ConversationId;
+    /**
+     * The chat the call is made from, its root for a subagent's thread. A person who reads it
+     * from outside its workspace (`readsChatFromOutside`) runs only the instance's agents there.
+     */
+    chatId?: ConversationId;
   }): Promise<boolean>;
   logger: Logger;
   now?: () => Date;

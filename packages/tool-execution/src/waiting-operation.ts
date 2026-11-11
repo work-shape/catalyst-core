@@ -530,7 +530,8 @@ async function admitAgain(
       agentName: call.origin.agentName,
       workspaceId: call.workspaceId,
       actor: call.actor,
-      conversationId: call.origin.conversationId
+      conversationId: call.origin.conversationId,
+      chatId: call.origin.conversationId
     }))
   ) {
     return refuse(
