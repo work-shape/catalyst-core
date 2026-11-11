@@ -182,6 +182,7 @@ const REVIEWED_FIELDS = [
   "useModelFallback",
   "maxSteps",
   "toolNames",
+  "ownServers",
   "skillNames",
   "knowledgeBases",
   "subagentNames",

@@ -600,6 +600,9 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
     // again when the Connection goes, so a delete asks here: of each, its draft and what it
     // serves now.
     async assertRemovable({ name, assets }) {
+      // A person's own server is on no agent and in no App: its delete is never refused.
+      const own = (await assets(CONNECTION_ASSET_KIND)).find((asset) => asset.name === name);
+      if (own && ownerOnlyOwnerOf(own.config) !== undefined) return;
       const carrying = (await assets(AGENT_ASSET_KIND)).filter((agent) =>
         [agent.config, agent.publishedConfig].some((config) =>
           toolNamesOf(config).some(

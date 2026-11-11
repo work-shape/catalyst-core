@@ -13,6 +13,8 @@ import {
   ASSET_OWNER_KINDS,
   defineAssetKind,
   operationDenialError,
+  ownerOnlyOwnerOf,
+  parseConnectionOperationName,
   KNOWLEDGE_BASE_ASSET_KIND,
   type AgentConfig,
   type AgentEditableField,
@@ -96,9 +98,12 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
       validateWrite(context, agents) {
         const changed = agents.filter((agent) => context.changes("agent", agent.name));
         assertSpendBudgetPricingCoverage(options.config, changed);
-        return (options.validateAgents?.([...agents], changed) ?? []).map((message) => ({
-          message
-        }));
+        return [
+          ...ownServerToolIssues(context, changed),
+          ...(options.validateAgents?.([...agents], changed) ?? []).map((message) => ({
+            message
+          }))
+        ];
       },
       summarize: (agent, locale = defaultLocale) => {
         const description = resolveLocalizedString(agent.description, locale, defaultLocale);
@@ -324,3 +329,36 @@ function missingKnowledgeBaseIssues(
       )
     );
 }
+
+/**
+ * A tool of a server a person added for themselves on an agent the write adds or changes (PMCP-4):
+ * such a server is on no agent, since an agent is offered to others. Its owner's own private
+ * chats are offered its tools without one.
+ */
+function ownServerToolIssues(
+  context: AssetValidationContext,
+  agents: readonly AgentConfig[]
+): AssetValidationIssue[] {
+  const own = new Set(
+    context
+      .definitions("connection")
+      .filter((connection) => ownerOnlyOwnerOf(connection) !== undefined)
+      .flatMap((connection) => readDefinitionName(connection) ?? [])
+  );
+  if (own.size === 0) return [];
+  return agents.flatMap((agent) =>
+    agent.toolNames
+      .filter((toolName) => {
+        const connection = parseConnectionOperationName(toolName)?.connection;
+        return connection !== undefined && own.has(connection);
+      })
+      .map((toolName) => ({
+        message: `Agent '${agent.name}' lists '${toolName}', a tool of an MCP server a person added for themselves. Such a server is on no agent: its owner's own chats are offered its tools`,
+        path: ["toolNames"],
+        code: OWN_SERVER_TOOL_ON_AGENT
+      }))
+  );
+}
+
+/** The issue code of an agent that lists a tool of a person's own server. */
+const OWN_SERVER_TOOL_ON_AGENT = "own_server_tool_on_agent";

@@ -49,6 +49,7 @@ const AGENT_FIELD: Record<string, TranslationKey> = {
   useModelFallback: "operations.agentField.useModelFallback",
   maxSteps: "operations.agentField.maxSteps",
   toolNames: "operations.agentField.toolNames",
+  ownServers: "operations.agentField.ownServers",
   skillNames: "operations.agentField.skillNames",
   knowledgeBases: "operations.agentField.knowledgeBases",
   subagentNames: "operations.agentField.subagentNames",

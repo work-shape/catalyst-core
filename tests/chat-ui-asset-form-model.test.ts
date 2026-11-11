@@ -46,6 +46,29 @@ describe("asset form model", () => {
     expect(agentFormToConfig(agentConfigToForm(config))).toEqual(config);
   });
 
+  it("lets the person's own MCP servers in unless the agent says `ownServers: false`", () => {
+    const stored = {
+      name: "a",
+      displayName: "Agent",
+      instructions: "x",
+      toolNames: [],
+      skillNames: [],
+      initialPrompts: []
+    };
+    const form = agentConfigToForm(stored);
+    expect(form.ownServers).toBe(true);
+    expect(emptyAgentForm().ownServers).toBe(true);
+    expect(agentFormToConfig(form)).not.toHaveProperty("ownServers");
+
+    const off = agentConfigToForm({ ...stored, ownServers: false });
+    expect(off.ownServers).toBe(false);
+    expect(agentFormToConfig(off).ownServers).toBe(false);
+    // Switched on again, the saved config leaves the field out.
+    expect(
+      editedAgentConfig({ ...off, ownServers: true }, { ...stored, ownServers: false }, [])
+    ).not.toHaveProperty("ownServers");
+  });
+
   it("maps a model binding selection to modelBindingId only", () => {
     const form = agentConfigToForm({
       name: "a",

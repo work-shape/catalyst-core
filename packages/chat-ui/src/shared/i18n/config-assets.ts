@@ -202,6 +202,9 @@ export const configAssets = defineTranslations({
     configToolGroupPlatform: "Platform",
     configToolGroupPlatformText:
       "Finds and edits agents, Workflows and Apps with the rights of the person it works for.",
+    configOwnServers: "Your MCP servers",
+    configOwnServersText:
+      "In a private chat of their own, the person chatting can use the MCP servers they added for themselves. Each change asks them first.",
     configToolGroupInstance: "For everyone",
     configWelcomeMessage: "Welcome message",
     configWelcomeSubtitle: "Welcome subtitle"
@@ -419,6 +422,9 @@ export const configAssets = defineTranslations({
     configToolGroupPlatform: "Plattform",
     configToolGroupPlatformText:
       "Findet und bearbeitet Agenten, Workflows und Apps mit den Rechten der Person, für die er arbeitet.",
+    configOwnServers: "Deine MCP-Server",
+    configOwnServersText:
+      "In einem eigenen privaten Chat kann die Person, die chattet, die MCP-Server nutzen, die sie selbst hinzugefügt hat. Jede Änderung fragt sie vorher.",
     configToolGroupInstance: "Für alle",
     configWelcomeMessage: "Begrüßungsnachricht",
     configWelcomeSubtitle: "Begrüßungsuntertitel"

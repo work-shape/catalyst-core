@@ -48,6 +48,7 @@ import { connectionToolTitle, type ConnectionToolChoice } from "./connection-too
 import { heldToolCount, toolPackages } from "./instance-tools";
 import { AgentUnavailableNotices, savedAgentUnavailable } from "./agent-unavailable";
 import { ToolPackagesSection } from "./tool-packages-section";
+import { OwnServersRow } from "./own-servers-row";
 import {
   AvailabilityFields,
   useAvailabilityEdit,
@@ -843,6 +844,11 @@ export function AgentEditor({
             selected={form.toolNames}
             disabled={!canEdit("toolNames")}
             onChange={(toolNames) => update({ toolNames })}
+          />
+          <OwnServersRow
+            checked={form.ownServers}
+            disabled={!canEdit("toolNames")}
+            onChange={(ownServers) => update({ ownServers })}
           />
           {shipped.note("toolNames")}
           {proposed.around("toolNames", null)}

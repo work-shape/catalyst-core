@@ -373,6 +373,15 @@ export interface OperationRunStore {
     startedBefore: ISODateString;
     limit: number;
   }): Promise<OperationRun[]>;
+  /**
+   * The Connection operations that ran in a conversation and in every run thread under it, by
+   * name and each once: calls that started, whatever their end. A call that waited and was not
+   * carried out, or was refused, did not run (PMCP-4, the cross-source rule).
+   */
+  connectionOperationsIn(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+  }): Promise<string[]>;
   /** Deletes the runs that conversations caused and their decided Inbox requests atomically.
    * A run with a pending request is kept until that request settles. */
   deleteOfConversations(input: {

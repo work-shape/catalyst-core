@@ -237,6 +237,7 @@ export class TurnLoop {
           clientInstanceId: context.clientInstanceId,
           conversationId: input.conversationId,
           agentToolNames: listed.toolNames,
+          agentOwnServers: listed.ownServers !== false,
           user: context.user,
           runId
         });

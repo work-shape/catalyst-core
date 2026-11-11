@@ -24,6 +24,7 @@ import {
   type OperationOrigin,
   type OperationResource,
   type OperationSource,
+  ownerOnlyOwnerOf,
   requireOwnServersOn
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
@@ -46,6 +47,7 @@ import {
   type ConnectionOperationSourceDeps,
   type StoredConnection
 } from "./connection-reads";
+import { ownServerPolicyFloor } from "./own-server-tools";
 import { jsonSchemaAsZod, outsideJsonSchemaAsZod, outsideSchemaChecker } from "./schema-check";
 
 export type { ConnectionOperationSourceDeps } from "./connection-reads";
@@ -295,20 +297,28 @@ function definitionOf(
           }
         }
       : {}),
-    // An MCP read still sends its arguments to an outside host; readOnlyHint is no boundary.
-    ...(connection.config.connectorType === "mcp" && connection.config.credentialMode !== "user"
+    // A person's own server asks before every change, and before a read where another
+    // Connection's operation ran in the conversation (PMCP-4). It is a floor: an admin's `allow`
+    // does not lower it, an admin's `deny` still raises it.
+    ...(ownerOnlyOwnerOf(connection.config) !== undefined
       ? {
-          policyFloorOf: async (origin: OperationOrigin) =>
-            origin.kind === "agent" &&
-            (await personalDataConversation(
-              deps.stores,
-              deps.clientInstanceId,
-              origin.conversationId
-            ))
-              ? ("confirm" as const)
-              : undefined
+          policyFloorOf: (origin: OperationOrigin) =>
+            ownServerPolicyFloor(deps, connection.config.name, operation, origin)
         }
-      : {}),
+      : // An MCP read still sends its arguments to an outside host; readOnlyHint is no boundary.
+        connection.config.connectorType === "mcp" && connection.config.credentialMode !== "user"
+        ? {
+            policyFloorOf: async (origin: OperationOrigin) =>
+              origin.kind === "agent" &&
+              (await personalDataConversation(
+                deps.stores,
+                deps.clientInstanceId,
+                origin.conversationId
+              ))
+                ? ("confirm" as const)
+                : undefined
+          }
+        : {}),
     action: null,
     authorize: (_input, context) => authorizeCall(deps, connection, operation, context),
     scope: null,

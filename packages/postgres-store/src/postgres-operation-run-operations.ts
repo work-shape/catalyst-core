@@ -474,6 +474,40 @@ async function listOperationRunsRunningSince(
   return rows.map(mapOperationRun);
 }
 
+/**
+ * The Connection operations that ran in the conversation and its run threads, at any depth.
+ * A refused, expired or waiting call did not run, nor did a failed one that was never carried
+ * out. Read through the conversation index, one tree of threads at a time.
+ */
+async function connectionOperationsInConversation(
+  db: PostgresConnection,
+  input: Input<"connectionOperationsIn">
+): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ operation: operationRuns.operation })
+    .from(operationRuns)
+    .where(
+      and(
+        eq(operationRuns.clientInstanceId, input.clientInstanceId),
+        sql`${operationRuns.conversationId} in (
+          with recursive tree(id) as (
+            select ${input.conversationId}::text
+            union
+            select thread.id
+            from ${conversations} as thread
+            join tree on thread.parent_conversation_id = tree.id
+            where thread.client_instance_id = ${input.clientInstanceId}
+          )
+          select id from tree
+        )`,
+        sql`${operationRuns.operation} like 'connection.%'`,
+        inArray(operationRuns.status, ["running", "done", "failed"]),
+        sql`not (${operationRuns.status} = 'failed' and coalesce(${operationRuns.error}->>'unexecuted', 'false') = 'true')`
+      )
+    );
+  return rows.map((row) => row.operation);
+}
+
 async function deleteOperationRunsOfConversations(
   db: PostgresConnection,
   input: Input<"deleteOfConversations">
@@ -797,6 +831,7 @@ export function createPostgresOperationRunsStore(
     endWaiting: (input) => settle(input, (tx) => endWaitingOperationRun(tx, input)),
     markExpired: (input) => markOperationRunsExpired(db, input),
     listRunningSince: (input) => listOperationRunsRunningSince(db, input),
+    connectionOperationsIn: (input) => connectionOperationsInConversation(db, input),
     deleteOfConversations: (input) => deleteOperationRunsOfConversations(db, input),
     deleteWithoutConversationOlderThan: (input) =>
       deleteOperationRunsWithoutConversationOlderThan(db, input),
