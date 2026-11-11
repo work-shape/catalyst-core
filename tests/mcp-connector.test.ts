@@ -12,6 +12,7 @@ import {
   createEgressChecker,
   createMcpConnectorType,
   createSecretStore,
+  egressOfConnection,
   loadSecretKeyring,
   openConnectorContext
 } from "@work-shape/catalyst-connections";
@@ -502,6 +503,31 @@ describe("the Connector type mcp", () => {
       expect(arrived?.headers["mcp-session-id"]).toBeUndefined();
       expect(findLeak(JSON.stringify(arrived), key)).toBeUndefined();
       expect(allowed.egress.asked).toContain(OTHER_HOST);
+    });
+
+    it("follows a self-added server's 307 only where its own rule admits the target (PMCP-3)", async () => {
+      const other = await serve({ call: () => textResult("from inside") });
+      const key = generateTestSecret();
+      const first = await serve({
+        requireHeader: bearer(key),
+        sessions: true,
+        intercept: redirectCalls(307, () => urlOf(other, OTHER_HOST))
+      });
+      // The operator's list names both hosts as private, as for an admin's Connection.
+      const listed = await connect({
+        url: urlOf(first),
+        allow: [allowOf(first), allowOf(other, OTHER_HOST)],
+        key
+      });
+      const opened = await listed.open();
+      // The same call with the further targets judged as a self-added server's are.
+      const own: ConnectorContext = {
+        ...opened,
+        checkEgress: egressOfConnection(listed.egress.checker, { ownerOnly: true }).check
+      };
+      const denied = await refusal(type.execute("echo", {}, own));
+      expect(connectionCallReasonOf(denied)).toBe("egress_denied");
+      expect(other.connections).toBe(0);
     });
 
     it("keeps the credential on a redirect within the Connection's own origin", async () => {

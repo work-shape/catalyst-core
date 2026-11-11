@@ -263,12 +263,16 @@ async function buildInstanceConnections(
       "egress.allowPublicHttps is on: a Connection may reach any https host on port 443 whose addresses are all public"
     );
   }
+  const ownServers = getOwnServers(config);
   const egress = createEgressChecker({
     // The hosts of an offered entry join the operator's list; an entry only names them.
     allow: [...config.egress.allow, ...catalogue.egress],
     allowPublicHttps: config.egress.allowPublicHttps === true,
     platformStore: platformStore ?? [],
-    platformStoreUnknown: platformStore === undefined
+    platformStoreUnknown: platformStore === undefined,
+    // A server a person adds for themselves never reaches the instance itself (PMCP-3).
+    ownServersPublicHttps: ownServers.publicHttps,
+    ...(config.instance.publicUrl === undefined ? {} : { instanceUrl: config.instance.publicUrl })
   });
   const ownSecrets = keyring
     ? createConnectionCredentialResolver({ clientInstanceId, keyring, store: stores.connections })
@@ -303,7 +307,6 @@ async function buildInstanceConnections(
         managedClients
       })
     : undefined;
-  const ownServers = getOwnServers(config);
   const operations = {
     clientInstanceId,
     stores,

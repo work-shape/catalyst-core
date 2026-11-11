@@ -506,7 +506,7 @@ describe("asset reference owners through the assembled API", () => {
     ).toEqual([]);
     const connection = createConnectionAssetKind({
       connectorTypes: fixtureConnectorTypes,
-      egress: { admits: () => true }
+      egress: { admits: () => true, refusal: () => undefined }
     });
     for (const kind of [kinds.require("skill"), kinds.require("data_store"), connection])
       expect(kind.references?.({})).toEqual([]);

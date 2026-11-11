@@ -245,7 +245,7 @@ describe("OAuth catalogue parts", () => {
     const kind = createConnectionAssetKind({
       catalogue: offered,
       connectorTypes: registry(),
-      egress: { admits: () => true }
+      egress: { admits: () => true, refusal: () => undefined }
     });
     const initial = {
       ...expandCataloguePart(part(), {

@@ -44,7 +44,7 @@ async function sourceWorld(limits: OperationLimits) {
     stores: t.stores,
     clientInstanceId,
     connectorTypes: createConnectorTypeRegistry([source.connectorType]),
-    egress: { admits: () => true, check: async () => target },
+    egress: { admits: () => true, refusal: () => undefined, check: async () => target },
     credentials: { resolve: async () => "fixture-secret", resolveSignIn: async () => "unused" },
     logger: {
       debug() {},

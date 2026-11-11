@@ -22,6 +22,7 @@ import {
   type ConnectorOAuthEndpoints,
   type ConnectorSignIn,
   type ConnectorTypeDefinition,
+  type EgressChecker,
   type EgressGrant,
   type JsonObject,
   type OperationResource,
@@ -35,7 +36,7 @@ import {
   type StoredConnection
 } from "../connection-reads";
 import { NO_CREDENTIALS, credentialOriginOf } from "../connector-context";
-import { egressTargetOfUrl } from "../egress";
+import { egressOfConnection, egressTargetOfUrl } from "../egress";
 import { createSecretStore, type SecretKeyring } from "../secret-store";
 import { onOrigins, resourceAllowed, scopesOf, stateHashOf } from "./checks";
 import {
@@ -296,6 +297,8 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
     origin: string;
     resourceUrl: string;
     fetch: OAuthFetch;
+    /** The checker as this Connection's addresses are judged, by its own rule. */
+    egress: EgressChecker;
   }
 
   /**
@@ -311,7 +314,7 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
       endpoints.tokenUrl,
       endpoints.revocationUrl
     ]) {
-      if (address !== undefined) await deps.egress.check(egressTargetOfUrl(address));
+      if (address !== undefined) await starting.egress.check(egressTargetOfUrl(address));
     }
     // The authorization address names the client id only: a managed client's secret is read
     // from the host at the code exchange, not here.
@@ -413,13 +416,17 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
   ): Promise<OAuthStartAnswer> {
     const { keyring, publicUrl, redirect } = required(connection.config.name);
     const { type, signIn, settings } = signInOf(connection);
-    const target = await deps.egress.check(type.target(settings));
+    // The Connection's target, its server's metadata, registration and token addresses, all
+    // by the Connection's own rule: a self-added server's sign-in reaches public hosts only.
+    const egress = egressOfConnection(deps.egress, connection.config);
+    const target = await egress.check(type.target(settings));
     const starting: Starting = {
       connection,
       keyring,
       origin: credentialOriginOf(type, settings, target),
       resourceUrl: signIn.resourceUrl(settings),
-      fetch: createOAuthFetch({ egress: deps.egress, signal })
+      fetch: createOAuthFetch({ egress, signal }),
+      egress
     };
     const endpoints = type.oauthEndpoints?.(settings);
     const found =
@@ -524,7 +531,8 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
     const { keyring } = required(connection.config.name);
     // The config of the session's revision: what the start discovered and signed in for.
     const { type, signIn, settings } = signInOf(connection);
-    const target = await deps.egress.check(type.target(settings));
+    const egress = egressOfConnection(deps.egress, connection.config);
+    const target = await egress.check(type.target(settings));
     const origin = credentialOriginOf(type, settings, target);
     if (query.error !== undefined) {
       throw connectionOAuthError(
@@ -536,7 +544,7 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
     if (query.code === undefined || query.code.length === 0) {
       throw connectionOAuthError("oauth_state_invalid", "the provider sent no code");
     }
-    const fetch = createOAuthFetch({ egress: deps.egress, signal });
+    const fetch = createOAuthFetch({ egress, signal });
     const { server, endpoints } = await signInServerOf({
       port,
       type,

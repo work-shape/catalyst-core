@@ -330,11 +330,12 @@ export async function fixtureOn<Instance extends AccessInstance>(
   });
   const closed = createEgressChecker({ allow: [], resolve: address });
   const egress: EgressChecker = {
-    check(target) {
+    check(target, rule) {
       sequence.push("check egress");
-      return (state.hostAllowed ? open : closed).check(target);
+      return (state.hostAllowed ? open : closed).check(target, rule);
     },
-    admits: (target) => (state.hostAllowed ? open : closed).admits(target)
+    admits: (target, rule) => (state.hostAllowed ? open : closed).admits(target, rule),
+    refusal: (target, rule) => (state.hostAllowed ? open : closed).refusal(target, rule)
   };
 
   let deps: ConnectionOperationSourceDeps | undefined;

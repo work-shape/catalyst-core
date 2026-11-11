@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { connectionConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   StoreBackedAuditRecorder,
+  egressRuleOf,
   endConnectionSignIn,
   type AuditActor,
   type AuditEventStore,
@@ -14,6 +15,7 @@ import {
   type ConnectorTypeRegistry,
   type JsonObject,
   type EgressChecker,
+  type EgressRule,
   type Logger
 } from "@work-shape/catalyst-core";
 import { bindingAuditSubject } from "../personal-bindings";
@@ -66,6 +68,8 @@ interface Revocable {
   /** The type and settings the sign-in was made under, whose server may be named in them. */
   type: ConnectorTypeDefinition;
   settings: JsonObject;
+  /** The rule the Connection's addresses are judged by, the revocation address's included. */
+  egressRule: EgressRule;
 }
 
 export function createSignInEnding(deps: SignInEndingDeps): ConnectionSignInEnding {
@@ -180,7 +184,8 @@ export function createSignInEnding(deps: SignInEndingDeps): ConnectionSignInEndi
       client,
       connectionOrigin: new URL(type.signIn.resourceUrl(settings.data)).origin,
       type,
-      settings: settings.data
+      settings: settings.data,
+      egressRule: egressRuleOf(parsed.data)
     };
   }
 
@@ -199,7 +204,10 @@ export function createSignInEnding(deps: SignInEndingDeps): ConnectionSignInEndi
       revocable = undefined;
       if (held === undefined) return "failed";
       const signal = AbortSignal.timeout(REVOCATION_TIMEOUT_MS);
-      const fetch = createOAuthFetch({ egress: deps.egress, signal });
+      const fetch = createOAuthFetch({
+        egress: { check: (target) => deps.egress.check(target, held.egressRule) },
+        signal
+      });
       try {
         const { server } = await signInServerOf({
           port,
