@@ -225,11 +225,13 @@ test("an attached image whose content is SVG bytes shows as its file chip", asyn
   await expect(message.getByRole("button", { name: "Open preview for plan.png" })).toBeVisible();
   await expect(message.locator("img")).toHaveCount(0);
 
-  // A PNG is the image itself.
+  // A PNG is the image itself, no file chip: the picture is the one button that opens it.
   content = { body: PNG, contentType: "image/png" };
   await page.reload();
   const image = message.locator("img");
   await expect(image).toBeVisible();
   await expect.poll(() => image.evaluate((node: HTMLImageElement) => node.naturalWidth)).toBe(1);
-  await expect(message.getByRole("button", { name: "Open preview for plan.png" })).toHaveCount(0);
+  const open = message.getByRole("button", { name: "Open preview for plan.png" });
+  await expect(open).toHaveCount(1);
+  await expect(open.locator("img")).toHaveCount(1);
 });
