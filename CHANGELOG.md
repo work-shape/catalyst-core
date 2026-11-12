@@ -7,6 +7,77 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.34 — 2026-11-12
+
+### Added
+
+- A picture sent with a message opens in the preview panel beside the chat when it is clicked or
+  activated with the keyboard, as a file chip of the message already did. The thumbnail is a
+  button named "Open preview for <file>" ("Vorschau für <file> öffnen"); on a phone the preview
+  opens as the full-width sheet.
+- `@work-shape/catalyst-ui` gains `ThumbnailButton`: a small picture with its caption on a framed
+  card that is a button, with a spinner while what it opens loads.
+- **Connections:** A catalogue entry can name an MCP server a person adds as their own: its
+  address (public https on 443), how they sign in (`oauth` or `token`), for a token a short help
+  text, a link and the header it goes under, and what it says of the server's tools. The add
+  dialog under You > Connections shows the offered entries as tiles above the address field; a
+  tile fixes the address, and a token tile goes straight to the token step with its help. The
+  card shows the entry's mark while the server's host is the entry's. English and German.
+- **Connections:** An entry carries no credential, adds no host to the egress list, grants no
+  right and never sets Always allow. Its `changing` starts a tool the server marks read-only as
+  changing and unticked; its `reading` never ticks a tool the server does not mark read-only.
+  Every rule of a person's own server holds for a server added from an entry.
+- **Agents:** The own-server mode of `platform.connections.propose` takes `ownServerEntry`, the
+  id of an offered entry, in place of a name and an address; the address is then the entry's.
+  An id the instance does not offer is refused with `own_server_entry_unknown`. The tool's
+  description lists the offered entries. Its audit names the mode and the entry, never the
+  address.
+- **API:** `connections.mine` answers `ownServers.entries`, the offered entries, to a person who
+  may add a server.
+- **Connections:** A person's own MCP server can take a token they paste instead of a sign-in.
+  The add dialog asks for it where the server wants one, and offers "Paste a token instead" on
+  the sign-in step. The token goes as a Bearer token, or under a header the person names under
+  "Technical details". Its card says "Token missing" while there is none and offers "Set token"
+  or "Replace token"; so do the cards of an admin's personal MCP Connections that take a token.
+  English and German.
+- **Connections:** The token is stored encrypted under the person's own binding and is never
+  answered back. It goes to the server's own origin only, never to a host a redirect names. A
+  401 deletes it and asks for a new one, without repeating the call. A move of the server's
+  address or of how the token is sent, Disconnect, the delete, the person's deactivation and an
+  admin's revoke delete it. The audit records `binding_connected`, `binding_needs_reconnect` and
+  `binding_revoked` with `personal: true` and scheme `static`, never the token.
+- **API:** `connections.set_own_secret` (`PUT /api/v1/connections/:name/own-secret`) sets or
+  replaces the caller's own token over its version, in a first-party session only, on their own
+  server or a personal MCP Connection they may use. `connections.get` answers `ownToken` (set or
+  not set, since when, the scheme), and `connections.mine` a `token` on such a row. Mode `user`
+  on `mcp` also takes the schemes `bearer` and `header`.
+- **Docs:** "Add your own MCP server" covers the token.
+- A plus at the right edge of a project's label in the sidebar starts a new chat in that
+  project ("New chat in this project"). It shows while the pointer or the keyboard is on the
+  label and always on a touch screen, stands in the column of the chats' "…" menu, and never
+  folds the project. The project labels are calmer: no folder icon, one muted colour for every
+  label, the name on its chats' left edge, and the gap between two projects that of two groups.
+  `NavGroup` takes a `labelAction` on a folding group whose label links, and its current label
+  keeps the colour of the others.
+
+### Fixed
+
+- Under "All workspaces except…", an agent that is the default in every shared workspace no
+  longer reads "There are no shared workspaces yet". The empty list now says the agent is the
+  default agent there and that another default agent in a workspace's settings lets it be left out.
+- The browser check of an attached image whose bytes are SVG expects what the chat now does: SVG
+  bytes still show as the file chip, and a real PNG is the picture that opens its preview, one
+  button holding the image, no file chip.
+
+### Database
+
+- Migrations 0201 and 0202 let `connection_bindings` hold a person's own token: scheme `static`
+  with subject `user:<id>` of the person, `user_id` set, a Secret Store handle and version, and
+  state `connected` or `needs_reconnect`. The scheme constraint is widened, added `NOT VALID` in
+  0201 and validated in 0202, so the table is not scanned under the lock. Every existing row and
+  every write of the previous release still fits it. A rollback needs no step for the schema: the
+  previous release reads no such row, so people's tokens wait unused until it is back.
+
 ## 0.8.0-rc.33 — 2026-11-11
 
 ### Added
