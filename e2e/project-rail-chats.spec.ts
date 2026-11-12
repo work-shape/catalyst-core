@@ -239,3 +239,95 @@ test("a project's chats in the rail: the open project unfolds, Zuletzt leaves it
   await expect(unfolded).toBeHidden();
   await expect(page.getByRole("button", { name: "Seitenleiste öffnen" })).toBeVisible();
 });
+
+// The plus on a project's label starts a new chat in the project: it shows on the label, to the
+// keyboard and on a phone, stands in the column of the chats' "…", and never folds the project.
+test("the plus on a project's label starts a new chat in it", async ({
+  page,
+  browser,
+  baseURL,
+  pageErrors
+}) => {
+  test.setTimeout(90_000);
+  const suffix = String(Date.now()).slice(-7);
+  const title = `Hafen ${suffix}`;
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await signIn(page, owner);
+  const created = await requestWithOrigin(page, "post", `${apiOrigin}/api/v1/workspaces`, {
+    data: { name: `Plus ${suffix}`, defaultConversationVisibility: "workspace" }
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const workspaceId = idSchema.parse(await created.json()).id;
+  const project = await createProject(page, workspaceId, title, "workspace");
+  const first = await startChat(page, workspaceId, `Kaimauer ${suffix}`, project.id);
+  await startChat(page, workspaceId, `Kran ${suffix}`, project.id);
+
+  // In a chat of the project: it stands open, the plus unseen until the label is pointed at.
+  await page.goto(`/w/${workspaceId}/c/${first}`);
+  const rail = page.getByRole("navigation", { name: "Hauptnavigation" });
+  const group = rail
+    .getByTestId("rail-project")
+    .filter({ has: page.getByRole("link", { name: title, exact: true }) });
+  const caret = group.getByRole("button", { name: `Chats in ${title}` });
+  const plus = group.getByRole("button", { name: "Neuer Chat in diesem Projekt" });
+  // The slot around the plus is what shows and hides it.
+  const plusSlot = plus.locator("xpath=..");
+  await expect(caret).toHaveAttribute("aria-expanded", "true");
+  await page.mouse.move(900, 400);
+  await expect(plusSlot).toHaveCSS("opacity", "0");
+  await group.getByRole("link", { name: title, exact: true }).hover();
+  await expect(plusSlot).toHaveCSS("opacity", "1");
+
+  // It stands in the column of the chats' "…".
+  const row = group.getByTestId("conversation-row").first();
+  await row.hover();
+  const menu = row.getByRole("button", { name: /Optionen/u });
+  const [plusBox, menuBox] = [await plus.boundingBox(), await menu.boundingBox()];
+  expect(plusBox && menuBox).toBeTruthy();
+  expect(Math.abs((plusBox?.x ?? 0) - (menuBox?.x ?? 0))).toBeLessThanOrEqual(1);
+  expect(plusBox?.width).toBe(menuBox?.width);
+
+  // The keyboard reaches it right after the caret, and sees it there.
+  await page.mouse.move(900, 400);
+  await caret.focus();
+  await page.keyboard.press("Tab");
+  await expect(plus).toBeFocused();
+  await expect(plusSlot).toHaveCSS("opacity", "1");
+
+  // It opens the project's page, the start of a new chat there, and leaves the project open.
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/p/${project.name}$`, "u"));
+  await expect(caret).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("textbox", { name: `Neuer Chat in ${title}` })).toBeFocused();
+
+  // On a phone it shows without a pointer, in the drawer, and the drawer closes on it.
+  const phone = await browser.newContext({
+    baseURL,
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true
+  });
+  await pageErrors.watch(phone);
+  const phonePage = await phone.newPage();
+  // Signed in as on the desktop; at this width the navigation waits in the drawer.
+  const phoneSignedIn = await phonePage.request.post(`${apiOrigin}/api/auth/sign-in/email`, {
+    headers: { Origin: uiOrigin },
+    data: { ...owner, rememberMe: true }
+  });
+  expect(phoneSignedIn.ok()).toBe(true);
+  await phonePage.addInitScript(() => {
+    window.localStorage.setItem("vivd-catalyst:locale", "de");
+  });
+  await phonePage.goto(`/w/${workspaceId}/c/${first}`);
+  await phonePage.getByRole("button", { name: "Seitenleiste öffnen" }).click();
+  const phonePlus = phonePage
+    .getByRole("navigation", { name: "Hauptnavigation" })
+    .getByTestId("rail-project")
+    .filter({ has: phonePage.getByRole("link", { name: title, exact: true }) })
+    .getByRole("button", { name: "Neuer Chat in diesem Projekt" });
+  await expect(phonePlus.locator("xpath=..")).toHaveCSS("opacity", "1");
+  await phonePlus.tap();
+  await expect(phonePage).toHaveURL(new RegExp(`/w/${workspaceId}/p/${project.name}$`, "u"));
+  await expect(phonePage.getByRole("button", { name: "Seitenleiste öffnen" })).toBeVisible();
+  await phone.close();
+});

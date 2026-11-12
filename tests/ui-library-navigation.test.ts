@@ -663,6 +663,43 @@ describe("navigation, page structure and data components", () => {
   });
 });
 
+describe("a folding group whose label links", () => {
+  const group = (props: Record<string, unknown>) =>
+    render(
+      createElement(
+        NavGroup,
+        {
+          label: "North",
+          labelLink: { href: "/p/north" },
+          collapsible: true,
+          foldLabel: "Chats in North",
+          ...props
+        },
+        createElement(NavItem, null, "A chat")
+      )
+    );
+
+  it("carries its action after the caret, at the right edge, outside what folds", () => {
+    const markup = group({
+      labelAction: createElement("button", { type: "button", "aria-label": "Add" })
+    });
+    expect(markup).toMatch(
+      /aria-label="Chats in North"[^]*?<\/button><span data-nav-group-action="" class="ml-auto [^"]*"><button type="button" aria-label="Add">/u
+    );
+    // Shown on the label, to the keyboard and on a touch screen; it keeps its room otherwise.
+    expect(markup).toMatch(/group-hover\/nav-group-row:opacity-100/u);
+    expect(markup).toMatch(/data-nav-group-action="" class="[^"]*focus-within:opacity-100/u);
+    expect(markup).toMatch(/data-nav-group-action="" class="[^"]*pointer-coarse:opacity-100/u);
+    expect(group({})).not.toContain("data-nav-group-action");
+  });
+
+  it("reads its current label in the colour of every other label", () => {
+    const markup = group({ labelCurrent: true });
+    expect(markup).toMatch(/<a [^>]*aria-current="page"/u);
+    expect(markup).not.toMatch(/<a [^>]*class="[^"]*(?<![:\w-])text-foreground/u);
+  });
+});
+
 describe("the space a page ends with", () => {
   const rail = () =>
     createElement(SubRail, {
