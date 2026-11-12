@@ -48,10 +48,14 @@ function frame(): BuildAssetEditorProps {
   };
 }
 
-function availabilitySection(availability: Partial<AvailabilityChoice>, isDefault = false): string {
+function availabilitySection(
+  availability: Partial<AvailabilityChoice>,
+  isDefault = false,
+  locale: "en" | "de" = "en"
+): string {
   const markup = renderToStaticMarkup(
     createElement(TranslationProvider, {
-      locale: "en",
+      locale,
       children: createElement(AgentEditor, {
         frame: frame(),
         initialForm: agentConfigToForm(config),
@@ -118,6 +122,31 @@ describe("agent availability", () => {
     expect(section).not.toMatch(/<label[^>]*>(?:(?!<\/label>).)*Legal/u);
   });
 
+  it("says why no workspace can be left out when the agent is the default in every one", () => {
+    const everywhere = {
+      saved: { mode: "all_except", personalWorkspaces: true, collaborationWorkspaceIds: [] },
+      workspaces: [sales, { ...legal, defaultAgentName: "assistant" }]
+    } satisfies Partial<AvailabilityChoice>;
+    // Sales names no default of its own, so the instance default stays there too.
+    const en = availabilitySection(everywhere, true);
+    expect(en).not.toMatch(/<label[^>]*>(?:(?!<\/label>).)*(?:Sales|Legal)/u);
+    expect(en).toContain("This agent is the default agent in every shared workspace.");
+    expect(en).toContain("To leave one out, choose another default agent in that workspace");
+    expect(en).not.toContain("There are no shared workspaces yet.");
+    const de = availabilitySection(everywhere, true, "de");
+    expect(de).toContain("Dieser Agent ist in jedem geteilten Arbeitsbereich der Standardagent.");
+    expect(de).toContain(
+      "Um einen auszunehmen, lege in dessen Einstellungen einen anderen Standardagenten fest."
+    );
+    expect(de).not.toContain("Es gibt noch keine geteilten Arbeitsbereiche.");
+    const failed = availabilitySection(
+      { ...everywhere, workspacesError: "The workspaces could not be read." },
+      true
+    );
+    expect(failed).toContain("The workspaces could not be read.");
+    expect(failed).not.toContain("This agent is the default agent in every shared workspace.");
+  });
+
   it("lets the default agent be restricted and says where it has to stay", () => {
     const section = availabilitySection(
       { saved: { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] } },
@@ -148,6 +177,15 @@ describe("agent availability", () => {
     const section = availabilitySection({ workspaces: [] });
     expect(section).toContain("There are no shared workspaces yet.");
     expect(section).toContain("this agent is not available in any workspace");
+  });
+
+  it("says there are no shared workspaces when there are none to leave out", () => {
+    const section = availabilitySection({
+      saved: { mode: "all_except", personalWorkspaces: true, collaborationWorkspaceIds: [] },
+      workspaces: []
+    });
+    expect(section).toContain("There are no shared workspaces yet.");
+    expect(section).not.toContain("This agent is the default agent in every shared workspace.");
   });
 
   it("says why the shared workspaces could not be listed", () => {
