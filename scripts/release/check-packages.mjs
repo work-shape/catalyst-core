@@ -37,8 +37,8 @@ const MAX_TARBALL_BYTES_BY_DIR = {
   "config-cli": 360_000,
   // Domain types and logic every other package builds on.
   core: 440_000,
-  // Built documentation site.
-  docs: 2_400_000,
+  // Built documentation site; the rc.34 cut took it to 2,403,019.
+  docs: 2_800_000,
   // Two built web pages: the public form page and its preview beside the chat.
   "outside-forms": 450_000,
   // Migrations and their snapshot history.
