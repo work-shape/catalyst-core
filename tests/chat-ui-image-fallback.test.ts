@@ -226,7 +226,10 @@ describe("an attached image that does not decode", () => {
     await show(sentThread(sentWithImage("file_photo", "photo.png")));
 
     expect(host.querySelector("img")?.getAttribute("alt")).toBe("photo.png");
-    expect(host.querySelector('button[aria-label="Open preview for photo.png"]')).toBeNull();
+    // The picture itself is the control that opens it.
+    expect(
+      host.querySelector('button[aria-label="Open preview for photo.png"] img')
+    ).not.toBeNull();
   });
 
   it("keeps a raster image that loads as the image", async () => {
@@ -236,7 +239,9 @@ describe("an attached image that does not decode", () => {
     await act(async () => image?.dispatchEvent(new Event("load")));
 
     expect(host.querySelector("img")?.getAttribute("src")).toBe("blob:catalyst/file-1");
-    expect(host.querySelector("figcaption")?.textContent).toBe("photo.png");
+    expect(host.querySelector('button[aria-label="Open preview for photo.png"]')?.textContent).toBe(
+      "photo.png"
+    );
     expect(blobTypes()).toEqual(["image/png"]);
   });
 });

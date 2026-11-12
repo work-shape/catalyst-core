@@ -6,6 +6,7 @@ import { FilePicker } from "../actions/file-picker";
 import { IconButton, type IconButtonSize } from "../actions/icon-button";
 import { RunLiveOnce, type RunLiveOnceState } from "../actions/run-live-once";
 import { TextLink } from "../actions/text-link";
+import { ThumbnailButton } from "../actions/thumbnail-button";
 import { Starter, StarterList } from "../actions/starter";
 import { Choice, ChoiceList } from "../actions/choice";
 import { Badge } from "../status/badge";
@@ -194,6 +195,20 @@ export const actionsGallery: GalleryGroup = {
               {text.learnMore}
             </TextLink>
           </p>
+        </Samples>
+      )
+    },
+    {
+      name: "ThumbnailButton",
+      components: ["ThumbnailButton"],
+      render: (text) => (
+        <Samples>
+          <ThumbnailButton label={text.openThumbnail} caption="screenshot.png">
+            <span className="block h-24 w-40 rounded bg-primary-soft" />
+          </ThumbnailButton>
+          <ThumbnailButton label={text.thumbnailOpening} caption="screenshot.png" loading>
+            <span className="block h-24 w-40 rounded bg-primary-soft" />
+          </ThumbnailButton>
         </Samples>
       )
     },

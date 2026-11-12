@@ -71,6 +71,8 @@ export interface GalleryText
   addItem: string;
   chooseFiles: string;
   noFileChosen: string;
+  openThumbnail: string;
+  thumbnailOpening: string;
   dropFiles: string;
   chooseFolder: string;
   moreActions: string;
@@ -336,6 +338,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     addItem: "Add",
     chooseFiles: "Choose files",
     noFileChosen: "No file chosen",
+    openThumbnail: "Open preview for screenshot.png",
+    thumbnailOpening: "Opening preview for screenshot.png",
     dropFiles: "Drop a folder or files here",
     chooseFolder: "Choose folder",
     moreActions: "More actions",
@@ -639,6 +643,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     addItem: "Hinzufügen",
     chooseFiles: "Dateien auswählen",
     noFileChosen: "Keine Datei ausgewählt",
+    openThumbnail: "Vorschau für screenshot.png öffnen",
+    thumbnailOpening: "Vorschau für screenshot.png wird geöffnet",
     dropFiles: "Ordner oder Dateien hier ablegen",
     chooseFolder: "Ordner auswählen",
     moreActions: "Weitere Aktionen",
