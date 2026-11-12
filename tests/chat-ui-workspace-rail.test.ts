@@ -1281,10 +1281,7 @@ describe("the Projects group", () => {
     expect(html.match(/data-testid="rail-project-new-chat"/gu)).toHaveLength(2);
     // In English too.
     expect(
-      renderProjectRail(
-        { recentProjects: [nord], onNewChatInProject: () => {} },
-        "en"
-      )
+      renderProjectRail({ recentProjects: [nord], onNewChatInProject: () => {} }, "en")
     ).toContain('aria-label="New chat in this project"');
   });
 
