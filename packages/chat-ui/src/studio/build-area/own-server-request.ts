@@ -9,6 +9,8 @@ import { forgetWhenSessionEnds } from "../../shared/shell-session";
 export interface OwnServerAddRequest {
   title: string;
   url: string;
+  /** The catalogue entry an agent named (PMCP-CAT): the add screen starts at its tile. */
+  entry?: string;
   from?: { conversationId: string; agentName?: string };
 }
 

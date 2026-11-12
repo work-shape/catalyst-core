@@ -1,6 +1,7 @@
 import type { ApiClient } from "@work-shape/catalyst-api-client";
 import { createContext, useContext, type ReactNode } from "react";
 import type { ConnectionDraft, ConnectionDraftOpening } from "./connection-draft";
+import type { OwnServerProposal } from "./own-server-model";
 
 // What the conversation's cards of an agent's Connection draft or proposal, and its Connect
 // card, read and do through the workspace on screen.
@@ -40,7 +41,7 @@ export interface ConnectionDraftHost {
    * filled with an agent's proposal (PMCP-CHAT), the conversation docked beside it. The page
    * decides whether the person may add one.
    */
-  openOwnServer?(proposal: { title: string; url: string }): void;
+  openOwnServer?(proposal: OwnServerProposal): void;
   /**
    * The Connection of an id as the instance holds it, or nothing where there is none: the card
    * names an existing Connection by its own title, never by the agent's.

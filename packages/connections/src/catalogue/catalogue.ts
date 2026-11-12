@@ -12,6 +12,7 @@ import {
   type ConnectionCredentialMode,
   type ResultShaper,
   type LocalizedStringConfig,
+  type OwnServerSignIn,
   sameJson
 } from "@work-shape/catalyst-core";
 import { createResultShaperRegistry } from "../result-shapers";
@@ -100,9 +101,30 @@ export interface CatalogueEntryView {
   parts: CataloguePartView[];
 }
 
+/**
+ * An offered entry a person adds as their own MCP server (PMCP-CAT), as their add screen and
+ * the propose tool read it. It holds no credential and adds no host to the egress list.
+ */
+export interface OwnServerEntryView {
+  id: string;
+  version: number;
+  service: string;
+  title: LocalizedStringConfig;
+  description: LocalizedStringConfig;
+  mark: { color?: string; logo?: string };
+  url: string;
+  signIn: OwnServerSignIn;
+  /** Only where the person pastes a token: where they get it, and the header it goes in. */
+  token?: { help: LocalizedStringConfig; link?: string; header?: string };
+  /** What the service's documentation says the named tools do. */
+  tools: { name: string; effect: CatalogueEntryOperation["effect"] }[];
+}
+
 export interface Catalogue {
-  /** Every entry the release ships, offered or not, by id. */
+  /** Every entry the release ships with a part an admin installs, offered or not, by id. */
   readonly entries: readonly CatalogueEntryView[];
+  /** The offered entries a person adds as their own MCP server, by id. */
+  readonly ownServers: readonly OwnServerEntryView[];
   /** The hosts of the offered entries: they join the operator's `egress.allow`. */
   readonly egress: readonly EgressAllowEntry[];
   /**
@@ -381,6 +403,7 @@ export function createCatalogue(input: {
   }
   const named = new Set(input.named);
   const views: CatalogueEntryView[] = [];
+  const ownServers: OwnServerEntryView[] = [];
   const egress: EgressAllowEntry[] = [];
   for (const entry of [...byId.values()].sort((left, right) => (left.id < right.id ? -1 : 1))) {
     const offered = named.has(entry.id);
@@ -447,6 +470,32 @@ export function createCatalogue(input: {
           )
             egress.push(host);
     }
+    if (offered && entry.ownServer !== undefined) {
+      const { url, signIn, token, tools } = entry.ownServer;
+      ownServers.push({
+        id: entry.id,
+        version: entry.version,
+        service: entry.service,
+        title: entry.title,
+        description: entry.description,
+        mark:
+          entry.mark.logo === undefined ? { color: entry.mark.color } : { logo: entry.mark.logo },
+        url,
+        signIn,
+        ...(token === undefined
+          ? {}
+          : {
+              token: {
+                help: token.help,
+                ...(token.link === undefined ? {} : { link: token.link }),
+                ...(token.header === undefined ? {} : { header: token.header })
+              }
+            }),
+        tools: tools.map((tool) => ({ name: tool.name, effect: tool.effect }))
+      });
+    }
+    // An entry a person adds as their own server alone is not installed by an admin.
+    if (entry.tools === undefined && entry.source === undefined) continue;
     if (offered && parts.length === 0) {
       throw new AppError(
         "VALIDATION_FAILED",
@@ -526,6 +575,7 @@ export function createCatalogue(input: {
   }
   return Object.freeze({
     entries,
+    ownServers: Object.freeze(ownServers),
     egress: Object.freeze(egress),
     managedClientIssue,
     prepareConnection(config: Record<string, unknown>): Record<string, unknown> {

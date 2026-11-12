@@ -59,9 +59,18 @@ const DISCOVERY_TIMEOUT_MS = 45_000;
 
 const mineSchema = z.object({
   connections: z.array(
-    z.object({ name: z.string(), ownServer: z.object({ tools: z.number() }).optional() })
+    z.object({
+      name: z.string(),
+      service: z.string().optional(),
+      ownServer: z.object({ tools: z.number() }).optional()
+    })
   ),
-  ownServers: z.object({ mayAdd: z.boolean() }).optional()
+  ownServers: z
+    .object({
+      mayAdd: z.boolean(),
+      entries: z.array(z.object({ id: z.string(), url: z.string() })).optional()
+    })
+    .optional()
 });
 const settingsSchema = z.object({
   items: z.array(z.object({ operation: z.string(), value: z.string().optional() }))
@@ -102,6 +111,51 @@ test.beforeEach(async () => {
     .toBe(200);
 });
 
+/** Starts the sample MCP server at `base`, its `/mcp` guarded by `key`, and waits for it. */
+async function startSampleAt(base: string, key: string): Promise<ChildProcess> {
+  const server = spawn(process.execPath, ["clients/demo/dist/sample-mcp-server.js"], {
+    env: {
+      ...process.env,
+      DEMO_SAMPLE_MCP_KEY: key,
+      HOST: "127.0.0.1",
+      PORT: new URL(base).port,
+      SAMPLE_OAUTH_ISSUER_BASE: base
+    },
+    stdio: "ignore"
+  });
+  await expect
+    .poll(
+      async () => {
+        try {
+          return (await fetch(`${base}/healthz`)).status;
+        } catch {
+          return 0;
+        }
+      },
+      { timeout: 15_000 }
+    )
+    .toBe(200);
+  return server;
+}
+
+async function stopSample(server: ChildProcess | undefined): Promise<void> {
+  if (server && server.exitCode === null && server.signalCode === null) {
+    const exited = once(server, "exit");
+    server.kill("SIGTERM");
+    await exited;
+  }
+}
+
+/**
+ * The address the instance gives one of the demo's own-server entries (PMCP-CAT): the suite's
+ * sample server on a port of its own (clients/demo/src/e2e-server.ts).
+ */
+async function entryAddress(page: Page, id: string): Promise<URL> {
+  const entry = (await mine(page)).ownServers?.entries?.find((candidate) => candidate.id === id);
+  expect(entry, `The own-server entry ${id} is offered`).toBeDefined();
+  return new URL(entry?.url ?? "");
+}
+
 test.afterEach(async () => {
   const server = sampleServer;
   sampleServer = undefined;
@@ -113,8 +167,8 @@ test.afterEach(async () => {
 });
 
 /** Plays the provider's page and the trip back to the API's callback. */
-async function routeProvider(context: BrowserContext) {
-  await context.route(`${sampleBase}/*/authorize**`, async (route) => {
+async function routeProvider(context: BrowserContext, base = sampleBase) {
+  await context.route(`${base}/*/authorize**`, async (route) => {
     const answer = await route.fetch({ maxRedirects: 0 });
     const back = new URL(answer.headers().location ?? "");
     expect(back.pathname).toMatch(/^\/api\/v1\/connections\/[^/]+\/oauth\/callback$/u);
@@ -478,6 +532,187 @@ test("de: an agent without the platform's tools proposes the person's own server
     await shoot(page, "chat-told");
   } finally {
     await removeOwnServers(page);
+    const found = await admin.request.get(agentUrl);
+    if (found.status() !== 404) {
+      const removed = await requestWithOrigin(admin, "post", `${agentUrl}/delete`, {
+        data: { expectedRevision: await assetRevision(admin, agentUrl) }
+      });
+      expect(removed.ok(), `Delete agent during cleanup: ${removed.status()}`).toBe(true);
+    }
+    await adminContext.close();
+  }
+});
+
+test("en: a person adds their own MCP server from a catalogue tile that takes a token, and its card carries the service's mark", async ({
+  page,
+  releaseConnections: _releaseConnections
+}) => {
+  test.setTimeout(shotsDir ? 300_000 : 180_000);
+  await signIn(page, "en");
+  await removeOwnServers(page);
+  const address = await entryAddress(page, "sample-records-token");
+  const key = randomUUID() + randomUUID();
+  const sample = await startSampleAt(address.origin, key);
+  try {
+    await page.goto("/settings/you/connections");
+    const section = page.locator("[data-own-servers]");
+    await section.getByRole("button", { name: "Add MCP server" }).click();
+    const dialog = page.getByRole("dialog");
+    const services = dialog.getByRole("group", { name: "Services" });
+    await expect(services.locator("[data-own-server-entry]")).toHaveCount(2);
+    await shoot(page, "entries");
+
+    // The tile fills the address and locks it; "Other address" frees the field again.
+    const field = dialog.locator('[data-own-server-field="address"]');
+    await services.locator('[data-own-server-entry="sample-records-token"]').click();
+    await expect(
+      services.locator('[data-own-server-entry="sample-records-token"]')
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(field).toHaveValue(address.href);
+    await expect(field).toHaveAttribute("readonly", "");
+    await dialog.locator("[data-own-server-other-address]").click();
+    await expect(field).toHaveValue("");
+    await expect(field).not.toHaveAttribute("readonly", "");
+    await services.locator('[data-own-server-entry="sample-records-token"]').click();
+    await shoot(page, "entry-chosen");
+    await dialog.getByRole("button", { name: "Connect" }).click();
+
+    // A token entry goes straight to the token, with where to get one and no header to choose.
+    await expect(dialog.locator("[data-own-server-token]")).toBeVisible({ timeout: 30_000 });
+    await expect(dialog.locator("[data-own-server-entry-help]")).toContainText(
+      "Make a personal token in the sample service"
+    );
+    await expect(dialog.locator("[data-own-server-entry-link]")).toHaveAttribute(
+      "href",
+      "https://records-token.example.com/help/tokens"
+    );
+    await expect(dialog.locator('[data-own-token-field="header"]')).toHaveCount(0);
+    await dialog.locator('[data-own-token-field="token"]').fill(key);
+    await shoot(page, "entry-token");
+    await dialog.getByRole("button", { name: "Set token" }).click();
+
+    await expect(dialog.locator("li[data-approval-tool]")).toHaveCount(6, {
+      timeout: DISCOVERY_TIMEOUT_MS
+    });
+    await expect(dialog.locator('[data-own-server-field="title"]')).toHaveValue(
+      "Sample records with a token"
+    );
+    await dialog.getByRole("button", { name: "Done" }).click();
+    await expect(dialog).toBeHidden();
+
+    const card = page.locator("[data-own-server-card]");
+    await expect(card).toContainText("Sample records with a token");
+    await expect(card.locator('[data-own-server-state="connected"]')).toBeVisible();
+    const name = (await card.getAttribute("data-own-server-card")) ?? "";
+    const row = (await mine(page)).connections.find((candidate) => candidate.name === name);
+    expect(row?.service).toBe("sample-records-token");
+    expect(JSON.stringify(await mine(page))).not.toContain(key);
+    await shoot(page, "entry-card");
+  } finally {
+    await removeOwnServers(page);
+    await stopSample(sample);
+  }
+});
+
+test("de: an agent names a catalogue entry for the person's own server, the add screen opens at its tile, and the entry's word on a tool starts it as changing", async ({
+  page,
+  browser,
+  baseURL,
+  releaseConnections: _releaseConnections,
+  instanceAgentsChange: _instanceAgentsChange
+}) => {
+  test.setTimeout(shotsDir ? 300_000 : 180_000);
+  const agent = `e2e_own_entry_${randomUUID().slice(0, 8)}`;
+  const agentUrl = `${apiBaseUrl}/api/v1/assets/agent/${agent}`;
+  const adminContext = await browser.newContext({ baseURL });
+  const admin = await adminContext.newPage();
+  const adminIn = await requestWithOrigin(admin, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
+    data: { ...superadmin, rememberMe: true }
+  });
+  expect(adminIn.ok()).toBe(true);
+  await signIn(page, "de");
+  await removeOwnServers(page);
+  const address = await entryAddress(page, "sample-records");
+  await routeProvider(page.context(), address.origin);
+  const sample = await startSampleAt(address.origin, randomUUID());
+  try {
+    const stored = await requestWithOrigin(admin, "put", agentUrl, {
+      data: {
+        expectedRevision: await assetBaseRevision(admin, agentUrl),
+        availableIn: "all",
+        config: {
+          name: agent,
+          displayName: `Dienst-Hilfe ${agent.slice(-8)}`,
+          description: "Hilft beim Verbinden.",
+          instructions: "Hilf beim Verbinden.",
+          toolNames: []
+        }
+      }
+    });
+    expect(stored.ok(), await stored.text()).toBe(true);
+
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/w\/[^/]+/u);
+    await page
+      .getByRole("navigation", { name: "Hauptnavigation" })
+      .getByRole("button", { name: "Agenten", exact: true })
+      .click();
+    await page
+      .getByRole("region", { name: "Agenten" })
+      .getByRole("listitem")
+      .filter({ has: page.getByRole("heading", { name: `Dienst-Hilfe ${agent.slice(-8)}` }) })
+      .getByRole("button", { name: "Chat starten" })
+      .click();
+    await expect(page).toHaveURL(/\/w\/[^/]+$/u);
+
+    // The agent names the entry and no address: the card carries the service's name.
+    await sendToolCall(page, PROPOSE_TOOL, {
+      mode: "own_server",
+      connectorType: "mcp",
+      ownServerEntry: "sample-records"
+    });
+    const card = page.locator('[data-own-server-proposal="sample-records"]');
+    await expect(card).toContainText("Beispiel-Datensätze verbinden");
+    await expect(page).toHaveURL(/\/settings\/you\/connections/u);
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.locator('[data-own-server-entry="sample-records"]')).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    const field = dialog.locator('[data-own-server-field="address"]');
+    await expect(field).toHaveValue(address.href);
+    await expect(field).toHaveAttribute("readonly", "");
+    expect((await mine(page)).connections.filter((row) => row.ownServer)).toEqual([]);
+    await shoot(page, "entry-proposal");
+
+    await dialog.getByRole("button", { name: "Verbinden" }).click();
+    await expect(dialog.locator("[data-sign-in-open]")).toBeVisible({ timeout: 30_000 });
+    const opened = page.waitForEvent("popup");
+    await dialog.locator("[data-sign-in-open]").click();
+    await (await opened).waitForEvent("close");
+    await expect(dialog.locator("li[data-approval-tool]")).toHaveCount(6, {
+      timeout: DISCOVERY_TIMEOUT_MS
+    });
+    // The server marks every tool read-only; the entry calls one changing, so it starts so,
+    // unticked, and the person may set it back.
+    const changing = dialog.locator('li[data-approval-tool="get_customer"]');
+    await expect(changing.locator("select[data-approval-effect]")).toHaveValue("changing");
+    await expect(changing.getByRole("checkbox")).not.toBeChecked();
+    const reading = dialog.locator('li[data-approval-tool="list_customers"]');
+    await expect(reading.getByRole("checkbox")).toBeChecked();
+    await expect(dialog.locator('[data-own-server-field="title"]')).toHaveValue(
+      "Beispiel-Datensätze"
+    );
+    await shoot(page, "entry-tools");
+    await dialog.getByRole("button", { name: "Fertig" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator("[data-own-server-card]")).toContainText("Beispiel-Datensätze");
+    await expect(
+      page.getByText(/^Ich habe meinen MCP-Server „Beispiel-Datensätze“ hinzugefügt\./u)
+    ).toBeVisible({ timeout: 30_000 });
+  } finally {
+    await removeOwnServers(page);
+    await stopSample(sample);
     const found = await admin.request.get(agentUrl);
     if (found.status() !== 404) {
       const removed = await requestWithOrigin(admin, "post", `${agentUrl}/delete`, {

@@ -3,6 +3,7 @@ import { CONNECTION_NAME_MAX_LENGTH } from "@work-shape/catalyst-core";
 import { toolAnswer } from "../../chat/conversation/subject-run";
 import type { TranslationContextValue } from "../../shared/i18n";
 import { personalViewOf, type PersonalView } from "./connection-people-model";
+import { readingNames, type ApprovalCandidate } from "./connection-approval-model";
 
 // A person's own MCP server (PMCP-5): what You > Connections reads and writes for it. Pure:
 // the dialog and the cards hold the state, these functions read and make it. The instance
@@ -12,6 +13,63 @@ type PersonalRow = PersonalConnections["connections"][number];
 
 /** Settings > You > Connections, where a person's own servers are added. */
 export const OWN_SERVERS_ROUTE = { kind: "settings", group: "you", page: "connections" } as const;
+
+/** A catalogue entry the person adds as their own server (PMCP-CAT): a tile on the add screen. */
+export type OwnServerEntry = NonNullable<
+  NonNullable<PersonalConnections["ownServers"]>["entries"]
+>[number];
+
+/**
+ * The entry a card shows the mark of: the one whose service the server carries, while the
+ * server is still at the entry's host. A server moved elsewhere is no longer that service.
+ */
+export function ownServerEntryOf(
+  row: Pick<PersonalRow, "service"> & { ownServer: { host: string } },
+  entries: readonly OwnServerEntry[]
+): OwnServerEntry | undefined {
+  if (row.service === undefined) return undefined;
+  return entries.find(
+    (entry) => entry.service === row.service && ownServerHostOf(entry.url) === row.ownServer.host
+  );
+}
+
+/** What the tools list starts with where an entry names the server's tools (PMCP-CAT). */
+export interface EntryToolStart {
+  /** Ticked at the start: the tools that read, less those the entry calls changing. */
+  selected: Set<string>;
+  /** `ändert` at the start where the server says the tool only reads and the entry does not. */
+  effects: Map<string, ApprovalCandidate["effect"]>;
+  /**
+   * Tools the server does not mark read-only that the entry says only read. They start
+   * `ändert` and unticked, and only the person's own choice makes them `liest`.
+   */
+  entryReads: Set<string>;
+}
+
+/**
+ * An entry recommends, and the person accepts: its `changing` turns a read-only tool into
+ * `ändert`, unticked, which the person may set back; its `reading` never ticks a tool the
+ * server does not mark read-only, it only lets the person choose `liest` for it. A tool the
+ * entry does not name keeps the server's hint, and one the server does not list is ignored.
+ */
+export function entryToolStart(
+  candidates: readonly ApprovalCandidate[],
+  tools: OwnServerEntry["tools"]
+): EntryToolStart {
+  const said = new Map(tools.map((tool) => [tool.name, tool.effect]));
+  const selected = new Set(readingNames(candidates));
+  const effects = new Map<string, ApprovalCandidate["effect"]>();
+  const entryReads = new Set<string>();
+  for (const candidate of candidates) {
+    const effect = said.get(candidate.name);
+    if (effect === "changing" && candidate.effect === "reading") {
+      effects.set(candidate.name, "changing");
+      selected.delete(candidate.name);
+    }
+    if (effect === "reading" && candidate.effect === "changing") entryReads.add(candidate.name);
+  }
+  return { selected, effects, entryReads };
+}
 
 /** A row of the person's list that is an MCP server they added for themselves. */
 export type OwnServerRow = PersonalRow & { ownServer: NonNullable<PersonalRow["ownServer"]> };
@@ -114,9 +172,12 @@ export function ownServerConfig(input: {
   name: string;
   url: string;
   title: string;
+  /** The service of the catalogue entry it is added from, which picks its card's mark. */
+  service?: string;
 }): Record<string, unknown> {
   return {
     name: input.name,
+    ...(input.service === undefined ? {} : { service: input.service }),
     connectorType: "mcp",
     credentialMode: "user",
     authScheme: "oauth",
@@ -173,16 +234,27 @@ export function withKeptOperations(
  * An agent's proposal of a person's own MCP server (PMCP-CHAT), as its tool answered: the name
  * in words and the address its add screen starts with. Nothing for any other answer.
  */
-export function readOwnServerProposal(result: unknown): { title: string; url: string } | undefined {
+export function readOwnServerProposal(result: unknown): OwnServerProposal | undefined {
   const answer = toolAnswer(result);
   if (answer?.mode !== "own_server") return undefined;
   const proposal: unknown = answer.ownServer;
   if (typeof proposal !== "object" || proposal === null) return undefined;
   const title: unknown = Reflect.get(proposal, "title");
   const url: unknown = Reflect.get(proposal, "url");
+  const entry: unknown = Reflect.get(proposal, "entry");
   return typeof title === "string" && typeof url === "string" && url !== ""
-    ? { title, url }
+    ? { title, url, ...(typeof entry === "string" && entry !== "" ? { entry } : {}) }
     : undefined;
+}
+
+/**
+ * An agent's proposal of a person's own server: its name and address, and the catalogue entry
+ * it names, whose address the add screen then takes from the instance (PMCP-CAT).
+ */
+export interface OwnServerProposal {
+  title: string;
+  url: string;
+  entry?: string;
 }
 
 /** The longest a server's or tool's name is quoted in the person's message. */

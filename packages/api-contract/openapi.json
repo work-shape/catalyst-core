@@ -31760,6 +31760,147 @@
                       "properties": {
                         "mayAdd": {
                           "type": "boolean"
+                        },
+                        "entries": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "version": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "service": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "en": {
+                                        "type": "string"
+                                      },
+                                      "de": {
+                                        "type": "string"
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              "description": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "en": {
+                                        "type": "string"
+                                      },
+                                      "de": {
+                                        "type": "string"
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              "mark": {
+                                "type": "object",
+                                "properties": {
+                                  "color": {
+                                    "type": "string"
+                                  },
+                                  "logo": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "signIn": {
+                                "type": "string",
+                                "enum": [
+                                  "oauth",
+                                  "token"
+                                ]
+                              },
+                              "token": {
+                                "type": "object",
+                                "properties": {
+                                  "help": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "en": {
+                                            "type": "string"
+                                          },
+                                          "de": {
+                                            "type": "string"
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "link": {
+                                    "type": "string"
+                                  },
+                                  "header": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "help"
+                                ]
+                              },
+                              "tools": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "effect": {
+                                      "type": "string",
+                                      "enum": [
+                                        "reading",
+                                        "changing"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "name",
+                                    "effect"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "version",
+                              "service",
+                              "title",
+                              "description",
+                              "mark",
+                              "url",
+                              "signIn",
+                              "tools"
+                            ]
+                          }
                         }
                       },
                       "required": [

@@ -54,7 +54,8 @@ export {
   createConnectionProposeTool,
   type ConnectionProposalAccess,
   type ConnectionProposalCatalogue,
-  type ConnectionProposalCatalogueEntry
+  type ConnectionProposalCatalogueEntry,
+  type OwnServerProposalEntry
 } from "./connection-propose-tool";
 export {
   PLATFORM_ASSET_TOOLS,

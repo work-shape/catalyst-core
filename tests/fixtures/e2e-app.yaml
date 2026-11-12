@@ -132,8 +132,9 @@ egress:
         cidrs: [127.0.0.0/8, "::1/128"]
       }
 # The demo's sample entry is offered; the suite's own `sample-files` is not, so it shows greyed.
+# The sample-records entries are own-server tiles at the suite's sample server (e2e-server.ts).
 catalogue:
-  entries: [sample-accounting, sample-oauth]
+  entries: [sample-accounting, sample-oauth, sample-records, sample-records-token]
 # The key of the secrets of Connections made in the suite. The runner makes a new one per run.
 secretStore:
   keys:

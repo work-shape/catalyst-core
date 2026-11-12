@@ -15,7 +15,10 @@ import {
   sendProductConversationMessage
 } from "../assistant/product-run-transport";
 import { openConnectionDraftIn } from "../../studio/build-area/connection-draft-card";
-import { OWN_SERVERS_ROUTE } from "../../studio/build-area/own-server-model";
+import {
+  OWN_SERVERS_ROUTE,
+  type OwnServerProposal
+} from "../../studio/build-area/own-server-model";
 import { requestOwnServerAdd } from "../../studio/build-area/own-server-request";
 import type { ConnectionDraft } from "../../studio/build-area/connection-draft";
 import { dockBuildKind } from "../dock/subject-starters";
@@ -881,10 +884,7 @@ export function useWorkspaceChatModel({
   // Its proposal of the person's own MCP server opens their add screen beside the conversation
   // (PMCP-CHAT); the page decides whether they may add one.
   const openOwnServerProposal = useCallback(
-    (
-      proposal: { title: string; url: string },
-      from: { conversationId: string; agentName?: string }
-    ) => {
+    (proposal: OwnServerProposal, from: { conversationId: string; agentName?: string }) => {
       requestOwnServerAdd({ ...proposal, from });
       openDockedPage(OWN_SERVERS_ROUTE, from.conversationId);
     },

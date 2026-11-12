@@ -11,6 +11,8 @@ export interface ChoiceProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
   mark?: ReactNode;
   /** This answer is the one given: it shows a check and the selected state. */
   chosen?: boolean;
+  /** Before the title, such as the mark of the service the answer names. */
+  leading?: ReactNode;
 }
 
 /**
@@ -18,7 +20,7 @@ export interface ChoiceProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
  * once. The caller decides what choosing it does.
  */
 export const Choice = forwardRef<HTMLButtonElement, ChoiceProps>(function Choice(
-  { title, hint, mark, chosen = false, className, ...props },
+  { title, hint, mark, chosen = false, leading, className, ...props },
   ref
 ) {
   return (
@@ -34,6 +36,7 @@ export const Choice = forwardRef<HTMLButtonElement, ChoiceProps>(function Choice
         className
       )}
     >
+      {leading === undefined ? null : <span className="shrink-0">{leading}</span>}
       <span className="grid min-w-0 flex-1 gap-0.5">
         <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <span className="min-w-0 text-label wrap-anywhere">{title}</span>

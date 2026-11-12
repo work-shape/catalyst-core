@@ -5,7 +5,11 @@ import { buildRouteOfLocation } from "../../shared/build-route";
 import { showOwnerInStudio } from "../../shared/build-rights";
 import { CONNECTIONS_BUILD_PATH } from "../../studio/build-area/connection-tools";
 import { connectCardOfProposal } from "../../studio/build-area/connection-connect-card-model";
-import { OWN_SERVERS_ROUTE, readOwnServerProposal } from "../../studio/build-area/own-server-model";
+import {
+  OWN_SERVERS_ROUTE,
+  readOwnServerProposal,
+  type OwnServerProposal
+} from "../../studio/build-area/own-server-model";
 import { workspaceRoutePath, type WorkspaceRoute } from "../../shared/routes";
 import type { WorkspaceDock } from "../workspace/use-workspace-dock";
 import {
@@ -96,7 +100,7 @@ export function useAgentOpens(input: {
    * (PMCP-CHAT), under the same rule of an open.
    */
   openOwnServerProposal?(
-    proposal: { title: string; url: string },
+    proposal: OwnServerProposal,
     from: { conversationId: string; agentName?: string }
   ): void;
 }): AgentOpens {

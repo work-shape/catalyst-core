@@ -12,6 +12,7 @@ import {
   CONNECTION_SERVICE_PATTERN,
   CONNECTOR_TYPE_PATTERN,
   OPERATION_EFFECTS,
+  OWN_SERVER_SIGN_INS,
   CONNECTION_CREDENTIAL_MODES,
   MANAGED_OAUTH_CLIENT_PATTERN,
   normalizeEgressHost,
@@ -23,6 +24,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { oauthEntrySchema, oauthScopesSchema } from "../http-api/oauth-settings";
+import { MCP_TRANSPORT_HEADER_NAMES } from "../mcp/client";
 
 // A catalogue entry (CAT-1): data about one outside service, with up to two parts, `tools` for
 // agents and `source` for a Knowledge Base. Each part installs one ordinary Connection. An
@@ -345,6 +347,106 @@ const partSchema = z
     defaultCredentialMode: part.defaultCredentialMode ?? part.credentialModes[0] ?? "shared"
   }));
 
+/**
+ * An address a person could paste on their add screen and the instance would take: `https` on
+ * 443, with no user name, password, query or fragment. Every request to it is still judged by
+ * the own-server egress rule (PMCP-3); this only keeps a reviewed entry from naming another.
+ */
+const ownServerUrlSchema = z
+  .string()
+  .max(2_048)
+  .superRefine((value, context) => {
+    let url: URL;
+    try {
+      url = new URL(value);
+    } catch {
+      context.addIssue({ code: "custom", message: "The address is no URL" });
+      return;
+    }
+    if (url.protocol !== "https:" || (url.port !== "" && url.port !== "443"))
+      context.addIssue({ code: "custom", message: "An own server's address is https on port 443" });
+    if (url.username !== "" || url.password !== "" || url.search !== "" || url.hash !== "")
+      context.addIssue({
+        code: "custom",
+        message: "An own server's address carries no user name, password, query or fragment"
+      });
+  });
+
+/** An https page of the service, such as where a person makes their token. */
+const httpsLinkSchema = z
+  .string()
+  .max(2_048)
+  .refine(
+    (value) => {
+      try {
+        const url = new URL(value);
+        return url.protocol === "https:" && url.username === "" && url.password === "";
+      } catch {
+        return false;
+      }
+    },
+    { message: "A link is an https address without user name or password" }
+  );
+
+/**
+ * The own-server part (PMCP-CAT): a remote MCP server each person adds for themselves on their
+ * own add screen, under every rule of a self-added server. It names the address, how the
+ * person signs in and, only where the service's documentation names its tools, an effect per
+ * tool. Never a token, a client, a scope, an exposure or an accepted tool.
+ */
+const ownServerSchema = z
+  .object({
+    url: ownServerUrlSchema,
+    signIn: z.enum(OWN_SERVER_SIGN_INS),
+    /** Only with `token`: where the person gets one, and the header it goes in. */
+    token: z
+      .object({
+        help: localizedStringSchema,
+        link: httpsLinkSchema.optional(),
+        /** Left out, the token goes as `Authorization: Bearer`. */
+        header: z
+          .string()
+          .regex(/^[A-Za-z][A-Za-z0-9-]{0,63}$/u, {
+            message: "A header name is letters, digits and hyphens"
+          })
+          .refine(
+            (value) =>
+              value.toLowerCase() !== "authorization" &&
+              !MCP_TRANSPORT_HEADER_NAMES.has(value.toLowerCase()),
+            {
+              message:
+                "Leave the header out for Authorization: Bearer; a header the transport writes itself is refused"
+            }
+          )
+          .optional()
+      })
+      .strict()
+      .optional(),
+    /** What the service's own documentation says each named tool does. */
+    tools: z
+      .array(
+        z
+          .object({
+            name: z
+              .string()
+              .max(CONNECTION_OPERATION_NAME_MAX_LENGTH)
+              .regex(CONNECTION_OPERATION_NAME_PATTERN),
+            effect: z.enum(OPERATION_EFFECTS)
+          })
+          .strict()
+      )
+      .max(64)
+      .default([])
+      .refine((tools) => new Set(tools.map((tool) => tool.name)).size === tools.length, {
+        message: "A tool is listed once"
+      })
+  })
+  .strict()
+  .refine((part) => (part.signIn === "token") === (part.token !== undefined), {
+    message: "An entry that takes a token says where the person gets it, and only that one",
+    path: ["token"]
+  });
+
 export const catalogueEntrySchema = z
   .object({
     id: z.string().regex(CATALOGUE_ENTRY_ID_PATTERN),
@@ -372,17 +474,22 @@ export const catalogueEntrySchema = z
           "A source part has no operations: its documents reach people through a Knowledge Base",
         path: ["operations"]
       })
-      .optional()
+      .optional(),
+    /** A remote MCP server each person adds for themselves (PMCP-CAT). */
+    ownServer: ownServerSchema.optional()
   })
   .strict()
-  .refine((entry) => entry.tools !== undefined || entry.source !== undefined, {
-    message: "An entry brings tools, a source or both"
-  });
+  .refine(
+    (entry) =>
+      entry.tools !== undefined || entry.source !== undefined || entry.ownServer !== undefined,
+    { message: "An entry brings tools, a source, an own server or several" }
+  );
 
 type ParsedEntry = z.infer<typeof catalogueEntrySchema>;
 export type CatalogueEntryPart = NonNullable<ParsedEntry["tools"]>;
 export type CatalogueEntryOperation = CatalogueEntryPart["operations"][number];
 export type CatalogueEntryField = NonNullable<CatalogueEntryPart["fields"]>[number];
+export type CatalogueOwnServerPart = NonNullable<ParsedEntry["ownServer"]>;
 
 /**
  * A loaded entry. Its mark carries the logo as an address the browser draws, read from the file
