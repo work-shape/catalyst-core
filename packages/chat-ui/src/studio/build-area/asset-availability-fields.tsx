@@ -250,7 +250,14 @@ export function AvailabilityFields({
               optionLabel={(id) => workspaceNames.get(id) ?? id}
               selected={form.collaborationWorkspaceIds}
               disabled={fixed}
-              emptyHint={workspacesError ?? t("configAvailabilityNoSharedWorkspaces")}
+              // Shared workspaces where the agent is the default are not offered: the list is
+              // empty because of them, not because there are none.
+              emptyHint={
+                workspacesError ??
+                (workspaceIds.length > 0
+                  ? t("configAvailabilityNoExcludableWorkspaces")
+                  : t("configAvailabilityNoSharedWorkspaces"))
+              }
               onChange={(collaborationWorkspaceIds) => update({ collaborationWorkspaceIds })}
             />
           )}
