@@ -8,6 +8,7 @@ export {
 export { FilePicker, type FilePickerProps } from "./file-picker";
 export { FileDropZone, type FileDropZoneProps } from "./file-drop-zone";
 export { TextLink, type TextLinkProps } from "./text-link";
+export { ThumbnailButton, type ThumbnailButtonProps } from "./thumbnail-button";
 export { Starter, StarterList, type StarterListProps, type StarterProps } from "./starter";
 export { Choice, ChoiceList, type ChoiceListProps, type ChoiceProps } from "./choice";
 export { RunLiveOnce, type RunLiveOnceProps, type RunLiveOnceState } from "./run-live-once";

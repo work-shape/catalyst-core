@@ -1,7 +1,7 @@
 import { AttachmentPrimitive, useAuiState } from "@assistant-ui/react";
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { cn, Spinner } from "@work-shape/catalyst-ui";
+import { cn, Spinner, ThumbnailButton } from "@work-shape/catalyst-ui";
 import { managedFileIdFromUrl, useAttachmentContentContext } from "./attachment-content";
 import { useOpenConversationFile } from "./conversation-file-presentation";
 import { resolveFileType } from "./file-type";
@@ -81,32 +81,14 @@ export function AttachmentPreview({
       <AttachmentPrimitive.Root className="group/attachment relative max-w-xs">
         {previewAvailable ? (
           // The thumbnail opens the picture in the preview panel, as a file chip opens its file.
-          <button
-            type="button"
-            className={cn(
-              cardClassName,
-              "relative max-w-full cursor-zoom-in text-left transition-colors",
-              "hover:bg-muted focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40",
-              opening && "cursor-progress"
-            )}
-            title={t("openArtifactPreview", { filename })}
-            aria-label={t("openArtifactPreview", { filename })}
-            aria-busy={opening}
-            disabled={opening}
+          <ThumbnailButton
+            label={t("openArtifactPreview", { filename })}
+            caption={attachment.name ? <AttachmentPrimitive.Name /> : undefined}
+            loading={opening}
             onClick={openPreview}
           >
             {picture}
-            {attachment.name ? (
-              <span className={captionClassName}>
-                <AttachmentPrimitive.Name />
-              </span>
-            ) : null}
-            {opening ? (
-              <span className="absolute inset-0 grid place-items-center bg-background/50">
-                <Spinner size="sm" />
-              </span>
-            ) : null}
-          </button>
+          </ThumbnailButton>
         ) : (
           <figure className={cardClassName}>
             {picture}
