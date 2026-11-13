@@ -15,13 +15,15 @@ import {
   useRequestedOwnServerAdd,
   type OwnServerAddRequest
 } from "@work-shape/catalyst-chat-ui/build-area";
+import { callRunOwner } from "@work-shape/catalyst-chat-ui/subject-run";
 import { createTranslationContext } from "./support/chat-ui/shared";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // An agent's proposal of a person's own MCP server in a chat (PMCP-CHAT): what the card reads of
 // the tool's answer and shows, where its button takes the person, and the message their tab
 // sends back once the server is added. The address goes to the add screen in memory, never into
-// the address bar.
+// the address bar. In a chat others read (PMCP-CHAT-2) the card says the tools work only in the
+// person's private chats, offers to start one, and nothing is told back to that chat.
 
 const ADDRESS = "https://notes.example.com/mcp";
 const answer = {
@@ -45,10 +47,24 @@ describe("the proposal the card reads", () => {
     ).toBeUndefined();
     expect(readOwnServerProposal(undefined)).toBeUndefined();
   });
+
+  it("knows a proposal made in a chat others read", () => {
+    expect(
+      readOwnServerProposal({ output: { ...answer.output, privateChat: false, note: "x" } })
+    ).toEqual({ title: "Meine Notizen", url: ADDRESS, privateChat: false });
+    expect(readOwnServerProposal({ output: { ...answer.output, privateChat: true } })).toEqual({
+      title: "Meine Notizen",
+      url: ADDRESS
+    });
+  });
 });
 
 describe("the card", () => {
-  const host = (owns: boolean, shown: unknown[] = []) => {
+  const host = (
+    owns: boolean,
+    shown: unknown[] = [],
+    more: Pick<Parameters<typeof connectionDraftHost>[0], "ownsCall" | "startPrivateChat"> = {}
+  ) => {
     const made = connectionDraftHost({
       // The card reads nothing: any call would fail the test.
       client: createApiClient({
@@ -60,20 +76,33 @@ describe("the card", () => {
       mayWriteConnections: false,
       showRoute: (route) => shown.push(route),
       ownsConversation: owns,
-      from: { conversationId: "conv_1", agentName: "helper" }
+      from: { conversationId: "conv_1", agentName: "helper" },
+      ...more
     });
     return made;
   };
-  const render = (locale: "en" | "de", owns: boolean) =>
+  const render = (
+    locale: "en" | "de",
+    owns: boolean,
+    options: {
+      privateChat?: false;
+      more?: Parameters<typeof host>[2];
+    } = {}
+  ) =>
     renderToStaticMarkup(
       createElement(
         TranslationProvider,
         { children: null, locale },
         createElement(
           ConnectionDraftHostProvider,
-          { value: host(owns), children: null },
+          { value: host(owns, [], options.more), children: null },
           createElement(OwnServerProposalCard, {
-            proposal: { title: "Meine Notizen", url: ADDRESS }
+            proposal: {
+              title: "Meine Notizen",
+              url: ADDRESS,
+              ...(options.privateChat === false ? { privateChat: false as const } : {})
+            },
+            toolCallId: "call_1"
           })
         )
       )
@@ -87,6 +116,8 @@ describe("the card", () => {
     expect(de).toContain("notes.example.com");
     expect(de).toContain("data-own-server-proposal-open");
     expect(de).toContain("Öffnen");
+    // A private chat: no line about private chats, no button to start one.
+    expect(de).not.toContain("data-own-server-proposal-private");
     const en = render("en", true);
     expect(en).toContain("Add MCP server");
     expect(en).toContain("Nothing is saved before.");
@@ -95,7 +126,46 @@ describe("the card", () => {
   it("has no button for someone else reading the chat", () => {
     const en = render("en", false);
     expect(en).not.toContain("data-own-server-proposal-open");
-    expect(en).toContain("Only the person whose chat this is adds their own MCP server.");
+    expect(en).toContain("Only the person who asked adds their own MCP server.");
+  });
+
+  it("in a chat others read, says where the tools work and offers a private chat to its person", () => {
+    const startPrivateChat = () => undefined;
+    const more = { ownsCall: () => true, startPrivateChat };
+    const de = render("de", true, { privateChat: false, more });
+    expect(de).toContain("data-own-server-proposal-open");
+    expect(de).toContain("Funktioniert nur in deinen privaten Chats.");
+    expect(de).toContain("Privaten Chat starten");
+    const en = render("en", true, { privateChat: false, more });
+    expect(en).toContain("Works only in your private chats.");
+    expect(en).toContain("Start private chat");
+    expect(host(true, [], more).startPrivateChat).toBe(startPrivateChat);
+    // Without a way to start one, the line stays and the button does not.
+    const bare = render("en", true, { privateChat: false, more: { ownsCall: () => true } });
+    expect(bare).toContain("Works only in your private chats.");
+    expect(bare).not.toContain("data-own-server-proposal-private=");
+  });
+
+  it("gives the buttons to the person whose message the run answered, not to who started the chat", () => {
+    // A teammate asked in the creator's team chat: theirs, and the creator only reads.
+    const teammate = render("en", false, {
+      privateChat: false,
+      more: { ownsCall: () => true, startPrivateChat: () => undefined }
+    });
+    expect(teammate).toContain("data-own-server-proposal-open");
+    expect(teammate).toContain("Start private chat");
+    const creator = render("en", true, {
+      privateChat: false,
+      more: { ownsCall: () => false, startPrivateChat: () => undefined }
+    });
+    expect(creator).not.toContain("data-own-server-proposal-open");
+    expect(creator).not.toContain("Start private chat");
+    expect(creator).not.toContain("Works only in your private chats.");
+    expect(creator).toContain("Only the person who asked adds their own MCP server.");
+    // Where the thread does not know the run, the chat's creator has it, as before.
+    expect(render("en", true, { more: { ownsCall: () => undefined } })).toContain(
+      "data-own-server-proposal-open"
+    );
   });
 
   it("goes to Settings > You > Connections with the proposal kept in memory, taken once", () => {
@@ -124,6 +194,37 @@ describe("the card", () => {
     renderToStaticMarkup(createElement(Reader));
     expect(seen.at(-1)?.title).toBe("B");
     takeOwnServerAdd(seen.at(-1) ?? { title: "", url: "" });
+  });
+
+  it("tells a chat others read nothing once the server is added", () => {
+    host(true).openOwnServer?.({ title: "Meine Notizen", url: ADDRESS, privateChat: false });
+    const seen: (OwnServerAddRequest | undefined)[] = [];
+    const Reader = () => {
+      seen.push(useRequestedOwnServerAdd());
+      return null;
+    };
+    renderToStaticMarkup(createElement(Reader));
+    // No conversation to tell: the add screen sends no message back.
+    expect(seen.at(-1)).toEqual({ title: "Meine Notizen", url: ADDRESS });
+    takeOwnServerAdd(seen.at(-1) ?? { title: "", url: "" });
+  });
+});
+
+describe("whose run a call is", () => {
+  const call = (toolCallId: string) => ({ type: "tool_call", toolCallId });
+  it("is the person of the run that goes, or of the ended run that holds the call", () => {
+    const runs = {
+      activeRun: { run: { ownerUserId: "user_lena" }, projection: { parts: [call("call_2")] } },
+      completedRunProjections: {
+        run_1: { ownerUserId: "user_kai", parts: [call("call_1")] }
+      }
+    };
+    expect(callRunOwner("call_2", runs)).toBe("user_lena");
+    expect(callRunOwner("call_1", runs)).toBe("user_kai");
+    expect(callRunOwner("call_3", runs)).toBeUndefined();
+    expect(
+      callRunOwner("call_1", { activeRun: undefined, completedRunProjections: undefined })
+    ).toBeUndefined();
   });
 });
 

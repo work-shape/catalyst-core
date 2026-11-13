@@ -159,11 +159,11 @@ describe("the catalogue's own-server entries", () => {
 });
 
 /** The proposal tool as an instance builds it, offered or not in this chat. */
-function proposeTool(offered: boolean) {
+function proposeTool(offered: boolean, privateChat = true) {
   return createConnectionProposeTool({
     connectorTypes: registry(),
     ownServerEntries: [{ id: "notes", title: "Notes", url: ADDRESS }],
-    access: { of: () => Promise.resolve({ ownServer: offered, otherModes: false }) }
+    access: { of: () => Promise.resolve({ ownServer: offered, otherModes: false, privateChat }) }
   });
 }
 
@@ -211,12 +211,22 @@ describe("an agent's proposal by entry", () => {
     const answer = await tool.execute(tool.inputSchema.parse(byEntry("notes")), context);
     expect(answer).toEqual({
       status: "success",
-      output: { mode: "own_server", ownServer: { title: "Notes", url: ADDRESS, entry: "notes" } },
+      output: {
+        mode: "own_server",
+        ownServer: { title: "Notes", url: ADDRESS, entry: "notes" },
+        privateChat: true
+      },
       auditSummary: {
         action: CONNECTION_PROPOSE_TOOL_NAME,
         metadata: { mode: "own_server", entry: "notes" }
       }
     });
+    // In a chat others read the answer says so, and tells the agent where the tools work.
+    const shared = proposeTool(true, false);
+    const elsewhere = await shared.execute(shared.inputSchema.parse(byEntry("notes")), context);
+    const output = elsewhere.status === "success" ? elsewhere.output : undefined;
+    expect(output).toMatchObject({ privateChat: false, ownServer: { entry: "notes" } });
+    expect(JSON.stringify(output)).toContain("private chats");
     expect(JSON.stringify(answer.auditSummary)).not.toContain("notes.example.com");
   });
 

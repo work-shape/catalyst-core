@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { forgetWhenSessionEnds } from "../../shared/shell-session";
+import type { OwnServerProposal } from "./own-server-model";
 
 // An agent's proposal of a person's own MCP server (PMCP-CHAT), on its one step from the card in
 // the conversation to the add screen of Settings > You > Connections. It is kept here, never in
@@ -12,6 +13,22 @@ export interface OwnServerAddRequest {
   /** The catalogue entry an agent named (PMCP-CAT): the add screen starts at its tile. */
   entry?: string;
   from?: { conversationId: string; agentName?: string };
+}
+
+/**
+ * The request of an agent's proposal from a conversation: the add screen tells that conversation
+ * once the server is added, unless others read it, where its tools never run (PMCP-CHAT-2).
+ */
+export function ownServerAddRequestOf(
+  proposal: OwnServerProposal,
+  from: OwnServerAddRequest["from"]
+): OwnServerAddRequest {
+  return {
+    title: proposal.title,
+    url: proposal.url,
+    ...(proposal.entry === undefined ? {} : { entry: proposal.entry }),
+    ...(from === undefined || proposal.privateChat === false ? {} : { from })
+  };
 }
 
 let requested: OwnServerAddRequest | undefined;
