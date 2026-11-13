@@ -56,16 +56,29 @@ export function keywordColumn(language: KnowledgeKeywordLanguage, alias: string)
 }
 
 /**
- * The words of `path`, a source-relative path in SQL, in `language`: its folder names and file
- * name, cut at `/`, `.` and `_`, which the parser would otherwise read as one file token.
+ * The words of `paths`, source-relative paths in SQL as `sourceItemPathWords` cuts them, in
+ * `language`.
  */
-export function keywordPathVector(language: KnowledgeKeywordLanguage, path: string): string {
-  return keywordVector(language, knowledgePathWords(path));
+export function keywordPathVector(language: KnowledgeKeywordLanguage, paths: string): string {
+  return keywordVector(language, paths);
 }
 
-/** `path` in SQL with its separators as spaces, for a text-search vector. */
-function knowledgePathWords(path: string): string {
-  return `pg_catalog.translate(${path}, '/._', '   ')`;
+/**
+ * The words of the query `$1` that may name a folder, any of which counts, as the `simple`
+ * configuration reads a path: none that is a stop word of one of `languages`, and no bare number.
+ * NULL where none is left.
+ */
+export function keywordPathQuery(languages: readonly KnowledgeKeywordLanguage[]): string {
+  const kept = languages
+    .map((language) => ` and pg_catalog.length(${keywordVector(language, "w.lexeme")}) > 0`)
+    .join("");
+  return `pg_catalog.to_tsquery('simple'::regconfig, pg_catalog.replace(
+    pg_catalog.plainto_tsquery('simple'::regconfig, (
+      select pg_catalog.string_agg(w.lexeme, ' ')
+      from pg_catalog.unnest(pg_catalog.to_tsvector('simple'::regconfig,
+        pg_catalog.translate($1::pg_catalog.text, '/._', '   '))) w
+      where w.lexeme !~ '^[0-9]+$'${kept}
+    ))::pg_catalog.text, ' & ', ' | '))`;
 }
 
 /** The query `$1` as `websearch_to_tsquery` of `language`. */

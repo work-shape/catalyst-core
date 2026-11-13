@@ -9,6 +9,7 @@ export type {
 } from "@work-shape/catalyst-asset-schemas";
 import {
   KNOWLEDGE_CHECK_STATUSES,
+  KNOWLEDGE_FILE_MAX_BYTES,
   type KnowledgeDocumentFailureCode,
   type KnowledgeDocumentState,
   type KnowledgeDocumentWaitCode,
@@ -561,6 +562,21 @@ export {
   KNOWLEDGE_FILE_MAX_BYTES,
   KNOWLEDGE_FILE_MAX_BYTES_CEILING
 } from "@work-shape/catalyst-asset-schemas";
+
+/**
+ * The largest file of `format` a Knowledge Base takes under `maxFileBytes`, its
+ * `knowledge.maxFileBytes`. A TXT or Markdown file is its own text, which no document carries
+ * more of than `KNOWLEDGE_FILE_MAX_BYTES`, so a larger one is refused when it is added or listed
+ * rather than failing in processing.
+ */
+export function knowledgeFileMaxBytes(
+  maxFileBytes: number,
+  format: KnowledgeDocumentFormat | undefined
+): number {
+  return format !== undefined && KNOWLEDGE_TEXT_FORMATS.includes(format)
+    ? Math.min(maxFileBytes, KNOWLEDGE_FILE_MAX_BYTES)
+    : maxFileBytes;
+}
 
 /**
  * How many pages of one PDF or DOCX a Knowledge Base reads by default. Release config

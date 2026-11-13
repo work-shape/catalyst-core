@@ -17,7 +17,8 @@ import {
   type KnowledgeFetchedDocument,
   type KnowledgeSyncJobPayload,
   type PlatformStores,
-  type JobControl
+  type JobControl,
+  knowledgeFileMaxBytes
 } from "@work-shape/catalyst-core";
 import type { PostgresChangeStatements } from "@work-shape/catalyst-postgres-connector";
 import { settleSourceSync } from "./source-lifecycle";
@@ -261,7 +262,7 @@ export function createSourceStore(
           if (!old || old.state === "withdrawn") held++;
           const format = sourceFormat(item);
           const failure =
-            (item.size ?? 0) > maxFileBytes
+            (item.size ?? 0) > knowledgeFileMaxBytes(maxFileBytes, format)
               ? "knowledge_file_over_limit"
               : !format
                 ? "knowledge_file_format_unsupported"

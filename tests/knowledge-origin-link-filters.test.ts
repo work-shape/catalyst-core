@@ -473,6 +473,8 @@ describe("the origin link and declared filters of a Knowledge Base (DS-6b)", () 
       expect((await found("Wann wurde die Heizung in Nord erneuert?"))[0]?.documentId).toBe(
         required(nord).id
       );
+      // A file's extension is no word of its path.
+      expect(await found("txt")).toEqual([]);
       // A file added by hand has no path; the others name theirs.
       const all = await found("Heizung");
       expect(Object.fromEntries(all.map((passage) => [passage.documentId, passage.path]))).toEqual({
@@ -528,6 +530,35 @@ describe("the origin link and declared filters of a Knowledge Base (DS-6b)", () 
       });
       const runs = await world.stores.operationRuns.list({ clientInstanceId });
       expect(JSON.stringify([audit, runs])).not.toContain("Technik");
+    });
+
+    it("searches the passages only of a store below the index of paths, as before it", async () => {
+      const world = await instance();
+      const record = await publishKnowledgeBase(world, "alt");
+      const [nord] = await addFiles(world, "alt", [
+        { filename: "Anlage-1.txt", content: "Die Heizung wurde 2019 erneuert." }
+      ]);
+      await fromSource(record, required(nord).id, { path: "/Projekte/Nord/Anlage-1.txt" });
+      // The store as a release before KB-PATH left it: no index of paths, at level 20.
+      await inStore(record, async (sql) => {
+        await sql`drop index catalyst_kb.source_items_path_search_idx`;
+        await sql`delete from catalyst_kb.migrations where number = 21`;
+      });
+      const platform = postgres(await fileTestDatabaseUrl(), { max: 1, onnotice: () => undefined });
+      try {
+        await platform`update data_stores set level = 20 where id = ${record.id}`;
+      } finally {
+        await platform.end();
+      }
+      const found = async (query: string) => {
+        const answered = await search(world, "alt", { query });
+        expect(answered.statusCode, answered.body).toBe(200);
+        return searchSchema.parse(answered.json()).passages;
+      };
+      expect(await found("Heizung")).toEqual([
+        expect.objectContaining({ documentId: required(nord).id, path: "/Projekte/Nord/Anlage-1.txt" })
+      ]);
+      expect(await found("Nord")).toEqual([]);
     });
   });
 

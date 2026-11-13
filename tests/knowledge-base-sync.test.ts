@@ -590,3 +590,29 @@ describe("the file limit of release config on a synced source", () => {
     ]);
   });
 });
+
+describe("the text limit of a synced TXT or Markdown file", () => {
+  const { setup } = useKnowledgeSync({ maxFileBytes: 2 * KNOWLEDGE_FILE_MAX_BYTES });
+
+  it("fails a TXT or Markdown item above the text one document holds by its listed size, without a fetch", async () => {
+    const fetched: string[] = [];
+    const world = await setup((source) => ({
+      ...source,
+      async *fetch(input, ctx) {
+        fetched.push(input.itemId);
+        yield* source.fetch(input, ctx);
+      }
+    }));
+    const large = world.world.put({
+      folderId: "folder",
+      name: "lang.md",
+      mime: "text/markdown",
+      bytes: new Uint8Array(KNOWLEDGE_FILE_MAX_BYTES + 1).fill(0x61)
+    });
+    await world.drain(await world.sync());
+    expect(fetched).not.toContain(large);
+    expect(
+      await world.sql`select name, state, failure_code from catalyst_kb.source_items order by name`
+    ).toEqual([{ name: "lang.md", state: "failed", failure_code: "knowledge_file_over_limit" }]);
+  });
+});

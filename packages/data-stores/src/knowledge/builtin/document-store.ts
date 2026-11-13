@@ -233,7 +233,8 @@ export function createBuiltinDocumentStore(
     what: string,
     timeoutMs: number,
     signal: AbortSignal | undefined,
-    work: (sql: PostgresChangeStatements) => Promise<T>,
+    /** `record` is the store's, as read before the transaction began. */
+    work: (sql: PostgresChangeStatements, record: DataStoreRecord) => Promise<T>,
     /** False for a statement that runs outside a transaction, such as a concurrent index build. */
     transaction?: false
   ): Promise<T> {
@@ -246,7 +247,7 @@ export function createBuiltinDocumentStore(
           ...(signal ? { signal } : {}),
           ...(transaction === false ? { transaction } : {})
         },
-        work
+        (sql) => work(sql, record)
       );
     } catch (error) {
       throw databaseFailureError(error, what);
@@ -1154,10 +1155,15 @@ export function createBuiltinDocumentStore(
     async search(input, signal) {
       const answer = await searchKnowledgeStore(
         (work) =>
-          inStore("Searching the documents", KNOWLEDGE_SEARCH_TIMEOUT_MS, signal, async (sql) => {
-            await sql.script("set transaction read only");
-            return work(sql);
-          }),
+          inStore(
+            "Searching the documents",
+            KNOWLEDGE_SEARCH_TIMEOUT_MS,
+            signal,
+            async (sql, record) => {
+              await sql.script("set transaction read only");
+              return work(sql, record.level);
+            }
+          ),
         target,
         input
       );

@@ -24,7 +24,8 @@ import {
   type OperationDefinition,
   type OperationExecutionContext,
   type OperationUpload,
-  type OperationResource
+  type OperationResource,
+  knowledgeFileMaxBytes
 } from "@work-shape/catalyst-core";
 import { knowledgeLimitError } from "./builtin/documents";
 import { knowledgeTargetOf, type KnowledgeBaseDefinition } from "./definition";
@@ -205,14 +206,22 @@ function checked(runtime: KnowledgeRuntime, label: string, file: OpenedKnowledge
       `${label} is a ${format.toUpperCase()} file, and this instance reads no ${format.toUpperCase()}: that needs its document processing. It takes ${runtime.documentFormats.map((each) => each.toUpperCase()).join(", ")}.`
     );
   }
-  if (file.byteSize > runtime.maxFileBytes) throw tooLarge(runtime, label);
+  if (file.byteSize > knowledgeFileMaxBytes(runtime.maxFileBytes, format))
+    throw tooLarge(runtime, label, format);
   return { label, file, format };
 }
 
-function tooLarge(runtime: Pick<KnowledgeRuntime, "maxFileBytes">, label: string): AppError {
+function tooLarge(
+  runtime: Pick<KnowledgeRuntime, "maxFileBytes">,
+  label: string,
+  format: KnowledgeDocumentFormat
+): AppError {
+  const limit = knowledgeFileMaxBytes(runtime.maxFileBytes, format);
   return knowledgeLimitError(
     "knowledge_file_too_large",
-    `${label} is larger than a Knowledge Base takes: ${runtime.maxFileBytes} bytes (knowledge.maxFileBytes).`
+    limit < runtime.maxFileBytes
+      ? `${label} is larger than a Knowledge Base takes of a ${format === "txt" ? "TXT" : "Markdown"} file: ${limit} bytes, the most text one document holds.`
+      : `${label} is larger than a Knowledge Base takes: ${limit} bytes (knowledge.maxFileBytes).`
   );
 }
 
@@ -312,7 +321,8 @@ async function addFiles(
     for (const { label, file, format, sha256 } of opened) {
       const bytes = await file.read();
       bytesAdded += bytes.byteLength;
-      if (bytes.byteLength > runtime.maxFileBytes) throw tooLarge(runtime, label);
+      if (bytes.byteLength > knowledgeFileMaxBytes(runtime.maxFileBytes, format))
+        throw tooLarge(runtime, label, format);
       const contentSha256 = createHash("sha256").update(bytes).digest("hex");
       if (sha256 !== undefined && sha256 !== contentSha256) throw uploadMissing();
       // The row first: an object is never stored without a row that leads to it.

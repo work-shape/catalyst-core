@@ -25,7 +25,8 @@ import {
   type JobControl,
   type KnowledgeDocumentFailureCode,
   type KnowledgeFetchJobPayload,
-  type RegisteredJobHandler
+  type RegisteredJobHandler,
+  knowledgeFileMaxBytes
 } from "@work-shape/catalyst-core";
 import { enqueueKnowledgeFileCleanup, removeUnusedKnowledgeCopies } from "../file-cleanup";
 import { knowledgeDocumentFileIds } from "./documents";
@@ -195,14 +196,14 @@ async function fetchItem(
             {
               itemId: item.item_id,
               version: item.version,
-              maxBytes: sourceMaxFileBytes(runtime.input),
+              maxBytes: knowledgeFileMaxBytes(sourceMaxFileBytes(runtime.input), format),
               boundary
             },
             context
           )) {
             context.signal.throwIfAborted();
             size += chunk.byteLength;
-            if (size > sourceMaxFileBytes(runtime.input))
+            if (size > knowledgeFileMaxBytes(sourceMaxFileBytes(runtime.input), format))
               throw new DocumentSourceError(
                 "over_limit",
                 "The source item exceeds knowledge.maxFileBytes"

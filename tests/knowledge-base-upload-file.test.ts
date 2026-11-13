@@ -230,6 +230,21 @@ describe("uploading a file to a Knowledge Base", () => {
     expect((await ownedFiles(instance)).documents).toHaveLength(1);
   });
 
+  it("refuses a TXT or Markdown file above the text one document holds when it is added, a larger knowledge.maxFileBytes or not", async () => {
+    const instance = await instanceWithKnowledgeBase({ maxFileBytes: 2 * KNOWLEDGE_FILE_MAX_BYTES });
+    for (const filename of ["lang.txt", "lang.md"]) {
+      const large = await upload(instance, {
+        filename,
+        contentType: filename.endsWith(".md") ? "text/markdown" : "text/plain",
+        content: Buffer.alloc(KNOWLEDGE_FILE_MAX_BYTES + 1, 0x61)
+      });
+      expect(large.statusCode, large.body).toBe(422);
+      expect(reasonOf(large)).toBe("knowledge_file_too_large");
+      expect(large.body).toContain(`${KNOWLEDGE_FILE_MAX_BYTES} bytes, the most text one document holds`);
+    }
+    expect((await ownedFiles(instance)).documents).toEqual([]);
+  });
+
   it("refuses a caller without `knowledge_base.write`", async () => {
     const instance = await instanceWithKnowledgeBase();
     const refused = await upload(

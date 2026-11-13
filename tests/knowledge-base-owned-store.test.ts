@@ -200,9 +200,8 @@ describe("the store a Knowledge Base owns", () => {
     for (const table of tables) {
       expect([record.roles.app, record.roles.migration]).not.toContain(table.owner);
     }
-    // The title's and the path's words are generated; the chunks' keyword columns are filled by
-    // a trigger, so a language can be added beside them (KB-12): German and English where none
-    // is listed.
+    // The title's words are generated; the chunks' keyword columns are filled by a trigger, so
+    // a language can be added beside them (KB-12): German and English where none is listed.
     const searchColumns = await inDatabase(
       database,
       (sql) =>
@@ -214,9 +213,17 @@ describe("the store a Knowledge Base owns", () => {
     expect(searchColumns).toEqual([
       { name: "chunks.search_de", generated: "NEVER" },
       { name: "chunks.search_en", generated: "NEVER" },
-      { name: "documents.title_search", generated: "ALWAYS" },
-      { name: "source_items.path_search", generated: "ALWAYS" }
+      { name: "documents.title_search", generated: "ALWAYS" }
     ]);
+    // A path's words are an index over the expression a search reads, not a column: adding
+    // them rewrote no row of `source_items` (KB-PATH).
+    expect(
+      await inDatabase(
+        database,
+        (sql) => sql`select pg_get_indexdef(indexrelid) as definition from pg_index
+          where indexrelid = 'catalyst_kb.source_items_path_search_idx'::regclass`
+      )
+    ).toEqual([{ definition: expect.stringMatching(/USING gin \(to_tsvector\('simple'::regconfig/) }]);
     expect(
       await inDatabase(
         database,

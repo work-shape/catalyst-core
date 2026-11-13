@@ -860,7 +860,8 @@ it and restarting the API and knowledge extraction worker, retry the document to
 26214400, 25 MiB; from 1 MiB to 268435456, 256 MiB). A larger file is refused when it is added
 or uploaded, with `knowledge_file_too_large`, and a synced item listed or fetched larger fails
 with `knowledge_file_over_limit` without being stored. The text of one document stays bounded at
-25 MiB however large its file. A file added by hand is read whole into the API's memory and every
+25 MiB however large its file, so a TXT or Markdown file above 25 MiB is refused the same way
+whatever the setting. A file added by hand is read whole into the API's memory and every
 file whole into the document worker's for extraction, so size both for it, and keep `knowledge.pageCacheBytes`
 at least as large. Restart the API and the knowledge workers after changing it.
 
