@@ -326,6 +326,28 @@ export function refusedRequest(input: {
     : undefined;
 }
 
+/**
+ * The person whose message the run of a call answered: the run that goes, or an ended one the
+ * thread holds. Nothing where neither holds the call or names its person.
+ */
+export function callRunOwner(
+  toolCallId: string,
+  runs: {
+    activeRun:
+      | { run: { ownerUserId?: string }; projection: { parts: readonly SubjectRunPart[] } }
+      | undefined;
+    completedRunProjections: Readonly<Record<string, RefusableRun>> | undefined;
+  }
+): string | undefined {
+  const holds = (parts: readonly SubjectRunPart[]) =>
+    parts.some((part) => part.type === "tool_call" && part.toolCallId === toolCallId);
+  if (runs.activeRun !== undefined && holds(runs.activeRun.projection.parts)) {
+    return runs.activeRun.run.ownerUserId;
+  }
+  return Object.values(runs.completedRunProjections ?? {}).find((run) => holds(run.parts))
+    ?.ownerUserId;
+}
+
 /** An App the agent's `app.save` made, as its line in the conversation names it (SHARE-1). */
 export interface AppSaved {
   /** The App's id. */

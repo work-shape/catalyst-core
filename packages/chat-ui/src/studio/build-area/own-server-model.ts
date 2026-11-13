@@ -243,7 +243,12 @@ export function readOwnServerProposal(result: unknown): OwnServerProposal | unde
   const url: unknown = Reflect.get(proposal, "url");
   const entry: unknown = Reflect.get(proposal, "entry");
   return typeof title === "string" && typeof url === "string" && url !== ""
-    ? { title, url, ...(typeof entry === "string" && entry !== "" ? { entry } : {}) }
+    ? {
+        title,
+        url,
+        ...(typeof entry === "string" && entry !== "" ? { entry } : {}),
+        ...(answer.privateChat === false ? { privateChat: false as const } : {})
+      }
     : undefined;
 }
 
@@ -255,6 +260,11 @@ export interface OwnServerProposal {
   title: string;
   url: string;
   entry?: string;
+  /**
+   * Made in a chat others read (PMCP-CHAT-2): the server's tools work only in the person's
+   * private chats, and nothing is told back to this one.
+   */
+  privateChat?: false;
 }
 
 /** The longest a server's or tool's name is quoted in the person's message. */

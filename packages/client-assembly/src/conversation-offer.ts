@@ -21,7 +21,8 @@ import {
   asCollaborationWorkspaceId,
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
-  mayUseOwnInChat,
+  actsAsThemselfInChat,
+  chatReadOnlyBy,
   dataStoreOperationName,
   resolvePolicy,
   type PolicyDefaults,
@@ -273,17 +274,28 @@ async function ownRunPerson(
   request: OfferRequest,
   conversation: OfferedConversation
 ): Promise<string | undefined> {
-  const { user, runId, clientInstanceId } = request;
-  const { agentRuns, configAssets, workspaces } = input.stores;
-  if (!user || !runId || !agentRuns || !configAssets || !workspaces) return undefined;
   // Only a chat no one but its person reads, as for a personal Connection: one they created,
   // in their own Personal Workspace or private. A team-visible chat, or one another person
   // created, gets none, as the skill's text would reach its other readers.
-  const workspace = await workspaces.getWorkspace(
-    clientInstanceId,
-    conversation.collaborationWorkspaceId
-  );
-  if (!mayUseOwnInChat(user, conversation, workspace)) return undefined;
+  const run = await firstPartyRunOf(input, request, conversation);
+  return run?.privateChat === true ? run.person : undefined;
+}
+
+/**
+ * The person of a run they started themself in a chat, in their own first-party session, and
+ * that acts for them now, and whether no one else reads that chat. Nothing for a subagent, a
+ * Workflow step, a service principal, or a run started or acting with a key or for an
+ * embedding host.
+ */
+async function firstPartyRunOf(
+  input: ConversationOfferInput,
+  request: OfferRequest,
+  conversation: OfferedConversation
+): Promise<{ person: string; privateChat: boolean } | undefined> {
+  const { user, runId, clientInstanceId } = request;
+  const { agentRuns, configAssets, workspaces } = input.stores;
+  if (!user || !runId || !agentRuns || !configAssets || !workspaces) return undefined;
+  if (!actsAsThemselfInChat(user, conversation)) return undefined;
   const person = getSubjectUserId(user);
   const run = await agentRuns.getAgentRun({ clientInstanceId, runId });
   const authorization = run?.authorization;
@@ -303,7 +315,11 @@ async function ownRunPerson(
   ) {
     return undefined;
   }
-  return person;
+  const workspace = await workspaces.getWorkspace(
+    clientInstanceId,
+    conversation.collaborationWorkspaceId
+  );
+  return { person, privateChat: chatReadOnlyBy(conversation, workspace, person) };
 }
 
 /**
@@ -325,20 +341,24 @@ async function ownServerToolNames(
 
 /**
  * Whether this run may propose the person's own MCP server (PMCP-CHAT): its agent lets own
- * servers in, the operator's switch is on, the run may be offered what is the person's alone
- * (the rules of `personalSkillNames`) and the person holds `connection.add_own`. Any agent may,
- * not only one that holds the platform's tools.
+ * servers in, the operator's switch is on, the person started the run themself in a chat
+ * (`firstPartyRunOf`) and holds `connection.add_own`. Any agent may, not only one that holds the
+ * platform's tools. Also in a chat others read (PMCP-CHAT-2): adding a server shows nobody
+ * anything of the person's, and the answer says the server's tools work only in their private
+ * chats. Nothing where the run may not propose one.
  */
-async function ownServerProposalAllowed(
+async function ownServerProposalOf(
   input: ConversationOfferInput,
   request: OfferRequest,
   conversation: OfferedConversation
-): Promise<boolean> {
-  if (request.agentOwnServers !== true || input.ownServerTools?.isOn() !== true) return false;
-  const person = await ownRunPerson(input, request, conversation);
+): Promise<{ privateChat: boolean } | undefined> {
+  if (request.agentOwnServers !== true || input.ownServerTools?.isOn() !== true) return undefined;
+  const run = await firstPartyRunOf(input, request, conversation);
   const authorizer = input.authorizer?.();
-  if (person === undefined || !request.user || !authorizer) return false;
-  return (await authorizer.forActor(request.user)).authorize(CONNECTION_ACTIONS.addOwn).allowed;
+  if (run === undefined || !request.user || !authorizer) return undefined;
+  return (await authorizer.forActor(request.user)).authorize(CONNECTION_ACTIONS.addOwn).allowed
+    ? { privateChat: run.privateChat }
+    : undefined;
 }
 
 /**
@@ -510,7 +530,7 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
       const proposes =
         holds ||
         (input.hasTool(CONNECTION_PROPOSE_TOOL_NAME) &&
-          (await ownServerProposalAllowed(input, request, conversation)));
+          (await ownServerProposalOf(input, request, conversation)) !== undefined);
       // A self-added server is on no agent: an agent's listing of one of its tools is withheld,
       // whoever's run it is, unless this run is offered it as its person's own.
       const listedOwnServerNames = (
@@ -678,7 +698,7 @@ async function proposalAccessOf(
       ) => Promise<{ toolNames: readonly string[]; ownServers?: boolean } | undefined>)
     | undefined,
   context: ToolExecutionContext
-): Promise<{ ownServer: boolean; otherModes: boolean }> {
+): Promise<{ ownServer: boolean; otherModes: boolean; privateChat?: boolean }> {
   const call = context.toolRequest;
   const agent = call && agentOf ? await agentOf(call.agentName) : undefined;
   const run =
@@ -709,21 +729,24 @@ async function proposalAccessOf(
     context.clientInstanceId,
     call.conversationId
   );
-  const ownServer =
-    conversation !== undefined &&
-    (await ownServerProposalAllowed(
-      input,
-      {
-        clientInstanceId: context.clientInstanceId,
-        conversationId: call.conversationId,
-        agentToolNames: agent.toolNames,
-        agentOwnServers: agent.ownServers !== false,
-        user: context.user,
-        runId: call.agentRunId
-      },
-      conversation
-    ));
-  return { ownServer, otherModes };
+  const proposal =
+    conversation === undefined
+      ? undefined
+      : await ownServerProposalOf(
+          input,
+          {
+            clientInstanceId: context.clientInstanceId,
+            conversationId: call.conversationId,
+            agentToolNames: agent.toolNames,
+            agentOwnServers: agent.ownServers !== false,
+            user: context.user,
+            runId: call.agentRunId
+          },
+          conversation
+        );
+  return proposal === undefined
+    ? { ownServer: false, otherModes }
+    : { ownServer: true, otherModes, privateChat: proposal.privateChat };
 }
 
 export async function conversationToolNames(

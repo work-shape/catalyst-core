@@ -56,7 +56,9 @@ export const ownServers = defineTranslations({
     "ownServers.proposalOpen": "Open",
     "ownServers.proposalNote":
       "You connect, sign in and choose its tools there. Nothing is saved before.",
-    "ownServers.proposalReader": "Only the person whose chat this is adds their own MCP server.",
+    "ownServers.proposalReader": "Only the person who asked adds their own MCP server.",
+    "ownServers.proposalPrivateOnly": "Works only in your private chats.",
+    "ownServers.proposalStartPrivate": "Start private chat",
     "ownServers.toldTools": "I added my MCP server {title}. {count} tools accepted: {tools}.",
     "ownServers.toldOne": "I added my MCP server {title}. 1 tool accepted: {tools}.",
     "ownServers.toldNoTools": "I added my MCP server {title}, with no tools accepted yet.",
@@ -144,7 +146,9 @@ export const ownServers = defineTranslations({
     "ownServers.proposalNote":
       "Dort verbindest du, meldest dich an und wählst die Tools. Vorher wird nichts gespeichert.",
     "ownServers.proposalReader":
-      "Nur die Person, deren Chat das ist, fügt ihren eigenen MCP-Server hinzu.",
+      "Nur die Person, die danach gefragt hat, fügt ihren eigenen MCP-Server hinzu.",
+    "ownServers.proposalPrivateOnly": "Funktioniert nur in deinen privaten Chats.",
+    "ownServers.proposalStartPrivate": "Privaten Chat starten",
     "ownServers.toldTools":
       "Ich habe meinen MCP-Server {title} hinzugefügt. {count} Tools akzeptiert: {tools}.",
     "ownServers.toldOne":

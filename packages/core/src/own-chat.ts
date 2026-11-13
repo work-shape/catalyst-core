@@ -34,6 +34,24 @@ export function chatReadOnlyBy(
 }
 
 /**
+ * Whether the caller acts as themself in an active chat, whoever else reads it: the person, neither
+ * a service principal, a key nor an embedding host acting for them. What may be offered there
+ * shows nobody anything of theirs, such as the proposal of their own MCP server (PMCP-CHAT-2).
+ */
+export function actsAsThemselfInChat(
+  user: AuthenticatedIdentity,
+  conversation: Pick<Conversation, "kind" | "status">
+): boolean {
+  return (
+    !isAuthenticatedServicePrincipal(user) &&
+    user.delegatedActor === undefined &&
+    user.keyScopes === undefined &&
+    conversation.kind === "chat" &&
+    conversation.status === "active"
+  );
+}
+
+/**
  * Whether the caller may use what is theirs alone in this chat: the person themself, neither a
  * service principal, a key nor an embedding host acting for them, in an active chat only they
  * read.
@@ -43,15 +61,9 @@ export function mayUseOwnInChat(
   conversation: Pick<Conversation, "kind" | "status" | "createdByUserId" | "visibility" | "people">,
   workspace: ChatWorkspace | undefined
 ): boolean {
-  if (
-    isAuthenticatedServicePrincipal(user) ||
-    user.delegatedActor !== undefined ||
-    user.keyScopes !== undefined
-  ) {
-    return false;
-  }
+  if (isAuthenticatedServicePrincipal(user)) return false;
   return (
-    conversation.status === "active" &&
+    actsAsThemselfInChat(user, conversation) &&
     chatReadOnlyBy(conversation, workspace, getSubjectUserId(user))
   );
 }

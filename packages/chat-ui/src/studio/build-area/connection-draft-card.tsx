@@ -24,7 +24,7 @@ import { CONNECTIONS_BUILD_PATH } from "./connection-tools";
 import { ConnectionConnectCard } from "./connection-connect-card";
 import { connectCardOfProposal } from "./connection-connect-card-model";
 import { OWN_SERVERS_ROUTE } from "./own-server-model";
-import { requestOwnServerAdd } from "./own-server-request";
+import { ownServerAddRequestOf, requestOwnServerAdd } from "./own-server-request";
 
 // The card of the agent's draft of the tools of a REST API (CS-5c), in the conversation: what
 // the tools are for and their names. Its button opens the Connection's approval list with the
@@ -99,6 +99,10 @@ export function connectionDraftHost(input: {
   from?: { conversationId: string; agentName?: string };
   /** The viewer started the conversation on screen. */
   ownsConversation?: boolean;
+  /** Whether the viewer is the person a call's run answered, where the run is known. */
+  ownsCall?: (toolCallId: string) => boolean | undefined;
+  /** Opens a new private chat with the conversation's agent. */
+  startPrivateChat?: () => void;
   /** Sends the person's message to a conversation, queued behind a run that goes. */
   tellConversation?: (
     to: { conversationId: string; agentName?: string },
@@ -112,6 +116,8 @@ export function connectionDraftHost(input: {
     authScope: input.authScope,
     client: input.client,
     ownsConversation: input.ownsConversation ?? false,
+    ...(input.ownsCall ? { ownsCall: input.ownsCall } : {}),
+    ...(input.startPrivateChat ? { startPrivateChat: input.startPrivateChat } : {}),
     connectionOf,
     ...(from && tellConversation
       ? {
@@ -122,7 +128,7 @@ export function connectionDraftHost(input: {
       : {})
   };
   host.openOwnServer = (proposal) => {
-    requestOwnServerAdd({ ...proposal, ...(from ? { from } : {}) });
+    requestOwnServerAdd(ownServerAddRequestOf(proposal, from));
     input.showRoute(OWN_SERVERS_ROUTE);
   };
   if (input.mayWriteConnections) {

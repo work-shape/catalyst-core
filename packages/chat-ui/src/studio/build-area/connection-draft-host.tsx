@@ -25,6 +25,16 @@ export interface ConnectionDraftHost {
    */
   ownsConversation: boolean;
   /**
+   * Whether the viewer is the person whose message the run of a call answered, which in a chat
+   * others read need not be who started it (PMCP-CHAT-2). `undefined` where the run is not known.
+   */
+  ownsCall?(toolCallId: string): boolean | undefined;
+  /**
+   * Opens a new private chat in the open workspace with the conversation's agent: where the
+   * person's own server's tools work, after a proposal in a chat others read (PMCP-CHAT-2).
+   */
+  startPrivateChat?(): void;
+  /**
    * Sends `text` as the person's message to the conversation on screen, queued behind a run that
    * goes (CHAT-CONN-1): the Connect card's word that the service is connected.
    */
