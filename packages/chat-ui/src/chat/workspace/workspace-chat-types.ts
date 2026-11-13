@@ -388,6 +388,12 @@ export interface SelectedChatModel {
    * after a build was refused because others read the open one. Settles once it opened.
    */
   continuePrivately?(prompt: string): Promise<void>;
+  /**
+   * Opens a new private chat of the open workspace with this agent, the composer as it was:
+   * where a person's own MCP server's tools work (PMCP-CHAT-2). Absent for a reader from
+   * outside the workspace.
+   */
+  startPrivateChat?(agentName: string | undefined): void;
   /** The first message on the start page makes a private conversation: "Continue privately". */
   startsPrivate?: boolean;
   /** The project the start page's first message starts its chat in, on the project's page. */

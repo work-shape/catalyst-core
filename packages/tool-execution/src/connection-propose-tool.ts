@@ -18,6 +18,7 @@ import {
   type ConnectorTypeRegistry,
   type ToolExecutionContext,
   type ToolHandlerResult,
+  type AuditSafeSummary,
   type JsonObject
 } from "@work-shape/catalyst-core";
 import {
@@ -255,8 +256,18 @@ const outputSchema = z.object({
 /** What the card of an own server shows and its add screen starts with. */
 const ownServerOutputSchema = z.object({
   mode: z.literal(OWN_SERVER_PROPOSAL_MODE),
-  ownServer: z.object({ title: z.string(), url: z.string(), entry: z.string().optional() })
+  ownServer: z.object({ title: z.string(), url: z.string(), entry: z.string().optional() }),
+  /**
+   * No one but the person reads the chat (PMCP-CHAT-2). Where others do, the server's tools
+   * will not run here, and `note` tells the agent to say so.
+   */
+  privateChat: z.boolean(),
+  note: z.string().optional()
 });
+
+/** What the answer tells the agent in a chat others read (PMCP-CHAT-2). */
+const OWN_SERVER_SHARED_CHAT_NOTE =
+  "Others read this chat, so the server's tools will work only in the person's private chats, never here. Tell them in one sentence: once it is added, they use it in a private chat; the card offers to start one with you.";
 
 /**
  * A catalogue entry a person adds as their own server (PMCP-CAT), as the instance offers it:
@@ -274,12 +285,14 @@ type OwnServerProposal = z.infer<typeof ownServerOutputSchema>;
 
 /**
  * Which modes this call may use (PMCP-CHAT). The own-server mode only in a run its person
- * started in a chat only they read, while their own servers are on, they hold
- * `connection.add_own` and the agent lets own servers in; the other modes only for an agent
- * that holds the platform's tools.
+ * started themself in a chat, while their own servers are on, they hold `connection.add_own`
+ * and the agent lets own servers in, with `privateChat: false` where others read that chat
+ * (PMCP-CHAT-2); the other modes only for an agent that holds the platform's tools.
  */
 export interface ConnectionProposalAccess {
-  of(context: ToolExecutionContext): Promise<{ ownServer: boolean; otherModes: boolean }>;
+  of(
+    context: ToolExecutionContext
+  ): Promise<{ ownServer: boolean; otherModes: boolean; privateChat?: boolean }>;
 }
 
 interface ProposalIssue {
@@ -621,10 +634,13 @@ export function createConnectionProposeTool(input: {
     outputSchema: z.union([outputSchema, ownServerOutputSchema]),
     async execute(proposal, context) {
       const access = (await input.access?.of(context)) ?? { ownServer: false, otherModes: true };
+      const ownServer = access.ownServer
+        ? { privateChat: access.privateChat !== false }
+        : undefined;
       if ("ownServerEntry" in proposal) {
-        return proposeOwnServerEntry(proposal.ownServerEntry, ownServerEntries, access.ownServer);
+        return proposeOwnServerEntry(proposal.ownServerEntry, ownServerEntries, ownServer);
       }
-      if ("mode" in proposal) return proposeOwnServer(proposal, access.ownServer);
+      if ("mode" in proposal) return proposeOwnServer(proposal, ownServer);
       if (!access.otherModes) {
         return {
           status: "failed",
@@ -716,23 +732,13 @@ export function createConnectionProposeTool(input: {
  */
 function proposeOwnServer(
   proposal: z.infer<typeof ownServerInputSchema>,
-  offered: boolean
+  offered: { privateChat: boolean } | undefined
 ): ToolHandlerResult<OwnServerProposal> {
   const auditSummary = {
     action: CONNECTION_PROPOSE_TOOL_NAME,
     metadata: { mode: OWN_SERVER_PROPOSAL_MODE }
   };
-  if (!offered) {
-    return {
-      status: "failed",
-      error: {
-        code: "not_allowed",
-        message:
-          "A person's own MCP server is proposed only in their own chat that no one else reads, where they may add one. Tell them they add it themselves under Settings > You > Connections."
-      },
-      auditSummary
-    };
-  }
+  if (offered === undefined) return notOffered(auditSummary);
   const url = proposal.url.trim();
   const issues = addressIssues(url);
   if (issues.length > 0) {
@@ -750,9 +756,39 @@ function proposeOwnServer(
     };
   }
   return toolSuccess<OwnServerProposal>(
-    { mode: OWN_SERVER_PROPOSAL_MODE, ownServer: { title: proposal.title.trim(), url } },
+    {
+      mode: OWN_SERVER_PROPOSAL_MODE,
+      ownServer: { title: proposal.title.trim(), url },
+      ...whereProposed(offered)
+    },
     { auditSummary }
   );
+}
+
+/**
+ * The refusal where the run may not propose the person's own server: not the person's own run in
+ * a chat, their own servers off, or no `connection.add_own`.
+ */
+function notOffered(auditSummary: AuditSafeSummary): ToolHandlerResult<OwnServerProposal> {
+  return {
+    status: "failed",
+    error: {
+      code: "not_allowed",
+      message:
+        "A person's own MCP server is proposed only in a chat they started this turn in themselves, where they may add one. Tell them they add it themselves under Settings > You > Connections."
+    },
+    auditSummary
+  };
+}
+
+/** Whether the chat is the person's alone, and in one others read the word for the agent. */
+function whereProposed(offered: { privateChat: boolean }): {
+  privateChat: boolean;
+  note?: string;
+} {
+  return offered.privateChat
+    ? { privateChat: true }
+    : { privateChat: false, note: OWN_SERVER_SHARED_CHAT_NOTE };
 }
 
 /**
@@ -773,24 +809,14 @@ function ownServerEntriesText(entries: readonly OwnServerProposalEntry[]): strin
 function proposeOwnServerEntry(
   id: string,
   entries: readonly OwnServerProposalEntry[],
-  offered: boolean
+  offered: { privateChat: boolean } | undefined
 ): ToolHandlerResult<OwnServerProposal> {
   const entry = entries.find((candidate) => candidate.id === id);
   const auditSummary = {
     action: CONNECTION_PROPOSE_TOOL_NAME,
     metadata: { mode: OWN_SERVER_PROPOSAL_MODE, ...(entry ? { entry: entry.id } : {}) }
   };
-  if (!offered) {
-    return {
-      status: "failed",
-      error: {
-        code: "not_allowed",
-        message:
-          "A person's own MCP server is proposed only in their own chat that no one else reads, where they may add one. Tell them they add it themselves under Settings > You > Connections."
-      },
-      auditSummary
-    };
-  }
+  if (offered === undefined) return notOffered(auditSummary);
   if (entry === undefined) {
     const known = entries.map((candidate) => `'${candidate.id}'`).join(", ");
     return {
@@ -808,7 +834,8 @@ function proposeOwnServerEntry(
   return toolSuccess<OwnServerProposal>(
     {
       mode: OWN_SERVER_PROPOSAL_MODE,
-      ownServer: { title: entry.title, url: entry.url, entry: entry.id }
+      ownServer: { title: entry.title, url: entry.url, entry: entry.id },
+      ...whereProposed(offered)
     },
     { auditSummary }
   );

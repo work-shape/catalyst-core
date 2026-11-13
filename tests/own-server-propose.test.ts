@@ -31,11 +31,12 @@ import {
   type AccessInstance
 } from "./support/access-instance";
 
-// The own-server mode of `platform.connections.propose` (PMCP-CHAT, connections acceptance check
-// 86). Any agent, not only one that holds the platform's tools, may propose a person's own MCP
-// server in a chat only that person reads, while their own servers are on and they hold
-// `connection.add_own`; the card opens their add screen, and the tool saves nothing. Its audit
-// names the mode, never the address or the name.
+// The own-server mode of `platform.connections.propose` (PMCP-CHAT, connections acceptance checks
+// 86 and 92). Any agent, not only one that holds the platform's tools, may propose a person's own
+// MCP server in a run that person started themself in a chat, while their own servers are on and
+// they hold `connection.add_own`; in a chat others read the answer says `privateChat: false`.
+// The card opens their add screen, and the tool saves nothing. Its audit names the mode, never
+// the address or the name.
 
 const ADDRESS = "https://notes.example.com/mcp";
 
@@ -169,7 +170,7 @@ const ownServerProposal = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe("an agent's proposal of a person's own MCP server", () => {
-  it("is offered to any agent in its person's own private chat, and nowhere else", async () => {
+  it("is offered to any agent in a chat its person started the run in, and nowhere else", async () => {
     const { t, runs, offer, home } = await setup();
     const record = (run: AgentRun) => (runs.set(run.id, run), run);
     const proposes = async (run: AgentRun, user: AuthenticatedUser, agent = "helper") =>
@@ -182,33 +183,51 @@ describe("an agent's proposal of a person's own MCP server", () => {
           user,
           runId: run.id
         })
-      )?.toolNames.includes(CONNECTION_PROPOSE_TOOL_NAME) ?? false;
+      )?.toolNames ?? [];
     const kai = personOf(t.kai);
+    const lena = personOf(t.lena);
     const own = record(runOf(await chatOf(t, t.kai, home), t.kai));
-    expect(await proposes(own, kai)).toBe(true);
+    expect(await proposes(own, kai)).toContain(CONNECTION_PROPOSE_TOOL_NAME);
 
     // The agent keeps own servers out.
-    expect(await proposes(own, kai, "closed")).toBe(false);
-    // A chat the team reads, another person's run, a subagent, a Workflow step, a key.
+    expect(await proposes(own, kai, "closed")).not.toContain(CONNECTION_PROPOSE_TOOL_NAME);
     const team = await t.sharedWorkspace("Team");
-    await t.stores.workspaces.addMembership({
-      clientInstanceId,
-      collaborationWorkspaceId: team,
-      userId: asUserId(t.kai.id),
-      role: "member"
-    });
+    for (const user of [t.kai, t.lena]) {
+      await t.stores.workspaces.addMembership({
+        clientInstanceId,
+        collaborationWorkspaceId: team,
+        userId: asUserId(user.id),
+        role: "member"
+      });
+    }
+    // A chat the team reads (PMCP-CHAT-2): its person's run, also a teammate's run in a chat
+    // another person started, is offered the proposal; the server's own tools stay out.
+    const teamChat = await chatOf(t, t.kai, team);
+    expect(await proposes(record(runOf(teamChat, t.kai)), kai)).toContain(
+      CONNECTION_PROPOSE_TOOL_NAME
+    );
+    expect(await proposes(record(runOf(teamChat, t.lena)), lena)).toContain(
+      CONNECTION_PROPOSE_TOOL_NAME
+    );
+    // Another person for the run, a subagent, a Workflow step, a key: none, in any chat.
     const keyActor = {
       kind: "api_key" as const,
       id: createPlatformId<"ApiCredentialId">("key"),
       displayLabel: "Key",
       authSource: "test"
     };
+    const teamRun = record(runOf(teamChat, t.kai));
     const refused: [string, AgentRun, AuthenticatedUser][] = [
-      ["a chat the team reads", record(runOf(await chatOf(t, t.kai, team), t.kai)), kai],
-      ["another person for the run", own, personOf(t.lena)],
+      ["another person for the run", own, lena],
+      ["another person for a team chat's run", teamRun, lena],
       [
         "a subagent",
         record(runOf(await chatOf(t, t.kai, home), t.kai, { parentRunId: own.id })),
+        kai
+      ],
+      [
+        "a subagent in a team chat",
+        record(runOf(teamChat, t.kai, { parentRunId: teamRun.id })),
         kai
       ],
       [
@@ -216,13 +235,92 @@ describe("an agent's proposal of a person's own MCP server", () => {
         record(runOf(await chatOf(t, t.kai, home), t.kai, { workflowStepRunId: "wfstep_1" })),
         kai
       ],
-      ["the owner's key", own, personOf(t.kai, { delegatedActor: keyActor, keyScopes: ["*"] })]
+      [
+        "a Workflow step in a team chat",
+        record(runOf(teamChat, t.kai, { workflowStepRunId: "wfstep_2" })),
+        kai
+      ],
+      ["the owner's key", own, personOf(t.kai, { delegatedActor: keyActor, keyScopes: ["*"] })],
+      [
+        "the owner's key in a team chat",
+        teamRun,
+        personOf(t.kai, { delegatedActor: keyActor, keyScopes: ["*"] })
+      ],
+      [
+        "a run its key started",
+        record(
+          runOf(teamChat, t.kai, {
+            authorization: {
+              personalConnectionsAllowed: false,
+              principal: createUserPrincipal(kai),
+              subjectUserId: t.kai.id,
+              scopes: ["*"]
+            }
+          })
+        ),
+        kai
+      ]
     ];
     for (const [what, run, user] of refused) {
-      expect(await proposes(run, user), what).toBe(false);
+      expect(await proposes(run, user), what).not.toContain(CONNECTION_PROPOSE_TOOL_NAME);
     }
     // An agent that holds the platform's tools keeps the tool for its other modes.
-    expect(await proposes(refused[0]?.[1] ?? own, kai, "builder")).toBe(true);
+    expect(await proposes(refused[0]?.[1] ?? own, lena, "builder")).toContain(
+      CONNECTION_PROPOSE_TOOL_NAME
+    );
+  });
+
+  it("answers in a team chat that the server's tools work only in private chats", async () => {
+    const { t, runs, tool } = await setup();
+    const team = await t.sharedWorkspace("Team");
+    for (const user of [t.kai, t.lena]) {
+      await t.stores.workspaces.addMembership({
+        clientInstanceId,
+        collaborationWorkspaceId: team,
+        userId: asUserId(user.id),
+        role: "member"
+      });
+    }
+    const teamChat = await chatOf(t, t.kai, team);
+    const privateChat = await chatOf(t, t.kai, team, "private");
+    for (const [what, run, user] of [
+      ["the chat's creator", runOf(teamChat, t.kai), t.kai],
+      ["a teammate", runOf(teamChat, t.lena), t.lena]
+    ] as const) {
+      runs.set(run.id, run);
+      const answer = await tool.execute(
+        tool.inputSchema.parse(ownServerProposal()),
+        callIn(run, personOf(user), "builder")
+      );
+      expect(answer.status, what).toBe("success");
+      const output = answer.status === "success" ? answer.output : undefined;
+      expect(output, what).toMatchObject({
+        mode: "own_server",
+        ownServer: { title: "Meine Notizen", url: ADDRESS },
+        privateChat: false
+      });
+      expect(JSON.stringify(output), what).toContain("only in the person's private chats");
+      expect(tool.outputSchema?.parse(output), what).toEqual(output);
+      // The audit names the mode alone, as in a private chat.
+      if (answer.status === "success") {
+        expect(answer.auditSummary).toEqual({
+          action: CONNECTION_PROPOSE_TOOL_NAME,
+          metadata: { mode: "own_server" }
+        });
+      }
+    }
+    // Her private chat in the team workspace is hers alone.
+    const own = runOf(privateChat, t.kai);
+    runs.set(own.id, own);
+    const answer = await tool.execute(
+      tool.inputSchema.parse(ownServerProposal()),
+      callIn(own, personOf(t.kai))
+    );
+    expect(answer.status === "success" ? answer.output : undefined).toEqual({
+      mode: "own_server",
+      ownServer: { title: "Meine Notizen", url: ADDRESS },
+      privateChat: true
+    });
   });
 
   it("is not offered while own servers are off or to a person without connection.add_own", async () => {
@@ -282,12 +380,17 @@ describe("an agent's proposal of a person's own MCP server", () => {
     const answer = await tool.execute(parsed, callIn(run, personOf(t.kai)));
     expect(answer).toEqual({
       status: "success",
-      output: { mode: "own_server", ownServer: { title: "Meine Notizen", url: ADDRESS } },
+      output: {
+        mode: "own_server",
+        ownServer: { title: "Meine Notizen", url: ADDRESS },
+        privateChat: true
+      },
       auditSummary: { action: CONNECTION_PROPOSE_TOOL_NAME, metadata: { mode: "own_server" } }
     });
     expect(tool.outputSchema?.parse(answer.status === "success" ? answer.output : {})).toEqual({
       mode: "own_server",
-      ownServer: { title: "Meine Notizen", url: ADDRESS }
+      ownServer: { title: "Meine Notizen", url: ADDRESS },
+      privateChat: true
     });
     expect(await connections()).toEqual(before);
     // No audit record names the address or the name.
@@ -334,7 +437,7 @@ describe("an agent's proposal of a person's own MCP server", () => {
     }
   });
 
-  it("is refused at the call outside its person's own chat, even to an agent with the platform's tools", async () => {
+  it("is refused at the call outside a run its person started, even to an agent with the platform's tools", async () => {
     const { t, runs, tool, home } = await setup();
     const team = await t.sharedWorkspace("Team");
     await t.stores.workspaces.addMembership({
@@ -349,12 +452,13 @@ describe("an agent's proposal of a person's own MCP server", () => {
     runs.set(shared.id, shared);
     runs.set(own.id, own);
     const refusedCalls: [string, ToolExecutionContext][] = [
-      ["a chat the team reads", callIn(shared, kai, "builder")],
       ["an agent that keeps own servers out", callIn(own, kai, "closed")],
       ["a subagent's call", callIn(own, kai, "helper", { subagent: true })],
+      ["a subagent's call in a team chat", callIn(shared, kai, "builder", { subagent: true })],
       ["a Workflow agent's call", callIn(own, kai, "helper", { workflowAgent: true })],
       ["an unattended start", callIn(own, kai, "helper", { unattended: true })],
-      ["another person", callIn(own, personOf(t.lena))]
+      ["another person", callIn(own, personOf(t.lena))],
+      ["another person in a team chat", callIn(shared, personOf(t.lena), "builder")]
     ];
     for (const [what, context] of refusedCalls) {
       const answer = await tool.execute(tool.inputSchema.parse(ownServerProposal()), context);

@@ -319,16 +319,19 @@ export function createWorkspaceConversationActions({
   /**
    * Goes on privately after a build was refused because others read the open conversation:
    * the workspace's start page with the request in its composer, as a new chat opens. Nothing
-   * exists until the first send, which makes the conversation private (ACCEPT-2e).
+   * exists until the first send, which makes the conversation private (ACCEPT-2e). Without a
+   * request the composer keeps what it held, as for "Start private chat" (PMCP-CHAT-2).
    */
-  function continuePrivatelyWith(prompt: string) {
+  function continuePrivatelyWith(prompt?: string) {
     if (!activeCollaborationWorkspaceId) {
       throw new Error("A private conversation belongs to a workspace");
     }
-    draftController.setDraft(
-      { authScope: WORKSPACE_AUTH_SCOPE, conversationId: undefined },
-      prompt
-    );
+    if (prompt !== undefined) {
+      draftController.setDraft(
+        { authScope: WORKSPACE_AUTH_SCOPE, conversationId: undefined },
+        prompt
+      );
+    }
     goToActiveCollaborationWorkspaceChat();
     setPrivateStartIn(activeCollaborationWorkspaceId);
     setNotice(undefined);

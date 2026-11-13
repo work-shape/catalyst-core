@@ -108,6 +108,7 @@ import { workspaceRoutePath } from "./shared/routes";
 import { useWorkspaceChatModel, WORKSPACE_AUTH_SCOPE } from "./chat/workspace/workspace-chat-model";
 import { ChatShareProvider } from "./chat/share/chat-share";
 import { ChatPeopleHead } from "./chat/share/chat-people";
+import { callRunOwner } from "./chat/conversation/subject-run";
 import { WorkspaceProviders } from "./chat/workspace/workspace-providers";
 import { useRequestLocale } from "./shared/api/workspace-api-client";
 import {
@@ -716,6 +717,7 @@ function ChatWorkspaceContent({
           brand: mailBrandFrom(model.config.config)
         }
       : undefined;
+  const viewerId = model.auth.user.id;
   const connectionDraft = connectionDraftHost({
     client: chat.client,
     apiBaseUrl: model.auth.apiBaseUrl,
@@ -726,6 +728,16 @@ function ChatWorkspaceContent({
     ownsConversation:
       chat.selectedConversationOwnerId !== undefined &&
       chat.selectedConversationOwnerId === model.auth.user.id,
+    // In a chat others read, a card is the person's whose message its run answered.
+    ownsCall: (toolCallId) => {
+      const owner = callRunOwner(toolCallId, chat);
+      return owner === undefined ? undefined : owner === viewerId;
+    },
+    ...(chat.startPrivateChat
+      ? {
+          startPrivateChat: () => chat.startPrivateChat?.(chat.selectedAgentName)
+        }
+      : {}),
     tellConversation: chat.tellConversation,
     ...(cardConversation === undefined ? {} : { from: cardConversation })
   });

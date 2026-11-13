@@ -284,7 +284,7 @@ export function ToolCallPart({
       ? readOwnServerProposal(result)
       : undefined;
   if (ownServerProposal) {
-    return <OwnServerProposalCard proposal={ownServerProposal} />;
+    return <OwnServerProposalCard proposal={ownServerProposal} toolCallId={toolCallId} />;
   }
 
   // The agent's question to the person: a card whose options answer it (ASK-1).
