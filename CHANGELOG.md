@@ -7,6 +7,52 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.35 — 2026-11-13
+
+### Added
+
+- **Knowledge Bases:** Keyword search reads the folder path of a synced or Workflow-fed
+  document: the words of its path count as words of each of its passages, so a query naming a
+  folder ("Heizung Projekt Nord") finds the passages of the files filed under it, and a query of
+  only a folder's name finds its files. The documents are picked by the query's words that are
+  no stop word of a keyword language and no bare number, and only the 50 whose paths hold the
+  most of them are read for it, so a folder name every path holds never makes a search read
+  every passage. File extensions and bare numbers are no words of a path. The embedded text is
+  unchanged, so no Knowledge Base is embedded again; search by meaning alone does not read the
+  path, and a store not yet at migration 21 searches its passages as before.
+- **Knowledge Bases:** Every search passage of a synced or Workflow-fed document carries `path`,
+  its path below the source's boundary with folders and file name, which the agent can cite and
+  pass to a `path` filter. A file added by hand has none. The path appears in no Operation Run or
+  audit event.
+- **Knowledge Bases:** A declared `prefix` filter on `path` ignores case and the Unicode encoding
+  of an umlaut, so `/projekte/süd/` matches `/Projekte/Süd/`. A prefix on another field and `eq`
+  still compare exactly.
+- **Knowledge Bases:** `knowledge.maxFileBytes` of release config sets the largest file a
+  Knowledge Base takes, from 1 MiB to 256 MiB, 25 MiB unless set. An add or upload of a larger
+  file is refused with `knowledge_file_too_large` naming the limit, and a synced item listed or
+  fetched larger fails with `knowledge_file_over_limit` without being stored. A TXT or Markdown
+  file is its own text, which stays bounded at 25 MiB for one document: a larger one is refused
+  the same way when it is added, listed or fetched, whatever the setting, instead of failing in
+  processing. The Knowledge Base's state answers `maxFileBytes`, and the Add dialog says and
+  holds to it. `knowledge.pageCacheBytes` must hold at least one file at the limit. Document
+  extraction checks files against the 256 MiB ceiling; a limit above 25 MiB for PDF, DOCX, XLSX
+  and PPTX needs the document-processing capability release that extracts up to
+  `knowledge.maxFileBytes`.
+
+### Fixed
+
+- **Knowledge Bases:** A declared filter on `document_type` no longer fails every search it
+  narrows with SQLSTATE 42883: its statement called `coalesce` as a function of the catalog.
+
+### Database
+
+- **Knowledge Bases:** Owned-store migration 21 `source_item_path_search` (applied to every
+  Knowledge Base store at the next start, no platform migration): an expression GIN index
+  `source_items_path_search_idx` over the words of each item's path. It adds no column and
+  rewrites no row; building it holds writes to `source_items` but never a search, and it gives up
+  after a 5 s `lock_timeout` where a sync is writing the table, so the migration is tried again.
+  `chunks` is untouched and nothing is embedded again. A rollback leaves the index unused.
+
 ## 0.8.0-rc.34 — 2026-11-12
 
 ### Added
