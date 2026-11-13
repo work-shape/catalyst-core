@@ -231,7 +231,9 @@ describe("uploading a file to a Knowledge Base", () => {
   });
 
   it("refuses a TXT or Markdown file above the text one document holds when it is added, a larger knowledge.maxFileBytes or not", async () => {
-    const instance = await instanceWithKnowledgeBase({ maxFileBytes: 2 * KNOWLEDGE_FILE_MAX_BYTES });
+    const instance = await instanceWithKnowledgeBase({
+      maxFileBytes: 2 * KNOWLEDGE_FILE_MAX_BYTES
+    });
     for (const filename of ["lang.txt", "lang.md"]) {
       const large = await upload(instance, {
         filename,
@@ -240,7 +242,9 @@ describe("uploading a file to a Knowledge Base", () => {
       });
       expect(large.statusCode, large.body).toBe(422);
       expect(reasonOf(large)).toBe("knowledge_file_too_large");
-      expect(large.body).toContain(`${KNOWLEDGE_FILE_MAX_BYTES} bytes, the most text one document holds`);
+      expect(large.body).toContain(
+        `${KNOWLEDGE_FILE_MAX_BYTES} bytes, the most text one document holds`
+      );
     }
     expect((await ownedFiles(instance)).documents).toEqual([]);
   });

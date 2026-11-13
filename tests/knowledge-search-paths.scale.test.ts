@@ -24,7 +24,10 @@ const passages = z.object({
 describe("keyword search over the paths of a large store", () => {
   const { start } = useDataStoreInstance();
 
-  async function inDatabase<T>(database: string | undefined, work: (sql: postgres.Sql) => Promise<T>) {
+  async function inDatabase<T>(
+    database: string | undefined,
+    work: (sql: postgres.Sql) => Promise<T>
+  ) {
     const url = new URL(await fileTestDatabaseUrl());
     if (database) url.pathname = `/${database}`;
     const sql = postgres(url.toString(), { max: 1, onnotice: () => undefined });
@@ -111,7 +114,10 @@ describe("keyword search over the paths of a large store", () => {
         return search(query);
       };
       const atLevel = (level: number) =>
-        inDatabase(undefined, (sql) => sql`update data_stores set level = ${level} where id = ${record.id}`);
+        inDatabase(
+          undefined,
+          (sql) => sql`update data_stores set level = ${level} where id = ${record.id}`
+        );
 
       // The same store searched as one that does not read paths.
       await atLevel(20);

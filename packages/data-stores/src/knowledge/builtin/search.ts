@@ -159,13 +159,20 @@ export async function searchKnowledgeStore(
         .array(hitRow)
         .parse(
           await sql.run(
-            searchStatement(signals, semantic, languages, filters, level >= PATH_SEARCH_STORE_LEVEL),
+            searchStatement(
+              signals,
+              semantic,
+              languages,
+              filters,
+              level >= PATH_SEARCH_STORE_LEVEL
+            ),
             [
-            input.query,
-            input.limit,
-            ...(semantic ? [`[${semantic.vector.join(",")}]`] : []),
-            ...filters.map((filter) => filter.value)
-          ])
+              input.query,
+              input.limit,
+              ...(semantic ? [`[${semantic.vector.join(",")}]`] : []),
+              ...filters.map((filter) => filter.value)
+            ]
+          )
         );
     });
     if (rows) return { hits: rows.map(hitOf), signals };
@@ -305,15 +312,12 @@ function searchStatement(
    * from `pathed` `p` too.
    */
   const vector = (language: KnowledgeKeywordLanguage, path: boolean) =>
-    path
-      ? `(${keywordColumn(language, "c")} || p.path_${language})`
-      : keywordColumn(language, "c");
+    path ? `(${keywordColumn(language, "c")} || p.path_${language})` : keywordColumn(language, "c");
   /** The best rank of chunk `c` in any language, for the query `q.k_<language><suffix>`. */
   const rank = (suffix: string, path: boolean) =>
     `greatest(${keywords
       .map(
-        (language) =>
-          `pg_catalog.ts_rank_cd(${vector(language, path)}, q.k_${language}${suffix})`
+        (language) => `pg_catalog.ts_rank_cd(${vector(language, path)}, q.k_${language}${suffix})`
       )
       .join(", ")})`;
   /** Whether chunk `c` matches the query `q.k_<language><suffix>` in any language. */

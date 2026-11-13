@@ -556,7 +556,10 @@ describe("the origin link and declared filters of a Knowledge Base (DS-6b)", () 
         return searchSchema.parse(answered.json()).passages;
       };
       expect(await found("Heizung")).toEqual([
-        expect.objectContaining({ documentId: required(nord).id, path: "/Projekte/Nord/Anlage-1.txt" })
+        expect.objectContaining({
+          documentId: required(nord).id,
+          path: "/Projekte/Nord/Anlage-1.txt"
+        })
       ]);
       expect(await found("Nord")).toEqual([]);
     });

@@ -223,7 +223,9 @@ describe("the store a Knowledge Base owns", () => {
         (sql) => sql`select pg_get_indexdef(indexrelid) as definition from pg_index
           where indexrelid = 'catalyst_kb.source_items_path_search_idx'::regclass`
       )
-    ).toEqual([{ definition: expect.stringMatching(/USING gin \(to_tsvector\('simple'::regconfig/) }]);
+    ).toEqual([
+      { definition: expect.stringMatching(/USING gin \(to_tsvector\('simple'::regconfig/) }
+    ]);
     expect(
       await inDatabase(
         database,
