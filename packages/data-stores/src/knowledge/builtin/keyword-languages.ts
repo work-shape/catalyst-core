@@ -55,6 +55,32 @@ export function keywordColumn(language: KnowledgeKeywordLanguage, alias: string)
   return `${alias}.${column(language)}`;
 }
 
+/**
+ * The words of `paths`, source-relative paths in SQL as `sourceItemPathWords` cuts them, in
+ * `language`.
+ */
+export function keywordPathVector(language: KnowledgeKeywordLanguage, paths: string): string {
+  return keywordVector(language, paths);
+}
+
+/**
+ * The words of the query `$1` that may name a folder, any of which counts, as the `simple`
+ * configuration reads a path: none that is a stop word of one of `languages`, and no bare number.
+ * NULL where none is left.
+ */
+export function keywordPathQuery(languages: readonly KnowledgeKeywordLanguage[]): string {
+  const kept = languages
+    .map((language) => ` and pg_catalog.length(${keywordVector(language, "w.lexeme")}) > 0`)
+    .join("");
+  return `pg_catalog.to_tsquery('simple'::regconfig, pg_catalog.replace(
+    pg_catalog.plainto_tsquery('simple'::regconfig, (
+      select pg_catalog.string_agg(w.lexeme, ' ')
+      from pg_catalog.unnest(pg_catalog.to_tsvector('simple'::regconfig,
+        pg_catalog.translate($1::pg_catalog.text, '/._', '   '))) w
+      where w.lexeme !~ '^[0-9]+$'${kept}
+    ))::pg_catalog.text, ' & ', ' | '))`;
+}
+
 /** The query `$1` as `websearch_to_tsquery` of `language`. */
 export function keywordQuery(language: KnowledgeKeywordLanguage): string {
   return `pg_catalog.websearch_to_tsquery(${config(language)}, $1::pg_catalog.text)`;

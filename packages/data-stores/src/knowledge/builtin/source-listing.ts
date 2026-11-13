@@ -16,7 +16,12 @@ import {
 } from "../source-boundary";
 import { sourceBoundary } from "../source-urls";
 import { createSourceStore, sourceTransaction, type SourceProgress } from "./source-store";
-import { sourceCall, sourceTarget, type SourceJobRuntime } from "./source-runtime";
+import {
+  sourceCall,
+  sourceMaxFileBytes,
+  sourceTarget,
+  type SourceJobRuntime
+} from "./source-runtime";
 import { reconcileSource } from "./source-reconciliation";
 
 /**
@@ -124,7 +129,8 @@ export async function readSourcePages(
             upserts,
             undefined,
             runtime.input.documentFormats,
-            runtime.input.maxDocuments
+            runtime.input.maxDocuments,
+            sourceMaxFileBytes(runtime.input)
           );
           // A new item held back at the limit holds back no deletion behind it.
           limited ||= page.limited;
@@ -158,7 +164,8 @@ export async function readSourcePages(
           [],
           limited ? { ...after, limited } : after,
           runtime.input.documentFormats,
-          runtime.input.maxDocuments
+          runtime.input.maxDocuments,
+          sourceMaxFileBytes(runtime.input)
         );
         return { ids, limited };
       });
@@ -200,7 +207,8 @@ export async function readSourcePages(
           items.filter((item) => withinSource(source, item)),
           write ? after : undefined,
           runtime.input.documentFormats,
-          runtime.input.maxDocuments
+          runtime.input.maxDocuments,
+          sourceMaxFileBytes(runtime.input)
         )
       );
       // Past the limit the listing goes on: what it does not name is withdrawn at its end.

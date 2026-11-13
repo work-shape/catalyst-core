@@ -9,6 +9,7 @@ export type {
 } from "@work-shape/catalyst-asset-schemas";
 import {
   KNOWLEDGE_CHECK_STATUSES,
+  KNOWLEDGE_FILE_MAX_BYTES,
   type KnowledgeDocumentFailureCode,
   type KnowledgeDocumentState,
   type KnowledgeDocumentWaitCode,
@@ -156,6 +157,12 @@ export interface KnowledgeSearchHit {
   text: string;
   score: number;
   originLink?: string;
+  /**
+   * The path of a synced or Workflow-fed document below its source's boundary, folders and file
+   * name, such as `/Projekte/Nord/Angebot.pdf`: what a `path` filter compares. None for a file
+   * added by hand.
+   */
+  path?: string;
   /**
    * The date a synced document states of its own version, such as the "Stand" of a web page, as
    * an ISO time. Only a date the document itself gives.
@@ -551,7 +558,25 @@ export { KNOWLEDGE_DOCUMENT_FORMATS, type KnowledgeDocumentFormat } from "./know
 /** The formats an instance reads without the document-processing capability. */
 export const KNOWLEDGE_TEXT_FORMATS: readonly KnowledgeDocumentFormat[] = ["txt", "markdown"];
 
-export { KNOWLEDGE_FILE_MAX_BYTES } from "@work-shape/catalyst-asset-schemas";
+export {
+  KNOWLEDGE_FILE_MAX_BYTES,
+  KNOWLEDGE_FILE_MAX_BYTES_CEILING
+} from "@work-shape/catalyst-asset-schemas";
+
+/**
+ * The largest file of `format` a Knowledge Base takes under `maxFileBytes`, its
+ * `knowledge.maxFileBytes`. A TXT or Markdown file is its own text, which no document carries
+ * more of than `KNOWLEDGE_FILE_MAX_BYTES`, so a larger one is refused when it is added or listed
+ * rather than failing in processing.
+ */
+export function knowledgeFileMaxBytes(
+  maxFileBytes: number,
+  format: KnowledgeDocumentFormat | undefined
+): number {
+  return format !== undefined && KNOWLEDGE_TEXT_FORMATS.includes(format)
+    ? Math.min(maxFileBytes, KNOWLEDGE_FILE_MAX_BYTES)
+    : maxFileBytes;
+}
 
 /**
  * How many pages of one PDF or DOCX a Knowledge Base reads by default. Release config

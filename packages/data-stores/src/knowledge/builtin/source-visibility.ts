@@ -18,8 +18,13 @@ export async function visibleSourceDocumentIds(
   return (await visibleSources(runtime, knowledgeBaseId, name, documentIds, read)).visible;
 }
 
-/** The dates a citation of a synced document shows (KB-WEB). */
-interface SourceDates {
+/**
+ * What a passage of a synced or Workflow-fed document names of its item: its path, and the dates
+ * a citation shows (KB-WEB).
+ */
+interface SourceFacts {
+  /** The item's path below the source's boundary, such as `/Projekte/Nord/Angebot.pdf`. */
+  path?: string;
   /** The date the item states of its version, such as a web page's "Stand". */
   statedAt?: string;
   /** When the platform fetched the version the index holds. */
@@ -29,8 +34,8 @@ interface SourceDates {
 const UTC_SECONDS = `'YYYY-MM-DD"T"HH24:MI:SS"Z"'`;
 
 /**
- * The visible documents, and the dates of each synced one, read with them so a search touches
- * the source's items once.
+ * The visible documents, and the path and dates of each synced one, read with them so a search
+ * touches the source's items once.
  */
 async function visibleSources(
   runtime: DataStoreRuntime,
@@ -38,8 +43,8 @@ async function visibleSources(
   name: string,
   documentIds: readonly string[],
   read: <T>(work: (sql: PostgresChangeStatements) => Promise<T>) => Promise<T>
-): Promise<{ visible: Set<string>; dates: Map<string, SourceDates> }> {
-  const none = { visible: new Set<string>(), dates: new Map<string, SourceDates>() };
+): Promise<{ visible: Set<string>; facts: Map<string, SourceFacts> }> {
+  const none = { visible: new Set<string>(), facts: new Map<string, SourceFacts>() };
   if (!documentIds.length) return none;
   const rows = await read(async (sql) =>
     z
@@ -63,16 +68,17 @@ async function visibleSources(
       )
   );
   const liveIds = new Set(rows.map((row) => row.id));
-  const dates = new Map(
+  const facts = new Map(
     rows.map((row) => [
       row.id,
       {
+        ...(row.path === null ? {} : { path: row.path }),
         ...(row.stated_at === null ? {} : { statedAt: row.stated_at }),
         ...(row.fetched_at === null ? {} : { retrievedAt: row.fetched_at })
       }
     ])
   );
-  if (!rows.some((row) => row.source_id !== null)) return { visible: liveIds, dates };
+  if (!rows.some((row) => row.source_id !== null)) return { visible: liveIds, facts };
   const asset = await runtime.stores.configAssets.getConfigAsset({
     clientInstanceId: runtime.clientInstanceId,
     kind: "knowledge_base",
@@ -102,7 +108,7 @@ async function visibleSources(
       })
       .map((row) => row.id)
   );
-  return { visible: new Set([...liveIds].filter((id) => !hidden.has(id))), dates };
+  return { visible: new Set([...liveIds].filter((id) => !hidden.has(id))), facts };
 }
 
 /** Search and proposal admission use the same decision, including pending source cleanup. */
@@ -113,7 +119,7 @@ export async function visibleSourceHits(
   answer: KnowledgeSearchAnswer,
   read: <T>(work: (sql: PostgresChangeStatements) => Promise<T>) => Promise<T>
 ): Promise<KnowledgeSearchAnswer> {
-  const { visible, dates } = await visibleSources(
+  const { visible, facts } = await visibleSources(
     runtime,
     knowledgeBaseId,
     name,
@@ -124,7 +130,7 @@ export async function visibleSourceHits(
     ...answer,
     hits: answer.hits.flatMap((hit) => {
       if (!visible.has(hit.documentId)) return [];
-      return [{ ...hit, ...dates.get(hit.documentId) }];
+      return [{ ...hit, ...facts.get(hit.documentId) }];
     })
   };
 }

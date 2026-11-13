@@ -112,6 +112,8 @@ interface KnowledgeOptions {
   maxDocuments?: number;
   /** `knowledge.maxPagesPerDocument` of release config, shared by API and execution assembly. */
   maxPagesPerDocument?: number;
+  /** `knowledge.maxFileBytes` of release config. */
+  maxFileBytes?: number;
   /**
    * The module `documents` on, shipped by a test capability with no code of its own: the API
    * process then takes PDF and DOCX, whose extraction a test serves with a worker of its own.
@@ -311,7 +313,10 @@ export function useDataStoreInstance(
                 : { maxDocuments: knowledge.maxDocuments }),
               ...(knowledge.maxPagesPerDocument === undefined
                 ? {}
-                : { maxPagesPerDocument: knowledge.maxPagesPerDocument })
+                : { maxPagesPerDocument: knowledge.maxPagesPerDocument }),
+              ...(knowledge.maxFileBytes === undefined
+                ? {}
+                : { maxFileBytes: knowledge.maxFileBytes })
             }
           }
         : {}),

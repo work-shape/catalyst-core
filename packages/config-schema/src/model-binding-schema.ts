@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   KNOWLEDGE_FILE_MAX_BYTES,
+  KNOWLEDGE_FILE_MAX_BYTES_CEILING,
   KNOWLEDGE_INDEX_CONCURRENCY_DEFAULTS,
   KNOWLEDGE_MAX_PAGES_PER_DOCUMENT,
   KNOWLEDGE_PAGE_CACHE_BYTES_DEFAULT,
@@ -89,14 +90,17 @@ export const modelBindingConfigSchema = z
  * Knowledge Base with semantic search uses unless it names another. Without it the instance
  * offers no semantic search; keyword and structured Knowledge Bases work all the same.
  * `maxDocuments` is how many documents one Knowledge Base holds at most: adding a file beyond
- * it is refused with the limit named. `maxPagesPerDocument` is how many pages of one PDF or
+ * it is refused with the limit named. `maxFileBytes` is the largest file one Knowledge Base takes,
+ * from 1 MiB to 256 MiB, 25 MiB unless set: a larger file is refused when it is added, and a
+ * synced item over it fails with `knowledge_file_over_limit` without being fetched. The text of
+ * one document stays bounded at 25 MiB however large its file. `maxPagesPerDocument` is how many pages of one PDF or
  * DOCX extraction reads: a longer one fails with `knowledge_file_too_many_pages`, counted
  * before conversion. It applies to Knowledge Bases only; chat uploads keep their own limits.
  * `indexConcurrency` is how many contents are indexed at once, each sending its passages to the
  * embedding model: `perWorker` on one knowledge worker, `total` across all of them. Raise them
  * only where the embedding quota of the deployment allows. `pageCacheBytes` bounds the page
  * cache of each Knowledge Base: the originals of synced documents that a reader's open of a
- * cited page fetched from their source, kept 7 days. It holds at least one file at the limit.
+ * cited page fetched from their source, kept 7 days. It holds at least one file at `maxFileBytes`.
  * `sourcePollMinutes` is how often a synced source is asked for its changes, in minutes by
  * connector type; a type it does not name is asked every 15 minutes.
  */
@@ -105,6 +109,12 @@ export const knowledgeConfigSchema = z
     defaultEmbeddingBinding: z.string().min(1).optional(),
     withdrawShareConfirm: z.number().min(0).max(1).default(0.2),
     maxDocuments: z.number().int().positive().max(1_000_000).default(10_000),
+    maxFileBytes: z
+      .number()
+      .int()
+      .min(1024 * 1024)
+      .max(KNOWLEDGE_FILE_MAX_BYTES_CEILING)
+      .default(KNOWLEDGE_FILE_MAX_BYTES),
     sourcePollMinutes: z.record(z.string(), z.number().int().min(1).max(1_440)).default({}),
     maxPagesPerDocument: z.number().int().positive().default(KNOWLEDGE_MAX_PAGES_PER_DOCUMENT),
     pageCacheBytes: z
@@ -126,4 +136,8 @@ export const knowledgeConfigSchema = z
       .prefault({})
   })
   .strict()
+  .refine((knowledge) => knowledge.pageCacheBytes >= knowledge.maxFileBytes, {
+    path: ["pageCacheBytes"],
+    message: "knowledge.pageCacheBytes holds at least one file at knowledge.maxFileBytes"
+  })
   .prefault({});

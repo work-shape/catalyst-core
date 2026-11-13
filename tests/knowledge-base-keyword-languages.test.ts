@@ -116,7 +116,7 @@ describe("the keyword languages of a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(found).toMatchObject({ status: "ready", level: 20 });
+      expect(found).toMatchObject({ status: "ready", level: 21 });
       return required(found);
     });
     await runJobs(world);

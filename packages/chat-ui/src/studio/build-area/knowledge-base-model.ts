@@ -292,7 +292,10 @@ export function documentFailureText(document: KnowledgeDocument): TranslationKey
   return KNOWLEDGE_DOCUMENT_FAILURES[document.failureCode];
 }
 
-/** The limits of one Add: how many files at once, and how large each may be. */
+/**
+ * The limits of one Add: how many files at once, and how large each may be where the instance
+ * does not say (`maxFileBytes` of the Knowledge Base's state, `knowledge.maxFileBytes`).
+ */
 export const KNOWLEDGE_ADD_LIMITS = {
   files: KNOWLEDGE_ADD_FILES_MAX_COUNT,
   bytes: KNOWLEDGE_FILE_MAX_BYTES
@@ -305,7 +308,8 @@ export const KNOWLEDGE_ADD_LIMITS = {
  */
 export function addableFile(
   file: Pick<KnowledgeOpenableFile, "name" | "mimeType" | "bytes">,
-  formats: readonly string[]
+  formats: readonly string[],
+  maxBytes: number = KNOWLEDGE_ADD_LIMITS.bytes
 ): { addable: true } | { addable: false; reason: TranslationKey } {
   const format = knowledgeDocumentFormatOf({
     filename: file.name,
@@ -314,7 +318,7 @@ export function addableFile(
   if (format === undefined || !formats.includes(format)) {
     return { addable: false, reason: "knowledge.addFormatRefused" };
   }
-  if (file.bytes > KNOWLEDGE_ADD_LIMITS.bytes) {
+  if (file.bytes > maxBytes) {
     return { addable: false, reason: "knowledge.addTooLarge" };
   }
   return { addable: true };

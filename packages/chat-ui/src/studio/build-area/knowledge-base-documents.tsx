@@ -283,6 +283,9 @@ export function KnowledgeDocuments({
           source={source}
           knowledgeBase={knowledgeBase}
           formats={uploadFormats(state.status === "ready" ? state.data.documentFormats : undefined)}
+          {...(state.status === "ready" && state.data.maxFileBytes !== undefined
+            ? { maxBytes: state.data.maxFileBytes }
+            : {})}
           onClose={() => setAdding(false)}
           onAdded={(count) => {
             setAdding(false);
@@ -567,6 +570,7 @@ export function KnowledgeAddDialog({
   source,
   knowledgeBase,
   formats,
+  maxBytes = KNOWLEDGE_ADD_LIMITS.bytes,
   onClose,
   onAdded
 }: {
@@ -574,6 +578,8 @@ export function KnowledgeAddDialog({
   knowledgeBase: string;
   /** The formats the instance reads, which the upload offers. */
   formats: readonly string[];
+  /** The largest file the instance takes, `KNOWLEDGE_ADD_LIMITS.bytes` unless it says. */
+  maxBytes?: number;
   onClose(): void;
   onAdded(count: number): void;
 }) {
@@ -587,7 +593,7 @@ export function KnowledgeAddDialog({
   const countUpload = useCallback(() => setUploaded((count) => count + 1), []);
   const close = () => (uploaded > 0 ? onAdded(uploaded) : onClose());
   const full = chosen.size >= KNOWLEDGE_ADD_LIMITS.files;
-  const size = formatFileBytes(KNOWLEDGE_ADD_LIMITS.bytes, locale);
+  const size = formatFileBytes(maxBytes, locale);
   const formatList = uploadFormatList(formats, locale);
   const toggle = (file: KnowledgeOpenableFile, on: boolean) =>
     setChosen((current) => {
@@ -647,6 +653,7 @@ export function KnowledgeAddDialog({
           source={source}
           knowledgeBase={knowledgeBase}
           formats={formats}
+          maxBytes={maxBytes}
           onAdded={countUpload}
         />
         <span className="text-label">{t("knowledge.conversationFilesTitle")}</span>
@@ -675,7 +682,7 @@ export function KnowledgeAddDialog({
               <>
                 <ul aria-label={t("knowledge.addFiles")} className="grid gap-3">
                   {files.map((file) => {
-                    const fit = addableFile(file, formats);
+                    const fit = addableFile(file, formats, maxBytes);
                     const on = chosen.has(fileKey(file));
                     return (
                       <li key={fileKey(file)} data-knowledge-add-file={file.name}>

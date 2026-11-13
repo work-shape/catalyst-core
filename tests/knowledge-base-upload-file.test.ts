@@ -53,10 +53,13 @@ const addedSchema = z.object({
 describe("uploading a file to a Knowledge Base", () => {
   const { start, person } = useDataStoreInstance();
 
-  async function instanceWithKnowledgeBase(): Promise<DataStoreInstance> {
+  async function instanceWithKnowledgeBase(
+    options: { maxFileBytes?: number } = {}
+  ): Promise<DataStoreInstance> {
     const attachments = createManagedObjectTestAttachmentCapability();
     const instance = await start(true, undefined, developmentAuth, undefined, {
-      attachments: attachments.capability
+      attachments: attachments.capability,
+      ...options
     });
     const config: JsonObject = {
       name: KB,
@@ -80,7 +83,7 @@ describe("uploading a file to a Knowledge Base", () => {
           clientInstanceId,
           name: `knowledge-base:${KB}`
         })
-      ).toMatchObject({ status: "ready", level: 20 });
+      ).toMatchObject({ status: "ready", level: 21 });
     });
     return instance;
   }
@@ -198,6 +201,51 @@ describe("uploading a file to a Knowledge Base", () => {
     expect(large.statusCode, large.body).toBe(422);
     expect(reasonOf(large)).toBe("knowledge_file_too_large");
 
+    expect((await ownedFiles(instance)).documents).toEqual([]);
+  });
+
+  it("takes files up to the instance's knowledge.maxFileBytes, says the limit on the page, and refuses a larger one naming it", async () => {
+    const limit = 1024 * 1024;
+    const instance = await instanceWithKnowledgeBase({ maxFileBytes: limit });
+    const state = await instance.api.call("knowledge_bases.get", {
+      params: { knowledgeBase: KB }
+    });
+    expect(state.statusCode, state.body).toBe(200);
+    expect(state.json()).toMatchObject({ maxFileBytes: limit });
+
+    const fits = await upload(instance, {
+      filename: "passt.txt",
+      contentType: "text/plain",
+      content: Buffer.alloc(limit, 0x61)
+    });
+    expect(fits.statusCode, fits.body).toBe(200);
+    const large = await upload(instance, {
+      filename: "gross.txt",
+      contentType: "text/plain",
+      content: Buffer.alloc(limit + 1, 0x61)
+    });
+    expect(large.statusCode, large.body).toBe(422);
+    expect(reasonOf(large)).toBe("knowledge_file_too_large");
+    expect(large.body).toContain(`${limit} bytes (knowledge.maxFileBytes)`);
+    expect((await ownedFiles(instance)).documents).toHaveLength(1);
+  });
+
+  it("refuses a TXT or Markdown file above the text one document holds when it is added, a larger knowledge.maxFileBytes or not", async () => {
+    const instance = await instanceWithKnowledgeBase({
+      maxFileBytes: 2 * KNOWLEDGE_FILE_MAX_BYTES
+    });
+    for (const filename of ["lang.txt", "lang.md"]) {
+      const large = await upload(instance, {
+        filename,
+        contentType: filename.endsWith(".md") ? "text/markdown" : "text/plain",
+        content: Buffer.alloc(KNOWLEDGE_FILE_MAX_BYTES + 1, 0x61)
+      });
+      expect(large.statusCode, large.body).toBe(422);
+      expect(reasonOf(large)).toBe("knowledge_file_too_large");
+      expect(large.body).toContain(
+        `${KNOWLEDGE_FILE_MAX_BYTES} bytes, the most text one document holds`
+      );
+    }
     expect((await ownedFiles(instance)).documents).toEqual([]);
   });
 

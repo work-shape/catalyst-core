@@ -10,7 +10,7 @@ import { asManagedFileId, type ClientInstanceId } from "./ids";
 import { defineJobHandler, type RegisteredJobHandler } from "./job-handlers";
 import {
   enqueueKnowledgeIndex,
-  KNOWLEDGE_FILE_MAX_BYTES,
+  KNOWLEDGE_FILE_MAX_BYTES_CEILING,
   type KnowledgeBuiltinProcessor,
   KNOWLEDGE_MAX_PAGES_PER_DOCUMENT,
   knowledgeExtractedPagesSchema,
@@ -158,7 +158,9 @@ export async function runKnowledgeExtraction(input: {
 }): Promise<KnowledgeExtractionResult> {
   const bytes = await input.readFile();
   if (!bytes) return { status: "failed", code: "knowledge_file_missing" };
-  if (bytes.byteLength > KNOWLEDGE_FILE_MAX_BYTES) {
+  // The instance's `knowledge.maxFileBytes` applied when the file was added or fetched; the
+  // extractor, which may run in a worker of another release config, holds only the ceiling.
+  if (bytes.byteLength > KNOWLEDGE_FILE_MAX_BYTES_CEILING) {
     return { status: "failed", code: "knowledge_file_over_limit" };
   }
   let extracted: KnowledgeExtractedPages;

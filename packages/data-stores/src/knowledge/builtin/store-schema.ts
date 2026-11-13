@@ -417,6 +417,39 @@ const SOURCE_ITEM_STATED_AT = `
   alter table catalyst_kb.source_items add column stated_at timestamp with time zone;
 `;
 
+/**
+ * The words of `path`, a synced or Workflow-fed item's source-relative path in SQL: its folder
+ * names and file name without the file's extension, cut at `/`, `.` and `_`, which the parser
+ * would otherwise read as one file token, and without bare numbers. Migration 21 indexes them;
+ * a search must use this very expression for the index to answer it, so a change to it is a
+ * new migration.
+ */
+export function sourceItemPathWords(path: string): string {
+  return `pg_catalog.regexp_replace(pg_catalog.translate(pg_catalog.regexp_replace(${path}, '[.][^./]*$', ''), '/._', '   '), '(^|[[:space:]])[0-9]+(?=[[:space:]]|$)', ' ', 'g')`;
+}
+
+/** The words of `path` as the `simple` text-search vector migration 21 indexes. */
+export function sourceItemPathSearch(path: string): string {
+  return `pg_catalog.to_tsvector('simple'::regconfig, ${sourceItemPathWords(path)})`;
+}
+
+/** The first store level whose search reads the words of a document's path. */
+export const PATH_SEARCH_STORE_LEVEL = 21;
+
+/**
+ * An index of the words of each item's path, which keyword search reads to find the passages of
+ * documents filed under a folder the query names. The embedded text is unchanged, so nothing is
+ * embedded again. An expression index rewrites no row, and building it holds writes to
+ * `source_items` but never a search. It gives up after 5 s where a sync is writing the table,
+ * rather than holding the writes queued behind it.
+ */
+const SOURCE_ITEM_PATH_SEARCH = `
+  set local lock_timeout = '5s';
+  create index source_items_path_search_idx on catalyst_kb.source_items
+    using gin ((${sourceItemPathSearch("path")}));
+  set local lock_timeout to default;
+`;
+
 /** The tables of the store of a built-in Knowledge Base, in the order a store applies them. */
 const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   { number: 1, name: "documents", sql: DOCUMENTS },
@@ -463,7 +496,8 @@ const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   { number: 17, name: "chunk_switch_fetch_window", sql: CHUNK_SWITCH_FETCH_WINDOW },
   { number: 18, name: "keyword_languages", sql: KEYWORD_LANGUAGES },
   { number: 19, name: "page_cache", sql: PAGE_CACHE },
-  { number: 20, name: "source_item_stated_at", sql: SOURCE_ITEM_STATED_AT }
+  { number: 20, name: "source_item_stated_at", sql: SOURCE_ITEM_STATED_AT },
+  { number: 21, name: "source_item_path_search", sql: SOURCE_ITEM_PATH_SEARCH }
 ];
 
 /** A later applied number never proves that earlier migrations were applied. */

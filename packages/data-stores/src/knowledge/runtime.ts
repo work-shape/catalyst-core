@@ -58,6 +58,8 @@ export interface KnowledgeRuntime {
   documentFormats: readonly KnowledgeDocumentFormat[];
   /** How many documents one Knowledge Base holds at most (`knowledge.maxDocuments`). */
   maxDocuments: number;
+  /** The largest file one Knowledge Base takes, in bytes (`knowledge.maxFileBytes`). */
+  maxFileBytes: number;
   /** What a source sets nothing for takes, by connector type (`SourceDefaultsByType`). */
   sourceDefaults?: SourceDefaultsByType;
   maxPages?: number;

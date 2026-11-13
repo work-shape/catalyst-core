@@ -534,3 +534,85 @@ describe("initial and full source import (KB 72, 73)", () => {
     ).toEqual([{ n: 1 }]);
   });
 });
+
+describe("the file limit of release config on a synced source", () => {
+  const limit = 1024 * 1024;
+  const { setup } = useKnowledgeSync({ maxFileBytes: limit });
+
+  it("fails an item over knowledge.maxFileBytes by its listed size without a fetch, and by its bytes where it lists none", async () => {
+    const fetched: string[] = [];
+    const world = await setup((source) => ({
+      ...source,
+      async list(input, ctx) {
+        const page = await source.list(input, ctx);
+        // A source that lists no size: the bytes of the fetch decide.
+        return {
+          ...page,
+          items: page.items.map(({ size, ...item }) =>
+            item.name === "unlisted.txt"
+              ? item
+              : { ...item, ...(size === undefined ? {} : { size }) }
+          )
+        };
+      },
+      async *fetch(input, ctx) {
+        fetched.push(input.itemId);
+        yield* source.fetch(input, ctx);
+      }
+    }));
+    const fits = world.world.put({
+      folderId: "folder",
+      name: "fits.txt",
+      mime: "text/plain",
+      bytes: new Uint8Array(limit).fill(0x61)
+    });
+    const listed = world.world.put({
+      folderId: "folder",
+      name: "listed.txt",
+      mime: "text/plain",
+      bytes: new Uint8Array(limit + 1).fill(0x61)
+    });
+    world.world.put({
+      folderId: "folder",
+      name: "unlisted.txt",
+      mime: "text/plain",
+      bytes: new Uint8Array(limit + 1).fill(0x62)
+    });
+    await world.drain(await world.sync());
+    expect(fetched).not.toContain(listed);
+    expect(fetched).toContain(fits);
+    expect(
+      await world.sql`select name, state, failure_code from catalyst_kb.source_items order by name`
+    ).toEqual([
+      { name: "fits.txt", state: "fetched", failure_code: null },
+      { name: "listed.txt", state: "failed", failure_code: "knowledge_file_over_limit" },
+      { name: "unlisted.txt", state: "failed", failure_code: "knowledge_file_over_limit" }
+    ]);
+  });
+});
+
+describe("the text limit of a synced TXT or Markdown file", () => {
+  const { setup } = useKnowledgeSync({ maxFileBytes: 2 * KNOWLEDGE_FILE_MAX_BYTES });
+
+  it("fails a TXT or Markdown item above the text one document holds by its listed size, without a fetch", async () => {
+    const fetched: string[] = [];
+    const world = await setup((source) => ({
+      ...source,
+      async *fetch(input, ctx) {
+        fetched.push(input.itemId);
+        yield* source.fetch(input, ctx);
+      }
+    }));
+    const large = world.world.put({
+      folderId: "folder",
+      name: "lang.md",
+      mime: "text/markdown",
+      bytes: new Uint8Array(KNOWLEDGE_FILE_MAX_BYTES + 1).fill(0x61)
+    });
+    await world.drain(await world.sync());
+    expect(fetched).not.toContain(large);
+    expect(
+      await world.sql`select name, state, failure_code from catalyst_kb.source_items order by name`
+    ).toEqual([{ name: "lang.md", state: "failed", failure_code: "knowledge_file_over_limit" }]);
+  });
+});

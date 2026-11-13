@@ -72,7 +72,7 @@ describe("the store a Knowledge Base owns", () => {
     return eventually(async () => {
       await jobs.runDue();
       const record = await ownedRecord(world);
-      expect(record).toMatchObject({ status: "ready", level: 20 });
+      expect(record).toMatchObject({ status: "ready", level: 21 });
       return required(record);
     });
   }
@@ -168,7 +168,8 @@ describe("the store a Knowledge Base owns", () => {
         expect.objectContaining({ number: 17, name: "chunk_switch_fetch_window" }),
         expect.objectContaining({ number: 18, name: "keyword_languages" }),
         expect.objectContaining({ number: 19, name: "page_cache" }),
-        expect.objectContaining({ number: 20, name: "source_item_stated_at" })
+        expect.objectContaining({ number: 20, name: "source_item_stated_at" }),
+        expect.objectContaining({ number: 21, name: "source_item_path_search" })
       ]
     });
     const { database } = record.location;
@@ -214,6 +215,17 @@ describe("the store a Knowledge Base owns", () => {
       { name: "chunks.search_en", generated: "NEVER" },
       { name: "documents.title_search", generated: "ALWAYS" }
     ]);
+    // A path's words are an index over the expression a search reads, not a column: adding
+    // them rewrote no row of `source_items` (KB-PATH).
+    expect(
+      await inDatabase(
+        database,
+        (sql) => sql`select pg_get_indexdef(indexrelid) as definition from pg_index
+          where indexrelid = 'catalyst_kb.source_items_path_search_idx'::regclass`
+      )
+    ).toEqual([
+      { definition: expect.stringMatching(/USING gin \(to_tsvector\('simple'::regconfig/) }
+    ]);
     expect(
       await inDatabase(
         database,
@@ -255,7 +267,7 @@ describe("the store a Knowledge Base owns", () => {
           name: `knowledge-base:${KB}`,
           title: "Objektunterlagen",
           status: "ready",
-          level: 20,
+          level: 21,
           ownedBy: { knowledgeBase: KB }
         }
       ]
@@ -299,7 +311,7 @@ describe("the store a Knowledge Base owns", () => {
         return sql`select * from catalyst_kb.migrations order by number`;
       });
       expect(ledger.map(({ number }) => number)).toEqual([
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21
       ]);
       const audits = await instance.stores.audit.listAuditEvents({
         clientInstanceId,

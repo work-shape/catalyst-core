@@ -77,10 +77,13 @@ export function useKnowledgeSync({
   methods = ["keyword", "semantic"],
   sourceTick,
   maxDocuments = 10000,
+  maxFileBytes,
   sourceDefaults
 }: {
   /** `knowledge.maxDocuments`, smaller than the default. */
   maxDocuments?: number;
+  /** `knowledge.maxFileBytes`, smaller than the default. */
+  maxFileBytes?: number;
   /** The bound of the page cache, smaller than the default (KB-13b). */
   pageCacheBytes?: number;
   withDataStoreJobs?: boolean;
@@ -186,7 +189,7 @@ export function useKnowledgeSync({
         name: `knowledge-base:${KB}`
       });
       expect(row?.status).toBe("ready");
-      expect(row?.level).toBe(20);
+      expect(row?.level).toBe(21);
       return required(row);
     });
     const url = new URL(await fileTestDatabaseUrl());
@@ -325,6 +328,7 @@ export function useKnowledgeSync({
       embedding,
       documentFormats: extractor ? KNOWLEDGE_DOCUMENT_FORMATS : KNOWLEDGE_TEXT_FORMATS,
       maxDocuments,
+      ...(maxFileBytes === undefined ? {} : { maxFileBytes }),
       ...(sourceDefaults ? { sourceDefaults } : {}),
       logger
     });
@@ -337,6 +341,7 @@ export function useKnowledgeSync({
       files,
       documentFormats: extractor ? KNOWLEDGE_DOCUMENT_FORMATS : KNOWLEDGE_TEXT_FORMATS,
       maxDocuments,
+      ...(maxFileBytes === undefined ? {} : { maxFileBytes }),
       ...(firstPassStop === undefined ? {} : { firstPassStop }),
       ...(fetchWindow === undefined ? {} : { fetchWindow }),
       ...sourceTick,

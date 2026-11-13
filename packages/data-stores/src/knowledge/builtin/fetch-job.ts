@@ -18,7 +18,6 @@ import {
   KNOWLEDGE_FETCH_WINDOW_BYTES,
   KNOWLEDGE_FETCH_WINDOW_ITEMS,
   KNOWLEDGE_FETCH_WINDOW_WAIT_MS,
-  KNOWLEDGE_FILE_MAX_BYTES,
   knowledgeFetchJob,
   knowledgeSourceKey,
   knowledgeIndexPayloadOfFetch,
@@ -26,7 +25,8 @@ import {
   type JobControl,
   type KnowledgeDocumentFailureCode,
   type KnowledgeFetchJobPayload,
-  type RegisteredJobHandler
+  type RegisteredJobHandler,
+  knowledgeFileMaxBytes
 } from "@work-shape/catalyst-core";
 import { enqueueKnowledgeFileCleanup, removeUnusedKnowledgeCopies } from "../file-cleanup";
 import { knowledgeDocumentFileIds } from "./documents";
@@ -36,7 +36,12 @@ import {
   sourceFormat,
   type SourceItem
 } from "./source-store";
-import { sourceTarget, sourceCall, type SourceJobRuntime } from "./source-runtime";
+import {
+  sourceCall,
+  sourceMaxFileBytes,
+  sourceTarget,
+  type SourceJobRuntime
+} from "./source-runtime";
 
 // Match the executor's item backoff without spending job attempts for a failed neighbour.
 const FETCH_BACKOFF_BASE_MS = knowledgeFetchJob.backoff.baseMs;
@@ -191,17 +196,17 @@ async function fetchItem(
             {
               itemId: item.item_id,
               version: item.version,
-              maxBytes: KNOWLEDGE_FILE_MAX_BYTES,
+              maxBytes: knowledgeFileMaxBytes(sourceMaxFileBytes(runtime.input), format),
               boundary
             },
             context
           )) {
             context.signal.throwIfAborted();
             size += chunk.byteLength;
-            if (size > KNOWLEDGE_FILE_MAX_BYTES)
+            if (size > knowledgeFileMaxBytes(sourceMaxFileBytes(runtime.input), format))
               throw new DocumentSourceError(
                 "over_limit",
-                "The source item exceeds KNOWLEDGE_FILE_MAX_BYTES"
+                "The source item exceeds knowledge.maxFileBytes"
               );
             hash.update(chunk);
             yield chunk;

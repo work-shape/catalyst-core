@@ -14,10 +14,13 @@ import {
 import type { PostgresChangeStatements } from "@work-shape/catalyst-postgres-connector";
 import {
   keywordColumn,
+  keywordPathQuery,
+  keywordPathVector,
   keywordQuery,
   keywordWordsQuery,
   searchedKeywordLanguages
 } from "./keyword-languages";
+import { PATH_SEARCH_STORE_LEVEL, sourceItemPathSearch, sourceItemPathWords } from "./store-schema";
 
 // Search over the documents of a Knowledge Base on the built-in backend: up to three ranked
 // lists, fused by reciprocal rank (k = 60, equal weights) in one statement against the store
@@ -30,7 +33,12 @@ import {
 // - `keyword`: full text with `websearch_to_tsquery` in each keyword language whose column of
 //   `chunks` the store searches (KB-12; German and English unless the Knowledge Base lists
 //   others). Where the Knowledge Base searches by words, and wherever `semantic` is not used, so
-//   a Knowledge Base whose embeddings are not there yet still answers.
+//   a Knowledge Base whose embeddings are not there yet still answers. The words of the path
+//   of a document's synced or Workflow-fed item count as words of each of its passages, so a
+//   query that names a folder ("Heizung Projekt Nord") finds the passages of the files filed
+//   under it. Only the 50 documents whose path holds the most words of the query that are no
+//   stop word or bare number are read for it, by the index on the path's words (store level
+//   21; an older store searches its passages only); the embedded text holds no path.
 // - `title`: the words of a document's title and file name. Each passage of a document whose
 //   title or file name holds a word of the query shares that document's place.
 //
@@ -102,7 +110,8 @@ interface QueryVector {
  * embedded, so that no transaction is held open while the embedding provider answers.
  */
 export async function searchKnowledgeStore(
-  run: <T>(work: (sql: PostgresChangeStatements) => Promise<T>) => Promise<T>,
+  /** `level` is the store's: the migrations applied to it. */
+  run: <T>(work: (sql: PostgresChangeStatements, level: number) => Promise<T>) => Promise<T>,
   target: Pick<BuiltinKnowledgeTarget, "methods">,
   input: {
     query: string;
@@ -135,7 +144,7 @@ export async function searchKnowledgeStore(
   for (let attempt = 0; ; attempt += 1) {
     let signals: KnowledgeSearchSignal[] = [];
     let switched: z.infer<typeof generationRow> | undefined;
-    const rows = await run(async (sql) => {
+    const rows = await run(async (sql, level) => {
       // The generation may have switched since it was read and its table be gone: it is read
       // again in the transaction of the search, and a vector of another generation is not used.
       const current = vector && (await activeGeneration(sql));
@@ -149,12 +158,21 @@ export async function searchKnowledgeStore(
       return z
         .array(hitRow)
         .parse(
-          await sql.run(searchStatement(signals, semantic, languages, filters), [
-            input.query,
-            input.limit,
-            ...(semantic ? [`[${semantic.vector.join(",")}]`] : []),
-            ...filters.map((filter) => filter.value)
-          ])
+          await sql.run(
+            searchStatement(
+              signals,
+              semantic,
+              languages,
+              filters,
+              level >= PATH_SEARCH_STORE_LEVEL
+            ),
+            [
+              input.query,
+              input.limit,
+              ...(semantic ? [`[${semantic.vector.join(",")}]`] : []),
+              ...filters.map((filter) => filter.value)
+            ]
+          )
         );
     });
     if (rows) return { hits: rows.map(hitOf), signals };
@@ -200,7 +218,7 @@ function hitOf(row: z.infer<typeof hitRow>): KnowledgeSearchHit {
 const FILTER_FIELD_SQL: Record<KnowledgeFilterField, string> = {
   title: "d.title",
   file_name: "d.file_name",
-  document_type: `(select pg_catalog.coalesce(fc.document_type, 'default') from catalyst_kb.contents fc
+  document_type: `(select coalesce(fc.document_type, 'default') from catalyst_kb.contents fc
     where fc.sha256 = d.content_sha256)`,
   source: `(select fi.source_id from catalyst_kb.source_items fi where fi.id = d.source_item_id)`,
   path: `(select fi.path from catalyst_kb.source_items fi where fi.id = d.source_item_id)`,
@@ -212,13 +230,20 @@ const FILTER_FIELD_SQL: Record<KnowledgeFilterField, string> = {
 /** The fields a filter compares as dates; every other one as text. */
 const DATE_FIELDS: ReadonlySet<KnowledgeFilterField> = new Set(["added_at", "modified_at"]);
 
+/** `text` in SQL in lower case and Unicode NFC, for a comparison that ignores case. */
+const folded = (text: string) => `pg_catalog.lower(pg_catalog.normalize(${text}, 'NFC'))`;
+
 /** A field's comparison with parameter `$n`, of the fixed comparisons a filter may name. */
 function filterCondition(filter: KnowledgeSearchFilter, parameter: number): string {
   const field = FILTER_FIELD_SQL[filter.field];
   const value = `$${parameter}`;
   switch (filter.op) {
+    // A folder's prefix ignores case and the encoding of an umlaut: it is named as people type
+    // it. Other fields compare as stored.
     case "prefix":
-      return `pg_catalog.starts_with(${field}, ${value}::pg_catalog.text)`;
+      return filter.field === "path"
+        ? `pg_catalog.starts_with(${folded(field)}, ${folded(`${value}::pg_catalog.text`)})`
+        : `pg_catalog.starts_with(${field}, ${value}::pg_catalog.text)`;
     case "gt":
       return `${field} > ${value}::pg_catalog.date`;
     case "gte":
@@ -266,7 +291,9 @@ function searchStatement(
   signals: readonly KnowledgeSearchSignal[],
   semantic: Pick<QueryVector, "generation" | "dimensions"> | undefined,
   languages: readonly KnowledgeKeywordLanguage[],
-  filters: readonly KnowledgeSearchFilter[]
+  filters: readonly KnowledgeSearchFilter[],
+  /** The store indexes the words of its documents' paths: it is at `PATH_SEARCH_STORE_LEVEL`. */
+  paths: boolean
 ): string {
   const depth = KNOWLEDGE_SEARCH_LIST_DEPTH;
   const filter = documentFilter(filters, semantic ? 4 : 3);
@@ -278,23 +305,55 @@ function searchStatement(
     `${keywordQuery(language)} as k_${language}`,
     `${keywordWordsQuery(language)} as k_${language}_words`
   ]);
+  // Paths are read where the store indexes them; an older store searches its passages only.
+  const pathed = paths && keywords.length > 0;
+  /**
+   * The words of chunk `c` in `language`: its text's, and with `path` its document's path's
+   * from `pathed` `p` too.
+   */
+  const vector = (language: KnowledgeKeywordLanguage, path: boolean) =>
+    path ? `(${keywordColumn(language, "c")} || p.path_${language})` : keywordColumn(language, "c");
   /** The best rank of chunk `c` in any language, for the query `q.k_<language><suffix>`. */
-  const rank = (suffix: string) =>
+  const rank = (suffix: string, path: boolean) =>
     `greatest(${keywords
       .map(
-        (language) =>
-          `pg_catalog.ts_rank_cd(${keywordColumn(language, "c")}, q.k_${language}${suffix})`
+        (language) => `pg_catalog.ts_rank_cd(${vector(language, path)}, q.k_${language}${suffix})`
       )
       .join(", ")})`;
   /** Whether chunk `c` matches the query `q.k_<language><suffix>` in any language. */
-  const matches = (suffix: string) =>
-    `(${keywords.map((language) => `${keywordColumn(language, "c")} @@ q.k_${language}${suffix}`).join(" or ")})`;
+  const matches = (suffix: string, path: boolean) =>
+    `(${keywords.map((language) => `${vector(language, path)} @@ q.k_${language}${suffix}`).join(" or ")})`;
+  /**
+   * The live chunks that match the query `q.k_<language><suffix>`, each with its rank, where
+   * `guard` holds. A chunk's text matches, by the index of each language; a chunk of one of the
+   * few documents in `pathed` matches with the words of its document's path too, and only
+   * those chunks are read for them.
+   */
+  const scored = (suffix: string, guard: string) =>
+    pathed
+      ? `(
+        select c.id, ${rank(suffix, false)} as score
+        from catalyst_kb.chunks c, q
+        where ${guard}${matches(suffix, false)}
+          and c.content_sha256 not in (select p.content_sha256 from pathed p) and ${LIVE_CHUNK}
+        union all
+        select c.id, ${rank(suffix, true)} as score
+        from pathed p join catalyst_kb.chunks c on c.content_sha256 = p.content_sha256, q
+        where ${guard}${matches(suffix, true)} and ${LIVE_CHUNK}
+      ) c`
+      : `(
+        select c.id, ${rank(suffix, false)} as score
+        from catalyst_kb.chunks c, q
+        where ${guard}${matches(suffix, false)} and ${LIVE_CHUNK}
+      ) c`;
   const parts: string[] = [
     // The words of the query by the stems of each keyword language, and every word as typed,
-    // any of which counts, for titles and file names.
+    // any of which counts, for titles, file names and paths.
     `q as (
       select ${queries.map((query) => `${query},`).join("\n        ")}
-        $1::pg_catalog.text !~* '(^|[[:space:]])(-|OR([[:space:]]|$))|"' as plain,
+        $1::pg_catalog.text !~* '(^|[[:space:]])(-|OR([[:space:]]|$))|"' as plain,${
+          pathed ? `\n        ${keywordPathQuery(keywords)} as path_words,` : ""
+        }
         pg_catalog.to_tsquery('simple'::regconfig, pg_catalog.replace(
           pg_catalog.plainto_tsquery('simple'::regconfig, $1::pg_catalog.text)::pg_catalog.text,
           ' & ', ' | ')) as words
@@ -316,12 +375,38 @@ function searchStatement(
   }
   if (keywords.length > 0) {
     parts.push(
+      ...(pathed
+        ? [
+            // The documents whose path holds the most words of the query that may name a folder,
+            // a list's depth of them, with the words of their paths in each keyword language. A
+            // content several documents hold has the words of each path. The bound keeps a word
+            // that most paths hold, such as a folder every project has, from reading every chunk.
+            `pathed as (
+        select t.content_sha256, ${keywords
+          .map(
+            (language) =>
+              `${keywordPathVector(language, `pg_catalog.string_agg(${sourceItemPathWords("i.path")}, ' ')`)} as path_${language}`
+          )
+          .join(", ")}
+        from (
+          select d.content_sha256,
+            pg_catalog.max(pg_catalog.ts_rank(${sourceItemPathSearch("i.path")}, q.path_words)) as score
+          from catalyst_kb.documents d
+          join catalyst_kb.source_items i on i.id = d.source_item_id, q
+          where d.withdrawn_at is null and ${sourceItemPathSearch("i.path")} @@ q.path_words${filter}
+          group by d.content_sha256
+          order by score desc, d.content_sha256 limit ${depth}
+        ) t
+        join catalyst_kb.documents d on d.content_sha256 = t.content_sha256
+        join catalyst_kb.source_items i on i.id = d.source_item_id, q
+        where d.withdrawn_at is null and ${sourceItemPathSearch("i.path")} @@ q.path_words${filter}
+        group by t.content_sha256
+      )`
+          ]
+        : []),
       `keyword_exact as (
-        select c.id, pg_catalog.row_number() over (
-          order by ${rank("")} desc, c.id
-        ) as rank
-        from catalyst_kb.chunks c, q
-        where ${matches("")} and ${LIVE_CHUNK}
+        select c.id, pg_catalog.row_number() over (order by c.score desc, c.id) as rank
+        from ${scored("", "")}
         order by rank limit ${depth}
       )`
     );
@@ -330,12 +415,8 @@ function searchStatement(
     parts.push(`keyword as (
       select id, rank from keyword_exact
       union all
-      select c.id, pg_catalog.row_number() over (
-        order by ${rank("_words")} desc, c.id
-      ) as rank
-      from catalyst_kb.chunks c, q
-      where q.plain and not exists (select 1 from keyword_exact)
-        and ${matches("_words")} and ${LIVE_CHUNK}
+      select c.id, pg_catalog.row_number() over (order by c.score desc, c.id) as rank
+      from ${scored("_words", "q.plain and not exists (select 1 from keyword_exact) and ")}
       order by rank limit ${depth}
     )`);
     lists.push("select id, rank from keyword");
