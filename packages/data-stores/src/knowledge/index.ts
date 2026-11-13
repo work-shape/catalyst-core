@@ -27,6 +27,7 @@ import {
   auditActorFromIdentity,
   defineAssetKind,
   KNOWLEDGE_BASE_ACTIONS,
+  KNOWLEDGE_FILE_MAX_BYTES,
   KNOWLEDGE_BASE_ASSET_KIND,
   type ActorAccess,
   type KnowledgeWorkflowSourcesOutput,
@@ -207,6 +208,8 @@ export function createKnowledgeBases(input: {
   documentFormats: readonly KnowledgeDocumentFormat[];
   /** `knowledge.maxDocuments` of release config. */
   maxDocuments: number;
+  /** `knowledge.maxFileBytes` of release config; `KNOWLEDGE_FILE_MAX_BYTES` unless given. */
+  maxFileBytes?: number;
   /**
    * What a source sets nothing for takes, by connector type: the type's own defaults and floor,
    * its `changes` replaced by `knowledge.sourcePollMinutes` of release config where that names it.
@@ -228,6 +231,7 @@ export function createKnowledgeBases(input: {
     embedding: input.embedding,
     documentFormats: input.documentFormats,
     maxDocuments: input.maxDocuments,
+    maxFileBytes: input.maxFileBytes ?? KNOWLEDGE_FILE_MAX_BYTES,
     ...(input.sourceDefaults ? { sourceDefaults: input.sourceDefaults } : {}),
     ...(input.maxPages === undefined ? {} : { maxPages: input.maxPages }),
     ...(input.indexConcurrency ? { indexConcurrency: input.indexConcurrency } : {}),

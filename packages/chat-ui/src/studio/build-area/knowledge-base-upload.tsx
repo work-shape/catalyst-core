@@ -38,12 +38,15 @@ export function KnowledgeUploadSection({
   source,
   knowledgeBase,
   formats,
+  maxBytes = KNOWLEDGE_ADD_LIMITS.bytes,
   onAdded
 }: {
   source: KnowledgeBaseSource;
   knowledgeBase: string;
   /** The formats the instance reads. */
   formats: readonly string[];
+  /** The largest file the instance takes, `KNOWLEDGE_ADD_LIMITS.bytes` unless it says. */
+  maxBytes?: number;
   onAdded(): void;
 }) {
   const { locale, t } = useTranslation();
@@ -52,7 +55,7 @@ export function KnowledgeUploadSection({
   const current = useRef<UploadItem[]>([]);
   const running = useRef(false);
   const titleId = useId();
-  const size = formatFileBytes(KNOWLEDGE_ADD_LIMITS.bytes, locale);
+  const size = formatFileBytes(maxBytes, locale);
   const formatList = uploadFormatList(formats, locale);
   const update = (change: (queue: readonly UploadItem[]) => UploadItem[]) => {
     current.current = change(current.current);

@@ -90,6 +90,8 @@ const knowledgePassageSchema = z.object({
   /** The fused score: compared only with passages of the same Knowledge Base. */
   score: z.number(),
   originLink: z.string().optional(),
+  /** The path of a synced or Workflow-fed document below its source's boundary. */
+  path: z.string().optional(),
   /** The date a synced document states of its version, such as the "Stand" of a web page. */
   statedAt: z.string().optional(),
   /** When the platform fetched the synced version. */

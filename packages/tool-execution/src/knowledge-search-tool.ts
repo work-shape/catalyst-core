@@ -57,6 +57,7 @@ const passageSchema = z.object({
   text: z.string(),
   score: z.number(),
   originLink: z.string().optional(),
+  path: z.string().optional(),
   statedAt: z.string().optional(),
   retrievedAt: z.string().optional()
 });

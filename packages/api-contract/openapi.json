@@ -26271,6 +26271,11 @@
                         "type": "string"
                       }
                     },
+                    "maxFileBytes": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -26606,6 +26611,11 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "maxFileBytes": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     },
                     "id": {
                       "type": "string"
@@ -29032,6 +29042,9 @@
                             "type": "number"
                           },
                           "originLink": {
+                            "type": "string"
+                          },
+                          "path": {
                             "type": "string"
                           },
                           "statedAt": {

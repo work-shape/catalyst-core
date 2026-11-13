@@ -8,7 +8,6 @@ import {
   AppError,
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_DOCUMENT_FORMATS,
-  KNOWLEDGE_FILE_MAX_BYTES,
   DocumentSourceError,
   KNOWLEDGE_TEXT_FORMATS,
   modelRouteAllowedForPersonalData,
@@ -202,107 +201,110 @@ const KNOWLEDGE_BASE_NOT_AVAILABLE = "Knowledge Base is not available";
 
 /**
  * The routes of one Knowledge Base. Each names it in its path and runs as its own operation,
- * `knowledge.<id>.<part>`: the part is the route's, never the caller's.
+ * `knowledge.<id>.<part>`: the part is the route's, never the caller's. An upload takes at most
+ * `maxFileBytes` (`knowledge.maxFileBytes`).
  */
-const knowledgeRoutes: RouteRegistration = (routes) => {
-  const bind = (
-    part:
-      | "sync"
-      | "sources"
-      | "source_items"
-      | "locate"
-      | "query"
-      | "state"
-      | "check"
-      | "add_files"
-      | "list_documents"
-      | "retry"
-      | "remove_documents"
-      | "set_origin_link"
-      | "search"
-      | "extract_fields"
-      | "reindex",
-    right: string
-  ) => ({
-    target: ({ knowledgeBase, ...input }: { knowledgeBase: string }) => ({
-      operation: knowledgeOperationName(knowledgeBase, part),
-      input
-    }),
-    right,
-    notFound: KNOWLEDGE_BASE_NOT_AVAILABLE
-  });
-  routes.resourceOperation(
-    apiOperations["knowledge_bases.sync"],
-    bind("sync", KNOWLEDGE_BASE_ACTIONS.write)
-  );
-  routes.resourceOperation(
-    apiOperations["knowledge_bases.sources"],
-    bind("sources", KNOWLEDGE_BASE_ACTIONS.read)
-  );
-  routes.resourceOperation(
-    apiOperations["knowledge_bases.source_items"],
-    bind("source_items", KNOWLEDGE_BASE_ACTIONS.read)
-  );
-  routes.resourceOperation(
-    apiOperations["knowledge_bases.locate"],
-    bind("locate", KNOWLEDGE_BASE_ACTIONS.read)
-  );
-  routes.resourceOperation(
-    apiOperations["knowledge_bases.query"],
-    bind("query", KNOWLEDGE_BASE_ACTIONS.use)
-  );
-  routes.resourceOperation(
-    apiOperations["knowledge_bases.get"],
-    bind("state", KNOWLEDGE_BASE_ACTIONS.read)
-  );
-  routes.resourceOperation(
-    apiOperations["knowledge_bases.check"],
-    bind("check", KNOWLEDGE_BASE_ACTIONS.write)
-  );
-  routes.resourceOperation(
-    apiOperations["knowledge_bases.add_files"],
-    bind("add_files", KNOWLEDGE_BASE_ACTIONS.write)
-  );
-  // An upload from the person's device is the same add: the bytes ride the call, and the
-  // input names them by their fingerprint, which the run hashes for its idempotency key.
-  routes.resourceOperation(apiOperations["knowledge_bases.upload_file"], {
-    ...bind("add_files", KNOWLEDGE_BASE_ACTIONS.write),
-    target: ({ knowledgeBase }: { knowledgeBase: string }, upload) => ({
-      operation: knowledgeOperationName(knowledgeBase, "add_files"),
-      input: { upload: upload ? uploadFingerprint(upload) : {} }
-    }),
-    uploadLimitBytes: KNOWLEDGE_FILE_MAX_BYTES
-  });
-  routes.resourceOperation(
-    apiOperations["knowledge_bases.list_documents"],
-    bind("list_documents", KNOWLEDGE_BASE_ACTIONS.use)
-  );
-  routes.resourceOperation(
-    apiOperations["knowledge_bases.remove_documents"],
-    bind("remove_documents", KNOWLEDGE_BASE_ACTIONS.write)
-  );
-  routes.resourceOperation(
-    apiOperations["knowledge_bases.set_origin_link"],
-    bind("set_origin_link", KNOWLEDGE_BASE_ACTIONS.write)
-  );
-  routes.resourceOperation(
-    apiOperations["knowledge_bases.retry_documents"],
-    bind("retry", KNOWLEDGE_BASE_ACTIONS.write)
-  );
-  // Re-indexing spends on the model as publishing a changed one does, so it takes that right.
-  routes.resourceOperation(
-    apiOperations["knowledge_bases.reindex"],
-    bind("reindex", KNOWLEDGE_BASE_ACTIONS.publish)
-  );
-  routes.resourceOperation(
-    apiOperations["knowledge_bases.extract_fields"],
-    bind("extract_fields", KNOWLEDGE_BASE_ACTIONS.read)
-  );
-  routes.resourceOperation(
-    apiOperations["knowledge_bases.search"],
-    bind("search", KNOWLEDGE_BASE_ACTIONS.use)
-  );
-};
+const knowledgeRoutes =
+  (maxFileBytes: number): RouteRegistration =>
+  (routes) => {
+    const bind = (
+      part:
+        | "sync"
+        | "sources"
+        | "source_items"
+        | "locate"
+        | "query"
+        | "state"
+        | "check"
+        | "add_files"
+        | "list_documents"
+        | "retry"
+        | "remove_documents"
+        | "set_origin_link"
+        | "search"
+        | "extract_fields"
+        | "reindex",
+      right: string
+    ) => ({
+      target: ({ knowledgeBase, ...input }: { knowledgeBase: string }) => ({
+        operation: knowledgeOperationName(knowledgeBase, part),
+        input
+      }),
+      right,
+      notFound: KNOWLEDGE_BASE_NOT_AVAILABLE
+    });
+    routes.resourceOperation(
+      apiOperations["knowledge_bases.sync"],
+      bind("sync", KNOWLEDGE_BASE_ACTIONS.write)
+    );
+    routes.resourceOperation(
+      apiOperations["knowledge_bases.sources"],
+      bind("sources", KNOWLEDGE_BASE_ACTIONS.read)
+    );
+    routes.resourceOperation(
+      apiOperations["knowledge_bases.source_items"],
+      bind("source_items", KNOWLEDGE_BASE_ACTIONS.read)
+    );
+    routes.resourceOperation(
+      apiOperations["knowledge_bases.locate"],
+      bind("locate", KNOWLEDGE_BASE_ACTIONS.read)
+    );
+    routes.resourceOperation(
+      apiOperations["knowledge_bases.query"],
+      bind("query", KNOWLEDGE_BASE_ACTIONS.use)
+    );
+    routes.resourceOperation(
+      apiOperations["knowledge_bases.get"],
+      bind("state", KNOWLEDGE_BASE_ACTIONS.read)
+    );
+    routes.resourceOperation(
+      apiOperations["knowledge_bases.check"],
+      bind("check", KNOWLEDGE_BASE_ACTIONS.write)
+    );
+    routes.resourceOperation(
+      apiOperations["knowledge_bases.add_files"],
+      bind("add_files", KNOWLEDGE_BASE_ACTIONS.write)
+    );
+    // An upload from the person's device is the same add: the bytes ride the call, and the
+    // input names them by their fingerprint, which the run hashes for its idempotency key.
+    routes.resourceOperation(apiOperations["knowledge_bases.upload_file"], {
+      ...bind("add_files", KNOWLEDGE_BASE_ACTIONS.write),
+      target: ({ knowledgeBase }: { knowledgeBase: string }, upload) => ({
+        operation: knowledgeOperationName(knowledgeBase, "add_files"),
+        input: { upload: upload ? uploadFingerprint(upload) : {} }
+      }),
+      uploadLimitBytes: maxFileBytes
+    });
+    routes.resourceOperation(
+      apiOperations["knowledge_bases.list_documents"],
+      bind("list_documents", KNOWLEDGE_BASE_ACTIONS.use)
+    );
+    routes.resourceOperation(
+      apiOperations["knowledge_bases.remove_documents"],
+      bind("remove_documents", KNOWLEDGE_BASE_ACTIONS.write)
+    );
+    routes.resourceOperation(
+      apiOperations["knowledge_bases.set_origin_link"],
+      bind("set_origin_link", KNOWLEDGE_BASE_ACTIONS.write)
+    );
+    routes.resourceOperation(
+      apiOperations["knowledge_bases.retry_documents"],
+      bind("retry", KNOWLEDGE_BASE_ACTIONS.write)
+    );
+    // Re-indexing spends on the model as publishing a changed one does, so it takes that right.
+    routes.resourceOperation(
+      apiOperations["knowledge_bases.reindex"],
+      bind("reindex", KNOWLEDGE_BASE_ACTIONS.publish)
+    );
+    routes.resourceOperation(
+      apiOperations["knowledge_bases.extract_fields"],
+      bind("extract_fields", KNOWLEDGE_BASE_ACTIONS.read)
+    );
+    routes.resourceOperation(
+      apiOperations["knowledge_bases.search"],
+      bind("search", KNOWLEDGE_BASE_ACTIONS.use)
+    );
+  };
 
 /**
  * What a synced source that sets nothing takes, by connector type (SRC-SYNC): the type's own
@@ -386,6 +388,7 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
       ? KNOWLEDGE_DOCUMENT_FORMATS
       : KNOWLEDGE_TEXT_FORMATS,
     maxDocuments: parts.config.knowledge.maxDocuments,
+    maxFileBytes: parts.config.knowledge.maxFileBytes,
     sourceDefaults,
     maxPages: parts.config.knowledge.maxPagesPerDocument,
     indexConcurrency: parts.config.knowledge.indexConcurrency,
@@ -427,7 +430,7 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
       );
       return {
         routes: [
-          knowledgeRoutes,
+          knowledgeRoutes(parts.config.knowledge.maxFileBytes),
           knowledgeDocumentRoutes({
             knowledgeBases,
             files: runtime.files,
@@ -451,6 +454,7 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
                   ? KNOWLEDGE_DOCUMENT_FORMATS
                   : KNOWLEDGE_TEXT_FORMATS,
                 maxDocuments: parts.config.knowledge.maxDocuments,
+                maxFileBytes: parts.config.knowledge.maxFileBytes,
                 withdrawShareConfirm: parts.config.knowledge.withdrawShareConfirm,
                 sourceDefaults,
                 ...(parts.config.clientInstance.timeZone === undefined

@@ -55,6 +55,19 @@ export function keywordColumn(language: KnowledgeKeywordLanguage, alias: string)
   return `${alias}.${column(language)}`;
 }
 
+/**
+ * The words of `path`, a source-relative path in SQL, in `language`: its folder names and file
+ * name, cut at `/`, `.` and `_`, which the parser would otherwise read as one file token.
+ */
+export function keywordPathVector(language: KnowledgeKeywordLanguage, path: string): string {
+  return keywordVector(language, knowledgePathWords(path));
+}
+
+/** `path` in SQL with its separators as spaces, for a text-search vector. */
+function knowledgePathWords(path: string): string {
+  return `pg_catalog.translate(${path}, '/._', '   ')`;
+}
+
 /** The query `$1` as `websearch_to_tsquery` of `language`. */
 export function keywordQuery(language: KnowledgeKeywordLanguage): string {
   return `pg_catalog.websearch_to_tsquery(${config(language)}, $1::pg_catalog.text)`;

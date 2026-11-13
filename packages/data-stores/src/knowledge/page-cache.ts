@@ -13,7 +13,6 @@ import {
   defineJobKind,
   documentSourceErrorCodeOf,
   DocumentSourceError,
-  KNOWLEDGE_FILE_MAX_BYTES,
   KNOWLEDGE_JOB_KINDS,
   KNOWLEDGE_PAGE_CACHE_LIFETIME_MS,
   KNOWLEDGE_SOURCE_UNREACHABLE,
@@ -179,14 +178,14 @@ export async function openCachedPage(
           {
             itemId: item.itemId,
             version: item.version,
-            maxBytes: KNOWLEDGE_FILE_MAX_BYTES,
+            maxBytes: runtime.maxFileBytes,
             boundary
           },
           context
         )) {
           callSignal.throwIfAborted();
           size += chunk.byteLength;
-          if (size > KNOWLEDGE_FILE_MAX_BYTES)
+          if (size > runtime.maxFileBytes)
             throw new DocumentSourceError("over_limit", "The source item exceeds the file limit");
           hash.update(chunk);
           yield chunk;

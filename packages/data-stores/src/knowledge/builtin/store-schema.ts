@@ -417,6 +417,20 @@ const SOURCE_ITEM_STATED_AT = `
   alter table catalyst_kb.source_items add column stated_at timestamp with time zone;
 `;
 
+/**
+ * The words of a synced or Workflow-fed item's path: its folder names and file name, cut at `/`,
+ * `.` and `_`, in the `simple` configuration the titles are in. Keyword search reads it to find
+ * the passages of documents filed under a folder the query names. The embedded text is
+ * unchanged, so nothing is embedded again; adding the column rewrites `source_items`, one row
+ * per item, never `chunks`. `knowledgePathWords` cuts the path the same way.
+ */
+const SOURCE_ITEM_PATH_SEARCH = `
+  alter table catalyst_kb.source_items add column path_search tsvector generated always as (
+    to_tsvector('simple'::regconfig, translate(path, '/._', '   '))
+  ) stored;
+  create index source_items_path_search_idx on catalyst_kb.source_items using gin (path_search);
+`;
+
 /** The tables of the store of a built-in Knowledge Base, in the order a store applies them. */
 const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   { number: 1, name: "documents", sql: DOCUMENTS },
@@ -463,7 +477,8 @@ const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   { number: 17, name: "chunk_switch_fetch_window", sql: CHUNK_SWITCH_FETCH_WINDOW },
   { number: 18, name: "keyword_languages", sql: KEYWORD_LANGUAGES },
   { number: 19, name: "page_cache", sql: PAGE_CACHE },
-  { number: 20, name: "source_item_stated_at", sql: SOURCE_ITEM_STATED_AT }
+  { number: 20, name: "source_item_stated_at", sql: SOURCE_ITEM_STATED_AT },
+  { number: 21, name: "source_item_path_search", sql: SOURCE_ITEM_PATH_SEARCH }
 ];
 
 /** A later applied number never proves that earlier migrations were applied. */

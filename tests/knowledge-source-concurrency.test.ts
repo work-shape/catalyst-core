@@ -28,7 +28,9 @@ describe("source concurrency (SRC-3a)", () => {
       locked = resolve;
     });
     const blocking = blocker.begin(async (sql) => {
-      await sql`lock table catalyst_kb.source_items in access exclusive mode`;
+      // The search's own statement reads source items for the words of their paths; only the
+      // boundary check reads sync runs, so it alone waits here.
+      await sql`lock table catalyst_kb.sync_runs in access exclusive mode`;
       locked();
       await gate;
       await sql`update catalyst_kb.documents set withdrawn_at=now()`;

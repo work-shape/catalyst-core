@@ -72,7 +72,7 @@ describe("the store a Knowledge Base owns", () => {
     return eventually(async () => {
       await jobs.runDue();
       const record = await ownedRecord(world);
-      expect(record).toMatchObject({ status: "ready", level: 20 });
+      expect(record).toMatchObject({ status: "ready", level: 21 });
       return required(record);
     });
   }
@@ -168,7 +168,8 @@ describe("the store a Knowledge Base owns", () => {
         expect.objectContaining({ number: 17, name: "chunk_switch_fetch_window" }),
         expect.objectContaining({ number: 18, name: "keyword_languages" }),
         expect.objectContaining({ number: 19, name: "page_cache" }),
-        expect.objectContaining({ number: 20, name: "source_item_stated_at" })
+        expect.objectContaining({ number: 20, name: "source_item_stated_at" }),
+        expect.objectContaining({ number: 21, name: "source_item_path_search" })
       ]
     });
     const { database } = record.location;
@@ -199,8 +200,9 @@ describe("the store a Knowledge Base owns", () => {
     for (const table of tables) {
       expect([record.roles.app, record.roles.migration]).not.toContain(table.owner);
     }
-    // The title's words are generated; the chunks' keyword columns are filled by a trigger, so
-    // a language can be added beside them (KB-12): German and English where none is listed.
+    // The title's and the path's words are generated; the chunks' keyword columns are filled by
+    // a trigger, so a language can be added beside them (KB-12): German and English where none
+    // is listed.
     const searchColumns = await inDatabase(
       database,
       (sql) =>
@@ -212,7 +214,8 @@ describe("the store a Knowledge Base owns", () => {
     expect(searchColumns).toEqual([
       { name: "chunks.search_de", generated: "NEVER" },
       { name: "chunks.search_en", generated: "NEVER" },
-      { name: "documents.title_search", generated: "ALWAYS" }
+      { name: "documents.title_search", generated: "ALWAYS" },
+      { name: "source_items.path_search", generated: "ALWAYS" }
     ]);
     expect(
       await inDatabase(
@@ -255,7 +258,7 @@ describe("the store a Knowledge Base owns", () => {
           name: `knowledge-base:${KB}`,
           title: "Objektunterlagen",
           status: "ready",
-          level: 20,
+          level: 21,
           ownedBy: { knowledgeBase: KB }
         }
       ]
@@ -299,7 +302,7 @@ describe("the store a Knowledge Base owns", () => {
         return sql`select * from catalyst_kb.migrations order by number`;
       });
       expect(ledger.map(({ number }) => number)).toEqual([
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21
       ]);
       const audits = await instance.stores.audit.listAuditEvents({
         clientInstanceId,

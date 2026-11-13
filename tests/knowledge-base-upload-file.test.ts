@@ -53,10 +53,13 @@ const addedSchema = z.object({
 describe("uploading a file to a Knowledge Base", () => {
   const { start, person } = useDataStoreInstance();
 
-  async function instanceWithKnowledgeBase(): Promise<DataStoreInstance> {
+  async function instanceWithKnowledgeBase(
+    options: { maxFileBytes?: number } = {}
+  ): Promise<DataStoreInstance> {
     const attachments = createManagedObjectTestAttachmentCapability();
     const instance = await start(true, undefined, developmentAuth, undefined, {
-      attachments: attachments.capability
+      attachments: attachments.capability,
+      ...options
     });
     const config: JsonObject = {
       name: KB,
@@ -80,7 +83,7 @@ describe("uploading a file to a Knowledge Base", () => {
           clientInstanceId,
           name: `knowledge-base:${KB}`
         })
-      ).toMatchObject({ status: "ready", level: 20 });
+      ).toMatchObject({ status: "ready", level: 21 });
     });
     return instance;
   }
@@ -199,6 +202,32 @@ describe("uploading a file to a Knowledge Base", () => {
     expect(reasonOf(large)).toBe("knowledge_file_too_large");
 
     expect((await ownedFiles(instance)).documents).toEqual([]);
+  });
+
+  it("takes files up to the instance's knowledge.maxFileBytes, says the limit on the page, and refuses a larger one naming it", async () => {
+    const limit = 1024 * 1024;
+    const instance = await instanceWithKnowledgeBase({ maxFileBytes: limit });
+    const state = await instance.api.call("knowledge_bases.get", {
+      params: { knowledgeBase: KB }
+    });
+    expect(state.statusCode, state.body).toBe(200);
+    expect(state.json()).toMatchObject({ maxFileBytes: limit });
+
+    const fits = await upload(instance, {
+      filename: "passt.txt",
+      contentType: "text/plain",
+      content: Buffer.alloc(limit, 0x61)
+    });
+    expect(fits.statusCode, fits.body).toBe(200);
+    const large = await upload(instance, {
+      filename: "gross.txt",
+      contentType: "text/plain",
+      content: Buffer.alloc(limit + 1, 0x61)
+    });
+    expect(large.statusCode, large.body).toBe(422);
+    expect(reasonOf(large)).toBe("knowledge_file_too_large");
+    expect(large.body).toContain(`${limit} bytes (knowledge.maxFileBytes)`);
+    expect((await ownedFiles(instance)).documents).toHaveLength(1);
   });
 
   it("refuses a caller without `knowledge_base.write`", async () => {

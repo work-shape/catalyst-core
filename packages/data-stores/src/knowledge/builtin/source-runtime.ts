@@ -1,6 +1,7 @@
 import {
   AppError,
   KNOWLEDGE_BASE_ASSET_KIND,
+  KNOWLEDGE_FILE_MAX_BYTES,
   type ConnectorContext,
   type DocumentSourceCapability,
   type KnowledgeFiles,
@@ -20,6 +21,8 @@ export interface KnowledgeSourceJobsInput {
   files: KnowledgeFiles;
   documentFormats: readonly KnowledgeDocumentFormat[];
   maxDocuments: number;
+  /** `knowledge.maxFileBytes` of release config; `KNOWLEDGE_FILE_MAX_BYTES` unless given. */
+  maxFileBytes?: number;
   withdrawShareConfirm?: number;
   /** What a source sets nothing for takes, by connector type (`SourceDefaultsByType`). */
   sourceDefaults?: SourceDefaultsByType;
@@ -43,6 +46,11 @@ export interface KnowledgeSourceJobsInput {
     signal: AbortSignal
   ): Promise<{ capability: DocumentSourceCapability; context: ConnectorContext }>;
 }
+/** The largest file a source's item may be: `knowledge.maxFileBytes`, the default unless set. */
+export function sourceMaxFileBytes(input: Pick<KnowledgeSourceJobsInput, "maxFileBytes">): number {
+  return input.maxFileBytes ?? KNOWLEDGE_FILE_MAX_BYTES;
+}
+
 export interface SourceJobRuntime {
   data: DataStoreRuntime;
   input: KnowledgeSourceJobsInput;

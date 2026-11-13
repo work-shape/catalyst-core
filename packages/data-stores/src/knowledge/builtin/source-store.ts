@@ -9,7 +9,6 @@ import {
   AppError,
   asManagedFileId,
   documentSourceItemSchema,
-  KNOWLEDGE_FILE_MAX_BYTES,
   type KnowledgeSyncResult,
   knowledgeDocumentFormatOf,
   knowledgeSyncResultSchema,
@@ -187,7 +186,9 @@ export function createSourceStore(
       items: DocumentSourceItem[],
       progress: SourceProgress | undefined,
       formats: readonly KnowledgeDocumentFormat[],
-      maxDocuments: number
+      maxDocuments: number,
+      /** `knowledge.maxFileBytes`: an item listed larger fails without a fetch. */
+      maxFileBytes: number
     ) {
       return change(async (sql) => {
         const active = await sql.run(
@@ -260,7 +261,7 @@ export function createSourceStore(
           if (!old || old.state === "withdrawn") held++;
           const format = sourceFormat(item);
           const failure =
-            (item.size ?? 0) > KNOWLEDGE_FILE_MAX_BYTES
+            (item.size ?? 0) > maxFileBytes
               ? "knowledge_file_over_limit"
               : !format
                 ? "knowledge_file_format_unsupported"

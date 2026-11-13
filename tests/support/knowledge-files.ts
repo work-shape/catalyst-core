@@ -105,7 +105,7 @@ export function useKnowledgeFiles(): {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(record).toMatchObject({ status: "ready", level: 20 });
+      expect(record).toMatchObject({ status: "ready", level: 21 });
       return required(record);
     });
   }

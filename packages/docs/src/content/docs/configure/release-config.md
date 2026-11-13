@@ -856,6 +856,14 @@ visible sheet or a slide counts as a page; chat uploads keep their own limits. T
 `knowledge_file_too_many_pages`. The Documents section shows the configured limit. After raising
 it and restarting the API and knowledge extraction worker, retry the document to extract it again.
 
+`knowledge.maxFileBytes` is the largest file one Knowledge Base takes, in bytes (default
+26214400, 25 MiB; from 1 MiB to 268435456, 256 MiB). A larger file is refused when it is added
+or uploaded, with `knowledge_file_too_large`, and a synced item listed or fetched larger fails
+with `knowledge_file_over_limit` without being stored. The text of one document stays bounded at
+25 MiB however large its file. A file added by hand is read whole into the API's memory and every
+file whole into the document worker's for extraction, so size both for it, and keep `knowledge.pageCacheBytes`
+at least as large. Restart the API and the knowledge workers after changing it.
+
 `knowledge.indexConcurrency` is how many contents are indexed at once, each sending its passages
 to the embedding model: `perWorker` on one knowledge worker (1 to 256, default 8) and `total`
 across all knowledge workers of the instance (1 to 1024, default 16). The lower of the two bounds
@@ -866,7 +874,7 @@ large source faster: 32 and 64 index 10,000 small documents in about 80 seconds 
 the knowledge workers after changing them.
 
 `knowledge.pageCacheBytes` bounds the page cache of each Knowledge Base (default 512 MiB, at least
-the Knowledge Base file limit). A synced document's original is released after extraction. When a
+25 MiB and at least `knowledge.maxFileBytes`). A synced document's original is released after extraction. When a
 reader opens a cited page of it, the API fetches the original through the source's Connection and
 keeps it there for 7 days from the fetch. When the cache is full, the oldest fetch is removed
 first. The API reads the setting, so restart it after changing it.
