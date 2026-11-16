@@ -155,9 +155,10 @@ describe("the further rights of assets.sync", () => {
     // Kai may write the agent, so a change of its instructions reaches the policy and waits.
     expect((await batch({ instructions: "Help well." })).statusCode).toBe(202);
     expect(approvalRequests).toHaveLength(1);
-    // Its model is not his to choose: he is told so, and nothing was asked about the batch.
+    // Its model fallback is not his to turn off: he is told so, and nothing was asked about
+    // the batch.
     emitted.length = 0;
-    const refused = await batch({ modelProviderId: undefined, modelBindingId: "plain" });
+    const refused = await batch({ useModelFallback: false });
     expect(refused.statusCode).toBe(403);
     const { error } = errorSchema.parse(refused.json());
     expect(error.code).toBe("FORBIDDEN");

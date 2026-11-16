@@ -39,7 +39,7 @@ import {
   assetKey,
   authorizeInteractiveWrite,
   findChangedAgentRefusals,
-  listsModelBindings,
+  choosesWorkspaceModels,
   findIssuesOfChange,
   isHiddenEverywhere,
   isReleaseSync,
@@ -355,7 +355,7 @@ async function checkBatch(
         resource: accessResource(entry.kind.kind, entry.name, entry.scope, entry.asset?.id),
         current: storedByName(entry.kind.kind).get(entry.name),
         next: acceptedByName(entry.kind.kind).get(entry.name),
-        modelBindingsListed: listsModelBindings(changed.lists)
+        workspaceModels: choosesWorkspaceModels(changed.lists)
       })
     );
   }

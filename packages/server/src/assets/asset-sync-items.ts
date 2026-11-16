@@ -18,7 +18,7 @@ import {
   loadStoredAssets,
   impliesDefaultChange,
   maxSyncItems,
-  listsModelBindings,
+  choosesWorkspaceModels,
   loadAgentLists,
   missingUpsertRightOf,
   preparedUpsert,
@@ -183,7 +183,7 @@ async function requireFurtherRights(
       resource: accessResource(entry.kind.kind, entry.name, entry.scope, entry.asset?.id),
       current,
       next: preparedUpsert(access, "sync", entry.kind, { current, next: entry.item.config }),
-      modelBindingsListed: listsModelBindings(lists)
+      workspaceModels: choosesWorkspaceModels(lists)
     });
     if (missing !== undefined) {
       entry.refusal = rightRefusal(missing.action, missing.reason);

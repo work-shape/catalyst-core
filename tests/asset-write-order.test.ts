@@ -126,7 +126,8 @@ describe("the order a write of an asset is refused in", () => {
     await t.put(t.kai.id, "agent", "kai-agent", t.kaiTeam);
   });
 
-  const withEffort = { config: agent("kai-agent", { reasoningEffort: "low" }) };
+  // The model fallback is the one model setting here only the right changes.
+  const withFallbackOff = { config: agent("kai-agent", { useModelFallback: false }) };
   const modelRight = { action: "agent_models.manage", reason: "no_grant" };
 
   // Fails without the change: a put that named no revision answered 428, and one against
@@ -136,7 +137,7 @@ describe("the order a write of an asset is refused in", () => {
       const refused = refusal(
         await t.call(t.kai.id, "assets.put", {
           params: { kind: "agent", name: "kai-agent" },
-          payload: { ...withEffort, expectedRevision, ...inKai() }
+          payload: { ...withFallbackOff, expectedRevision, ...inKai() }
         })
       );
       expect(refused).toMatchObject({ status: 403, code: "FORBIDDEN", details: modelRight });
@@ -146,7 +147,7 @@ describe("the order a write of an asset is refused in", () => {
     const put = (expectedRevision: number | undefined) =>
       t.call(t.root.id, "assets.put", {
         params: { kind: "agent", name: "kai-agent" },
-        payload: { ...withEffort, expectedRevision, ...inKai() }
+        payload: { ...withFallbackOff, expectedRevision, ...inKai() }
       });
     expect(refusal(await put(undefined))).toMatchObject({
       status: 428,
@@ -164,7 +165,7 @@ describe("the order a write of an asset is refused in", () => {
         params: { kind: "agent", name: "kai-reverted" },
         payload: { config, expectedRevision, ...inKai() }
       });
-    await write(agent("kai-reverted", { reasoningEffort: "low" }), 1);
+    await write(agent("kai-reverted", { useModelFallback: false }), 1);
     await publishAsRoot("kai-reverted");
     await write(agent("kai-reverted"), 2);
     await publishAsRoot("kai-reverted");
@@ -188,7 +189,7 @@ describe("the order a write of an asset is refused in", () => {
       await t.call(t.kai.id, "assets.sync", {
         payload: {
           ...inKai(),
-          items: [{ type: "put", kind: "agent", ...withEffort, expectedRevision: undefined }]
+          items: [{ type: "put", kind: "agent", ...withFallbackOff, expectedRevision: undefined }]
         }
       })
     );

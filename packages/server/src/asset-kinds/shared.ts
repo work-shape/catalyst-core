@@ -194,8 +194,8 @@ export interface WorkflowAssetKind
     /** The stored definition, or undefined for a new asset. */
     current: unknown;
     next: unknown;
-    /** A list names the model bindings the agent may use (`listsModelBindings`). */
-    modelBindingsListed: boolean;
+    /** A workspace owns the agent: its writer picks among its models (`choosesWorkspaceModels`). */
+    workspaceModels: boolean;
   }): MissingUpsertRight | undefined;
   /** Throws `FORBIDDEN` when the instance's editing policy refuses this interactive save. */
   assertInteractiveUpsertAllowed(input: {
@@ -208,7 +208,7 @@ export interface WorkflowAssetKind
     current: unknown;
     /** The validated definition. */
     next: unknown;
-    modelBindingsListed: boolean;
+    workspaceModels: boolean;
   }): void;
   /**
    * What every write keeps of the stored definition, a release's and a revert included: the
