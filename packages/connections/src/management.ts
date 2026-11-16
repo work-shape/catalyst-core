@@ -177,6 +177,12 @@ export interface ConnectionView {
   health: ConnectionHealth;
   lastTestedAt?: string;
   lastErrorCode?: string;
+  /**
+   * When the instance last wrote the Connection's state: a test, a discovery, a call that
+   * failed, or a write that reset it. A page that waits for a discovery reads a failure
+   * written after its wait began by it.
+   */
+  recordedAt?: string;
   secret: { state: SecretState; version?: number };
   sharedCredential: boolean;
   operations: ConnectionOperationView[];
@@ -712,6 +718,7 @@ export function createConnectionManagement(
           ? {}
           : { lastTestedAt: state.lastTestedAt }),
         ...(state?.lastErrorCode === undefined ? {} : { lastErrorCode: state.lastErrorCode }),
+        ...(state === undefined ? {} : { recordedAt: state.updatedAt }),
         secret: await secretOf(connection),
         sharedCredential: connection.config.credentialMode === "shared",
         operations: operationsOf(connection),

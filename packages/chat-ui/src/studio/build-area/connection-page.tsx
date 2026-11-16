@@ -49,6 +49,8 @@ import {
   typeToolsToApprove
 } from "./connection-editing";
 import {
+  discoveryWaitFrom,
+  discoveryWaitsForSignIn,
   personContextHeaderOf,
   waitsForDiscovery,
   type DiscoveryWait
@@ -72,6 +74,9 @@ import {
 import { withOAuthSettings } from "./connection-sign-in-model";
 import { ConnectionTestCredentialSection } from "./connection-test-credential";
 import type { ConnectionHoldersRead, ConnectionSource } from "./connection-source";
+
+/** The section of the page that signs the Connection in, or the reader's own account. */
+const SIGN_IN_SECTION_ID = "sign-in";
 
 /** A member of the definition that is a text, or nothing. */
 function textOf(config: Record<string, unknown>, key: string): string | undefined {
@@ -134,26 +139,44 @@ export function ConnectionPage({
   const update = editing && entries ? catalogueUpdateOf(asset.config, entries) : undefined;
   const discovers = connectorType !== "http_api" && offer === undefined;
   const formEdits = offer === undefined;
+  const { config } = asset;
+  const enabled = config.enabled !== false;
+  // Each person connects their own account: the page's sign-in is the reader's own.
+  const personal = isPersonalConfig(config);
+  const signsIn = textOf(config, "authScheme") === "oauth";
+  // A page that opens waits only while the Connection was never read and nothing failed, as
+  // right after its creation; an off Connection is read by nobody.
   const [wait, setWait] = useState<DiscoveryWait | undefined>(() =>
-    editing && discovers ? { since: Date.now() } : undefined
+    editing && discovers && enabled ? { since: Date.now() } : undefined
   );
   const read = source.useDetail(asset.name, wait);
   const holders = source.useHolders(asset.name);
   const detail = read.status === "ready" ? read.detail : undefined;
+  const own = source.useOwnSignInState?.(
+    asset.name,
+    Boolean(editing && discovers && personal && signsIn)
+  );
+  // Without the sign-in that reads them, the tools are not read: the page says so at once.
+  const signIn =
+    editing && discovers && detail
+      ? discoveryWaitsForSignIn({ personal, signsIn, binding: detail?.binding?.state, own })
+      : undefined;
   const waiting =
-    wait !== undefined && detail !== undefined && waitsForDiscovery(wait, detail, Date.now());
-  const written = () => setWait({ since: Date.now(), discoveredAt: detail?.discoveredAt });
-  const { config } = asset;
+    signIn === undefined &&
+    wait !== undefined &&
+    detail !== undefined &&
+    waitsForDiscovery(wait, detail, Date.now());
+  // Asked for a discovery: the page waits for it, or for a failure written after it asked.
+  const asked = () => setWait(discoveryWaitFrom(detail, Date.now()));
+  // A write of a personal Connection asks for no discovery: its tools are read on its owner's
+  // request alone. The page reads it again once.
+  const written = () => setWait(discoveryWaitFrom(detail, Date.now(), !personal && enabled));
   const runtime = config.origin !== "release";
   const title = textOf(config, "displayName") ?? asset.name;
-  const enabled = config.enabled !== false;
   const headHealth = detail ? recordedHealth(detail) : undefined;
   const personContextHeader = personContextHeaderOf(config);
   // The mappings are admin data: only a reader who may change the Connection reads them.
   const personContext = source.mayTest(asset) ? source.personContext : undefined;
-  // Each person connects their own account: the page's sign-in is the reader's own.
-  const personal = isPersonalConfig(config);
-  const signsIn = textOf(config, "authScheme") === "oauth";
   const sections: {
     id: string;
     label: string;
@@ -222,7 +245,7 @@ export function ConnectionPage({
     ...(detail?.oauth && personal
       ? [
           {
-            id: "sign-in",
+            id: SIGN_IN_SECTION_ID,
             label: t("connectionSignIn.sectionTitle"),
             description: t("personalConnections.sectionDescription"),
             body: <PersonalSignInSection name={asset.name} title={title} />
@@ -247,7 +270,7 @@ export function ConnectionPage({
       : detail?.oauth
         ? [
             {
-              id: "sign-in",
+              id: SIGN_IN_SECTION_ID,
               label: t("connectionSignIn.sectionTitle"),
               description: t("connectionSignIn.sectionDescription"),
               body: (
@@ -395,8 +418,12 @@ export function ConnectionPage({
                           frame={editing}
                           detail={detail}
                           waiting={waiting}
+                          {...(signIn === undefined
+                            ? {}
+                            : { signIn: { whose: signIn, section: SIGN_IN_SECTION_ID } })}
                           source={source}
                           written={written}
+                          asked={asked}
                         />
                       )
                     }

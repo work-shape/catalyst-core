@@ -128,6 +128,11 @@ export const connections = defineTranslations({
     "connections.discoveredWaiting": "Reading the tools of the server.",
     "connections.discoveredNever": "The tools of the server have not been read yet.",
     "connections.discoveredFailed": "The tools could not be read. Test the connection to see why.",
+    "connections.discoveredSignInShared":
+      "Nobody is signed in to this connection yet, so its tools cannot be read. Sign in under Sign-in, and the tools are read after that.",
+    "connections.discoveredSignInOwn":
+      "You have not connected your own account yet, so the tools cannot be read. Connect it under Sign-in, then choose Read tools again.",
+    "connections.discoveredSignInGo": "Go to sign-in",
     "connections.discoverAgain": "Read tools again",
     "connections.discoverHeld": "Reading the tools waits for approval in the Inbox.",
     "connections.discoverFailed": "The tools could not be read again.",
@@ -454,6 +459,11 @@ export const connections = defineTranslations({
     "connections.discoveredNever": "Die Tools des Servers wurden noch nicht gelesen.",
     "connections.discoveredFailed":
       "Die Tools ließen sich nicht lesen. Teste die Verbindung, um den Grund zu sehen.",
+    "connections.discoveredSignInShared":
+      "Bei dieser Verbindung ist noch niemand angemeldet, darum lassen sich ihre Tools nicht lesen. Melde dich unter Anmeldung an, danach werden die Tools gelesen.",
+    "connections.discoveredSignInOwn":
+      "Du hast dein eigenes Konto noch nicht verbunden, darum lassen sich die Tools nicht lesen. Verbinde es unter Anmeldung und wähle dann Tools neu lesen.",
+    "connections.discoveredSignInGo": "Zur Anmeldung",
     "connections.discoverAgain": "Tools neu lesen",
     "connections.discoverHeld": "Das Lesen der Tools wartet auf eine Freigabe im Eingang.",
     "connections.discoverFailed": "Die Tools konnten nicht neu gelesen werden.",

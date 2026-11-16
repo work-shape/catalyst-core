@@ -31,6 +31,7 @@ import { connectionGiveSource } from "./connection-give";
 import type { ConnectionGiveHost } from "./connection-give-step";
 import type { ConnectorTypeOffer } from "./connection-typed-model";
 import { ownSignInOf } from "./connection-people-model";
+import { usePersonalConnectionsQuery } from "../../shared/api/personal-connections";
 import type { SignInRead } from "./connection-sign-in-model";
 
 /** The action that lets a person test a Connection. */
@@ -116,6 +117,11 @@ export interface ConnectionSource {
    * page waits for a discovery it is read again every few seconds, until the discovery is in.
    */
   useDetail(name: string, wait?: DiscoveryWait): ConnectionDetailRead;
+  /**
+   * A hook: the state of the reader's own sign-in on a personal Connection, read with
+   * `enabled`: `not_connected` where they have none. Nothing until it is read.
+   */
+  useOwnSignInState?(name: string, enabled: boolean): string | undefined;
   /**
    * Enters the Connection's secret, as the next version after `expectedVersion`, for the
    * Connection at `expectedRevision`: one changed since is refused. The value goes to the
@@ -332,6 +338,14 @@ export function useConnectionSource(): ConnectionSource {
         };
       }
       return { status: "loading" };
+    },
+    useOwnSignInState(name, enabled) {
+      const mine = usePersonalConnectionsQuery({ ...api, enabled });
+      if (!mine.data) return undefined;
+      return (
+        mine.data.connections.find((connection) => connection.name === name)?.state ??
+        "not_connected"
+      );
     },
     useHolders(name) {
       // Read under the Connection's own read right; the instance names only whom the reader

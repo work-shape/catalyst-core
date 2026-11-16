@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   DISCOVERY_WAIT_MS,
   connectionConfigToForm,
+  discoveryWaitFrom,
+  discoveryWaitsForSignIn,
   credentialOriginKey,
   newConnectionConfig,
   emptyConnectionForm,
@@ -272,5 +274,59 @@ describe("the form of a Connection", () => {
       false
     );
     expect(waitsForDiscovery(wait, {}, 1_000 + DISCOVERY_WAIT_MS)).toBe(false);
+  });
+
+  it("stops waiting once a failure is written after the wait began, and not for an older one", () => {
+    const failed = {
+      health: "failed",
+      lastErrorCode: "upstream_unauthorized",
+      recordedAt: "2026-10-14T08:00:00.000Z"
+    };
+    const wait = discoveryWaitFrom(failed, 1_000);
+    // The same failure, written before the page asked, says nothing of this discovery.
+    expect(waitsForDiscovery(wait, failed, 2_000)).toBe(true);
+    // The discovery failed again: the state was written anew.
+    expect(
+      waitsForDiscovery(wait, { ...failed, recordedAt: "2026-10-14T08:00:05.000Z" }, 2_000)
+    ).toBe(false);
+    // A write that reset the state is no failure: the page waits on.
+    expect(
+      waitsForDiscovery(wait, { health: "unknown", recordedAt: "2026-10-14T08:00:05.000Z" }, 2_000)
+    ).toBe(true);
+  });
+
+  it("waits on a page that opens only while the Connection was never read and nothing failed", () => {
+    const opened = { since: 1_000 };
+    expect(waitsForDiscovery(opened, { health: "unknown" }, 2_000)).toBe(true);
+    // A personal Connection nobody signed in to: its state says why, so nothing is awaited.
+    expect(
+      waitsForDiscovery(
+        opened,
+        {
+          health: "needs_configuration",
+          lastErrorCode: "oauth_required",
+          recordedAt: "2026-10-14T08:00:00.000Z"
+        },
+        2_000
+      )
+    ).toBe(false);
+  });
+
+  it("waits for no discovery after a write that asked for none", () => {
+    expect(waitsForDiscovery(discoveryWaitFrom(undefined, 1_000, false), {}, 2_000)).toBe(false);
+  });
+
+  it("names the sign-in the tools wait for: the reader's own, or the Connection's one", () => {
+    const personal = { personal: true, signsIn: true };
+    expect(discoveryWaitsForSignIn({ ...personal, own: "not_connected" })).toBe("own");
+    expect(discoveryWaitsForSignIn({ ...personal, own: "needs_reconnect" })).toBe("own");
+    expect(discoveryWaitsForSignIn({ ...personal, own: "connected" })).toBeUndefined();
+    // Not read yet: the page claims nothing.
+    expect(discoveryWaitsForSignIn(personal)).toBeUndefined();
+    const shared = { personal: false, signsIn: true };
+    expect(discoveryWaitsForSignIn(shared)).toBe("shared");
+    expect(discoveryWaitsForSignIn({ ...shared, binding: "revoked" })).toBe("shared");
+    expect(discoveryWaitsForSignIn({ ...shared, binding: "connected" })).toBeUndefined();
+    expect(discoveryWaitsForSignIn({ personal: false, signsIn: false })).toBeUndefined();
   });
 });
