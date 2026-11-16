@@ -497,15 +497,16 @@ describe("CHAT-SHARE-1: named people on a private chat", () => {
     expect(moved.json<{ people: unknown[] }>().people).toEqual([]);
     await expect(people(conversationId)).resolves.toEqual([]);
 
-    const events = await auditRows("conversation.person_removed");
-    expect(
-      events.map((row) => {
-        const { operationRunId: _run, ...metadata } = z
-          .record(z.string(), z.unknown())
-          .parse(row.metadata);
-        return { subject: row.subject, metadata };
-      })
-    ).toEqual([
+    const events = (await auditRows("conversation.person_removed")).map((row) => {
+      const { operationRunId: _run, ...metadata } = z
+        .record(z.string(), z.unknown())
+        .parse(row.metadata);
+      return { subject: String(row.subject), metadata };
+    });
+    // The membership's end removes both chats' rows in one transaction, so the two events have
+    // no order of their own: they are compared by subject.
+    const ended = events.slice(2, 4).sort((a, b) => (a.subject < b.subject ? -1 : 1));
+    expect([...events.slice(0, 2), ...ended, ...events.slice(4)]).toEqual([
       { subject: conversationId, metadata: { personId: ids.named, reason: "removed" } },
       { subject: conversationId, metadata: { personId: ids.named, reason: "left" } },
       ...[conversationId, other].sort().map((subject) => ({
