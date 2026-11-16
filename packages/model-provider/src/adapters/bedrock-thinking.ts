@@ -1,25 +1,41 @@
-import { isRecord, type ReasoningEffortConfig } from "@work-shape/catalyst-core";
+import {
+  isRecord,
+  MODEL_CALL_RESERVED_OUTPUT_TOKENS,
+  type ReasoningEffortConfig
+} from "@work-shape/catalyst-core";
 import type { ModelProviderContinuation } from "../types";
-import type { BedrockEffort, BedrockMessagesRequest, BedrockThinkingBlock } from "./bedrock-wire";
+import {
+  BEDROCK_EFFORTS,
+  type BedrockEffort,
+  type BedrockMessagesRequest,
+  type BedrockThinkingBlock
+} from "./bedrock-wire";
 
 /**
  * The reasoning efforts a call may ask for. `none` sends no thinking setting, never a disabled
  * one: Claude Opus 5.5 refuses `thinking.type: disabled` and a thinking budget at every effort,
  * and without a setting it thinks adaptively at its own default effort (`medium`), as Claude
- * Sonnet 4.6 then does not think at all. `low`, `medium` and `high` ask for adaptive thinking with
- * that effort, which every Claude model from Sonnet 4.6 on takes. `xhigh` and `max` are not
- * declared: Claude Sonnet 4.6 refuses `xhigh`, and `max` thinks without a bound inside an output
- * limit that also has to hold the answer. No request sends `tool_choice`, a sampling setting or
- * an assistant prefill, which Claude Opus 5.5 refuses.
+ * Sonnet 4.6 then does not think at all. Every other effort asks for adaptive thinking with that
+ * effort. Claude Opus, Sonnet and Haiku 5.5 take all five; Claude Sonnet 4.6 refuses `xhigh` and
+ * `max`, so a binding of such a model lists the efforts it takes in its
+ * `userSelectableReasoningEfforts`. No request sends `tool_choice`, a sampling setting or an
+ * assistant prefill, which Claude Opus 5.5 refuses.
  */
 export const BEDROCK_REASONING_EFFORTS: readonly ReasoningEffortConfig[] = [
   "none",
-  "low",
-  "medium",
-  "high"
+  ...BEDROCK_EFFORTS
 ];
 
-const WIRE_EFFORTS: ReadonlySet<string> = new Set<BedrockEffort>(["low", "medium", "high"]);
+const WIRE_EFFORTS: ReadonlySet<string> = new Set<BedrockEffort>(BEDROCK_EFFORTS);
+
+/** The efforts that think long enough to need the larger output limit. */
+const LONG_THINKING_EFFORTS: ReadonlySet<string> = new Set<BedrockEffort>(["xhigh", "max"]);
+
+/**
+ * The output limit of a call at `xhigh` or `max`, as Anthropic advises for them: below it a long
+ * thought fills the limit and the answer is cut off before it starts.
+ */
+const BEDROCK_LONG_THINKING_MAX_OUTPUT_TOKENS = 64_000;
 
 /**
  * What a request says about thinking. No thinking budget is sent: a fixed budget is refused by
@@ -31,6 +47,19 @@ export function bedrockThinkingSettings(
   effort: ReasoningEffortConfig | undefined
 ): Pick<BedrockMessagesRequest, "thinking" | "output_config"> {
   return isWireEffort(effort) ? { thinking: { type: "adaptive" }, output_config: { effort } } : {};
+}
+
+/**
+ * The output limit of a request that states none: 64,000 tokens at `xhigh` and `max`, where
+ * thinking alone can pass 16,000, else what admission reserves for the answer of a call
+ * (`MODEL_CALL_RESERVED_OUTPUT_TOKENS`). Every Claude model that takes `xhigh` or `max` gives at
+ * least 64,000. Such a call can use more output than admission held for it; settlement counts
+ * what it used.
+ */
+export function bedrockMaxOutputTokens(effort: ReasoningEffortConfig | undefined): number {
+  return effort !== undefined && LONG_THINKING_EFFORTS.has(effort)
+    ? BEDROCK_LONG_THINKING_MAX_OUTPUT_TOKENS
+    : MODEL_CALL_RESERVED_OUTPUT_TOKENS;
 }
 
 function isWireEffort(effort: ReasoningEffortConfig | undefined): effort is BedrockEffort {

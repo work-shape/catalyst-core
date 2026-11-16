@@ -79,8 +79,9 @@ export interface BedrockMessagesRequest {
   tools?: BedrockTool[];
 }
 
-/** The efforts the Messages format takes on every model this adapter is checked against. */
-export type BedrockEffort = "low" | "medium" | "high";
+/** The efforts the Messages format takes. An older Claude model refuses those it does not take. */
+export const BEDROCK_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
+export type BedrockEffort = (typeof BEDROCK_EFFORTS)[number];
 
 export interface BedrockUsage {
   /** The input that was neither read from nor written to a cache. */
