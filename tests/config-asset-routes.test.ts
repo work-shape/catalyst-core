@@ -391,13 +391,14 @@ describe("config asset admin routes", () => {
       params: { kind: "skill", name: "review" },
       payload: {}
     });
-    expect(referencedDelete.statusCode).toBe(422);
+    // An agent lists the skill, so its delete is refused as in use (SKILL-DEL-1).
+    expect(referencedDelete.statusCode).toBe(409);
     expect(referencedDelete.json()).toMatchObject({
       error: {
-        code: "VALIDATION_FAILED",
-        details: {
-          issues: [{ message: "Agent 'assistant' references missing skill 'review'" }]
-        }
+        code: "CONFLICT",
+        message:
+          "The skill 'review' is used by the agent 'assistant'. Take it off that agent first, then delete it",
+        details: { reason: "skill_in_use", agents: ["assistant"] }
       }
     });
 

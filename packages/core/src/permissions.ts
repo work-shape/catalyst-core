@@ -158,11 +158,20 @@ export const WORKSPACE_MEMBER_ACTIONS = [
 
 /**
  * The verbs each bundle of a workspace carries on every kind a workspace can own: Builder reads
- * and writes, Publisher publishes. Neither deletes.
+ * and writes, Publisher publishes. Neither deletes on every kind.
  */
 const WORKSPACE_BUNDLE_VERBS: Readonly<Record<string, readonly string[]>> = {
   builder: ["read", "write"],
   publisher: ["publish"]
+};
+
+/**
+ * The rights a bundle carries beside its verbs, each on the one kind it names. Publisher
+ * deletes the skills its workspace owns (SKILL-DEL-1): a delete keeps their revisions, and an
+ * agent that lists one refuses it. Nothing else of a workspace is deleted through a bundle.
+ */
+const WORKSPACE_BUNDLE_ACTIONS: Readonly<Record<string, readonly string[]>> = {
+  publisher: ["skill.delete"]
 };
 
 /**
@@ -203,7 +212,8 @@ export function bundleCarries(bundle: string, action: string): boolean {
   return (
     dot > 0 &&
     WORKSPACE_OWNED_RIGHT_KINDS.some((kind) => kind === action.slice(0, dot)) &&
-    verbs.includes(action.slice(dot + 1))
+    (verbs.includes(action.slice(dot + 1)) ||
+      (WORKSPACE_BUNDLE_ACTIONS[bundle]?.includes(action) ?? false))
   );
 }
 

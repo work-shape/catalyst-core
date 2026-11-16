@@ -5,7 +5,13 @@ import {
   skillPortabilityIssues,
   type ClientInstanceConfig
 } from "@work-shape/catalyst-config-schema";
-import { ASSET_OWNER_KINDS, AppError, defineAssetKind } from "@work-shape/catalyst-core";
+import {
+  ASSET_OWNER_KINDS,
+  AppError,
+  defineAssetKind,
+  type ConfigAssetRecord,
+  type JsonObject
+} from "@work-shape/catalyst-core";
 import { skillSecretWarnings } from "./skill-secret-warnings";
 import { z } from "zod";
 import { readDefinitionField, readDefinitionName, type WorkflowAssetKind } from "./shared";
@@ -119,6 +125,20 @@ export function createSkillAssetKind(options: {
     },
     assertInteractiveUpsertAllowed: assertEditingAllowed,
     assertInteractiveDeleteAllowed: assertEditingAllowed,
+    // An agent that lists the skill, in its draft, its live revision or its pending shared
+    // draft, keeps it. The refusal names those the caller may read and counts the others, so
+    // the deleter knows where to take it off (SKILL-DEL-1).
+    async assertRemovable({ name, assets, drafts, readable }) {
+      const listing = await agentsListingSkill({ name, assets, drafts });
+      if (listing.length === 0) return;
+      const agents = listing.filter(readable).map((agent) => agent.name);
+      const unreadAgents = listing.length - agents.length;
+      throw new AppError("CONFLICT", skillInUseMessage(name, agents, unreadAgents), {
+        reason: "skill_in_use",
+        agents,
+        ...(unreadAgents === 0 ? {} : { unreadAgents })
+      });
+    },
     // A name or a description outside the public skill convention is said and not refused.
     writeWarnings: (definition, files) => [
       ...skillPortabilityIssues(
@@ -129,6 +149,50 @@ export function createSkillAssetKind(options: {
     // A skill is a folder: `SKILL.md`, its text resources, and whatever else it carries.
     revisionFiles: SKILL_REVISION_FILES
   };
+}
+
+/**
+ * The agents that list the skill, in their draft, their live revision or their pending shared
+ * draft, sorted by name: while one does, the skill is not deleted (SKILL-DEL-1).
+ */
+async function agentsListingSkill(input: {
+  name: string;
+  assets(kind: string): Promise<readonly ConfigAssetRecord[]>;
+  drafts(assetIds: readonly string[]): Promise<ReadonlyMap<string, JsonObject>>;
+}): Promise<ConfigAssetRecord[]> {
+  const agents = await input.assets("agent");
+  const pending = await input.drafts(agents.map((agent) => agent.id));
+  return agents
+    .filter((agent) =>
+      [agent.config, agent.publishedConfig, pending.get(agent.id)].some((config) =>
+        skillNamesOf(config).includes(input.name)
+      )
+    )
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+/** The refusal of a delete of a skill that agents list, naming only those the caller reads. */
+function skillInUseMessage(name: string, agents: readonly string[], unreadAgents: number): string {
+  const users = [
+    ...(agents.length === 0
+      ? []
+      : [
+          `the agent${agents.length === 1 ? "" : "s"} ${agents.map((agent) => `'${agent}'`).join(", ")}`
+        ]),
+    ...(unreadAgents === 0
+      ? []
+      : [`${unreadAgents} agent${unreadAgents === 1 ? "" : "s"} the caller may not read`])
+  ];
+  const those = agents.length + unreadAgents === 1 ? "that agent" : "those agents";
+  return `The skill '${name}' is used by ${users.join(" and ")}. Take it off ${those} first, then delete it`;
+}
+
+/** The skills an agent's config lists; none where it lists none or is not there. */
+function skillNamesOf(config: unknown): string[] {
+  const names = readDefinitionField(config, "skillNames");
+  return Array.isArray(names)
+    ? names.filter((value): value is string => typeof value === "string")
+    : [];
 }
 
 /** How a revision of a skill holds its folder: text in the config, other files beside it. */

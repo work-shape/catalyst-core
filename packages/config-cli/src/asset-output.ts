@@ -151,12 +151,19 @@ export function formatWarnings(warnings: ReadonlyArray<{ message: string }>): st
 /**
  * A refusal of the instance as it said it: the code, the message, and each asset, issue or
  * item its details name. Nothing is reworded, so what a person reads is what the instance
- * decided.
+ * decided. A key that does not cover a right its person holds is told how to get one that
+ * does: a key names the rights of when it was issued, so it lacks `skill.delete` where its
+ * person became Publisher since (SKILL-DEL-1).
  */
 export function formatRefusal(error: ConfigApiError): string {
   const head = `Refused by the instance (HTTP ${error.status}${error.code ? ` ${error.code}` : ""}): ${error.message}`;
-  return [head, ...detailLines(error.details)].join("\n");
+  const outsideKey = isRecord(error.details) && error.details.reason === "outside_key_scope";
+  return [head, ...detailLines(error.details), ...(outsideKey ? [NEW_KEY_HINT] : [])].join("\n");
 }
+
+/** How to get a key that names a right its person holds now. */
+const NEW_KEY_HINT =
+  "A key names the rights its person chose when it was issued. 'catalyst login --instance <url>' issues a new key that starts with every right you hold now; at /settings/you/api-keys you can also issue one and tick them yourself.";
 
 function detailLines(details: unknown): string[] {
   if (!isRecord(details)) return [];

@@ -6,6 +6,7 @@ import {
   clientInstanceId,
   errorSchema,
   setupAccessInstance,
+  skill,
   type AccessInstance
 } from "./support/access-instance";
 import { appFiles, expectStatus, setupAppInstance, type AppInstance } from "./support/app-instance";
@@ -288,6 +289,124 @@ describe("the build limits of a workspace", () => {
     expectStatus(await put(t.kai.id, "lifted", { toolNames: ["second.tool"] }), 200);
   });
 });
+describe("a Publisher deleting the workspace's skills (SKILL-DEL-1)", () => {
+  let t: AccessInstance;
+  let team: CollaborationWorkspaceId;
+  let other: CollaborationWorkspaceId;
+  beforeAll(async () => {
+    t = await setupAccessInstance({ furtherToolNames: ["read_skill"] });
+    team = await t.sharedWorkspace("Team");
+    other = await t.sharedWorkspace("Other");
+    await t.grant(t.kai.id, "builder", { workspaceId: team });
+    for (const name of ["guide", "spare"]) expectStatus(await putSkill(name, team), 200);
+    expectStatus(await putSkill("elsewhere", other), 200);
+    const uses = { toolNames: ["read_skill"], skillNames: ["guide"] };
+    expectStatus(await putTeamAgent("live-user", uses), 200);
+    // A second write of an agent that is there goes to its draft, which also keeps the skill.
+    expectStatus(await putTeamAgent("draft-user"), 200);
+    const read = await t.expectOk(t.admin.id, "assets.get", {
+      params: { kind: "agent", name: "draft-user" },
+      query: { workspaceId: team }
+    });
+    expectStatus(
+      await putTeamAgent("draft-user", uses, revisionSchema.parse(read.json()).revision),
+      200
+    );
+    // An agent whose draft no longer lists the skill still serves it live.
+    expectStatus(await putTeamAgent("live-only", uses), 200);
+    const liveOnly = await t.expectOk(t.admin.id, "assets.get", {
+      params: { kind: "agent", name: "live-only" },
+      query: { workspaceId: team }
+    });
+    expectStatus(
+      await putTeamAgent("live-only", {}, revisionSchema.parse(liveOnly.json()).revision),
+      200
+    );
+  });
+  afterAll(async () => {
+    await t.instance.close();
+  });
+
+  function putSkill(name: string, workspaceId: string) {
+    return t.call(t.admin.id, "assets.put", {
+      params: { kind: "skill", name },
+      payload: { config: skill(name), expectedRevision: null, workspaceId }
+    });
+  }
+  function putTeamAgent(name: string, overrides: Record<string, unknown> = {}, revision?: number) {
+    return t.call(t.admin.id, "assets.put", {
+      params: { kind: "agent", name },
+      payload: {
+        config: agent(name, overrides),
+        expectedRevision: revision ?? null,
+        workspaceId: team
+      }
+    });
+  }
+  async function deleteSkill(name: string, workspaceId: string) {
+    const read = await t.expectOk(t.admin.id, "assets.get", {
+      params: { kind: "skill", name },
+      query: { workspaceId }
+    });
+    return t.call(t.kai.id, "assets.delete", {
+      params: { kind: "skill", name },
+      payload: { expectedRevision: revisionSchema.parse(read.json()).revision, workspaceId }
+    });
+  }
+
+  it("is no Builder's: Builder alone deletes no skill", async () => {
+    const refused = await deleteSkill("spare", team);
+    expect([refused.statusCode, refusalOf(refused)]).toEqual([
+      403,
+      expect.objectContaining({ action: "skill.delete" })
+    ]);
+  });
+
+  it("deletes a skill no agent lists, keeping its revisions, in its own workspace only", async () => {
+    await t.grant(t.kai.id, "publisher", { workspaceId: team });
+    expectStatus(await deleteSkill("spare", team), 200);
+    const stored = await t.stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: "skill",
+      name: "spare"
+    });
+    expect(stored).toMatchObject({ status: "deleted", revision: 2 });
+    const revisions = await t.expectOk(t.admin.id, "assets.revisions.list", {
+      params: { kind: "skill", name: "spare" },
+      query: { workspaceId: team }
+    });
+    expect(z.object({ items: z.array(z.unknown()) }).parse(revisions.json()).items).toHaveLength(2);
+    const outside = await deleteSkill("elsewhere", other);
+    expect(refusalOf(outside)).toMatchObject({ action: "skill.delete" });
+    // The bundle deletes nothing else of the workspace.
+    const read = await t.expectOk(t.admin.id, "assets.get", {
+      params: { kind: "agent", name: "live-user" },
+      query: { workspaceId: team }
+    });
+    const agentDelete = await t.call(t.kai.id, "assets.delete", {
+      params: { kind: "agent", name: "live-user" },
+      payload: { expectedRevision: revisionSchema.parse(read.json()).revision, workspaceId: team }
+    });
+    expect(refusalOf(agentDelete)).toMatchObject({ action: "agent.delete" });
+  });
+
+  it("refuses while an agent lists the skill, live or in its draft, naming the agents", async () => {
+    const refused = await deleteSkill("guide", team);
+    expect(refused.statusCode).toBe(409);
+    const { error } = errorSchema.parse(refused.json());
+    expect(error.details).toEqual({
+      reason: "skill_in_use",
+      agents: ["draft-user", "live-only", "live-user"]
+    });
+    expect(error.message).toBe(
+      "The skill 'guide' is used by the agents 'draft-user', 'live-only', 'live-user'. Take it off those agents first, then delete it"
+    );
+    expect(
+      await t.stores.configAssets.getConfigAsset({ clientInstanceId, kind: "skill", name: "guide" })
+    ).toMatchObject({ status: "active" });
+  });
+});
+
 function refusalOf(response: { json(): unknown }) {
   return errorSchema.parse(response.json()).error.details;
 }

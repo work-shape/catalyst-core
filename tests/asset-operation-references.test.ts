@@ -325,12 +325,20 @@ describe("an issue of an asset the caller may not read", () => {
     );
     expect(german.body).not.toContain("second-reader");
 
+    // A delete of the skill the agents list is refused as in use, and counts what it may not
+    // name (SKILL-DEL-1).
+    const deleted = await t.call(t.kai.id, "assets.delete", {
+      ...address,
+      payload: { expectedRevision: 1, ...inKai }
+    });
+    expect(deleted.statusCode, deleted.body).toBe(409);
+    expect(errorSchema.parse(deleted.json()).error).toMatchObject({
+      message:
+        "The skill 'kai-guide' is used by 2 agents the caller may not read. Take it off those agents first, then delete it",
+      details: { reason: "skill_in_use", agents: [], unreadAgents: 2 }
+    });
     const calls = [
       await t.call(t.kai.id, "assets.put", { ...address, payload: { config: untitled, ...inKai } }),
-      await t.call(t.kai.id, "assets.delete", {
-        ...address,
-        payload: { expectedRevision: 1, ...inKai }
-      }),
       await t.call(t.kai.id, "assets.sync", {
         payload: {
           ...inKai,
@@ -349,9 +357,11 @@ describe("an issue of an asset the caller may not read", () => {
       ...address,
       payload: { expectedRevision: 1, ...inKai }
     });
-    expect(named.statusCode).toBe(422);
-    expect(named.body).toContain("Agent 'first-reader' references missing skill 'kai-guide'");
-    expect(named.body).toContain("Agent 'second-reader' references missing skill 'kai-guide'");
+    expect(named.statusCode).toBe(409);
+    expect(errorSchema.parse(named.json()).error.details).toEqual({
+      reason: "skill_in_use",
+      agents: ["first-reader", "second-reader"]
+    });
     expect(named.body).not.toContain(unread);
   });
 });

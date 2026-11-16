@@ -8,7 +8,7 @@ export const accessWorkspace = defineTranslations({
     "access.actionBuilderDescription":
       "View and edit everything the workspace owns, also what it gets later, and build and try there in private conversations. Deletes nothing. No membership needed: a Builder who is no member sees none of the workspace's conversations.",
     "access.actionPublisherDescription":
-      "Publish what the workspace owns. Guardrails and Workflows are not included.",
+      "Publish what the workspace owns, and delete its skills while no agent uses them. Guardrails and Workflows are not included.",
     "access.scopeWorkspace": "Workspace {name}",
     "access.objectWorkspace": "the workspace {name}"
   },
@@ -17,7 +17,7 @@ export const accessWorkspace = defineTranslations({
     "access.actionBuilderDescription":
       "Alles ansehen und bearbeiten, was dem Arbeitsbereich gehört, auch was später dazukommt, und dort in privaten Unterhaltungen bauen und ausprobieren. Löscht nichts. Ohne Mitgliedschaft: wer Builder, aber nicht Mitglied ist, sieht keine Unterhaltung des Arbeitsbereichs.",
     "access.actionPublisherDescription":
-      "Veröffentlichen, was dem Arbeitsbereich gehört. Leitplanken und Workflows gehören nicht dazu.",
+      "Veröffentlichen, was dem Arbeitsbereich gehört, und seine Skills löschen, solange kein Agent sie nutzt. Leitplanken und Workflows gehören nicht dazu.",
     "access.scopeWorkspace": "Arbeitsbereich {name}",
     "access.objectWorkspace": "den Arbeitsbereich {name}"
   }

@@ -103,6 +103,21 @@ export async function withPublishedConfigs(
   });
 }
 
+/** The config of each pending shared draft among the assets, read only where one is pending. */
+export async function pendingSharedDrafts(
+  options: AssetWorkflowOptions,
+  assetIds: readonly string[]
+): Promise<ReadonlyMap<string, JsonObject>> {
+  const { clientInstanceId, stores } = options;
+  const pending = await stores.agentProposals.summaries({ clientInstanceId, agentIds: assetIds });
+  const drafts = new Map<string, JsonObject>();
+  for (const agentId of pending.keys()) {
+    const draft = await stores.agentProposals.get({ clientInstanceId, agentId });
+    if (draft) drafts.set(agentId, draft.config);
+  }
+  return drafts;
+}
+
 /** The module whose switch turns changing assets in the interface on and off. */
 const ASSET_MANAGEMENT_MODULE = "assetManagement";
 
