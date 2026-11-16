@@ -249,13 +249,18 @@ function ConnectCli({
   initialCode: string;
   offer: KeyOffer;
   confirming: boolean;
-  onConfirm(userCode: string, body: ConfirmConnectCodeRequest): Promise<unknown>;
+  onConfirm(
+    userCode: string,
+    body: ConfirmConnectCodeRequest
+  ): Promise<{ leftOutScopes?: readonly string[] }>;
 }) {
   const { apiBaseUrl, authScope, client } = useSettingsPage();
   const { t } = useTranslation();
   const keyProblem = useKeyProblem();
   const [code, setCode] = useState(initialCode);
   const [confirmedCode, setConfirmedCode] = useState<string>();
+  // The scopes asked for that the key does not carry, because the person holds no such right.
+  const [leftOut, setLeftOut] = useState<readonly string[]>([]);
   const complete = isCompleteConnectCode(code);
   const lookup = useConnectCodeQuery({
     apiBaseUrl,
@@ -278,6 +283,11 @@ function ConnectCli({
       {confirmedCode && confirmedCode === code ? (
         <Banner tone="success" title={t("personalApiKeys.connected")}>
           {t("personalApiKeys.connectedDescription")}
+          {leftOut.length > 0 ? (
+            <p data-connect-left-out>
+              {t("personalApiKeys.connectedLeftOut", { scopes: leftOut.join(", ") })}
+            </p>
+          ) : null}
         </Banner>
       ) : !complete ? null : lookup.isPending || !offer.settled ? (
         <SkeletonList rows={2} />
@@ -289,7 +299,8 @@ function ConnectCli({
           offer={offer}
           pending={confirming}
           onConfirm={async (body) => {
-            await onConfirm(code, body);
+            const confirmed = await onConfirm(code, body);
+            setLeftOut(confirmed.leftOutScopes ?? []);
             setConfirmedCode(code);
           }}
         />

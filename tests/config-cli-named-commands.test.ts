@@ -696,7 +696,7 @@ describe("named CLI operation faces", () => {
       out: "",
       err: [
         `Refused by the instance (HTTP 403 FORBIDDEN): ${message}`,
-        "A key names the rights its person chose when it was issued. 'catalyst login --instance <url>' issues a new key that starts with every right you hold now; at /settings/you/api-keys you can also issue one and tick them yourself.",
+        "Your account holds the right 'skill.delete', but this API key does not carry it: a key carries only the rights ticked when it was issued, so a right you were given after that is missing from it. Run 'catalyst login' and confirm a new key with the right ticked; it replaces the saved key. Where CATALYST_API_KEY is set, create a new key in Settings > API keys and set that instead.",
         ""
       ].join("\n")
     });

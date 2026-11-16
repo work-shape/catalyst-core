@@ -78,6 +78,8 @@ export const personalApiKeys = defineTranslations({
     "personalApiKeys.connected": "The CLI is now logged in",
     "personalApiKeys.connectedDescription":
       "Return to your terminal. The key is listed under Your keys, where you can revoke it.",
+    "personalApiKeys.connectedLeftOut":
+      "Left off the key, because you do not hold these rights: {scopes}. The key does everything else you chose.",
     "personalApiKeys.instanceTitle": "Personal keys",
     "personalApiKeys.instanceDescription":
       "The keys people issued for themselves. Each acts as its owner, limited to what it may do."
@@ -160,6 +162,8 @@ export const personalApiKeys = defineTranslations({
     "personalApiKeys.connected": "Die CLI ist jetzt angemeldet",
     "personalApiKeys.connectedDescription":
       "Kehre zu deinem Terminal zurück. Der Schlüssel steht unter Deine Schlüssel, wo du ihn widerrufen kannst.",
+    "personalApiKeys.connectedLeftOut":
+      "Nicht im Schlüssel, weil du diese Rechte nicht hast: {scopes}. Alles andere, was du gewählt hast, kann der Schlüssel.",
     "personalApiKeys.instanceTitle": "Persönliche Schlüssel",
     "personalApiKeys.instanceDescription":
       "Die Schlüssel, die Personen für sich selbst ausgestellt haben. Jeder handelt als sein Inhaber innerhalb seiner Berechtigungen."

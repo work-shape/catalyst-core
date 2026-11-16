@@ -47,6 +47,8 @@ interface IssuableKeyFields {
   name: string;
   scopes: string[];
   expiresAt?: string;
+  /** Scopes asked for that name a right the owner holds nowhere, left off a confirmed code's key. */
+  leftOutScopes?: string[];
 }
 
 /** What a changing operation of this file takes from its Operation Run. */
@@ -197,12 +199,14 @@ export class PersonalApiKeysWorkflow {
     context: ChangeContext,
     userCode: string,
     fields: PersonalApiKeyFields
-  ): Promise<{ confirmed: true }> {
+  ): Promise<{ confirmed: true; scopes: string[]; leftOutScopes?: string[] }> {
     // An unknown code is told first: nothing about the scopes matters for it.
     await this.getConnectCode(userCode);
     const userCodeHash = await this.userCodeHash(userCode);
     const { checked, code } = await this.whileRightsHeld(context, async (held, access) => {
-      const issuable = await held.requireIssuable(access, fields);
+      // A code's key carries what the person holds of what it asks: one right they lack does not
+      // refuse the rest, and the answer names what was left out.
+      const issuable = await held.requireIssuable(access, fields, true);
       return {
         checked: issuable,
         code: await held.options.stores.personalApiKeys.approveConnectCode({
@@ -226,10 +230,15 @@ export class PersonalApiKeysWorkflow {
         name: checked.name,
         scopes: checked.scopes,
         expiresAt: checked.expiresAt ?? null,
+        ...(checked.leftOutScopes ? { leftOutScopes: checked.leftOutScopes } : {}),
         ...(code.clientLabel === undefined ? {} : { clientLabel: code.clientLabel })
       }
     });
-    return { confirmed: true };
+    return {
+      confirmed: true,
+      scopes: checked.scopes,
+      ...(checked.leftOutScopes ? { leftOutScopes: checked.leftOutScopes } : {})
+    };
   }
 
   /**
@@ -283,11 +292,6 @@ export class PersonalApiKeysWorkflow {
   }
 
   /**
-   * The fields of a key the caller may issue: valid scopes, each naming a right the caller
-   * holds now somewhere it reaches, and an expiry within a year or none. A scope the caller holds
-   * nowhere would issue a key that can do nothing; it is refused with the right it names.
-   */
-  /**
    * `withRightsHeld` for issuing a key: what the key may name is asked of the owner's rights
    * now, under the rights locks of the owner, on the transaction's stores.
    */
@@ -302,9 +306,17 @@ export class PersonalApiKeysWorkflow {
     );
   }
 
+  /**
+   * The fields of a key the caller may issue: valid scopes, each naming a right the caller
+   * holds now somewhere it reaches, and an expiry within a year or none. A scope the caller holds
+   * nowhere would issue a key that can do nothing there: it is refused with the right it names,
+   * or, with `leaveOutUnheld`, left off the key and named in `leftOutScopes`, refused only where
+   * no scope is left.
+   */
   private async requireIssuable(
     access: ActorAccess,
-    fields: PersonalApiKeyFields
+    fields: PersonalApiKeyFields,
+    leaveOutUnheld = false
   ): Promise<IssuableKeyFields> {
     const scopes = requirePersonalApiKeyScopes(fields.scopes);
     const expiresAt = fields.expiresAt ?? undefined;
@@ -324,11 +336,18 @@ export class PersonalApiKeysWorkflow {
         );
       }
     }
-    for (const scope of scopes) {
+    const kept: string[] = [];
+    const leftOut: string[] = [];
+    let firstRefusal: AppError | undefined;
+    scopes.forEach((scope, index) => {
+      const written = fields.scopes[index] ?? "";
       // The account and workspaces level is no right a grant gives: every person changes their
       // own account, and what they may do in a workspace is their role there, asked at each
       // call by the checks of the screen.
-      if (isPersonalApiKeyAccountLevelAction(scope.action)) continue;
+      if (isPersonalApiKeyAccountLevelAction(scope.action)) {
+        kept.push(written);
+        return;
+      }
       // Where the key may reach, as the caller holds it: anywhere for a scope without a
       // workspace, in the workspace for one with it. A right on one asset counts, as one in a
       // workspace does for a scope without one: the key is narrowed to the owner at each call.
@@ -338,21 +357,35 @@ export class PersonalApiKeysWorkflow {
             access.holdsGrantAt(scope.action, ["asset", "workspace"])
           : access.authorizeTransfer(scope.action, { workspaceId: scope.workspaceId }).allowed ||
             access.holdsGrantAt(scope.action, ["asset"]);
-      if (!held) {
+      if (held) {
+        kept.push(written);
+        return;
+      }
+      leftOut.push(written);
+      firstRefusal ??= new AppError(
+        "VALIDATION_FAILED",
+        `You hold no right '${scope.action}'${scope.workspaceId === undefined ? "" : ` in the workspace '${scope.workspaceId}'`}, so a key cannot carry it`,
+        {
+          action: scope.action,
+          ...(scope.workspaceId === undefined ? {} : { workspaceId: scope.workspaceId })
+        }
+      );
+    });
+    if (firstRefusal && (!leaveOutUnheld || kept.length === 0)) {
+      if (leaveOutUnheld) {
         throw new AppError(
           "VALIDATION_FAILED",
-          `You hold no right '${scope.action}'${scope.workspaceId === undefined ? "" : ` in the workspace '${scope.workspaceId}'`}, so a key cannot carry it`,
-          {
-            action: scope.action,
-            ...(scope.workspaceId === undefined ? {} : { workspaceId: scope.workspaceId })
-          }
+          `You hold none of the rights this key asks for (${leftOut.join(", ")}), so it could do nothing. Ask for a right first, or confirm the code with scopes you hold`,
+          { reason: "no_scope_held", leftOutScopes: leftOut }
         );
       }
+      throw firstRefusal;
     }
     return {
       name: fields.name,
-      scopes: [...new Set(fields.scopes)],
-      ...(expiresAt === undefined ? {} : { expiresAt })
+      scopes: [...new Set(kept)],
+      ...(expiresAt === undefined ? {} : { expiresAt }),
+      ...(leftOut.length > 0 ? { leftOutScopes: [...new Set(leftOut)] } : {})
     };
   }
 

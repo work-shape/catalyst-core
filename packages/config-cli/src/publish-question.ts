@@ -52,10 +52,9 @@ export function waitingPublishLine(
 export function agentPublishRefusalHint(error: unknown): string | undefined {
   if (!(error instanceof ConfigApiError) || error.status !== 403) return undefined;
   const reason = isRecord(error.details) ? error.details.reason : undefined;
-  const keyRefused =
-    reason === "user_only" ||
-    reason === "outside_key_scope" ||
-    error.message.includes(`'${PUBLISH_SCOPE}'`);
+  // A personal key that lacks a right its owner holds is told so with the refusal itself.
+  if (reason === "outside_key_scope") return undefined;
+  const keyRefused = reason === "user_only" || error.message.includes(`'${PUBLISH_SCOPE}'`);
   return keyRefused
     ? `This key publishes no agent. A service principal's key, such as the release key of an operated instance, writes agent drafts and publishes none (AP-10); a personal key publishes only with the publish right, scope ${PUBLISH_SCOPE}. Publish the draft with such a personal key or on the agent page.`
     : "Publishing an agent needs the right agent.publish on it, which an instance admin holds.";

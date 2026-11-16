@@ -322,6 +322,53 @@ describe("connect codes", () => {
     expect(put.statusCode, put.body).toBe(200);
   });
 
+  it("issue a code's key with the rights its owner holds, naming those left out; none held is refused", async () => {
+    const t = await setup();
+    await grantKaiWorkspace(t);
+    const start = async () =>
+      startedSchema.parse((await t.instance.call("connect_codes.start", { payload: {} })).json());
+    const started = await start();
+    const asked = [
+      `agent.read:${t.kaiTeam}`,
+      `agent.write:${t.kaiTeam}`,
+      "agent.delete",
+      "skill.delete",
+      "guardrail.publish"
+    ];
+    const confirmed = await t.expectOk(t.kai.id, "me.connect_codes.confirm", {
+      params: { userCode: started.userCode },
+      payload: { name: "Mini", scopes: asked, expiresAt: inDays(30) }
+    });
+    expect(confirmed.json()).toEqual({
+      confirmed: true,
+      scopes: [`agent.read:${t.kaiTeam}`, `agent.write:${t.kaiTeam}`],
+      leftOutScopes: ["agent.delete", "skill.delete", "guardrail.publish"]
+    });
+    const issued = z
+      .object({ status: z.literal("issued"), key: keySchema, secret: z.string() })
+      .parse(
+        (
+          await t.instance.call("connect_codes.redeem", {
+            payload: { deviceCode: started.deviceCode }
+          })
+        ).json()
+      );
+    expect(issued.key.scopes).toEqual([`agent.read:${t.kaiTeam}`, `agent.write:${t.kaiTeam}`]);
+
+    // Only a code none of whose rights its owner holds is refused, naming them all.
+    const nothing = await start();
+    const refused = await t.expectRefused(
+      t.kai.id,
+      "me.connect_codes.confirm",
+      {
+        params: { userCode: nothing.userCode },
+        payload: { name: "Empty", scopes: ["agent.delete", "skill.delete"], expiresAt: inDays(30) }
+      },
+      { status: 422, code: "VALIDATION_FAILED" }
+    );
+    expect(refused.message).toContain("agent.delete, skill.delete");
+  });
+
   it("refuse a code that expired, is malformed or belongs to nobody", async () => {
     const t = await setup();
     await grantKaiWorkspace(t);
