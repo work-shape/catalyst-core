@@ -8,11 +8,13 @@ import { WORKSPACE_BUNDLES, type MemberBundleChange } from "@work-shape/catalyst
 import { Switch } from "@work-shape/catalyst-ui";
 import { useId } from "react";
 import { useTranslation, type TranslationKey } from "../../../shared/i18n";
+import { originRoleName } from "../../access/origin-words";
 
 // AP-3: a member's Builder and Publisher as two switches under the member's row. On means held
 // or asked for. What a switch does is the server's answer for the caller: an Owner or Admin
 // asks for it and takes it back, an instance admin who holds it gives it at once, and who asked
-// withdraws the request. A switch the caller may not change is shown and cannot be turned.
+// withdraws the request. A switch the caller may not change is shown and cannot be turned. A
+// bundle whose rights a role already gives is on and names the role: nobody asks for it.
 
 const bundleLabels: Record<WorkspaceBundle, TranslationKey> = {
   builder: "rights.actionBuilder",
@@ -77,8 +79,14 @@ function BundleSwitch({
   const id = useId();
   const noteId = useId();
   const label = t(bundleLabels[bundle]);
-  const note = stateNotes[value.state];
-  const { change } = value;
+  const { change, coveredBy } = value;
+  const stateNote = stateNotes[value.state];
+  const note =
+    value.state === "inherited" && coveredBy !== undefined && coveredBy.length > 0
+      ? t("workspaceBundles.coveredBy", {
+          roles: coveredBy.map((role) => originRoleName(role.id, coveredBy, t)).join(", ")
+        })
+      : stateNote && t(stateNote);
   return (
     <span
       className="inline-flex min-w-0 items-center gap-2"
@@ -105,7 +113,7 @@ function BundleSwitch({
       </label>
       {note ? (
         <span id={noteId} className="text-caption text-muted-foreground">
-          {t(note)}
+          {note}
         </span>
       ) : null}
     </span>

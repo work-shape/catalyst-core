@@ -7,7 +7,8 @@ export const workspaceBundles = defineTranslations({
   en: {
     "workspaceBundles.switch": "{bundle} for {name}",
     "workspaceBundles.requested": "requested",
-    "workspaceBundles.inherited": "by role or group",
+    "workspaceBundles.inherited": "already covered by a role, group or right",
+    "workspaceBundles.coveredBy": "already covered by {roles}",
     "workspaceBundles.refused": "You may not change this right.",
     "workspaceBundles.changed": "This changed in the meantime. The list now shows how it stands.",
     "inbox.kindGrantRequest": "Right in a workspace",
@@ -31,7 +32,8 @@ export const workspaceBundles = defineTranslations({
   de: {
     "workspaceBundles.switch": "{bundle} für {name}",
     "workspaceBundles.requested": "angefragt",
-    "workspaceBundles.inherited": "über Rolle oder Gruppe",
+    "workspaceBundles.inherited": "schon abgedeckt durch Rolle, Gruppe oder Recht",
+    "workspaceBundles.coveredBy": "schon abgedeckt durch {roles}",
     "workspaceBundles.refused": "Du darfst dieses Recht nicht ändern.",
     "workspaceBundles.changed":
       "Das hat sich inzwischen geändert. Die Liste zeigt jetzt, wie es steht.",

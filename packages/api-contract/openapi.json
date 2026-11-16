@@ -56368,6 +56368,12 @@
           },
           "requestId": {
             "type": "string"
+          },
+          "coveredBy": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccessOriginRole"
+            }
           }
         },
         "required": [

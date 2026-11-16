@@ -196,7 +196,7 @@ function rowGives(
  * Whether the bundle carries the action on what its workspace owns: one of its verbs on a kind a
  * workspace can own. A Connection is instance-owned, so no bundle names a right on one (PMCP-1).
  */
-function bundleCarries(bundle: string, action: string): boolean {
+export function bundleCarries(bundle: string, action: string): boolean {
   const verbs = WORKSPACE_BUNDLE_VERBS[bundle];
   if (verbs === undefined || BUNDLE_EXCLUDED_ACTIONS.includes(action)) return false;
   const dot = action.indexOf(".");
