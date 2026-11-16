@@ -363,30 +363,32 @@ export interface GuardrailStore {
     kind?: string;
     workspaceId?: string;
   }): Promise<number>;
-  /** The shipped guardrails somebody switched, with who did it last. A missing one is on. */
+  /** The shipped guardrails somebody switched, with who did it last. A missing one is as shipped. */
   listShippedGuardrailSwitches(input: {
     clientInstanceId: ClientInstanceId;
   }): Promise<ShippedGuardrailSwitch[]>;
   /**
    * Switches one shipped guardrail on or off, or sets whether it asks on every publish, in one
    * statement: a field left out keeps what it was, so two admins switching the two fields at
-   * once lose neither. A guardrail nobody switched before is on and asks only when widening.
+   * once lose neither. A guardrail nobody switched before is as shipped (`onByDefault`) and asks
+   * only when widening.
    */
   switchShippedGuardrail(
     input: { clientInstanceId: ClientInstanceId } & Omit<
       ShippedGuardrailSwitch,
       "enabled" | "alwaysAsk"
     > &
-      Partial<Pick<ShippedGuardrailSwitch, "enabled" | "alwaysAsk">>
+      Partial<Pick<ShippedGuardrailSwitch, "enabled" | "alwaysAsk">> &
+      Pick<ShippedGuardrail, "onByDefault">
   ): Promise<ShippedGuardrailSwitch>;
   /** Deletes the hits older than the audit retention. Answers how many it deleted. */
   deleteHitsOlderThan(input: { clientInstanceId: ClientInstanceId; days: number }): Promise<number>;
 }
 
 /**
- * A guardrail the release ships beside the operator's floor. It is on on every instance until a
- * holder of `guardrail.publish` at instance scope switches it off, and a release never switches
- * it back on. Its content is the release's and is not edited. Unlike a guardrail a person
+ * A guardrail the release ships beside the operator's floor. It is on or off as the release ships
+ * it (`onByDefault`) until a holder of `guardrail.publish` at instance scope switches it, and a
+ * release never switches it for them. Its content is the release's and is not edited. Unlike a guardrail a person
  * writes, it may be bound to several events, and it has no check: it answers its outcome at
  * every event it is bound to. Spec: events-workflows-and-guardrails.md, Publishing needs a
  * person's click.
@@ -397,6 +399,8 @@ export interface ShippedGuardrail {
   /** What a person it stops or holds is told. */
   reason: string;
   on: readonly GuardrailEvent[];
+  /** Whether it is on where nobody switched it. */
+  onByDefault: boolean;
   /**
    * The events of `on` where it answers only for an asset a workspace owns, which the event's
    * subject names (`GuardrailSubject.workspaceId`): an instance-owned agent's publish is not
@@ -423,8 +427,9 @@ export interface ShippedGuardrail {
 export const PUBLISH_WIDENS_FIELD = "publish_widens";
 
 /**
- * A publish of an App, a Workflow or a form page, and of an agent a workspace owns, that widens
- * reach waits for an approval, which a holder of the kind's `approve` right gives with their own
+ * Off by default since 2026-11-16: a publish goes live directly (PUB-LIVE-1). Where an instance
+ * admin switched it on, a publish of an App, a Workflow or a form page, and of an agent a
+ * workspace owns, that widens reach waits for an approval, which a holder of the kind's `approve` right gives with their own
  * Publish (GR-PUB-1, WS-PUB-1b, EW-9c). One that widens nothing goes live on its publisher's own
  * click, unless an instance admin set it to ask on every publish (GR-PUB-2). Only an App's and
  * an agent's publish say whether they widen reach; a Workflow's and a form page's always ask.
@@ -440,6 +445,7 @@ export const PUBLISH_APPROVAL_GUARDRAIL = {
     "form_page.before_publish",
     "agent.before_publish"
   ],
+  onByDefault: false,
   workspaceOwnedOnly: ["agent.before_publish"],
   outcome: "require_approval",
   asksOnlyWhenWidening: true
@@ -451,7 +457,15 @@ export function shippedGuardrail(name: string): ShippedGuardrail | undefined {
   return SHIPPED_GUARDRAILS.find((guardrail) => guardrail.name === name);
 }
 
-/** Who switched a shipped guardrail last, and to what. Nobody has: it is on. */
+/** Whether a shipped guardrail is on: as an instance admin switched it last, else as shipped. */
+export function shippedGuardrailOn(
+  guardrail: Pick<ShippedGuardrail, "onByDefault">,
+  switched: Pick<ShippedGuardrailSwitch, "enabled"> | undefined
+): boolean {
+  return switched?.enabled ?? guardrail.onByDefault;
+}
+
+/** Who switched a shipped guardrail last, and to what. Nobody has: it is as shipped. */
 export interface ShippedGuardrailSwitch {
   name: string;
   enabled: boolean;

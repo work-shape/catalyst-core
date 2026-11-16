@@ -48,6 +48,14 @@ describe("publishing needs an instance admin's approval", () => {
         operations: { events: guardedEvents(stores, {}, { shipped: true }).events }
       })
     });
+    // The release ships it off (PUB-LIVE-1); this instance's admin switched it on.
+    expectStatus(
+      await t.call(t.admin.id, "guardrails.switch_shipped", {
+        params: { name: PUBLISH_APPROVAL_GUARDRAIL.name },
+        payload: { enabled: true }
+      }),
+      200
+    );
     // Kai may write and publish the workspace's Apps, and may not approve a publish. No
     // operation grants App rights yet (RIGHTS-1c), so the rows are written as a role would.
     for (const action of ["app.read", "app.write", "app.publish"]) {
@@ -349,9 +357,14 @@ describe("publishing needs an instance admin's approval", () => {
     const listed = shippedSchema.parse(
       (await t.expectOk(t.admin.id, "guardrails.list_shipped")).json()
     );
-    // On as the release ships it, on an instance where nobody switched it.
+    // On, as this instance's admin switched it.
     expect(listed.items).toEqual([
-      { name: PUBLISH_APPROVAL_GUARDRAIL.name, enabled: true, canSwitch: true }
+      {
+        name: PUBLISH_APPROVAL_GUARDRAIL.name,
+        enabled: true,
+        switchedBy: { id: t.admin.id, label: t.admin.displayLabel },
+        canSwitch: true
+      }
     ]);
     const refused = await switchTo(t.kai.id, false);
     expectStatus(refused, 403);
@@ -410,7 +423,7 @@ describe("publishing a Workflow under the shipped guardrail", () => {
       },
       {
         definitions: "assets",
-        events: (stores) => guardedEvents(stores, {}, { shipped: true }).events
+        events: (stores) => guardedEvents(stores, {}, { shipped: "publish-approval-on" }).events
       }
     );
   /**

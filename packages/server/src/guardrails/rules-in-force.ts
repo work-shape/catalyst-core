@@ -5,6 +5,7 @@ import {
   GUARDRAIL_ASSET_KIND,
   NOTICE_RECIPIENTS_MAX,
   SHIPPED_GUARDRAILS,
+  shippedGuardrailOn,
   asUserId,
   authenticatedUserFromRecord,
   isSuperadmin,
@@ -201,7 +202,7 @@ async function listRules(options: Options, viewer: AuthenticatedUser): Promise<R
         outcome: guardrail.outcome,
         origin: "shipped",
         scope: { kind: "instance" },
-        enabled: switched?.enabled ?? true,
+        enabled: shippedGuardrailOn(guardrail, switched),
         ...(guardrail.asksOnlyWhenWidening ? { alwaysAsk: switched?.alwaysAsk ?? false } : {}),
         ...(switched ? { changedAt: switched.switchedAt } : {}),
         askable: true

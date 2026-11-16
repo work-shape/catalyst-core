@@ -62,6 +62,11 @@ export const approvals = defineTranslations({
     approvalRevisionMessageTargetNewResource: "New reference: {name}",
     approvalRevisionMessageTargetResource: "Affected: reference {name}",
     approvalRevisionMessageTargetRoot: "Affected: the skill's instructions",
+    approvalSkillNotLive:
+      "Not live yet: the skill stays as it is until a person who may approve the change accepts it.",
+    approvalSkillNotLiveWaits:
+      "Not live yet: the skill stays as it is until {names} accepts the change.",
+    approvalSkillNotLiveYours: "Not live yet: accept it here and the skill changes at once.",
     approvalRevisionStartFailed:
       "The rework could not be started. Your message is in the input field; send it to start.",
     approvalStatusApproved: "Accepted",
@@ -161,6 +166,12 @@ export const approvals = defineTranslations({
     approvalRevisionMessageTargetNewResource: "Neue Referenz: {name}",
     approvalRevisionMessageTargetResource: "Betrifft: Referenz {name}",
     approvalRevisionMessageTargetRoot: "Betrifft: Anweisungen des Skills",
+    approvalSkillNotLive:
+      "Noch nicht aktiv: Der Skill bleibt, wie er ist, bis eine Person mit Freigaberecht die Änderung übernimmt.",
+    approvalSkillNotLiveWaits:
+      "Noch nicht aktiv: Der Skill bleibt, wie er ist, bis {names} die Änderung übernimmt.",
+    approvalSkillNotLiveYours:
+      "Noch nicht aktiv: Übernimm sie hier, dann ändert sich der Skill sofort.",
     approvalRevisionStartFailed:
       "Die Überarbeitung konnte nicht gestartet werden. Deine Nachricht steht im Eingabefeld; sende sie, um zu starten.",
     approvalStatusApproved: "Übernommen",

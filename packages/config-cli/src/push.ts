@@ -12,12 +12,7 @@ import {
   type InstanceBaseline,
   type WorkingCopyBundle
 } from "./working-copy";
-import {
-  OVERTAKEN_LINE,
-  agentPublishRefusalHint,
-  askBeforePublish,
-  waitingPublishLine
-} from "./publish-question";
+import { OVERTAKEN_LINE, agentPublishRefusalHint, waitingPublishLine } from "./publish-question";
 import { preflightGuardrails } from "./push-guardrail-preflight";
 import { CANONICAL_FORM_VERSION } from "./serialization";
 import {
@@ -547,11 +542,10 @@ interface PushedDraft {
 }
 
 /**
- * `push --publish`: publishes each draft the push wrote, by the draft revision it was given.
- * An instance's own agent is published without a question, unless a guardrail on
- * `agent.before_publish` holds it for an approval. A workspace's agent asks first, as an App
- * does, and without a terminal is not published. A service principal publishes nothing
- * (AP-10). Each publish is recorded as the agent's new live revision when it is answered.
+ * `push --publish`: publishes each draft the push wrote, by the draft revision it was given,
+ * without a question: the push is its person's own publish, live at once unless a guardrail on
+ * `agent.before_publish` holds it for an approval (PUB-LIVE-1). A service principal publishes
+ * nothing (AP-10). Each publish is recorded as the agent's new live revision when it is answered.
  * Answers 0 when all were published, 3 when one waits for an approval, 1 otherwise.
  */
 async function publishDrafts(
@@ -585,20 +579,6 @@ async function publishDrafts(
     }
   };
   for (const [index, draft] of drafts.entries()) {
-    if (input.workspaceId !== undefined && draft.kind === "agent") {
-      // A workspace's agent keeps the question and the approval of its publish (WS-PUB-1b).
-      const answer = await askBeforePublish(options, {
-        kind: "agent",
-        command: "agent",
-        name: draft.name,
-        revision: draft.draftRevision,
-        yes: false
-      });
-      if (answer !== "answered") {
-        unpublished(index);
-        return 1;
-      }
-    }
     let outcome;
     try {
       outcome = await api.change(

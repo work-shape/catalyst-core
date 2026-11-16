@@ -108,26 +108,15 @@ describe(
           payload: { revision },
           headers: asMember
         });
-      /** Publishes as the member; the live publish waits for an approver, who approves it. */
+      /** Publishes as the member; it goes live directly (PUB-LIVE-1). */
       async function publishLive(revision: number) {
-        const asked = await publish(revision);
-        expect(asked.statusCode, asked.body).toBe(202);
-        const { approvalRequestId } = z
-          .object({ approvalRequestId: z.string() })
-          .parse(asked.json());
-        const decided = await w.instance.api.call("approval_requests.decide", {
-          params: { requestId: approvalRequestId },
-          payload: { decision: "approve" }
+        const published = await publish(revision);
+        expect(published.statusCode, published.body).toBe(200);
+        const asset = await w.instance.stores.configAssets.getConfigAsset({
+          clientInstanceId,
+          ...address
         });
-        expect(decided.statusCode, decided.body).toBe(200);
-        await eventually(async () => {
-          await getTestJobs(w.instance.api).runDue();
-          const asset = await w.instance.stores.configAssets.getConfigAsset({
-            clientInstanceId,
-            ...address
-          });
-          expect(asset?.publishedRevision).toBe(revision);
-        }, 60_000);
+        expect(asset?.publishedRevision).toBe(revision);
       }
       async function account() {
         const asset = required(

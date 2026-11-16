@@ -51,6 +51,7 @@ export function createPostgresGuardrailsStore(db: PostgresConnection): Guardrail
       name,
       enabled,
       alwaysAsk,
+      onByDefault,
       switchedBy,
       switchedAt
     }) {
@@ -67,7 +68,7 @@ export function createPostgresGuardrailsStore(db: PostgresConnection): Guardrail
         .values({
           clientInstanceId,
           guardrailName: name,
-          enabled: true,
+          enabled: onByDefault,
           alwaysAsk: false,
           ...switched
         })

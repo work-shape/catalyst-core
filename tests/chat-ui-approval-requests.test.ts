@@ -105,6 +105,23 @@ describe("compact approval request card in the thread", () => {
     expect(markup).not.toContain("Angefragt von");
   });
 
+  // SKILL-ACCEPT-1: a waiting skill change says in its conversation that it is not live yet.
+  it("says a waiting skill change is not live yet, and who makes it live", () => {
+    expect(renderCompact({}, { locale: "en" })).toContain(
+      "Not live yet: the skill stays as it is until a person who may approve the change accepts it."
+    );
+    expect(
+      renderCompact(
+        { preview: { ...skillChangePreview, approverNames: ["Dana"] } },
+        { locale: "en" }
+      )
+    ).toContain("Not live yet: the skill stays as it is until Dana accepts the change.");
+    expect(renderCompact({ canDecide: true }, { locale: "en" })).toContain(
+      "Not live yet: accept it here and the skill changes at once."
+    );
+    expect(renderCompact({ status: "approved" })).not.toContain("approval-request-not-live");
+  });
+
   it("offers a requester without the permission only withdraw and details", () => {
     const markup = renderCompact({ canWithdraw: true });
 

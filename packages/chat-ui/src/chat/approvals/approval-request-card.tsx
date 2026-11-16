@@ -13,6 +13,7 @@ import {
 } from "@work-shape/catalyst-ui";
 import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
 import { useTranslation } from "../../shared/i18n";
+import { approverNamesOf } from "../../studio/build-area/build-refusals";
 import { useInboxItemActions, type InboxItemActions } from "../inbox/inbox-item-actions";
 import { useInboxItemKindLookup } from "../inbox/inbox-item-kinds";
 import { inboxItemSurface } from "../inbox/inbox-item-surface";
@@ -123,6 +124,9 @@ export function ApprovalRequestCardView({
         {state.onRefresh ? <ApprovalRefreshButton onRefresh={state.onRefresh} /> : null}
         {hasActions ? null : detailsButton}
       </div>
+      {request.status === "pending" && request.kind === "skill_change" ? (
+        <SkillChangeNotLive request={request} />
+      ) : null}
       {hasActions ? (
         <ApprovalRequestActions
           // A refetched request in another status starts with a clean form.
@@ -133,6 +137,25 @@ export function ApprovalRequestCardView({
         />
       ) : null}
     </Card>
+  );
+}
+
+/**
+ * Under a skill change that waits, in the conversation it came from: it is not live yet, and
+ * who makes it live. Its requester who may make the skill live accepts it here (SKILL-ACCEPT-1,
+ * 2026-11-16); anyone else reads who decides it.
+ */
+function SkillChangeNotLive({ request }: { request: ApprovalRequestView }) {
+  const { t } = useTranslation();
+  const names = approverNamesOf(request.preview);
+  return (
+    <p className="text-caption text-muted-foreground" data-testid="approval-request-not-live">
+      {request.canDecide
+        ? t("approvalSkillNotLiveYours")
+        : names.length > 0
+          ? t("approvalSkillNotLiveWaits", { names: names.join(", ") })
+          : t("approvalSkillNotLive")}
+    </p>
   );
 }
 

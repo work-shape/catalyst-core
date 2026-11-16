@@ -1,7 +1,9 @@
 import { vi } from "vitest";
 import {
+  PUBLISH_APPROVAL_GUARDRAIL,
   StoreBackedAuditRecorder,
   type ClientInstanceId,
+  type GuardrailStore,
   type GuardrailEvent,
   type PlatformEventEmitter
 } from "@work-shape/catalyst-core";
@@ -79,14 +81,40 @@ function completion(text: string): ModelCompletion {
 }
 
 /**
+ * The shipped guardrails as switched, with "Publishing needs an instance admin's approval" on
+ * where nobody switched it: an instance whose admin switched it on.
+ */
+function publishApprovalOn(
+  store: Pick<GuardrailStore, "listShippedGuardrailSwitches">
+): Pick<GuardrailStore, "listShippedGuardrailSwitches"> {
+  return {
+    async listShippedGuardrailSwitches(input) {
+      const switches = await store.listShippedGuardrailSwitches(input);
+      if (switches.some((entry) => entry.name === PUBLISH_APPROVAL_GUARDRAIL.name)) return switches;
+      return [
+        ...switches,
+        {
+          name: PUBLISH_APPROVAL_GUARDRAIL.name,
+          enabled: true,
+          alwaysAsk: false,
+          switchedBy: { id: "admin", label: "Admin" },
+          switchedAt: "2026-11-16T00:00:00.000Z"
+        }
+      ];
+    }
+  };
+}
+
+/**
  * The guardrails of these release entries, with a judge that answers `violates`. `shipped`
- * runs the guardrails the release ships too, as an assembled instance does.
+ * runs the guardrails the release ships too, as an assembled instance does; `"publish-approval-on"`
+ * also has the publish guardrail on, which the release ships off (PUB-LIVE-1).
  */
 export function runnerOf(
   stores: TestStore,
   clientInstanceId: ClientInstanceId,
   guardrails: Record<string, unknown>,
-  options: { shipped?: true } = {}
+  options: { shipped?: true | "publish-approval-on" } = {}
 ) {
   const config = configWith(guardrails);
   const complete = vi
@@ -98,7 +126,14 @@ export function runnerOf(
     hits: stores.guardrails,
     // The published guardrails written as assets run beside the floor, as on an instance.
     assets: stores.configAssets,
-    ...(options.shipped ? { shipped: stores.guardrails } : {}),
+    ...(options.shipped
+      ? {
+          shipped:
+            options.shipped === "publish-approval-on"
+              ? publishApprovalOn(stores.guardrails)
+              : stores.guardrails
+        }
+      : {}),
     modelGateway: createScriptedInstanceModelGateway({
       config,
       modelProvider: { complete },
@@ -116,7 +151,7 @@ export function runnerOf(
 export function guardedEvents(
   stores: TestStore,
   guardrails: Record<string, unknown>,
-  options: { shipped?: true } = {}
+  options: { shipped?: true | "publish-approval-on" } = {}
 ) {
   const { runner, complete } = runnerOf(stores, accessInstanceId, guardrails, options);
   const events: PlatformEventEmitter = createAuditingEventEmitter(

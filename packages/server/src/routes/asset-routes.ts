@@ -237,9 +237,9 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     // that hands a source's data on for a holder of `connection.write` on the source as well.
     approval: async (input, actor) =>
       publishHandover.approval(input, actor, await together.approval(input)),
-    // An instance-owned agent's publish is made live without a terminal; a workspace's agent
-    // keeps the question, so `--yes` waits as the person's confirmation (WS-PUB-1b). A skill's
-    // draft is published without a question, as a save with the publish right is.
+    // An agent's publish in a conversation asks its person, except an instance-owned agent's;
+    // a person's own publish never waits (PUB-LIVE-1). A skill's draft is published as a save
+    // with the publish right is.
     // A publish that hands a source's data on unconfirmed waits for an approval, whatever kind.
     policyFloorOf: (origin, input, actor) =>
       publishHandover.policyFloor(

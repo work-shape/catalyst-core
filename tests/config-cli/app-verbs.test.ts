@@ -113,8 +113,9 @@ describe("catalyst asset commands against an instance", () => {
       });
       expect(await t.listed("offers")).not.toHaveProperty("publishedRevision");
 
-      // An App is published on a person's answer to the question, and on nothing else.
-      const unasked = await run(
+      // A person's publish goes live directly: the CLI asks nothing (PUB-LIVE-1).
+      const asking = cliAs(t.instance, t.admin.id, cwd, []);
+      const published = await asking.run(
         "app",
         "publish",
         "offers",
@@ -124,48 +125,7 @@ describe("catalyst asset commands against an instance", () => {
         "1",
         ...workspace
       );
-      expect(unasked.code).toBe(1);
-      expect(unasked.err).toContain("add --yes to confirm it in your Inbox");
-      const scripted = await cliAs(t.instance, t.admin.id, cwd, ["y"], true).run(
-        "app",
-        "publish",
-        "offers",
-        "--audience",
-        "workspace",
-        "--revision",
-        "1",
-        "--yes",
-        ...workspace
-      );
-      // `--yes` publishes nothing by itself: the publish waits in the caller's own Inbox.
-      expect(scripted.code).toBe(3);
-      expect(scripted.err).toContain("Waits in your Inbox for your confirmation");
-      const declining = cliAs(t.instance, t.admin.id, cwd, ["n"]);
-      const declined = await declining.run(
-        "app",
-        "publish",
-        "offers",
-        "--audience",
-        "workspace",
-        "--revision",
-        "1",
-        ...workspace
-      );
-      expect(declined).toMatchObject({ code: 1, err: "Nothing was published.\n" });
-      expect(declining.asked).toEqual([
-        "Publish revision 1 of app 'offers'? If approval is required, this files a request in the Inbox. [y/N; d=Details] "
-      ]);
-      expect(await t.listed("offers")).not.toHaveProperty("publishedRevision");
-      const published = await cliAs(t.instance, t.admin.id, cwd, ["y"]).run(
-        "app",
-        "publish",
-        "offers",
-        "--audience",
-        "workspace",
-        "--revision",
-        "1",
-        ...workspace
-      );
+      expect(asking.asked).toEqual([]);
       expect(published, published.err).toMatchObject({ code: 0 });
       expect(published.out).toContain("Published revision 1 of App 'offers'.\n");
       expect(await t.listed("offers")).toMatchObject({ publishedRevision: 1 });
@@ -176,7 +136,7 @@ describe("catalyst asset commands against an instance", () => {
     }
   });
 
-  it("an admin key's interactive CLI publish waits with its request id and Inbox instructions", async () => {
+  it("an admin key's CLI publish under the switched-on guardrail waits with its request id and Inbox instructions", async () => {
     const t = await setupAppInstance({
       modules: { personalApiKeys: { enabled: true } },
       server(stores) {
@@ -192,7 +152,9 @@ describe("catalyst asset commands against an instance", () => {
             recordAuthAdapter()
           ]),
           serviceAccessToken: { exchange: new ApiKeyAccessTokenExchange(keys) },
-          operations: { events: guardedEvents(stores, {}, { shipped: true }).events }
+          operations: {
+            events: guardedEvents(stores, {}, { shipped: "publish-approval-on" }).events
+          }
         };
       }
     });
@@ -249,7 +211,7 @@ describe("catalyst asset commands against an instance", () => {
         }
       );
       expect(code, err.join("")).toBe(3);
-      expect(questions).toHaveLength(1);
+      expect(questions).toEqual([]);
       const [request] = await t.stores.approvals.listApprovalRequests({
         clientInstanceId: accessInstanceId,
         kinds: ["app_publish"],
@@ -272,13 +234,13 @@ describe("catalyst asset commands against an instance", () => {
     }
   });
 
-  // GR-PUB-1, check 66: a member who may publish and not approve answers the question, and the
-  // CLI ends with the request an approver decides. Nothing is live until then.
+  // GR-PUB-1, check 66: where an instance admin switched the publish guardrail on, a member who
+  // may publish and not approve ends with the request an approver decides. Nothing is live until then.
   it("ends a member's publish of an App with the request an approver decides", async () => {
     const t = await setupAppInstance({
       explicitCredentials: true,
       server: (stores) => ({
-        operations: { events: guardedEvents(stores, {}, { shipped: true }).events }
+        operations: { events: guardedEvents(stores, {}, { shipped: "publish-approval-on" }).events }
       })
     });
     try {

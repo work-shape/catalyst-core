@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { asClientInstanceId } from "@work-shape/catalyst-core";
+import { PUBLISH_APPROVAL_GUARDRAIL, asClientInstanceId } from "@work-shape/catalyst-core";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, getTestJobs } from "./support/test-instance";
 
@@ -49,6 +49,15 @@ it("includes workflow.yaml on first publish, compares it with live, and leaves a
         grantedBy: root.id
       });
     }
+    // The release ships the publish guardrail off (PUB-LIVE-1); this instance switched it on.
+    await t.stores.guardrails.switchShippedGuardrail({
+      clientInstanceId,
+      name: PUBLISH_APPROVAL_GUARDRAIL.name,
+      enabled: true,
+      onByDefault: PUBLISH_APPROVAL_GUARDRAIL.onByDefault,
+      switchedBy: { id: root.id, label: root.displayLabel },
+      switchedAt: new Date().toISOString()
+    });
     const principal = await t.call("service_principals.create", {
       payload: { name: "review-runner", displayLabel: "Review runner" }
     });

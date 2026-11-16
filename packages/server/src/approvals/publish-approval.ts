@@ -180,11 +180,12 @@ export function publishApproval(
 }
 
 /**
- * The refusal of a publish that is no person's click, for a kind whose publish an approver's
- * click makes live: a revision of it goes live only on the interface's Publish, the answer to
- * the CLI's question, or the person's Allow of an unattended CLI publish in their Inbox (see
- * `publishPolicyFloor`). An agent's App or Workflow publish pauses for that person's confirmation
- * (and an App's audience choice). Other agent publishes and MCP publishes are refused. Nothing for a person's own call.
+ * The refusal of a publish that is no person's own call, for a kind whose publish an approver's
+ * click makes live: a revision of it goes live on the interface's Publish or the CLI's publish,
+ * which is its person's own (PUB-LIVE-1), or on the person's Allow of an unattended call in
+ * their Inbox (see `publishPolicyFloor`). An agent's App or Workflow publish pauses for that
+ * person's confirmation (and an App's audience choice). Other agent publishes and MCP publishes
+ * are refused. Nothing for a person's own call.
  */
 export function publishFromAPerson(
   target: AssetTarget,
@@ -203,14 +204,15 @@ export function publishFromAPerson(
     allowed: false,
     ...(publish === undefined ? {} : { action: publish }),
     reason: "user_only",
-    message: `Publishing a ${target.kind.kind} needs a person's click: publish it in the interface, or answer the question of 'catalyst ${target.kind.kind} publish' in a terminal.`
+    message: `Publishing a ${target.kind.kind} needs a person's click: publish it in the interface, or with 'catalyst ${target.kind.kind} publish'.`
   };
 }
 
 /**
- * The floor of a publish that is not its caller's own confirmation, such as `catalyst <kind>
- * publish --yes`: at least `confirm`, whatever a central setting says, so the person confirms
- * it in their Inbox (Confirmation in the Inbox). Nothing for a call that is its own.
+ * The floor of a publish that is not its caller's own confirmation, such as an agent's in a
+ * conversation: at least `confirm`, whatever a central setting says, so the person it acts for
+ * confirms it. Nothing for a call that is its own: a person's publish from the interface, the
+ * CLI or their key is live at once (PUB-LIVE-1).
  */
 export function publishPolicyFloor(origin: OperationOrigin): PolicyValue | undefined {
   return callerCanConfirm(origin) ? undefined : "confirm";
