@@ -67,7 +67,32 @@ export function formatStructuredDataValue(
   if (typeof value === "boolean") {
     return locale === "de" ? (value ? "Ja" : "Nein") : value ? "Yes" : "No";
   }
-  return value;
+  return formatIsoDate(value, locale) ?? value;
+}
+
+/** A string that is exactly a valid calendar date (`YYYY-MM-DD`), in the locale's date form. */
+function formatIsoDate(value: string, locale: LocaleCode): string | undefined {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
+  if (!match) {
+    return undefined;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return undefined;
+  }
+  return new Intl.DateTimeFormat(locale, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "UTC"
+  }).format(date);
 }
 
 export function structuredDataToTsv(
