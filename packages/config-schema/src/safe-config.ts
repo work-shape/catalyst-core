@@ -96,7 +96,8 @@ export function createSafeConfigView(
     },
     retention: config.retention,
     usage: {
-      safeguards: config.usage.safeguards
+      safeguards: config.usage.safeguards,
+      showConversationCost: config.usage.showConversationCost
     },
     views: {
       allowedScriptSrc: config.views.allowedScriptSrc

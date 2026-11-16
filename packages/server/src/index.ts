@@ -53,6 +53,7 @@ export { ProjectFileService } from "./projects/project-files";
 export { ProjectSetupService } from "./projects/project-setup";
 import { registerPlatformReportRoutes } from "./platform-report/platform-report-routes";
 import { registerUsageLimitRoutes } from "./usage/usage-limits-routes";
+import { registerConversationCostRoute } from "./usage/conversation-cost-route";
 import { registerUsageReportRoutes } from "./usage/usage-report-routes";
 import { registerWorkflowPrincipalRightsRoutes } from "./workflows/workflow-principal-rights";
 import { registerAccessRoutes } from "./routes/access-routes";
@@ -323,6 +324,7 @@ export async function createChatServer(
   registerProjectRoutes(route, options);
   registerPlatformReportRoutes(route, options);
   registerUsageLimitRoutes(route, options);
+  registerConversationCostRoute(route, options);
   registerPolicyRoutes(route, options);
   registerUsageReportRoutes(route, options);
   registerSuperadminRoutes(route, options);

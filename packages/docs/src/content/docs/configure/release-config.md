@@ -115,6 +115,8 @@ The conversation Resources panel appears only after a user enters a persisted Co
 
 Daily and monthly spend limits use `usage.costs.customer.currency`. Set it to the invoice currency and express every configured model and web-search price in that same currency.
 
+`usage.showConversationCost: true` adds one line to the hover card of the context indicator in the composer: what the conversation has cost so far, its subagents and its title included, in `usage.costs.customer.currency`. In a private chat a person sees the cost of their own calls. In a team chat or a chat shared with named people, a person sees their own share, and a holder of `usage.view` the whole chat's cost. The default is `false`: no line, and the API answers as for a conversation that does not exist.
+
 `costSafetyMultiplier` is a private enforcement buffer. Budget checks multiply the persisted customer billable total by this value, while stored usage records and customer-facing billable costs remain unchanged. It defaults to `1`.
 
 The customer rate card uses exact `providerId` and `model` rows and prices uncached and cached input separately. Its `version` must change when any rate changes. Usage Governance persists the applied rates and billable amount with every new usage event, so changing the active card affects only future usage.

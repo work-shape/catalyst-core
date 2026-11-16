@@ -57,6 +57,7 @@ export function AssistantComposer({
   selectedReasoningEffort,
   showContextIndicator,
   contextSnapshot,
+  costConversationId,
   focusRequestId,
   onCancelRun,
   onSelectModelBinding,
@@ -91,6 +92,8 @@ export function AssistantComposer({
         compactThresholdTokens: number;
       }
     | undefined;
+  /** The conversation whose cost so far the context indicator shows, where the instance shows it. */
+  costConversationId?: string | undefined;
   focusRequestId: number;
   onCancelRun: () => void;
   onSelectModelBinding: (modelBindingId: string) => void;
@@ -494,6 +497,7 @@ export function AssistantComposer({
                 <ContextIndicator
                   inputTokens={contextSnapshot.inputTokens}
                   compactThresholdTokens={contextSnapshot.compactThresholdTokens}
+                  costConversationId={costConversationId}
                 />
               </div>
             ) : null}

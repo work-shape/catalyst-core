@@ -77,6 +77,7 @@ export function AssistantThread({
   selectedReasoningEffort,
   showContextIndicator,
   contextSnapshot,
+  costConversationId,
   notice,
   noticeReport,
   noticeContinue,
@@ -135,6 +136,8 @@ export function AssistantThread({
         compactThresholdTokens: number;
       }
     | undefined;
+  /** The conversation whose cost so far the context indicator shows, where the instance shows it. */
+  costConversationId?: string | undefined;
   notice: string | undefined;
   /** Where the notice is a run's platform failure: the run, to report it to the operator. */
   noticeReport?: { runId: string; failure: PlatformFailure };
@@ -458,6 +461,7 @@ export function AssistantThread({
                     selectedReasoningEffort={selectedReasoningEffort}
                     showContextIndicator={showContextIndicator}
                     contextSnapshot={contextSnapshot}
+                    costConversationId={costConversationId}
                     focusRequestId={composerFocusRequestId}
                     onCancelRun={onCancelRun}
                     onSelectModelBinding={onSelectModelBinding}

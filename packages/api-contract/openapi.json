@@ -10999,6 +10999,72 @@
         "x-catalyst-rate-class": "write"
       }
     },
+    "/api/v1/conversations/{conversationId}/cost": {
+      "get": {
+        "operationId": "conversations.cost.get",
+        "summary": "Read the settled cost of a conversation so far: the caller's own calls, or the whole chat for a holder of usage.view in a chat more people read",
+        "tags": [
+          "Conversations"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "conversation:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "conversation:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationCost"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/conversations/{conversationId}/data-stores": {
       "post": {
         "operationId": "conversations.data_stores.add",
@@ -53337,6 +53403,36 @@
           "people"
         ]
       },
+      "ConversationCost": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "own",
+              "conversation"
+            ]
+          },
+          "shared": {
+            "type": "boolean"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "costMicros": {
+            "type": "number"
+          },
+          "complete": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "scope",
+          "shared",
+          "costMicros",
+          "complete"
+        ]
+      },
       "ConversationCreationTarget": {
         "type": "string",
         "const": "instance"
@@ -61118,6 +61214,9 @@
             "properties": {
               "safeguards": {
                 "$ref": "#/components/schemas/UsageSafeguards"
+              },
+              "showConversationCost": {
+                "type": "boolean"
               }
             },
             "required": [

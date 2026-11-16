@@ -1,12 +1,16 @@
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
+import { ConversationCostLine } from "./conversation-cost";
 
 export function ContextIndicator({
   inputTokens,
-  compactThresholdTokens
+  compactThresholdTokens,
+  costConversationId
 }: {
   inputTokens: number;
   compactThresholdTokens: number;
+  /** Where the instance shows a conversation's cost: the conversation (LU-7). */
+  costConversationId?: string | undefined;
 }) {
   const { t } = useTranslation();
   const exactPercentage =
@@ -70,6 +74,7 @@ export function ContextIndicator({
           {t("contextPercentFull", { percent: percentage })}
         </div>
         <div className="mt-0.5 text-muted-foreground">{detail}</div>
+        {costConversationId ? <ConversationCostLine conversationId={costConversationId} /> : null}
       </HoverCardContent>
     </HoverCard>
   );

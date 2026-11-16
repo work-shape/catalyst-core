@@ -533,6 +533,9 @@ function AssistantRuntimePane({
                 selectedReasoningEffort={selectedReasoningEffort}
                 showContextIndicator={showContextIndicator}
                 contextSnapshot={contextSnapshot}
+                costConversationId={
+                  config?.usage.showConversationCost ? selectedConversationId : undefined
+                }
                 notice={visibleNotice}
                 noticeReport={visibleNotice === notice ? noticeReport : undefined}
                 noticeContinue={visibleNotice === notice ? noticeContinue : undefined}
