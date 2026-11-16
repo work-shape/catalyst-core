@@ -235,9 +235,13 @@ describe("the use level of a personal key", () => {
     );
     const offered = context.workspaces.find((workspace) => workspace.id === team.id);
     expect(offered?.useActions).toEqual(["workflow.use"]);
-    // Builder and Publisher carry no delete, so the instance offers none.
-    expect(offered?.actions.some((action) => action.endsWith(".delete"))).toBe(false);
-    expect(context.authoringActions.some((action) => action.endsWith(".delete"))).toBe(false);
+    // Of all deletes, Publisher carries only the workspace's skills' (SKILL-DEL-1).
+    expect(offered?.actions.filter((action) => action.endsWith(".delete"))).toEqual([
+      "skill.delete"
+    ]);
+    expect(context.authoringActions.filter((action) => action.endsWith(".delete"))).toEqual([
+      "skill.delete"
+    ]);
     // Over everywhere and limited to the workspace, the key with every offered right is issued.
     const everywhere = await issuePersonalKey(
       t,
