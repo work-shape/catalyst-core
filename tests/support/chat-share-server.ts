@@ -39,6 +39,8 @@ async function createShareInstance(): Promise<TestInstance<TestStore>> {
   // Projects for the guard; apps so their routes answer past the module switch.
   config.modules.projects = { enabled: true };
   config.modules.apps = { enabled: true };
+  // The cost line, so that its read answers past the switch for a named member.
+  config.usage.showConversationCost = true;
   return createTestInstanceWith((stores) => ({
     config,
     auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: stores.audit }),
@@ -253,6 +255,7 @@ export function readingRoutes(runId: string): Record<string, TestCallInput> {
   return {
     "conversations.share_candidates": {},
     "conversations.reader_offer.get": {},
+    "conversations.cost.get": {},
     "conversations.thread.get": {},
     "conversations.messages.list": {},
     "conversations.resources.list": {},

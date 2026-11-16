@@ -1,4 +1,5 @@
 conversations.add_person  POST /api/v1/conversations/:conversationId/people
+conversations.cost.get  GET /api/v1/conversations/:conversationId/cost
 conversations.create  POST /api/v1/conversations
 conversations.data_stores.add  POST /api/v1/conversations/:conversationId/data-stores
 conversations.delete  DELETE /api/v1/conversations/:conversationId
