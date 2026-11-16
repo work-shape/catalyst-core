@@ -7,6 +7,62 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.38 — 2026-11-16
+
+### Added
+
+- **Subagents:** `run_agent` takes a `model`. A subagent runs on a model the person may pick on
+  its agent, narrowed by the model list of the workspace that owns that agent; any other model
+  answers `model_not_available`. Without `model` it runs on the parent's model and effort, and
+  its usage records the model it ran on. The tool's agents and models are now generated for
+  each run from the live config and the person's rights, as lists the model picks from, in a
+  stable order so the prompt cache holds; the server still checks every call. An agent's
+  `subagentNames: "*"` makes every agent the person may use a subagent of it, and counts as a
+  widening in the publish review. The card of a subagent and its row in the Resources panel
+  name its agent by display name and its model by label ("Alpha · Small 5.5 · 8 s").
+
+### Changed
+
+- **Connections:** the Connections page in Studio is now the catalogue. **Services** ("Dienste")
+  at the top shows one card per prepared service the reader can act on, including the ones each
+  person adds as their own server, with where it stands: **Set up** ("Eingerichtet") opens the
+  Connection made from it, **You're connected** ("Du bist verbunden") opens where the reader
+  manages their own account, and **Set up now** ("Einrichten") starts the same setup the New
+  connection dialog ran before. The list follows as **Your connections** ("Deine Verbindungen").
+  New connection now opens straight on the own-connection types (MCP server, REST API and the
+  types with a form of their own); the services are no longer shown there.
+- **Chat:** while an agent waits for the subagents it started, the status line under the
+  conversation now says so instead of looking as if the agent were still writing: **Waiting for
+  2 subagents…** ("Ich warte auf 2 Subagenten…"), with an hourglass in place of the spinner and
+  each subagent's description and running time beside it. Once the last subagent ends and the
+  agent goes on, the line returns to its usual working state.
+
+### Fixed
+
+- **Models:** a Claude binding on AWS Bedrock now offers and sends the reasoning efforts `xhigh`
+  and `max`, so the chat's effort picker shows all five levels for Claude Opus, Sonnet and Haiku
+  5.5. A call at `xhigh` or `max` allows 64,000 output tokens, so long thinking no longer cuts
+  the answer off; the other efforts keep 16,000. A binding of an older model that refuses them,
+  such as Claude Sonnet 4.6, lists its efforts in `userSelectableReasoningEfforts`.
+- **Connections:** the page of an MCP Connection waits for its tools only after a discovery was
+  asked for: after a change, after "Read tools again", or while a new Connection's first one is
+  not in. It stops as soon as a failure is written after it asked, instead of showing "Reading
+  the tools of the server." for 90 seconds. Where nobody is signed in whose sign-in reads the
+  tools (the reader on a personal Connection, anybody on a shared one), Discovered tools says so
+  at once and leads to the page's sign-in. `connections.get` answers `recordedAt`, when the
+  instance last wrote the Connection's state.
+- **Subagents:** a named agent started with `run_agent` and no `model` runs on its own default
+  model and effort again, as its builder chose them; only a copy of the agent itself takes the
+  parent's model and effort. The tool's description says which default applies.
+- **Subagents:** a subagent can now work with the files attached to its chat. It is given the
+  chat's list of attached files with its task, as the agent that started it reads them, and
+  `read_document`, `view_document_page`, `document.extract_structured` and
+  `workspace.import_files` find those files from the subagent's thread; before, they answered
+  that the file was not available. A file of another chat is still not found. `run_agent` now
+  tells the agent to name the files a subagent needs in its task and to have each subagent
+  write its files under `/workspace/agents/<a short name for its task>/`, so subagents that run
+  at the same time do not overwrite each other's files.
+
 ## 0.8.0-rc.37 — 2026-11-16
 
 ### Fixed
