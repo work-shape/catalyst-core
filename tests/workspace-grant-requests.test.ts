@@ -264,8 +264,9 @@ describe("Builder and Publisher of a member, asked for and decided", () => {
       userId: nora.id,
       role: "admin"
     });
-    // Publishing every kind a workspace owns here, on the whole instance: Publisher in Sales
-    // gives her nothing more. Writing is not in the role, so Builder still would.
+    // Publishing every kind a workspace owns here, and deleting skills (SKILL-DEL-1), on the whole
+    // instance: Publisher in Sales gives her nothing more. Writing is not in the role, so Builder
+    // still would.
     const role = z.object({ id: z.string() }).parse(
       (
         await t.expectOk(t.admin.id, "roles.create", {
@@ -273,7 +274,8 @@ describe("Builder and Publisher of a member, asked for and decided", () => {
             name: "Editors",
             grants: [
               { action: "agent.publish", scopeKind: "instance" },
-              { action: "skill.publish", scopeKind: "instance" }
+              { action: "skill.publish", scopeKind: "instance" },
+              { action: "skill.delete", scopeKind: "instance" }
             ]
           }
         })
