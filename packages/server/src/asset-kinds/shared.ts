@@ -294,6 +294,10 @@ export interface WorkflowAssetKind
   assertRemovable?(input: {
     name: string;
     assets(kind: string): Promise<readonly ConfigAssetRecord[]>;
+    /** The pending shared draft of each asset that has one, by the asset's id. */
+    drafts(assetIds: readonly string[]): Promise<ReadonlyMap<string, JsonObject>>;
+    /** Whether the caller may read the asset: a refusal names only what it may. */
+    readable(asset: ConfigAssetRecord): boolean;
   }): Promise<void>;
   /**
    * What a delete or an unpublish of this asset answers beside its result: one warning for

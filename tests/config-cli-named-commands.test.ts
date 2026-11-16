@@ -652,6 +652,56 @@ describe("named CLI operation faces", () => {
     });
   });
 
+  it("tells a key issued before its person became Publisher how to get one that deletes a skill (SKILL-DEL-1)", async () => {
+    const message =
+      "The API key of this call does not cover 'skill.delete' here. Its owner holds the right; issue a key whose scopes name it";
+    const result = await run(
+      ["skill", "delete", "guide", "--if-revision", "2", "--workspace", "workspace-1"],
+      {
+        fetchImpl: apiFetch((request) =>
+          new URL(request.url).pathname === apiOperations["platform.context.get"].path
+            ? Response.json({
+                ...platformContext,
+                kinds: [
+                  {
+                    kind: "skill",
+                    plural: "skills",
+                    lifecycle: "draft_published",
+                    representation: "config",
+                    actions: {
+                      read: "skill.read",
+                      write: "skill.write",
+                      delete: "skill.delete",
+                      publish: "skill.publish"
+                    },
+                    owners: ["instance", "workspace"]
+                  }
+                ]
+              })
+            : Response.json(
+                {
+                  error: {
+                    code: "FORBIDDEN",
+                    message,
+                    details: { action: "skill.delete", reason: "outside_key_scope" }
+                  }
+                },
+                { status: 403 }
+              )
+        )
+      }
+    );
+    expect(result).toEqual({
+      code: 1,
+      out: "",
+      err: [
+        `Refused by the instance (HTTP 403 FORBIDDEN): ${message}`,
+        "A key names the rights its person chose when it was issued. 'catalyst login --instance <url>' issues a new key that starts with every right you hold now; at /settings/you/api-keys you can also issue one and tick them yourself.",
+        ""
+      ].join("\n")
+    });
+  });
+
   it("sends the request body of workflow start, data-store insert and the queries from a file or stdin", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "cli-use-input-"));
     directories.push(cwd);

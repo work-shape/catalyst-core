@@ -548,6 +548,27 @@ describe("workspace bundles (WS-BUILD-1)", () => {
     }
   });
 
+  it("lets Publisher delete its workspace's skills and nothing else (SKILL-DEL-1)", () => {
+    const skill: AccessResource = { kind: "skill", assetId: "skill-1", workspaceId: "kai" };
+    expect(decide({ grants: [publisher], action: "skill.delete", resource: skill })).toEqual(
+      allowedByGrant
+    );
+    expect(
+      decide({
+        grants: [publisher],
+        action: "skill.delete",
+        resource: { ...skill, workspaceId: "other" }
+      })
+    ).toEqual(noGrant);
+    expect(decide({ grants: [builder], action: "skill.delete", resource: skill })).toEqual(noGrant);
+    for (const kind of WORKSPACE_OWNED_RIGHT_KINDS.filter((owned) => owned !== "skill")) {
+      const action = `${kind}.delete`;
+      expect(decide({ grants: [publisher], action, resource: inWorkspace }), action).toEqual(
+        noGrant
+      );
+    }
+  });
+
   it("reaches a kind a later release lets a workspace own without a new row (check 35)", () => {
     // No workspace owns a Workflow yet; once one does, its asset carries the workspace.
     const workflow: AccessResource = { kind: "workflow", assetId: "wf-1", workspaceId: "kai" };

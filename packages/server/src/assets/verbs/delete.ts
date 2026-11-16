@@ -7,12 +7,13 @@ import {
   withoutDefinition,
   type AssetSet
 } from "../asset-set";
-import { deleteDecision, type AssetCall } from "../asset-access";
+import { accessResource, deleteDecision, type AssetCall } from "../asset-access";
 import {
   assertDeleteWithinLimits,
   assetKey,
   clearsLastDefault,
   loadStoredAssets,
+  pendingSharedDrafts,
   requireInstanceDefaultChange,
   withPublishedConfigs
 } from "../asset-write-rules";
@@ -65,7 +66,13 @@ export async function deleteAsset(
   const stored = await loadStoredAssets(scope.options);
   await kind.assertRemovable?.({
     name,
-    assets: (other) => withPublishedConfigs(scope.options, stored.assets, other)
+    assets: (other) => withPublishedConfigs(scope.options, stored.assets, other),
+    drafts: (assetIds) => pendingSharedDrafts(scope.options, assetIds),
+    readable: (asset) =>
+      call.access.authorize(
+        `${asset.kind}.read`,
+        accessResource(asset.kind, asset.name, asset.scope, asset.id)
+      ).allowed
   });
   const clearsDefault = clearsLastDefault(stored.set, kind, name);
   requireInstanceDefaultChange(call.access, kind, clearsDefault);
