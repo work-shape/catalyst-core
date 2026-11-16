@@ -1,6 +1,7 @@
 import { sql as drizzleSql, type SQL } from "drizzle-orm";
 import {
   KNOWLEDGE_INGESTION_PURPOSES,
+  PERSON_OWN_PURPOSES,
   USAGE_BREAKDOWN_DIMENSIONS,
   type ModelUsageEventStore,
   type ModelUsageTotals,
@@ -28,13 +29,13 @@ const list = (values: readonly string[]): SQL =>
 /**
  * Where a row of the daily sums came from (limits spec 3.2), from its keys: ingestion of a
  * Knowledge Base, a call the product made for itself, a Workflow, an App, or a conversation. The
- * query of a Knowledge Base search is chat.
+ * query of a Knowledge Base search and a transcription in the composer are chat.
  */
 const ORIGIN = drizzleSql`case
   when purpose in (${list(KNOWLEDGE_INGESTION_PURPOSES)}) then 'knowledge_base'
   when workflow_name <> '' or purpose = 'workflow_step' then 'workflow'
   when app_name <> '' then 'app'
-  when purpose not in ('', 'knowledge_query') then 'system'
+  when purpose not in ('', ${list(PERSON_OWN_PURPOSES)}) then 'system'
   else 'conversation'
 end`;
 

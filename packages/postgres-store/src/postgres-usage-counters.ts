@@ -1,7 +1,7 @@
 import { sql as drizzleSql, type SQL } from "drizzle-orm";
 import {
   KNOWLEDGE_INGESTION_PURPOSES,
-  type ModelSystemPurpose,
+  PERSON_OWN_PURPOSES,
   type ModelUsageCounterLimits,
   type ModelUsageLimits,
   type ModelUsagePeriodLimits,
@@ -26,9 +26,6 @@ import { modelUsageCounters } from "./schema";
  * takes the person off their events.
  */
 export type CounterScope = { kind: "user" | "system"; id: string };
-
-/** The purposes a person's own call carries: the query of a Knowledge Base search is chat. */
-const PERSON_OWN_PURPOSES: readonly ModelSystemPurpose[] = ["knowledge_query"];
 
 // The day and the month of the database clock, in UTC as the windows of the limits are.
 export const TODAY = drizzleSql`(now() at time zone 'UTC')::date`;

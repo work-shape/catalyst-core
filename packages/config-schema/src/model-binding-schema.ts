@@ -15,7 +15,9 @@ import { localizedStringSchema } from "./localization";
 /**
  * One entry of `modelBindings`. A binding without `kind` is a chat binding. An embedding binding
  * states the length of its vectors and is never offered to agents: unset, `agentSelectable` is
- * true for a chat binding and false for an embedding binding.
+ * true for a chat binding and false for an embedding or a transcription binding. A
+ * transcription binding turns the recordings of the composer into text and is offered to no
+ * agent either.
  */
 export const modelBindingConfigSchema = z
   .object({
@@ -48,17 +50,16 @@ export const modelBindingConfigSchema = z
         message: `Model binding '${binding.id}' names itself as its fallback`
       });
     }
-    if (binding.kind !== "embedding") {
-      if (binding.dimensions !== undefined) {
-        context.addIssue({
-          code: "custom",
-          path: ["dimensions"],
-          message: `Model binding '${binding.id}' states 'dimensions', which only a binding of kind 'embedding' has`
-        });
-      }
-      return;
+    if (binding.kind !== "embedding" && binding.dimensions !== undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["dimensions"],
+        message: `Model binding '${binding.id}' states 'dimensions', which only a binding of kind 'embedding' has`
+      });
     }
-    if (binding.dimensions === undefined) {
+    if (binding.kind === undefined || binding.kind === "chat") return;
+    const named = binding.kind === "embedding" ? "Embedding" : "Transcription";
+    if (binding.kind === "embedding" && binding.dimensions === undefined) {
       context.addIssue({
         code: "custom",
         path: ["dimensions"],
@@ -69,21 +70,36 @@ export const modelBindingConfigSchema = z
       context.addIssue({
         code: "custom",
         path: ["fallback"],
-        message: `Embedding binding '${binding.id}' takes no fallback: another model's vectors do not fit its index`
+        message:
+          binding.kind === "embedding"
+            ? `Embedding binding '${binding.id}' takes no fallback: another model's vectors do not fit its index`
+            : `Transcription binding '${binding.id}' takes no fallback: the audio goes to its provider alone`
       });
     }
     if (binding.agentSelectable === true) {
       context.addIssue({
         code: "custom",
         path: ["agentSelectable"],
-        message: `Embedding binding '${binding.id}' cannot be chosen for agents: leave out 'agentSelectable'`
+        message: `${named} binding '${binding.id}' cannot be chosen for agents: leave out 'agentSelectable'`
       });
     }
   })
   .transform(({ agentSelectable, ...binding }) => ({
     ...binding,
-    agentSelectable: agentSelectable ?? binding.kind !== "embedding"
+    agentSelectable: agentSelectable ?? (binding.kind === undefined || binding.kind === "chat")
   }));
+
+/**
+ * What the composer's microphone sends with each recording (STT-1). `terms` are the words the
+ * deployment wants spelled right, such as its company, product and place names. They go first
+ * in the list each request builds, which is cut at 100 terms. Core ships none.
+ */
+export const transcriptionConfigSchema = z
+  .object({
+    terms: z.array(z.string().trim().min(1).max(200)).max(100).default([])
+  })
+  .strict()
+  .prefault({});
 
 /**
  * The Knowledge Bases of an instance. `defaultEmbeddingBinding` names the embedding binding a

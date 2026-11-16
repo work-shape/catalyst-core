@@ -21,13 +21,22 @@ export type UsageCostEvent = Pick<
   | "webSearchCallCount"
   | "fastMode"
   | "providerServiceTier"
->;
+> & {
+  /**
+   * Set on a transcription, which is priced per minute of its audio instead of by tokens:
+   * the seconds the provider counted, absent where it counted none.
+   */
+  audio?: { seconds?: number };
+};
 
 export function calculateUsageCost(
   event: UsageCostEvent,
   rateCard: UsageRateCardConfig | undefined,
   source: UsageCostRecord["source"] = "rate_card"
 ): UsageCostRecord {
+  if (event.audio !== undefined) {
+    return calculateTranscriptionCost(event, event.audio.seconds, rateCard, source);
+  }
   if (!rateCard) {
     return incompleteCost("unpriced", source, ["model_rate"]);
   }
@@ -95,6 +104,65 @@ export function calculateUsageCost(
     components,
     totalCostMicros: totalComponents(components)
   };
+}
+
+/**
+ * The cost of a transcription: its audio at the rate card's price per minute (STT-1). The
+ * audio is the call's input, so its price stands as the uncached input; tokens cost nothing.
+ */
+function calculateTranscriptionCost(
+  event: UsageCostEvent,
+  seconds: number | undefined,
+  rateCard: UsageRateCardConfig | undefined,
+  source: UsageCostRecord["source"]
+): UsageCostRecord {
+  const rate = rateCard && findTranscriptionRate(rateCard, event);
+  if (!rateCard || !rate) {
+    return incompleteCost("unpriced", source, ["transcription_rate"], rateCard);
+  }
+  const provenance = {
+    source,
+    calculationVersion: 1 as const,
+    rateCardId: rateCard.id,
+    rateCardVersion: rateCard.version,
+    currency: rateCard.currency,
+    appliedRates: {
+      uncachedInputPricePerMillionTokens: 0,
+      cachedInputPricePerMillionTokens: 0,
+      outputPricePerMillionTokens: 0,
+      audioPricePerMinute: rate.pricePerAudioMinute
+    }
+  };
+  if (seconds === undefined) {
+    return { status: "incomplete", ...provenance, missingMeters: ["audio_duration"] };
+  }
+  const components: UsageCostComponents = {
+    uncachedInputCostMicros: priceAudioSeconds(seconds, rate.pricePerAudioMinute),
+    cachedInputCostMicros: 0,
+    outputCostMicros: 0,
+    webSearchCostMicros: 0
+  };
+  return {
+    status: "settled",
+    ...provenance,
+    components,
+    totalCostMicros: totalComponents(components)
+  };
+}
+
+/** The rate card's price per audio minute for the model of a call, if it has one. */
+export function findTranscriptionRate(
+  rateCard: UsageRateCardConfig,
+  call: { providerId: string; model: string }
+): { pricePerAudioMinute: number } | undefined {
+  return (rateCard.transcription ?? []).find(
+    (candidate) => candidate.providerId === call.providerId && candidate.model === call.model
+  );
+}
+
+/** What seconds of audio cost, in micros, at a price per minute. */
+export function priceAudioSeconds(seconds: number, pricePerAudioMinute: number): number {
+  return Math.round((normalizeCount(seconds) * pricePerAudioMinute * 1_000_000) / 60);
 }
 
 function calculateKnownComponents(

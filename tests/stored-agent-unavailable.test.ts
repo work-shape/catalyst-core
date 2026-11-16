@@ -178,7 +178,8 @@ describe("stored agents with unavailable references", () => {
         version: "1",
         currency: "EUR",
         models: [],
-        webSearch: cause === "pricing_removed" ? [] : [{ providerId: "local", pricePerCall: 0.01 }]
+        webSearch: cause === "pricing_removed" ? [] : [{ providerId: "local", pricePerCall: 0.01 }],
+        transcription: []
       };
       const warn = vi.spyOn(createLogger(), "warn");
       const instance = await createTestInstance({

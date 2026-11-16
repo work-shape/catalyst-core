@@ -2,6 +2,14 @@ import { defineTranslations } from "./translation-area";
 
 export const assistant = defineTranslations({
   en: {
+    "dictation.start": "Dictate",
+    "dictation.stop": "Stop and transcribe",
+    "dictation.transcribing": "Transcribing",
+    "dictation.micRefused":
+      "The microphone is blocked. Allow it for this site in your browser to dictate.",
+    "dictation.failed": "The recording could not be transcribed. Try again.",
+    "dictation.empty": "Nothing was heard in the recording.",
+    "dictation.dismiss": "Dismiss",
     agentReady: "{agent} is ready for this conversation.",
     chatRegionLabel: "Chat",
     copyCodeBlock: "Copy code",
@@ -115,6 +123,14 @@ export const assistant = defineTranslations({
       "No agent is available in this workspace yet. An administrator can make one available here."
   },
   de: {
+    "dictation.start": "Diktieren",
+    "dictation.stop": "Beenden und umwandeln",
+    "dictation.transcribing": "Wird umgewandelt",
+    "dictation.micRefused":
+      "Das Mikrofon ist gesperrt. Erlaube es für diese Seite im Browser, um zu diktieren.",
+    "dictation.failed": "Die Aufnahme konnte nicht umgewandelt werden. Versuche es noch einmal.",
+    "dictation.empty": "In der Aufnahme war nichts zu hören.",
+    "dictation.dismiss": "Schließen",
     agentReady: "{agent} ist für diese Unterhaltung bereit.",
     chatRegionLabel: "Chat",
     copyCodeBlock: "Code kopieren",

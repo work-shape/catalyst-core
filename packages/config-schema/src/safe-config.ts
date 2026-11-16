@@ -113,6 +113,9 @@ export function createSafeConfigView(
       semanticSearch:
         modules.isEnabled("knowledge") && config.knowledge.defaultEmbeddingBinding !== undefined
     },
+    transcription: {
+      enabled: config.modelBindings.some((binding) => binding.kind === "transcription")
+    },
     // Derived from the modules for one transition release; the interface moves to `modules`.
     features: {
       attachments: {

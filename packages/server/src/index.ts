@@ -80,6 +80,7 @@ import { registerConversationFileRoutes } from "./routes/conversation-file-route
 import { registerConversationResourceRoutes } from "./routes/conversation-resource-routes";
 import { registerConversationRoutes } from "./routes/conversation-routes";
 import { registerDraftAttachmentRoutes } from "./routes/draft-attachment-routes";
+import { registerTranscriptionRoutes } from "./transcriptions/transcription-routes";
 import { registerSessionTokenRoutes } from "./routes/session-token-routes";
 import { registerServiceAccessTokenRoutes } from "./routes/service-access-token-routes";
 import { registerSuperadminRoutes } from "./routes/superadmin-routes";
@@ -310,6 +311,7 @@ export async function createChatServer(
   registerConversationResourceRoutes(route, options);
   registerConversationFileRoutes(route, options);
   registerDraftAttachmentRoutes(route, options);
+  registerTranscriptionRoutes(route, options);
   registerAuditRoutes(route, options);
   registerOperationRunRoutes(route, options);
   registerOperationCallableRoutes(route, options);

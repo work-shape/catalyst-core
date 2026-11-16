@@ -13,6 +13,8 @@ import {
   WEB_SEARCH_MODEL_TOOL_NAME,
   type ModelAdapterEmbedding,
   type ModelAdapterEmbeddingRequest,
+  type ModelAdapterTranscription,
+  type ModelAdapterTranscriptionRequest,
   type ModelCapabilities,
   type ModelCompletion,
   type ModelCompletionRequest,
@@ -53,6 +55,10 @@ import {
   readOpenAiEmbeddings,
   toOpenAiEmbeddingsRequestBody
 } from "./openai-compatible-embeddings";
+import {
+  readOpenAiTranscription,
+  toOpenAiTranscriptionsRequestBody
+} from "./openai-compatible-transcriptions";
 import {
   streamOpenAiCompatibleCompletion,
   streamOpenAiResponsesCompletion
@@ -141,6 +147,22 @@ export class OpenAiCompatibleChatProvider {
       throw await this.createProviderError(response);
     }
     return readOpenAiEmbeddings(await this.readResponseJson(response), request.texts.length);
+  }
+
+  /**
+   * Posts a recording to `<baseUrl>/audio/transcriptions`, the same endpoint and key as chat
+   * calls. The audio goes from memory into the request body and nowhere else.
+   */
+  async transcribe(request: ModelAdapterTranscriptionRequest): Promise<ModelAdapterTranscription> {
+    const response = await this.post(
+      "audio/transcriptions",
+      toOpenAiTranscriptionsRequestBody(request),
+      request.signal
+    );
+    if (!response.ok) {
+      throw await this.createProviderError(response);
+    }
+    return readOpenAiTranscription(await this.readResponseJson(response));
   }
 
   private async completeChatCompletions(
@@ -295,11 +317,13 @@ export class OpenAiCompatibleChatProvider {
 
   /** A request that never got an answer failed on the connection, unless the caller stopped it. */
   private async post(path: string, body: unknown, signal?: AbortSignal): Promise<Response> {
+    // A form sets its own content type, with the boundary of its parts.
+    const form = body instanceof FormData;
     try {
       return await fetch(`${this.options.baseUrl.replace(/\/$/u, "")}/${path}`, {
         method: "POST",
-        headers: this.createHeaders(),
-        body: JSON.stringify(body),
+        headers: this.createHeaders(form ? undefined : "application/json"),
+        body: form ? body : JSON.stringify(body),
         // A redirect is never followed: the key and the conversation go to the configured
         // endpoint alone. The answer with status 3xx is refused like any other that is no success.
         redirect: "manual",
@@ -310,10 +334,8 @@ export class OpenAiCompatibleChatProvider {
     }
   }
 
-  private createHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {
-      "content-type": "application/json"
-    };
+  private createHeaders(contentType?: string): Record<string, string> {
+    const headers: Record<string, string> = contentType ? { "content-type": contentType } : {};
     if ((this.options.authMode ?? "bearer") === "api-key") {
       headers["api-key"] = this.options.apiKey;
     } else {

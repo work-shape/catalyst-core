@@ -75,6 +75,7 @@ export function createTestConfig(
     modelBindings?: Array<{
       id: string;
       providerId: string;
+      kind?: "transcription";
       model?: string;
       reasoningEffort?: "none" | "low" | "medium" | "high" | "xhigh";
       agentSelectable?: boolean;
@@ -105,6 +106,7 @@ export function createTestConfig(
       }>;
     };
     webAccess?: unknown;
+    transcription?: { terms: string[] };
     developmentAuth?: unknown;
     sessionToken?: unknown;
   } = {}
@@ -169,6 +171,7 @@ export function createTestConfig(
         : {}
     },
     ...(input.webAccess ? { webAccess: input.webAccess } : {}),
+    ...(input.transcription ? { transcription: input.transcription } : {}),
     ...(input.executionWorkspaces ? { executionWorkspaces: input.executionWorkspaces } : {}),
     tools: input.tools ?? []
   });

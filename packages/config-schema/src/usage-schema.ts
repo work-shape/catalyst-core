@@ -63,6 +63,16 @@ export const usageRateCardConfigSchema = z.object({
         pricePerCall: z.number().nonnegative()
       })
     )
+    .default([]),
+  /** The price of a transcription model per minute of audio (STT-1). */
+  transcription: z
+    .array(
+      z.object({
+        providerId: z.string().min(1),
+        model: z.string().min(1),
+        pricePerAudioMinute: z.number().nonnegative()
+      })
+    )
     .default([])
 });
 

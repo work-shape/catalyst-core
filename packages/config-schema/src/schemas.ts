@@ -38,7 +38,11 @@ import { releaseGuardrailsConfigSchema } from "./guardrail-schema";
 import { infrastructureConfigSchema } from "./infrastructure";
 import { instanceConfigSchema } from "./instance-schema";
 import { localizationConfigSchema, localizedStringSchema } from "./localization";
-import { knowledgeConfigSchema, modelBindingConfigSchema } from "./model-binding-schema";
+import {
+  knowledgeConfigSchema,
+  modelBindingConfigSchema,
+  transcriptionConfigSchema
+} from "./model-binding-schema";
 import {
   agentRuntimeConfigSchema,
   conversationTitleConfigSchema,
@@ -584,6 +588,8 @@ export const clientInstanceConfigSchema = z.object({
   modelBindings: z.array(modelBindingConfigSchema).default([]),
   /** The Knowledge Bases of the instance: which embedding binding semantic search uses. */
   knowledge: knowledgeConfigSchema,
+  /** What the composer's microphone sends with each recording; on with a transcription binding. */
+  transcription: transcriptionConfigSchema,
   localization: localizationConfigSchema,
   conversationTitles: conversationTitleConfigSchema,
   /** The release's guardrails: the operator's floor. Seeded as read-only assets when the API starts. */

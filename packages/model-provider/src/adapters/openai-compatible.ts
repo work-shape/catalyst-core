@@ -54,7 +54,8 @@ async function listModels(
 
 /**
  * Any endpoint that speaks the OpenAI chat completions or responses wire format, and its
- * embeddings endpoint for bindings of kind `embedding`.
+ * embeddings endpoint for bindings of kind `embedding`, and its audio transcriptions endpoint for
+ * bindings of kind `transcription`.
  */
 export const openAiCompatibleModelProvider = defineProvider({
   port: "models",
@@ -93,7 +94,8 @@ export const openAiCompatibleModelProvider = defineProvider({
         capabilities: () => capabilities,
         complete: (request) => provider.complete(toRequest(request), request),
         stream: (request) => provider.stream(toRequest(request), request),
-        embed: (request) => provider.embed(request)
+        embed: (request) => provider.embed(request),
+        transcribe: (request) => provider.transcribe(request)
       };
     };
     build.check = (context) => listModels({ ...config, apiKey, organization }, context);

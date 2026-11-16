@@ -121,7 +121,10 @@ export class ModelInput {
     const { bindingId } = selection.binding;
     const fallbackId = bindings.find((candidate) => candidate.id === bindingId)?.fallback;
     const fallback = bindings.find((candidate) => candidate.id === fallbackId);
-    if (!fallback || fallback.id === bindingId || fallback.kind === "embedding") return undefined;
+    // Only a chat binding answers a chat call: an embedding or transcription one never does.
+    if (!fallback || fallback.id === bindingId || (fallback.kind ?? "chat") !== "chat") {
+      return undefined;
+    }
     const provider = this.options.modelProviders.find(
       (candidate) => candidate.id === fallback.providerId
     );

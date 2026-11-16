@@ -246,6 +246,7 @@
     "projects.setup.get": "workspace_role",
     "ready.get": "public",
     "session_tokens.issue": "public",
+    "transcriptions.create": "conversation_access",
     "view_runtime.files.get": "public",
     "view_shell.files.get": "public",
     "workflows.principal_rights": "asset_right",

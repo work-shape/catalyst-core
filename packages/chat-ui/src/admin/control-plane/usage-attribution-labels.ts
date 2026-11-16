@@ -8,7 +8,8 @@ const PURPOSE_LABELS: Record<string, TranslationKey> = {
   guardrail_judge: "settings.usagePurposeGuardrailJudge",
   knowledge_embedding: "settings.usagePurposeKnowledgeEmbedding",
   knowledge_field_extraction: "settings.usagePurposeKnowledgeFieldExtraction",
-  knowledge_query: "settings.usagePurposeKnowledgeQuery"
+  knowledge_query: "settings.usagePurposeKnowledgeQuery",
+  transcription: "settings.usagePurposeTranscription"
 };
 
 const REGION_LABELS: Record<string, TranslationKey> = {

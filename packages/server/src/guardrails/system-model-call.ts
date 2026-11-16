@@ -2,8 +2,13 @@ import type { ReasoningEffortConfig } from "@work-shape/catalyst-core";
 import type { ResolvedModelSelection } from "@work-shape/catalyst-config-schema";
 import type { ModelBindingRef, ModelGateway } from "@work-shape/catalyst-model-provider";
 
-/** The gateway as the server's own model calls use it: conversation titles and approval checks. */
-export type SystemModelGateway = Pick<ModelGateway, "complete" | "capabilities">;
+/**
+ * The gateway as the server's own model calls use it: conversation titles, approval checks and,
+ * where the instance turns speech into text (STT-1), the composer's transcriptions. A server
+ * without `transcribe` answers that speech to text is not available.
+ */
+export type SystemModelGateway = Pick<ModelGateway, "complete" | "capabilities"> &
+  Partial<Pick<ModelGateway, "transcribe">>;
 
 /** How a call names the model a config selection resolved to. */
 export function modelBindingRefOf(selection: ResolvedModelSelection): ModelBindingRef {

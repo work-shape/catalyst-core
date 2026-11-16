@@ -36777,6 +36777,122 @@
         "x-catalyst-rate-class": "write"
       }
     },
+    "/api/v1/transcriptions": {
+      "post": {
+        "operationId": "transcriptions.create",
+        "summary": "Turn a recording from the composer into text, which is not stored",
+        "tags": [
+          "Conversations"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "conversation:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "conversation:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z]{2,3}$"
+            }
+          },
+          {
+            "name": "conversationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "workspaceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscriptionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "504": {
+            "$ref": "#/components/responses/Timeout"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "write"
+      }
+    },
     "/api/v1/workflow-capabilities": {
       "get": {
         "operationId": "workflows.capabilities",
@@ -61337,6 +61453,17 @@
               "semanticSearch"
             ]
           },
+          "transcription": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          },
           "features": {
             "type": "object",
             "properties": {
@@ -63214,6 +63341,22 @@
           "input",
           "result",
           "modelOutput"
+        ]
+      },
+      "TranscriptionResponse": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "durationSeconds": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "text",
+          "durationSeconds"
         ]
       },
       "UnavailableModel": {
