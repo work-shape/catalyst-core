@@ -44,7 +44,7 @@ afterEach(() => {
 });
 
 describe("Bedrock adapter: what it reads", () => {
-  it("counts cache reads and writes into the input and reports the read share as cached", async () => {
+  it("counts cache reads and writes into the input and reports the read and the written share", async () => {
     answerWith(() =>
       Response.json(
         message([{ type: "text", text: "Hello." }], "end_turn", {
@@ -66,6 +66,7 @@ describe("Bedrock adapter: what it reads", () => {
     expect(completion.usage).toEqual({
       inputTokens: 15,
       cachedInputTokens: 4,
+      cacheWriteInputTokens: 3,
       outputTokens: 5,
       totalTokens: 20,
       source: "provider_reported",
@@ -146,6 +147,7 @@ describe("Bedrock adapter: what it reads", () => {
         usage: {
           inputTokens: 40,
           cachedInputTokens: 0,
+          cacheWriteInputTokens: 0,
           outputTokens: 18,
           totalTokens: 58,
           source: "provider_reported",

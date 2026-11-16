@@ -309,6 +309,11 @@ export interface UsageSafeguardsConfig {
 export interface UsageRateCardTokenRatesConfig {
   uncachedInputPricePerMillionTokens: number;
   cachedInputPricePerMillionTokens: number;
+  /**
+   * Input written to a prompt cache, for a provider that reports cache writes and bills them
+   * apart (Claude). Without it a cache write is priced as uncached input.
+   */
+  cacheWriteInputPricePerMillionTokens?: number;
   outputPricePerMillionTokens: number;
 }
 

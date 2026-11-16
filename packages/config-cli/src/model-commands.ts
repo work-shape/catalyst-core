@@ -76,6 +76,8 @@ Options of add:
   --region eu               The only region this command writes
   --input-price <n>         Price of a million uncached input tokens
   --cached-input-price <n>  Price of a million cached input tokens
+  --cache-write-price <n>   bedrock: price of a million input tokens written to the prompt
+                            cache (default: the input price)
   --output-price <n>        Price of a million output tokens
   --currency <ABC>          The rate card's currency where the config has none yet (EUR)
 
@@ -123,6 +125,7 @@ export async function runModelsCommand(argv: readonly string[], base: Options): 
           region: { type: "string" },
           "input-price": { type: "string" },
           "cached-input-price": { type: "string" },
+          "cache-write-price": { type: "string" },
           "output-price": { type: "string" },
           currency: { type: "string" },
           config: { type: "string" },
@@ -300,6 +303,9 @@ async function addProvider(
     model,
     uncachedInputPricePerMillionTokens: Number(values["input-price"]),
     cachedInputPricePerMillionTokens: Number(values["cached-input-price"]),
+    ...(values["cache-write-price"] === undefined
+      ? {}
+      : { cacheWriteInputPricePerMillionTokens: Number(values["cache-write-price"]) }),
     outputPricePerMillionTokens: Number(values["output-price"])
   };
   const prices = valueAt(config.merged, PRICES);
@@ -357,7 +363,7 @@ async function addProvider(
     ],
     [
       PRICES.join("."),
-      `${price.uncachedInputPricePerMillionTokens} input, ${price.cachedInputPricePerMillionTokens} cached input, ${price.outputPricePerMillionTokens} output per million tokens (${currency})`
+      `${price.uncachedInputPricePerMillionTokens} input, ${price.cachedInputPricePerMillionTokens} cached input, ${price.cacheWriteInputPricePerMillionTokens === undefined ? "" : `${price.cacheWriteInputPricePerMillionTokens} cache write, `}${price.outputPricePerMillionTokens} output per million tokens (${currency})`
     ]
   ];
   const width = Math.max(...written.map(([where]) => where.length));

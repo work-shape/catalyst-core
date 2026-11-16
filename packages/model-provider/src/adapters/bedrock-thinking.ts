@@ -3,10 +3,14 @@ import type { ModelProviderContinuation } from "../types";
 import type { BedrockEffort, BedrockMessagesRequest, BedrockThinkingBlock } from "./bedrock-wire";
 
 /**
- * The reasoning efforts a call may ask for. `none` sends no thinking setting. `low`, `medium` and
- * `high` ask for adaptive thinking with that effort. `xhigh` and `max` are not declared: Claude
- * Sonnet 4.6 refuses `xhigh`, and `max` thinks without a bound inside an output limit that also
- * has to hold the answer.
+ * The reasoning efforts a call may ask for. `none` sends no thinking setting, never a disabled
+ * one: Claude Opus 5.5 refuses `thinking.type: disabled` and a thinking budget at every effort,
+ * and without a setting it thinks adaptively at its own default effort (`medium`), as Claude
+ * Sonnet 4.6 then does not think at all. `low`, `medium` and `high` ask for adaptive thinking with
+ * that effort, which every Claude model from Sonnet 4.6 on takes. `xhigh` and `max` are not
+ * declared: Claude Sonnet 4.6 refuses `xhigh`, and `max` thinks without a bound inside an output
+ * limit that also has to hold the answer. No request sends `tool_choice`, a sampling setting or
+ * an assistant prefill, which Claude Opus 5.5 refuses.
  */
 export const BEDROCK_REASONING_EFFORTS: readonly ReasoningEffortConfig[] = [
   "none",

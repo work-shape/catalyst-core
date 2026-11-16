@@ -39,6 +39,14 @@ const customerRateCard: UsageRateCardConfig = {
       uncachedInputPricePerMillionTokens: 1,
       cachedInputPricePerMillionTokens: 0.1,
       outputPricePerMillionTokens: 6
+    },
+    {
+      providerId: "bedrock-eu",
+      model: "claude-profile",
+      uncachedInputPricePerMillionTokens: 4,
+      cachedInputPricePerMillionTokens: 0.2,
+      cacheWriteInputPricePerMillionTokens: 5,
+      outputPricePerMillionTokens: 20
     }
   ],
   webSearch: [{ providerId: "azure-eu", pricePerCall: 1 }]
@@ -145,6 +153,60 @@ describe("model usage governance", () => {
         billableCostMicros: 4_400_000
       }
     });
+  });
+
+  it("prices input written to a prompt cache at the write rate and keeps its count", async () => {
+    const { governance, clientInstanceId } = await createGovernance();
+
+    const event = await governance.recordModelUsage({
+      ...usageInput(clientInstanceId, {
+        inputTokens: 1_000_000,
+        cachedInputTokens: 600_000,
+        cacheWriteInputTokens: 300_000,
+        outputTokens: 100_000,
+        totalTokens: 1_100_000
+      }),
+      providerId: "bedrock-eu",
+      model: "claude-profile"
+    });
+
+    expect(event).toMatchObject({ cachedInputTokens: 600_000, cacheWriteInputTokens: 300_000 });
+    expect(event.customerBillableCost).toMatchObject({
+      status: "settled",
+      appliedRates: {
+        uncachedInputPricePerMillionTokens: 4,
+        cachedInputPricePerMillionTokens: 0.2,
+        cacheWriteInputPricePerMillionTokens: 5,
+        outputPricePerMillionTokens: 20
+      },
+      // 100,000 uncached at 4 and 300,000 written at 5; 600,000 read at 0.2.
+      components: {
+        uncachedInputCostMicros: 1_900_000,
+        cachedInputCostMicros: 120_000,
+        outputCostMicros: 2_000_000,
+        webSearchCostMicros: 0
+      },
+      totalCostMicros: 4_020_000
+    });
+  });
+
+  it("prices a cache write as uncached input on a card without a write rate", () => {
+    const cost = calculateUsageCost(
+      {
+        ...usageInput(asClientInstanceId("client-write"), {
+          inputTokens: 1_000_000,
+          cachedInputTokens: 600_000,
+          cacheWriteInputTokens: 300_000
+        })
+      },
+      customerRateCard
+    );
+
+    expect(cost).toMatchObject({
+      status: "settled",
+      components: { uncachedInputCostMicros: 2_000_000, cachedInputCostMicros: 300_000 }
+    });
+    expect(cost).not.toHaveProperty("appliedRates.cacheWriteInputPricePerMillionTokens");
   });
 
   it("settles a fast call with the fast rates and a normal call with the normal rates", async () => {
@@ -534,6 +596,7 @@ function usageInput(
   overrides: Partial<{
     inputTokens: number;
     cachedInputTokens: number;
+    cacheWriteInputTokens: number;
     outputTokens: number;
     totalTokens: number;
     webSearchCallCount: number;

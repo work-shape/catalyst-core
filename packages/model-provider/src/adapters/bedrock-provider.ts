@@ -51,7 +51,8 @@ export const BEDROCK_RUNTIME_HOST = `bedrock-runtime.${BEDROCK_REGION}.amazonaws
  * none. A PDF is sent as a document block within the limits `assertBedrockDocuments` holds. An
  * answer format is sent as the Messages format's own `output_config.format`. The continuation
  * carries the thinking of a run's tool-use turns to the run's next request and nothing else.
- * The adapter sets no cache breakpoint and asks for no cache. Every token is billed to the
+ * A call of a conversation sets prompt cache breakpoints (`withBedrockCacheBreakpoints`), and
+ * the usage reports what was read from and written to the cache. Every token is billed to the
  * consumer's profile, so a model without a price is not called.
  */
 export const BEDROCK_CAPABILITIES: ModelCapabilities = {

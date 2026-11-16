@@ -228,6 +228,47 @@ describe("catalyst models add", () => {
     }
   );
 
+  it("writes the cache write price of a Bedrock model when one is given", async () => {
+    const root = await repository({ "config/app.yaml": FRESH_CONFIG });
+    const result = await run(root, [
+      "models",
+      "add",
+      "bedrock",
+      "--model",
+      PROFILE,
+      "--label",
+      "Claude Opus 5.5",
+      ...PRICES,
+      "--cache-write-price",
+      "3.125"
+    ]);
+    expect(result, result.err).toMatchObject({ code: 0, err: "" });
+    expect(result.out).toContain("2.5 input, 0.25 cached input, 3.125 cache write, 10 output");
+    const config = await startupAccepts(join(root, "config/app.yaml"), {
+      AWS_BEARER_TOKEN_BEDROCK: "test-bedrock-key"
+    });
+    expect(config.usage.costs.customer?.models[0]).toMatchObject({
+      cacheWriteInputPricePerMillionTokens: 3.125
+    });
+
+    const free = await run(root, [
+      "models",
+      "add",
+      "bedrock",
+      "--id",
+      "bedrock-two",
+      "--model",
+      PROFILE,
+      "--label",
+      "Claude",
+      ...PRICES,
+      "--cache-write-price",
+      "0"
+    ]);
+    expect(free.code).toBe(1);
+    expect(free.err).toContain("--cache-write-price must be above zero");
+  });
+
   it("adds after what is there and leaves every other line of the file as it was", async () => {
     const original = `version: 1
 clientInstance:

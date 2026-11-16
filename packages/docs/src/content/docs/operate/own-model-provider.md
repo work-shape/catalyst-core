@@ -53,14 +53,16 @@ catalyst models check vertex-eu --instance https://chat.example.com
 
 ## Claude on Amazon Bedrock
 
-You need an application inference profile of your AWS account in `eu-central-1`, built on an EU model or an EU inference profile, its ARN, and a Bedrock API key whose IAM policy allows `bedrock:InvokeModel` and `bedrock:InvokeModelWithResponseStream` on that profile alone. Set Bedrock's data retention to none and leave model invocation logging off.
+You need an application inference profile of your AWS account in `eu-central-1`, built on an EU model or an EU inference profile, its ARN, and a Bedrock API key whose IAM policy allows `bedrock:InvokeModel` and `bedrock:InvokeModelWithResponseStream` on that profile, and on the model in each EU region an EU inference profile routes to only when the call comes through your profile (condition `bedrock:InferenceProfileArn`). Bedrock refuses a call through the profile without the second grant. Set Bedrock's data retention to none and leave model invocation logging off.
 
 ```sh
 catalyst models add bedrock \
   --model arn:aws:bedrock:eu-central-1:123456789012:application-inference-profile/abcd1234efgh \
-  --label "Claude Sonnet 4.6" \
-  --input-price 2.8 --cached-input-price 0.28 --output-price 14
+  --label "Claude Opus 5.5" \
+  --input-price 4.4 --cached-input-price 0.22 --cache-write-price 5.5 --output-price 22
 ```
+
+Agent runs on Bedrock use the prompt cache, so `--cache-write-price` is the price of a million input tokens written to it; without it, cache writes are priced as uncached input.
 
 The account is the one the ARN names unless `--account` says otherwise; a profile of another account or region is refused before anything is written. Set the secret `AWS_BEARER_TOKEN_BEDROCK` to the key, deploy, and check:
 

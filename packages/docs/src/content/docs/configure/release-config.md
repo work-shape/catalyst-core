@@ -597,6 +597,7 @@ usage:
           model: arn:aws:bedrock:eu-central-1:123456789012:application-inference-profile/abcd1234efgh
           uncachedInputPricePerMillionTokens: <your price, above zero>
           cachedInputPricePerMillionTokens: <your price, above zero>
+          cacheWriteInputPricePerMillionTokens: <your price, above zero>
           outputPricePerMillionTokens: <your price, above zero>
 ```
 
@@ -632,17 +633,30 @@ a capability worker needs it when one of its bindings is on the entry.
 it cannot price. Startup stops when the entry's own model or the model of a binding on it has no
 row in `usage.costs.customer.models` with the entry's id as `providerId`, the same ARN as
 `model`, and a price above zero for uncached input, cached input and output. The message names
-the binding or the entry.
+the binding or the entry. Bedrock bills input written to the prompt cache at its own rate (for
+Claude, 1.25 times uncached input): set it as `cacheWriteInputPricePerMillionTokens`. A row
+without it prices cache writes as uncached input.
 
 The adapter reads text, images and PDF documents, calls tools, also several at once, streams,
 thinks and answers in a JSON format. A binding on it can be chosen for agents. It declares no
 web search, no fast tier and no server-side compaction; a call that asks for one of them is
-refused before it is sent, and an agent with web search configured runs without it. The adapter
-asks for no prompt cache.
+refused before it is sent, and an agent with web search configured runs without it.
+
+**Prompt cache.** A call of a conversation, an agent run's turns and steps, sets four cache
+breakpoints (`cache_control`, five minutes): on the last tool, on the agent's instructions, on the
+end of the previous request of the conversation and on its own end. The next turn reads the
+tools, the instructions and the conversation so far from the cache and pays the cache read rate
+for them. A call the product makes for itself, such as a title, sets none. Bedrock keeps a cached
+prefix for five minutes after its last use, separate per AWS account. A prompt below the model's
+minimum (512 tokens for Claude Opus 5.5) is not cached. The usage record keeps the input read from
+the cache as cached input and the input written to it apart; the rate card prices each at its own
+rate.
 
 **Thinking.** The reasoning efforts `low`, `medium` and `high` ask for adaptive thinking
 (`thinking: { type: adaptive }`) with that effort; `none`, or no effort, sends no thinking
-setting. `xhigh` and `max` are not offered. The adapter sends no thinking budget: the output
+setting. A model that always thinks, such as Claude Opus 5.5, then thinks at its own default
+effort (`medium` for Opus 5.5); the adapter never sends `disabled`, which such a model refuses.
+`xhigh` and `max` are not offered. The adapter sends no thinking budget: the output
 limit of 16,000 tokens is the one limit on thinking and answer together, so thinking can never
 ask for more than the limit, and a long thought leaves a shorter answer. Thinking is billed as
 output and is part of the output tokens of the usage record; it has no count of its own. A

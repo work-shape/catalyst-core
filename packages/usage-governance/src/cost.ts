@@ -15,6 +15,7 @@ export type UsageCostEvent = Pick<
   | "model"
   | "inputTokens"
   | "cachedInputTokens"
+  | "cacheWriteInputTokens"
   | "outputTokens"
   | "source"
   | "webSearchCallCount"
@@ -68,6 +69,11 @@ export function calculateUsageCost(
     appliedRates: {
       uncachedInputPricePerMillionTokens: tokenRates.uncachedInputPricePerMillionTokens,
       cachedInputPricePerMillionTokens: tokenRates.cachedInputPricePerMillionTokens,
+      ...(tokenRates.cacheWriteInputPricePerMillionTokens === undefined
+        ? {}
+        : {
+            cacheWriteInputPricePerMillionTokens: tokenRates.cacheWriteInputPricePerMillionTokens
+          }),
       outputPricePerMillionTokens: tokenRates.outputPricePerMillionTokens,
       ...(webSearchRate ? { webSearchPricePerCall: webSearchRate.pricePerCall } : {})
     }
@@ -102,12 +108,26 @@ function calculateKnownComponents(
       ? 0
       : undefined);
   const inputKnown = cachedInputTokens !== undefined;
+  const inputTokens = normalizeCount(event.inputTokens);
+  // What was written to a cache is input that was not read from one. A card without a write
+  // rate prices it as uncached input.
+  const cacheWriteInputTokens = inputKnown
+    ? Math.min(
+        normalizeCount(event.cacheWriteInputTokens ?? 0),
+        Math.max(0, inputTokens - cachedInputTokens)
+      )
+    : 0;
   const uncachedInputTokens = inputKnown
-    ? Math.max(0, normalizeCount(event.inputTokens) - cachedInputTokens)
+    ? Math.max(0, inputTokens - cachedInputTokens - cacheWriteInputTokens)
     : 0;
   return {
     uncachedInputCostMicros: inputKnown
-      ? priceTokens(uncachedInputTokens, tokenRates.uncachedInputPricePerMillionTokens)
+      ? priceTokens(uncachedInputTokens, tokenRates.uncachedInputPricePerMillionTokens) +
+        priceTokens(
+          cacheWriteInputTokens,
+          tokenRates.cacheWriteInputPricePerMillionTokens ??
+            tokenRates.uncachedInputPricePerMillionTokens
+        )
       : 0,
     cachedInputCostMicros: inputKnown
       ? priceTokens(cachedInputTokens, tokenRates.cachedInputPricePerMillionTokens)

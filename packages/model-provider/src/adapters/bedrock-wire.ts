@@ -7,13 +7,28 @@
 
 export const BEDROCK_ANTHROPIC_VERSION = "bedrock-2023-05-31";
 
-export type BedrockContentBlock =
-  | { type: "text"; text: string }
-  | { type: "image"; source: { type: "base64"; media_type: string; data: string } }
-  | {
-      type: "document";
-      source: { type: "base64"; media_type: "application/pdf"; data: string };
-    };
+/**
+ * A prompt cache breakpoint: the prompt up to and with the block is written to Bedrock's cache
+ * for five minutes, and a later request that starts with the same bytes reads it from there.
+ */
+export interface BedrockCacheControl {
+  type: "ephemeral";
+}
+
+/** A block that may carry a cache breakpoint. */
+interface BedrockCacheable {
+  cache_control?: BedrockCacheControl;
+}
+
+export type BedrockContentBlock = BedrockCacheable &
+  (
+    | { type: "text"; text: string }
+    | { type: "image"; source: { type: "base64"; media_type: string; data: string } }
+    | {
+        type: "document";
+        source: { type: "base64"; media_type: "application/pdf"; data: string };
+      }
+  );
 
 /**
  * What the model thought before or between its tool calls. `signature` and `data` are opaque:
@@ -26,8 +41,23 @@ export type BedrockThinkingBlock =
 export type BedrockRequestBlock =
   | BedrockContentBlock
   | BedrockThinkingBlock
-  | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
-  | { type: "tool_result"; tool_use_id: string; content?: BedrockContentBlock[] };
+  | (BedrockCacheable & {
+      type: "tool_use";
+      id: string;
+      name: string;
+      input: Record<string, unknown>;
+    })
+  | (BedrockCacheable & {
+      type: "tool_result";
+      tool_use_id: string;
+      content?: BedrockContentBlock[];
+    });
+
+interface BedrockTool extends BedrockCacheable {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+}
 
 export interface BedrockRequestMessage {
   role: "user" | "assistant";
@@ -37,7 +67,7 @@ export interface BedrockRequestMessage {
 export interface BedrockMessagesRequest {
   anthropic_version: typeof BEDROCK_ANTHROPIC_VERSION;
   max_tokens: number;
-  system?: { type: "text"; text: string }[];
+  system?: (BedrockCacheable & { type: "text"; text: string })[];
   messages: BedrockRequestMessage[];
   /** The model decides whether and how much it thinks; `output_config.effort` guides it. */
   thinking?: { type: "adaptive" };
@@ -46,7 +76,7 @@ export interface BedrockMessagesRequest {
     /** The answer is one text block of JSON that follows the schema. */
     format?: { type: "json_schema"; schema: Record<string, unknown> };
   };
-  tools?: { name: string; description: string; input_schema: Record<string, unknown> }[];
+  tools?: BedrockTool[];
 }
 
 /** The efforts the Messages format takes on every model this adapter is checked against. */
@@ -55,7 +85,9 @@ export type BedrockEffort = "low" | "medium" | "high";
 export interface BedrockUsage {
   /** The input that was neither read from nor written to a cache. */
   input_tokens?: number;
+  /** The input read from the prompt cache. */
   cache_read_input_tokens?: number;
+  /** The input written to the prompt cache. */
   cache_creation_input_tokens?: number;
   /** What the model wrote, its thinking included: Bedrock bills thinking as output. */
   output_tokens?: number;

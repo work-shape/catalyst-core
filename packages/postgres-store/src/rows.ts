@@ -596,6 +596,9 @@ export function mapModelUsageEvent(row: ModelUsageEventRow | undefined): ModelUs
     ...(row.operationRunId === null ? {} : { operationRunId: row.operationRunId }),
     inputTokens: row.inputTokens,
     cachedInputTokens: row.cachedInputTokens ?? undefined,
+    ...(row.cacheWriteInputTokens === null
+      ? {}
+      : { cacheWriteInputTokens: row.cacheWriteInputTokens }),
     outputTokens: row.outputTokens,
     totalTokens: row.totalTokens,
     webSearchCallCount: row.webSearchCallCount,

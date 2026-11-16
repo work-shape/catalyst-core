@@ -26,8 +26,15 @@ import type { ISODateString } from "./time";
 export type ModelUsageSource = (typeof MODEL_USAGE_SOURCES)[number];
 
 export interface ModelTokenUsage {
+  /** All input of the call: uncached, read from a prompt cache and written to one. */
   inputTokens: number;
+  /** The share of `inputTokens` read from a prompt cache. */
   cachedInputTokens?: number;
+  /**
+   * The share of `inputTokens` written to a prompt cache, where the provider reports it. Absent
+   * for a provider that bills no cache write of its own.
+   */
+  cacheWriteInputTokens?: number;
   outputTokens: number;
   totalTokens: number;
   source: ModelUsageSource;
@@ -41,11 +48,14 @@ export type UsageCostMissingMeter =
 export interface UsageCostAppliedRates {
   uncachedInputPricePerMillionTokens: number;
   cachedInputPricePerMillionTokens: number;
+  /** Set when the rate card prices cache writes apart from uncached input. */
+  cacheWriteInputPricePerMillionTokens?: number;
   outputPricePerMillionTokens: number;
   webSearchPricePerCall?: number;
 }
 
 export interface UsageCostComponents {
+  /** Uncached input, with the input written to a prompt cache at its own rate. */
   uncachedInputCostMicros: number;
   cachedInputCostMicros: number;
   outputCostMicros: number;
@@ -344,6 +354,7 @@ export type ModelUsageSettlement = Pick<
   ModelUsageEventRecordInput,
   | "inputTokens"
   | "cachedInputTokens"
+  | "cacheWriteInputTokens"
   | "outputTokens"
   | "totalTokens"
   | "source"
