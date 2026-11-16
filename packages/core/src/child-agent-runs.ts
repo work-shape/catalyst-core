@@ -46,6 +46,8 @@ export interface SubagentSummary {
   /** The parent's `run_agent` call that started it. */
   toolCallId: ToolCallId;
   agentName: string;
+  /** The binding the subagent runs on; missing where it runs on its agent's provider model. */
+  modelBindingId?: string;
   description: string;
   status: AgentRun["status"];
   startedAt: ISODateString;

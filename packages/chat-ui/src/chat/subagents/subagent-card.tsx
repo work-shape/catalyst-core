@@ -12,6 +12,7 @@ import {
   answeredSubagentState,
   isSubagentActive,
   subagentDuration,
+  subagentNaming,
   subagentState,
   subagentStateLabel,
   subagentStateTone,
@@ -128,7 +129,7 @@ export function SubagentCard({
 }
 
 /**
- * One subagent in a line: its description, agent, state and duration, with Open and, while it
+ * One subagent in a line: its description, agent, model, state and duration, with Open and, while it
  * runs, Stop. The card draws it framed; the Resources panel draws it as a row.
  */
 export function SubagentLine({
@@ -154,7 +155,7 @@ export function SubagentLine({
   const stop = useStopSubagent(rootConversationId);
   const details = subagent
     ? [
-        subagent.agentName,
+        ...subagentNaming(subagent),
         subagentDuration(subagent, now, locale, (duration) => t("subagents.soFar", { duration }))
       ].join(" · ")
     : t("subagents.subagent");

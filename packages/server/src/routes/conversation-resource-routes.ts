@@ -6,7 +6,8 @@ import { AppError, asStructuredDataResourceId } from "@work-shape/catalyst-core"
 import { listConversationResources } from "../conversations/conversation-resources";
 import { ConversationWorkflow } from "../conversations/conversation-service";
 import type { Route } from "../http/route";
-import { conversationIdParam, requirePathParam } from "./request-context";
+import { conversationIdParam, requirePathParam, resolveRequestLocale } from "./request-context";
+import { nameSubagent } from "../conversations/subagent-choices";
 import type { ChatServerOptions } from "../types";
 
 export function registerConversationResourceRoutes(route: Route, options: ChatServerOptions): void {
@@ -26,15 +27,32 @@ export function registerConversationResourceRoutes(route: Route, options: ChatSe
 
   // The subagents of a chat conversation's runs, read with its Resources (CR-1). A thread has
   // no subagents of its own.
-  route(apiOperations["conversations.subagents.list"], async ({ user, params }) => {
+  // Each names its agent by display name and its model by label (CR-3m).
+  route(apiOperations["conversations.subagents.list"], async ({ user, params, request }) => {
     const conversationId = conversationIdParam(params);
     const conversation = await conversations.requireConversationAccess(conversationId, user);
     if (conversation.kind !== "chat") return { items: [] };
-    return {
-      items: await options.stores.childAgentRuns.listSubagents({
+    const [subagents, assets] = await Promise.all([
+      options.stores.childAgentRuns.listSubagents({
         clientInstanceId: options.clientInstanceId,
         conversationId
-      })
+      }),
+      options.configAssets.source.getSnapshot()
+    ]);
+    const locale = resolveRequestLocale(options, request);
+    return {
+      items: subagents.map(({ modelBindingId, ...subagent }) => ({
+        ...subagent,
+        ...nameSubagent(
+          options.config,
+          assets,
+          {
+            agentName: subagent.agentName,
+            ...(modelBindingId === undefined ? {} : { modelBindingId })
+          },
+          locale
+        )
+      }))
     };
   });
 

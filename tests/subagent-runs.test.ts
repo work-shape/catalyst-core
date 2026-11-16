@@ -26,9 +26,11 @@ import { injectStartConversationRun } from "./support/chat-server-run-harness";
 import { createTestConfig, personalConversationListInput } from "./support/fixtures";
 import { createTestInstance, getTestConfig, type TestInstance } from "./support/test-instance";
 import { withTestSql } from "./support/test-sql";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // CR-1: an agent hands sub-tasks to subagents with `run_agent`. Checks 90, 92, 93, 95, 97 and
-// 98 of events-workflows-and-guardrails.md, through a running instance and its workers.
+// 98 of events-workflows-and-guardrails.md, through a running instance and its workers; CR-3m's
+// model and the tool generated per run, check 165.
 
 const SUBAGENT_MODEL_PROVIDER = "subagent-test";
 const executed: string[] = [];
@@ -146,12 +148,17 @@ function createSubagentModel() {
 
 const model = createSubagentModel();
 
-async function fixture(policies: CentralPolicySetting[] = [], unattended = false) {
+async function fixture(
+  policies: CentralPolicySetting[] = [],
+  unattended = false,
+  modelBindings?: NonNullable<Parameters<typeof createTestConfig>[0]>["modelBindings"]
+) {
   executed.length = 0;
   model.reset();
   const config = createTestConfig({
     tools: [{ name: change.name, enabled: true }],
-    toolNames: ["run_agent", change.name, CONVERSATION_RENAME_TOOL_NAME]
+    toolNames: ["run_agent", change.name, CONVERSATION_RENAME_TOOL_NAME],
+    ...(modelBindings ? { modelBindings } : {})
   });
   config.infrastructure.models = { local: { provider: SUBAGENT_MODEL_PROVIDER, model: "local" } };
   const app: TestInstance = await createTestInstance({
@@ -591,6 +598,146 @@ describe("stopping subagents", () => {
     );
     expect(JSON.stringify(answer)).toContain("cancelled");
     expect(JSON.stringify(answer)).toContain("I received: Keep going.");
+    await f.app.close();
+  });
+});
+
+/**
+ * An instance whose agent starts subagents on chosen models (CR-3m): `test_agent` runs on
+ * `large` and offers `small`; `alpha` runs on `small` and offers `large`; `zeta` offers only
+ * `large`; `outsider` is listed only through `"*"`. `other` is a binding no agent offers.
+ */
+async function modelFixture(subagentNames: string[] | "*") {
+  const f = await fixture([], false, [
+    { id: "large", providerId: "local", model: "local", label: "Large 5.5" },
+    { id: "small", providerId: "local", model: "local", label: "Small 5.5" },
+    { id: "other", providerId: "local", model: "local", label: "Other 5.5" }
+  ]);
+  const agent = (name: string, displayName: string, extra: Record<string, unknown>) => ({
+    type: "upsert" as const,
+    kind: "agent",
+    name,
+    config: {
+      name,
+      displayName,
+      instructions: "Work.",
+      toolNames: [change.name],
+      initialPrompts: [],
+      ...extra
+    }
+  });
+  await applyAtCurrentRevisions(f.app.stores.configAssets, {
+    clientInstanceId: f.clientInstanceId,
+    mutations: [
+      agent("test_agent", "Test Agent", {
+        toolNames: ["run_agent", change.name],
+        modelBindingId: "large",
+        userSelectableModelBindingIds: ["small"],
+        subagentNames
+      }),
+      agent("alpha", "Alpha", {
+        description: "Sorts receipts.",
+        modelBindingId: "small",
+        userSelectableModelBindingIds: ["large"]
+      }),
+      agent("zeta", "Zeta", { modelBindingId: "large" }),
+      agent("outsider", "Outsider", { modelBindingId: "large" })
+    ]
+  });
+  return f;
+}
+
+/** The `run_agent` tool a model request offered, as the model read it. */
+function runAgentToolOf(request: ModelAdapterRequest) {
+  const tool = required(request.tools.find((candidate) => candidate.name === "run_agent"));
+  return z
+    .object({
+      properties: z.object({
+        agent: z.object({ enum: z.array(z.string()), description: z.string() }),
+        model: z.object({ enum: z.array(z.string()), description: z.string() })
+      })
+    })
+    .parse("inputJsonSchema" in tool ? tool.inputJsonSchema : undefined).properties;
+}
+
+describe("the model of a subagent (CR-3m)", () => {
+  it("lists the agents and models the person may name, and runs each child on its binding", async () => {
+    const f = await modelFixture(["zeta", "alpha"]);
+    const message = [
+      runAgent({ description: "Klein", task: "Task small.", agent: "alpha", model: "large" }),
+      runAgent({ description: "Erbe", task: "Task inherit.", agent: "alpha" }),
+      runAgent({ description: "Falsch", task: "Task wrong.", agent: "zeta", model: "small" }),
+      runAgent({ description: "Fremd", task: "Task other.", model: "other" })
+    ].join("\n");
+    const said = await f.say(message);
+    await f.until(said.runId, "completed");
+
+    // The schema: the run's own agent first, then by name; models by id; `other` nowhere.
+    const tool = runAgentToolOf(required(f.requestsFor(message)[0]));
+    expect(tool.agent.enum).toEqual(["test_agent", "alpha", "zeta"]);
+    expect(tool.model.enum).toEqual(["large", "small"]);
+    expect(tool.agent.description).toContain(
+      "- alpha: Alpha — Sorts receipts. (models: large, small)"
+    );
+    expect(tool.agent.description).not.toContain("outsider");
+
+    // A chosen model runs the child on it; without one it takes the parent's.
+    const children = await f.children(said.runId);
+    expect(children.map((child) => child.description)).toEqual(["Klein", "Erbe"]);
+    const [chosen, inherited] = children.map((child) => child.subagentRunId);
+    expect(await f.agentRun(required(chosen))).toMatchObject({ modelBindingId: "large" });
+    expect(await f.agentRun(required(inherited))).toMatchObject({ modelBindingId: "large" });
+
+    // A binding outside the child agent's offer is refused and starts nothing.
+    const failures = (await f.events(said.runId)).flatMap((event) =>
+      event.type === "tool_call_failed" ? [JSON.stringify(event)] : []
+    );
+    expect(failures.filter((failure) => failure.includes("model_not_available"))).toHaveLength(2);
+
+    // The child's usage records its binding.
+    const usage = await f.app.stores.usage.listModelUsageEvents({
+      clientInstanceId: f.clientInstanceId
+    });
+    const ofChosen = usage.filter((event) => event.agentRunId === chosen);
+    expect(ofChosen.length).toBeGreaterThan(0);
+    expect(ofChosen.every((event) => event.bindingId === "large")).toBe(true);
+
+    // The panel's list names the agent and its model as a person reads them.
+    const listed = await f.subagents(said.conversationId);
+    expect(listed.find((item) => item.description === "Klein")).toMatchObject({
+      agentName: "alpha",
+      agentDisplayName: "Alpha",
+      model: { model: "local", label: "Large 5.5" }
+    });
+    await f.app.close();
+  });
+
+  it("runs a child on a model its agent offers that the parent's agent does not", async () => {
+    const f = await modelFixture(["alpha"]);
+    // `alpha` offers `small` as its own; the parent offers it too, `zeta` would not.
+    const said = await f.say(
+      runAgent({ description: "Sortieren", task: "Task sort.", agent: "alpha", model: "small" })
+    );
+    await f.until(said.runId, "completed");
+    const child = required((await f.children(said.runId))[0]);
+    expect(await f.agentRun(child.subagentRunId)).toMatchObject({ modelBindingId: "small" });
+    const usage = await f.app.stores.usage.listModelUsageEvents({
+      clientInstanceId: f.clientInstanceId
+    });
+    const ofChild = usage.filter((event) => event.agentRunId === child.subagentRunId);
+    expect(ofChild.length).toBeGreaterThan(0);
+    expect(ofChild.every((event) => event.bindingId === "small")).toBe(true);
+    await f.app.close();
+  });
+
+  it("lists every agent the person may use for '*' and starts one of them", async () => {
+    const f = await modelFixture("*");
+    const message = runAgent({ description: "Außen", task: "Task outside.", agent: "outsider" });
+    const said = await f.say(message);
+    await f.until(said.runId, "completed");
+    const tool = runAgentToolOf(required(f.requestsFor(message)[0]));
+    expect(tool.agent.enum).toEqual(["test_agent", "alpha", "outsider", "zeta"]);
+    expect((await f.children(said.runId)).map((child) => child.description)).toEqual(["Außen"]);
     await f.app.close();
   });
 });

@@ -410,6 +410,8 @@ function configOf(config: JsonObject | null | undefined): JsonObject {
 }
 
 function names(value: JsonValue | undefined): string[] {
+  // `subagentNames: "*"` (CR-3m) stands for every agent: a list that turns into it widens.
+  if (value === "*") return ["*"];
   return Array.isArray(value)
     ? value.flatMap((entry) => (typeof entry === "string" ? [entry] : []))
     : [];

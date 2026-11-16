@@ -515,6 +515,7 @@ describe("an agent of Only me beyond the chat its owner chose it in", () => {
     const calls = await getTestOperationCalls(t.instance);
     registerSubagentOperation(calls.registry, {
       clientInstanceId,
+      config: getTestConfig(t.instance),
       stores: t.stores,
       assetSource: createStoredConfigAssetSource({
         store: t.stores.configAssets,

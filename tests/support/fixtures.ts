@@ -3,6 +3,7 @@ import {
   asClientInstanceId,
   asConversationId,
   isJsonObject,
+  type MODEL_USAGE_TIERS,
   SecretNotResolvedError,
   unknownToJsonValue,
   type AuthenticatedUser,
@@ -81,6 +82,9 @@ export function createTestConfig(
       agentSelectable?: boolean;
       userSelectable?: boolean;
       userSelectableReasoningEfforts?: Array<"none" | "low" | "medium" | "high" | "xhigh">;
+      label?: string;
+      description?: string;
+      usageTier?: (typeof MODEL_USAGE_TIERS)[number];
     }>;
     agentModelBindingId?: string;
     agentUserSelectableModelBindingIds?: string[];

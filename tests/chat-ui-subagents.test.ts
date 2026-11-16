@@ -160,6 +160,23 @@ describe("the card of a run_agent call", () => {
     expect(markup).toContain(">Öffnen<");
   });
 
+  it("names the subagent by display name and model label, never its technical name (CR-3m)", () => {
+    const markup = renderCall({ toolCallId: "call_n" }, [
+      subagent({
+        runId: "n",
+        agentDisplayName: "Rechercheurin",
+        model: { model: "small-5-5", label: "Klein 5.5" }
+      })
+    ]);
+    expect(markup).toContain("Rechercheurin · Klein 5.5 · ");
+    expect(markup).not.toContain("researcher");
+    // A model without a label reads as its tidied id, as in the model picker.
+    const unlabelled = renderCall({ toolCallId: "call_u" }, [
+      subagent({ runId: "u", agentDisplayName: "Rechercheurin", model: { model: "gpt-5.6-luna" } })
+    ]);
+    expect(unlabelled).toContain("Rechercheurin · GPT-5.6 Luna · ");
+  });
+
   it("is starting until its subagent is known, with nothing to open", () => {
     const markup = renderCall({ toolCallId: "call_new" }, []);
     expect(markup).toContain(">Startet<");
@@ -246,6 +263,20 @@ describe("the Subagents section of the Resources panel", () => {
     expect([...order].sort((left, right) => left - right)).toEqual(order);
     expect(markup).toContain(">Gestoppt<");
     expect(markup).toContain(">Fertig<");
+  });
+
+  it("names each row's agent and model as the card does (CR-3m)", () => {
+    const markup = renderPanel([
+      subagent({
+        runId: "row",
+        status: "completed",
+        endedAt: "2026-10-17T09:00:08.000Z",
+        agentDisplayName: "Rechercheurin",
+        model: { model: "small-5-5", label: "Klein 5.5" }
+      })
+    ]);
+    expect(markup).toContain("Rechercheurin · Klein 5.5 · ");
+    expect(markup).not.toContain("researcher");
   });
 
   it("leaves the section out of a conversation without subagents", () => {

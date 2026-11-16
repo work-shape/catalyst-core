@@ -101,6 +101,8 @@ export type ToolExecutionErrorCode =
   | "confirmation_required"
   /** `run_agent` names an agent the run may not start as a subagent. */
   | "agent_not_available"
+  /** `run_agent` names a model the person may not pick on the subagent's agent (CR-3m). */
+  | "model_not_available"
   /** `run_agent` beyond the subagents one step or one run may start. */
   | "subagent_limit"
   /** A call of a personal Connection the person has not signed in to (CS-9a, CHAT-CONN-2b). */

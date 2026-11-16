@@ -110,9 +110,11 @@ export function findAgentSubagentReferenceIssues(
 ): string[] {
   const names = agentNames && new Set(agentNames);
   return agents.flatMap((agent) => {
-    const listed = agent.subagentNames ?? [];
+    // `"*"` names every agent the person may use, so it references none in particular.
+    const listed = agent.subagentNames === "*" ? [] : (agent.subagentNames ?? []);
+    const lists = agent.subagentNames === "*" || listed.length > 0;
     return [
-      ...(listed.length > 0 && !agent.toolNames.includes(RUN_AGENT_TOOL_NAME)
+      ...(lists && !agent.toolNames.includes(RUN_AGENT_TOOL_NAME)
         ? [`Agent '${agent.name}' lists subagents but does not allow '${RUN_AGENT_TOOL_NAME}'`]
         : []),
       ...listed
