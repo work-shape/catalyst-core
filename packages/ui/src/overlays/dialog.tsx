@@ -77,6 +77,9 @@ export function ModalSurface({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const pointerStartedOnBackdropRef = useRef(false);
   const openerRef = useRef<Element | null>(null);
+  // Escape closes the dialog at once, but its close event arrives a task later: the owner hears
+  // of it on the cancel event already, so a key pressed in between sees it closed.
+  const cancelledRef = useRef(false);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -85,6 +88,7 @@ export function ModalSurface({
     }
     if (open && !dialog.open) {
       openerRef.current = document.activeElement;
+      cancelledRef.current = false;
       dialog.showModal();
       initialFocus?.current?.focus();
     } else if (!open && dialog.open) {
@@ -160,6 +164,16 @@ export function ModalSurface({
         // The event of a close arrives late: where the dialog was opened again meanwhile, it
         // is the earlier close that speaks, and the dialog stays open.
         if (event.target === event.currentTarget && !event.currentTarget.open) {
+          if (cancelledRef.current) {
+            cancelledRef.current = false;
+            return;
+          }
+          onClose();
+        }
+      }}
+      onCancel={(event) => {
+        if (event.target === event.currentTarget) {
+          cancelledRef.current = true;
           onClose();
         }
       }}
