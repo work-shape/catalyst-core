@@ -54,7 +54,8 @@ agent asks first and then waits in the Inbox for a holder of agent.approve, and 
 publish offers it in its workspace. A workspace's agent made by someone without agent.approve
 starts offered nowhere; 'catalyst agent publish <name> --revision 1' publishes it as made,
 without a draft. A service principal's key publishes no agent. 'catalyst agent discard
-<name> --revision <n>' drops the draft.
+<name> --revision <n>' drops the draft. 'catalyst agent show <name> --revision draft' prints the
+draft; --revision published prints the live revision, and a number one of its history.
 A skill has no draft: a put, a push or a revert is live. A skill of the instance or of a Shared
 Workspace asks for skill.publish on a person's account or key with config_assets:publish;
 without it the write files a request a holder of skill.approve decides in the Inbox, says so
