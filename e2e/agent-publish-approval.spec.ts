@@ -3,6 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { z } from "zod";
+import { switchPublishGuardrail } from "./publish-guardrail";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
@@ -134,6 +135,8 @@ test("a workspace agent's publish waits in the Inbox and goes live once an admin
   const publisherPage = await publisherContext.newPage();
   const grants: string[] = [];
   try {
+    // The release ships the publish guardrail off (PUB-LIVE-1); an instance admin switches it on.
+    await switchPublishGuardrail(page, apiBaseUrl, true);
     await signIn(publisherPage, publisher);
     const me = idSchema.parse(
       await (await publisherPage.request.get(`${apiBaseUrl}/api/v1/me`)).json()
@@ -231,6 +234,7 @@ test("a workspace agent's publish waits in the Inbox and goes live once an admin
     );
     expect(await offered()).toContain(name);
   } finally {
+    await switchPublishGuardrail(page, apiBaseUrl, false);
     for (const grant of grants) {
       await requestWithOrigin(
         page,

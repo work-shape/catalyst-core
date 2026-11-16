@@ -92,11 +92,14 @@ test("a Builder and Publisher of one workspace confirms a connect code as it sta
     const confirm = builderPage.getByRole("button", { name: "Confirm", exact: true });
     await expect(confirm).toBeEnabled();
     const form = builderPage.locator("form").filter({ has: confirm });
-    // Only what the person holds is offered, ticked: no deletion, which neither bundle carries.
+    // Only what the person holds is offered, ticked but a deletion: Publisher deletes the
+    // workspace's skills (SKILL-DEL-1), offered and left unticked, and nothing else.
     await expect(form.getByRole("checkbox", { name: "Edit agents", exact: true })).toBeChecked();
     await expect(form.getByRole("checkbox", { name: "Publish agents", exact: true })).toBeChecked();
     await expect(form.getByRole("checkbox", { name: "Delete agents", exact: true })).toHaveCount(0);
-    await expect(form.getByRole("checkbox", { name: "Delete skills", exact: true })).toHaveCount(0);
+    await expect(
+      form.getByRole("checkbox", { name: "Delete skills", exact: true })
+    ).not.toBeChecked();
 
     await confirm.click();
     await expect(builderPage.getByText("The CLI is now logged in", { exact: true })).toBeVisible();
