@@ -7,7 +7,7 @@ COPY package.json schemas.tgz core.tgz ./
 RUN node -e "const fs=require('fs');const p=require('./package.json');delete p.devDependencies;p.dependencies['@work-shape/catalyst-asset-schemas']='file:schemas.tgz';p.dependencies['@work-shape/catalyst-core']='file:core.tgz';fs.writeFileSync('package.json',JSON.stringify(p))" \
  && npm install --omit=dev --ignore-scripts \
  && node node_modules/playwright/cli.js install --with-deps --only-shell chromium \
- && apt-get install -y --no-install-recommends fonts-noto-core fonts-noto-color-emoji \
+ && apt-get install -y --no-install-recommends fonts-inter fonts-noto-core fonts-noto-color-emoji \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --gid 10001 capture \
  && useradd --uid 10001 --gid 10001 --home-dir /tmp --no-create-home capture
