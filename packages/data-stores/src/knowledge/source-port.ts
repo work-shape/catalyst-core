@@ -9,6 +9,7 @@ import type {
   KnowledgeRetryInput,
   KnowledgeWorkflowSourcesOutput,
   ActorAccess,
+  KnowledgeDocumentFormat,
   KnowledgeFirstPassConfirmation,
   WorkflowDatasetReference
 } from "@work-shape/catalyst-core";
@@ -36,6 +37,36 @@ export interface KnowledgeIngestCall {
   /** The items as handed in, each checked on its own by the pass; or the dataset that holds them. */
   items: { inline: readonly unknown[] } | { dataset: WorkflowDatasetReference };
   complete: boolean;
+}
+
+/** One document `pending` hands out, before its pages are read (PROC-W). */
+export interface KnowledgePendingDocument {
+  id: string;
+  contentSha256: string;
+  fileId: string;
+  format: KnowledgeDocumentFormat;
+  type: string;
+  /** The id of the source it came from; null for a file added by hand. */
+  source: string | null;
+  path: string;
+  name: string;
+  /** When its pages last changed, to the millisecond, as an ISO date and time. */
+  changedAt: string;
+}
+
+/** One call of `knowledge.<id>.pending` from a Workflow step: the step's datasets hold the answer. */
+export interface KnowledgePendingCall {
+  knowledgeBaseId: string;
+  workflowRunId: string;
+  stepRunId: string;
+  type?: string;
+  since?: string;
+  limit: number;
+  /** The page text of one document, or nothing where none can be read. */
+  pages(
+    document: KnowledgePendingDocument,
+    signal: AbortSignal
+  ): Promise<readonly { page: number; text: string }[] | undefined>;
 }
 
 /** A first pass that stopped at its stop, with what the store holds now. */
@@ -79,6 +110,15 @@ export interface KnowledgeSources {
   syncedDocumentIds(id: string, ids: string[], signal: AbortSignal): Promise<string[]>;
   /** Records the pass and queues it; its Operation Run ends when every item has ended. */
   ingest(call: KnowledgeIngestCall, signal: AbortSignal): Promise<void>;
+  /**
+   * The indexed documents of a type whose pages changed after `since`, oldest change first, each
+   * with its pages as a dataset of the calling step run, and the list as another (PROC-W).
+   * Answers the list and how many documents had no readable text and were left out.
+   */
+  pending(
+    call: KnowledgePendingCall,
+    signal: AbortSignal
+  ): Promise<{ documents: WorkflowDatasetReference; unreadable: number }>;
   /** Withdraws items of a Workflow-fed source by their ids at the Workflow; answers how many. */
   withdraw(
     input: {

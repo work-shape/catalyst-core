@@ -28,6 +28,7 @@ import type { DataStoreRuntime } from "../../runtime";
 import { createSourceStore, syncResult } from "./source-store";
 import { enqueueSourceSync, sourceSyncStarted } from "./source-lifecycle";
 import { startIngest, withdrawWorkflowItems } from "./ingest";
+import { pendingDataset } from "./pending";
 import { WORKFLOW_SOURCE_END_MIGRATION, workflowSourceDocuments } from "./workflow-source";
 
 // All operations use the same derived state: the item owns fetch state, the content owns indexing.
@@ -412,6 +413,7 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
       });
     },
     ingest: (call, signal) => startIngest(runtime, call, signal),
+    pending: (call, signal) => pendingDataset(runtime, call, signal),
     withdraw: (input, signal) => withdrawWorkflowItems(runtime, input, signal),
     workflowSources: (workflow, access, signal) =>
       workflowSourceDocuments(runtime, workflow, access, signal),

@@ -247,9 +247,29 @@ describe("KBW-0 write contracts", () => {
         id: "doc",
         type: "kaufvertrag",
         contentHash: "a".repeat(64),
+        source: "drive",
+        path: "/Preise/preisliste.xlsx",
+        name: "preisliste.xlsx",
+        changedAt: "2026-11-16T08:00:00.000Z",
         pages: dataset
       })
     ).toHaveProperty("pages", dataset);
+    // A file added by hand has no source.
+    expect(
+      KNOWLEDGE_WRITE_OPERATIONS.pending.rowSchema.safeParse({
+        id: "doc",
+        type: "default",
+        contentHash: "a".repeat(64),
+        source: null,
+        path: "/notes.txt",
+        name: "notes.txt",
+        changedAt: "2026-11-16T08:00:00.000Z",
+        pages: dataset
+      }).success
+    ).toBe(true);
+    expect(KNOWLEDGE_WRITE_OPERATIONS.pending.inputSchema.safeParse({ limit: 1_001 }).success).toBe(
+      false
+    );
     expect(
       KNOWLEDGE_WRITE_OPERATIONS.pending.rowSchema.safeParse({
         id: "doc",

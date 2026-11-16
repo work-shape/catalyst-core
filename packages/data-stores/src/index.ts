@@ -95,6 +95,7 @@ export {
   KNOWLEDGE_CHUNKING_REVISION,
   knowledgeChunkPrefix
 } from "./knowledge/builtin/chunking";
+export { pageRows as knowledgePendingPageRows } from "./knowledge/builtin/pending";
 export { dataStoreStateOperationName } from "./state";
 export { splitSeedStatements } from "./seed-statements";
 export type { TestCopyPart } from "./test-copy";

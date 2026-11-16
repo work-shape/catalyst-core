@@ -6,6 +6,7 @@ import {
   LEGACY_LIST_GRANTOR,
   WORKFLOW_ASSET_KIND,
   type JsonObject,
+  type KnowledgeExtractor,
   type WorkflowRunPrincipal,
   type WorkflowStepRunId
 } from "@work-shape/catalyst-core";
@@ -43,10 +44,15 @@ export function operationRunOf(outcome: Awaited<ReturnType<typeof runOperation>>
 export function useKnowledgeWorkflow(options: { firstPassStop?: number } = {}) {
   const { setup } = useKnowledgeSync(options);
   /** `developmentAuth` names the people a test signs in as, beside the default one. */
-  async function world(developmentAuth?: unknown, workflows?: true) {
+  async function world(
+    developmentAuth?: unknown,
+    workflows?: true,
+    /** Reads PDF and office files, as the document-processing capability does. */
+    extractor?: KnowledgeExtractor
+  ) {
     const world = await setup(
       undefined,
-      undefined,
+      extractor,
       false,
       developmentAuth,
       undefined,
@@ -208,7 +214,7 @@ export function useKnowledgeWorkflow(options: { firstPassStop?: number } = {}) {
         return reference;
       }
       async function call(
-        operation: "ingest" | "withdraw" | "retry",
+        operation: "ingest" | "withdraw" | "retry" | "pending",
         input: unknown,
         knowledgeBase = KB
       ) {
@@ -217,7 +223,7 @@ export function useKnowledgeWorkflow(options: { firstPassStop?: number } = {}) {
         return runOperation(
           {
             operation: `knowledge.${knowledgeBase}.${operation}`,
-            effect: "changing",
+            effect: operation === "pending" ? "reading" : "changing",
             input,
             actor,
             origin: { kind: "workflow", workflowRunId: runId, stepRunId },
