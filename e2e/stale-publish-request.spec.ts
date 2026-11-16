@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
 import { z } from "zod";
+import { switchPublishGuardrail } from "./publish-guardrail";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
@@ -60,6 +61,8 @@ test("a publish request a newer revision overtook leaves To decide and says it c
   const publisherPage = await publisherContext.newPage();
   const grants: string[] = [];
   try {
+    // The release ships the publish guardrail off (PUB-LIVE-1); an instance admin switches it on.
+    await switchPublishGuardrail(page, apiBaseUrl, true);
     await signIn(publisherPage, publisher);
     const me = idSchema.parse(
       await (await publisherPage.request.get(`${apiBaseUrl}/api/v1/me`)).json()
@@ -163,6 +166,7 @@ test("a publish request a newer revision overtook leaves To decide and says it c
     await theirs.getByRole("button").click();
     await expect(publisherPage.getByTestId("inbox-item")).toContainText(OVERTAKEN);
   } finally {
+    await switchPublishGuardrail(page, apiBaseUrl, false);
     for (const grant of grants) {
       await requestWithOrigin(
         page,
