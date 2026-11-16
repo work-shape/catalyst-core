@@ -190,9 +190,19 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
       if (changedModelSettings(workspaceModels, current, next).length === 0) return undefined;
       // Asked with the agent: a personal key covers the right where it covers writing it.
       const decision = access.authorize(MODEL_SETTINGS_RIGHT, resource);
-      return decision.allowed
-        ? undefined
-        : { action: MODEL_SETTINGS_RIGHT, reason: decision.reason };
+      if (decision.allowed) return undefined;
+      // A key that does not cover the right its owner holds is told about the key instead.
+      return decision.reason === "outside_key_scope"
+        ? { action: MODEL_SETTINGS_RIGHT, reason: decision.reason }
+        : {
+            action: MODEL_SETTINGS_RIGHT,
+            reason: decision.reason,
+            message: modelSettingsRefusal(
+              changedModelSettings(workspaceModels, current, next),
+              current,
+              workspaceModels
+            )
+          };
     },
 
     assertInteractiveUpsertAllowed({ access, resource, current, next, workspaceModels }) {
@@ -220,7 +230,8 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
             })
           : new AppError(
               "FORBIDDEN",
-              `Changing agent model settings (${changedSettings.join(", ")}) requires '${MODEL_SETTINGS_RIGHT}' permission`
+              modelSettingsRefusal(changedSettings, current, workspaceModels),
+              { action: MODEL_SETTINGS_RIGHT, reason: modelRight.reason }
             );
       }
       const protectedFields = changedFields.filter(
@@ -305,6 +316,33 @@ function changedModelSettings(
         agentModelSettingValue(next, field)
       )
   );
+}
+
+/**
+ * The refusal of a save that changes model settings without `agent_models.manage`: which
+ * settings, what they hold now, and what to do. Keeping them as stored, or leaving them out of
+ * a new agent, saves without the right; an instance admin changes them or grants the right. An
+ * agent a workspace owns takes its models and their efforts without the right, among those the
+ * workspace allows, so only for an agent of the instance is that named as the other way.
+ */
+function modelSettingsRefusal(
+  changed: readonly AgentModelSettingField[],
+  current: unknown,
+  workspaceModels: boolean
+): string {
+  const named = changed.length === 0 ? "the model settings" : changed.join(", ");
+  const keep =
+    current === undefined
+      ? `leave ${named} out: the agent then runs the instance's default model`
+      : `keep ${changed.length === 0 ? named : changed.map((field) => `${field} ${storedValue(agentModelSettingValue(current, field))}`).join(", ")}, as stored`;
+  const lists = workspaceModels
+    ? ""
+    : "; an agent a workspace owns instead takes its model, the models its users may pick and their efforts from whoever writes it, among the models the workspace allows";
+  return `Changing ${named} needs the right '${MODEL_SETTINGS_RIGHT}', which an instance admin holds and this call does not. To save without it, ${keep}. To change ${changed.length === 1 ? "it" : "them"}, ask an instance admin to make the change or to grant '${MODEL_SETTINGS_RIGHT}'${lists}.`;
+}
+
+function storedValue(value: unknown): string {
+  return value === undefined ? "unset (left out)" : JSON.stringify(value);
 }
 
 function isAgentModelSettingField(field: string): field is AgentModelSettingField {

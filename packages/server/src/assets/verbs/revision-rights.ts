@@ -206,7 +206,8 @@ export async function requireFurtherRight(
     throw operationDenialError({
       kind: "forbidden",
       action: further.action,
-      reason: further.reason
+      reason: further.reason,
+      ...(further.message === undefined ? {} : { message: further.message })
     });
   }
 }

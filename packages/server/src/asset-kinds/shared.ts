@@ -26,6 +26,8 @@ import type {
 export interface MissingUpsertRight {
   action: string;
   reason: Extract<AccessDecision, { allowed: false }>["reason"];
+  /** What the refusal says in place of naming the right alone: what to do instead. */
+  message?: string;
 }
 
 /** What a kind's `withinWrite` leaves to do once the transaction ended. */

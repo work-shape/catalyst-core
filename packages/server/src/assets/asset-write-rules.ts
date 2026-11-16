@@ -685,11 +685,16 @@ function buildLimitRefusal(
       ...(agent.modelBindingId === undefined ? [] : [agent.modelBindingId]),
       ...(agent.userSelectableModelBindingIds ?? [])
     ].find((id) => !allowedModelBindingIds.includes(id));
-  if (modelBindingId !== undefined) {
+  if (allowedModelBindingIds && modelBindingId !== undefined) {
     return new AppError(
       "FORBIDDEN",
-      `Model binding '${modelBindingId}' is not allowed in ${limits.place}`,
-      { reason: "model_not_allowed", modelBindingId, ...limits.details }
+      `Model binding '${modelBindingId}' is not allowed in ${limits.place}. ${allowedModelsLine(allowedModelBindingIds, limits.place)}`,
+      {
+        reason: "model_not_allowed",
+        modelBindingId,
+        allowedModelBindingIds: [...allowedModelBindingIds],
+        ...limits.details
+      }
     );
   }
   // Without a binding the agent runs the provider it names or the instance default, which
@@ -701,11 +706,25 @@ function buildLimitRefusal(
   ) {
     return new AppError(
       "FORBIDDEN",
-      `An agent in ${limits.place} must select a model binding allowed there`,
-      { reason: "model_binding_required", ...limits.details }
+      `An agent in ${limits.place} must select a model binding allowed there. ${allowedModelsLine(allowedModelBindingIds, limits.place)}`,
+      {
+        reason: "model_binding_required",
+        allowedModelBindingIds: [...allowedModelBindingIds],
+        ...limits.details
+      }
     );
   }
   return undefined;
+}
+
+/**
+ * What a writer bound by a list of model bindings does: set `modelBindingId` (and any
+ * `userSelectableModelBindingIds`) to bindings it names, or have an instance admin change it.
+ */
+function allowedModelsLine(allowed: readonly string[], place: string): string {
+  return allowed.length === 0
+    ? `The build limits of the ${place} allow no model binding: an instance admin adds one to its allowedModelBindingIds before an agent can be saved there.`
+    : `The build limits of the ${place} allow: ${allowed.map((id) => `'${id}'`).join(", ")}. Set modelBindingId, and any userSelectableModelBindingIds, to bindings of that list, or ask an instance admin to add another one to its allowedModelBindingIds.`;
 }
 
 export function requireMatchingConfigName(config: unknown, expectedName: string): void {

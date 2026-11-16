@@ -584,14 +584,19 @@ describe("config asset admin routes", () => {
     for (const [field, change] of Object.entries(changes)) {
       const denied = await put(adminToken, { ...initial, ...change });
       expect(denied.statusCode).toBe(403);
-      // The missing right is answered as every missing right is, before the write is read.
+      // The missing right is answered before the write is read, with what to do instead.
       expect(denied.json(), field).toMatchObject({
         error: {
           code: "FORBIDDEN",
-          message: "Missing the right 'agent_models.manage'",
+          message: expect.stringContaining(
+            `Changing ${field} needs the right 'agent_models.manage', which an instance admin holds and this call does not. To save without it, keep ${field} `
+          ),
           details: { action: "agent_models.manage" }
         }
       });
+      expect(denied.json().error.message, field).toContain(
+        "ask an instance admin to make the change or to grant 'agent_models.manage'"
+      );
     }
     // The admin keeps the fields that the edit policy allows.
     expect((await put(adminToken, { ...initial, displayName: "Renamed" })).statusCode).toBe(200);
@@ -825,7 +830,12 @@ describe("config asset admin routes", () => {
       payload: { config: { ...offered, modelReasoningEfforts: { other: "high" } } }
     });
     expect(denied.statusCode).toBe(403);
-    expect(denied.json().error.message).toBe("Missing the right 'agent_models.manage'");
+    expect(denied.json().error.message).toContain(
+      `Changing modelReasoningEfforts needs the right 'agent_models.manage'`
+    );
+    expect(denied.json().error.message).toContain(
+      `keep modelReasoningEfforts {"other":"low"}, as stored`
+    );
 
     // A stored id that is no longer eligible does not block later edits of the agent.
     await applyAtCurrentRevisions(fixture.store.configAssets, {
