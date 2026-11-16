@@ -19,6 +19,11 @@ import { configValuesEqual, readDefinitionField } from "../asset-kinds/shared";
 // a skill being deleted gets a revision without it first, in the same write, or every later
 // write of the instance would be refused for the reference it left. It writes to the store and
 // through no operation, which refuse every write to such a skill.
+//
+// An instance skill under a shipped name that no person ever wrote, only a service principal
+// such as a config release or System, is an earlier copy of the shipped skill: the seed adopts
+// it, writing the shipped skill over it as it updates one. Agents keep listing it by name. A
+// copy a person wrote once is the instance's own and stays.
 
 const SKILL_KIND = "skill";
 const AGENT_KIND = "agent";
@@ -30,6 +35,8 @@ const SYSTEM_ACTOR: AuditActor = { displayLabel: "System", roles: [] };
 export interface ShippedSkillSeedResult {
   /** Existing names kept intact when their content or owner conflicts with a shipped skill. */
   retained: string[];
+  /** Instance copies no person ever wrote, now the shipped skill of their name. */
+  adopted: string[];
   created: string[];
   updated: string[];
   removed: string[];
@@ -68,6 +75,14 @@ function definitionOf(skill: ShippedSkill): JsonObject {
 const isShipped = (asset: ConfigAssetRecord) =>
   readDefinitionField(asset.config, "origin") === "release";
 
+/** Whether a revision was written by a person: a user, never a service principal or System. */
+const writtenByPerson = (actor: AuditActor | null) =>
+  actor !== null &&
+  actor.principalKind !== "service" &&
+  (actor.principalKind === "user" ||
+    actor.userId !== undefined ||
+    actor.externalUserId !== undefined);
+
 /**
  * Reconciles the stored skills of origin `release` with what this build ships. Safe on every
  * start and in several processes at once: a start that finds everything as shipped writes
@@ -87,6 +102,16 @@ export async function seedShippedSkills(
   }
 }
 
+/** Whether every stored revision of the instance skill was written by no person. */
+async function notWrittenByPerson(input: SeedShippedSkillsInput, name: string): Promise<boolean> {
+  const revisions = await input.stores.configAssets.listConfigAssetRevisions({
+    clientInstanceId: input.clientInstanceId,
+    kind: SKILL_KIND,
+    name
+  });
+  return revisions.length > 0 && revisions.every((revision) => !writtenByPerson(revision.actor));
+}
+
 async function reconcile(input: SeedShippedSkillsInput): Promise<ShippedSkillSeedResult> {
   const { clientInstanceId } = input;
   const store = input.stores.configAssets;
@@ -99,6 +124,7 @@ async function reconcile(input: SeedShippedSkillsInput): Promise<ShippedSkillSee
   );
   const result: ShippedSkillSeedResult = {
     retained: [],
+    adopted: [],
     created: [],
     updated: [],
     removed: [],
@@ -110,7 +136,12 @@ async function reconcile(input: SeedShippedSkillsInput): Promise<ShippedSkillSee
     const asset = stored.get(name);
     // Deleted rows keep their owner too: an instance upsert cannot reclaim a workspace name.
     const row = asset ?? (await store.getConfigAsset({ clientInstanceId, kind: SKILL_KIND, name }));
-    if ((row && row.scope.kind !== "instance") || (asset && !isShipped(asset))) {
+    const adopt =
+      row?.scope.kind === "instance" &&
+      asset !== undefined &&
+      !isShipped(asset) &&
+      (await notWrittenByPerson(input, name));
+    if (!adopt && ((row && row.scope.kind !== "instance") || (asset && !isShipped(asset)))) {
       // Keep user content and ownership intact, and leave the admin API available to resolve
       // collisions. Removing an instance copy lets a later start seed the shipped skill;
       // a workspace's name remains with that workspace even after deletion.
@@ -122,7 +153,7 @@ async function reconcile(input: SeedShippedSkillsInput): Promise<ShippedSkillSee
     // brings it back continues its revisions.
     mutations.push({ type: "upsert", kind: SKILL_KIND, name, config });
     baseRevisions[`${SKILL_KIND}:${name}`] = row?.revision ?? null;
-    (asset ? result.updated : result.created).push(name);
+    (adopt ? result.adopted : asset ? result.updated : result.created).push(name);
   }
   for (const asset of stored.values()) {
     if (!isShipped(asset) || shipped.has(asset.name)) continue;
