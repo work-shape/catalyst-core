@@ -142,24 +142,16 @@ export function subagentOperation(
           ...(reasoningEffort === undefined ? {} : { reasoningEffort })
         };
       } else {
-        // The parent's model is the one its run names, else its agent's own binding. A parent
-        // on its provider's own model, with no binding, leaves another agent on its own
-        // default: an effort means nothing without the model it was set for.
-        const bindingId = parent.modelBindingId ?? own?.modelBindingId;
-        const binding = options.config.modelBindings.find(
-          (candidate) => candidate.id === bindingId
-        );
-        const reasoningEffort =
-          parent.reasoningEffort ??
-          (own && binding ? defaultReasoningEffortForAgentBinding(own, binding) : undefined);
-        selection = binding
-          ? {
-              modelBindingId: binding.id,
-              ...(reasoningEffort === undefined ? {} : { reasoningEffort })
-            }
-          : agentName === parent.agentName && parent.reasoningEffort
+        // A copy of the parent runs on the parent's model and effort, as CR-1 had it. Another
+        // agent runs on its own default: its builder chose it, and the parent's model may not
+        // be allowed there.
+        const sameAgent = agentName === parent.agentName;
+        selection = {
+          ...(sameAgent && parent.modelBindingId ? { modelBindingId: parent.modelBindingId } : {}),
+          ...(sameAgent && parent.reasoningEffort
             ? { reasoningEffort: parent.reasoningEffort }
-            : {};
+            : {})
+        };
       }
       const started = await options.stores.childAgentRuns.startSubagentRun({
         clientInstanceId: options.clientInstanceId,

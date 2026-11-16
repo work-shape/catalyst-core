@@ -36,7 +36,7 @@ const taskField = z
 
 const AGENT_FIELD = "The agent to run. Leave it out to run yourself in a fresh context.";
 const MODEL_FIELD =
-  "The model the subagent runs on. Leave it out to run it on your own model; pick a smaller one for mechanical work.";
+  "The model the subagent runs on. Leave it out and a copy of yourself runs on your model and effort, another agent on its own default model; pick a smaller one for mechanical work.";
 
 /**
  * The input of `run_agent` and of the operation `agents.run` it is (CR-1, CR-3m). `agent` and

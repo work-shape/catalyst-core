@@ -119,8 +119,7 @@ async function askToReadMail(agentName: string) {
         idempotencyKey: `mail-${agentName}`,
         agentName,
         message: {
-          // The subagent names its own eu model: without one it would run on its parent's (CR-3m).
-          text: `/tool run_agent ${JSON.stringify({ agent: "reader", model: "eu", description: "Mail", task })}`
+          text: `/tool run_agent ${JSON.stringify({ agent: "reader", description: "Mail", task })}`
         }
       }
     },
