@@ -454,6 +454,11 @@ export type WorkflowStep =
         type: "agent";
         instructions: string;
         input: WorkflowInputMapping;
+        /**
+         * The model binding the step runs on, one agents may select on the instance; the
+         * instance's default chat binding where it is left out.
+         */
+        model?: string;
       })
   /** Puts a notice into an Inbox or sends a mail through the platform mailer. */
   | (WorkflowStepBase & {

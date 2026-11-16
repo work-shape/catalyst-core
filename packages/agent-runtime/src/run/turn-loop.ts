@@ -134,6 +134,10 @@ export class TurnLoop {
           name: input.agentName,
           instructions: input.workflowAgent.instructions,
           toolNames: [...input.workflowAgent.toolNames],
+          // The step's binding, checked at save and publish; the default chat binding without one.
+          ...(input.workflowAgent.modelBindingId === undefined
+            ? {}
+            : { modelBindingId: input.workflowAgent.modelBindingId }),
           skillNames: [],
           displayName: { en: input.agentName, de: input.agentName },
           initialPrompts: []

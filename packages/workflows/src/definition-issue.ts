@@ -6,6 +6,9 @@ export const WORKFLOW_LIMIT_ABOVE_CEILING = "limit_above_ceiling";
 /** The code of a step that names an operation no step of a Workflow may call. */
 export const WORKFLOW_OPERATION_NOT_CALLABLE = "operation_not_callable";
 
+/** The code of an agent step whose `model` names a binding agents may not select. */
+export const WORKFLOW_MODEL_NOT_AVAILABLE = "model_not_available";
+
 /** The code of a definition outside clients may start that reads data not exposed to them. */
 export const WORKFLOW_OUTSIDE_NOT_EXPOSED = "outside_not_exposed";
 
@@ -22,5 +25,6 @@ export interface WorkflowDefinitionIssue {
     | typeof WORKFLOW_OPERATION_NOT_CALLABLE
     | typeof WORKFLOW_LIMIT_ABOVE_CEILING
     | typeof WORKFLOW_OUTSIDE_NOT_EXPOSED
+    | typeof WORKFLOW_MODEL_NOT_AVAILABLE
     | "process_workflow_write_operation";
 }

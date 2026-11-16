@@ -17,7 +17,8 @@ export const agentStep = {
       ...declared,
       type: z.literal("agent"),
       instructions: z.string().min(1),
-      input: inputMappingSchema
+      input: inputMappingSchema,
+      model: z.string().min(1).optional()
     }),
   unsupported: (step: StepOf<"agent">, at: string) =>
     namesDatasetType(step.inputSchema)
