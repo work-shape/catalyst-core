@@ -665,7 +665,8 @@ describe("the model of a subagent (CR-3m)", () => {
     const f = await modelFixture(["zeta", "alpha"]);
     const message = [
       runAgent({ description: "Klein", task: "Task small.", agent: "alpha", model: "large" }),
-      runAgent({ description: "Erbe", task: "Task inherit.", agent: "alpha" }),
+      runAgent({ description: "Eigen", task: "Task own default.", agent: "alpha" }),
+      runAgent({ description: "Kopie", task: "Task copy." }),
       runAgent({ description: "Falsch", task: "Task wrong.", agent: "zeta", model: "small" }),
       runAgent({ description: "Fremd", task: "Task other.", model: "other" })
     ].join("\n");
@@ -681,12 +682,13 @@ describe("the model of a subagent (CR-3m)", () => {
     );
     expect(tool.agent.description).not.toContain("outsider");
 
-    // A chosen model runs the child on it; without one it takes the parent's.
+    // A chosen model runs the child on it. Without one a named agent runs on its own default
+    // and a copy of the parent on the parent's model.
     const children = await f.children(said.runId);
-    expect(children.map((child) => child.description)).toEqual(["Klein", "Erbe"]);
-    const [chosen, inherited] = children.map((child) => child.subagentRunId);
+    expect(children.map((child) => child.description)).toEqual(["Klein", "Eigen", "Kopie"]);
+    const [chosen, ownDefault, copy] = children.map((child) => child.subagentRunId);
     expect(await f.agentRun(required(chosen))).toMatchObject({ modelBindingId: "large" });
-    expect(await f.agentRun(required(inherited))).toMatchObject({ modelBindingId: "large" });
+    expect(tool.model.description).toContain("another agent on its own default model");
 
     // A binding outside the child agent's offer is refused and starts nothing.
     const failures = (await f.events(said.runId)).flatMap((event) =>
@@ -698,9 +700,12 @@ describe("the model of a subagent (CR-3m)", () => {
     const usage = await f.app.stores.usage.listModelUsageEvents({
       clientInstanceId: f.clientInstanceId
     });
-    const ofChosen = usage.filter((event) => event.agentRunId === chosen);
-    expect(ofChosen.length).toBeGreaterThan(0);
-    expect(ofChosen.every((event) => event.bindingId === "large")).toBe(true);
+    const bindingsOf = (runId: string | undefined) => [
+      ...new Set(usage.filter((event) => event.agentRunId === runId).map((e) => e.bindingId))
+    ];
+    expect(bindingsOf(chosen)).toEqual(["large"]);
+    expect(bindingsOf(ownDefault)).toEqual(["small"]);
+    expect(bindingsOf(copy)).toEqual(["large"]);
 
     // The panel's list names the agent and its model as a person reads them.
     const listed = await f.subagents(said.conversationId);
