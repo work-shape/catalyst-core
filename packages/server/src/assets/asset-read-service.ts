@@ -41,7 +41,13 @@ import {
 } from "@work-shape/catalyst-core";
 import { resolveConfigLocale } from "@work-shape/catalyst-config-schema";
 import { accessResource, decide, listedTo, type AssetCall } from "./asset-access";
-import { isReleaseSync } from "./asset-write-rules";
+import {
+  isReleaseSync,
+  loadStoredAssets,
+  pendingSharedDrafts,
+  withPublishedConfigs
+} from "./asset-write-rules";
+import { agentsListingSkill } from "../asset-kinds/skill";
 import { readRevisionFiles, readSourceFiles, type AssetFileOutput } from "./asset-files";
 import { hasSharedDrafts } from "./shared-drafts";
 import type { AddresseeNames, WorkflowAssetKind } from "../asset-kinds/shared";
@@ -455,6 +461,11 @@ export class AssetReadWorkflow {
     // What the caller may do here, decided as each write decides it, so the page offers no
     // action the instance refuses and hides none it allows (AD-4).
     const allowed = allowedOn(target.kind, call, target.resource);
+    // The agents that keep a skill from its delete, for who may delete it (SKILL-DEL-1).
+    const listedBy =
+      target.kind.kind === "skill" && allowed.includes("delete")
+        ? await this.skillListedBy(call, asset.name, locale)
+        : undefined;
     // The widening check (DS-13c), for who may publish the revision: the publish asks it again.
     // A failed check never breaks the read: the publish asks it again and refuses or holds.
     const publishHandover =
@@ -595,6 +606,8 @@ export class AssetReadWorkflow {
             )
           }
         : {}),
+      ...(listedBy?.agents.length ? { listedBy: listedBy.agents } : {}),
+      ...(listedBy?.unread ? { listedByUnread: listedBy.unread } : {}),
       allowed,
       updatedAt: asset.updatedAt
     };
@@ -650,6 +663,43 @@ export class AssetReadWorkflow {
       },
       locale
     );
+  }
+
+  /**
+   * The agents that list the skill, as its delete refuses for them: those the caller may read
+   * by name and title, the others counted.
+   */
+  private async skillListedBy(
+    call: AssetCall,
+    name: string,
+    locale: LocaleCode | undefined
+  ): Promise<{ agents: { name: string; title: string }[]; unread: number }> {
+    const stored = await loadStoredAssets(this.options);
+    const listing = await agentsListingSkill({
+      name,
+      assets: (kind) => withPublishedConfigs(this.options, stored.assets, kind),
+      drafts: (assetIds) => pendingSharedDrafts(this.options, assetIds)
+    });
+    const readable = listing.filter(
+      (agent) =>
+        call.access.authorize(
+          "agent.read",
+          accessResource(agent.kind, agent.name, agent.scope, agent.id)
+        ).allowed
+    );
+    return {
+      agents: readable.map((agent) => ({
+        name: agent.name,
+        title: assetTitle(
+          this.options.configAssets.kinds.kinds,
+          agent.kind,
+          agent.name,
+          agent.publishedConfig ?? agent.config ?? {},
+          locale
+        )
+      })),
+      unread: listing.length - readable.length
+    };
   }
 
   private async agentStatus(config: unknown) {

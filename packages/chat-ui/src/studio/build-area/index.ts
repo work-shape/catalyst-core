@@ -244,6 +244,7 @@ export {
 } from "./instance-tools";
 export { resolveBuildPlace, visibleBuildKinds } from "./build-model";
 export { addressBlocksCreate, addressCheckOf } from "./name-check";
+export { deleteBlockedReason } from "./delete-blocked";
 export {
   approverNamesOf,
   PendingApprovalError,

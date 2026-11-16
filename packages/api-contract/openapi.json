@@ -50466,6 +50466,29 @@
           "canSetAvailability": {
             "type": "boolean"
           },
+          "listedBy": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "title"
+              ]
+            }
+          },
+          "listedByUnread": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
           "agentUse": {
             "$ref": "#/components/schemas/AgentUse"
           },

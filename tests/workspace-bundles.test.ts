@@ -354,7 +354,16 @@ describe("a Publisher deleting the workspace's skills (SKILL-DEL-1)", () => {
     });
   }
 
+  function readSkill(name: string) {
+    return t.expectOk(t.kai.id, "assets.get", {
+      params: { kind: "skill", name },
+      query: { workspaceId: team }
+    });
+  }
+
   it("is no Builder's: Builder alone deletes no skill", async () => {
+    // Who may not delete the skill is not told which agents keep it.
+    expect((await readSkill("guide")).json()).not.toHaveProperty("listedBy");
     const refused = await deleteSkill("spare", team);
     expect([refused.statusCode, refusalOf(refused)]).toEqual([
       403,
@@ -404,6 +413,16 @@ describe("a Publisher deleting the workspace's skills (SKILL-DEL-1)", () => {
     expect(
       await t.stores.configAssets.getConfigAsset({ clientInstanceId, kind: "skill", name: "guide" })
     ).toMatchObject({ status: "active" });
+  });
+
+  it("tells who may delete the skill which agents keep it, before the delete", async () => {
+    const read = (await readSkill("guide")).json();
+    expect(read).toMatchObject({
+      listedBy: ["draft-user", "live-only", "live-user"].map((name) =>
+        expect.objectContaining({ name, title: expect.any(String) })
+      )
+    });
+    expect(read).not.toHaveProperty("listedByUnread");
   });
 });
 

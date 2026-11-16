@@ -64,6 +64,7 @@ import {
   refusalPlaceOf,
   useKnownWorkspaces
 } from "./asset-place";
+import { deleteBlockedReason } from "./delete-blocked";
 
 /**
  * Whether a publish was refused because what it processes or embeds again changed after the
@@ -668,7 +669,16 @@ function LoadedAssetPage({
       source.chooseScope?.(owner);
     }
   });
-  const canDelete = !shipped && state.canDelete && mayOnAsset(source.rights, "delete", stored);
+  // Delete stands in the menu wherever the instance lets the kind be deleted here, and says why
+  // it cannot be chosen: the reader lacks the right, or agents still list the skill (SKILL-DEL-1).
+  const showsDelete = !shipped && state.canDelete;
+  const deleteBlocked = deleteBlockedReason(
+    stored,
+    mayOnAsset(source.rights, "delete", stored),
+    place,
+    t,
+    locale
+  );
   // A kind with drafts answers its two pointers. The saved draft is ahead of what is
   // published, or nothing is published yet.
   const hasDraft = stored.draftRevision !== undefined;
@@ -932,13 +942,15 @@ function LoadedAssetPage({
                 ) : null}
                 {share.item}
                 <CopyIdItem id={stored.name} />
-                {canDelete ? (
+                {showsDelete ? (
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       tone="danger"
                       icon={<Trash2 aria-hidden="true" />}
-                      onSelect={() => setDeleteOpen(true)}
+                      {...(deleteBlocked === undefined
+                        ? { onSelect: () => setDeleteOpen(true) }
+                        : { disabledReason: deleteBlocked, reasonPlacement: "line" as const })}
                     >
                       {t("configDelete")}
                     </DropdownMenuItem>
