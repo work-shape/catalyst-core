@@ -365,7 +365,7 @@ ENV NODE_ENV=production PLAYWRIGHT_BROWSERS_PATH=/opt/browsers HOME=/tmp
 COPY --from=preview-capture-packages /opt/preview-capture ./
 RUN capture_cli="$(node --input-type=module -e 'import {createRequire} from "node:module"; import {dirname,join} from "node:path"; process.stdout.write(join(dirname(createRequire(import.meta.resolve("@work-shape/catalyst-preview-capture")).resolve("playwright/package.json")),"cli.js"))')" \
  && node "$capture_cli" install --with-deps --only-shell chromium \
- && apt-get install -y --no-install-recommends fonts-noto-core fonts-noto-color-emoji \
+ && apt-get install -y --no-install-recommends fonts-inter fonts-noto-core fonts-noto-color-emoji \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --gid 10001 capture \
  && useradd --uid 10001 --gid 10001 --home-dir /tmp --no-create-home capture
