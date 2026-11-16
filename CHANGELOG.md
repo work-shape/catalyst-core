@@ -7,6 +7,19 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.37 — 2026-11-16
+
+### Fixed
+
+- **Dialogs:** a dialog closed with Escape tells its owner at once, not a moment later when the
+  browser's close event arrives. Pressing Ctrl+K (⌘K) right after closing the search palette with
+  Escape opens it again; before, the shortcut could land in between and leave the palette closed.
+- **Shipped skills:** an instance skill under a shipped skill's name that no person ever wrote,
+  only a service principal such as a config release or System, is now adopted at start: the seed
+  writes the shipped skill over it, logs the adopted names, and agents keep listing it by name.
+  Before, such a copy was kept forever with a warning, and could neither be updated (the name is
+  reserved) nor deleted (an agent listed it). A copy a person edited is still kept with the warning.
+
 ## 0.8.0-rc.36 — 2026-11-16
 
 ### Added
