@@ -673,6 +673,7 @@ async function listSubagents(
         parentRunId: asAgentRunId(run.parentRunId),
         toolCallId: asToolCallId(origin.toolCallId),
         agentName: run.agentName,
+        ...(run.modelBindingId === null ? {} : { modelBindingId: run.modelBindingId }),
         description: title,
         status: run.status,
         startedAt: run.startedAt.toISOString(),

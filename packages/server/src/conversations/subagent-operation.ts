@@ -2,14 +2,14 @@ import {
   AGENTS_RUN_OPERATION,
   answerAsTool,
   asAgentRunId,
-  type AuthenticatedIdentity,
   type ClientInstanceId,
-  type CollaborationWorkspaceId,
+  ALL_SUBAGENTS,
+  defaultReasoningEffortForAgentBinding,
   type ConfigAssetSource,
-  type ConversationId,
   type OperationDefinition,
   type OperationRegistry,
   type PlatformStores,
+  type ReasoningEffortConfig,
   type ToolExecutionErrorCode
 } from "@work-shape/catalyst-core";
 import {
@@ -17,38 +17,27 @@ import {
   runAgentOutputSchema,
   type RunAgentInput
 } from "@work-shape/catalyst-tool-execution";
+import {
+  listsSubagent,
+  subagentAvailable,
+  subagentModelChoices,
+  type SubagentChoiceOptions
+} from "./subagent-choices";
 
 /** How long a start of a subagent may take: it writes its thread and its run, nothing more. */
 const AGENTS_RUN_TIMEOUT_MS = 30_000;
 
-export interface SubagentOperationOptions {
+export interface SubagentOperationOptions extends Omit<SubagentChoiceOptions, "stores"> {
   clientInstanceId: ClientInstanceId;
   stores: Pick<
     PlatformStores,
-    "agentRuns" | "childAgentRuns" | "conversations" | "scheduledStarts"
+    "agentRuns" | "childAgentRuns" | "conversations" | "scheduledStarts" | "workspaces"
   >;
   assetSource: ConfigAssetSource;
-  /**
-   * Whether a person may use an agent in a workspace now: the rule a new run starts under,
-   * availability and `agent.use` (AGENT-USE-1). A refusal of `agent.use` is recorded. With the
-   * root chat, the actor's own agent ("Nur ich") counts as available in a chat only they read.
-   */
-  agentAvailable(input: {
-    agentName: string;
-    workspaceId: CollaborationWorkspaceId;
-    actor: AuthenticatedIdentity;
-    correlationId: string;
-    conversationId?: ConversationId;
-    /**
-     * The chat the call is made from, its root for a subagent's thread. A person who reads it
-     * from outside its workspace (`readsChatFromOutside`) runs only the instance's agents there.
-     */
-    chatId?: ConversationId;
-  }): Promise<boolean>;
 }
 
 /**
- * The operation `agents.run` (CR-1), which an agent's `run_agent` call is. It starts a
+ * The operation `agents.run` (CR-1, CR-3m), which an agent's `run_agent` call is. It starts a
  * subagent in a run thread of its own and ends `done` once the child is committed: the child's
  * answer reaches the parent when the parent's step ends, not through this run. A subagent acts
  * as its parent's person, so this call needs no right of its own; every call the child makes
@@ -106,43 +95,78 @@ export function subagentOperation(
       const agentName = input.agent ?? parent.agentName;
       const assets = await options.assetSource.getSnapshot();
       const own = assets.agents.find((agent) => agent.name === parent.agentName);
-      // Q3: the parent's own agent, and the agents its config lists, each only where the
-      // person may use it in the root conversation's workspace.
-      const listed =
-        agentName === parent.agentName || (own?.subagentNames ?? []).includes(agentName);
-      const exists = assets.agents.some((agent) => agent.name === agentName);
+      const child = assets.agents.find((agent) => agent.name === agentName);
+      // Q3: the parent's own agent, and the agents its config lists (every one for "*"), each
+      // only where the person may use it in the root conversation's workspace. Asked again on
+      // every call: the rights can change while the run works (CR-3m).
       if (
-        !listed ||
-        !exists ||
-        !(await options.agentAvailable({
+        !listsSubagent(own, parent.agentName, agentName) ||
+        !child ||
+        !(await subagentAvailable(options, {
           agentName,
-          workspaceId: root.collaborationWorkspaceId,
+          parentAgentName: parent.agentName,
+          root,
           actor: context.actor,
-          correlationId: context.correlationId,
-          // The subagent's thread belongs to this chat, so a person's own agent that runs
-          // itself there is judged by the chat's audience. Another agent it names never is.
-          ...(agentName === parent.agentName ? { conversationId: root.id } : {}),
-          chatId: root.id
+          correlationId: context.correlationId
         }))
       ) {
+        const named = own?.subagentNames === ALL_SUBAGENTS ? [] : (own?.subagentNames ?? []);
         return refused(
           "agent_not_available",
           `Agent '${agentName}' is not available as a subagent here. Run yourself by leaving out 'agent'${
-            (own?.subagentNames ?? []).length > 0
-              ? `, or name one of: ${(own?.subagentNames ?? []).join(", ")}`
-              : ""
+            named.length > 0 ? `, or name one of: ${named.join(", ")}` : ""
           }.`
         );
       }
-      // Without an agent of its own, the parent runs itself with its own model and effort.
-      const sameAgent = agentName === parent.agentName;
+      // CR-3m: a model the person may pick on the child's agent, with that agent's effort for
+      // it. Without one the child runs on the parent's model and effort.
+      let selection: { modelBindingId?: string; reasoningEffort?: ReasoningEffortConfig };
+      if (input.model !== undefined) {
+        const offered = await subagentModelChoices(options, assets, child);
+        const binding = options.config.modelBindings.find(
+          (candidate) => candidate.id === input.model
+        );
+        if (!binding || !offered.some((model) => model.bindingId === input.model)) {
+          return refused(
+            "model_not_available",
+            `Model '${input.model}' is not available for agent '${agentName}'. Leave out 'model' to run on your own model${
+              offered.length > 0
+                ? `, or name one of: ${offered.map((model) => model.bindingId).join(", ")}`
+                : ""
+            }.`
+          );
+        }
+        const reasoningEffort = defaultReasoningEffortForAgentBinding(child, binding);
+        selection = {
+          modelBindingId: binding.id,
+          ...(reasoningEffort === undefined ? {} : { reasoningEffort })
+        };
+      } else {
+        // The parent's model is the one its run names, else its agent's own binding. A parent
+        // on its provider's own model, with no binding, leaves another agent on its own
+        // default: an effort means nothing without the model it was set for.
+        const bindingId = parent.modelBindingId ?? own?.modelBindingId;
+        const binding = options.config.modelBindings.find(
+          (candidate) => candidate.id === bindingId
+        );
+        const reasoningEffort =
+          parent.reasoningEffort ??
+          (own && binding ? defaultReasoningEffortForAgentBinding(own, binding) : undefined);
+        selection = binding
+          ? {
+              modelBindingId: binding.id,
+              ...(reasoningEffort === undefined ? {} : { reasoningEffort })
+            }
+          : agentName === parent.agentName && parent.reasoningEffort
+            ? { reasoningEffort: parent.reasoningEffort }
+            : {};
+      }
       const started = await options.stores.childAgentRuns.startSubagentRun({
         clientInstanceId: options.clientInstanceId,
         parentRunId: parent.id,
         parentOperationRunId: context.runId,
         agentName,
-        ...(sameAgent && parent.modelBindingId ? { modelBindingId: parent.modelBindingId } : {}),
-        ...(sameAgent && parent.reasoningEffort ? { reasoningEffort: parent.reasoningEffort } : {}),
+        ...selection,
         description: input.description,
         task: input.task,
         correlationId: context.correlationId

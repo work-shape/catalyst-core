@@ -141,6 +141,7 @@ export function createInstanceOperationCalls(
   // The start of a subagent, which an agent's `run_agent` call is (CR-1).
   registerSubagentOperation(operationCalls.registry, {
     clientInstanceId,
+    config,
     stores: store,
     assetSource,
     agentAvailable: async (input) => (await operationCalls.deps.agentAvailable?.(input)) ?? false

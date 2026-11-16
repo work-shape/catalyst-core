@@ -21,8 +21,11 @@ import {
   type AgentRuntimeEvent,
   type ClientInstanceId,
   type ConversationId,
+  type AuthenticatedUser,
+  type LocaleCode,
   type RuntimeCallContext,
   type SteeredUserMessage,
+  type ToolDescriptor,
   type StartAgentRunInput
 } from "@work-shape/catalyst-core";
 import type { SubagentOutcomeReader } from "./subagents";
@@ -72,6 +75,19 @@ export interface LocalAgentRuntimeOptions {
    * that kind. Asked once when a run starts. Without it no conversation is offered any.
    */
   conversationOffer?: ConversationOfferSource;
+  /**
+   * `run_agent` as a run's model reads it (CR-3m): the agents and models its person may name
+   * now, generated from live config and rights. Asked once each time a run whose agent holds
+   * `run_agent` starts or resumes. Without it, or where it answers nothing, the release's own
+   * definition is sent; every call is checked by `agents.run` either way.
+   */
+  runAgentTool?: (input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    agentName: string;
+    user: AuthenticatedUser;
+    locale?: LocaleCode;
+  }) => Promise<ToolDescriptor | undefined>;
   /**
    * The model bindings the Shared Workspace that owns a run's agent allows, or `undefined` where
    * it sets no list. Read once when a run starts whose binding names a fallback: a fallback the

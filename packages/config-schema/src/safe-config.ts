@@ -244,6 +244,30 @@ function agentStarters(
 }
 
 /**
+ * The models a person may pick for one agent, as the chat's model picker lists them: the
+ * agent's own first, then the bindings its users may pick. The tool `run_agent` lists a
+ * subagent's models from here too (CR-3m), so the picker and the tool never disagree.
+ */
+export function agentSelectableModelViews(
+  config: ClientInstanceConfig,
+  agent: AgentConfig,
+  options: Pick<
+    SafeConfigViewOptions,
+    "requestedLocale" | "reasoningEffortsOfBinding" | "mayWriteAgent"
+  > = {}
+) {
+  return agentSelectableModels(
+    {
+      config,
+      locale: resolveConfigLocale(config.localization, options),
+      reasoningEffortsOfBinding: options.reasoningEffortsOfBinding ?? (() => [])
+    },
+    agent,
+    options.mayWriteAgent?.(agent.name) ?? true
+  );
+}
+
+/**
  * The agent's own model first, then the bindings users may pick instead. For a reader who may
  * not write the agent, a model whose effort the author set offers no other effort, so the
  * composer shows no model control where the author offered no choice.

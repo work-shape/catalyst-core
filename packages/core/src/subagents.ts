@@ -32,7 +32,53 @@ export const SUBAGENT_ANSWER_MAX_LENGTH = 20_000;
 export const SUBAGENT_FILES_MAX = 20;
 
 /** The tool errors of `run_agent` a parent's model reads. */
-export const RUN_AGENT_ERROR_CODES = ["agent_not_available", "subagent_limit"] as const;
+export const RUN_AGENT_ERROR_CODES = [
+  "agent_not_available",
+  "model_not_available",
+  "subagent_limit"
+] as const;
+
+/**
+ * `subagentNames: "*"`: every agent the person may use in the root conversation's workspace is
+ * a subagent of this agent (CR-3m).
+ */
+export const ALL_SUBAGENTS = "*";
+
+/**
+ * The most agents the tool `run_agent` lists for a run (CR-3m). Past it the first ones in
+ * the tool's order are listed and its description says more exist; the call checks any name.
+ */
+export const RUN_AGENT_LISTED_AGENTS_MAX = 20;
+
+/** A model a subagent may run on, as the run's `run_agent` tool lists it (CR-3m). */
+export interface SubagentModelChoice {
+  bindingId: string;
+  label: string;
+  description?: string;
+  usageTier?: string;
+}
+
+/** An agent a run may start as a subagent, as its `run_agent` tool lists it (CR-3m). */
+export interface SubagentAgentChoice {
+  name: string;
+  displayName: string;
+  /** The first line of the agent's description. */
+  description?: string;
+  /** The ids of the models the person may pick on it, each in `SubagentChoices.models`. */
+  modelBindingIds: string[];
+}
+
+/**
+ * What a run's `run_agent` tool offers, generated from live config and the person's rights
+ * when the run starts (CR-3m). Sorted stably: the parent's own agent first, then by name;
+ * models by id. `moreAgents`: agents past `RUN_AGENT_LISTED_AGENTS_MAX` were left out.
+ */
+export interface SubagentChoices {
+  ownAgentName: string;
+  agents: SubagentAgentChoice[];
+  models: SubagentModelChoice[];
+  moreAgents: boolean;
+}
 
 /** A `run_agent` call of the step a run paused in, and the subagent it started. */
 export interface StartedSubagent {

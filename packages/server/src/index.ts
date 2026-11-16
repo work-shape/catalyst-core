@@ -151,6 +151,11 @@ export {
   subagentOperation,
   type SubagentOperationOptions
 } from "./conversations/subagent-operation";
+export {
+  subagentChoices,
+  type SubagentAgentAvailable,
+  type SubagentChoiceOptions
+} from "./conversations/subagent-choices";
 export type {
   ChatServerOptions,
   OperationCalls,

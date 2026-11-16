@@ -141,6 +141,11 @@ export interface ModelToolMaterializationInput {
   toolRegistry: ModelToolRegistryView;
   /** The agent's data tools as `describeAgentDataTools` read them. Without them there are none. */
   dataTools?: readonly ToolDescriptor[];
+  /**
+   * Release tools described for this run, such as `run_agent` with its agents and models
+   * (CR-3m): each replaces the release's own definition of its name for this run's model.
+   */
+  runTools?: readonly ToolDescriptor[];
   webAccess?: WebAccessConfig;
 }
 
@@ -156,7 +161,10 @@ export function materializeModelTools(input: ModelToolMaterializationInput): Mod
       toolName !== WEB_SEARCH_MODEL_TOOL_NAME &&
       (input.capabilities.imageInput === true || !IMAGE_RESULT_TOOL_NAMES.includes(toolName))
   );
-  const releaseTools = input.toolRegistry.listDescriptorsForAgent(functionToolNames);
+  const runTools = new Map((input.runTools ?? []).map((tool) => [tool.name, tool]));
+  const releaseTools = input.toolRegistry
+    .listDescriptorsForAgent(functionToolNames)
+    .map((tool) => runTools.get(tool.name) ?? tool);
   const releaseNames = new Set(releaseTools.map((tool) => tool.name));
   // The operations of the agent's Knowledge Bases are no tools of their own: the knowledge
   // tools stand for them.

@@ -1,6 +1,7 @@
 import type { AgentRun, LocaleCode, SubagentSummary } from "@work-shape/catalyst-api-client";
 import type { BadgeTone } from "@work-shape/catalyst-ui";
 import { formatElapsed } from "../../shared/locale-format";
+import { modelDisplayLabel } from "../../shared/model-label";
 import type { TranslationKey } from "../../shared/i18n";
 import { isLiveRunStatus } from "../conversation/conversation-controller-state";
 
@@ -56,6 +57,19 @@ export function subagentStateLabel(state: SubagentState): TranslationKey {
 
 export function subagentStateTone(state: SubagentState): BadgeTone {
   return STATE_TONES[state];
+}
+
+/**
+ * Who the subagent is, as people read it (CR-3m): its agent's display name and its model's
+ * label, never the agent's technical name while the server names it.
+ */
+export function subagentNaming(
+  subagent: Pick<SubagentSummary, "agentName" | "agentDisplayName" | "model">
+): string[] {
+  return [
+    subagent.agentDisplayName ?? subagent.agentName,
+    ...(subagent.model ? [modelDisplayLabel(subagent.model)] : [])
+  ];
 }
 
 /** How long the subagent ran, or has run so far while it runs. */

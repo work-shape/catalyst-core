@@ -63193,6 +63193,23 @@
           "agentName": {
             "type": "string"
           },
+          "agentDisplayName": {
+            "type": "string"
+          },
+          "model": {
+            "type": "object",
+            "properties": {
+              "model": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "model"
+            ]
+          },
           "description": {
             "type": "string"
           },

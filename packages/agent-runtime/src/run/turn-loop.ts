@@ -29,6 +29,7 @@ import {
   type RuntimeCallContext,
   type StartAgentRunInput,
   type StoredModelFallback,
+  type ToolDescriptor,
   withPreviewSkills
 } from "@work-shape/catalyst-core";
 import {
@@ -149,6 +150,7 @@ export class TurnLoop {
     const offer = await this.offerOf(runId, listed, input, context);
     const projectInstructions = await this.projectInstructionsOf(runId, input, context);
     const { agent, dataTools } = await this.agentToolsOf(runId, listed, offer, input, context);
+    const runTools = await this.runToolsOf(agent, input, context);
     const modelSelection = this.modelInput.getModelSelectionForAgent(
       agent,
       input.modelBindingId,
@@ -166,7 +168,7 @@ export class TurnLoop {
       );
       return {
         modelSelection: selection,
-        tools: this.modelToolsOf(agent, selection, dataTools.described),
+        tools: this.modelToolsOf(agent, selection, dataTools.described, runTools),
         compactThresholdTokens,
         compactionEnabled: compactThresholdTokens !== undefined
       };
@@ -218,6 +220,7 @@ export class TurnLoop {
       ancestorRoutes: (input.ancestors ?? []).map((ancestor) => this.routeOf(assets, ancestor)),
       tools,
       offeredDataTools,
+      runTools,
       listed,
       compactThresholdTokens,
       compactionEnabled,
@@ -338,11 +341,34 @@ export class TurnLoop {
     return { agent, dataTools };
   }
 
+  /**
+   * The release tools this run describes for itself: `run_agent` with the agents and models
+   * its person may name now (CR-3m), read once as the run starts or resumes. A subagent and a
+   * Workflow step's agent never hold it.
+   */
+  private async runToolsOf(
+    agent: AgentConfig,
+    input: StartAgentRunInput,
+    context: RuntimeCallContext
+  ): Promise<ToolDescriptor[]> {
+    const describe = this.options.runAgentTool;
+    if (!describe || !agent.toolNames.some(isRunAgentCall)) return [];
+    const described = await describe({
+      clientInstanceId: context.clientInstanceId,
+      conversationId: input.conversationId,
+      agentName: agent.name,
+      user: context.user,
+      ...(context.locale === undefined ? {} : { locale: context.locale })
+    });
+    return described ? [described] : [];
+  }
+
   /** The tools a model of the run is sent for the agent. */
   private modelToolsOf(
     agent: AgentConfig,
     selection: ModelSelection,
-    dataTools: AgentDataTools["described"]
+    dataTools: AgentDataTools["described"],
+    runTools: readonly ToolDescriptor[]
   ): ModelTool[] {
     return withToolResultRead(
       materializeModelTools({
@@ -350,6 +376,7 @@ export class TurnLoop {
         capabilities: selection.capabilities,
         toolRegistry: this.options.toolRegistry,
         dataTools,
+        runTools,
         webAccess: this.options.webAccess
       })
     );
@@ -378,9 +405,12 @@ export class TurnLoop {
     for (const tool of dataTools.described) setup.offeredDataTools.add(tool.name);
     const widen = (on: ModelSetup): ModelSetup => {
       const have = new Set(on.tools.map(modelToolKey));
-      const added = this.modelToolsOf(agent, on.modelSelection, dataTools.described).filter(
-        (tool) => !have.has(modelToolKey(tool))
-      );
+      const added = this.modelToolsOf(
+        agent,
+        on.modelSelection,
+        dataTools.described,
+        setup.runTools
+      ).filter((tool) => !have.has(modelToolKey(tool)));
       return added.length === 0 ? on : { ...on, tools: [...on.tools, ...added] };
     };
     model.current = widen(model.current);
@@ -1054,6 +1084,8 @@ interface RunSetup extends ModelSetup {
   ancestorRoutes: NonNullable<RuntimeCallContext["modelRoutes"]>;
   /** The data tools the run was offered; a Data Store a step added widens it (`reoffer`). */
   offeredDataTools: Set<string>;
+  /** The release tools described for this run (`runToolsOf`). */
+  runTools: readonly ToolDescriptor[];
   /** The agent as its definition lists it, before the conversation's offer. */
   listed: AgentConfig;
   /** The binding's fallback, where the run may switch to it. */

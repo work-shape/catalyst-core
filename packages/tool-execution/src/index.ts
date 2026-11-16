@@ -35,6 +35,7 @@ export {
 export * from "./read-skill-tool";
 export {
   createRunAgentTool,
+  describeRunAgentTool,
   runAgentInputSchema,
   runAgentOutputSchema,
   type RunAgentInput

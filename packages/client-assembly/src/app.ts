@@ -20,6 +20,7 @@ import {
   createSkillChangeApprovalHandler,
   createChatServer,
   createChatServerJobs,
+  subagentChoices,
   ProjectFileService,
   ProjectSetupService,
   workflowAssetKindOf
@@ -74,6 +75,7 @@ import {
   createProposeSkillChangeTool,
   createStructuredDataToolDefinitions,
   createWorkspaceToolDefinitions,
+  describeRunAgentTool,
   WorkspaceCommandService
 } from "@work-shape/catalyst-tool-execution";
 import type { ToolAssemblyDefinition } from "@work-shape/catalyst-tool-sdk";
@@ -910,6 +912,32 @@ export async function createClientInstanceExecutionAssembly(
     },
     // A run reads how its subagents ended at the end of the step that started them.
     subagents: store.childAgentRuns,
+    // `run_agent` lists the agents and models the run's person may name now (CR-3m), by the
+    // rules `agents.run` checks each call with.
+    runAgentTool: async (input) => {
+      const root = await store.conversations.getConversation(
+        input.clientInstanceId,
+        input.conversationId
+      );
+      if (!root || root.kind !== "chat") return undefined;
+      const choices = await subagentChoices(
+        {
+          clientInstanceId,
+          config,
+          stores: store,
+          agentAvailable: async (check) =>
+            (await operationCalls.deps.agentAvailable?.(check)) ?? false
+        },
+        {
+          assets: await assetSource.getSnapshot(),
+          parentAgentName: input.agentName,
+          root,
+          actor: input.user,
+          ...(input.locale === undefined ? {} : { locale: input.locale })
+        }
+      );
+      return describeRunAgentTool(choices);
+    },
     // What the browser of a run's person reported of the previews it opened (PREVIEW-STATUS-1).
     previewReports: store.pages,
     webAccess: config.webAccess,
