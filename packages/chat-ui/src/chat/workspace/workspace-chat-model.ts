@@ -19,7 +19,10 @@ import {
   OWN_SERVERS_ROUTE,
   type OwnServerProposal
 } from "../../studio/build-area/own-server-model";
-import { requestOwnServerAdd } from "../../studio/build-area/own-server-request";
+import {
+  ownServerAddRequestOf,
+  requestOwnServerAdd
+} from "../../studio/build-area/own-server-request";
 import type { ConnectionDraft } from "../../studio/build-area/connection-draft";
 import { dockBuildKind } from "../dock/subject-starters";
 import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
@@ -885,7 +888,7 @@ export function useWorkspaceChatModel({
   // (PMCP-CHAT); the page decides whether they may add one.
   const openOwnServerProposal = useCallback(
     (proposal: OwnServerProposal, from: { conversationId: string; agentName?: string }) => {
-      requestOwnServerAdd({ ...proposal, from });
+      requestOwnServerAdd(ownServerAddRequestOf(proposal, from));
       openDockedPage(OWN_SERVERS_ROUTE, from.conversationId);
     },
     [openDockedPage]
@@ -1425,6 +1428,22 @@ export function useWorkspaceChatModel({
           setNotice(createTranslationContext(activeLocale).t("conversationPrivateStartFailed"));
         }
       },
+      // A new private chat of the open workspace with this agent, where the person's own
+      // server's tools work (PMCP-CHAT-2); none for a reader from outside the workspace.
+      ...(outsideChat === undefined
+        ? {
+            startPrivateChat: (agentName: string | undefined) => {
+              try {
+                if (agentName !== undefined) setNewConversationAgentName(agentName);
+                continuePrivatelyWith();
+              } catch {
+                setNotice(
+                  createTranslationContext(activeLocale).t("conversationPrivateStartFailed")
+                );
+              }
+            }
+          }
+        : {}),
       startsPrivate,
       ...(startProjectId === undefined ? {} : { startProjectId }),
       ...(readerNote === undefined ? {} : { readerNote })
