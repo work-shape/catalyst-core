@@ -1,5 +1,11 @@
-import { useCallback, useEffect, useMemo } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useContext, useEffect, useMemo } from "react";
+import {
+  QueryClient,
+  QueryClientContext,
+  useMutation,
+  useQuery,
+  useQueryClient
+} from "@tanstack/react-query";
 import {
   useOptionalWorkspaceApiClient,
   useWorkspaceApiClient
@@ -41,22 +47,28 @@ export function useWaitingSubagents(
   waited: readonly { toolCallId: string; description: string }[] | undefined
 ): { description: string; startedAt?: string }[] | undefined {
   const workspace = useOptionalWorkspaceApiClient();
-  const listed = useQuery({
-    queryKey: workspaceQueryKeys.conversationSubagents(
-      workspace?.apiBaseUrl ?? "",
-      WORKSPACE_AUTH_SCOPE,
-      conversationId
-    ),
-    queryFn: async () =>
-      workspace
-        ? (
-            await workspace.client.conversations.subagents.list({
-              params: { conversationId: conversationId ?? "" }
-            })
-          ).items
-        : [],
-    enabled: Boolean(workspace && conversationId && waited && waited.length > 0)
-  }).data;
+  // A thread drawn without a query client, as in an embedded chat or a test, names the
+  // descriptions alone; the inert client is never asked.
+  const queryClient = useContext(QueryClientContext);
+  const listed = useQuery(
+    {
+      queryKey: workspaceQueryKeys.conversationSubagents(
+        workspace?.apiBaseUrl ?? "",
+        WORKSPACE_AUTH_SCOPE,
+        conversationId
+      ),
+      queryFn: async () =>
+        workspace
+          ? (
+              await workspace.client.conversations.subagents.list({
+                params: { conversationId: conversationId ?? "" }
+              })
+            ).items
+          : [],
+      enabled: Boolean(queryClient && workspace && conversationId && waited && waited.length > 0)
+    },
+    queryClient ?? inertQueryClient()
+  ).data;
   return useMemo(
     () =>
       waited?.map(({ toolCallId, description }) => {
@@ -68,6 +80,12 @@ export function useWaitingSubagents(
       }),
     [listed, waited]
   );
+}
+
+let inert: QueryClient | undefined;
+function inertQueryClient(): QueryClient {
+  inert ??= new QueryClient();
+  return inert;
 }
 
 /** Reads a conversation's Resources and its subagents again: one of them changed. */
