@@ -273,7 +273,7 @@ describe("catalyst config and agent drafts (Platform Access 66)", () => {
     expect(await draft()).toMatchObject({ revision: 3, config: { instructions: "Third." } });
   });
 
-  it("refuses a push over a draft somebody changed since the last pull, and names them", async () => {
+  it("skips an agent whose draft somebody changed since the last pull, and names them", async () => {
     const { t, team, live, draft } = await setup();
     const mine = await workingCopy(team);
     const cli = cliAs(t.instance, { user: t.admin.id }, mine);
@@ -292,7 +292,9 @@ describe("catalyst config and agent drafts (Platform Access 66)", () => {
     await editInstructions(mine, "Mine.");
     const refused = await cli.run(["config", "push"]);
     expect(refused.code).toBe(1);
-    expect(refused.err).toContain("Push conflict; nothing was applied.");
+    expect(refused.err).toContain(
+      "Skipped; these changed on the instance since the last pull and were not written:"
+    );
     expect(refused.err).toMatch(
       /- agent:kai-helper: its draft changed since the last pull: draft revision 1, written by Root at \S+\./u
     );

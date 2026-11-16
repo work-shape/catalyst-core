@@ -208,7 +208,7 @@ describe("config CLI guardrails in the working copy", () => {
     expect(output.join("")).toContain("guardrail:no_iban: changed locally");
     expect(output.join("")).not.toContain("guardrail:privacy");
 
-    // Changed on the instance since: preflight refuses before any write and names the pull.
+    // Changed on the instance since: preflight skips it before any write and names the pull.
     await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
@@ -225,8 +225,8 @@ describe("config CLI guardrails in the working copy", () => {
     output.length = 0;
     writes.length = 0;
     expect(await runConfigCommand("push", { ...options, only: ["guardrail:privacy"] })).toBe(1);
-    expect(output.join("")).toContain(
-      "Push refused; nothing was applied. guardrail:privacy changed since the last pull."
+    expect(output.join("")).toMatch(
+      /Skipped;[^\n]*\n- guardrail:privacy: revision 3, changed by [^\n]* at /u
     );
     expect(output.join("")).toContain("catalyst config pull --only guardrail:privacy");
     expect(writes).toEqual([]);

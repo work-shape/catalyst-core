@@ -97,9 +97,10 @@ describe("config CLI against an instance", () => {
       "utf8"
     );
 
+    // The changed agent is written as its draft; the skill created since is kept and named.
     expect(await runConfigCommand("push", options)).toBe(1);
     expect(errors.join("")).toContain("skill:fresh");
-    expect(syncs).toEqual([]);
+    expect(syncs).toMatchObject([{ items: [{ type: "put", kind: "agent" }] }]);
     const held = (kind: string, name: string) =>
       fixture.store.configAssets.getConfigAsset({
         clientInstanceId: fixture.clientInstanceId,
@@ -248,16 +249,10 @@ describe("config CLI against an instance", () => {
         name
       });
 
-    // The instance holds one of the two: the whole push is refused, the new skill with it.
+    // The instance holds one of the two: that one is skipped and named, the new skill created.
     expect(await runConfigCommand("push", options)).toBe(1);
     expect(errors.join("")).toContain("- skill:review: revision 1, changed by");
-    expect(syncs).toEqual([]);
     expect(await held("review")).toMatchObject({ revision: 1, config: { content: "# Remote" } });
-    expect(await held("extra")).toBeUndefined();
-
-    // Without the asset the instance holds, what is left is created.
-    await rm(resolve(directory, "skills", "review"), { recursive: true });
-    expect(await runConfigCommand("push", options), errors.join("")).toBe(0);
     expect(syncs).toEqual([
       {
         items: [
