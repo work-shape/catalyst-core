@@ -577,22 +577,85 @@ export function countConnectionFormChanges(
 /** How long a page waits for a discovery it asked for, at most. */
 export const DISCOVERY_WAIT_MS = 90_000;
 
-/** A discovery a page waits for: since when, and the catalog it had then. */
+/** A discovery a page waits for: since when, and the catalog and state it had then. */
 export interface DiscoveryWait {
   since: number;
   /** When the catalog the page had was read. Nothing where it had none. */
   discoveredAt?: string;
+  /** When the instance had last written the Connection's state then. Nothing where it had not. */
+  recordedAt?: string;
+  /** No discovery was asked for: the page reads the Connection again once and waits for none. */
+  none?: true;
 }
 
+/** What a page reads of a Connection to know whether a discovery it waits for is in. */
+export interface DiscoveryOutcome {
+  discoveredAt?: string;
+  health?: string;
+  lastErrorCode?: string;
+  recordedAt?: string;
+}
+
+/** The health that says the Connection failed: a discovery that failed leaves one of these. */
+const FAILED_HEALTH = new Set(["failed", "needs_configuration", "secret_unreadable"]);
+
 /**
- * Whether a page still waits: no catalog is in that is newer than the one it had, and the wait
- * is not over. A changed address drops the catalog, which is no new one.
+ * Whether a page still waits: it asked for a discovery, no catalog is in that is newer than the
+ * one it had, no failure was written since, and the wait is not over. A changed address drops
+ * the catalog, which is no new one. A page that opens waits with nothing it had: only while the
+ * Connection was never read and no failure of it is written, as right after its creation.
  */
 export function waitsForDiscovery(
   wait: DiscoveryWait,
-  detail: { discoveredAt?: string },
+  detail: DiscoveryOutcome,
   now: number
 ): boolean {
+  if (wait.none) return false;
   const unchanged = detail.discoveredAt === undefined || detail.discoveredAt === wait.discoveredAt;
-  return unchanged && now - wait.since < DISCOVERY_WAIT_MS;
+  const failedSince =
+    detail.recordedAt !== undefined &&
+    detail.recordedAt !== wait.recordedAt &&
+    (detail.lastErrorCode !== undefined ||
+      (detail.health !== undefined && FAILED_HEALTH.has(detail.health)));
+  return unchanged && !failedSince && now - wait.since < DISCOVERY_WAIT_MS;
+}
+
+/**
+ * The wait a page starts after a write or a request of its own, from what it read of the
+ * Connection then. With `asked` false the write asked for no discovery.
+ */
+export function discoveryWaitFrom(
+  detail: Pick<DiscoveryOutcome, "discoveredAt" | "recordedAt"> | undefined,
+  now: number,
+  asked = true
+): DiscoveryWait {
+  return {
+    since: now,
+    ...(asked ? {} : { none: true as const }),
+    ...(detail?.discoveredAt === undefined ? {} : { discoveredAt: detail.discoveredAt }),
+    ...(detail?.recordedAt === undefined ? {} : { recordedAt: detail.recordedAt })
+  };
+}
+
+/** Whose sign-in the tools of a Connection wait for, where none is there to read them with. */
+export type DiscoverySignIn = "own" | "shared";
+
+/**
+ * Whether the tools cannot be read for want of a sign-in: a personal Connection reads them with
+ * the reader's own, a shared one with the one sign-in of the Connection. Nothing where the
+ * Connection signs in with no one, or the reader's own sign-in is not read yet.
+ */
+export function discoveryWaitsForSignIn(input: {
+  personal: boolean;
+  signsIn: boolean;
+  /** The shared sign-in's state, where one was made. */
+  binding?: string | undefined;
+  /** The reader's own sign-in's state, once read. */
+  own?: string | undefined;
+}): DiscoverySignIn | undefined {
+  if (!input.signsIn) return undefined;
+  if (input.personal) {
+    return input.own === undefined || input.own === "connected" ? undefined : "own";
+  }
+  return input.binding === "connected" ? undefined : "shared";
 }

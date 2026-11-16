@@ -31,7 +31,8 @@ import {
   holdsSecret,
   sendsSecret,
   withApprovedOperations,
-  withConnectionForm
+  withConnectionForm,
+  type DiscoverySignIn
 } from "./connection-form-model";
 import { connectionRefusalOf, type ConnectionRefusal } from "./connection-refusals";
 import type { ConnectionSource } from "./connection-source";
@@ -350,7 +351,8 @@ function ConnectionKeyRemoval({
 /**
  * What the server offers that the Connection does not accept, as one list to approve at once:
  * the tools that only read are ticked, and one row says who may use what is approved. "Read
- * tools again" asks for a new discovery.
+ * tools again" asks for a new discovery. Where the sign-in that reads the tools is missing,
+ * the section says so at once and leads to the sign-in of the page.
  */
 export function DiscoveredTools({
   name,
@@ -358,8 +360,10 @@ export function DiscoveredTools({
   frame,
   detail,
   waiting,
+  signIn,
   source,
-  written
+  written,
+  asked: askedFor
 }: {
   name: string;
   asset: BuildAsset;
@@ -367,8 +371,15 @@ export function DiscoveredTools({
   detail: ConnectionDetail | undefined;
   /** The page waits for a discovery it asked for. */
   waiting: boolean;
+  /**
+   * Nobody is signed in whose sign-in reads the tools: the reader on a personal Connection,
+   * anybody on a shared one. `section` is the id of the page's sign-in.
+   */
+  signIn?: { whose: DiscoverySignIn; section: string };
   source: ConnectionSource;
   written(): void;
+  /** The instance took the request to read the tools again. */
+  asked(): void;
 }) {
   const { t } = useTranslation();
   const write = useConnectionWrite(frame, written);
@@ -379,7 +390,7 @@ export function DiscoveredTools({
     setAsked(undefined);
     source
       .discover(name)
-      .then(written, (error: unknown) =>
+      .then(askedFor, (error: unknown) =>
         setAsked(
           error instanceof PendingApprovalError
             ? t("connections.discoverHeld")
@@ -405,6 +416,30 @@ export function DiscoveredTools({
         write.write("approve", withApprovedOperations(asset.config, chosen, surfaces))
       }
     />
+  ) : signIn ? (
+    <EmptyState
+      layout="inline"
+      data-connection-discovered-sign-in={signIn.whose}
+      action={
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            document
+              .getElementById(signIn.section)
+              ?.scrollIntoView({ behavior: "smooth", block: "start" })
+          }
+        >
+          {t("connections.discoveredSignInGo")}
+        </Button>
+      }
+    >
+      {t(
+        signIn.whose === "own"
+          ? "connections.discoveredSignInOwn"
+          : "connections.discoveredSignInShared"
+      )}
+    </EmptyState>
   ) : (
     <EmptyState layout="inline" data-connection-discovered-empty="">
       {t(
@@ -423,7 +458,13 @@ export function DiscoveredTools({
       {body}
       {write.failure ? <RefusalNotice {...write.failure} /> : null}
       <div className="grid justify-items-start gap-1">
-        <Button variant="outline" size="sm" loading={asking || waiting} onClick={discover}>
+        <Button
+          variant="outline"
+          size="sm"
+          loading={asking || waiting}
+          disabled={signIn !== undefined}
+          onClick={discover}
+        >
           {t("connections.discoverAgain")}
         </Button>
         {asked ? <FormNotice tone="error">{asked}</FormNotice> : null}

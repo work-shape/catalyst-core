@@ -6518,6 +6518,9 @@
                     "lastErrorCode": {
                       "type": "string"
                     },
+                    "recordedAt": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    },
                     "secret": {
                       "type": "object",
                       "properties": {
