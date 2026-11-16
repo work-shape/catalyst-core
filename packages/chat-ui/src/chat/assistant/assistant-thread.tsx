@@ -35,7 +35,8 @@ import { useTranslation } from "../../shared/i18n";
 import { useFooterKeepsThreadInView, useKeepReadingPlace } from "./reading-place";
 import type { SendBlock } from "./send-block";
 import { useMoveWithPanels } from "../surface/panel-move";
-import { findRunActivity, shouldShowRunActivity } from "./thread-activity";
+import { findRunActivity, findWaitedSubagents, shouldShowRunActivity } from "./thread-activity";
+import { useWaitingSubagents } from "../subagents/subagent-queries";
 import { ToolSubjectsProvider } from "./tool-subjects";
 import { FoldedCardsProvider } from "../conversation/card-fold-context";
 import { QuestionAnswersProvider } from "../questions/question-card";
@@ -345,6 +346,7 @@ export function AssistantThread({
                 </ToolSubjectsProvider>
                 <RunActivityRow
                   activeRunId={activeRunId}
+                  conversationId={conversationId}
                   conversationRunning={conversationRunning}
                   optimisticPending={optimisticPending}
                   preparingToolName={preparingToolName}
@@ -774,11 +776,13 @@ function ThreadScrollToBottom() {
  */
 function RunActivityRow({
   activeRunId,
+  conversationId,
   conversationRunning,
   optimisticPending,
   preparingToolName
 }: {
   activeRunId?: string;
+  conversationId?: string;
   conversationRunning?: boolean;
   optimisticPending?: boolean;
   preparingToolName?: string;
@@ -789,6 +793,11 @@ function RunActivityRow({
     return lastMessage?.role === "assistant" ? lastMessage.parts : undefined;
   });
   const activity = useMemo(() => findRunActivity(lastAssistantParts), [lastAssistantParts]);
+  const waitedSubagents = useMemo(
+    () => findWaitedSubagents(lastAssistantParts),
+    [lastAssistantParts]
+  );
+  const waitingSubagents = useWaitingSubagents(conversationId, waitedSubagents);
 
   if (!shouldShowRunActivity({ conversationRunning, optimisticPending, threadRunning })) {
     return null;
@@ -806,6 +815,7 @@ function RunActivityRow({
         activity={activity}
         preparingToolName={preparingToolName}
         variationSeed={activeRunId}
+        waitingSubagents={waitingSubagents}
       />
     </div>
   );

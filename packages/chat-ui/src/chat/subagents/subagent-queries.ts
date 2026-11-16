@@ -1,6 +1,15 @@
-import { useCallback, useEffect } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
+import { useCallback, useContext, useEffect, useMemo } from "react";
+import {
+  QueryClient,
+  QueryClientContext,
+  useMutation,
+  useQuery,
+  useQueryClient
+} from "@tanstack/react-query";
+import {
+  useOptionalWorkspaceApiClient,
+  useWorkspaceApiClient
+} from "../../shared/api/workspace-api-client";
 import { useWorkspaceThreadQuery } from "../../shared/api/workspace-queries";
 import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
 import { isTerminalObservation } from "../conversation/conversation-controller-state";
@@ -26,6 +35,57 @@ export function useSubagentsQuery(input: { conversationId: string | undefined; e
       ).items,
     enabled: input.enabled && Boolean(input.conversationId)
   });
+}
+
+/**
+ * The subagents a run waits for, as its activity row names them: each call's description and,
+ * once the conversation's subagents list it, when it started. Outside a workspace, as in an
+ * embedded chat, the descriptions alone.
+ */
+export function useWaitingSubagents(
+  conversationId: string | undefined,
+  waited: readonly { toolCallId: string; description: string }[] | undefined
+): { description: string; startedAt?: string }[] | undefined {
+  const workspace = useOptionalWorkspaceApiClient();
+  // A thread drawn without a query client, as in an embedded chat or a test, names the
+  // descriptions alone; the inert client is never asked.
+  const queryClient = useContext(QueryClientContext);
+  const listed = useQuery(
+    {
+      queryKey: workspaceQueryKeys.conversationSubagents(
+        workspace?.apiBaseUrl ?? "",
+        WORKSPACE_AUTH_SCOPE,
+        conversationId
+      ),
+      queryFn: async () =>
+        workspace
+          ? (
+              await workspace.client.conversations.subagents.list({
+                params: { conversationId: conversationId ?? "" }
+              })
+            ).items
+          : [],
+      enabled: Boolean(queryClient && workspace && conversationId && waited && waited.length > 0)
+    },
+    queryClient ?? inertQueryClient()
+  ).data;
+  return useMemo(
+    () =>
+      waited?.map(({ toolCallId, description }) => {
+        const subagent = listed?.find((item) => item.toolCallId === toolCallId);
+        return {
+          description: subagent?.description ?? description,
+          ...(subagent ? { startedAt: subagent.startedAt } : {})
+        };
+      }),
+    [listed, waited]
+  );
+}
+
+let inert: QueryClient | undefined;
+function inertQueryClient(): QueryClient {
+  inert ??= new QueryClient();
+  return inert;
 }
 
 /** Reads a conversation's Resources and its subagents again: one of them changed. */
