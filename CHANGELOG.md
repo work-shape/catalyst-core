@@ -7,6 +7,162 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.36 — 2026-11-16
+
+### Added
+
+- **Workflows:** an `agent` step takes an optional `model`, the id of a model binding agents may
+  select on the instance, so a step that only sorts or extracts can run on a small model. Without
+  it the step runs on the instance's default chat binding, as before. An unknown binding, an
+  embedding binding or one marked `agentSelectable: false` is refused at save and at publish with
+  `model_not_available`, naming the id. The step's usage is recorded on the binding it ran on.
+- **Bedrock prompt cache:** an agent run's calls on `aws-bedrock` set four prompt cache
+  breakpoints (the last tool, the agent's instructions, the end of the previous request and the
+  call's own end), so each turn reads the tools, the instructions and the conversation so far
+  at the cache read rate. Calls the product makes for itself set none. The usage record keeps
+  the input written to the cache apart from the input read from it, and a rate card row prices
+  cache writes with the new optional `cacheWriteInputPricePerMillionTokens`; a row without it
+  prices them as uncached input. `catalyst models add bedrock` takes `--cache-write-price`.
+- **Usage:** The context indicator's hover card in the composer can show what a conversation has
+  cost so far: "Kosten bisher 1,84 €" / "Cost so far €1.84", in the Customer Rate Card's currency
+  and the person's locale. It sums the settled cost of the chat's calls, its subagent threads
+  and its title; a call still running is not in it, and an incomplete cost reads "at least". In
+  a private chat a person sees their own calls; in a team chat or a chat shared with named
+  people their own share ("Deine Kosten bisher"), and a holder of `usage.view` the whole chat's.
+  The new read `conversations.cost.get` (`GET /api/v1/conversations/:conversationId/cost`)
+  answers it. Off by default: `usage.showConversationCost: true` in release config turns it on;
+  off, the read answers not found (LU-7).
+- **Knowledge Bases:** `knowledge.<id>.pending({ type?, since?, limit })` runs as a step of a
+  Workflow Run and hands it the indexed documents of a type whose pages changed after `since`,
+  oldest change first, as a dataset of the step run (PROC-W, the reading half). Each row carries
+  `id`, `type`, `contentHash`, `source` (null for a file added by hand), `path`, `name`,
+  `changedAt` and `pages`, a dataset of `{ page, text }` rows from the stored extraction: an XLSX
+  sheet per page with its tables as Markdown, a PDF page per page. No model is called. The step's
+  account needs `knowledge_base.read` on the Knowledge Base; `limit` is at most 1,000. A page
+  longer than one dataset row (`workflows.datasets.rowBytes`) goes on in the next row of the same
+  number.
+- **Preview capture:** the renderer image (the deployment kit's `preview-capture` target and the
+  package's own Dockerfile) installs Debian's `fonts-inter` (Inter, OFL-1.1), so HTML printed by
+  `workspace.html_to_pdf` or `pdf.download` with `font-family: Inter` renders in Inter without
+  any network request. The image grows by about 10 MB.
+- **Speech to text (STT-1):** a microphone left of Send in the composer records up to five
+  minutes, sends the recording on stop and adds its text at the end of what is in the field;
+  nothing is sent to the agent by itself. It is off until the release config holds a model
+  binding of `kind: transcription` on an `openai-compatible` provider entry with `region: eu`
+  (for example Mistral's `https://api.mistral.ai/v1` with model `voxtral-mini-latest`). An
+  instance has at most one; it takes no fallback, no agent may use it, and a chat fallback or
+  chat use that names it is refused. `transcription.terms` (up to 100) lists words to bias the
+  transcription towards; each request also sends the names of the shared workspace, the project,
+  the agents and the Knowledge Bases and Data Stores the person may see. New endpoint
+  `POST /api/v1/transcriptions` (multipart part `file`, optional query `language`,
+  `conversationId`, `projectId`, `workspaceId`); `GET /api/v1/config` says
+  `transcription.enabled`. The audio is held in memory for the request only and never stored or
+  logged, the text is not stored, and the audit event `transcription.completed` records the
+  binding and the seconds. Usage is recorded under the purpose `transcription` against the
+  person's own budget, priced per audio minute from the rate card's new `transcription` rows
+  (`{ providerId, model, pricePerAudioMinute }`), which a spend budget requires for the binding.
+- **Database:** migration 0206 adds the nullable column `model_usage_events.audio_seconds`, set
+  only on a transcription. It rewrites no row and gives up after a 5 s `lock_timeout`. A rollback
+  needs no step: an older release does not read the column.
+
+### Changed
+
+- **`catalyst config push` writes what has no conflict:** an asset that changed on the instance
+  since the last pull (another revision, a delete, a moved agent draft, another asset under the
+  name, or one created there since) no longer stops the whole push. The push writes every other
+  changed asset and skips that one without writing it, so a change the working copy has not seen
+  is still never written over or deleted. A changed default agent is skipped the same way. After
+  the push the CLI lists each skipped asset with who changed it and when, prints the scoped
+  `catalyst config pull --only` that reads them, and exits with 1. The instance still checks every
+  revision under its own lock; where it refuses a batch for changed assets, the CLI sends it again
+  without them.
+- An agent may propose a person's own MCP server in any chat that person's own run is in, also a
+  team-visible chat or one with named people (PMCP-CHAT-2). The server's tools and the person's
+  own skills still run only in their private chats. The tool's answer says `privateChat: false`
+  in a chat others read and tells the agent where the tools work.
+- In such a chat the card says "Works only in your private chats." ("Funktioniert nur in deinen
+  privaten Chats.") and offers "Start private chat" ("Privaten Chat starten"), which opens a new
+  private chat in the same workspace with the same agent. After "Done" the add screen sends no
+  message into that chat.
+- The card's buttons go to the person whose message the run answered, not to whoever started
+  the chat; everyone else sees the reader line.
+- **A publish goes live directly:** a holder of the publish right makes an App, a Workflow, a
+  form page, an agent or a skill live at once, from Studio, `catalyst <kind> publish` or
+  `catalyst config push --publish`. The shipped guardrail "Publishing needs an instance admin's
+  approval" is off by default; an instance admin can switch it on on Build > Guardrails, and a
+  guardrail an instance binds to a `*.before_publish` event still stops or holds a publish.
+  Migration `0205_publish_guardrail_off_by_default` removes its stored switches, so every
+  instance starts with it off, an instance where an admin had set "Ask on every publish"
+  included. The CLI asks no question before a publish and never sends it unattended; `--yes` is
+  accepted and changes nothing. Requests already waiting in an Inbox stay decidable and are
+  settled as superseded once a newer revision goes live.
+- **Skill changes from chat:** a person who holds `skill.publish` on a skill accepts the change
+  their agent proposed for it on the card in the chat, and it is live at once without a second
+  person. The card under a waiting skill change says it is not live yet and who makes it live.
+- **Rights:** Publisher in a workspace now deletes the skills that workspace owns
+  (`skill.delete`), and nothing else of it. A delete keeps the skill's revisions, so a revert
+  brings it back. Deleting a skill that an agent lists, in its live revision or its pending
+  draft, is refused with `CONFLICT` (`skill_in_use`) and names those agents, for every deleter.
+  Builder still deletes nothing. A CLI refusal for a key that does not cover a right its person
+  holds, such as a key issued before its person became Publisher, says how to issue a new key
+  (SKILL-DEL-1).
+- **Studio:** On an agent's or a skill's page, Delete now stays in the "…" menu and says why it
+  cannot be chosen, instead of being left out. Without the right it says so, and for a skill a
+  workspace owns, that a Publisher there or an admin deletes it. When agents still list the
+  skill, it names those you can see and counts the others. A skill's read (`assets.get`) answers
+  `listedBy` and `listedByUnread` for a caller who may delete it (SKILL-DEL-1).
+- **Agent models:** whoever may write an agent a workspace owns picks its models without
+  `agent_models.manage`: the default binding, the bindings its users may pick and the reasoning
+  effort of each (`modelBindingId`, `userSelectableModelBindingIds`, `reasoningEffort`,
+  `modelReasoningEfforts`), among the bindings the workspace allows. Those are the list among its
+  build limits, or every binding of the instance where the workspace sets none. Before, this held
+  only for `modelBindingId` and only in a workspace with a list. Studio offers the same choice.
+  `fastMode`, `useModelFallback` and every model setting of an instance-owned agent still need
+  `agent_models.manage`, and which bindings a workspace allows stays an instance admin's setting.
+
+### Fixed
+
+- **Workspace > Members:** a member who already holds every right of Builder or Publisher in the
+  workspace, through an instance role, a group or a grant, is shown with the switch on and
+  "already covered by" the role that gives it, and is offered no request. A request for such a
+  bundle is refused with `CONFLICT` (`already_held`) instead of reaching an instance admin's
+  Inbox.
+- **Config CLI:** `catalyst agent show <name> --revision published` and `--revision <n>` no
+  longer refuse with "has no published revision": an agent's live revision is the one it
+  publishes, so `published` answers it and a number answers that revision of its history, as
+  for a skill. `--revision draft` answers the agent's pending draft to whoever may read it, and
+  the live revision where there is none.
+- **Config CLI:** A refusal because the API key does not carry a right its owner holds
+  (`outside_key_scope`) now says why and what to do: a key carries only the rights ticked when it
+  was issued, so a right given after that is missing from it, and `catalyst login` confirms a new
+  key with it (or a new key from Settings > API keys where `CATALYST_API_KEY` is set).
+- **Personal API keys:** Confirming a CLI's connect code no longer fails for each right the
+  person does not hold. The key carries the scopes asked for that the person holds, and the
+  answer of `me.connect_codes.confirm` names them (`scopes`) and those left out
+  (`leftOutScopes`), which Settings shows after confirming. Only a code none of whose rights the
+  person holds is refused, naming them all. A key created in Settings is still refused for a
+  right its owner does not hold.
+- **Agents:** A save refused for changing model settings without `agent_models.manage` now says
+  what to do instead of only "Missing the right": which settings it changes, their stored
+  values to keep (or to leave out of a new agent, which then runs the instance's default
+  model), and that an instance admin makes the change or grants the right; for an agent of the
+  instance, that an agent a workspace owns takes its models from whoever writes it. A refusal from a workspace's build limits
+  (`model_not_allowed`, `model_binding_required`) names the model bindings the list allows,
+  also as `allowedModelBindingIds` in its details.
+- **Resources:** a structured-data value that is exactly an ISO date (`YYYY-MM-DD`, a valid
+  calendar date) shows in the user's locale, in German as `DD.MM.YYYY`, in the Resources panel,
+  the inline view and the copy-all text. The stored value is unchanged.
+
+### Database
+
+- **Usage:** migration 0204 `usage_cache_write_tokens` adds the nullable column
+  `model_usage_events.cache_write_input_tokens`. Earlier rows hold null; no row is rewritten. A
+  rollback leaves the column unused.
+- **Usage:** Migration 0203 `usage_event_conversation_index` builds
+  `model_usage_events_conversation_idx` on `(client_instance_id, conversation_id)` for events that
+  name a conversation, with `CREATE INDEX CONCURRENTLY`, so writes to `model_usage_events` go on
+  while it builds. It adds no column and changes no row. A rollback leaves the index unused.
+
 ## 0.8.0-rc.35 — 2026-11-13
 
 ### Added
