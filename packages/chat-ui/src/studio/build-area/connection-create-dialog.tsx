@@ -78,7 +78,6 @@ import { useConnectionSource, type ConnectionSource } from "./connection-source"
 import { ConnectionApprovedBody, useGiveToAgent } from "./connection-give-step";
 import { TypedConnectionSetup } from "./connection-typed-setup";
 import { CatalogueInstall } from "./connection-catalogue-install";
-import { CatalogueServices } from "./connection-catalogue-services";
 import {
   entriesToShow,
   typesWithEntries,
@@ -141,7 +140,8 @@ export function ConnectionCreateFlow({
   mayDelete,
   existing,
   onClose,
-  onCreated
+  onCreated,
+  start
 }: BuildCreateDialogProps & { source: ConnectionSource; browser?: SignInBrowser }) {
   const { locale, t } = useTranslation();
   const allOffers = source.useConnectorTypes?.() ?? [];
@@ -156,13 +156,28 @@ export function ConnectionCreateFlow({
   const draftedType = drafted?.connection.connectorType;
   const typedDraft =
     draftedType !== undefined && draftedType !== "mcp" && draftedType !== "http_api";
-  const [stage, setStage] = useState<Stage>({
-    step: drafted && !drafted.entry && !typedDraft ? "form" : "pick"
+  /** The offered entry a service's card on the Connections page started the dialog at. */
+  const startEntry = (candidates: readonly CatalogueEntryOffer[]) =>
+    start === undefined
+      ? undefined
+      : candidates.find((candidate) => candidate.id === start && candidate.offered);
+  const [stage, setStage] = useState<Stage>(() => {
+    const entry = startEntry(entries);
+    if (entry) return { step: "entry", entry };
+    return { step: drafted && !drafted.entry && !typedDraft ? "form" : "pick" };
   });
-  // A proposal of a type with a form of its own opens that form once the types are read.
-  const typedOpened = useRef(false);
+  // A proposal of a type with a form of its own opens that form once the types are read; a
+  // service's card on the Connections page (`start`) opens its install once the entries are.
+  const typedOpened = useRef(stage.step === "entry");
   useEffect(() => {
     if (typedOpened.current) return;
+    if (start !== undefined) {
+      const entry = startEntry(entries);
+      if (!entry) return;
+      typedOpened.current = true;
+      setStage({ step: "entry", entry });
+      return;
+    }
     if (drafted?.entry) {
       const entry = connectionDraftEntry(drafted, entries);
       if (!entry) return;
@@ -175,7 +190,7 @@ export function ConnectionCreateFlow({
     if (offer === undefined) return;
     typedOpened.current = true;
     setStage({ step: "typed", offer });
-  }, [draftedType, allOffers, typedDraft, drafted, entries]);
+  }, [draftedType, allOffers, typedDraft, drafted, entries, start]);
   // The conversation whose agent proposed the Connection hears once that it is connected.
   const told = useRef(false);
   const tellReady = (outcome: ConnectionReadyOutcome, connection = { name, title }) => {
@@ -764,7 +779,6 @@ export function ConnectionCreateFlow({
         {...(browser ? { browser } : {})}
         checkName={checkName}
         put={put}
-        onBack={() => setStage({ step: "pick" })}
         onClose={onClose}
         onCreated={onCreated}
       />
@@ -909,8 +923,10 @@ export function ConnectionCreateFlow({
       case "typed":
       case "entry":
         return null;
-      case "pick": {
-        const own = (
+      case "pick":
+        // The catalogue's services stand on the Connections page itself (CAT-PAGE): here only
+        // what a person connects of their own.
+        return (
           <div
             className="grid min-w-0 gap-2"
             role="group"
@@ -948,20 +964,6 @@ export function ConnectionCreateFlow({
             ))}
           </div>
         );
-        if (entries.length === 0) return own;
-        return (
-          <div className="grid min-w-0 gap-5">
-            <CatalogueServices
-              entries={entries}
-              onChoose={(entry) => setStage({ step: "entry", entry })}
-            />
-            <section className="grid min-w-0 gap-2" data-connection-own="">
-              <h3 className="text-label text-muted-foreground">{t("connectionCatalogue.own")}</h3>
-              {own}
-            </section>
-          </div>
-        );
-      }
       case "form":
         return (
           <ConnectionCreateForm

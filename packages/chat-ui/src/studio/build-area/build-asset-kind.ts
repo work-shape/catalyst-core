@@ -21,4 +21,5 @@ export {
   type BuildKind,
   type BuildListedKind
 } from "./build-kind/kind";
+export type { BuildListHeadProps } from "./build-kind/list-head";
 export type { BuildListLead, BuildListLeadFilter, BuildListLeadRow } from "./build-kind/list-lead";

@@ -101,7 +101,8 @@ export function TypedConnectionCreate({
 }: Pick<BuildCreateDialogProps, "checkName" | "put" | "onClose" | "onCreated"> & {
   offer: ConnectorTypeOffer;
   source: ConnectionSource;
-  onBack(): void;
+  /** Back to where the dialog chose what to connect. Absent where it started here: no way back. */
+  onBack?: () => void;
   /** The name and id an agent proposed (CHAT-CONN-1): the form starts with them. */
   initial?: { title: string; name: string };
   /** The catalogue entry's part this form installs, where it does. */
@@ -301,7 +302,7 @@ export function TypedConnectionCreate({
     <Dialog
       open
       title={
-        created || held ? (
+        created || held || onBack === undefined ? (
           heading
         ) : (
           <span className="flex min-w-0 items-center gap-1">

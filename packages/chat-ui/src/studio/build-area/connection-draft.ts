@@ -46,7 +46,7 @@ const HTTP_API = "http_api";
 
 /** A draft as the card and the approval list read it. */
 export interface ConnectionDraft {
-  /** A catalogue proposal opens Dienste at this part. */
+  /** A catalogue proposal opens the install of this part. */
   entry?: { id: string; part: CataloguePart };
   state?: ConnectionProposalState;
   mayWrite?: boolean;

@@ -1,13 +1,20 @@
 import { defineTranslations } from "./translation-area";
 
-// The catalogue in New connection (CAT-1): the "Dienste" group of entry cards and the steps
-// that install one part of an entry. `{title}` is the entry's name, such as a service's.
+// The catalogue (CAT-1): the "Dienste" cards at the top of the Connections page (CAT-PAGE) and
+// the steps that install one part of an entry. `{title}` is the entry's name, such as a service's.
 export const connectionCatalogue = defineTranslations({
   en: {
     "connectionCatalogue.services": "Services",
-    "connectionCatalogue.own": "Your own connection",
+    "connectionCatalogue.servicesText":
+      "Prepared connections to common services, set up in a few steps.",
     "connectionCatalogue.partTools": "For agents",
     "connectionCatalogue.partSource": "As a Knowledge Base source",
+    "connectionCatalogue.partOwn": "Only for you",
+    "connectionCatalogue.statusConnected": "You're connected",
+    "connectionCatalogue.statusSetUp": "Set up",
+    "connectionCatalogue.statusStart": "Set up now",
+    "connectionCatalogue.startLabel": "Set up {title}",
+    "connectionCatalogue.openLabel": "Open {title}",
     "connectionCatalogue.notOffered": "Ask the technical team",
     "connectionCatalogue.partChoice": "What to connect",
     "connectionCatalogue.examples": "Ask, for example",
@@ -54,9 +61,16 @@ export const connectionCatalogue = defineTranslations({
   },
   de: {
     "connectionCatalogue.services": "Dienste",
-    "connectionCatalogue.own": "Eigene Verbindung",
+    "connectionCatalogue.servicesText":
+      "Vorbereitete Verbindungen zu gängigen Diensten, in wenigen Schritten eingerichtet.",
     "connectionCatalogue.partTools": "Für Agenten",
     "connectionCatalogue.partSource": "Als Quelle einer Wissensdatenbank",
+    "connectionCatalogue.partOwn": "Nur für dich",
+    "connectionCatalogue.statusConnected": "Du bist verbunden",
+    "connectionCatalogue.statusSetUp": "Eingerichtet",
+    "connectionCatalogue.statusStart": "Einrichten",
+    "connectionCatalogue.startLabel": "{title} einrichten",
+    "connectionCatalogue.openLabel": "{title} öffnen",
     "connectionCatalogue.notOffered": "Frag das technische Team",
     "connectionCatalogue.partChoice": "Was du verbindest",
     "connectionCatalogue.examples": "Frag zum Beispiel",

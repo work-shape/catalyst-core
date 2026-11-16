@@ -12,6 +12,7 @@ export const connections = defineTranslations({
     "connections.releaseNotice":
       "This connection comes with the system setup. The technical team changes it there; it cannot be changed here.",
     "connections.new": "New connection",
+    "connections.yours": "Your connections",
     "connections.titleLabel": "Name",
     "connections.deleteTitle": "Delete connection '{name}'?",
     "connections.deleteDescription":
@@ -334,6 +335,7 @@ export const connections = defineTranslations({
     "connections.releaseNotice":
       "Diese Verbindung gehört zur Einrichtung des Systems. Das technische Team ändert sie dort; hier lässt sie sich nicht ändern.",
     "connections.new": "Neue Verbindung",
+    "connections.yours": "Deine Verbindungen",
     "connections.titleLabel": "Name",
     "connections.deleteTitle": "Verbindung „{name}“ löschen?",
     "connections.deleteDescription":
