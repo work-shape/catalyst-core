@@ -515,7 +515,7 @@ describe("push guardrail preflight", () => {
         .map((c) => c.operation)
     ).toEqual(["assets.validate", "assets.validate", "assets.sync", "assets.put", "assets.put"]);
   });
-  it("refuses a stale guardrail before applying an otherwise valid batch", async () => {
+  it("skips a stale guardrail and applies the rest of the batch", async () => {
     const stored = {
       ...remote("agent", agent),
       id: "guardrail-id",
@@ -533,7 +533,9 @@ describe("push guardrail preflight", () => {
     await editGuardrail(f, guardrail.name);
     const result = await f.run(["config", "push"]);
     expect(result.code).toBe(1);
-    expect(f.calls.some((c) => c.operation === "assets.sync")).toBe(false);
+    expect(result.err).toContain(`- guardrail:${guardrail.name}: revision 2`);
+    expect(f.calls.some((c) => c.operation === "assets.sync")).toBe(true);
+    expect(f.calls.some((c) => c.operation === "assets.put")).toBe(false);
   });
 });
 describe("asset pointer preconditions", () => {

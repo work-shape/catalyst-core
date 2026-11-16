@@ -179,7 +179,9 @@ describe("config CLI command flows", () => {
         stderr: (text) => errors.push(text)
       })
     ).toBe(1);
-    expect(errors.join("")).toContain("Push conflict; nothing was applied.");
+    expect(errors.join("")).toContain(
+      "Skipped; these changed on the instance since the last pull and were not written:"
+    );
     expect(errors.join("")).toMatch(
       /- skill:review: revision 2, changed by Reviewer at \d{4}-\d{2}-\d{2}T/u
     );
@@ -198,6 +200,91 @@ describe("config CLI command flows", () => {
       })
     ).toMatchObject({ revision: 2, config: { content: "# Two" } });
     expect(errors.join("")).toContain("Commit or stash local edits in git first");
+  });
+
+  it("writes every asset without a conflict, skips the conflicting one and names its pull", async () => {
+    const fixture = await createFixture();
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
+      clientInstanceId: fixture.clientInstanceId,
+      mutations: [
+        ...["assistant", "other"].map((name) => ({
+          type: "upsert" as const,
+          kind: "agent" as const,
+          name,
+          config: agentConfig("Baseline", { name })
+        })),
+        { type: "setDefaultAgent", agentName: "assistant" }
+      ]
+    });
+    const output: string[] = [];
+    const errors: string[] = [];
+    const options = {
+      cwd: directory,
+      env: { CATALYST_API_KEY: fixture.apiKey },
+      fetchImpl: createTestFetch(fixture.server),
+      stdout: (text: string) => output.push(text),
+      stderr: (text: string) => errors.push(text)
+    };
+    expect(await runConfigCommand("pull", options)).toBe(0);
+    const before = (await readStateFile(resolve(directory, STATE_FILENAME))).instances.local;
+    const edit = (name: string, instructions: string) =>
+      writeFile(
+        resolve(directory, "agents", `${name}.agent.yaml`),
+        serializeAgentYaml(agentConfig(instructions, { name })),
+        "utf8"
+      );
+    await edit("assistant", "Local edit");
+    await edit("other", "Local edit");
+    // An approved change in the admin UI: it exists only in the database.
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
+      clientInstanceId: fixture.clientInstanceId,
+      actor: { displayLabel: "Approver", roles: ["admin"] },
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: "other",
+          config: agentConfig("Approved there", { name: "other" })
+        }
+      ]
+    });
+    const held = (name: string) =>
+      fixture.store.configAssets.getConfigAsset({
+        clientInstanceId: fixture.clientInstanceId,
+        kind: "agent",
+        name
+      });
+
+    // Fails without the change: the instance refused the whole batch, so the agent nobody else
+    // touched was not written either.
+    expect(await runConfigCommand("push", options)).toBe(1);
+    expect(output.join("")).toContain("agent:assistant: draft revision");
+    expect(errors.join("")).toContain(
+      "Skipped; these changed on the instance since the last pull and were not written:"
+    );
+    expect(errors.join("")).toMatch(/- agent:other: revision 2, changed by Approver at /u);
+    expect(errors.join("")).not.toContain("agent:assistant");
+    expect(errors.join("")).toContain("catalyst config pull --only agent:other");
+    expect(errors.join("")).toContain("Merge your edits into the pulled files");
+    // The change made on the instance stays as it is, and the working copy still lacks it.
+    expect(await held("other")).toMatchObject({
+      revision: 2,
+      config: { instructions: "Approved there" }
+    });
+    const after = (await readStateFile(resolve(directory, STATE_FILENAME))).instances.local;
+    expect(after?.assets?.["agent:other"]).toEqual(before?.assets?.["agent:other"]);
+    expect(after?.assets?.["agent:assistant"]).toMatchObject({ draftPushed: true });
+
+    // Pull the skipped asset, merge the edit into it, and the next push writes it.
+    expect(await runConfigCommand("pull", { ...options, only: ["agent:other"] })).toBe(0);
+    await edit("other", "Approved there, and the local edit");
+    output.length = 0;
+    errors.length = 0;
+    expect(await runConfigCommand("push", options), errors.join("")).toBe(0);
+    expect(output.join("")).toContain("agent:other: draft revision");
+    expect(errors.join("")).toBe("");
   });
 
   it("classifies local, remote and conflicting changes and pushes only local edits", async () => {

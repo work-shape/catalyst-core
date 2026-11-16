@@ -64,7 +64,8 @@ describe("CLI skill folder write outcomes", () => {
       const result = await f.run(source, "push", { fetchImpl });
       expect(result.code).toBe(1);
       expect(result.err).toContain("skill:form");
-      expect(result.err).toContain("applied");
+      // A race skips the folder and reports it after the rest; the others stop the push there.
+      expect(result.err).toContain(failure === "race" ? "Skipped;" : "applied");
       if (failure === "approval") expect(result.err).toContain("held-folder");
       if (failure === "race")
         expect(result.err).toContain("catalyst config pull --only skill:form");
