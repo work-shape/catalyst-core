@@ -253,7 +253,7 @@ export {
   type KnowledgeSourceItemShownState
 } from "@work-shape/catalyst-asset-schemas";
 
-// KBW-0's write contract inventory. No handler runs until KBW-1 or PROC-W.
+// KBW-0's write contract inventory. KBW-1 runs ingest and withdraw, PROC-W pending.
 export {
   knowledgeWriteContracts as KNOWLEDGE_WRITE_OPERATIONS,
   knowledgeWorkflowSourceSchema,
@@ -262,6 +262,10 @@ export {
   knowledgeIngestInputSchema,
   knowledgeIngestOutputSchema,
   knowledgeIngestFetchSchema,
+  knowledgePendingOutputSchema,
+  knowledgePendingRowSchema,
+  knowledgePendingPageRowSchema,
+  KNOWLEDGE_PENDING_MAX_LIMIT,
   type KnowledgeIngestItem,
   type KnowledgeIngestInput,
   type KnowledgeIngestOutput,
@@ -270,6 +274,7 @@ export {
   type KnowledgeWithdrawOutput,
   type KnowledgePendingInput,
   type KnowledgePendingRow,
+  type KnowledgePendingPageRow,
   type KnowledgePendingOutput,
   type KnowledgePutProcessedInput,
   type KnowledgeExtractFieldsInput,

@@ -91,7 +91,21 @@ async function documentPages(
   assetId: string,
   doc: KnowledgeFieldDocument
 ) {
-  if (!runtime.files) throw failure("knowledge_field_text_unavailable");
+  const pages = await readDocumentPages(runtime, assetId, doc);
+  if (!pages) throw failure("knowledge_field_text_unavailable");
+  return pages;
+}
+
+/**
+ * The page text of an indexed document: its stored extraction, or the bytes of a text file
+ * added by hand, which keeps none. Nothing where neither can be read. No model is called.
+ */
+export async function readDocumentPages(
+  runtime: KnowledgeRuntime,
+  assetId: string,
+  doc: Pick<KnowledgeFieldDocument, "contentHash" | "fileId" | "format">
+): Promise<{ page: number; text: string }[] | undefined> {
+  if (!runtime.files) return undefined;
   try {
     const bytes = await readObjectBytes(
       runtime.files.objects,
@@ -104,8 +118,7 @@ async function documentPages(
   } catch {
     /* A manually added text file can have no retained extraction yet. */
   }
-  if (doc.format !== "txt" && doc.format !== "markdown")
-    throw failure("knowledge_field_text_unavailable");
+  if (doc.format !== "txt" && doc.format !== "markdown") return undefined;
   const file = await runtime.stores.files.getManagedFile({
     clientInstanceId: runtime.clientInstanceId,
     fileId: asManagedFileId(doc.fileId)
@@ -115,7 +128,7 @@ async function documentPages(
     file.owner.id !== assetId ||
     file.status !== "available"
   )
-    throw failure("knowledge_field_text_unavailable");
+    return undefined;
   try {
     return [
       {
@@ -126,7 +139,7 @@ async function documentPages(
       }
     ];
   } catch {
-    throw failure("knowledge_field_text_unavailable");
+    return undefined;
   }
 }
 

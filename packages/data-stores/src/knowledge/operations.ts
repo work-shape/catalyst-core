@@ -7,6 +7,7 @@ import { assetResource } from "../store-audience";
 import { sourceOperation } from "./source-operations";
 import { knowledgeBaseReadsClosedConnection } from "./outside-reach";
 import { writeOperation, type KnowledgeWritePart } from "./write-operations";
+import { pendingOperation } from "./pending-operation";
 import {
   AppError,
   isAppError,
@@ -563,6 +564,14 @@ const OPERATIONS = {
     writeTarget(runtime, kb, "ingest"),
   withdraw: (runtime: KnowledgeRuntime, kb: PublishedKnowledgeBase) =>
     writeTarget(runtime, kb, "withdraw"),
+  pending: (runtime: KnowledgeRuntime, kb: PublishedKnowledgeBase) =>
+    isStructured(kb)
+      ? undefined
+      : pendingOperation(runtime, {
+          assetId: kb.asset.id,
+          name: kb.asset.name,
+          resource: kb.resource
+        }),
   query: (runtime: KnowledgeRuntime, knowledgeBase: PublishedKnowledgeBase) =>
     isStructured(knowledgeBase) ? queryOperation(runtime, knowledgeBase) : undefined,
   add_files: (runtime: KnowledgeRuntime, knowledgeBase: PublishedKnowledgeBase) =>
@@ -679,7 +688,8 @@ export function createKnowledgeOperationSource(runtime: KnowledgeRuntime): Opera
                   OPERATIONS.search(runtime, knowledgeBase),
                   OPERATIONS.extract_fields(runtime, knowledgeBase),
                   OPERATIONS.ingest(runtime, knowledgeBase),
-                  OPERATIONS.withdraw(runtime, knowledgeBase)
+                  OPERATIONS.withdraw(runtime, knowledgeBase),
+                  OPERATIONS.pending(runtime, knowledgeBase)
                 ].filter((operation): operation is OperationDefinition => operation !== undefined)
           ),
         truncated:
