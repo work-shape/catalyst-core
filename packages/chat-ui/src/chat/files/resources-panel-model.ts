@@ -76,7 +76,9 @@ function formatIsoDate(value: string, locale: LocaleCode): string | undefined {
   if (!match) {
     return undefined;
   }
-  const [year, month, day] = match.slice(1).map(Number) as [number, number, number];
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
   const date = new Date(Date.UTC(year, month - 1, day));
   if (
     date.getUTCFullYear() !== year ||
