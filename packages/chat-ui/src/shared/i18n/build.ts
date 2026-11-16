@@ -76,6 +76,12 @@ export const build = defineTranslations({
       "This data store is still in use, so nothing was deleted. Stop using it in the apps, workflows, agents and knowledge bases that use it, then delete it.",
     "build.deleteChanged":
       "Somebody changed this since you opened it, so nothing was deleted. Open the page again to see the newer version.",
+    "build.deleteNoRight": "You may not delete this.",
+    "build.deleteNoRightWorkspaceSkill":
+      "Only a Publisher in {workspace} or an admin can delete this skill.",
+    "build.deleteListedBy": "Used by {agents}. Remove it there first, then delete it.",
+    "build.deleteListedByUnreadOne": "1 agent you cannot see",
+    "build.deleteListedByUnreadOther": "{count} agents you cannot see",
     "build.editWithAgentFailed": "The agent could not be opened",
     "build.editWithAgentRefused": "You can no longer open this, or it is gone.",
     "build.editWithAgentClose": "Close",
@@ -293,6 +299,12 @@ export const build = defineTranslations({
       "Dieser Datenspeicher wird noch verwendet, daher wurde nichts gelöscht. Entferne ihn aus den Apps, Workflows, Agenten und Wissensbasen, die ihn verwenden, und lösche ihn dann.",
     "build.deleteChanged":
       "Jemand hat dies geändert, seit du es geöffnet hast. Darum wurde nichts gelöscht. Öffne die Seite neu, um die neuere Version zu sehen.",
+    "build.deleteNoRight": "Du darfst dies nicht löschen.",
+    "build.deleteNoRightWorkspaceSkill":
+      "Diesen Skill löschen nur Publisher in {workspace} oder ein Admin.",
+    "build.deleteListedBy": "Verwendet von {agents}. Entferne ihn dort zuerst, dann lösche ihn.",
+    "build.deleteListedByUnreadOne": "1 Agent, den du nicht sehen kannst",
+    "build.deleteListedByUnreadOther": "{count} Agenten, die du nicht sehen kannst",
     "build.editWithAgentFailed": "Der Agent ließ sich nicht öffnen",
     "build.editWithAgentRefused": "Du kannst dies nicht mehr öffnen, oder es ist weg.",
     "build.editWithAgentClose": "Schließen",

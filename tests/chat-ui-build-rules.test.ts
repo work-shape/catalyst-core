@@ -12,6 +12,7 @@ import {
   addressCheckOf,
   approverNamesOf,
   buildScopes,
+  deleteBlockedReason,
   PendingApprovalError,
   mayCreateAgents,
   readBuildRefusal,
@@ -371,6 +372,64 @@ describe("Studio refusals", () => {
         ? "Person context is not available in Apps yet. Remove App exposure or the person context header."
         : "Personenkontext ist in Apps noch nicht verfügbar. Entfernen Sie die App-Freigabe oder den Header für den Personenkontext."
     ]);
+  });
+
+  // SKILL-DEL-1: Delete stays in the menu and says why it cannot be chosen.
+  it.each(["en", "de"] as const)("says why a skill cannot be deleted now, in %s", (locale) => {
+    const { t: translate } = createTranslationContext(locale);
+    const skill = {
+      id: "asset_guide",
+      kind: "skill",
+      name: "guide",
+      scope: { kind: "workspace" as const, workspaceId: "cws_team" },
+      revision: 2,
+      config: { name: "guide" },
+      updatedAt: "2026-11-16T10:00:00.000Z"
+    };
+    const team = { rung: "workspace" as const, name: "Team" };
+    const reason = (
+      asset: typeof skill & {
+        listedBy?: { name: string; title: string }[];
+        listedByUnread?: number;
+      },
+      may: boolean
+    ) => deleteBlockedReason(asset, may, team, translate, locale);
+    const listed = {
+      ...skill,
+      listedBy: [
+        { name: "intake", title: "Intake" },
+        { name: "review", title: "Review" }
+      ]
+    };
+
+    expect(reason(skill, true)).toBeUndefined();
+    expect([
+      reason(skill, false),
+      reason({ ...skill, kind: "agent" }, false),
+      reason(listed, true)
+    ]).toEqual(
+      locale === "en"
+        ? [
+            "Only a Publisher in Team or an admin can delete this skill.",
+            "You may not delete this.",
+            "Used by Intake and Review. Remove it there first, then delete it."
+          ]
+        : [
+            "Diesen Skill löschen nur Publisher in Team oder ein Admin.",
+            "Du darfst dies nicht löschen.",
+            "Verwendet von Intake und Review. Entferne ihn dort zuerst, dann lösche ihn."
+          ]
+    );
+    // An agent the reader cannot see is counted, never named.
+    expect(
+      reason({ ...listed, listedBy: listed.listedBy.slice(0, 1), listedByUnread: 2 }, true)
+    ).toBe(
+      locale === "en"
+        ? "Used by Intake and 2 agents you cannot see. Remove it there first, then delete it."
+        : "Verwendet von Intake und 2 Agenten, die du nicht sehen kannst. Entferne ihn dort zuerst, dann lösche ihn."
+    );
+    // Without the right the reader is told that, not which agents list it.
+    expect(reason(listed, false)).not.toContain("Intake");
   });
 
   // STORE-PAGES: a Data Store still used is not deleted. The reader is told so in their own

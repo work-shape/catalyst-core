@@ -155,7 +155,7 @@ export function createSkillAssetKind(options: {
  * The agents that list the skill, in their draft, their live revision or their pending shared
  * draft, sorted by name: while one does, the skill is not deleted (SKILL-DEL-1).
  */
-async function agentsListingSkill(input: {
+export async function agentsListingSkill(input: {
   name: string;
   assets(kind: string): Promise<readonly ConfigAssetRecord[]>;
   drafts(assetIds: readonly string[]): Promise<ReadonlyMap<string, JsonObject>>;
