@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { reasoningEffortChoiceForBinding } from "@work-shape/catalyst-core";
 import {
   BEDROCK_TEST_ACCOUNT_ID,
   answerWith,
@@ -135,7 +136,7 @@ describe("Bedrock adapter: what a config may name", () => {
   it("declares tool calls, images, documents, answer formats and thinking, and nothing it does not map", async () => {
     const adapter = await bedrock();
     expect(adapter.capabilities(RECORDED_BEDROCK_PROFILE)).toEqual({
-      reasoningEfforts: ["none", "low", "medium", "high"],
+      reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
       nativeTools: [],
       toolCalls: true,
       serverCompaction: false,
@@ -148,6 +149,23 @@ describe("Bedrock adapter: what a config may name", () => {
       streaming: true,
       priceRequired: true
     });
+  });
+
+  it("offers the chat picker all five efforts, unless the binding lists fewer", async () => {
+    const { reasoningEfforts } = (await bedrock()).capabilities(RECORDED_BEDROCK_PROFILE);
+
+    expect(reasoningEffortChoiceForBinding({}, reasoningEfforts, undefined)).toEqual({
+      defaultEffort: "medium",
+      selectable: ["low", "medium", "high", "xhigh", "max"]
+    });
+    // A model that refuses `xhigh` and `max`, such as Claude Sonnet 4.6, is restricted by its binding.
+    expect(
+      reasoningEffortChoiceForBinding(
+        { userSelectableReasoningEfforts: ["low", "medium", "high"] },
+        reasoningEfforts,
+        undefined
+      ).selectable
+    ).toEqual(["low", "medium", "high"]);
   });
 
   it("needs the account id of the instance, and takes nothing but twelve digits", async () => {

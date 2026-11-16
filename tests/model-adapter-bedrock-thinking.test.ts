@@ -5,7 +5,15 @@ import type {
   ModelProviderContinuation,
   ModelTool
 } from "@work-shape/catalyst-model-provider";
-import { answerWith, bedrock, collect, hello, message } from "./support/bedrock-adapter";
+import {
+  answerWith,
+  bedrock,
+  bedrockEventStream,
+  collect,
+  hello,
+  message
+} from "./support/bedrock-adapter";
+import { bedrockChunk } from "./support/bedrock-event-stream";
 import {
   RECORDED_BEDROCK_PROFILE,
   loadModelAdapterRecording,
@@ -33,9 +41,16 @@ afterEach(() => {
 });
 
 describe("Bedrock adapter: thinking", () => {
-  it.each(["low", "medium", "high"] as const)(
+  it.each([
+    ["low", 16_000],
+    ["medium", 16_000],
+    ["high", 16_000],
+    // Below 64,000 a long thought at these efforts fills the limit before the answer starts.
+    ["xhigh", 64_000],
+    ["max", 64_000]
+  ] as const)(
     "asks for adaptive thinking with the effort '%s' and sends no thinking budget",
-    async (effort) => {
+    async (effort, maxTokens) => {
       const sent = answerWith(() => Response.json(message([{ type: "text", text: "Hello." }])));
 
       await (
@@ -44,13 +59,69 @@ describe("Bedrock adapter: thinking", () => {
 
       expect(sent[0]?.body).toMatchObject({
         // The one hard limit on thinking and answer together.
-        max_tokens: 16_000,
+        max_tokens: maxTokens,
         thinking: { type: "adaptive" },
         output_config: { effort }
       });
       expect(JSON.stringify(sent[0]?.body)).not.toContain("budget_tokens");
     }
   );
+
+  it("streams a call at 'max' with the larger output limit", async () => {
+    const sent = answerWith(() =>
+      bedrockEventStream([
+        bedrockChunk({ type: "message_start", message: { usage: { input_tokens: 8 } } }),
+        bedrockChunk({
+          type: "content_block_start",
+          index: 0,
+          content_block: { type: "text", text: "" }
+        }),
+        bedrockChunk({
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "text_delta", text: "Hello." }
+        }),
+        bedrockChunk({ type: "content_block_stop", index: 0 }),
+        bedrockChunk({
+          type: "message_delta",
+          delta: { stop_reason: "end_turn" },
+          usage: { output_tokens: 5 }
+        }),
+        bedrockChunk({ type: "message_stop" })
+      ])
+    );
+
+    const events = await collect(
+      (await bedrock()).stream({
+        model: RECORDED_BEDROCK_PROFILE,
+        ...hello,
+        reasoningEffort: "max"
+      })
+    );
+
+    expect(events.at(-1)).toMatchObject({ type: "completed", completion: { text: "Hello." } });
+    expect(sent[0]?.url).toMatch(/\/invoke-with-response-stream$/u);
+    expect(sent[0]?.body).toMatchObject({
+      max_tokens: 64_000,
+      thinking: { type: "adaptive" },
+      output_config: { effort: "max" }
+    });
+  });
+
+  it("keeps the output limit a call states at 'xhigh'", async () => {
+    const sent = answerWith(() => Response.json(message([{ type: "text", text: "Hello." }])));
+
+    await (
+      await bedrock()
+    ).complete({
+      model: RECORDED_BEDROCK_PROFILE,
+      ...hello,
+      reasoningEffort: "xhigh",
+      maxOutputTokens: 2_000
+    });
+
+    expect(sent[0]?.body).toMatchObject({ max_tokens: 2_000, output_config: { effort: "xhigh" } });
+  });
 
   it.each([undefined, "none"] as const)(
     "sends no thinking setting for the effort '%s'",

@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
-import { isRecord, MODEL_CALL_RESERVED_OUTPUT_TOKENS } from "@work-shape/catalyst-core";
+import { isRecord } from "@work-shape/catalyst-core";
 import { createProviderToolMetadata, type ProviderToolNames } from "../openai-compatible-mapping";
 import type { ModelAdapterRequest, ModelCompletion, ModelContent, ModelToolCall } from "../types";
 import { withBedrockCacheBreakpoints } from "./bedrock-cache";
 import { assertBedrockDocuments, toBedrockDocumentBlock } from "./bedrock-documents";
 import { toBedrockOutputFormat } from "./bedrock-output";
 import {
+  bedrockMaxOutputTokens,
   bedrockThinkingSettings,
   findBedrockThinkingTurn,
   readBedrockThinkingTurns,
@@ -23,14 +24,6 @@ import {
   type BedrockUsage
 } from "./bedrock-wire";
 
-// The Messages format requires an output limit. It is what admission reserves for the answer
-// of a call, so an answer never uses more output than was held for it on the budget; a longer
-// one ends there and the user reads it cut off. Thinking is output too: the limit holds thinking
-// and answer together, so no thinking setting can ask for more than the limit, and an answer
-// after long thinking has what the thinking left of it. Every Claude model from the 4 generation
-// on gives at least this much. Bedrock refuses the request for an older model with a smaller
-// limit.
-const BEDROCK_MAX_OUTPUT_TOKENS = MODEL_CALL_RESERVED_OUTPUT_TOKENS;
 // Protects a request from being refused whole over one image: Bedrock takes an image of at most
 // 3.75 MB. A larger one is left out, and the model is told so in its place.
 const BEDROCK_IMAGE_MAX_BYTES = 3_750_000;
@@ -133,7 +126,11 @@ export function toBedrockRequest(
 
   const body: BedrockMessagesRequest = {
     anthropic_version: BEDROCK_ANTHROPIC_VERSION,
-    max_tokens: request.maxOutputTokens ?? BEDROCK_MAX_OUTPUT_TOKENS,
+    // The Messages format requires an output limit. It holds thinking and answer together, so no
+    // thinking setting can ask for more, and an answer after long thinking has what the thinking
+    // left of it; a longer one ends there and the user reads it cut off. Bedrock refuses the
+    // request for an older model with a smaller limit.
+    max_tokens: request.maxOutputTokens ?? bedrockMaxOutputTokens(request.reasoningEffort),
     ...(system.length > 0 ? { system } : {}),
     messages,
     ...(thinking ? { thinking } : {}),
