@@ -9,7 +9,7 @@ import type {
   PlatformContext
 } from "@work-shape/catalyst-api-contract";
 import { ConfigApiError } from "./api";
-import { formatDraft } from "./command-support";
+import { formatDraft, keyScopeHint } from "./command-support";
 
 // How the asset commands print what the instance answered. Every line is built from the
 // answer; nothing here decides anything.
@@ -157,13 +157,9 @@ export function formatWarnings(warnings: ReadonlyArray<{ message: string }>): st
  */
 export function formatRefusal(error: ConfigApiError): string {
   const head = `Refused by the instance (HTTP ${error.status}${error.code ? ` ${error.code}` : ""}): ${error.message}`;
-  const outsideKey = isRecord(error.details) && error.details.reason === "outside_key_scope";
-  return [head, ...detailLines(error.details), ...(outsideKey ? [NEW_KEY_HINT] : [])].join("\n");
+  const hint = keyScopeHint(error);
+  return [head, ...detailLines(error.details), ...(hint ? [hint] : [])].join("\n");
 }
-
-/** How to get a key that names a right its person holds now. */
-const NEW_KEY_HINT =
-  "A key names the rights its person chose when it was issued. 'catalyst login --instance <url>' issues a new key that starts with every right you hold now; at /settings/you/api-keys you can also issue one and tick them yourself.";
 
 function detailLines(details: unknown): string[] {
   if (!isRecord(details)) return [];
