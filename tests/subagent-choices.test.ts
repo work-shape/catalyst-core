@@ -119,6 +119,11 @@ describe("the agents and models a run's run_agent lists (CR-3m)", () => {
     // The same config and rights give the same definition, whatever order the snapshot has.
     const again = await choose([...agents].reverse());
     expect(describeRunAgentTool(again)).toEqual(describeRunAgentTool(choices));
+
+    // Check 169: files reach a child by name, and parallel children write apart.
+    const { description } = describeRunAgentTool(choices);
+    expect(description).toContain("name the ones it needs in the task by file name");
+    expect(description).toContain("/workspace/agents/<a short name for its task>/");
   });
 
   it("lists every agent the person may use for '*', and leaves out one they may not", async () => {

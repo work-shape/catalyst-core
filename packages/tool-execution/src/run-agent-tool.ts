@@ -76,6 +76,8 @@ const RUN_AGENT_DESCRIPTION = [
   "Start a subagent: an agent that works on one sub-task in a thread of its own and answers you when it is done.",
   "Use it for independent parts of a larger task, such as researching several subjects. Start all of them in the same step: they run at the same time, and you get every answer as the result of its call once the last one has ended.",
   "The subagent does not see this conversation, so the task must hold everything it needs. It acts for the same person, with the same rights, and its files land in this conversation.",
+  "It is given the list of files attached to this conversation: name the ones it needs in the task by file name.",
+  "Tell it to write its files under /workspace/agents/<a short name for its task>/, so subagents that run at the same time do not overwrite each other's files.",
   "A subagent cannot ask the person to confirm a call; where it needed one, its answer names the exact operation and arguments that still need to be called. Make that call yourself so the person can confirm it. Keep operation ids out of your reply to the person.",
   `At most ${SUBAGENTS_PER_STEP} subagents in one step and ${SUBAGENTS_PER_RUN} in one run. A subagent cannot start subagents of its own.`
 ].join(" ");

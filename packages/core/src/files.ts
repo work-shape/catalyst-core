@@ -814,12 +814,17 @@ export interface ConversationAttachmentStore {
     error: JsonObject;
     completedAt: ISODateString;
   }): Promise<ConversationAttachment>;
-  /** Also resolves a Workflow run-file id through the copy claimed by its task in this thread. */
+  /**
+   * A subagent's run thread reads its root conversation's attachments: a thread holds none of
+   * its own. Also resolves a Workflow run-file id through the copy claimed by its task in this
+   * thread.
+   */
   findReadyConversationAttachmentByFile(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
     fileId: ManagedFileId;
   }): Promise<ConversationAttachment | undefined>;
+  /** A subagent's run thread reads its root conversation's attachments, as above. */
   findConversationAttachmentByFile(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;

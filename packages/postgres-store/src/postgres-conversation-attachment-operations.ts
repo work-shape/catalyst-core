@@ -555,6 +555,24 @@ export async function failClaimedConversationAttachment(
   return mapConversationAttachment(row);
 }
 
+/**
+ * The conversation whose attachments a tool of this conversation reads by file. A subagent's
+ * run thread holds none of its own: it reads its root chat's, as its Execution Workspace and
+ * project folder are its root's. Any other conversation, a Workflow step's thread included,
+ * reads its own.
+ */
+function attachmentConversationOf(
+  clientInstanceId: ClientInstanceId,
+  conversationId: ConversationId
+) {
+  return drizzleSql`coalesce((
+    select thread.parent_conversation_id from ${conversations} as thread
+    where thread.client_instance_id = ${clientInstanceId}
+      and thread.id = ${conversationId}
+      and thread.kind = 'run_thread'
+  ), ${conversationId})`;
+}
+
 export async function findReadyConversationAttachmentByFile(
   db: PostgresConnection,
   input: {
@@ -569,7 +587,10 @@ export async function findReadyConversationAttachmentByFile(
     .where(
       and(
         eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-        eq(conversationAttachments.conversationId, input.conversationId),
+        eq(
+          conversationAttachments.conversationId,
+          attachmentConversationOf(input.clientInstanceId, input.conversationId)
+        ),
         or(
           eq(conversationAttachments.fileId, input.fileId),
           // A Workflow task also names the original run file. Resolve it only through the
@@ -608,7 +629,10 @@ export async function findConversationAttachmentByFile(
     .where(
       and(
         eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-        eq(conversationAttachments.conversationId, input.conversationId),
+        eq(
+          conversationAttachments.conversationId,
+          attachmentConversationOf(input.clientInstanceId, input.conversationId)
+        ),
         eq(conversationAttachments.fileId, input.fileId),
         ne(conversationAttachments.status, "deleted")
       )

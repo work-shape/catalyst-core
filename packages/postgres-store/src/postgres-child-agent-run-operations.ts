@@ -1,6 +1,8 @@
 import {
   ACTIVE_AGENT_RUN_STATUSES,
+  isJsonObject,
   readAssistantToolCallsMetadata,
+  readUserMessageMetadata,
   readWorkflowAgentFiles,
   AppError,
   SUBAGENTS_PER_RUN,
@@ -18,15 +20,19 @@ import {
   createUserMessageMetadata,
   executeAgentRunJob,
   type AgentRunError,
+  type AttachmentManifest,
+  type AttachmentManifestEntry,
   type ChildAgentRunStore,
   type ClientInstanceId,
+  type JsonObject,
+  type JsonValue,
   type StartSubagentRunInput,
   type StartSubagentRunResult,
   type SubagentOutcome,
   type SubagentSummary,
   type WorkflowAgentRunData
 } from "@work-shape/catalyst-core";
-import { and, asc, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { requestAgentRunCancellation } from "./postgres-agent-run-cancellation";
 import { enqueueJob } from "./jobs/store";
 import { enqueueSubagentWake, hasOpenChildren } from "./postgres-agent-run-lineage";
@@ -351,6 +357,61 @@ export function createPostgresChildAgentRunStore(
   };
 }
 
+/**
+ * The attachment manifest of a subagent's root conversation, as its parent reads it (CR-1,
+ * files): the entries of the root messages' manifests whose attachments are still ready,
+ * oldest message first. The parent names files in the task; the child finds their ids here.
+ */
+async function readRootAttachmentManifest(
+  tx: PostgresConnection,
+  clientInstanceId: ClientInstanceId,
+  rootId: string
+): Promise<AttachmentManifest | undefined> {
+  const ready = await tx
+    .select({ id: conversationAttachments.id, messageId: conversationAttachments.messageId })
+    .from(conversationAttachments)
+    .where(
+      and(
+        eq(conversationAttachments.clientInstanceId, clientInstanceId),
+        eq(conversationAttachments.conversationId, rootId),
+        eq(conversationAttachments.status, "ready"),
+        isNotNull(conversationAttachments.messageId)
+      )
+    );
+  if (ready.length === 0) return undefined;
+  const readyIds = new Set(ready.map((attachment) => attachment.id));
+  const messageIds = [...new Set(ready.flatMap((attachment) => attachment.messageId ?? []))];
+  const rows = await tx
+    .select({ metadata: messages.metadata })
+    .from(messages)
+    .where(and(eq(messages.clientInstanceId, clientInstanceId), inArray(messages.id, messageIds)))
+    .orderBy(asc(messages.createdAt), asc(messages.id));
+  const attachments: AttachmentManifestEntry[] = [];
+  for (const row of rows) {
+    const manifest = readUserMessageMetadata(row.metadata)?.attachmentManifest;
+    if (!isJsonObject(manifest) || !Array.isArray(manifest.attachments)) continue;
+    for (const entry of manifest.attachments) {
+      // An entry is listed once, while its attachment is ready.
+      if (!isManifestEntry(entry) || !readyIds.delete(entry.attachmentId)) continue;
+      attachments.push(entry);
+    }
+  }
+  return attachments.length > 0 ? { version: 1, attachments } : undefined;
+}
+
+/** An entry of a stored attachment manifest, as `createUserMessageMetadata` wrote it. */
+function isManifestEntry(value: JsonValue): value is JsonObject & AttachmentManifestEntry {
+  return (
+    isJsonObject(value) &&
+    typeof value.kind === "string" &&
+    typeof value.fileId === "string" &&
+    typeof value.attachmentId === "string" &&
+    typeof value.filename === "string" &&
+    typeof value.byteSize === "number" &&
+    typeof value.status === "string"
+  );
+}
+
 async function startSubagentRun(
   db: PostgresConnection,
   input: StartSubagentRunInput
@@ -446,7 +507,11 @@ async function startSubagentRun(
       conversationId: threadId,
       role: "user",
       text: input.task,
-      metadata: {},
+      // The root's files reach the child by name: its manifest is the child's `ls`.
+      metadata:
+        createUserMessageMetadata({
+          attachmentManifest: await readRootAttachmentManifest(tx, clientInstanceId, root.id)
+        }) ?? {},
       createdAt: now
     });
     const [row] = await tx
