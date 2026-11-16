@@ -426,6 +426,9 @@ export const assembleWorkflows: ModuleSeam = ({
               registry: () => registry,
               runs: () => runs,
               knowledgeSources: modules.isEnabled("knowledge"),
+              agentModelBindingIds: config.modelBindings
+                .filter((binding) => binding.agentSelectable !== false)
+                .map((binding) => binding.id),
               // Every write is a commit where the instance makes commits (WF-GIT-1).
               repository: commitsAssetRepos(config, modules),
               sourceLimits: config.workflows.source,

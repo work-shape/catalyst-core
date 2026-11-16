@@ -50,7 +50,8 @@ export async function workflowAgentInput(
     workflowRunId: found.stepRun.runId,
     instructions: found.step.instructions,
     toolNames: found.tools,
-    outputSchema: found.step.outputSchema
+    outputSchema: found.step.outputSchema,
+    ...(found.step.model === undefined ? {} : { modelBindingId: found.step.model })
   };
 }
 

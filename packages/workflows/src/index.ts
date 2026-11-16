@@ -195,6 +195,7 @@ export { createDatasetDownload } from "./dataset-download";
 export { WorkflowStepFailure } from "./step-failure";
 
 export { workflowKindIssues } from "./kind-rules";
+export { workflowAgentModelIssues } from "./agent-model";
 
 export {
   workflowNeededRights,

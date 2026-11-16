@@ -73,6 +73,11 @@ interface FixtureOptions {
    * to outside clients: the Workflow's reach is closed to them (WF-OUT).
    */
   closedReach?: boolean;
+  /**
+   * The agent step's `model`. The instance then has the chat bindings `small`, which agents may
+   * select, and `held`, which they may not.
+   */
+  model?: string;
   /** Runs after the Workflow run started and before a job claims it. */
   beforeJobs?: (started: {
     app: TestInstance;
@@ -171,7 +176,15 @@ async function fixture(
       ]
     },
     tools: options.webTools ? [{ name: "web_fetch", enabled: true }] : [],
-    toolNames: []
+    toolNames: [],
+    ...(options.model === undefined
+      ? {}
+      : {
+          modelBindings: [
+            { id: "small", providerId: "local", model: "small-model" },
+            { id: "held", providerId: "local", model: "held-model", agentSelectable: false }
+          ]
+        })
   });
   if (options.webTools)
     config.webAccess = {
@@ -352,6 +365,7 @@ async function fixture(
           properties: { body: { type: "string", format: "markdown" } }
         },
         outputSchema,
+        ...(options.model === undefined ? {} : { model: options.model }),
         input: options.composedInput
           ? { body: { text: ["Name: ", { ref: { step: "start", path: "input.text" } }] } }
           : {}
@@ -809,6 +823,106 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
       });
       expect(response.statusCode, response.body).toBe(404);
     }
+  });
+
+  it("runs an agent step on the model binding it names and records the usage on that binding", async () => {
+    const f = await fixture("valid", false, "user-1", { model: "small" });
+    const step = await f.ended("done");
+    expect(JSON.parse(required(step.outputPreview).text)).toEqual({ answer: "validated" });
+    const child = required(
+      await f.app.stores.childAgentRuns.readWorkflowAgentRun({
+        clientInstanceId: f.clientInstanceId,
+        stepRunId: step.id
+      })
+    );
+    await withTestSql(async (sql) => {
+      const rows =
+        await sql`select binding_id, model, purpose from model_usage_events where agent_run_id = ${child.id}`;
+      expect(rows).toMatchObject([
+        { binding_id: "small", model: "small-model", purpose: "workflow_step" }
+      ]);
+    });
+  });
+
+  it("refuses at save and at publish an agent step on a binding agents may not select", async () => {
+    const f = await fixture("plain", false, "user-1", { model: "small" });
+    const manifest = (model: string): import("@work-shape/catalyst-core").JsonObject => ({
+      id: "model-check",
+      name: "Model check",
+      runAs: "workflow-runner",
+      inputs: { type: "object" },
+      outputs: outputSchema,
+      tools: [toolName],
+      steps: [
+        { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
+        {
+          id: "sort",
+          name: "Sort",
+          type: "agent",
+          instructions: "Answer.",
+          inputSchema: { type: "object" },
+          outputSchema,
+          model,
+          input: {}
+        },
+        {
+          id: "result",
+          name: "Result",
+          type: "output",
+          input: { answer: { ref: { step: "sort", path: "answer" } } }
+        }
+      ]
+    });
+    const params = { kind: "workflow", name: "model-check" };
+    // A binding marked agentSelectable: false, and one the instance does not have.
+    for (const model of ["held", "missing"]) {
+      const put = await f.app.call("assets.put", {
+        params,
+        payload: {
+          expectedRevision: null,
+          config: { name: "model-check", manifest: manifest(model) }
+        }
+      });
+      expect(put.statusCode, put.body).toBe(422);
+      expect(put.json<{ error: { details: { reason: string } } }>().error.details.reason).toBe(
+        "model_not_available"
+      );
+      expect(put.body).toContain(`'${model}'`);
+    }
+    // A revision that reached the store another way is refused when it is published.
+    await applyAtCurrentRevisions(f.app.stores.configAssets, {
+      clientInstanceId: f.clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "workflow",
+          name: "model-check",
+          config: { name: "model-check", manifest: manifest("held") }
+        }
+      ]
+    });
+    const stored = required(
+      await f.app.stores.configAssets.getConfigAsset({
+        clientInstanceId: f.clientInstanceId,
+        ...params
+      })
+    );
+    const published = await f.app.call("assets.publish", {
+      params,
+      payload: { revision: stored.revision }
+    });
+    expect(published.statusCode, published.body).toBe(422);
+    expect(published.body).toContain("model_not_available");
+    expect(published.body).toContain("'held'");
+    // A binding agents may select is taken.
+    const put = await f.app.call("assets.put", {
+      params,
+      payload: {
+        expectedRevision: stored.revision,
+        config: { name: "model-check", manifest: manifest("small") }
+      }
+    });
+    expect(put.statusCode, put.body).toBe(200);
   });
 
   it("joins and escapes referenced Markdown before starting its Child Agent Run", async () => {

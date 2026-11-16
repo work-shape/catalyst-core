@@ -49,6 +49,8 @@ export interface StartAgentRunInput {
     instructions: string;
     toolNames: readonly string[];
     outputSchema: JsonObject;
+    /** The binding the step names; the instance's default chat binding where it names none. */
+    modelBindingId?: string;
   };
   preparedRun?: {
     id: AgentRunId;

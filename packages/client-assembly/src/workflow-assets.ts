@@ -78,6 +78,7 @@ import {
   workflowReachRefusal,
   workflowStepFileIssues,
   workflowStepFilesRefusal,
+  workflowAgentModelIssues,
   workflowKindIssues,
   workflowLimitIssues,
   workflowContinuationIssues,
@@ -183,6 +184,11 @@ export function createWorkflowAssetKind(
      */
     knowledgeSources?: boolean;
     /**
+     * The model bindings agents may select on the instance: an agent step's `model` names one
+     * of them, or it is refused at save and at publish. None given: a step names none.
+     */
+    agentModelBindingIds?: readonly string[];
+    /**
      * Whether every write is a commit of the Workflow's folder (WF-GIT-1): where the instance
      * keeps files and runs the worker that commits. Without it a Workflow is written as its
      * config alone, as before.
@@ -192,6 +198,11 @@ export function createWorkflowAssetKind(
   }
 ): WorkflowAssetKind {
   const { clientInstanceId, timeZone = "UTC", now = () => new Date(), limits } = options;
+  /** An agent step on a model binding agents may not select is refused by name. */
+  const assertAgentModels = (name: string, manifest: WorkflowManifest) => {
+    const issues = workflowAgentModelIssues(manifest, options.agentModelBindingIds ?? []);
+    if (issues.length > 0) throw workflowDefinitionRefusal(name, issues);
+  };
   /** The definition of a published config as the engine runs it, or nothing where it runs none. */
   const runnable = (config: JsonObject | undefined) => {
     const parsed = parseStoredManifest(manifestOfConfigSchema.safeParse(config).data?.manifest);
@@ -266,6 +277,7 @@ export function createWorkflowAssetKind(
   ): Promise<void> {
     const kindIssues = workflowKindIssues(manifest);
     if (kindIssues.length > 0) throw workflowDefinitionRefusal(name, kindIssues);
+    assertAgentModels(name, manifest);
     await assertMailSteps(manifest, stores, actor);
     // A limit above the operator's ceiling is refused here, by name, and never clamped.
     const above = workflowLimitIssues(manifest, limits);
@@ -379,6 +391,7 @@ export function createWorkflowAssetKind(
           if (!context.changes(WORKFLOW_ASSET_KIND, workflow.name)) continue;
           const result = parseStoredManifest(workflow.manifest);
           if (!result.ok) throw workflowDefinitionRefusal(workflow.name, result.issues);
+          assertAgentModels(workflow.name, result.manifest);
           if (result.manifest.id !== workflow.name) {
             return [
               {
@@ -727,6 +740,7 @@ export function createWorkflowAssetKind(
         throw workflowDefinitionRefusal(result.manifest.id, continuation);
       const kindIssues = workflowKindIssues(result.manifest);
       if (kindIssues.length > 0) throw workflowDefinitionRefusal(config.name, kindIssues);
+      assertAgentModels(config.name, result.manifest);
       if (result.manifest.runAs === undefined) {
         checkWorkflowOwnRights(
           result.manifest,
