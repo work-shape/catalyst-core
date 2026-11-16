@@ -57,6 +57,7 @@ export {
 export {
   composerActions,
   findRunActivity,
+  findWaitedSubagents,
   isThreadBusy,
   shouldShowCancelAction,
   shouldShowRunActivity

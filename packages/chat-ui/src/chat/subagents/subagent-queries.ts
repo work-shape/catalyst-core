@@ -1,6 +1,9 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
+import {
+  useOptionalWorkspaceApiClient,
+  useWorkspaceApiClient
+} from "../../shared/api/workspace-api-client";
 import { useWorkspaceThreadQuery } from "../../shared/api/workspace-queries";
 import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
 import { isTerminalObservation } from "../conversation/conversation-controller-state";
@@ -26,6 +29,45 @@ export function useSubagentsQuery(input: { conversationId: string | undefined; e
       ).items,
     enabled: input.enabled && Boolean(input.conversationId)
   });
+}
+
+/**
+ * The subagents a run waits for, as its activity row names them: each call's description and,
+ * once the conversation's subagents list it, when it started. Outside a workspace, as in an
+ * embedded chat, the descriptions alone.
+ */
+export function useWaitingSubagents(
+  conversationId: string | undefined,
+  waited: readonly { toolCallId: string; description: string }[] | undefined
+): { description: string; startedAt?: string }[] | undefined {
+  const workspace = useOptionalWorkspaceApiClient();
+  const listed = useQuery({
+    queryKey: workspaceQueryKeys.conversationSubagents(
+      workspace?.apiBaseUrl ?? "",
+      WORKSPACE_AUTH_SCOPE,
+      conversationId
+    ),
+    queryFn: async () =>
+      workspace
+        ? (
+            await workspace.client.conversations.subagents.list({
+              params: { conversationId: conversationId ?? "" }
+            })
+          ).items
+        : [],
+    enabled: Boolean(workspace && conversationId && waited && waited.length > 0)
+  }).data;
+  return useMemo(
+    () =>
+      waited?.map(({ toolCallId, description }) => {
+        const subagent = listed?.find((item) => item.toolCallId === toolCallId);
+        return {
+          description: subagent?.description ?? description,
+          ...(subagent ? { startedAt: subagent.startedAt } : {})
+        };
+      }),
+    [listed, waited]
+  );
 }
 
 /** Reads a conversation's Resources and its subagents again: one of them changed. */

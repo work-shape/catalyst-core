@@ -11,6 +11,7 @@ import {
   ToolActivityLabelsProvider,
   composerActions,
   findRunActivity,
+  findWaitedSubagents,
   isThreadBusy,
   shouldShowCancelAction,
   shouldShowRunActivity
@@ -162,6 +163,76 @@ describe("chat UI thread activity", () => {
     );
 
     expect(markup).toContain("Bearbeite Unterlagenprüfung…");
+  });
+
+  describe("a run that waits for its subagents (implicit join)", () => {
+    const subagentCall = (toolCallId: string, description: string, result?: unknown) => ({
+      type: "tool-call",
+      toolCallId,
+      toolName: "run_agent",
+      args: { description, task: "…" },
+      ...(result === undefined ? {} : { result })
+    });
+
+    it("finds the subagents when every open call of the step is a run_agent call", () => {
+      expect(
+        findWaitedSubagents([
+          { type: "tool-call", toolName: "documents.check", result: { ok: true } },
+          subagentCall("call_a", "Marktanalyse"),
+          subagentCall("call_b", "Förderprogramme prüfen")
+        ])
+      ).toEqual([
+        { toolCallId: "call_a", description: "Marktanalyse" },
+        { toolCallId: "call_b", description: "Förderprogramme prüfen" }
+      ]);
+    });
+
+    it("finds none while another call still runs, once the calls answered, or for a background child", () => {
+      expect(
+        findWaitedSubagents([
+          subagentCall("call_a", "Marktanalyse"),
+          { type: "tool-call", toolName: "documents.check" }
+        ])
+      ).toBeUndefined();
+      expect(
+        findWaitedSubagents([subagentCall("call_a", "Marktanalyse", { status: "completed" })])
+      ).toBeUndefined();
+      expect(
+        findWaitedSubagents([subagentCall("call_a", "Marktanalyse", { status: "running" })])
+      ).toBeUndefined();
+      expect(findWaitedSubagents([{ type: "text", text: "Fertig" }])).toBeUndefined();
+    });
+
+    it("says how many it waits for, names them with their time, and drops the spinner", () => {
+      const markup = renderActivityStatus({
+        activity: { kind: "tool", toolName: "run_agent" },
+        waitingSubagents: [
+          {
+            description: "Marktanalyse",
+            startedAt: new Date(Date.now() - 75_000).toISOString()
+          },
+          { description: "Förderprogramme prüfen" }
+        ]
+      });
+
+      expect(markup).toContain("Ich warte auf 2 Subagenten…");
+      expect(markup).toContain("Marktanalyse 1m 15s · Förderprogramme prüfen");
+      expect(markup).toContain('data-waiting-for-subagents="true"');
+      expect(markup).not.toContain("animate-spin");
+      expect(markup.match(/role="status"/gu)).toHaveLength(1);
+    });
+
+    it("names one subagent in English, and works as usual without any", () => {
+      expect(
+        renderActivityStatus(
+          { waitingSubagents: [{ description: "Market analysis" }] },
+          { locale: "en" }
+        )
+      ).toContain("Waiting for a subagent…");
+      const working = renderActivityStatus({ waitingSubagents: [] });
+      expect(working).toContain("animate-spin");
+      expect(working).not.toContain("Subagent");
+    });
   });
 
   it("shows the elapsed run time next to the phrase", () => {
