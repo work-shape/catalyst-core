@@ -403,8 +403,8 @@ function fallbackRefusal(
     : undefined;
   if (!isRecord(fallback))
     return `The release config has no model binding '${fallbackId}' to fall back to. Name one of its chat bindings with --fallback.`;
-  if (fallback.kind === "embedding")
-    return `'${fallbackId}' is an embedding binding; a fallback answers chat calls. Name a chat binding with --fallback.`;
+  if (fallback.kind === "embedding" || fallback.kind === "transcription")
+    return `'${fallbackId}' is ${fallback.kind === "embedding" ? "an embedding" : "a transcription"} binding; a fallback answers chat calls. Name a chat binding with --fallback.`;
   const entry =
     isPlainConfigObject(models) && typeof fallback.providerId === "string"
       ? models[fallback.providerId]

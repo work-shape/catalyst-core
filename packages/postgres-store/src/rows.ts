@@ -602,6 +602,7 @@ export function mapModelUsageEvent(row: ModelUsageEventRow | undefined): ModelUs
     outputTokens: row.outputTokens,
     totalTokens: row.totalTokens,
     webSearchCallCount: row.webSearchCallCount,
+    ...(row.audioSeconds === null ? {} : { audioSeconds: row.audioSeconds }),
     fastMode: row.fastMode,
     ...(row.providerServiceTier === null ? {} : { providerServiceTier: row.providerServiceTier }),
     preview: row.preview,

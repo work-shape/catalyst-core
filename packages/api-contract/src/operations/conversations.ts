@@ -28,6 +28,8 @@ import {
   subagentListSchema,
   unknownRunObservationSchema,
   startConversationRunRequestSchema,
+  transcriptionQuerySchema,
+  transcriptionResponseSchema,
   startConversationRunResponseSchema,
   sharedFromOutsideListItemSchema,
   structuredDataResourceResponseSchema
@@ -386,6 +388,24 @@ export const conversationOperations = {
       z.union([startConversationRunResponseSchema, queuedConversationRunResponseSchema])
     ),
     errors: ["NOT_FOUND", "CONFLICT", "GUARDRAIL_BLOCKED"],
+    rateClass: "write"
+  }),
+  "transcriptions.create": defineOperation({
+    id: "transcriptions.create",
+    method: "POST",
+    path: "/api/v1/transcriptions",
+    summary: "Turn a recording from the composer into text, which is not stored",
+    tag: "Conversations",
+    auth: "user",
+    scope: "conversation:write",
+    requires: [],
+    // It changes nothing: the recording and its text are not stored. The provider call is
+    // metered as every model call is.
+    effect: "reading",
+    multipart: true,
+    query: transcriptionQuerySchema,
+    response: json(transcriptionResponseSchema),
+    errors: ["NOT_FOUND", "TIMEOUT"],
     rateClass: "write"
   }),
   "conversations.runs.create": defineOperation({

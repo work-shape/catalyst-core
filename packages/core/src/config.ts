@@ -71,9 +71,11 @@ export type AgentModelSettingField = (typeof AGENT_MODEL_SETTING_FIELDS)[number]
 
 /**
  * What a model binding is for. A `chat` binding answers agent runs and the product's own calls;
- * an `embedding` binding turns text into vectors for Knowledge Bases and answers nothing else.
+ * an `embedding` binding turns text into vectors for Knowledge Bases and answers nothing else;
+ * a `transcription` binding turns a recording from the composer into text and answers nothing
+ * else. An instance has at most one transcription binding.
  */
-export const MODEL_BINDING_KINDS = ["chat", "embedding"] as const;
+export const MODEL_BINDING_KINDS = ["chat", "embedding", "transcription"] as const;
 export type ModelBindingKind = (typeof MODEL_BINDING_KINDS)[number];
 
 /** The most dimensions an embedding binding may ask for: what pgvector's `vector` type stores. */
@@ -330,12 +332,20 @@ export interface UsageRateCardWebSearchConfig {
   pricePerCall: number;
 }
 
+/** The price of a transcription binding's model per minute of audio. */
+export interface UsageRateCardTranscriptionConfig {
+  providerId: string;
+  model: string;
+  pricePerAudioMinute: number;
+}
+
 export interface UsageRateCardConfig {
   id: string;
   version: string;
   currency: string;
   models: UsageRateCardModelConfig[];
   webSearch?: UsageRateCardWebSearchConfig[];
+  transcription?: UsageRateCardTranscriptionConfig[];
 }
 
 export interface UsageCostConfig {

@@ -31,6 +31,7 @@ import { roleEvents } from "./events/role";
 import { scheduledStartEvents } from "./events/scheduled-start";
 import { scopeAssignmentEvents } from "./events/scope-assignment";
 import { storageEvents } from "./events/storage";
+import { transcriptionEvents } from "./events/transcription";
 import { userEvents } from "./events/user";
 import { workflowEvents } from "./events/workflow";
 import { workflowRunEvents } from "./events/workflow-run";
@@ -76,6 +77,7 @@ export const EVENTS = joinEvents(
   scheduledStartEvents,
   scopeAssignmentEvents,
   storageEvents,
+  transcriptionEvents,
   userEvents,
   workflowEvents,
   workflowRunEvents,

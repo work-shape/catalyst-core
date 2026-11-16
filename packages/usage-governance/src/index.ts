@@ -5,6 +5,7 @@ import {
   ModelNotPricedError,
   ModelUsageLimitReachedError,
   KNOWLEDGE_INGESTION_PURPOSES,
+  PERSON_OWN_PURPOSES,
   type AdmittedModelCall,
   type ClientInstanceId,
   type CollaborationWorkspaceId,
@@ -38,7 +39,14 @@ import {
   type UsageBreakdownDimension,
   type UsageBreakdownFilter
 } from "@work-shape/catalyst-core";
-import { calculateUsageCost, normalizeCount, priceTokens, totalComponents } from "./cost";
+import {
+  calculateUsageCost,
+  findTranscriptionRate,
+  normalizeCount,
+  priceAudioSeconds,
+  priceTokens,
+  totalComponents
+} from "./cost";
 
 export { calculateUsageCost, type UsageCostEvent } from "./cost";
 
@@ -705,7 +713,8 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
     });
     const own =
       attribution.userId !== undefined &&
-      (attribution.kind !== "system" || attribution.purpose === "knowledge_query");
+      (attribution.kind !== "system" ||
+        PERSON_OWN_PURPOSES.some((purpose) => purpose === attribution.purpose));
     return {
       instance: this.instanceSpendLimits(stored.instance),
       ...(stored.workspace?.limits ? { workspace: stored.workspace.limits } : {}),
@@ -763,9 +772,12 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
       call.request.maxOutputTokens ?? MODEL_CALL_RESERVED_OUTPUT_TOKENS
     );
     const tokens = inputTokens + outputTokens;
+    const { audioSeconds } = call.request;
     const costMicros = this.freeProviderIds.has(call.providerId)
       ? 0
-      : this.highestCost(call, inputTokens, outputTokens);
+      : audioSeconds !== undefined
+        ? this.audioCost(call, audioSeconds)
+        : this.highestCost(call, inputTokens, outputTokens);
     const purpose = call.attribution.kind === "system" ? call.attribution.purpose : undefined;
     const limited = [spendLimits.instance, spendLimits.workspace, spendLimits.own].some(
       (amounts) => amounts?.dailyMicros !== undefined || amounts?.monthlyMicros !== undefined
@@ -778,6 +790,15 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
       throw new ModelNotPricedError();
     }
     return { tokens, costMicros: costMicros ?? 0 };
+  }
+
+  /** What the seconds of audio of a transcription cost, if the rate card prices its model. */
+  private audioCost(
+    call: Pick<ModelCallAdmission, "providerId" | "model">,
+    seconds: number
+  ): number | undefined {
+    const rate = this.costs.customer && findTranscriptionRate(this.costs.customer, call);
+    return rate && priceAudioSeconds(seconds, rate.pricePerAudioMinute);
   }
 
   /** What the tokens cost at the highest price the rate card has for the model, if it has one. */
@@ -936,7 +957,10 @@ function settlementOf(
     webSearchCallCount: normalizeCount(usage.webSearchCallCount ?? 0),
     ...(usage.providerServiceTier === undefined
       ? {}
-      : { providerServiceTier: usage.providerServiceTier })
+      : { providerServiceTier: usage.providerServiceTier }),
+    ...(usage.audio?.seconds === undefined
+      ? {}
+      : { audioSeconds: normalizeCount(Math.ceil(usage.audio.seconds)) })
   };
   return {
     ...measured,
@@ -946,6 +970,7 @@ function settlementOf(
         model: call.model,
         fastMode: call.fastMode,
         ...measured,
+        ...(usage.audio === undefined ? {} : { audio: { seconds: measured.audioSeconds } }),
         ...(usage === NOTHING_REPORTED ? { source: "estimated" as const } : {})
       },
       rateCard

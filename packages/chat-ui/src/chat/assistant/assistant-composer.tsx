@@ -21,6 +21,13 @@ import { useTranslation, type TranslationContextValue } from "../../shared/i18n"
 import { FollowUpQueue, useFollowUpQueue } from "./follow-up-queue";
 import { holdsFiles, shouldQueueSend, type SendBlock } from "./send-block";
 import { ComposerAction } from "./composer-action";
+import {
+  browserRecords,
+  DictationButton,
+  DictationNotice,
+  useComposerDictation,
+  type DictationPlace
+} from "./composer-dictation";
 import { followUpModeOfSend } from "./follow-up-shortcut";
 import { AddFromProjectButton } from "../projects/add-from-project";
 import { ChatInputNotice } from "../guardrails/chat-input-notice";
@@ -68,7 +75,8 @@ export function AssistantComposer({
   onQueueSend,
   onSubmitMessage,
   chip,
-  inputLabel
+  inputLabel,
+  dictation: dictationPlace
 }: {
   attachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
@@ -111,6 +119,11 @@ export function AssistantComposer({
   chip?: ReactNode;
   /** The field's accessible name where the chip says more than the placeholder. */
   inputLabel?: string;
+  /**
+   * Set where the instance turns speech into text (STT-1): the microphone left of Send, for
+   * the chat it names or a new one.
+   */
+  dictation?: DictationPlace;
 }) {
   const { t } = useTranslation();
   // With a chip the field stands in the second row, and its controls in the third once it grows.
@@ -124,6 +137,9 @@ export function AssistantComposer({
   const previousComposerLayoutRef = useRef<ComposerLayoutSnapshot | null>(null);
   const composerLayoutAnimationsRef = useRef<Animation[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const dictation = useComposerDictation(dictationPlace ?? {}, composerInputRef);
+  const [records] = useState(browserRecords);
+  const offersDictation = Boolean(dictationPlace) && records;
   const hasAttachments = attachments.length > 0 || localUploadingAttachments.length > 0;
   // The people picked with @ are shared with before the message goes (CHAT-SHARE-2): while
   // that runs, or where one was refused, Send waits.
@@ -385,6 +401,7 @@ export function AssistantComposer({
   return (
     <ComposerPrimitive.Root className="relative grid w-full gap-2" onSubmitCapture={handleSubmit}>
       <ChatInputNotice onSendAnyway={() => composerInputRef.current?.form?.requestSubmit()} />
+      {offersDictation ? <DictationNotice dictation={dictation} /> : null}
       <FollowUpQueue />
       <ComposerPrimitive.Attachments>
         {() => <AttachmentPreview removable />}
@@ -510,6 +527,7 @@ export function AssistantComposer({
               onSelectModelBinding={onSelectModelBinding}
               onSelectReasoningEffort={onSelectReasoningEffort}
             />
+            {offersDictation ? <DictationButton dictation={dictation} /> : null}
             <ComposerAction
               sendBlock={sendBlock}
               sendQueued={sendQueued}

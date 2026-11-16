@@ -173,7 +173,8 @@ function insertEvent(input: {
     insert into model_usage_events (
       id, client_instance_id, conversation_id, agent_run_id, agent_name, purpose, workflow_run_id, provider_id,
       model, region, binding_id, input_tokens, cached_input_tokens, cache_write_input_tokens,
-      output_tokens, total_tokens, web_search_call_count, fast_mode, provider_service_tier, preview, source,
+      output_tokens, total_tokens, web_search_call_count, audio_seconds, fast_mode, provider_service_tier,
+      preview, source,
       customer_billable_cost, user_id, collaboration_workspace_id, operation_run_id,
       correlation_id, status, counted_tokens, counted_cost_micros, created_at
     )
@@ -184,7 +185,7 @@ function insertEvent(input: {
       ${event.inputTokens}::int, ${event.cachedInputTokens ?? null}::int,
       ${event.cacheWriteInputTokens ?? null}::int,
       ${event.outputTokens}::int, ${event.totalTokens}::int, ${event.webSearchCallCount}::int,
-      ${event.fastMode}::boolean, ${event.providerServiceTier ?? null},
+      ${event.audioSeconds ?? null}::int, ${event.fastMode}::boolean, ${event.providerServiceTier ?? null},
       exists (
         select 1 from agent_try_conversations
         where conversation_id = ${event.conversationId ?? null}
@@ -461,6 +462,7 @@ async function settleModelUsageEvent(
         output_tokens = ${settlement.outputTokens}::int,
         total_tokens = ${settlement.totalTokens}::int,
         web_search_call_count = ${settlement.webSearchCallCount}::int,
+        audio_seconds = ${settlement.audioSeconds ?? null}::int,
         provider_service_tier = ${settlement.providerServiceTier ?? null},
         source = ${settlement.source},
         customer_billable_cost = ${JSON.stringify(settlement.customerBillableCost)}::jsonb,

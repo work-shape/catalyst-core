@@ -51,6 +51,8 @@ export const modelUsageEvents = pgTable(
     outputTokens: integer("output_tokens").notNull(),
     totalTokens: integer("total_tokens").notNull(),
     webSearchCallCount: integer("web_search_call_count").notNull().default(0),
+    // The seconds of audio of a transcription (STT-1); null on every other call.
+    audioSeconds: integer("audio_seconds"),
     fastMode: boolean("fast_mode").notNull().default(false),
     providerServiceTier: text("provider_service_tier"),
     // A call in a Try conversation (TRY-1b). The insert reads it from the conversation's link.

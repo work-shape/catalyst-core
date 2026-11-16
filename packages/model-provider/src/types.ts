@@ -237,6 +237,45 @@ export interface ModelAdapter {
   stream(request: ModelAdapterRequest): AsyncIterable<ModelAdapterStreamEvent>;
   /** Present only where the provider turns text into vectors. Its absence declares that it does not. */
   embed?(request: ModelAdapterEmbeddingRequest): Promise<ModelAdapterEmbedding>;
+  /** Present only where the provider turns speech into text. Its absence declares that it does not. */
+  transcribe?(request: ModelAdapterTranscriptionRequest): Promise<ModelAdapterTranscription>;
+}
+
+/** One recording to one transcription model, as the gateway hands it to an adapter. */
+export interface ModelAdapterTranscriptionRequest {
+  model: string;
+  audio: ModelTranscriptionAudio;
+  /** The language spoken, as an ISO 639-1 code such as `de`. */
+  language?: string;
+  /** Words the provider should spell right: context biasing, never training. */
+  terms: readonly string[];
+  /** Aborts when the caller stops the call or its deadline passes. The adapter stops with it. */
+  signal?: AbortSignal;
+  deadline?: Date;
+}
+
+/** A recording held in memory for the one call. It is never written anywhere. */
+export interface ModelTranscriptionAudio {
+  bytes: Uint8Array;
+  mimeType: string;
+  filename: string;
+}
+
+/**
+ * What an adapter answers: the text, and the seconds of audio the provider counted, which it
+ * bills. Absent where the provider counted none.
+ */
+export interface ModelAdapterTranscription {
+  text: string;
+  audioSeconds?: number;
+  usage: ModelTokenUsage;
+}
+
+/** What the gateway answers a transcription call. */
+export interface ModelTranscription {
+  text: string;
+  /** The seconds of audio the provider counted; 0 where it counted none. */
+  durationSeconds: number;
 }
 
 /** One batch of texts to one embedding model, as the gateway hands it to an adapter. */

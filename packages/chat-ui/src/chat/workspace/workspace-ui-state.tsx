@@ -431,6 +431,11 @@ export function useWorkspaceRouteState(): WorkspaceRouteContextValue {
   );
 }
 
+/** The route state, or undefined outside the workspace, such as in an embedded chat. */
+export function useOptionalWorkspaceRouteState(): WorkspaceRouteContextValue | undefined {
+  return useContext(WorkspaceRouteContext);
+}
+
 export function useWorkspaceChromeState(): WorkspaceChromeContextValue {
   return useStrictContext(
     WorkspaceChromeContext,

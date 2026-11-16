@@ -162,6 +162,16 @@ export function adapterFromFakeProvider(
         }
       };
     },
+    // Every entry transcribes: the recording's bytes read as text, then the terms it was sent
+    // with in brackets, one second of audio per byte.
+    async transcribe(request) {
+      const spoken = new TextDecoder().decode(request.audio.bytes);
+      return {
+        text: request.terms.length === 0 ? spoken : `${spoken} [${request.terms.join("|")}]`,
+        audioSeconds: request.audio.bytes.byteLength,
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, source: "provider_reported" }
+      };
+    },
     complete: (request) =>
       provider.complete(
         {

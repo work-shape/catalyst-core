@@ -43,7 +43,13 @@ export interface ModelTokenUsage {
 export type UsageCostRecordSource = "rate_card" | "backfilled" | "provider_reconciled";
 export type UsageCostRecordStatus = (typeof USAGE_COST_STATUSES)[number];
 export type UsageCostMissingMeter =
-  "token_usage" | "cached_input_tokens" | "model_rate" | "fast_model_rate" | "web_search_rate";
+  | "token_usage"
+  | "cached_input_tokens"
+  | "model_rate"
+  | "fast_model_rate"
+  | "web_search_rate"
+  | "transcription_rate"
+  | "audio_duration";
 
 export interface UsageCostAppliedRates {
   uncachedInputPricePerMillionTokens: number;
@@ -52,6 +58,11 @@ export interface UsageCostAppliedRates {
   cacheWriteInputPricePerMillionTokens?: number;
   outputPricePerMillionTokens: number;
   webSearchPricePerCall?: number;
+  /**
+   * Set on a transcription, which is priced by its audio alone: the audio is its input, so its
+   * price stands in `uncachedInputCostMicros` and its token rates are zero.
+   */
+  audioPricePerMinute?: number;
 }
 
 export interface UsageCostComponents {
@@ -121,6 +132,8 @@ export interface ModelUsageEvent extends ModelTokenUsage {
   collaborationWorkspaceId?: CollaborationWorkspaceId;
   operationRunId?: string;
   webSearchCallCount: number;
+  /** The seconds of audio a transcription carried, as its provider counted them. */
+  audioSeconds?: number;
   /** The call was requested in fast mode. See `isBilledAsFast` for the rates it is settled with. */
   fastMode: boolean;
   /** Service tier the provider reported for the call, where it reports one. */
@@ -149,7 +162,18 @@ export type ModelSystemPurpose =
   | "guardrail_judge"
   | "document_extraction"
   | "knowledge_field_extraction"
+  | "transcription"
   | ModelEmbeddingPurpose;
+
+/**
+ * The purposes of a call that is the person's own, as chat is: the query of a Knowledge Base
+ * search and the transcription of what they spoke into the composer. It counts on their own
+ * bucket and their own spend limit, not on the `system` bucket of what the product adds.
+ */
+export const PERSON_OWN_PURPOSES = [
+  "knowledge_query",
+  "transcription"
+] as const satisfies readonly ModelSystemPurpose[];
 
 /** Knowledge Base ingestion records usage but consumes no chat safeguard or spend budget. */
 export const KNOWLEDGE_INGESTION_PURPOSES = [
@@ -215,6 +239,11 @@ export interface ModelCallRequestSize {
   inputCharacters: number;
   /** The most tokens the answer may have, where the request states it. */
   maxOutputTokens?: number;
+  /**
+   * Set on a transcription: the most seconds of audio it may carry. Admission reserves their
+   * price per audio minute instead of tokens.
+   */
+  audioSeconds?: number;
 }
 
 /** A call that was admitted: its usage event, which settlement completes. */
@@ -230,6 +259,11 @@ export interface AdmittedModelCall extends Pick<
 export interface ModelCallUsage extends ModelTokenUsage {
   webSearchCallCount?: number;
   providerServiceTier?: string;
+  /**
+   * Set on a transcription, which is priced by its audio: the seconds its provider counted,
+   * absent where it counted none.
+   */
+  audio?: { seconds?: number };
 }
 
 export interface ModelUsageEventInput extends Omit<ModelCallAdmission, "request">, ModelCallUsage {}
@@ -254,6 +288,8 @@ export interface ModelUsageEventRecordInput extends ModelTokenUsage {
   collaborationWorkspaceId?: string;
   operationRunId?: string;
   webSearchCallCount: number;
+  /** The seconds of audio of a transcription. */
+  audioSeconds?: number;
   fastMode: boolean;
   providerServiceTier?: string;
   customerBillableCost: UsageCostRecord;
@@ -359,6 +395,7 @@ export type ModelUsageSettlement = Pick<
   | "totalTokens"
   | "source"
   | "webSearchCallCount"
+  | "audioSeconds"
   | "providerServiceTier"
   | "customerBillableCost"
 >;

@@ -472,6 +472,11 @@ export function AssistantThread({
                     onSubmitMessage={onSubmitMessage}
                     chip={startPage ? chatStart?.composerChip : undefined}
                     inputLabel={startPage ? chatStart?.composerLabel : undefined}
+                    dictation={
+                      config?.transcription?.enabled
+                        ? { ...(conversationId ? { conversationId } : {}) }
+                        : undefined
+                    }
                   />
                 </div>
               </div>

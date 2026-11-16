@@ -32,6 +32,8 @@ import {
   type ModelCompletion,
   type ModelAdapterEmbedding,
   type ModelEmbedding,
+  type ModelTranscription,
+  type ModelTranscriptionAudio,
   type ModelAdapterStreamEvent,
   type ModelCompletionStreamEvent,
   type ModelMessage,
@@ -108,6 +110,29 @@ export interface ModelEmbeddingCall {
 }
 
 /**
+ * The most seconds of audio admission reserves for one transcription: the five minutes after
+ * which the composer stops a recording. A longer recording settles at what it used.
+ */
+export const MODEL_TRANSCRIPTION_RESERVED_SECONDS = 300;
+
+/** One call to the transcription binding: one recording, turned into text (STT-1). */
+export interface ModelTranscriptionCall {
+  binding: { bindingId: string };
+  audio: ModelTranscriptionAudio;
+  /** The language spoken, as an ISO 639-1 code. */
+  language?: string;
+  /** Words the provider should spell right, at most 100. */
+  terms: readonly string[];
+  attribution: SystemModelAttribution & { purpose: "transcription" };
+  clientInstanceId: ClientInstanceId;
+  /** Ties the usage event to the request that caused the call. */
+  correlationId: string;
+  signal?: AbortSignal;
+  /** As for `ModelCall`: no attempt starts and no wait ends after it. */
+  deadline?: Date;
+}
+
+/**
  * What a streamed call yields: the adapter's events, and a notice that a tool call announced by
  * an attempt will not come because that attempt failed and the call is sent again.
  */
@@ -128,6 +153,11 @@ export interface ModelGateway {
    * batch reaches neither admission nor the provider.
    */
   embed(call: ModelEmbeddingCall): Promise<ModelEmbedding>;
+  /**
+   * Turns one recording into text. Only a binding of kind `transcription` takes it, and it
+   * takes nothing else. The audio stays in memory: nothing of it is logged or kept.
+   */
+  transcribe(call: ModelTranscriptionCall): Promise<ModelTranscription>;
   /** What the model behind a binding can do. */
   capabilities(binding: ModelBindingRef): ModelCapabilities;
 }
@@ -178,6 +208,12 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
         `Embedding binding '${binding.id}' is on model provider '${binding.providerId}', which does not embed`
       );
     }
+    if (binding.kind === "transcription" && adapter && !adapter.transcribe) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `Transcription binding '${binding.id}' is on model provider '${binding.providerId}', which does not transcribe`
+      );
+    }
   }
 
   function resolve(ref: ModelBindingRef): ResolvedModelTarget {
@@ -210,14 +246,16 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     };
   }
 
-  /** A chat call never reaches an embedding binding, nor an embedding call a chat binding. */
+  /** A call reaches only a binding of its own kind: chat, embedding or transcription. */
   function assertKind(target: ResolvedModelTarget, kind: ModelBindingKind): void {
     if (target.kind === kind) return;
     throw new AppError(
       "VALIDATION_FAILED",
       kind === "embedding"
         ? `${modelLabelOf(target)} is no embedding binding and embeds nothing`
-        : `${modelLabelOf(target)} is an embedding binding and answers no chat call`
+        : kind === "transcription"
+          ? `${modelLabelOf(target)} is no transcription binding and transcribes nothing`
+          : `${modelLabelOf(target)} is ${target.kind === "embedding" ? "an embedding" : "a transcription"} binding and answers no chat call`
     );
   }
 
@@ -527,6 +565,78 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     }
   }
 
+  /**
+   * The path of a transcription: resolve, admit with the most seconds a recording has, call
+   * with the retry policy, settle with the seconds the provider counted. The same recording is
+   * sent on every attempt and nothing returns until it is whole, so every attempt is safe to
+   * send again.
+   */
+  async function transcribe(call: ModelTranscriptionCall): Promise<ModelTranscription> {
+    const target = resolve(call.binding);
+    assertKind(target, "transcription");
+    const transcribeWith = target.adapter.transcribe?.bind(target.adapter);
+    if (!transcribeWith) {
+      throw new AppError("INTERNAL", `${modelLabelOf(target)} cannot transcribe`);
+    }
+    const policy = createModelRetryPolicy({ signal: call.signal, deadline: call.deadline });
+    policy.assertAttemptMayStart();
+    const admitted = await governance.admitModelCall({
+      clientInstanceId: call.clientInstanceId,
+      attribution: call.attribution,
+      providerId: target.provider.id,
+      model: target.model,
+      ...(target.provider.region ? { region: target.provider.region } : {}),
+      bindingId: call.binding.bindingId,
+      fastMode: false,
+      correlationId: call.correlationId,
+      // A transcription is priced by its audio, not by tokens.
+      request: {
+        inputCharacters: 0,
+        maxOutputTokens: 0,
+        audioSeconds: MODEL_TRANSCRIPTION_RESERVED_SECONDS
+      }
+    });
+    const limit = limitModelCall(call.signal, call.deadline);
+    let billed: ModelCallUsage | undefined;
+    let handedOn = false;
+    try {
+      for (;;) {
+        policy.assertAttemptMayStart();
+        try {
+          const answer = await limit.bound(
+            transcribeWith({
+              model: target.model,
+              audio: call.audio,
+              ...(call.language ? { language: call.language } : {}),
+              terms: call.terms,
+              signal: limit.signal,
+              deadline: call.deadline
+            })
+          );
+          billed = {
+            ...answer.usage,
+            cachedInputTokens: 0,
+            audio: answer.audioSeconds === undefined ? {} : { seconds: answer.audioSeconds }
+          };
+          handedOn = true;
+          return { text: answer.text, durationSeconds: answer.audioSeconds ?? 0 };
+        } catch (thrown) {
+          if (call.signal?.aborted) throw stopOf(call.signal, thrown);
+          if (limit.expired()) throw deadlinePassed();
+          const error = normalizeModelAdapterError(thrown);
+          if (error instanceof ModelProviderError) {
+            logProviderError(error, target, call.attribution);
+          }
+          const waitMs = policy.waitBeforeRetryMs(error, { retrySafe: true });
+          await policy.wait(waitMs, modelCallFailureFor(error));
+        }
+      }
+    } finally {
+      limit.release();
+      await settle(target, admitted, billed, handedOn);
+    }
+  }
+
   return {
     async complete(call) {
       let completion: ModelCompletion | undefined;
@@ -544,6 +654,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
       return run(call, true);
     },
     embed,
+    transcribe,
     capabilities(binding) {
       const target = resolve(binding);
       return target.adapter.capabilities(target.model);

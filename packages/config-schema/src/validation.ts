@@ -31,6 +31,7 @@ export function parseClientInstanceConfig(input: unknown): ClientInstanceConfig 
   assertModuleSwitches(parsed.data);
   assertConfigReferences(parsed.data);
   assertEmbeddingBindings(parsed.data);
+  assertTranscriptionBindings(parsed.data);
   assertTokenSafeguardsAdmitACall(parsed.data);
   assertFastModePricingCoverage(parsed.data);
   assertSpendBudgetPricingCoverage(parsed.data, []);
@@ -220,10 +221,10 @@ function assertModelFallbacks(config: ClientInstanceConfig): void {
         `Model binding '${binding.id}' names missing model binding '${binding.fallback}' as its fallback`
       );
     }
-    if (fallback.kind === "embedding") {
+    if (fallback.kind === "embedding" || fallback.kind === "transcription") {
       throw new AppError(
         "VALIDATION_FAILED",
-        `Model binding '${binding.id}' names embedding binding '${fallback.id}' as its fallback; a fallback answers chat calls`
+        `Model binding '${binding.id}' names ${fallback.kind} binding '${fallback.id}' as its fallback; a fallback answers chat calls`
       );
     }
     const region = regionOf(binding.providerId);
@@ -260,6 +261,11 @@ function assertEmbeddingBindings(config: ClientInstanceConfig): void {
       .filter((binding) => binding.kind === "embedding")
       .map((binding) => binding.id)
   );
+  const answersNoChat = new Map(
+    config.modelBindings
+      .filter((binding) => binding.kind === "embedding" || binding.kind === "transcription")
+      .map((binding) => [binding.id, binding.kind])
+  );
   const { conversationTitles } = config;
   const chatUses = [
     ...Object.entries(config.guardrails).flatMap(([name, { check }]) =>
@@ -272,10 +278,11 @@ function assertEmbeddingBindings(config: ClientInstanceConfig): void {
       : [])
   ];
   for (const { user, bindingId } of chatUses) {
-    if (embeddingBindingIds.has(bindingId)) {
+    const kind = answersNoChat.get(bindingId);
+    if (kind !== undefined) {
       throw new AppError(
         "VALIDATION_FAILED",
-        `${user} names the embedding binding '${bindingId}', which answers no chat call`
+        `${user} names the ${kind} binding '${bindingId}', which answers no chat call`
       );
     }
   }
@@ -285,6 +292,32 @@ function assertEmbeddingBindings(config: ClientInstanceConfig): void {
       "VALIDATION_FAILED",
       `'knowledge.defaultEmbeddingBinding' names '${defaultBinding}', which is no model binding of kind 'embedding'`
     );
+  }
+}
+
+/**
+ * A transcription sends what a person spoke to its provider (STT-1), so its provider entry must
+ * state region `eu`; an entry with no region does not pass. An instance has at most one
+ * transcription binding, and without one the composer has no microphone.
+ */
+function assertTranscriptionBindings(config: ClientInstanceConfig): void {
+  const providers = getModelProviderConfigs(config);
+  const bindings = config.modelBindings.filter((binding) => binding.kind === "transcription");
+  const [first, second] = bindings;
+  if (first && second) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Model bindings '${first.id}' and '${second.id}' are both of kind 'transcription'; an instance has at most one`
+    );
+  }
+  for (const binding of bindings) {
+    const region = providers.find((provider) => provider.id === binding.providerId)?.region;
+    if (region !== "eu") {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `Transcription binding '${binding.id}' is on model provider '${binding.providerId}', whose region is '${region ?? "unset"}': a transcription sends what a person spoke to its provider and needs an entry with region 'eu'`
+      );
+    }
   }
 }
 
@@ -378,6 +411,22 @@ export function assertSpendBudgetPricingCoverage(
     const selection = resolveModelBinding(config, bindingId);
     if (selection.provider.type !== "deterministic") {
       requiredPrices.add(createPricingKey(selection.provider.id, selection.model));
+    }
+  }
+
+  // A transcription is priced per minute of audio, on the rate card's `transcription` rows.
+  const transcriptionPriceKeys = new Set(
+    customerRateCard.transcription.map((price) => createPricingKey(price.providerId, price.model))
+  );
+  for (const binding of config.modelBindings) {
+    if (binding.kind !== "transcription") continue;
+    const selection = resolveModelBinding(config, binding.id);
+    const key = createPricingKey(selection.provider.id, selection.model);
+    if (!transcriptionPriceKeys.has(key)) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `Spend budget requires a customer price per audio minute for transcription model ${key}`
+      );
     }
   }
 
