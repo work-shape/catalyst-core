@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { isRecord, MODEL_CALL_RESERVED_OUTPUT_TOKENS } from "@work-shape/catalyst-core";
 import { createProviderToolMetadata, type ProviderToolNames } from "../openai-compatible-mapping";
 import type { ModelAdapterRequest, ModelCompletion, ModelContent, ModelToolCall } from "../types";
+import { withBedrockCacheBreakpoints } from "./bedrock-cache";
 import { assertBedrockDocuments, toBedrockDocumentBlock } from "./bedrock-documents";
 import { toBedrockOutputFormat } from "./bedrock-output";
 import {
@@ -63,6 +64,8 @@ export function toBedrockRequest(
   const toContentBlocks = (content: ModelContent): BedrockContentBlock[] =>
     contentBlocks(content, () => imagesToLeaveOut-- > 0);
   const system: { type: "text"; text: string }[] = [];
+  // The last system block of the first system message, the agent's instructions.
+  let instructionsEnd: number | undefined;
   const messages: BedrockRequestMessage[] = [];
   const push = (role: BedrockRequestMessage["role"], content: BedrockRequestBlock[]): void => {
     if (content.length === 0) return;
@@ -79,6 +82,7 @@ export function toBedrockRequest(
   for (const message of request.messages) {
     if (message.role === "system") {
       system.push(...toTextBlocks(message.content));
+      if (instructionsEnd === undefined && system.length > 0) instructionsEnd = system.length - 1;
     } else if (message.role === "assistant") {
       const toolCalls = message.toolCalls ?? [];
       const toolUse = (toolCall: ModelToolCall): BedrockRequestBlock => ({
@@ -127,26 +131,27 @@ export function toBedrockRequest(
     ...(request.output ? { format: toBedrockOutputFormat(request.output.jsonSchema) } : {})
   };
 
+  const body: BedrockMessagesRequest = {
+    anthropic_version: BEDROCK_ANTHROPIC_VERSION,
+    max_tokens: request.maxOutputTokens ?? BEDROCK_MAX_OUTPUT_TOKENS,
+    ...(system.length > 0 ? { system } : {}),
+    messages,
+    ...(thinking ? { thinking } : {}),
+    ...(Object.keys(outputConfig).length > 0 ? { output_config: outputConfig } : {}),
+    ...(tools.providerTools.length > 0
+      ? {
+          tools: tools.providerTools.map(({ tool, providerName }) => ({
+            name: providerName,
+            description: tool.description,
+            input_schema: tool.inputJsonSchema ?? { type: "object" }
+          }))
+        }
+      : {})
+  };
   return {
     toolNames: tools,
     thinkingTurns,
-    body: {
-      anthropic_version: BEDROCK_ANTHROPIC_VERSION,
-      max_tokens: request.maxOutputTokens ?? BEDROCK_MAX_OUTPUT_TOKENS,
-      ...(system.length > 0 ? { system } : {}),
-      messages,
-      ...(thinking ? { thinking } : {}),
-      ...(Object.keys(outputConfig).length > 0 ? { output_config: outputConfig } : {}),
-      ...(tools.providerTools.length > 0
-        ? {
-            tools: tools.providerTools.map(({ tool, providerName }) => ({
-              name: providerName,
-              description: tool.description,
-              input_schema: tool.inputJsonSchema ?? { type: "object" }
-            }))
-          }
-        : {})
-    }
+    body: request.cacheKey ? withBedrockCacheBreakpoints(body, instructionsEnd) : body
   };
 }
 
@@ -295,10 +300,9 @@ export function missingBedrockAnswerReason(
 
 /**
  * The usage Bedrock reported. Its `input_tokens` leaves out what was read from or written to a
- * cache; the product's input count holds all three, and the cached share is what was read. A
- * cache write has no rate of its own in the product. This adapter asks for no cache, so none is
- * written; a count that arrives anyway is billed as uncached input. Without an input count
- * nothing was reported, and the call's cost is then incomplete.
+ * cache; the product's input count holds all three, with the share read from the cache and the
+ * share written to it, which the rate card prices apart. Without an input count nothing was
+ * reported, and the call's cost is then incomplete.
  */
 export function toBedrockModelUsage(usage: BedrockUsage | undefined): ModelCompletion["usage"] {
   const count = (value: unknown): number =>
@@ -313,12 +317,13 @@ export function toBedrockModelUsage(usage: BedrockUsage | undefined): ModelCompl
     };
   }
   const cachedInputTokens = count(usage.cache_read_input_tokens);
-  const inputTokens =
-    count(usage.input_tokens) + cachedInputTokens + count(usage.cache_creation_input_tokens);
+  const cacheWriteInputTokens = count(usage.cache_creation_input_tokens);
+  const inputTokens = count(usage.input_tokens) + cachedInputTokens + cacheWriteInputTokens;
   const outputTokens = count(usage.output_tokens);
   return {
     inputTokens,
     cachedInputTokens,
+    cacheWriteInputTokens,
     outputTokens,
     totalTokens: inputTokens + outputTokens,
     source: "provider_reported",

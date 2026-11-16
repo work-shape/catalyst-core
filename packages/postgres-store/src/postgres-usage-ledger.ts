@@ -172,8 +172,8 @@ function insertEvent(input: {
   return drizzleSql`
     insert into model_usage_events (
       id, client_instance_id, conversation_id, agent_run_id, agent_name, purpose, workflow_run_id, provider_id,
-      model, region, binding_id, input_tokens, cached_input_tokens, output_tokens, total_tokens,
-      web_search_call_count, fast_mode, provider_service_tier, preview, source,
+      model, region, binding_id, input_tokens, cached_input_tokens, cache_write_input_tokens,
+      output_tokens, total_tokens, web_search_call_count, fast_mode, provider_service_tier, preview, source,
       customer_billable_cost, user_id, collaboration_workspace_id, operation_run_id,
       correlation_id, status, counted_tokens, counted_cost_micros, created_at
     )
@@ -182,6 +182,7 @@ function insertEvent(input: {
       ${personal(event.agentRunId)}, ${agentNameOf(event)}, ${event.purpose ?? null}, ${event.workflowRunId ?? null},
       ${event.providerId}, ${event.model}, ${event.region ?? null}, ${event.bindingId ?? null},
       ${event.inputTokens}::int, ${event.cachedInputTokens ?? null}::int,
+      ${event.cacheWriteInputTokens ?? null}::int,
       ${event.outputTokens}::int, ${event.totalTokens}::int, ${event.webSearchCallCount}::int,
       ${event.fastMode}::boolean, ${event.providerServiceTier ?? null},
       exists (
@@ -456,6 +457,7 @@ async function settleModelUsageEvent(
       update model_usage_events e set
         input_tokens = ${settlement.inputTokens}::int,
         cached_input_tokens = ${settlement.cachedInputTokens ?? null}::int,
+        cache_write_input_tokens = ${settlement.cacheWriteInputTokens ?? null}::int,
         output_tokens = ${settlement.outputTokens}::int,
         total_tokens = ${settlement.totalTokens}::int,
         web_search_call_count = ${settlement.webSearchCallCount}::int,

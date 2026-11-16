@@ -922,6 +922,14 @@ function settlementOf(
     ...(usage.cachedInputTokens === undefined
       ? {}
       : { cachedInputTokens: Math.min(normalizeCount(usage.cachedInputTokens), inputTokens) }),
+    ...(usage.cacheWriteInputTokens === undefined
+      ? {}
+      : {
+          cacheWriteInputTokens: Math.min(
+            normalizeCount(usage.cacheWriteInputTokens),
+            Math.max(0, inputTokens - normalizeCount(usage.cachedInputTokens ?? 0))
+          )
+        }),
     outputTokens: normalizeCount(usage.outputTokens),
     totalTokens: normalizeCount(usage.totalTokens),
     source: usage.source,

@@ -46,6 +46,8 @@ export const modelUsageEvents = pgTable(
     bindingId: text("binding_id"),
     inputTokens: integer("input_tokens").notNull(),
     cachedInputTokens: integer("cached_input_tokens"),
+    // Null for a provider that reports no cache write, and on rows written before the column.
+    cacheWriteInputTokens: integer("cache_write_input_tokens"),
     outputTokens: integer("output_tokens").notNull(),
     totalTokens: integer("total_tokens").notNull(),
     webSearchCallCount: integer("web_search_call_count").notNull().default(0),

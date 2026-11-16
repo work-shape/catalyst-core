@@ -34,6 +34,7 @@ export const usageSafeguardsConfigSchema = z
 const usageRateCardTokenRatesShape = {
   uncachedInputPricePerMillionTokens: z.number().nonnegative(),
   cachedInputPricePerMillionTokens: z.number().nonnegative(),
+  cacheWriteInputPricePerMillionTokens: z.number().nonnegative().optional(),
   outputPricePerMillionTokens: z.number().nonnegative()
 };
 

@@ -22,7 +22,7 @@ afterEach(() => {
 });
 
 describe("Bedrock adapter: what it sends", () => {
-  it("calls the Frankfurt runtime with the profile ARN, the key as a bearer token and no cache", async () => {
+  it("calls the Frankfurt runtime with the profile ARN, the key as a bearer token and no cache for a call of no conversation", async () => {
     const sent = answerWith(() => Response.json(message([{ type: "text", text: "Hello." }])));
     const adapter = await bedrock();
 
@@ -64,7 +64,7 @@ describe("Bedrock adapter: what it sends", () => {
         }
       ]
     });
-    // The route forbids explicit caches: nothing in a request asks for one.
+    // A call without a cache key starts no prompt a later call repeats: nothing asks for a cache.
     expect(JSON.stringify(sent[0]?.body)).not.toMatch(/cache_control|cachePoint/u);
   });
 

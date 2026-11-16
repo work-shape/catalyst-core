@@ -22,7 +22,7 @@ catalyst models list --instance https://chat.example.com
 
 - the provider's entry under `infrastructure.models.<id>`, with `region: eu` and the name of its secret in `credentialSecret`;
 - a model binding on it under `modelBindings`;
-- its price row under `usage.costs.customer.models`, with the three prices per million tokens. Where the config has no rate card yet, it writes one with the instance's id, this month as its version and `--currency` (EUR).
+- its price row under `usage.costs.customer.models`, with the three prices per million tokens, and for Bedrock the price of input written to the prompt cache where `--cache-write-price` gives one. Where the config has no rate card yet, it writes one with the instance's id, this month as its version and `--currency` (EUR).
 
 At a terminal it asks for what its flags leave out; without one it names the missing flags and exits 2. The id is `azure-eu`, `vertex-eu` or `bedrock-eu` unless `--id` names another; an `openai-compatible` provider always needs `--id`. The binding takes the provider's id unless `--binding` names another.
 
