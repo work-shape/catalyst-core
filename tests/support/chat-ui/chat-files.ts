@@ -29,6 +29,7 @@ export {
 } from "../../../packages/chat-ui/src/chat/files/message-attachments";
 export { ResourcesPanel } from "../../../packages/chat-ui/src/chat/files/resources-panel";
 export {
+  formatStructuredDataValue,
   groupConversationResources,
   isResourcesPanelAvailable,
   resolveResourcesPanelOpen,

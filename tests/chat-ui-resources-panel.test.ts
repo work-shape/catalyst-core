@@ -7,6 +7,7 @@ import {
   type StructuredDataResourceResponse
 } from "@work-shape/catalyst-api-client";
 import {
+  formatStructuredDataValue,
   groupConversationResources,
   isResourcesPanelAvailable,
   resolveResourcesPanelOpen,
@@ -280,6 +281,38 @@ describe("Resources panel model", () => {
 
     expect(structuredDataToTsv(data, "en")).toBe(
       'Section\tField\tValue\nNotes\tDetail\t"line\tone\nnext"\nNotes\tQuote\t"A ""quoted"" value"'
+    );
+  });
+
+  it("shows a string that is exactly an ISO date in the user's locale", () => {
+    expect(formatStructuredDataValue("1984-03-07", "de")).toBe("07.03.1984");
+    expect(formatStructuredDataValue("1984-03-07", "en")).toBe("03/07/1984");
+    expect(formatStructuredDataValue("2024-02-29", "de")).toBe("29.02.2024");
+    for (const value of [
+      "2023-02-29",
+      "1984-13-01",
+      "1984-3-7",
+      "1984-03-07T10:00",
+      " 1984-03-07"
+    ]) {
+      expect(formatStructuredDataValue(value, "de")).toBe(value);
+    }
+  });
+
+  it("copies ISO dates in the user's locale", () => {
+    const data: StructuredDataResourceResponse = {
+      ...structuredData,
+      sections: [
+        {
+          key: "person",
+          label: "Person",
+          fields: [{ key: "birthDate", label: "Geburtsdatum", value: "1984-03-07" }]
+        }
+      ]
+    };
+
+    expect(structuredDataToTsv(data, "de")).toBe(
+      "Section\tField\tValue\nPerson\tGeburtsdatum\t07.03.1984"
     );
   });
 });
