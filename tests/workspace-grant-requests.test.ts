@@ -21,7 +21,10 @@ import {
 const bundleSchema = z.object({
   state: z.enum(["none", "requested", "held", "inherited"]),
   change: z.enum(["grant", "request", "revoke", "withdraw"]).optional(),
-  requestId: z.string().optional()
+  requestId: z.string().optional(),
+  coveredBy: z
+    .array(z.object({ id: z.string(), name: z.string(), builtIn: z.boolean() }))
+    .optional()
 });
 const listSchema = z.object({
   items: z.array(z.object({ userId: z.string(), builder: bundleSchema, publisher: bundleSchema }))
@@ -243,7 +246,52 @@ describe("Builder and Publisher of a member, asked for and decided", () => {
     expect((await lenaOf(t.kai.id)).publisher).toMatchObject({ state: "held" });
     // An instance admin holds both by role: there is nothing to take back on this screen.
     const admin = (await list(t.kai.id)).find((item) => item.userId === t.admin.id);
-    expect(admin?.builder).toEqual({ state: "inherited" });
+    expect(admin?.builder).toEqual({
+      state: "inherited",
+      coveredBy: [{ id: "admin", name: "admin", builtIn: true }]
+    });
+  });
+
+  it("names the role that already gives every right of a bundle, and takes no request for it", async () => {
+    const nora = await t.stores.users.createUser({
+      clientInstanceId,
+      displayLabel: "Nora",
+      roles: ["user"]
+    });
+    await t.stores.workspaces.addMembership({
+      clientInstanceId,
+      collaborationWorkspaceId: team,
+      userId: nora.id,
+      role: "admin"
+    });
+    // Publishing every kind a workspace owns here, on the whole instance: Publisher in Sales
+    // gives her nothing more. Writing is not in the role, so Builder still would.
+    const role = z.object({ id: z.string() }).parse(
+      (
+        await t.expectOk(t.admin.id, "roles.create", {
+          payload: {
+            name: "Editors",
+            grants: [
+              { action: "agent.publish", scopeKind: "instance" },
+              { action: "skill.publish", scopeKind: "instance" }
+            ]
+          }
+        })
+      ).json()
+    );
+    await t.expectOk(t.admin.id, "users.update", {
+      params: { userId: nora.id },
+      payload: { roles: ["user", role.id] }
+    });
+    const row = (await list(t.kai.id)).find((item) => item.userId === nora.id);
+    expect(row?.publisher).toEqual({
+      state: "inherited",
+      coveredBy: [{ id: role.id, name: "Editors", builtIn: false }]
+    });
+    expect(row?.builder).toEqual({ state: "none", change: "request" });
+    const asked = await ask(nora.id, nora.id, "publisher");
+    expect(asked.statusCode).toBe(409);
+    expect(errorSchema.parse(asked.json()).error.details).toMatchObject({ reason: "already_held" });
   });
 
   it("ends a request as outdated once the member left the workspace", async () => {

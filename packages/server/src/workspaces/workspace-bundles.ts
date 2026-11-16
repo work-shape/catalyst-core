@@ -3,7 +3,11 @@ import {
   asUserId,
   auditActorFromUser,
   authenticatedUserFromRecord,
+  bundleCarries,
   createAuthorizer,
+  explainAccessEntries,
+  listAccessEntries,
+  type AccessResource,
   type ActorAccess,
   type ApprovalRequest,
   type AuthenticatedUser,
@@ -17,6 +21,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { ApprovalRequestWorkflow } from "../approvals/approval-request-service";
 import { AccessWorkflow, grantAuditMetadata } from "../access/access-service";
+import { nameRoles, type OriginRole } from "../access/effective-rights";
 import { mayManageHolder, requireManageableHolder } from "../access/grant-holder-rules";
 import { withRightsHeld } from "../access/rights-held";
 import { bundleRows, type GrantRequestSubject } from "./member-bundle-rows";
@@ -47,12 +52,14 @@ export interface MemberBundleView {
   state: MemberBundleState;
   change?: MemberBundleChange;
   requestId?: string;
+  /** For `inherited`: the roles it is held through, where roles alone give it. */
+  coveredBy?: OriginRole[];
 }
 
 type BundleOptions = Pick<
   ChatServerOptions,
   "clientInstanceId" | "stores" | "authorizer" | "approvalRequests" | "auditRecorder"
->;
+> & { configAssets: Pick<ChatServerOptions["configAssets"], "kinds"> };
 
 /** A member's rights as their account is now, for what they hold. An inactive one holds nothing. */
 export async function memberAccess(
@@ -74,6 +81,81 @@ export function holdsBundle(
   bundle: WorkspaceBundle
 ): boolean {
   return access?.authorize(bundle, { workspaceId }).allowed ?? false;
+}
+
+/**
+ * Each right the bundle carries in the workspace, on every kind this instance lets a workspace
+ * own, with the resource it is asked on.
+ */
+function carriedRights(
+  options: Pick<BundleOptions, "configAssets">,
+  workspaceId: string,
+  bundle: WorkspaceBundle
+): { action: string; resource: AccessResource }[] {
+  return options.configAssets.kinds.kinds
+    .filter((kind) => kind.owners.includes("workspace"))
+    .flatMap((kind) =>
+      Object.values(kind.actions)
+        .filter((action) => bundleCarries(bundle, action))
+        .map((action) => ({ action, resource: { kind: kind.kind, workspaceId } }))
+    );
+}
+
+/**
+ * Whether the member already holds the bundle in the workspace: the bundle itself from any
+ * source, or every right it carries there, as an instance role with those rights gives them.
+ * Such a member is asked for nothing and given nothing.
+ */
+function coversBundle(
+  options: Pick<BundleOptions, "configAssets">,
+  access: ActorAccess | undefined,
+  workspaceId: string,
+  bundle: WorkspaceBundle
+): boolean {
+  if (access === undefined) return false;
+  if (holdsBundle(access, workspaceId, bundle)) return true;
+  const rights = carriedRights(options, workspaceId, bundle);
+  return (
+    rights.length > 0 &&
+    rights.every(({ action, resource }) => access.authorize(action, resource).allowed)
+  );
+}
+
+/**
+ * A bundle the member holds other than by a row in the workspace, with the roles it is held
+ * through: the roles of the entries that give the bundle, or each right it carries. None are
+ * named where any of them comes from elsewhere, a grant or a group, so the screen never names a
+ * role as the only source.
+ */
+async function inheritedBundle(
+  options: BundleOptions,
+  member: UserRecord,
+  { workspaceId, bundle }: GrantRequestSubject
+): Promise<MemberBundleView> {
+  const persisted = await options.stores.access.loadPersistedAccess({
+    clientInstanceId: options.clientInstanceId,
+    holder: { kind: "user", id: member.id }
+  });
+  const entries = listAccessEntries(
+    {
+      kind: "user",
+      id: member.id,
+      clientInstanceId: member.clientInstanceId,
+      roles: member.roles,
+      permissionRefs: member.permissionRefs
+    },
+    persisted
+  );
+  const asBundle = explainAccessEntries(entries, bundle, { workspaceId });
+  const giving = asBundle.decision.allowed
+    ? [asBundle.entry]
+    : carriedRights(options, workspaceId, bundle).map(
+        ({ action, resource }) => explainAccessEntries(entries, action, resource).entry
+      );
+  const coveredBy = giving.every((entry) => entry?.source === "role")
+    ? await nameRoles(options, giving)
+    : [];
+  return { state: "inherited", ...(coveredBy.length > 0 ? { coveredBy } : {}) };
 }
 
 /**
@@ -129,10 +211,10 @@ async function describeBundle(
   pending: Map<string, ApprovalRequest>,
   subject: GrantRequestSubject
 ): Promise<MemberBundleView> {
-  if (holdsBundle(memberRights, subject.workspaceId, subject.bundle)) {
+  if (coversBundle(options, memberRights, subject.workspaceId, subject.bundle)) {
     const rows = await bundleRows(options.stores.access, options.clientInstanceId, subject);
     // A bundle held through a role, a group or the whole instance is changed where it is given.
-    if (rows.length === 0) return { state: "inherited" };
+    if (rows.length === 0) return inheritedBundle(options, member, subject);
     return mayManageHolder(caller.user, member)
       ? { state: "held", change: "revoke" }
       : { state: "held" };
@@ -231,7 +313,9 @@ export async function requestMemberBundle(
   const member = await requireMember(options, subject);
   if (member.status !== "active")
     throw new AppError("CONFLICT", "The member's account is not active");
-  if (holdsBundle(await memberAccess(options, member), subject.workspaceId, subject.bundle))
+  if (
+    coversBundle(options, await memberAccess(options, member), subject.workspaceId, subject.bundle)
+  )
     throw new AppError("CONFLICT", "The member already holds this bundle here", {
       reason: "already_held"
     });
@@ -352,7 +436,8 @@ export async function revokeMemberBundle(
   }
   const member = revoked.holder;
   const rights = member ? await memberAccess(options, member) : undefined;
-  if (holdsBundle(rights, subject.workspaceId, subject.bundle)) return { state: "inherited" };
+  if (member && coversBundle(options, rights, subject.workspaceId, subject.bundle))
+    return inheritedBundle(options, member, subject);
   return member && member.status === "active"
     ? {
         state: "none",
