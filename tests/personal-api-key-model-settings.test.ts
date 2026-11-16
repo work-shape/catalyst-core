@@ -199,9 +199,11 @@ describe("pushing an agent's model settings with a personal key", () => {
     expect(error.details).toMatchObject({
       items: [{ status: "refused", error: { action: MODEL_RIGHT } }]
     });
-    expect(syncItemsSchema.parse(error.details).items[0]?.error?.message).toBe(
-      `Missing the right '${MODEL_RIGHT}'`
-    );
+    // It names the settings, how to save without the right, and who changes them.
+    const message = syncItemsSchema.parse(error.details).items[0]?.error?.message;
+    expect(message).toContain(`needs the right '${MODEL_RIGHT}'`);
+    expect(message).toContain("To save without it, leave");
+    expect(message).toContain("ask an instance admin");
   });
 
   it("is refused to a key that does not write the agent, and says it is the key", async () => {

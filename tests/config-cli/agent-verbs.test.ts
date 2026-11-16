@@ -285,6 +285,9 @@ describe("catalyst asset commands against an instance", () => {
       "2"
     );
     expect(refused.code).toBe(1);
-    expect(refused.err).toContain("Missing the right 'agent_models.manage'");
+    // The refusal says what the binding holds and how to save without the right.
+    expect(refused.err).toContain(
+      "Changing modelBindingId needs the right 'agent_models.manage', which an instance admin holds and this call does not. To save without it, keep modelBindingId \"plain\", as stored."
+    );
   });
 });

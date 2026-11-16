@@ -186,7 +186,7 @@ async function requireFurtherRights(
       workspaceModels: choosesWorkspaceModels(lists)
     });
     if (missing !== undefined) {
-      entry.refusal = rightRefusal(missing.action, missing.reason);
+      entry.refusal = rightRefusal(missing.action, missing.reason, missing.message);
     }
   }
   if (planned.some((entry) => entry.refusal)) {
@@ -200,11 +200,17 @@ async function requireFurtherRights(
  */
 function rightRefusal(
   action: string,
-  reason: Extract<OperationAuthorization, { allowed: false }>["reason"]
+  reason: Extract<OperationAuthorization, { allowed: false }>["reason"],
+  message?: string
 ): ItemRefusal {
   return {
     code: "FORBIDDEN",
-    message: operationDenialError({ kind: "forbidden", action, reason }).message,
+    message: operationDenialError({
+      kind: "forbidden",
+      action,
+      reason,
+      ...(message === undefined ? {} : { message })
+    }).message,
     action
   };
 }

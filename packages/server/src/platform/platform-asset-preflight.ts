@@ -23,15 +23,8 @@ export async function authorizePlatformAssetPut(
     expectedRevision: input.expectedRevision ?? null
   };
   const decision = await workflow.authorizeRevisionWrite(context.access, write, "write", true);
-  if (!decision.allowed)
-    // A key that does not cover the right its owner holds is told about the key instead.
-    return decision.action === "agent_models.manage" && decision.reason !== "outside_key_scope"
-      ? {
-          ...decision,
-          message:
-            "Changing model settings requires the right agent_models.manage, held by the Instance admin (superadmin) by default. Leave model settings out to use the default model."
-        }
-      : decision;
+  // A refusal of model settings says what to do itself (`modelSettingsRefusal`).
+  if (!decision.allowed) return decision;
   if (input.config !== undefined) {
     if (input.config.name !== target.name)
       throw new AppError("VALIDATION_FAILED", "Config asset name must match the requested asset");

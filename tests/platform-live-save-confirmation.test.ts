@@ -152,8 +152,11 @@ describe("live first saves from the Build Agent (ACCEPT-FIX-5)", () => {
       expect(rows).toHaveLength(1);
       expect(rows[0]?.status).toBe(status);
       expect(JSON.stringify(rows[0]?.error)).toContain(expected);
+      // The workspace's agent takes its binding without the right; the fallback stays the right's.
       if (name === "copied-model")
-        expect(rows[0]?.error?.message).toContain("Instance admin (superadmin)");
+        expect(rows[0]?.error?.message).toContain(
+          "leave useModelFallback out: the agent then runs the instance's default model"
+        );
       if (name === "skill-without-reader") expect(rows[0]?.error?.message).toContain("read_skill");
       expect(rows.some((row) => row.status === "pending_confirmation")).toBe(false);
       expect(
