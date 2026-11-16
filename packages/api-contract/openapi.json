@@ -31640,6 +31640,18 @@
                     "confirmed": {
                       "type": "boolean",
                       "const": true
+                    },
+                    "scopes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "leftOutScopes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
