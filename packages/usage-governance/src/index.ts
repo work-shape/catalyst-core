@@ -154,6 +154,17 @@ export interface SafeCostedWorkspaceMemberUsage extends SafeCostedModelUsageWind
   userId?: string;
 }
 
+/**
+ * The settled cost of a conversation's calls so far (LU-7). `currency` is absent without a
+ * Customer Rate Card or where the costs are in more than one currency. `complete` is false while a
+ * call's cost is incomplete or unpriced: the amount is then what is known, at least.
+ */
+export interface ConversationCostSummary {
+  currency?: string;
+  costMicros: number;
+  complete: boolean;
+}
+
 /** What one person's own calls hold on their spend counter of a month. */
 export interface UsageUserMonthSpend {
   userId: string;
@@ -524,6 +535,27 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
       ...(userId === undefined ? {} : { userId }),
       ...toSafeWindow(totals, start, end, this.costs.customer, showWebSearchCost)
     }));
+  }
+
+  /**
+   * The settled cost of one chat conversation, its run threads and its title so far, of one
+   * person's calls with `userId`. Calls in flight are in no sum.
+   */
+  async summarizeConversationCost(
+    input: Parameters<ModelUsageEventStore["summarizeConversationUsage"]>[0]
+  ): Promise<ConversationCostSummary> {
+    const totals = await this.store.summarizeConversationUsage(input);
+    // Without a Customer Rate Card the instance shows no cost, whatever earlier calls were priced.
+    const currency =
+      this.costs.customer === undefined || totals.settledCurrencyCount > 1
+        ? undefined
+        : (totals.settledCurrency ?? this.costs.customer.currency);
+    return {
+      ...(currency === undefined ? {} : { currency }),
+      costMicros: totalComponents(totals.settledCost),
+      complete:
+        totals.settledModelCallCount === totals.modelCallCount && totals.settledCurrencyCount <= 1
+    };
   }
 
   /**

@@ -3,6 +3,7 @@ import {
   KNOWLEDGE_INGESTION_PURPOSES,
   USAGE_BREAKDOWN_DIMENSIONS,
   type ModelUsageEventStore,
+  type ModelUsageTotals,
   type UsageActivityCounts,
   type UsageBreakdownDimension,
   type UsageBreakdownGroup,
@@ -99,6 +100,47 @@ async function summarizeWorkspaceMemberUsage(
   }));
 }
 
+async function summarizeConversationUsage(
+  db: PostgresConnection,
+  input: Parameters<Store["summarizeConversationUsage"]>[0]
+): Promise<ModelUsageTotals> {
+  const e = drizzleSql`e`;
+  const settled = drizzleSql`(${e}.customer_billable_cost->>'status' = 'settled')`;
+  const component = (name: string): SQL =>
+    drizzleSql`coalesce(sum(coalesce((${e}.customer_billable_cost->'components'->>${name})::bigint, 0)) filter (where ${settled}), 0)::float8`;
+  const currency = drizzleSql`(${e}.customer_billable_cost->>'currency')`;
+  // A subagent's thread names the chat as its parent, the thread of a subagent's subagent too.
+  const rows = await db.execute<TotalsRow>(drizzleSql`
+    select
+      count(*)::float8 as model_call_count,
+      coalesce(sum(${e}.input_tokens), 0)::float8 as input_tokens,
+      coalesce(sum(coalesce(${e}.cached_input_tokens, 0)), 0)::float8 as cached_input_tokens,
+      coalesce(sum(${e}.output_tokens), 0)::float8 as output_tokens,
+      coalesce(sum(${e}.total_tokens), 0)::float8 as total_tokens,
+      coalesce(sum(${e}.web_search_call_count), 0)::float8 as web_search_call_count,
+      (count(*) filter (where ${settled}))::float8 as settled_model_call_count,
+      ${component("uncachedInputCostMicros")} as uncached_input_cost_micros,
+      ${component("cachedInputCostMicros")} as cached_input_cost_micros,
+      ${component("outputCostMicros")} as output_cost_micros,
+      ${component("webSearchCostMicros")} as web_search_cost_micros,
+      coalesce(sum(${e}.web_search_call_count) filter (where ${settled}), 0)::float8
+        as settled_web_search_call_count,
+      (count(distinct ${currency}) filter (where ${settled}))::float8 as settled_currency_count,
+      min(${currency}) filter (where ${settled}) as settled_currency
+    from model_usage_events ${e}
+    where ${e}.client_instance_id = ${input.clientInstanceId}
+      and ${e}.conversation_id = any(array[${input.conversationId}::text] || array(
+        select c.id from conversations c
+        where c.client_instance_id = ${input.clientInstanceId}
+          and c.parent_conversation_id = ${input.conversationId}))
+      and ${e}.status <> 'pending'
+      ${input.userId === undefined ? drizzleSql`` : drizzleSql`and ${e}.user_id = ${input.userId}`}
+  `);
+  const [row] = rows;
+  if (!row) throw new Error("A sum without a group returns one row");
+  return toTotals(row);
+}
+
 async function countUsageActivity(
   db: PostgresConnection,
   input: Parameters<Store["countUsageActivity"]>[0]
@@ -186,12 +228,14 @@ export function createPostgresUsageReports(
   Store,
   | "summarizeModelUsageBreakdown"
   | "summarizeWorkspaceMemberUsage"
+  | "summarizeConversationUsage"
   | "countUsageActivity"
   | "listUserMonthSpend"
 > {
   return {
     summarizeModelUsageBreakdown: (input) => summarizeModelUsageBreakdown(db, input),
     summarizeWorkspaceMemberUsage: (input) => summarizeWorkspaceMemberUsage(db, input),
+    summarizeConversationUsage: (input) => summarizeConversationUsage(db, input),
     countUsageActivity: (input) => countUsageActivity(db, input),
     listUserMonthSpend: (input) => listUserMonthSpend(db, input)
   };

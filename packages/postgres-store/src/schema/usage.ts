@@ -100,6 +100,10 @@ export const modelUsageEvents = pgTable(
     index("model_usage_events_agent_run_idx")
       .on(table.clientInstanceId, table.agentRunId)
       .where(sql`${table.agentRunId} is not null`),
+    // What the cost of a conversation and its run threads is summed by (LU-7).
+    index("model_usage_events_conversation_idx")
+      .on(table.clientInstanceId, table.conversationId)
+      .where(sql`${table.conversationId} is not null`),
     index("model_usage_events_workflow_run_idx")
       .on(table.workflowRunId)
       .where(sql`${table.workflowRunId} is not null`),

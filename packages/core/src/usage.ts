@@ -559,6 +559,17 @@ export interface ModelUsageEventStore extends UsageSpendLimitStore {
     to: ISODateString;
   }): Promise<WorkspaceMemberUsage[]>;
   /**
+   * What the calls of one chat conversation and of its run threads (its subagents' threads)
+   * used, the conversation title included, summed from their usage events by
+   * `model_usage_events_conversation_idx`. Calls in flight are in no sum. With `userId`, only
+   * that person's calls.
+   */
+  summarizeConversationUsage(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    userId?: UserId;
+  }): Promise<ModelUsageTotals>;
+  /**
    * The people active and the conversations, Agent Runs, App action runs and Workflow Runs
    * started from `from` up to `to`; of one shared workspace, from its usage events and its
    * Operation Runs, where one is named.

@@ -32,6 +32,7 @@ import {
   sharedFromOutsideListItemSchema,
   structuredDataResourceResponseSchema
 } from "../conversations";
+import { conversationCostSchema } from "../usage-limits";
 import { defineOperation, defineRegisteredOperation, json, page, sse } from "./define-operation";
 
 /**
@@ -274,6 +275,21 @@ export const conversationOperations = {
     requires: [],
     effect: "reading",
     response: json(subagentListSchema),
+    errors: ["NOT_FOUND"],
+    rateClass: "read"
+  }),
+  "conversations.cost.get": defineOperation({
+    id: "conversations.cost.get",
+    method: "GET",
+    path: "/api/v1/conversations/:conversationId/cost",
+    summary:
+      "Read the settled cost of a conversation so far: the caller's own calls, or the whole chat for a holder of usage.view in a chat more people read",
+    tag: "Conversations",
+    auth: "user",
+    scope: "conversation:read",
+    requires: [],
+    effect: "reading",
+    response: json(conversationCostSchema),
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),

@@ -138,6 +138,9 @@ export const workspaceQueryKeys = {
     ["usage-limits", apiBaseUrl, authScope] as const,
   /** The policy of every operation and the admin's settings (OP-2), for holders of `policy.manage`. */
   policies: (apiBaseUrl: string, authScope: string) => ["policies", apiBaseUrl, authScope] as const,
+  /** What a conversation has cost so far, as the context indicator shows it (LU-7). */
+  conversationCost: (apiBaseUrl: string, authScope: string, conversationId: string) =>
+    ["conversation-cost", apiBaseUrl, authScope, conversationId] as const,
   /** The signed-in person's own consumption against the limits, in one workspace or none. */
   ownUsage: (apiBaseUrl: string, authScope: string, workspaceId?: string) =>
     ["own-usage", apiBaseUrl, authScope, workspaceId ?? null] as const,

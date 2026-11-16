@@ -180,6 +180,7 @@
     "conversations.attachments.start_preview": "conversation_access",
     "conversations.create": "workspace_role",
     "conversations.delete": "conversation_access",
+    "conversations.cost.get": "conversation_access",
     "conversations.draft_attachments.delete": "conversation_access",
     "conversations.draft_attachments.list": "conversation_access",
     "conversations.draft_attachments.retry": "conversation_access",

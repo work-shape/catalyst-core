@@ -612,7 +612,9 @@ export const clientInstanceConfigSchema = z.object({
     .object({
       budget: usageBudgetConfigSchema,
       safeguards: usageSafeguardsConfigSchema,
-      costs: usageCostConfigSchema
+      costs: usageCostConfigSchema,
+      /** The context indicator shows what a conversation has cost so far (LU-7). Off by default. */
+      showConversationCost: z.boolean().default(false)
     })
     .prefault({}),
   tools: z.array(toolInstanceConfigSchema).default([]),
