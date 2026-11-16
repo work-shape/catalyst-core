@@ -365,10 +365,11 @@ export class AssetReadWorkflow {
     // Whoever may not read the draft is answered the published revision and nothing of it.
     const publishedOnly = read.publishedView;
     if (publishedOnly) address = { ...address, revision: "published" };
+    const readsDraft = readsAgentDraft(call.access, target.resource, target.kind.kind);
     const [defaultName, availability, content, useLimits] = await Promise.all([
       this.defaultName(target.kind, target.scope),
       this.availability(call, target.kind, asset.name),
-      this.revisionContent(target, asset, address),
+      this.revisionContent(target, asset, address, readsDraft),
       target.kind.kind === "agent"
         ? this.options.configAssets.store.listAgentUseLimits({
             clientInstanceId: this.options.clientInstanceId,
@@ -378,7 +379,7 @@ export class AssetReadWorkflow {
     ]);
     // Resolve only after authorization, from the revision the caller is allowed to read.
     const runsAs = await target.kind.readRunsAs?.(content.config);
-    const draftSummary = readsAgentDraft(call.access, target.resource, target.kind.kind)
+    const draftSummary = readsDraft
       ? (
           await this.options.stores.agentProposals.summaries({
             clientInstanceId: this.options.clientInstanceId,
@@ -879,7 +880,8 @@ export class AssetReadWorkflow {
   async revisionContent(
     target: AssetTarget,
     asset: ConfigAssetRecord & { config: JsonObject },
-    input: { revision?: string; files?: boolean }
+    input: { revision?: string; files?: boolean },
+    readsDraft = false
   ): Promise<{
     config: JsonObject;
     contentRevision?: number;
@@ -894,20 +896,15 @@ export class AssetReadWorkflow {
       });
     }
     if (kind.lifecycle !== "draft_published") {
-      if (selector !== "draft") {
-        throw new AppError(
-          "VALIDATION_FAILED",
-          `A ${kind.kind} has no published revision: its earlier revisions are read with 'assets.revisions.list'`,
-          { reason: "no_draft" }
-        );
-      }
+      const content = await this.activeContent(target, asset, input.revision, readsDraft);
       return {
-        config: asset.config,
+        config: content.config,
+        ...(content.revision === undefined ? {} : { contentRevision: content.revision }),
         ...(input.files
           ? await readRevisionFiles(this.options, kind, {
               assetId: asset.id,
-              config: asset.config,
-              ...(asset.fileSetId ? { fileSetId: asset.fileSetId } : {})
+              config: content.config,
+              ...(content.fileSetId ? { fileSetId: content.fileSetId } : {})
             })
           : {})
       };
@@ -935,6 +932,40 @@ export class AssetReadWorkflow {
       contentRevision: content.revision,
       ...(await readSourceFiles(this.options, fileSet))
     };
+  }
+
+  /**
+   * The revision a selector names of a kind whose writes go live: its live revision is the one
+   * its users are served, so `published` names it, and a number names one of its history. A
+   * read that names no revision answers the live one. `draft` answers the pending draft of an
+   * agent to whoever may read it (`readsAgentDraft`), and the live revision where there is
+   * none; a draft counts its revisions apart from the history, so it carries no number here.
+   */
+  private async activeContent(
+    target: AssetTarget,
+    asset: ConfigAssetRecord & { config: JsonObject },
+    selector: string | undefined,
+    readsDraft: boolean
+  ): Promise<{ revision?: number; config: JsonObject; fileSetId?: FileSet["id"] }> {
+    const live = {
+      config: asset.config,
+      ...(asset.fileSetId ? { fileSetId: asset.fileSetId } : {})
+    };
+    if (selector === undefined) return live;
+    if (selector === "draft") {
+      const draft = readsDraft
+        ? await this.options.stores.agentProposals.get({
+            clientInstanceId: this.options.clientInstanceId,
+            agentId: asset.id
+          })
+        : undefined;
+      if (!draft) return live;
+      return { config: draft.config, ...(draft.fileSetId ? { fileSetId: draft.fileSetId } : {}) };
+    }
+    if (selector === "published" || Number(selector) === asset.revision) {
+      return { revision: asset.revision, ...live };
+    }
+    return this.storedRevision(target, Number(selector));
   }
 
   /** The revision a selector names: the draft, the published one, or one by its number. */
@@ -966,7 +997,20 @@ export class AssetReadWorkflow {
         reason: "not_published"
       });
     }
-    const number = selector === "published" ? published : Number(selector);
+    return this.storedRevision(
+      target,
+      selector === "published" ? published : Number(selector),
+      selector
+    );
+  }
+
+  /** One revision of the asset's history by its number, refused where it holds no content. */
+  private async storedRevision(
+    target: AssetTarget,
+    number: number | undefined,
+    selector: string = String(number)
+  ): Promise<{ revision: number; config: JsonObject; fileSetId?: FileSet["id"] }> {
+    const { kind, name } = target;
     const revision =
       number === undefined
         ? undefined

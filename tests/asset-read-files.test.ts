@@ -222,9 +222,8 @@ describe("reading the source files of one revision of an App", () => {
     const noFiles = await get(t.admin.id, name ?? "", { files: "true" }, "agent");
     expectStatus(noFiles, 422);
     expect(refusal(noFiles).details).toMatchObject({ reason: "no_files" });
-    const noDraft = await get(t.admin.id, name ?? "", { revision: "published" }, "agent");
-    expectStatus(noDraft, 422);
-    expect(refusal(noDraft).details).toMatchObject({ reason: "no_draft" });
+    // Its live revision is the one it publishes (agent-show-revision.test.ts).
+    expectStatus(await get(t.admin.id, name ?? "", { revision: "published" }, "agent"), 200);
   });
 
   it("answers the index alone, and reads no object, for a set above ASSET_GET_FILES_MAX_BYTES", async () => {
