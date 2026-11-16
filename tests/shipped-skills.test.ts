@@ -12,6 +12,7 @@ import {
 } from "@work-shape/catalyst-client-assembly";
 import {
   asClientInstanceId,
+  asCollaborationWorkspaceId,
   createModuleRegistry,
   type ShippedSkill
 } from "@work-shape/catalyst-core";
@@ -246,6 +247,7 @@ describe("the skills that ship with the platform", () => {
     });
     expect(result).toEqual({
       retained: [],
+      adopted: [],
       created: [],
       updated: [GUIDE],
       removed: [],
@@ -414,6 +416,7 @@ describe("the skills that ship with the platform", () => {
         });
         expect(result).toEqual({
           retained: ["pdf"],
+          adopted: [],
           created: [],
           updated: [],
           removed: [],
@@ -422,6 +425,114 @@ describe("the skills that ship with the platform", () => {
       }
     }
   );
+
+  /** The service principal of a config release, which writes the instance's assets. */
+  const RELEASE_PRINCIPAL = {
+    displayLabel: "Config Release",
+    roles: [],
+    principalKind: "service" as const,
+    principalId: "svc_config_release",
+    principalDisplayLabel: "Config Release"
+  };
+  /** Writes a copy of `pdf` as the config release service principal, as an earlier push did. */
+  async function pushCopy(app: TestInstance, workspaceId?: string) {
+    const key = { clientInstanceId, kind: "skill", name: "pdf" };
+    for (const content of ["Old.", "Older."]) {
+      const current = await app.stores.configAssets.getConfigAsset(key);
+      await app.stores.configAssets.applyConfigAssetMutations({
+        clientInstanceId,
+        actor: RELEASE_PRINCIPAL,
+        baseRevisions: { "skill:pdf": current?.revision ?? null },
+        mutations: [
+          {
+            type: "upsert",
+            kind: "skill",
+            name: "pdf",
+            config: { name: "pdf", title: "PDF", description: "Old.", content },
+            ...(workspaceId
+              ? {
+                  scope: {
+                    kind: "workspace" as const,
+                    workspaceId: asCollaborationWorkspaceId(workspaceId)
+                  }
+                }
+              : {})
+          }
+        ]
+      });
+    }
+    return key;
+  }
+
+  it("adopts an instance copy under a shipped name that only a service principal wrote", async () => {
+    const earlier = await start(false);
+    const key = await pushCopy(earlier);
+    const result = await seedShippedSkills({
+      clientInstanceId,
+      stores: earlier.stores,
+      skills: [platformDocsSkill, generalSkill("pdf", "pdf", ["read_skill"])]
+    });
+    expect(result).toMatchObject({ retained: [], adopted: ["pdf"], updated: [] });
+    const adopted = await read(earlier, "pdf");
+    expect(adopted.config).toMatchObject({ content: "# pdf", origin: "release" });
+    const revisions = await earlier.stores.configAssets.listConfigAssetRevisions(key);
+    expect(revisions.map((revision) => revision.actor?.displayLabel)).toEqual([
+      "Config Release",
+      "Config Release",
+      "System"
+    ]);
+    // It is the shipped skill now: a person can no longer change it, and a start keeps it.
+    const refused = await earlier.call("assets.put", {
+      params: { kind: "skill", name: "pdf" },
+      payload: {
+        config: { name: "pdf", title: "Ours", description: "Ours.", content: "Ours." },
+        expectedRevision: adopted.revision
+      }
+    });
+    expect(refused.statusCode, refused.body).toBe(403);
+    const upgraded = await start(false, [artifactSkills]);
+    expect(await shippedNames(upgraded)).toEqual([GUIDE, "pdf"].sort());
+    expect((await read(upgraded, "pdf")).revision).toBe(adopted.revision);
+  });
+
+  it("retains an instance copy under a shipped name that a person edited once", async () => {
+    const app = await start(false);
+    const key = await pushCopy(app);
+    const edited = await app.call("assets.put", {
+      params: { kind: "skill", name: "pdf" },
+      payload: {
+        config: { name: "pdf", title: "PDF", description: "Ours.", content: "Ours." },
+        expectedRevision: (await read(app, "pdf")).revision
+      }
+    });
+    expect(edited.statusCode, edited.body).toBe(200);
+    await pushCopy(app);
+    const before = await app.stores.configAssets.getConfigAsset(key);
+    const result = await seedShippedSkills({
+      clientInstanceId,
+      stores: app.stores,
+      skills: [platformDocsSkill, generalSkill("pdf", "pdf", ["read_skill"])]
+    });
+    expect(result).toMatchObject({ retained: ["pdf"], adopted: [] });
+    expect(await app.stores.configAssets.getConfigAsset(key)).toEqual(before);
+  });
+
+  it("leaves a workspace copy under a shipped name that only a service principal wrote", async () => {
+    const app = await start(false);
+    const workspace = await app.call("workspaces.create", { payload: { name: "Team" } });
+    expect(workspace.statusCode, workspace.body).toBe(200);
+    const { id: workspaceId } = z.object({ id: z.string() }).parse(workspace.json());
+    const key = await pushCopy(app, workspaceId);
+    const before = await app.stores.configAssets.getConfigAsset(key);
+    expect(before).toMatchObject({ scope: { kind: "workspace", workspaceId } });
+    const result = await seedShippedSkills({
+      clientInstanceId,
+      stores: app.stores,
+      skills: [platformDocsSkill, generalSkill("pdf", "pdf", ["read_skill"])]
+    });
+    expect(result).toMatchObject({ retained: ["pdf"], adopted: [] });
+    expect(await app.stores.configAssets.getConfigAsset(key)).toEqual(before);
+  });
 
   it("stores the skills a capability ships, with their icon and summary, where the instance has their tools", async () => {
     const app = await start(false, [artifactSkills]);
