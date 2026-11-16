@@ -58,7 +58,7 @@ async function publishing(status: "done" | "pending_confirmation" | "pending_app
                 effect: "changing",
                 status,
                 actor: { kind: "user", id: "fixture-user", label: "Fixture user" },
-                origin: { kind: "cli", unattended: true },
+                origin: { kind: "cli" },
                 target: "live",
                 inputHash: "hash",
                 attempt: 1,
@@ -129,7 +129,7 @@ describe("the public Data Store publish CLI process", () => {
     "exits 3 while %s without publishing",
     async (status) => {
       const result = await publishing(status);
-      expect(result).toMatchObject({ code: 3, published: false, unattended: "1" });
+      expect(result).toMatchObject({ code: 3, published: false, unattended: undefined });
       expect(JSON.parse(result.output)).toMatchObject({
         status: "pending_approval",
         run: { status }
@@ -138,7 +138,7 @@ describe("the public Data Store publish CLI process", () => {
   );
   it("exits 0 only for the published revision", async () => {
     const result = await publishing("done");
-    expect(result).toMatchObject({ code: 0, published: true, unattended: "1" });
+    expect(result).toMatchObject({ code: 0, published: true, unattended: undefined });
     expect(JSON.parse(result.output)).toEqual({ draftRevision: 1, publishedRevision: 1 });
   });
 });

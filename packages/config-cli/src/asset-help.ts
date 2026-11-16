@@ -25,7 +25,7 @@ A Workflow as a folder (workflow.yaml at its root, scripts in steps/):
   catalyst workflow pull <workflow> [dir] [--published | --revision <n>]  Write a revision into a folder (assets.get)
   catalyst workflow push [dir]  Send a changed folder as the next draft, or create the Workflow (assets.put)
   catalyst workflow status <workflow> [dir]  Show draft, published revision and local changes
-  catalyst workflow publish <workflow> --revision <n> [--yes]  Review and ask before publishing (assets.publish)
+  catalyst workflow publish <workflow> --revision <n>  Review and publish at once (assets.publish)
   catalyst workflow history <workflow>  List revisions (assets.revisions.list)
   catalyst workflow revert <workflow> --to <n> --if-revision <n>  Restore a revision (assets.revert)
 
@@ -41,8 +41,8 @@ Options:
 
 The instance decides every right and every check, and a refusal is printed as it gave it.
 A write names the revision it was made against: read it with 'show' or 'history'.
-A publish of an App or a Workflow asks you first and needs your answer in a terminal; --yes
-publishes nothing. If you may not approve it yourself, it then waits for an approver.
+A publish is your own and goes live at once; it asks nothing, and --yes changes nothing. Where
+a guardrail of the instance asks for an approval, it waits for an approver instead.
 A publish, an availability change or a move that hands a source's data to people who may not
 use the source waits in the Inbox until a person who may change the source approves it. A key
 never confirms that hand-over, whatever rights it holds.

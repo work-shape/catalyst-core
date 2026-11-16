@@ -532,22 +532,20 @@ describe("LIVE-2: one Publish of a Workflow makes it live with its Data Stores",
     return { code, out: out.join(""), err: err.join(""), questions, published };
   }
 
-  it("shows the store, its migration and the account in `catalyst workflow publish`, and one yes publishes them with the Workflow", async () => {
+  // PUB-LIVE-1: a person's publish goes live directly. The CLI shows what goes live with the
+  // Workflow and asks nothing.
+  it("shows the store, its migration and the account in `catalyst workflow publish`, and publishes them with the Workflow", async () => {
     const store = await liveWorkflowWithPendingStore("live2-cli", "live2-cli-flow");
 
-    const result = await cliPublish("live2-cli-flow", { answers: ["d", "y"] });
+    const result = await cliPublish("live2-cli-flow");
 
     expect(result.code, result.err).toBe(0);
-    // The sentence leads with the account and the store beneath it; Details keep the lines the
-    // page's question holds. The same question is asked again after them.
-    expect(result.questions).toHaveLength(2);
+    expect(result.questions).toEqual([]);
     expect(result.out).toContain("runs as the account “Import findings”");
     expect(result.out).toContain(
       `Data Store 'Store live2-cli' (live2-cli): revision ${store} in place of 1, at level 1, applies 1 migration: add_note`
     );
-    expect(result.out).toContain(
-      "Runs as its own account “Import findings” and may add rows to Store live2-cli."
-    );
+    expect(result.out).toContain("adds rows to Store live2-cli");
     expect(result.published).toEqual([
       { revision: 2, dataStores: [{ name: "live2-cli", revision: store }] }
     ]);
@@ -557,31 +555,28 @@ describe("LIVE-2: one Publish of a Workflow makes it live with its Data Stores",
     expect((await asset(WORKFLOW_ASSET_KIND, "live2-cli-flow"))?.publishedRevision).toBe(2);
   });
 
-  it("changes nothing where the answer is no, where no one can answer, and where a migration fails", async () => {
-    await liveWorkflowWithPendingStore("live2-cli-no", "live2-cli-no-flow");
+  it("publishes the same with `--yes`, which a script may still pass", async () => {
+    const store = await liveWorkflowWithPendingStore("live2-cli-yes", "live2-cli-yes-flow");
 
-    const declined = await cliPublish("live2-cli-no-flow", { answers: ["n"] });
-    expect(declined.code).toBe(1);
-    expect(declined.err).toBe("Nothing was published.\n");
-    expect(declined.out).toContain("applies 1 migration: add_note");
-    expect(declined.published).toEqual([]);
+    const result = await cliPublish("live2-cli-yes-flow", { yes: true, terminal: false });
 
-    // A run with no terminal and no --yes is refused before it sends anything.
-    const silent = await cliPublish("live2-cli-no-flow", { terminal: false });
-    expect(silent.code).toBe(1);
-    expect(silent.err).toContain("needs your answer here");
-    expect(silent.published).toEqual([]);
+    expect(result.code, result.err).toBe(0);
+    expect(result.out).toContain("applies 1 migration: add_note");
+    expect(result.published).toEqual([
+      { revision: 2, dataStores: [{ name: "live2-cli-yes", revision: store }] }
+    ]);
+    expect(await record("live2-cli-yes")).toMatchObject({ status: "ready", level: 2 });
+    expect((await asset(WORKFLOW_ASSET_KIND, "live2-cli-yes-flow"))?.publishedRevision).toBe(2);
+  });
 
-    expect(await record("live2-cli-no")).toMatchObject({ status: "ready", level: 1 });
-    expect((await asset(WORKFLOW_ASSET_KIND, "live2-cli-no-flow"))?.publishedRevision).toBe(1);
-
-    // Where the instance refuses after a yes, the store keeps its level and the live revision.
+  it("changes nothing where a migration fails", async () => {
+    // Where the instance refuses, the store keeps its level and the live revision.
     const brokenStore = await liveWorkflowWithPendingStore(
       "live2-cli-broken",
       "live2-cli-broken-flow",
       broken
     );
-    const refused = await cliPublish("live2-cli-broken-flow", { answers: ["y"] });
+    const refused = await cliPublish("live2-cli-broken-flow");
     expect(refused.code).not.toBe(0);
     expect(refused.published).toEqual([
       { revision: 2, dataStores: [{ name: "live2-cli-broken", revision: brokenStore }] }
@@ -589,41 +584,5 @@ describe("LIVE-2: one Publish of a Workflow makes it live with its Data Stores",
     expect(refused.out).not.toContain("Published revision");
     expect(await record("live2-cli-broken")).toMatchObject({ level: 1 });
     expect((await asset(WORKFLOW_ASSET_KIND, "live2-cli-broken-flow"))?.publishedRevision).toBe(1);
-  });
-
-  it("`--yes` shows the same lines, asks nothing, and names the store in the request that waits in the Inbox", async () => {
-    const store = await liveWorkflowWithPendingStore("live2-cli-yes", "live2-cli-yes-flow");
-
-    const result = await cliPublish("live2-cli-yes-flow", { yes: true });
-
-    expect(result.code, result.err).toBe(3);
-    expect(result.questions).toEqual([]);
-    expect(result.out).toContain("applies 1 migration: add_note");
-    expect(result.out).toContain(
-      "Runs as its own account “Import findings” and may add rows to Store live2-cli-yes."
-    );
-    expect(result.err).toMatch(
-      /Waits in your Inbox for your confirmation; nothing has changed yet/u
-    );
-    expect(result.published).toEqual([
-      { revision: 2, dataStores: [{ name: "live2-cli-yes", revision: store }] }
-    ]);
-    expect(await record("live2-cli-yes")).toMatchObject({ level: 1 });
-    expect((await asset(WORKFLOW_ASSET_KIND, "live2-cli-yes-flow"))?.publishedRevision).toBe(1);
-
-    // The Allow in the Inbox is the person's click: the store and the Workflow go live with it.
-    const requestId = required(/request (\S+),/u.exec(result.err)?.[1]);
-    expectStatus(
-      await t.call(t.root.id, "approval_requests.decide", {
-        params: { requestId },
-        payload: { decision: "approve" }
-      }),
-      200
-    );
-    await getTestJobs(t.instance).runDue();
-    await eventually(async () => {
-      expect((await asset(WORKFLOW_ASSET_KIND, "live2-cli-yes-flow"))?.publishedRevision).toBe(2);
-    }, 30_000);
-    expect(await record("live2-cli-yes")).toMatchObject({ status: "ready", level: 2 });
   });
 });

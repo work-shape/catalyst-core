@@ -73,7 +73,7 @@ export function ShippedGuardrailsLead({
           name: personName(guardrail.switchedBy.label, t),
           when: guardrail.switchedAt ? formatMomentShort(guardrail.switchedAt, locale) : ""
         })
-      : t("guardrails.shippedAsShipped");
+      : t(guardrail.enabled ? "guardrails.shippedAsShipped" : "guardrails.shippedOffAsShipped");
     return [
       {
         key: `shipped:${guardrail.name}`,

@@ -51,7 +51,7 @@ async function setup() {
     storedAssetSource: true,
     furtherToolNames: ["read_skill"],
     server: (stores) => ({
-      operations: { events: guardedEvents(stores, {}, { shipped: true }).events }
+      operations: { events: guardedEvents(stores, {}, { shipped: "publish-approval-on" }).events }
     })
   });
   instances.push(t);

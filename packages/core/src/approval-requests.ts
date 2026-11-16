@@ -161,6 +161,14 @@ export interface ApprovalRequestHandler<TPayload extends JsonObject = JsonObject
    */
   alsoDecidedBy?(payload: TPayload): ApprovalFurtherRight | undefined;
   /**
+   * A right with which the request's own requester decides it, in place of
+   * `requiredPermission`: `skill.publish` on the skill an agent proposed to change for them, so
+   * a person who may make the skill live accepts their agent's change without a second person
+   * (SKILL-ACCEPT-1, 2026-11-16). Nobody else decides through it. `furtherPermissions` are asked all the
+   * same.
+   */
+  requesterDecidesWith?(payload: TPayload): ApprovalFurtherRight | undefined;
+  /**
    * The subjects of the requests one person decides through `alsoDecidedBy` alone, as
    * `payload.subject` holds them. Lists and counts read it, for a reader who lacks
    * `requiredPermission` on the instance.

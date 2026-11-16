@@ -259,21 +259,19 @@ export function narrator(input: {
         );
       }
     },
+    // The release ships the publish guardrail off (PUB-LIVE-1); these instances switched it on
+    // unless `shippedOff`.
     shipped: {
       listShippedGuardrailSwitches: () =>
-        Promise.resolve(
-          input.shippedOff
-            ? [
-                {
-                  name: "publishing-needs-approval",
-                  enabled: false,
-                  alwaysAsk: false,
-                  switchedBy: { id: "usr_admin", label: "Admin" },
-                  switchedAt: "2026-10-18T00:00:00.000Z"
-                }
-              ]
-            : []
-        )
+        Promise.resolve([
+          {
+            name: "publishing-needs-approval",
+            enabled: !input.shippedOff,
+            alwaysAsk: false,
+            switchedBy: { id: "usr_admin", label: "Admin" },
+            switchedAt: "2026-10-18T00:00:00.000Z"
+          }
+        ])
     }
   });
   return createPublishNarrator({

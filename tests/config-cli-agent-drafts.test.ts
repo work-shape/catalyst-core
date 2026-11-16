@@ -329,7 +329,7 @@ describe("catalyst config and agent drafts (Platform Access 66)", () => {
     });
   });
 
-  it("publishes a workspace's agent it pushed with an admin's personal key, once answered", async () => {
+  it("publishes a workspace's agent it pushed with an admin's personal key, asking nothing", async () => {
     const { t, team, live, draft, version } = await setup();
     const stateVersion = await version();
     const mine = await workingCopy(team);
@@ -337,9 +337,9 @@ describe("catalyst config and agent drafts (Platform Access 66)", () => {
     await cli.ok(["config", "pull"]);
     await editInstructions(mine, "Published from the CLI.");
 
-    const published = await cli.run(["config", "push", "--publish"], ["yes"]);
+    const published = await cli.run(["config", "push", "--publish"], []);
     expect(published.code, published.err).toBe(0);
-    expect(published.asked).toHaveLength(1);
+    expect(published.asked).toEqual([]);
     expect(published.out).toContain("agent:kai-helper: draft revision 1;");
     expect(published.out).toContain(
       "Published draft revision 1 of agent 'kai-helper' as live revision 2 in place of revision 1."
@@ -610,7 +610,7 @@ describe("catalyst config and agent drafts (Platform Access 66)", () => {
     expect(await draft()).toMatchObject({ revision: 1 });
   });
 
-  it("asks before it publishes a workspace's agent, and publishes nothing without a terminal", async () => {
+  it("publishes a workspace's agent with config push --publish, live at once (PUB-LIVE-1)", async () => {
     const { t } = await setup();
     const team = await t.sharedWorkspace("Team");
     const mine = await workingCopy();
@@ -648,21 +648,9 @@ describe("catalyst config and agent drafts (Platform Access 66)", () => {
       (await readFile(path, "utf8")).replace("Help the team.", "Help the team well."),
       "utf8"
     );
-    const unasked = await cli.run(["config", "push", "--publish"]);
-    expect(unasked.code).toBe(1);
-    expect(unasked.out).toContain("agent:team-helper: draft revision 1;");
-    expect(unasked.err).toContain("Publishing an agent needs your answer here");
-    expect(unasked.err).toContain(
-      `catalyst agent publish team-helper --revision 1 --workspace ${team}`
-    );
-    expect(await teamAgent()).toMatchObject({ revision: 1 });
-
-    const answered = await cli.run(
-      ["agent", "publish", "team-helper", "--revision", "1", "--workspace", team],
-      ["yes"]
-    );
-    expect(answered.asked).toHaveLength(1);
-    expect(answered.code, answered.err).toBe(0);
+    const published = await cli.run(["config", "push", "--publish"]);
+    expect(published.code, published.err).toBe(0);
+    expect(published.out).toContain("agent:team-helper: draft revision 1;");
     expect(await teamAgent()).toMatchObject({
       revision: 2,
       config: { instructions: "Help the team well." }

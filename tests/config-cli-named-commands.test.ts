@@ -439,7 +439,7 @@ describe("named CLI operation faces", () => {
                   ]
                 });
               }
-              expect(request.headers.get("Catalyst-Unattended")).toBe("1");
+              expect(request.headers.get("Catalyst-Unattended")).toBeNull();
               expect(await request.json()).toEqual({ revision: 1 });
               return Response.json(pending, { status: 202 });
             })

@@ -48,6 +48,14 @@ describe("GR-PUB-2: the default publish guardrail asks only when a publish widen
         operations: { events: guardedEvents(stores, {}, { shipped: true }).events }
       })
     });
+    // The release ships it off (PUB-LIVE-1); this instance's admin switched it on.
+    expectStatus(
+      await t.call(t.admin.id, "guardrails.switch_shipped", {
+        params: { name: PUBLISH_APPROVAL_GUARDRAIL.name },
+        payload: { enabled: true }
+      }),
+      200
+    );
     // Kai may write and publish the workspace's Apps, and may not approve a publish.
     for (const action of ["app.read", "app.write", "app.publish"]) {
       await t.stores.access.createGrant({
@@ -269,7 +277,7 @@ describe("GR-PUB-2: the default publish guardrail asks only when a publish widen
 });
 
 describe("GR-PUB-2: what cannot say whether it widens asks", () => {
-  /** The runner with the shipped guardrails alone, switched as `switches` says. */
+  /** The runner with the shipped guardrails alone, the publish guardrail switched on. */
   const runner = (alwaysAsk = false) => {
     const recordHits = vi.fn<GuardrailStore["recordHits"]>().mockResolvedValue(undefined);
     return new GuardrailRunner({
@@ -279,19 +287,16 @@ describe("GR-PUB-2: what cannot say whether it widens asks", () => {
       hits: { recordHits },
       shipped: {
         listShippedGuardrailSwitches: () =>
-          Promise.resolve(
-            alwaysAsk
-              ? [
-                  {
-                    name: PUBLISH_APPROVAL_GUARDRAIL.name,
-                    enabled: true,
-                    alwaysAsk: true,
-                    switchedBy: { id: "usr_admin", label: "Admin" },
-                    switchedAt: new Date(0).toISOString()
-                  }
-                ]
-              : []
-          )
+          // Switched on by an instance admin: the release ships it off (PUB-LIVE-1).
+          Promise.resolve([
+            {
+              name: PUBLISH_APPROVAL_GUARDRAIL.name,
+              enabled: true,
+              alwaysAsk,
+              switchedBy: { id: "usr_admin", label: "Admin" },
+              switchedAt: new Date(0).toISOString()
+            }
+          ])
       }
     });
   };

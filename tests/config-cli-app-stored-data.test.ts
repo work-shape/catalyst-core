@@ -71,6 +71,8 @@ async function publish(options: { json?: boolean; response?: unknown; status?: n
           },
           updatedAt: "2026-10-18T00:00:00.000Z"
         });
+      case apiOperations["assets.publish"].buildPath({ params: { kind: "app", name: "report" } }):
+        return Response.json({ draftRevision: 9, publishedRevision: 7 });
       case apiOperations["data_stores.app_sources"].path:
         return Response.json(options.response ?? sources, { status: options.status ?? 200 });
       default:
@@ -108,12 +110,13 @@ async function publish(options: { json?: boolean; response?: unknown; status?: n
   return { code, out: out.join(""), err: err.join(""), questions, requests };
 }
 
-describe("the App publish question's stored data", () => {
+describe("the App publish's stored data", () => {
+  // PUB-LIVE-1: the CLI says what the App reaches and publishes, without a question.
   it.each([false, true])(
-    "shows the selected revision's audience and sources before asking (json=%s)",
+    "shows the selected revision's audience and sources before it publishes (json=%s)",
     async (json) => {
       const result = await publish({ json });
-      expect(result.code, result.err).toBe(1);
+      expect(result.code, result.err).toBe(0);
       const review = json ? result.err : result.out;
       expect(review).toContain("Everyone in Kai Spezis (14 people)");
       expect(review).toContain("2 additional grant holders (not a count of people)");
@@ -122,13 +125,17 @@ describe("the App publish question's stored data", () => {
       expect(review).toContain("not the number these actions select");
       expect(review).toContain("Copied by Workflow Nachtimport from Exampledata");
       expect(review).toContain("checked against the publisher, not each viewer");
-      expect(result.questions).toHaveLength(1);
-      const request = result.requests.find(
+      expect(result.questions).toEqual([]);
+      const sourcesAt = result.requests.findIndex(
         (request) => new URL(request.url).pathname === apiOperations["data_stores.app_sources"].path
       );
-      expect(request && new URL(request.url).searchParams.get("revision")).toBe("7");
-      expect(result.requests.some((request) => request.url.includes("/publish"))).toBe(false);
-      if (json) expect(result.out).toBe("");
+      const sourcesRequest = result.requests[sourcesAt];
+      expect(sourcesRequest && new URL(sourcesRequest.url).searchParams.get("revision")).toBe("7");
+      const publishAt = result.requests.findIndex(
+        (request) => request.method === "POST" && request.url.includes("/publish")
+      );
+      expect(publishAt).toBeGreaterThan(sourcesAt);
+      if (json) expect(JSON.parse(result.out)).toMatchObject({ publishedRevision: 7 });
     }
   );
 

@@ -12,6 +12,7 @@ import {
   auditActorFromIdentity,
   isAuthenticatedServicePrincipal,
   shippedGuardrail,
+  shippedGuardrailOn,
   type ActorAccess,
   type OperationAuthorization,
   type OperationExecutionContext,
@@ -200,6 +201,7 @@ export function registerGuardrailRoutes(route: Route, options: ChatServerOptions
         clientInstanceId,
         name: guardrail.name,
         ...changed,
+        onByDefault: guardrail.onByDefault,
         switchedBy: { id: context.actor.id, label: context.actor.displayLabel },
         switchedAt: (options.operations?.now?.() ?? new Date()).toISOString()
       });
@@ -344,7 +346,7 @@ function shippedView(
     reason: guardrail.reason,
     on: [...guardrail.on],
     outcome: guardrail.outcome,
-    enabled: switched?.enabled ?? true,
+    enabled: shippedGuardrailOn(guardrail, switched),
     ...(guardrail.asksOnlyWhenWidening ? { alwaysAsk: switched?.alwaysAsk ?? false } : {}),
     ...(switched ? { switchedBy: switched.switchedBy, switchedAt: switched.switchedAt } : {}),
     canSwitch

@@ -372,7 +372,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     // A request addressed to a person is theirs to decide, whatever rights they hold; only
     // they reach it here.
     if (request.addresseeUserId === undefined) {
-      requireDecidingRight(handler, request, access);
+      requireDecidingRight(handler, request, user, access);
       for (const { permission, resource } of furtherPermissionsOf(handler, request))
         access.require(permission, resource);
       // Approving a hand-over of a source's data confirms it (DS-13c): only a person signed in
@@ -501,7 +501,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
   ): Promise<ApprovalRequestView> {
     const request = await this.visibleRequest(user, access, requestId);
     const handler = this.handler(request.kind);
-    requireDecidingRight(handler, request, access);
+    requireDecidingRight(handler, request, user, access);
     for (const { permission, resource } of furtherPermissionsOf(handler, request))
       access.require(permission, resource);
     const revert = handler.revert?.bind(handler);
@@ -647,7 +647,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       (request.addresseeUserId !== undefined
         ? request.addresseeUserId !== user.id
         : (request.requestedBy.id !== user.id || handler?.hiddenFromRequester === true) &&
-          (!handler || !holdsDecidingRight(handler, request, access)))
+          (!handler || !holdsDecidingRight(handler, request, user, access)))
     ) {
       throw new AppError("NOT_FOUND", "Approval request was not found");
     }
@@ -869,7 +869,8 @@ export function decidesRequest(
 ): boolean {
   return request.addresseeUserId !== undefined
     ? request.addresseeUserId === decider.id
-    : holdsDecidingRight(handler, request, access) && decidesFurther(handler, request, access);
+    : holdsDecidingRight(handler, request, decider, access) &&
+        decidesFurther(handler, request, access);
 }
 
 /**
@@ -892,21 +893,39 @@ function furtherPermissionsOf(
 function holdsDecidingRight(
   handler: ApprovalRequestHandler,
   request: ApprovalRequest,
+  decider: { id: string },
   access: ActorAccess
 ): boolean {
   if (access.authorize(handler.requiredPermission, resourceOfRequest(handler, request)).allowed)
     return true;
   const also = alsoDecidedByOf(handler, request);
-  return also !== undefined && access.authorize(also.permission, also.resource).allowed;
+  if (also !== undefined && access.authorize(also.permission, also.resource).allowed) return true;
+  const own =
+    request.requestedBy.id === decider.id ? requesterDecidesWithOf(handler, request) : undefined;
+  return own !== undefined && access.authorize(own.permission, own.resource).allowed;
+}
+
+/** The right with which the request's requester decides it, where the kind names one. */
+function requesterDecidesWithOf(
+  handler: ApprovalRequestHandler,
+  request: ApprovalRequest
+): ApprovalFurtherRight | undefined {
+  if (!handler.requesterDecidesWith) return undefined;
+  try {
+    return handler.requesterDecidesWith(handler.validate(request.payload));
+  } catch {
+    return undefined;
+  }
 }
 
 /** Refuses as the kind's right refuses, unless `holdsDecidingRight`. */
 function requireDecidingRight(
   handler: ApprovalRequestHandler,
   request: ApprovalRequest,
+  decider: { id: string },
   access: ActorAccess
 ): void {
-  if (!holdsDecidingRight(handler, request, access))
+  if (!holdsDecidingRight(handler, request, decider, access))
     access.require(handler.requiredPermission, resourceOfRequest(handler, request));
 }
 

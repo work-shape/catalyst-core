@@ -19,7 +19,7 @@ describe("SHARE-1 audience on App availability", () => {
   beforeAll(async () => {
     t = await setupAppInstance({
       server: (stores) => ({
-        operations: { events: guardedEvents(stores, {}, { shipped: true }).events }
+        operations: { events: guardedEvents(stores, {}, { shipped: "publish-approval-on" }).events }
       })
     });
     for (const action of ["app.read", "app.write", "app.publish"]) {

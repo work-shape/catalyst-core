@@ -58,7 +58,7 @@ describe("an unattended CLI publish waits in its person's Inbox (OP-4b)", () => 
       explicitCredentials: true,
       server: (stores) => ({
         operations: {
-          events: guardedEvents(stores, {}, { shipped: true }).events,
+          events: guardedEvents(stores, {}, { shipped: "publish-approval-on" }).events,
           centralPolicySettings: () => [PUBLISH_ALLOWED]
         }
       })
@@ -430,7 +430,7 @@ describe("an unattended CLI publish of a Workflow (OP-4b)", () => {
       },
       {
         definitions: "assets",
-        events: (stores) => guardedEvents(stores, {}, { shipped: true }).events
+        events: (stores) => guardedEvents(stores, {}, { shipped: "publish-approval-on" }).events
       }
     );
     const id = "unattended-notify";

@@ -27,7 +27,8 @@ import {
   type GuardrailStore,
   type GuardrailSubject,
   type RuntimeCallContext,
-  SHIPPED_GUARDRAILS
+  SHIPPED_GUARDRAILS,
+  shippedGuardrailOn
 } from "@work-shape/catalyst-core";
 import {
   GUARDRAIL_CHECKED_FIELD_MAX_CHARS,
@@ -352,7 +353,7 @@ export class GuardrailRunner implements BeforeActionCheck {
   }
 
   /**
-   * The shipped guardrails bound to the event that nobody switched off. One bound to an event
+   * The shipped guardrails bound to the event that are on, as switched or as shipped. One bound to an event
    * for a workspace's assets only answers where the subject names the workspace that owns it.
    */
   private async shippedGuardrails(
@@ -369,12 +370,16 @@ export class GuardrailRunner implements BeforeActionCheck {
     const switches = await shipped.listShippedGuardrailSwitches({
       clientInstanceId: this.options.clientInstanceId
     });
-    const off = new Set(switches.filter((entry) => !entry.enabled).map((entry) => entry.name));
     const alwaysAsk = new Set(
       switches.filter((entry) => entry.alwaysAsk).map((entry) => entry.name)
     );
     return bound
-      .filter((guardrail) => !off.has(guardrail.name))
+      .filter((guardrail) =>
+        shippedGuardrailOn(
+          guardrail,
+          switches.find((entry) => entry.name === guardrail.name)
+        )
+      )
       .map((guardrail) => ({
         name: guardrail.name,
         guardrail: { displayName: guardrail.displayName, outcome: guardrail.outcome },

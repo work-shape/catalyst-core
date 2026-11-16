@@ -22,6 +22,9 @@ import { CONFIG_CHANGE_OPERATIONS } from "./connection-approval";
 
 export const SKILL_APPROVE_ACTION: PlatformAction = "skill.approve";
 
+/** The right that makes a skill live, with which a requester accepts their own change. */
+export const SKILL_PUBLISH_ACTION: PlatformAction = "skill.publish";
+
 const heldSubjectSchema = z.object({
   skillAssetId: z.string().min(1),
   skill: z.string().min(1),

@@ -25,7 +25,7 @@ import {
   type ConfigAssetWriterOptions
 } from "../assets/config-asset-writer";
 import { revisionText } from "../guardrails/asset-guardrail-events";
-import { scopeOfWorkspace, skillApproveResource } from "./skill-approval";
+import { SKILL_PUBLISH_ACTION, scopeOfWorkspace, skillApproveResource } from "./skill-approval";
 
 export const SKILL_CHANGE_KIND = "skill_change";
 
@@ -379,10 +379,17 @@ export function withFiledSkillChanges(
 ): ApprovalRequestHandler {
   const filed = filedChangeOperations(options);
   const stored = (payload: JsonObject) => toJsonObject(parse(payload));
+  const resourceOf = (payload: JsonObject) =>
+    isFiledPayload(payload) ? filed.resourceOf(parse(payload)) : proposal.resourceOf(payload);
   return {
     ...proposal,
-    resourceOf: (payload) =>
-      isFiledPayload(payload) ? filed.resourceOf(parse(payload)) : proposal.resourceOf(payload),
+    resourceOf,
+    // Who may make the skill live accepts the change they asked for, their agent's included,
+    // without a second person (SKILL-ACCEPT-1, 2026-11-16): nobody else decides through it.
+    requesterDecidesWith: (payload) => ({
+      permission: SKILL_PUBLISH_ACTION,
+      resource: resourceOf(payload)
+    }),
     validate: (payload) => (isFiledPayload(payload) ? stored(payload) : proposal.validate(payload)),
     filedPayload: async (payload) =>
       isFiledPayload(payload)
