@@ -8,8 +8,9 @@ import {
 } from "./connection-approval-model";
 import type { ConnectorTypeOffer, TypedValues } from "./connection-typed-model";
 
-// The catalogue's entries in New connection (CAT-1): one card per entry in "Dienste", and the
-// part an admin installs through the form of its type. Pure: the dialog holds the choice.
+// The catalogue's entries (CAT-1): one card per entry in "Dienste" on the Connections page,
+// and the part an admin installs through the form of its type. Pure: the dialog holds the
+// choice.
 // An entry only recommends. Its install writes a Connection with no operation; the review
 // step ticks the reading operations it recommends, and only the admin's confirmation enables
 // any. Nothing here grants a right.

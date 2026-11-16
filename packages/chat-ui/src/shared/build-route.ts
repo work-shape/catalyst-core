@@ -43,6 +43,11 @@ export interface BuildNavigation {
   open(location: BuildLocation, options?: { replace?: boolean }): void;
   /** The address of a place, for a link to it. */
   href(location: BuildLocation): string;
+  /**
+   * Opens a page outside Build, such as You > Connections from a service a person adds as their
+   * own. Absent where Build is shown alone.
+   */
+  openRoute?(route: WorkspaceRoute): void;
 }
 
 const BuildNavigationContext = createContext<BuildNavigation | undefined>(undefined);

@@ -13,7 +13,7 @@ import {
 } from "./request-with-origin";
 import { expect, test } from "./test";
 
-// The Connection Catalogue in New connection: the demo's OAuth entry, installed and approved.
+// The Connection Catalogue on the Connections page: the demo's OAuth entry, installed and approved.
 // The install of the API-key entry is covered by tests/connection-catalogue.test.ts and
 // tests/chat-ui-connection-catalogue.test.ts.
 
@@ -142,7 +142,7 @@ test.describe("an OAuth entry", () => {
     return asked;
   }
 
-  /** New connection, Dienste, the OAuth entry: its first step, with whose account to choose. */
+  /** Dienste on the Connections page, the OAuth entry: its first step, with whose account to choose. */
   async function openEntry(page: Page, theme: Theme) {
     const signedIn = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
       data: { ...admin, rememberMe: true }
@@ -155,9 +155,10 @@ test.describe("an OAuth entry", () => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/build/connections");
     const main = page.getByRole("region", { name: "Studio" });
-    await main.getByRole("button", { name: "Neue Verbindung" }).first().click();
+    const card = main.locator(`[data-catalogue-entry="${OAUTH_ENTRY}"]`);
+    await expect(card).toHaveAttribute("data-catalogue-status", "start");
+    await card.locator("[data-catalogue-start]").click();
     const dialog = page.getByRole("dialog").first();
-    await dialog.locator(`[data-catalogue-entry="${OAUTH_ENTRY}"]`).getByRole("button").click();
     await expect(dialog.locator(`[data-catalogue-intro="${OAUTH_ENTRY}"]`)).toBeVisible();
     return dialog;
   }

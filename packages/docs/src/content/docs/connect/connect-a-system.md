@@ -16,6 +16,17 @@ The German interface shows the labels in quotes.
 - The operator must allow the instance to reach the server's host. If it does not, the test says **Network denied** ("Netzwerk gesperrt"); ask the operator.
 - The operator must have set up a key store for credentials (a Secret Store key). Without it the key you enter is not kept, and **Credential** shows **Not set** ("Nicht gesetzt"). If that happens, ask the operator.
 
+## Prepared services
+
+The Connections page ("Verbindungen") starts with **Services** ("Dienste"): one card per service the instance has prepared, with its mark, one sentence and what it brings. Each card says where it stands:
+
+- **Set up now** ("Einrichten") starts the setup of the service in a dialog: its checklist, its fields and Connect.
+- **Set up** ("Eingerichtet") opens the Connection made from it.
+- **You're connected** ("Du bist verbunden") means your own account is connected; the card opens where you manage it.
+- **Ask the technical team** ("Frag das technische Team") marks a service the instance has not been set up for yet.
+
+Services each person adds for themselves show here too, marked **Only for you** ("Nur für dich"); their card opens Settings > You > Connections at that service. Your own Connections follow under **Your connections** ("Deine Verbindungen"). **New connection** is for a system that is not among the services.
+
 ## Create the Connection
 
 1. Open **Studio** and choose **Connections** ("Verbindungen").
@@ -252,7 +263,7 @@ existing retention and model-region rules.
 
 The agent reads `catalogue.entries` in `platform.context` before proposing a Connection. This lists only offered entry ids, titles, categories, parts and credential modes, and whether an installed Connection has its client secret set. It includes no example prompts, operation descriptions or setup checklists.
 
-If an entry fits, `platform.connections.propose` takes only `entry: { id, part }`. Its result tells the card whether setup is needed, whether the viewer may write Connections and, for a personal Connection, the viewer's own binding state. The dialog opens Dienste at that entry's part.
+If an entry fits, `platform.connections.propose` takes only `entry: { id, part }`. Its result tells the card whether setup is needed, whether the viewer may write Connections and, for a personal Connection, the viewer's own binding state. The dialog opens at that entry's setup.
 
 Otherwise the proposal fills the custom Connection's address, auth scheme, OAuth endpoints and scopes, public client id, credential mode and GET read declarations. Mail, calendar and personal files use `user` mode. Custom addresses covered by an offered entry are refused with `entry_covers_host`, naming the entry.
 

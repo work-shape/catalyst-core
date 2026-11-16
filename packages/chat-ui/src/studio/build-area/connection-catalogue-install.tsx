@@ -114,7 +114,8 @@ export function CatalogueInstall({
   source: ConnectionSource;
   /** The browser the sign-in opens the provider's page in. A test hands its own. */
   browser?: SignInBrowser;
-  onBack(): void;
+  /** Back to where the entry was chosen. Absent where the install started on its own. */
+  onBack?: () => void;
 }) {
   const { locale, t } = useTranslation();
   const [partName, setPartName] = useState<CataloguePartName | undefined>(entry.parts[0]?.part);
@@ -298,7 +299,7 @@ export function CatalogueInstall({
         source={source}
         checkName={checkName}
         put={put}
-        onBack={onBack}
+        {...(onBack ? { onBack } : {})}
         onClose={onClose}
         onCreated={onCreated}
         initial={{ title: offerText(part.title ?? entry.title, locale), name: part.name }}

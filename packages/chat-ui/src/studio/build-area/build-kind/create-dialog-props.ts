@@ -38,6 +38,11 @@ export interface BuildCreateDialogProps {
    * page is open, such as opening the chat beside it.
    */
   onCreated(name: string, then?: () => void): void;
+  /**
+   * Where the dialog starts, as the kind's section above its list asked (`ListHead`), such as
+   * a catalogue entry by its id. Absent where it starts at its first step.
+   */
+  start?: string;
 }
 
 /**

@@ -154,7 +154,7 @@ export interface ConnectionSource {
    */
   useConnectorTypes?(mayChange?: boolean): readonly ConnectorTypeOffer[] | undefined;
   /**
-   * A hook: the catalogue's entries, for the "Dienste" group of the New connection dialog and
+   * A hook: the catalogue's entries, for "Dienste" on the Connections page, their install and
    * a Connection's update to its entry's current version, read with the Connector types and
    * offered as they are. Nothing until they are read; a failed read offers none.
    */

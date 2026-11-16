@@ -261,7 +261,8 @@ export function useControlPlaneModel({
         ? {
             location: { kindPath: buildKindPath, name: buildAssetName },
             open: (location, options) => showRoute(buildRouteOfLocation(location), options),
-            href: (location) => workspaceRoutePath(buildRouteOfLocation(location))
+            href: (location) => workspaceRoutePath(buildRouteOfLocation(location)),
+            openRoute: (next) => showRoute(next)
           }
         : undefined,
     [buildAssetName, buildKindPath, inBuild, showRoute]

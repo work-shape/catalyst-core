@@ -1,6 +1,7 @@
 import { Badge, Chip, ConnectionIcon } from "@work-shape/catalyst-ui";
 import { connectionCategory } from "../../shared/connection-facts";
 import type { BuildAsset, BuildAssetKind, BuildAssetRow } from "./build-asset-kind";
+import { ConnectionServices } from "./connection-catalogue-services";
 import { ConnectionCreateDialog } from "./connection-create-dialog";
 import { ConnectionAssetEditor } from "./connection-editor";
 import { connectorTypeLabel } from "./connection-form";
@@ -26,10 +27,11 @@ function listedIncomplete(asset: Pick<BuildAssetRow, "attributes">): boolean {
 }
 
 /**
- * Connections in Build: a list, "New connection" with its own dialog for an MCP server or a
- * REST API, and the page of one Connection. A row says what the instance tells of the Connection without
- * its definition: its icon, what it is for, its connector type, whom it belongs to and
- * whether it is on. No row holds a setting or a reference to a credential.
+ * Connections in Build: the catalogue's services on top ("Dienste", CAT-PAGE), the list below
+ * them, "New connection" with its own dialog for an MCP server, a REST API or a type with a
+ * form of its own, and the page of one Connection. A row says what the instance tells of the
+ * Connection without its definition: its icon, what it is for, its connector type, whom it
+ * belongs to and whether it is on. No row holds a setting or a reference to a credential.
  */
 export const connectionKind: BuildAssetKind = {
   kind: "connection",
@@ -50,6 +52,8 @@ export const connectionKind: BuildAssetKind = {
   withoutCli: true,
   Editor: ConnectionAssetEditor,
   CreateDialog: ConnectionCreateDialog,
+  ListHead: ConnectionServices,
+  listTitle: "connections.yours",
   // A row shows the icon of the system behind the Connection, on its tile, and what the
   // Connection is for in words. Its id stands on its page.
   row: (asset, t) => {

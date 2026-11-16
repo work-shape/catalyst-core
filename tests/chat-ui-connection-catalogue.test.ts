@@ -2,7 +2,6 @@ import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import {
   CatalogueInstall,
-  CatalogueServices,
   ConnectionCreateFlow,
   catalogueLink,
   entriesToShow,
@@ -23,10 +22,11 @@ import { required } from "./support/assertions";
 import { connectionDetail } from "./chat-ui-connection-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
-// The catalogue in New connection (CAT-1): the "Dienste" group, the part installed through the
-// form of its type, and the review of what the entry proposes. An entry only recommends: these
-// tests fail where its install would enable an operation, where a changing operation would be
-// ticked in advance, or where an entry the operator has not named could be chosen.
+// The catalogue (CAT-1): New connection beside the services on the page, the part installed
+// through the form of its type, and the review of what the entry proposes. An entry only
+// recommends: these tests fail where its install would enable an operation, where a changing
+// operation would be ticked in advance, or where an entry the operator has not named could be
+// chosen.
 
 /** A Connector type with a form of its own, which the entry `files` installs through. */
 const folderType: ConnectorTypeOffer = {
@@ -186,7 +186,7 @@ describe("the catalogue model", () => {
   });
 });
 
-describe("Dienste in New connection", () => {
+describe("New connection and the install of an entry", () => {
   const source: ConnectionSource = {
     mayTest: () => true,
     useDetail: () => ({ status: "loading" }),
@@ -222,29 +222,40 @@ describe("Dienste in New connection", () => {
       })
     );
 
-  it("shows the offered entry to choose and the other one greyed, with no way to choose it", () => {
+  it("offers only what a person connects of their own: the services stand on the page", () => {
     const markup = dialog(source);
-    expect(markup).toContain("Dienste");
-    expect(markup).toContain("Eigene Verbindung");
-    expect(markup.indexOf('data-catalogue-entry="ledger"')).toBeLessThan(
-      markup.indexOf('data-catalogue-entry="files"')
-    );
+    expect(markup).not.toContain("data-connection-services");
+    expect(markup).not.toContain("data-catalogue-entry");
     // An own MCP server or REST API stays; a type keeps its card while its entry is not named.
+    expect(markup).toContain('data-connection-type="mcp"');
     expect(markup).toContain('data-connection-type="http_api"');
     expect(markup).toContain('data-connection-type="folder_store"');
-    // Named, the entry stands in for the card of the type it installs through.
+    // Named, the entry's card on the page stands in for the card of the type it installs through.
     const named = dialog({
       ...source,
       useCatalogueEntries: () => [{ ...files, offered: true }, ledger]
     });
     expect(named).not.toContain('data-connection-type="folder_store"');
-    expect(named).toContain('data-catalogue-entry="files"');
-    const services = inGerman(
-      createElement(CatalogueServices, { entries: [files], onChoose() {} })
-    );
-    expect(services).toContain('data-catalogue-offered="false"');
-    expect(services).toContain("Frag das technische Team");
-    expect(services).not.toContain("<button");
+  });
+
+  it("opens at the install of the entry a service's card names, with no way back to a list", () => {
+    const at = (start: string) =>
+      inGerman(
+        createElement(ConnectionCreateFlow, {
+          ...props,
+          source,
+          remove: async () => undefined,
+          mayDelete: () => true,
+          start
+        })
+      );
+    const markup = at("ledger");
+    expect(markup).toContain('data-catalogue-intro="ledger"');
+    expect(markup).not.toContain("data-connection-type");
+    expect(markup).not.toContain('aria-label="Zurück"');
+    // An entry the operator has not named is never installed, whatever the card asked.
+    expect(at("files")).not.toContain("data-catalogue-intro");
+    expect(at("files")).toContain('data-connection-type="mcp"');
   });
 
   it("prepares the part with its checklist, and says whose account it is before the key", () => {

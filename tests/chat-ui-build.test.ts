@@ -435,6 +435,8 @@ describe("Studio frame", () => {
     // A row opens the Connection's page, and a new one is started from the list.
     expect(list).toContain('href="/build/connections/crm"');
     expect(list).toContain(">New connection<");
+    // The list stands under its own heading, below the services (CAT-PAGE).
+    expect(list).toContain(">Your connections</h2>");
     expect(list).not.toContain("More actions");
     // The list says what Connections are and which of them are read-only, with rows and without.
     expect(list).toContain(

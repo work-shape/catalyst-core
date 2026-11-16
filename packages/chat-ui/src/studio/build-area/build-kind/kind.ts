@@ -5,6 +5,7 @@ import type { BuildWithAgentCopy } from "../../build-with-agent-empty";
 import type { BuildAsset, BuildAssetRow } from "./asset";
 import type { BuildCreateDialogProps, BuildImportDialogProps } from "./create-dialog-props";
 import type { BuildAssetEditorProps, BuildPageSlot } from "./editor-props";
+import type { BuildListHeadProps } from "./list-head";
 import type { BuildListLead, BuildListLeadFilter } from "./list-lead";
 
 /** What every kind of the Build area names: its rail item and its list. */
@@ -103,6 +104,13 @@ export interface BuildAssetKind extends BuildKindBase {
    * the label of the list's action that opens it. Shown to whoever may create one of the kind.
    */
   importDialog?: { label: TranslationKey; Dialog: ComponentType<BuildImportDialogProps> };
+  /**
+   * A section above the list, such as the catalogue's services above the Connections: the list
+   * then stands below it under `listTitle`. It may start the kind's own dialog at a place it
+   * names (`BuildCreateDialogProps.start`).
+   */
+  ListHead?: ComponentType<BuildListHeadProps>;
+  listTitle?: TranslationKey;
   /**
    * A new asset is available in the shared workspace it is made in: the dialog that starts
    * it says where, and offers every workspace to whoever may change that.

@@ -19,6 +19,7 @@ import {
   Picker,
   PickerButton,
   RegistryIcon,
+  Section,
   SkeletonList,
   SkeletonPage,
   SubRail
@@ -137,6 +138,8 @@ function BuildFrameBody({
   // A new asset has no address yet: it is written on the list's address and ends with it.
   const locationKey = `${location.kindPath ?? ""}/${location.name ?? ""}`;
   const [asking, setAsking] = useState(false);
+  /** Where the kind's own dialog starts, as the section above its list asked (`ListHead`). */
+  const [askedStart, setAskedStart] = useState<string>();
   /** The kind's import dialog is open over its list. */
   const [importing, setImporting] = useState(false);
   // A page outside Studio may have started an asset in its own dialog: the list it leads to
@@ -163,6 +166,7 @@ function BuildFrameBody({
   useEffect(() => {
     if (!dialogAsked) return;
     clearBuildCreateDialogRequest();
+    setAskedStart(undefined);
     setAsking(true);
   }, [dialogAsked]);
   // What a kind's own dialog asked to run once the page of the asset it made is open.
@@ -464,9 +468,12 @@ function BuildFrameBody({
         loadError={loadError}
         view={view}
         onViewChange={(next) => setListViews((views) => ({ ...views, [entry.path]: next }))}
-        hrefOf={(asset) => href({ kindPath: entry.path, name: asset.name })}
-        onOpen={(asset) => open({ kindPath: entry.path, name: asset.name })}
-        onNew={() => setAsking(true)}
+        hrefOf={(name) => href({ kindPath: entry.path, name })}
+        onOpen={(name) => open({ kindPath: entry.path, name })}
+        onNew={(at) => {
+          setAskedStart(at);
+          setAsking(true);
+        }}
         onImport={() => setImporting(true)}
       />
       {importing && isEditableKind(entry) && place.kind.state.canCreate && entry.importDialog ? (
@@ -557,6 +564,7 @@ function BuildFrameBody({
                 !shipped && place.kind.state.canDelete && mayOnAsset(source.rights, "delete", asset)
             };
           }}
+          {...(askedStart === undefined ? {} : { start: askedStart })}
           onClose={() => setAsking(false)}
           onCreated={(name, then) => {
             setAsking(false);
@@ -620,10 +628,11 @@ function BuildList({
   loadError: ReactNode;
   view: ListView;
   onViewChange(view: ListView): void;
-  /** The address of an asset: a row is a link to it. */
-  hrefOf(asset: BuildAssetRow): string;
-  onOpen(asset: BuildAssetRow): void;
-  onNew(): void;
+  /** The address of an asset, by its id: a row is a link to it. */
+  hrefOf(name: string): string;
+  onOpen(name: string): void;
+  /** Opens the kind's New dialog, at `start` where the section above the list names one. */
+  onNew(start?: string): void;
   /** Opens the kind's import dialog. */
   onImport(): void;
 }) {
@@ -698,7 +707,7 @@ function BuildList({
     if (everyOwner && buildScopeValue(asset.scope) !== buildScopeValue(scope)) {
       source.chooseScope?.(asset.scope);
     }
-    onOpen(asset);
+    onOpen(asset.name);
   };
   const filtered = settledText.trim() !== "";
   // A kind that only lists has no asset to start and no CLI entry, and a page only to show one.
@@ -711,12 +720,12 @@ function BuildList({
   const startWithAgent = withAgent ? source.buildWithAgent : undefined;
   const newButton =
     withAgent && startWithAgent ? (
-      <Button onClick={onNew}>
+      <Button onClick={() => onNew()}>
         <Plus aria-hidden="true" />
         {t(withAgent.label)}
       </Button>
     ) : editable && state.canCreate ? (
-      <Button onClick={onNew}>
+      <Button onClick={() => onNew()}>
         <Plus aria-hidden="true" />
         {t(editable.newLabel)}
       </Button>
@@ -729,6 +738,10 @@ function BuildList({
   const offerStands =
     entry.emptyBuild && startWithAgent && !list.error && !filtered && list.rows?.length === 0;
   const headNew = offerStands ? undefined : newButton;
+  // A kind's section above the list (`ListHead`) reads every asset, whatever the search says:
+  // unsearched, this is the list's own read.
+  const ListHead = editable?.ListHead;
+  const unfiltered = source.useList(entry.kind, { text: "" });
 
   // The rows a kind adds come first, in the same list, under the same search and filters.
   const listBody = (lead: BuildListLead) => {
@@ -882,7 +895,7 @@ function BuildList({
                       link={
                         opens ? (
                           <a
-                            href={hrefOf(asset)}
+                            href={hrefOf(asset.name)}
                             onClick={(event) => {
                               if (opensHere(event)) {
                                 event.preventDefault();
@@ -913,6 +926,14 @@ function BuildList({
     );
   };
 
+  const listed = entry.ListLead ? (
+    <entry.ListLead filter={{ text: settledText, scope: everyOwner ? undefined : scope }}>
+      {listBody}
+    </entry.ListLead>
+  ) : (
+    listBody(NO_LEAD)
+  );
+
   return (
     <>
       <PageHeader
@@ -942,12 +963,25 @@ function BuildList({
         }
       />
       {loadError}
-      {entry.ListLead ? (
-        <entry.ListLead filter={{ text: settledText, scope: everyOwner ? undefined : scope }}>
-          {listBody}
-        </entry.ListLead>
+      {ListHead ? (
+        <>
+          <ListHead
+            rows={unfiltered.rows}
+            canCreate={state.canCreate}
+            hrefOf={hrefOf}
+            open={onOpen}
+            create={onNew}
+          />
+          <Section
+            layout="stacked"
+            title={editable?.listTitle ? t(editable.listTitle) : t(entry.label)}
+            data-build-list-section=""
+          >
+            {listed}
+          </Section>
+        </>
       ) : (
-        listBody(NO_LEAD)
+        listed
       )}
       {cliOpen ? (
         <Dialog
