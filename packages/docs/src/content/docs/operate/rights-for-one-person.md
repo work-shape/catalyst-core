@@ -56,7 +56,7 @@ The server decides the result, by the same rule that guards every request; the t
 
 The result is the right alone. A save the tab calls allowed can still be refused for a reason outside rights:
 
-- a changed model setting without `agent_models.manage`
+- a changed model setting without `agent_models.manage`, except a model and its effort on an agent a workspace owns, among the models the workspace allows
 - the first agent of an instance and the last one change the default agent, which needs the instance-wide right to write agents
 - agent configuration in the interface is switched off for the instance
 

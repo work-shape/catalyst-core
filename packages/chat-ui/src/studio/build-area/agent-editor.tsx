@@ -92,6 +92,7 @@ export function AgentEditor({
   referencesLoading = false,
   editableAgentFields,
   canManageAgentModels,
+  workspaceModels = false,
   skillChoice,
   knowledgeChoice,
   dataStoreChoice,
@@ -115,6 +116,11 @@ export function AgentEditor({
   /** The fields the instance lets people change. The model settings follow their own right. */
   editableAgentFields: readonly string[];
   canManageAgentModels: boolean;
+  /**
+   * A workspace owns the agent: who writes it picks its models and their efforts among the
+   * ones the workspace allows, without the right to manage models.
+   */
+  workspaceModels?: boolean;
   skillChoice: SkillChoice;
   /** The Knowledge Bases on offer. Left out where the instance has none: the section is not shown. */
   knowledgeChoice?: KnowledgeBaseChoice;
@@ -203,6 +209,7 @@ export function AgentEditor({
   }>();
   const canEdit = (field: string) => canWrite && editableAgentFields.includes(field);
   const canEditModel = canWrite && canManageAgentModels;
+  const canChooseModels = canEditModel || (canWrite && workspaceModels);
   const canEditMaxSteps = canEdit("maxSteps");
   const modelBindings = useMemo(
     () =>
@@ -267,7 +274,7 @@ export function AgentEditor({
     onNewTitle?.(named);
   }, [onNewTitle, named]);
   const showModels =
-    canEditModel ||
+    canChooseModels ||
     proposed.fields.includes("model") ||
     Boolean(form.modelBindingId || form.modelProviderId || form.reasoningEffort) ||
     form.userSelectableModelBindingIds.some((id) => modelBindingIds.includes(id));
@@ -692,8 +699,8 @@ export function AgentEditor({
                   form={form}
                   modelBindings={modelBindings}
                   reasoningEfforts={references?.reasoningEfforts ?? []}
-                  editable={canEditModel}
-                  setByModelManagers={canWrite && !canManageAgentModels}
+                  editable={canChooseModels}
+                  setByModelManagers={canWrite && !canChooseModels}
                   onSelectDefault={(modelBindingId) =>
                     setForm((value) =>
                       selectAgentModelBinding(value, modelBindingId, {
@@ -929,7 +936,10 @@ export function AgentEditor({
         saveBlocked: frame.saveBlocked === true || behind !== undefined,
         canWrite:
           canWrite &&
-          (editableAgentFields.length > 0 || canManageAgentModels || availability !== undefined)
+          (editableAgentFields.length > 0 ||
+            canManageAgentModels ||
+            workspaceModels ||
+            availability !== undefined)
       }}
       title={title}
       status={

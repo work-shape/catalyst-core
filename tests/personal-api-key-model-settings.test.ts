@@ -135,10 +135,13 @@ const syncItemsSchema = z.object({
   )
 });
 
-/** An agent whose model is chosen: a binding and a reasoning effort. */
+/**
+ * An agent whose model settings need the right: a binding and an effort, which a writer of the
+ * workspace picks, and the model fallback turned off, which only the right changes.
+ */
 function modelAgent(name: string) {
   const { modelProviderId: _provider, ...rest } = agentConfig(name);
-  return { ...rest, modelBindingId: "plain", reasoningEffort: "low" };
+  return { ...rest, modelBindingId: "plain", reasoningEffort: "low", useModelFallback: false };
 }
 
 /** Kai holds the right in his list, as only a superadmin gives it. */

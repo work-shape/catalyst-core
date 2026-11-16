@@ -99,7 +99,7 @@ describe("live first saves from the Build Agent (ACCEPT-FIX-5)", () => {
     },
     {
       name: "copied-model",
-      extra: { modelBindingId: "primary" },
+      extra: { modelBindingId: "primary", useModelFallback: false },
       expected: "agent_models.manage",
       status: "denied"
     },

@@ -13,7 +13,7 @@ import {
   loadStoredAssets,
   assertUpsertPolicyAndMissingRight,
   keptStored,
-  listsModelBindings,
+  choosesWorkspaceModels,
   loadAgentLists,
   missingUpsertRightOf,
   setsInitialDefault
@@ -157,7 +157,7 @@ async function furtherRight(
       resource: target.resource,
       current,
       next: keptStored(kind, current, kind.prepareInteractiveUpsert({ current, next: config })),
-      modelBindingsListed: listsModelBindings(
+      workspaceModels: choosesWorkspaceModels(
         await loadAgentLists(
           scope.options,
           target.scope.kind === "workspace" ? target.scope.workspaceId : undefined

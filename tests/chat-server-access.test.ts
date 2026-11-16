@@ -625,13 +625,13 @@ describe("the build limits of a workspace", () => {
       params: { kind: "agent", name: "kai-helper" },
       payload: { config: bound("plain"), workspaceId }
     });
-    // A list only restricts: changing another model field still needs agent_models.manage.
+    // Picking a model is not managing models: the fallback still needs agent_models.manage.
     const refusal = await t.expectRefused(
       t.kai.id,
       "assets.put",
       {
         params: { kind: "agent", name: "kai-helper" },
-        payload: { config: { ...bound("plain"), reasoningEffort: "low" }, workspaceId }
+        payload: { config: { ...bound("plain"), useModelFallback: false }, workspaceId }
       },
       { status: 403, code: "FORBIDDEN" }
     );

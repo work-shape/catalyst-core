@@ -595,11 +595,13 @@ export async function loadAgentLists(
 }
 
 /**
- * Whether a list names the model bindings the agent may use: the operator's choice of models
- * for it, so its writer picks among them without the right to manage models.
+ * Whether a workspace owns the agent, so that its writer picks among the model bindings the
+ * workspace allows without the right to manage models: the bindings of its build limits, or
+ * every binding of the instance where it sets none. Which bindings a workspace allows stays the
+ * instance admin's (Instance > Workspaces).
  */
-export function listsModelBindings(lists: AgentLists): boolean {
-  return lists.workspace?.allowedModelBindingIds !== undefined;
+export function choosesWorkspaceModels(lists: AgentLists): boolean {
+  return lists.workspace !== undefined;
 }
 
 /** Lists that bind an agent, with the place a refusal names. */

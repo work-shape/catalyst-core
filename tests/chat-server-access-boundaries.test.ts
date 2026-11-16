@@ -176,7 +176,7 @@ describe("a workspace's model list and an agent without a binding", () => {
 });
 
 describe("a workspace's model list and its writer", () => {
-  it("lets the writer pick a listed binding without the model right, there and nowhere else", async () => {
+  it("lets the writer pick a binding the workspace allows without the model right, and nowhere else", async () => {
     const t = await setup();
     const { listed, free } = await twoWorkspaces(t);
     const bound = (name: string, modelBindingId: string, overrides = {}) => {
@@ -204,32 +204,48 @@ describe("a workspace's model list and its writer", () => {
         }
       }
     );
-    // Editing the agent keeps working, and every other model setting still needs the right.
+    // Editing the agent keeps working, and so does the effort of the binding it picked.
     await t.expectOk(
       t.kai.id,
       "assets.put",
       put("kai-new", bound("kai-new", "plain", { instructions: "More." }), listed)
     );
-    const effort = await t.expectRefused(
+    await t.expectOk(
       t.kai.id,
       "assets.put",
-      put("kai-new", { ...bound("kai-new", "plain"), reasoningEffort: "low" }, listed),
+      put("kai-new", { ...bound("kai-new", "plain"), reasoningEffort: "low" }, listed)
+    );
+    // The model fallback stays the right's.
+    const fallback = await t.expectRefused(
+      t.kai.id,
+      "assets.put",
+      put("kai-new", { ...bound("kai-new", "plain"), useModelFallback: false }, listed),
       { status: 403, code: "FORBIDDEN" }
     );
-    expect(effort.message).toContain("agent_models.manage");
-    // A workspace without a list, and an agent of the instance, keep the rule as it was.
-    for (const [userId, name, workspaceId] of [
-      [t.kai.id, "free-helper", free],
-      [t.admin.id, "plain-helper", undefined]
-    ] as const) {
-      const refusal = await t.expectRefused(
-        userId,
-        "assets.put",
-        put(name, bound(name, "plain"), workspaceId),
-        { status: 403, code: "FORBIDDEN" }
-      );
-      expect(refusal.message).toContain("agent_models.manage");
-    }
+    expect(fallback.message).toContain("agent_models.manage");
+    // A workspace without a list allows every binding of the instance, and its writer picks
+    // one, a model listed for users with its effort included.
+    await t.expectOk(
+      t.kai.id,
+      "assets.put",
+      put(
+        "free-helper",
+        {
+          ...bound("free-helper", "other"),
+          userSelectableModelBindingIds: ["plain"],
+          modelReasoningEfforts: { plain: "medium" }
+        },
+        free
+      )
+    );
+    // An agent of the instance keeps the rule as it was.
+    const refusal = await t.expectRefused(
+      t.admin.id,
+      "assets.put",
+      put("plain-helper", bound("plain-helper", "plain")),
+      { status: 403, code: "FORBIDDEN" }
+    );
+    expect(refusal.message).toContain("agent_models.manage");
   });
 });
 

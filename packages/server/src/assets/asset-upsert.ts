@@ -23,7 +23,7 @@ import {
 } from "./asset-set";
 import {
   assertChangedAgentsAllowed,
-  listsModelBindings,
+  choosesWorkspaceModels,
   assertUpsertWithinLimits,
   assetKey,
   keptStored,
@@ -162,7 +162,7 @@ export async function upsertAsset(
       resource: target.resource,
       current,
       next,
-      modelBindingsListed: listsModelBindings(lists)
+      workspaceModels: choosesWorkspaceModels(lists)
     });
   await kind.assertScopedWrite?.({
     clientInstanceId: options.clientInstanceId,

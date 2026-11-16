@@ -253,6 +253,7 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
         referencesLoading={referencesQuery.isPending}
         editableAgentFields={management.editableAgentFields}
         canManageAgentModels={canManageAgentModels(user)}
+        workspaceModels={owner !== undefined}
         skillChoice={{
           options: skills?.items ?? [],
           ...(skills?.more === undefined ? {} : { more: skills.more }),

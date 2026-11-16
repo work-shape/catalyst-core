@@ -343,7 +343,12 @@ describe("a release through assets.sync", () => {
 
   it("carries model settings without the right that governs them, in a sync only", async () => {
     const t = await setup();
-    const binding = { modelProviderId: undefined, modelBindingId: "plain" };
+    // A writer of a workspace picks its binding; turning the model fallback off is the right's.
+    const binding = {
+      modelProviderId: undefined,
+      modelBindingId: "plain",
+      useModelFallback: false
+    };
     const bound = putAgent("rel-old", binding, 1);
 
     // An administrator holds `agent.write` and not `agent_models.manage`, in a workspace's

@@ -186,8 +186,8 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
       return withoutFastMode;
     },
 
-    missingUpsertRight({ access, resource, current, next, modelBindingsListed }) {
-      if (changedModelSettings(modelBindingsListed, current, next).length === 0) return undefined;
+    missingUpsertRight({ access, resource, current, next, workspaceModels }) {
+      if (changedModelSettings(workspaceModels, current, next).length === 0) return undefined;
       // Asked with the agent: a personal key covers the right where it covers writing it.
       const decision = access.authorize(MODEL_SETTINGS_RIGHT, resource);
       return decision.allowed
@@ -195,7 +195,7 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
         : { action: MODEL_SETTINGS_RIGHT, reason: decision.reason };
     },
 
-    assertInteractiveUpsertAllowed({ access, resource, current, next, modelBindingsListed }) {
+    assertInteractiveUpsertAllowed({ access, resource, current, next, workspaceModels }) {
       if (current === undefined && !policy().allowAgentCreation) {
         throw new AppError("FORBIDDEN", "Interactive agent creation is disabled");
       }
@@ -208,7 +208,7 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
       const changedFields = AGENT_EDITABLE_FIELDS.filter(
         (field) => changed(field) || (field === "instructions" && changed("additionalInstructions"))
       );
-      const changedSettings = changedModelSettings(modelBindingsListed, current, next);
+      const changedSettings = changedModelSettings(workspaceModels, current, next);
       const modelRight =
         changedSettings.length > 0 ? access.authorize(MODEL_SETTINGS_RIGHT, resource) : undefined;
       if (modelRight?.allowed === false) {
@@ -275,19 +275,31 @@ export function agentModelSettingValue(agent: unknown, field: AgentModelSettingF
 const MODEL_SETTINGS_RIGHT = "agent_models.manage";
 
 /**
+ * The settings that choose an agent's models and the effort of each: who writes an agent a
+ * workspace owns sets them among the bindings the workspace allows, which its build limits
+ * check for every writer (agent.write chooses, Felix, 2026-11-16).
+ */
+const WORKSPACE_MODEL_CHOICE_FIELDS: readonly AgentModelSettingField[] = [
+  "modelBindingId",
+  "userSelectableModelBindingIds",
+  "reasoningEffort",
+  "modelReasoningEfforts"
+];
+
+/**
  * The model settings a save changes that the right governs. They are governed by a
- * permission, not by the editable-field policy. The one exception is the binding of an agent
- * a list of bindings binds, its workspace's: the list is the operator's choice
- * of models for it, so its writer picks among them.
+ * permission, not by the editable-field policy. The exception is an agent a workspace owns:
+ * the bindings the workspace allows are the instance admin's choice of models for it, so its
+ * writer picks among them and their efforts. Fast mode and the model fallback stay the right's.
  */
 function changedModelSettings(
-  modelBindingsListed: boolean,
+  workspaceModels: boolean,
   current: unknown,
   next: unknown
 ): AgentModelSettingField[] {
   return AGENT_MODEL_SETTING_FIELDS.filter(
     (field) =>
-      !(field === "modelBindingId" && modelBindingsListed) &&
+      !(workspaceModels && WORKSPACE_MODEL_CHOICE_FIELDS.includes(field)) &&
       !configValuesEqual(
         agentModelSettingValue(current, field),
         agentModelSettingValue(next, field)
