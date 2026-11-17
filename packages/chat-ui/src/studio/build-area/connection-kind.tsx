@@ -7,6 +7,7 @@ import { ConnectionAssetEditor } from "./connection-editor";
 import { connectorTypeLabel } from "./connection-form";
 import { HEALTH_VIEWS, listedHealth } from "./connection-status";
 import { CONNECTIONS_BUILD_PATH } from "./connection-tools";
+import { listedOwnServer } from "./own-server-model";
 
 /**
  * The name of a Connection that release config defines. Such a Connection is changed there
@@ -54,6 +55,24 @@ export const connectionKind: BuildAssetKind = {
   CreateDialog: ConnectionCreateDialog,
   ListHead: ConnectionServices,
   listTitle: "connections.yours",
+  // A person's own server is for that person alone, whatever its place. Another person's,
+  // which an admin sees to switch off or delete, stands below the reader's own (PMCP).
+  rowPlace: (asset, t) => {
+    const own = listedOwnServer(asset);
+    if (own === undefined) return undefined;
+    if (own.owner === "reader") return { scope: "personal", name: t("build.placeMine") };
+    return {
+      scope: "personal",
+      name: own.label
+        ? t("connections.onlyFor", { name: own.label })
+        : t("connections.onlyForDeleted")
+    };
+  },
+  listAside: {
+    title: "connections.othersOwn",
+    description: "connections.othersOwnText",
+    holds: (asset) => listedOwnServer(asset)?.owner === "other"
+  },
   // A row shows the icon of the system behind the Connection, on its tile, and what the
   // Connection is for in words. Its id stands on its page.
   row: (asset, t) => {

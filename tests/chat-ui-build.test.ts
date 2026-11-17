@@ -477,6 +477,77 @@ describe("Studio frame", () => {
     expect(render({ kindPath: "agents" })).not.toContain("Connections");
   });
 
+  it("lists other people's own servers apart from the reader's, each only for its owner (PMCP)", () => {
+    const base = source();
+    const rows = [
+      row("connection", "crm", {
+        title: "CRM",
+        attributes: { connectorType: "mcp", origin: "runtime", enabled: true }
+      }),
+      row("connection", "mine-notes", {
+        title: "My notes",
+        attributes: { connectorType: "mcp", origin: "runtime", enabled: true, ownServer: "reader" }
+      }),
+      row("connection", "carol-notes", {
+        title: "Notes of Carol",
+        attributes: {
+          connectorType: "mcp",
+          origin: "runtime",
+          enabled: true,
+          ownServer: "other",
+          ownerLabel: "Carol"
+        }
+      }),
+      row("connection", "gone-notes", {
+        title: "Old notes",
+        attributes: {
+          connectorType: "mcp",
+          origin: "runtime",
+          enabled: true,
+          ownServer: "other",
+          ownerLabel: ""
+        }
+      })
+    ];
+    const listOf = (listed: BuildAssetRow[], locale: LocaleCode = "en") =>
+      render(
+        { kindPath: "connections" },
+        {
+          locale,
+          source: source({
+            lists: { connection: { rows: listed } },
+            overrides: {
+              kinds: [...base.kinds, { kind: "connection", canCreate: true, canDelete: true }]
+            }
+          })
+        }
+      );
+    const list = listOf(rows);
+    const yoursAt = list.indexOf(">Your connections</h2>");
+    const othersAt = list.indexOf(">Added by others</h2>");
+    expect(yoursAt).toBeGreaterThan(-1);
+    expect(othersAt).toBeGreaterThan(yoursAt);
+    const yours = list.slice(yoursAt, othersAt);
+    const others = list.slice(othersAt);
+    // The reader's own list holds the shared Connection and their own server, named as theirs.
+    expect(yours).toContain(">CRM<");
+    expect(yours).toContain(">My notes<");
+    expect(yours).not.toContain("Carol");
+    expect(yours.split(">Everyone<")).toHaveLength(2);
+    expect(yours).toContain(">Only me<");
+    // Another person's server stands below, for its owner alone, and still opens its page.
+    expect(others).toContain(">Notes of Carol<");
+    expect(others).toContain(">Only for Carol<");
+    expect(others).toContain(">Only for a deleted account<");
+    expect(others).not.toContain(">Everyone<");
+    expect(others).toContain('href="/build/connections/carol-notes"');
+    const de = listOf(rows, "de");
+    expect(de).toContain(">Von anderen hinzugefügt</h2>");
+    expect(de).toContain(">Nur für Carol<");
+    // Without another person's server there is no such section.
+    expect(listOf(rows.slice(0, 2))).not.toContain("Added by others");
+  });
+
   it("says in a sentence what an empty list is for, with the one button, or without the right", () => {
     const empty = (permissions: string[]) =>
       render(

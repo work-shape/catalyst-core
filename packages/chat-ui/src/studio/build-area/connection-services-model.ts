@@ -4,7 +4,7 @@ import {
   type CatalogueEntryOffer,
   type CataloguePartName
 } from "./connection-catalogue-model";
-import { ownServerEntryOf, type OwnServerEntry } from "./own-server-model";
+import { listedOwnServer, ownServerEntryOf, type OwnServerEntry } from "./own-server-model";
 
 // "Dienste" on the Connections page (CAT-PAGE): one card per catalogue entry the reader can act
 // on, with what is true of it here. Pure: the page reads the entries, the Connections and the
@@ -94,8 +94,12 @@ export function serviceCards(input: {
   };
 
   for (const entry of entriesToShow(input.entries)) {
+    // A person's own server is never the instance's install of an entry, and another
+    // person's, which an admin's list shows, says nothing of the reader's.
     const installed = input.connections.find(
-      (connection) => connection.attributes?.catalogueEntry === entry.id
+      (connection) =>
+        connection.attributes?.catalogueEntry === entry.id &&
+        listedOwnServer(connection) === undefined
     );
     const own = input.mine.find(
       (row) =>
@@ -121,6 +125,7 @@ export function serviceCards(input: {
     }
   }
 
+  // Only the reader's own servers count: `mine` lists no other person's.
   for (const entry of input.ownEntries) {
     const row = input.mine.find(
       ({ ownServer, ...candidate }) =>

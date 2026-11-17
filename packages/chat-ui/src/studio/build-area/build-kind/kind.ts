@@ -1,6 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 import type { AvatarKind, GenericIconKey } from "@work-shape/catalyst-ui";
-import type { TranslationKey } from "../../../shared/i18n";
+import type { TranslationContextValue, TranslationKey } from "../../../shared/i18n";
 import type { BuildWithAgentCopy } from "../../build-with-agent-empty";
 import type { BuildAsset, BuildAssetRow } from "./asset";
 import type { BuildCreateDialogProps, BuildImportDialogProps } from "./create-dialog-props";
@@ -56,6 +56,24 @@ interface BuildKindBase {
     filter: BuildListLeadFilter;
     children(lead: BuildListLead): ReactNode;
   }>;
+  /**
+   * Whom a row's asset is for, in place of where it sits, where the kind knows better: such as
+   * a person's own server, which only that person uses, whatever its owner. Without it, or
+   * where it answers nothing, the row names the asset's place.
+   */
+  rowPlace?(
+    asset: BuildAssetRow,
+    t: TranslationContextValue["t"]
+  ): { scope: "instance" | "workspace" | "personal"; name: string } | undefined;
+  /**
+   * Rows that stand in a section of their own below the list, under `title`, such as other
+   * people's own servers an admin sees: the list leaves them out. The search narrows them too.
+   */
+  listAside?: {
+    title: TranslationKey;
+    description?: TranslationKey;
+    holds(asset: BuildAssetRow): boolean;
+  };
   /** The row's badges, such as the default marker. */
   badges?(asset: BuildAssetRow, t: (key: TranslationKey) => string): ReactNode;
   /**

@@ -383,6 +383,43 @@ describe("the owner's rights, and nobody else's (check 77)", () => {
     expect(JSON.stringify(call.result)).toContain("not_owner");
   });
 
+  it("names whose it is on a list: the reader's own, or another person's by name", async () => {
+    const listPath = apiOperations["assets.list"].buildPath({ params: { kind: "connection" } });
+    const rowsOf = async (cookie: string) => {
+      const answer = await request("GET", `${listPath}?limit=200`, { cookie });
+      expect(answer.status).toBe(200);
+      return z
+        .object({
+          items: z.array(
+            z.object({
+              name: z.string(),
+              attributes: z.record(z.string(), z.union([z.string(), z.boolean()])).optional()
+            })
+          )
+        })
+        .parse(JSON.parse(answer.text)).items;
+    };
+    // The admin's own server, which the admin's list names as theirs.
+    expect((await put("alice-notes", own(), alice)).status).toBe(200);
+    try {
+      const rows = await rowsOf(alice);
+      const mine = rows.find((row) => row.name === "alice-notes");
+      expect(mine?.attributes).toMatchObject({ ownServer: "reader" });
+      expect(mine?.attributes).not.toHaveProperty("ownerLabel");
+      const carols = rows.filter((row) => row.name.startsWith("carol-"));
+      expect(carols.length).toBeGreaterThan(0);
+      for (const row of carols) {
+        expect(row.attributes).toMatchObject({ ownServer: "other", ownerLabel: "Carol" });
+      }
+      // A Connection nobody added for themselves says nothing of an owner.
+      for (const row of rows.filter((each) => !/^(alice|carol|dave)-/u.test(each.name))) {
+        expect(row.attributes ?? {}).not.toHaveProperty("ownServer");
+      }
+    } finally {
+      expect(await world.deleteConnection("alice-notes", alice)).toBe(200);
+    }
+  });
+
   it("lets an admin read it, switch it off and delete it, and nothing more", async () => {
     expect((await request("GET", assetPath("carol-notes"), { cookie: alice })).status).toBe(200);
     expect(

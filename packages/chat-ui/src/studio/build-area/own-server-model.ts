@@ -33,6 +33,27 @@ export function ownServerEntryOf(
   );
 }
 
+/** Whose own server a row of the Connections list is, as the instance's list names it. */
+export type ListedOwnServer =
+  | { owner: "reader" }
+  /** Another person's, by their name now: empty for an account that is gone. */
+  | { owner: "other"; label: string };
+
+/**
+ * Whose own server a Connection of the list is (PMCP): the reader's, another person's, which an
+ * admin sees and may only switch off or delete, or nobody's for any other Connection.
+ */
+export function listedOwnServer(row: {
+  attributes?: Record<string, unknown> | undefined;
+}): ListedOwnServer | undefined {
+  const { ownServer, ownerLabel } = row.attributes ?? {};
+  if (ownServer === "reader") return { owner: "reader" };
+  if (ownServer === "other") {
+    return { owner: "other", label: typeof ownerLabel === "string" ? ownerLabel.trim() : "" };
+  }
+  return undefined;
+}
+
 /** What the tools list starts with where an entry names the server's tools (PMCP-CAT). */
 export interface EntryToolStart {
   /** Ticked at the start: the tools that read, less those the entry calls changing. */
