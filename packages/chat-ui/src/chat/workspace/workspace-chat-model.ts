@@ -102,6 +102,7 @@ import { useConversationListRefresh } from "./use-conversation-list-refresh";
 import { useUnreadableDockConversation } from "./use-workspace-dock";
 import {
   activeAgentNameFor,
+  composerAgentFor,
   conversationAgentPickFor,
   isOwnChat,
   outsideReaderNote,
@@ -128,6 +129,7 @@ import {
 } from "./workspace-ui-state";
 export {
   activeAgentNameFor,
+  composerAgentFor,
   conversationAgentPickFor,
   isAbandonedDraftConversation,
   isOwnChat,
@@ -850,7 +852,12 @@ export function useWorkspaceChatModel({
       goToDefaultChat(activeCollaborationWorkspaceId, { replace: true });
     }
   }, [activeCollaborationWorkspaceId, areaClosed, goToDefaultChat]);
-  const activeAgent = config?.agents.find((agent) => agent.name === activeAgentName);
+  // Try on an agent's page sends to the agent under construction, whatever was picked elsewhere.
+  const tryAgentName = docked && dock.tab === "try" ? dock.tryAgent : undefined;
+  const activeAgent = composerAgentFor(config?.agents, {
+    tryAgent: tryAgentName,
+    activeAgentName
+  });
   const selectedThread =
     threadQuery.data?.conversation.id === selectedConversationId ? threadQuery.data : undefined;
   // What an outside reader's composer says of their agent (CHAT-SHARE-6): the agent their turns
@@ -1357,7 +1364,7 @@ export function useWorkspaceChatModel({
       draft: activeDraft.draft,
       composerFocusRequestId: chrome.composerFocusRequestId,
       locale: activeLocale,
-      selectedAgentName: activeAgentName,
+      selectedAgentName: tryAgentName ?? activeAgentName,
       selectableModels,
       personalData: conversationPersonalData,
       noModelForPersonalData: noModelAllowed,

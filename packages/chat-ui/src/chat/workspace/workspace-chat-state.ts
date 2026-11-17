@@ -152,6 +152,19 @@ export function conversationAgentPickFor(input: {
 }
 
 /**
+ * The agent the composer sends to and offers the models of. Try on an agent's page sends to the
+ * agent under construction (section 4.7c), never to the one picked for other conversations: its
+ * models only, and none where the instance lists that agent with none, so the run takes its own.
+ */
+export function composerAgentFor<Agent extends { name: string }>(
+  agents: readonly Agent[] | undefined,
+  input: { tryAgent: string | undefined; activeAgentName: string | undefined }
+): Agent | undefined {
+  const name = input.tryAgent ?? input.activeAgentName;
+  return agents?.find((agent) => agent.name === name);
+}
+
+/**
  * The agent of each run of the open conversation as its thread names them, with the run underway
  * added where the thread was read before it started (T30).
  */
