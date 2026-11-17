@@ -6,6 +6,7 @@ import {
   ModelCard,
   ModelPicker,
   agentModelSelection,
+  composerAgentFor,
   conversationModelPicks,
   modelReasoningEffortSelection,
   type AgentSelectableModel
@@ -67,6 +68,31 @@ describe("agent model selection", () => {
       selectableModels: [],
       selectedModel: undefined,
       noModelAllowed: false
+    });
+  });
+
+  describe("in Try on an agent's page", () => {
+    const agents = [
+      { name: "chooser", ...chooser },
+      { name: "fixed", ...fixed }
+    ];
+
+    it("offers the tried agent's models, not those of the agent picked elsewhere", () => {
+      const tried = composerAgentFor(agents, { tryAgent: "fixed", activeAgentName: "chooser" });
+      // The pick made with the other agent falls back to the tried agent's own model.
+      const selection = agentModelSelection(tried, "terra");
+      expect(selection.selectableModels.map((model) => model.bindingId)).toEqual(["luna"]);
+      expect(selection.selectedModel?.bindingId).toBe("luna");
+    });
+
+    it("offers no model for a tried agent the instance does not list, so the run takes its own", () => {
+      const tried = composerAgentFor(agents, { tryAgent: "draft", activeAgentName: "chooser" });
+      expect(agentModelSelection(tried, "terra").selectedModel).toBeUndefined();
+    });
+
+    it("keeps the conversation's agent and the pick outside Try", () => {
+      const agent = composerAgentFor(agents, { tryAgent: undefined, activeAgentName: "chooser" });
+      expect(agentModelSelection(agent, "terra").selectedModel).toEqual(terra);
     });
   });
 
