@@ -13,6 +13,11 @@ export const connections = defineTranslations({
       "This connection comes with the system setup. The technical team changes it there; it cannot be changed here.",
     "connections.new": "New connection",
     "connections.yours": "Your connections",
+    "connections.othersOwn": "Added by others",
+    "connections.othersOwnText":
+      "Servers other people added for themselves. Only they can use them; you can switch them off or delete them.",
+    "connections.onlyFor": "Only for {name}",
+    "connections.onlyForDeleted": "Only for a deleted account",
     "connections.titleLabel": "Name",
     "connections.deleteTitle": "Delete connection '{name}'?",
     "connections.deleteDescription":
@@ -341,6 +346,11 @@ export const connections = defineTranslations({
       "Diese Verbindung gehört zur Einrichtung des Systems. Das technische Team ändert sie dort; hier lässt sie sich nicht ändern.",
     "connections.new": "Neue Verbindung",
     "connections.yours": "Deine Verbindungen",
+    "connections.othersOwn": "Von anderen hinzugefügt",
+    "connections.othersOwnText":
+      "Server, die andere Personen für sich selbst hinzugefügt haben. Nur sie können sie nutzen; du kannst sie ausschalten oder löschen.",
+    "connections.onlyFor": "Nur für {name}",
+    "connections.onlyForDeleted": "Nur für ein gelöschtes Konto",
     "connections.titleLabel": "Name",
     "connections.deleteTitle": "Verbindung „{name}“ löschen?",
     "connections.deleteDescription":

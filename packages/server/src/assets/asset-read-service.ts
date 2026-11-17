@@ -25,7 +25,9 @@ import {
   getSubjectUserId,
   isAppError,
   isAuthenticatedServicePrincipal,
+  isOwnServerOwner,
   liveRevisionId,
+  ownerOnlyOwnerOf,
   ownerOnlyResource,
   type ActorAccess,
   type AuthenticatedIdentity,
@@ -278,6 +280,10 @@ export class AssetReadWorkflow {
         : []
       ).map((state) => [state.connectionAssetId, state.health])
     );
+    // A person's own server says whose it is: the reader's, or another person's by name, so a
+    // list that shows it to an admin does not read as theirs (PMCP).
+    const ownServers =
+      kind.kind === "connection" ? await this.ownServerAttributes(call, records) : undefined;
     // The Apps that start each Workflow of the page, from one pass over the Apps.
     const appCallers =
       kind.kind === "workflow" && records.length > 0
@@ -311,7 +317,11 @@ export class AssetReadWorkflow {
       // Health is a `connection.read` field; use holders see the published summary only.
       const attributes =
         kind.kind === "connection"
-          ? { ...summary.attributes, health: health.get(record.id) ?? "unknown" }
+          ? {
+              ...summary.attributes,
+              health: health.get(record.id) ?? "unknown",
+              ...ownServers?.get(record.id)
+            }
           : summary.attributes;
       return {
         id: record.id,
@@ -330,6 +340,35 @@ export class AssetReadWorkflow {
         updatedAt: record.updatedAt
       };
     });
+  }
+
+  /**
+   * What a list says of each person's own server among the records, by asset id: `ownServer`
+   * is `reader` for the reader's own and `other` for another person's, which also names its
+   * owner as `ownerLabel`, the account's name now (empty for an account that is gone).
+   */
+  private async ownServerAttributes(
+    call: AssetCall,
+    records: readonly ConfigAssetRecord[]
+  ): Promise<Map<string, Record<string, string>>> {
+    const labelOf = createPersonLabelLookup(
+      this.options.stores.users,
+      this.options.clientInstanceId
+    );
+    const entries = await Promise.all(
+      records.map(async (record): Promise<[string, Record<string, string>] | undefined> => {
+        const owner = ownerOnlyOwnerOf(record.config);
+        if (owner === undefined) return undefined;
+        if (isOwnServerOwner(call.actor, record.config)) {
+          return [record.id, { ownServer: "reader" }];
+        }
+        return [
+          record.id,
+          { ownServer: "other", ownerLabel: owner === "" ? "" : await labelOf(owner, "") }
+        ];
+      })
+    );
+    return new Map(entries.filter((entry) => entry !== undefined));
   }
 
   /** The right a read of the revision the call names asks. */

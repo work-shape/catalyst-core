@@ -19,6 +19,7 @@ import {
   Picker,
   PickerButton,
   RegistryIcon,
+  ScopeChip,
   Section,
   SkeletonList,
   SkeletonPage,
@@ -743,11 +744,94 @@ function BuildList({
   const ListHead = editable?.ListHead;
   const unfiltered = source.useList(entry.kind, { text: "" });
 
+  // A row of the list, or of the kind's section below it (`listAside`).
+  const assetRow = (asset: BuildAssetRow) => {
+    const title = asset.title.trim() || asset.name;
+    const own = entry.row?.(asset, t);
+    const rowText = entry.rowText?.(asset)?.trim();
+    const RowLine = entry.RowLine;
+    const removable = rowRemovable(asset);
+    const place = entry.rowPlace?.(asset, t);
+    return (
+      <ListRow
+        key={asset.name}
+        {...(removable
+          ? {
+              actions: (
+                <IconButton
+                  label={
+                    isEditableKind(entry) && entry.rowRemoveLabel
+                      ? t(entry.rowRemoveLabel, { name: title })
+                      : t("configDelete")
+                  }
+                  size="sm"
+                  variant="ghost"
+                  data-build-row-remove={asset.name}
+                  onClick={() => setRemoving(asset)}
+                >
+                  <Trash2 aria-hidden="true" />
+                </IconButton>
+              ),
+              actionsVisible: true
+            }
+          : {})}
+        leading={own?.leading ?? <RowMark entry={entry} title={title} />}
+        title={title}
+        // A kind's own line is a sentence, read whole.
+        descriptionWraps={!own && RowLine !== undefined ? "always" : false}
+        description={
+          own ? own.description : RowLine ? <RowLine asset={asset} /> : rowText || undefined
+        }
+        // Every row says where the asset sits, in the words of the ladder: Nur ich, the
+        // team's name or Alle, the same chip as on its page, unless the kind says whom it is
+        // for, as of a person's own server (`rowPlace`).
+        chips={
+          <>
+            {place ? (
+              <ScopeChip size="sm" scope={place.scope} name={place.name} />
+            ) : (
+              <AssetPlaceLine owner={asset.scope} />
+            )}
+            {entry.badges?.(asset, t)}
+          </>
+        }
+        time={
+          <time
+            className="hidden sm:inline"
+            dateTime={asset.updatedAt}
+            title={formatDateTime(asset.updatedAt, locale)}
+          >
+            {formatUpdated(asset.updatedAt, now, locale)}
+          </time>
+        }
+        link={
+          opens ? (
+            <a
+              href={hrefOf(asset.name)}
+              onClick={(event) => {
+                if (opensHere(event)) {
+                  event.preventDefault();
+                  openRow(asset);
+                }
+              }}
+            />
+          ) : undefined
+        }
+      />
+    );
+  };
+  const aside = entry.listAside;
+  const inAside = (asset: BuildAssetRow) => aside?.holds(asset) === true;
+  const asideRows = aside ? (list.rows ?? []).filter(inAside) : [];
+
   // The rows a kind adds come first, in the same list, under the same search and filters.
   const listBody = (lead: BuildListLead) => {
     const leadRows = lead.rows;
     // Where the assets could not be read, the kind's own rows still show under the list's error.
-    const rows = list.rows ?? (listError && leadRows?.length ? [] : undefined);
+    // Rows of the kind's section below the list (`listAside`) stand there, not here.
+    const rows = (list.rows ?? (listError && leadRows?.length ? [] : undefined))?.filter(
+      (asset) => !inAside(asset)
+    );
     return (
       <>
         {listError}
@@ -833,81 +917,7 @@ function BuildList({
                     actionsVisible
                   />
                 ))}
-                {rows.map((asset) => {
-                  const title = asset.title.trim() || asset.name;
-                  const own = entry.row?.(asset, t);
-                  const rowText = entry.rowText?.(asset)?.trim();
-                  const RowLine = entry.RowLine;
-                  const removable = rowRemovable(asset);
-                  return (
-                    <ListRow
-                      key={asset.name}
-                      {...(removable
-                        ? {
-                            actions: (
-                              <IconButton
-                                label={
-                                  isEditableKind(entry) && entry.rowRemoveLabel
-                                    ? t(entry.rowRemoveLabel, { name: title })
-                                    : t("configDelete")
-                                }
-                                size="sm"
-                                variant="ghost"
-                                data-build-row-remove={asset.name}
-                                onClick={() => setRemoving(asset)}
-                              >
-                                <Trash2 aria-hidden="true" />
-                              </IconButton>
-                            ),
-                            actionsVisible: true
-                          }
-                        : {})}
-                      leading={own?.leading ?? <RowMark entry={entry} title={title} />}
-                      title={title}
-                      // A kind's own line is a sentence, read whole.
-                      descriptionWraps={!own && RowLine !== undefined ? "always" : false}
-                      description={
-                        own ? (
-                          own.description
-                        ) : RowLine ? (
-                          <RowLine asset={asset} />
-                        ) : (
-                          rowText || undefined
-                        )
-                      }
-                      // Every row says where the asset sits, in the words of the ladder: Nur
-                      // ich, the team's name or Alle, the same chip as on its page.
-                      chips={
-                        <>
-                          <AssetPlaceLine owner={asset.scope} />
-                          {entry.badges?.(asset, t)}
-                        </>
-                      }
-                      time={
-                        <time
-                          className="hidden sm:inline"
-                          dateTime={asset.updatedAt}
-                          title={formatDateTime(asset.updatedAt, locale)}
-                        >
-                          {formatUpdated(asset.updatedAt, now, locale)}
-                        </time>
-                      }
-                      link={
-                        opens ? (
-                          <a
-                            href={hrefOf(asset.name)}
-                            onClick={(event) => {
-                              if (opensHere(event)) {
-                                event.preventDefault();
-                                openRow(asset);
-                              }
-                            }}
-                          />
-                        ) : undefined
-                      }
-                    />
-                  );
-                })}
+                {rows.map(assetRow)}
               </List>
             )}
             {list.hasMore ? (
@@ -983,6 +993,16 @@ function BuildList({
       ) : (
         listed
       )}
+      {aside && asideRows.length > 0 ? (
+        <Section
+          layout="stacked"
+          title={t(aside.title)}
+          description={aside.description ? t(aside.description) : undefined}
+          data-build-list-aside=""
+        >
+          <List aria-label={t(aside.title)}>{asideRows.map(assetRow)}</List>
+        </Section>
+      ) : null}
       {cliOpen ? (
         <Dialog
           open

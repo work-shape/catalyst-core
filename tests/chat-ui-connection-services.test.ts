@@ -154,6 +154,37 @@ describe("the services on the Connections page", () => {
     ).toEqual([["notes", "start", "add-own"]]);
   });
 
+  it("counts only the reader's own servers, never another person's an admin's list shows", () => {
+    const others = [
+      {
+        name: "notes-carol",
+        attributes: { ownServer: "other", ownerLabel: "Carol", catalogueEntry: "notes" }
+      }
+    ];
+    expect(
+      statuses(
+        serviceCards({
+          entries: [entry("notes")],
+          ownEntries: [notes],
+          connections: others,
+          mine: [],
+          mayCreate: true
+        })
+      )
+    ).toEqual([["notes", "start", "install"]]);
+    expect(
+      statuses(
+        serviceCards({
+          entries: [],
+          ownEntries: [notes],
+          connections: others,
+          mine: [],
+          mayCreate: true
+        })
+      )
+    ).toEqual([["notes", "start", "add-own"]]);
+  });
+
   it("shows one card for an entry that is both an admin's and a person's own, at its furthest", () => {
     const cards = serviceCards({
       entries: [entry("notes")],
