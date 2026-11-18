@@ -7,6 +7,65 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.39 — 2026-11-19
+
+### Added
+
+- **Connections:** The connector type `imap` lists its folders and puts drafts into the mailbox.
+  `list_folders` (reading) answers each of the Connection's folders with its message and unread
+  counts, without opening one. `create_draft` (changing, never ticked by the setup) appends one
+  plain-text draft to the drafts folder, flagged `\Draft` and `\Seen`: the folder the new setting
+  `draftsFolder` names, or else the one the server marks as `\Drafts`. With `inReplyToId` it sets
+  `In-Reply-To` and `References` from the answered message. It sends nothing. Addresses, subject
+  and text are checked before the server is contacted, so nothing an agent writes adds a header,
+  and with the instance default each draft waits for the person's confirmation in the chat. Its
+  Operation Run keeps no input or output, as every call of the type. The card "Mailbox (IMAP)"
+  asks for the drafts folder under Technical details. The login uses `AUTHENTICATE PLAIN` with
+  the password in UTF-8 where the server offers it, which a test now covers.
+- **Knowledge Bases:** a document type can set `readByModel: true`: every page of its documents
+  is read by the instance's page-reading model, where `capabilities.documentProcessing.extraction.ocr`
+  names one (KB-10). The type's processor revision gets `+model`, so turning it on or off states
+  and reads its documents again with the next publish.
+- **Usage:** the purpose `knowledge_page_reading` records the model calls that read Knowledge Base
+  pages. It is Knowledge Base ingestion, like embedding and field extraction, and counts against
+  no chat budget.
+- **Capabilities:** a capability can hand a model images (`{ type: "image" }`, JPEG or PNG).
+
+### Changed
+
+- **Studio:** A Connection that signs in with OAuth leads its page with what a person needs:
+  whether it is connected, since when and by whom, the account where the provider names one,
+  and Sign in again. The provider's host, the permissions granted, the client ID, the redirect
+  URI and the approval link for IT are folded under Technical details. The Status section no
+  longer repeats the sign-in state, and the "provider names no account" row is gone.
+- **Knowledge Bases:** the `text` processor is at version 2: the document worker reads a PDF's
+  text layer with PDFium instead of pdfplumber, about 30 times faster on long PDFs (a 222-page
+  PDF in 0.7 s instead of 18 s on one core). The next publish of a Knowledge Base states the
+  documents it reads again and what that costs; they are read again only once it is confirmed.
+  Release the platform and the capabilities together.
+- **Knowledge Bases:** A Knowledge Base takes files up to 100 MiB unless release config sets
+  `knowledge.maxFileBytes` (was 25 MiB). The text of one document stays bounded at 25 MiB
+  (`KNOWLEDGE_DOCUMENT_TEXT_MAX_BYTES`, split from `KNOWLEDGE_FILE_MAX_BYTES`), so a TXT or
+  Markdown file above 25 MiB is still refused, and the Add and Upload dialogs now refuse it before
+  sending and name 25 MiB. The Upload dialog holds to the instance's `maxFileBytes` instead of the
+  default. `knowledge.pageCacheBytes` must hold one file at `knowledge.maxFileBytes`, no longer
+  25 MiB as well: a config that sets `pageCacheBytes` below 100 MiB without `maxFileBytes` is
+  refused at load. A publish's conservative embedding estimate counts at most 25 MiB of text per
+  unestimated document. Items of a synced source that failed with `knowledge_file_over_limit`
+  under the old limit stay failed until they are retried; Retry with that failure code fetches
+  them again.
+
+### Fixed
+
+- **Chat:** Try on an agent's page offers only the tried agent's models. A model picked with another agent
+  no longer carries into it: the composer falls back to the tried agent's own model, so sending
+  no longer fails with "Model binding ... is not available for user selection".
+- **Studio:** Connections lists other people's own MCP servers, which an admin sees to switch off
+  or delete, in a section of their own, "Added by others", each row "Only for" its owner instead
+  of "Everyone". "Your connections" holds the reader's own servers, marked "Only me", and the
+  shared Connections. The Connections list names whose own server a row is (`ownServer`,
+  `ownerLabel`), and a catalogue card counts only the reader's own servers.
+
 ## 0.8.0-rc.38 — 2026-11-16
 
 ### Added
