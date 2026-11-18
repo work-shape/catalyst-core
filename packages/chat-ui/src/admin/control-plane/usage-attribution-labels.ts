@@ -8,6 +8,7 @@ const PURPOSE_LABELS: Record<string, TranslationKey> = {
   guardrail_judge: "settings.usagePurposeGuardrailJudge",
   knowledge_embedding: "settings.usagePurposeKnowledgeEmbedding",
   knowledge_field_extraction: "settings.usagePurposeKnowledgeFieldExtraction",
+  knowledge_page_reading: "settings.usagePurposeKnowledgePageReading",
   knowledge_query: "settings.usagePurposeKnowledgeQuery",
   transcription: "settings.usagePurposeTranscription"
 };

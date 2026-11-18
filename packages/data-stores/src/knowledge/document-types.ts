@@ -40,6 +40,9 @@ export const knowledgeDocumentTypesSchema = z
             "documentTypes[].processor must be text or tables. ocr arrives with KB-9; use a data Workflow for other processing."
         })
         .default("text"),
+      // KB-10: every page goes to the instance's page-reading model
+      // (`capabilities.documentProcessing.extraction.ocr`), where it names one.
+      readByModel: z.boolean().optional(),
       workflow: z
         .never({
           error:
@@ -61,6 +64,8 @@ export interface KnowledgeProcessing {
   type: string;
   processor: KnowledgeBuiltinProcessor;
   processorRevision: string;
+  /** Set only when true, so the key of every other type stays as it was. */
+  readByModel?: true;
   chunking: KnowledgeChunkingStrategy;
   schema?: KnowledgeDocumentType["schema"];
   key: string;
@@ -83,7 +88,9 @@ export function knowledgeProcessingOf(
   const processing = {
     type: type?.id ?? "default",
     processor,
-    processorRevision: `${processor}@${KNOWLEDGE_PROCESSOR_VERSIONS[processor]}`,
+    // A model reading is another extraction, so it is not reused for the type without one.
+    processorRevision: `${processor}@${KNOWLEDGE_PROCESSOR_VERSIONS[processor]}${type?.readByModel ? "+model" : ""}`,
+    ...(type?.readByModel ? { readByModel: true as const } : {}),
     chunking: type?.chunking ?? defaultKnowledgeChunking(item.format),
     ...(type?.schema === undefined ? {} : { schema: type.schema })
   };

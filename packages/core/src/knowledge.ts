@@ -737,7 +737,9 @@ export type KnowledgeBuiltinProcessor = (typeof KNOWLEDGE_BUILTIN_PROCESSORS)[nu
 export const knowledgeExtractJobPayloadSchema = knowledgeContentJobPayloadSchema.extend({
   format: z.enum(KNOWLEDGE_EXTRACTED_FORMATS),
   processor: z.enum(KNOWLEDGE_BUILTIN_PROCESSORS).optional(),
-  processorRevision: z.string().optional()
+  processorRevision: z.string().optional(),
+  /** The document's type sends every page to the instance's page-reading model (KB-10). */
+  readByModel: z.literal(true).optional()
 });
 
 export type KnowledgeExtractJobPayload = z.infer<typeof knowledgeExtractJobPayloadSchema>;

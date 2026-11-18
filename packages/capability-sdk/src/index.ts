@@ -309,13 +309,18 @@ export interface ClientInstanceCapabilityBrand {
 /** What a capability calls a model for. It names the call on its usage record. */
 export type CapabilityModelPurpose = Extract<
   ModelSystemPurpose,
-  "document_extraction" | "knowledge_field_extraction" | "guardrail_judge"
+  | "document_extraction"
+  | "knowledge_field_extraction"
+  | "knowledge_page_reading"
+  | "guardrail_judge"
 >;
 
 /** What a capability hands a model to read. */
 export type CapabilityModelContentPart =
   | { type: "text"; text: string }
-  | { type: "document"; mimeType: "application/pdf"; data: Uint8Array };
+  | { type: "document"; mimeType: "application/pdf"; data: Uint8Array }
+  /** A rendered page or part of one, for a model that reads images. */
+  | { type: "image"; mimeType: "image/jpeg" | "image/png"; data: Uint8Array };
 
 /** One call of a capability to a model of the instance. */
 export interface CapabilityModelCall {
