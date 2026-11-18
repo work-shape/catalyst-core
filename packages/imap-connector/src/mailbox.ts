@@ -24,7 +24,8 @@ import type { ImapSettings } from "./settings";
 //   TLS name and the certificate checked against it. The transport has no upgrade, so a server
 //   that asks for STARTTLS gets none, and nothing goes out before the handshake.
 // - Folders are opened with EXAMINE (read-only) and every body section is read with
-//   BODY.PEEK, never BINARY: the server keeps every flag as it was.
+//   BODY.PEEK, never BINARY: the server keeps every flag as it was. The one write is APPEND
+//   of a draft, which adds a message and changes none.
 // - The library logs nothing, and none of its errors leaves this file: some of them carry the
 //   command as it was sent, a login's password included, or the server's text. A failure is
 //   one reason of the platform's own.
@@ -84,6 +85,18 @@ export interface MailboxSession {
     uid: number,
     wanted: readonly { part: string; maxBytes: number }[]
   ): Promise<Map<string, Buffer>>;
+  /** The References header of one message of the folder opened last, as the server sent it. */
+  references(uid: number): Promise<string | undefined>;
+  /** How many messages one folder holds and how many are unread, without opening it. */
+  status(folder: string): Promise<{ messages: number; unseen: number }>;
+  /** The folder the server marks as `\Drafts`, where there is one. */
+  draftsFolder(): Promise<string | undefined>;
+  /** Adds one message to a folder with these flags; the UID where the server says it. */
+  append(
+    folder: string,
+    message: Buffer,
+    flags: readonly string[]
+  ): Promise<{ uid?: number; uidValidity?: string }>;
   /** Logs out and closes the socket; never throws. */
   close(): Promise<void>;
 }
@@ -97,6 +110,8 @@ const SOCKET_TIMEOUT_MS = 20_000;
 const MAX_LITERAL_BYTES = 2 * 1024 * 1024;
 const MAX_LINE_BYTES = 1024 * 1024;
 const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
+/** The most of a References header read for a reply. */
+const REFERENCES_MAX_BYTES = 16 * 1024;
 /** What the client says it is, where the server asks (RFC 2971). Nothing of the instance. */
 const CLIENT_INFO = { name: "catalyst-imap-connector" };
 
@@ -128,6 +143,7 @@ function pinnedTlsTransport(grant: EgressGrant): ImapTransport {
 interface LibraryError {
   authenticationFailed?: boolean;
   mailboxMissing?: boolean;
+  serverResponseCode?: string;
   responseStatus?: string;
   code?: string;
 }
@@ -142,12 +158,25 @@ function libraryErrorOf(error: unknown): LibraryError {
   };
   const responseStatus = text("responseStatus");
   const code = text("code");
+  const serverResponseCode = text("serverResponseCode");
   return {
     authenticationFailed: flag("authenticationFailed"),
     mailboxMissing: flag("mailboxMissing"),
+    ...(serverResponseCode === undefined ? {} : { serverResponseCode }),
     ...(responseStatus === undefined ? {} : { responseStatus }),
     ...(code === undefined ? {} : { code })
   };
+}
+
+/** Whether the server said that a folder is not there. */
+function folderMissing(error: unknown): boolean {
+  const failure = libraryErrorOf(error);
+  return (
+    failure.mailboxMissing === true ||
+    failure.code === "NotFound" ||
+    failure.serverResponseCode === "NONEXISTENT" ||
+    failure.serverResponseCode === "TRYCREATE"
+  );
 }
 
 /**
@@ -161,6 +190,8 @@ function failureOf(error: unknown, signal: AbortSignal): AppError {
   if (failure.authenticationFailed === true) return connectionCallError("upstream_unauthorized");
   if (failure.code === "CONNECT_TIMEOUT" || failure.code === "GREETING_TIMEOUT")
     return connectionCallError("upstream_timeout");
+  if (failure.serverResponseCode === "APPENDLIMIT" || failure.serverResponseCode === "TOOBIG")
+    return connectionCallError("input_invalid", "the server refuses a message this large");
   if (failure.responseStatus === "NO" || failure.responseStatus === "BAD")
     return connectionCallError("upstream_error");
   return connectionCallError("connection_unavailable");
@@ -354,6 +385,53 @@ export async function openMailboxSession(
         }
         return found;
       }),
+    references: (uid) =>
+      run(async () => {
+        const message = await client.fetchOne(
+          String(uid),
+          { uid: true, headers: ["references"] },
+          { uid: true }
+        );
+        if (message === false || message.headers === undefined) return undefined;
+        return message.headers.subarray(0, REFERENCES_MAX_BYTES).toString("latin1");
+      }),
+    async status(folder) {
+      try {
+        const status = await client.status(folder, { messages: true, unseen: true });
+        if (status === false) throw connectionCallError("upstream_error");
+        return { messages: status.messages ?? 0, unseen: status.unseen ?? 0 };
+      } catch (error) {
+        if (
+          !signal.aborted &&
+          (folderMissing(error) || libraryErrorOf(error).responseStatus === "NO")
+        )
+          throw connectionCallError("folder_not_found");
+        throw failureOf(error, signal);
+      }
+    },
+    draftsFolder: () =>
+      run(async () => {
+        const folders = await client.list();
+        const drafts = folders.find(
+          (folder) => folder.specialUse === "\\Drafts" && !folder.flags.has("\\Noselect")
+        );
+        return drafts?.path;
+      }),
+    async append(folder, message, flags) {
+      try {
+        const appended = await client.append(folder, message, [...flags]);
+        if (appended === false) throw connectionCallError("upstream_error");
+        return {
+          ...(appended.uid === undefined ? {} : { uid: appended.uid }),
+          ...(appended.uidValidity === undefined
+            ? {}
+            : { uidValidity: String(appended.uidValidity) })
+        };
+      } catch (error) {
+        if (!signal.aborted && folderMissing(error)) throw connectionCallError("folder_not_found");
+        throw failureOf(error, signal);
+      }
+    },
     close
   };
 }

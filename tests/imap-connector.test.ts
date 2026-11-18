@@ -132,6 +132,7 @@ describe("the Connector type imap", () => {
     port: number;
     password: string;
     folders?: string[];
+    draftsFolder?: string;
     username?: string;
     allow?: { host: string; port: number; protocol: "imaps" | "https" }[];
   }
@@ -146,13 +147,16 @@ describe("the Connector type imap", () => {
         host: HOST,
         port: setup.port,
         username: setup.username ?? USERNAME,
-        folders: setup.folders ?? ["INBOX"]
+        folders: setup.folders ?? ["INBOX"],
+        ...(setup.draftsFolder === undefined ? {} : { draftsFolder: setup.draftsFolder })
       },
       authScheme: "password",
       secretHandle: handle,
       operations: [
+        { name: "list_folders", effect: "reading", exposure: ["agent"], enabled: true },
         { name: "search_messages", effect: "reading", exposure: ["agent"], enabled: true },
-        { name: "get_message", effect: "reading", exposure: ["agent"], enabled: true }
+        { name: "get_message", effect: "reading", exposure: ["agent"], enabled: true },
+        { name: "create_draft", effect: "changing", exposure: ["agent"], enabled: true }
       ]
     });
     await applyAtCurrentRevisions(stores.configAssets, {
@@ -435,6 +439,184 @@ describe("the Connector type imap", () => {
     });
   });
 
+  describe("folders", () => {
+    it("lists the boundary folders with their counts, without opening one", async () => {
+      const server = await serve({
+        INBOX: inbox([message(1, { flags: ["\\Seen"] }), message(2), message(3)]),
+        Orders: inbox([message(1)]),
+        Private: inbox([message(1)])
+      });
+      const w = await connect({
+        port: server.port,
+        password: server.password,
+        folders: ["INBOX", "Orders", "Gone"]
+      });
+      expect(await w.execute("list_folders")).toEqual({
+        folders: [
+          { name: "INBOX", available: true, messages: 3, unread: 2 },
+          { name: "Orders", available: true, messages: 1, unread: 1 },
+          { name: "Gone", available: false }
+        ]
+      });
+      expect(sent(server)).not.toContain("EXAMINE");
+      expect(sent(server)).not.toContain("SELECT");
+      expect(server.flagsOf("INBOX", 2)).toEqual([]);
+      expect(server.commands.map((command) => command.args).join(" ")).not.toContain("Private");
+    });
+  });
+
+  describe("drafts", () => {
+    /** The headers of a draft, unfolded, and its body decoded. */
+    function draftOf(raw: string) {
+      const [head = "", body = ""] = raw.split("\r\n\r\n");
+      const headers = new Map<string, string>();
+      for (const line of head.replace(/\r\n[ \t]+/gu, " ").split("\r\n")) {
+        const colon = line.indexOf(":");
+        headers.set(line.slice(0, colon).toLowerCase(), line.slice(colon + 1).trim());
+      }
+      // Space between two encoded words is no text (RFC 2047, 6.2).
+      const decoded = (value: string | undefined) =>
+        (value ?? "")
+          .replace(/(\?=)\s+(?==\?UTF-8\?B\?)/gu, "$1")
+          .replace(/=\?UTF-8\?B\?([^?]*)\?=/gu, (_, text: string) =>
+            Buffer.from(text, "base64").toString("utf8")
+          );
+      return {
+        headers,
+        subject: decoded(headers.get("subject")),
+        to: decoded(headers.get("to")),
+        text: Buffer.from(body.replace(/\s+/gu, ""), "base64").toString("utf8")
+      };
+    }
+
+    it("appends a draft to the server's drafts folder, flagged, in UTF-8, and sends nothing", async () => {
+      const server = await serve(
+        {
+          INBOX: inbox([message(1)]),
+          Entwürfe: { uidValidity: 3, messages: [], specialUse: "\\Drafts" }
+        },
+        { capabilities: ["SPECIAL-USE", "UIDPLUS"] }
+      );
+      const w = await connect({ port: server.port, password: server.password });
+      const result = await w.execute("create_draft", {
+        to: ["Jörg Müller <joerg@example.test>", "office@example.test"],
+        cc: ['"Team, Desk" <team@example.test>'],
+        subject: "Rückfrage zu Ihrer Anfrage",
+        text: "Guten Tag,\nvielen Dank für Ihre Nachricht.\n\nGrüße"
+      });
+      expect(result).toMatchObject({
+        folder: "Entwürfe",
+        messageId: expect.stringMatching(/^<.+@example\.test>$/u)
+      });
+      expect(result).not.toHaveProperty("id");
+      expect(server.appends).toHaveLength(1);
+      const [append] = server.appends;
+      expect(required(append).folder).toBe("Entwürfe");
+      expect(required(append).flags.sort()).toEqual(["\\Draft", "\\Seen"]);
+      const draft = draftOf(required(append).raw);
+      expect(draft.headers.get("from")).toBe(USERNAME);
+      expect(draft.to).toBe("Jörg Müller <joerg@example.test>, office@example.test");
+      expect(draft.headers.get("cc")).toBe('"Team, Desk" <team@example.test>');
+      expect(draft.subject).toBe("Rückfrage zu Ihrer Anfrage");
+      expect(draft.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+      expect(draft.headers.has("in-reply-to")).toBe(false);
+      expect(draft.text).toBe("Guten Tag,\r\nvielen Dank für Ihre Nachricht.\r\n\r\nGrüße");
+      // The raw message is ASCII: every header and line is at most 998 characters.
+      expect(/^[\x20-\x7e\r\n\t]*$/u.test(required(append).raw)).toBe(true);
+      expect(sent(server)).not.toContain("SELECT");
+      expect(sent(server).some((name) => name.includes("STORE"))).toBe(false);
+    });
+
+    it("answers in the thread: In-Reply-To and References from the answered message, read with PEEK", async () => {
+      const server = await serve(
+        {
+          INBOX: inbox([
+            message(4, {
+              messageId: "<m4@example.test>",
+              references: "<m1@example.test> <m2@example.test>"
+            })
+          ]),
+          Drafts: { uidValidity: 9, messages: [] }
+        },
+        { capabilities: ["UIDPLUS"] }
+      );
+      const w = await connect({
+        port: server.port,
+        password: server.password,
+        folders: ["INBOX", "Drafts"],
+        draftsFolder: "Drafts"
+      });
+      const [found] = pageOf(await w.execute("search_messages", {})).items;
+      const result = await w.execute("create_draft", {
+        to: ["sender4@example.test"],
+        subject: "Re: Request 4",
+        text: "Thanks.",
+        inReplyToId: required(found).id
+      });
+      expect(result).toMatchObject({ folder: "Drafts", id: expect.any(String) });
+      const draft = draftOf(required(server.appends[0]).raw);
+      expect(draft.headers.get("in-reply-to")).toBe("<m4@example.test>");
+      expect(draft.headers.get("references")).toBe(
+        "<m1@example.test> <m2@example.test> <m4@example.test>"
+      );
+      expect(server.flagsOf("INBOX", 4)).toEqual([]);
+      expect(sent(server)).not.toContain("SELECT");
+    });
+
+    it("refuses a header written into a value, and an answered id outside the boundary, before it connects", async () => {
+      const server = await serve({ INBOX: inbox([]), Drafts: { uidValidity: 1, messages: [] } });
+      const w = await connect({
+        port: server.port,
+        password: server.password,
+        draftsFolder: "Drafts"
+      });
+      const base = { to: ["a@example.test"], subject: "Hello", text: "Body" };
+      expect(
+        await reasonOf(
+          w.execute("create_draft", { ...base, subject: "Hello\r\nBcc: x@example.test" })
+        )
+      ).toBe("input_invalid");
+      expect(
+        await reasonOf(
+          w.execute("create_draft", { ...base, to: ["a@example.test\r\nBcc: x@example.test"] })
+        )
+      ).toBe("input_invalid");
+      expect(
+        await reasonOf(
+          w.execute("create_draft", { ...base, to: ["Name <a@example.test>, b@example.test"] })
+        )
+      ).toBe("input_invalid");
+      expect(await reasonOf(w.execute("create_draft", { ...base, text: "a\u0000b" }))).toBe(
+        "input_invalid"
+      );
+      const outside = Buffer.from(JSON.stringify([1, "Private", "7", 1])).toString("base64url");
+      expect(await reasonOf(w.execute("create_draft", { ...base, inReplyToId: outside }))).toBe(
+        "message_not_found"
+      );
+      expect(server.connections()).toBe(0);
+      expect(server.appends).toEqual([]);
+    });
+
+    it("answers folder_not_found where the server marks no drafts folder and the settings name none", async () => {
+      const server = await serve({ INBOX: inbox([]) }, { capabilities: ["SPECIAL-USE"] });
+      const w = await connect({ port: server.port, password: server.password });
+      expect(await reasonOf(w.execute("create_draft", { subject: "Hello", text: "Body" }))).toBe(
+        "folder_not_found"
+      );
+      expect(server.appends).toEqual([]);
+    });
+
+    it("tests the drafts folder the settings name", async () => {
+      const server = await serve({ INBOX: inbox([]) });
+      const w = await connect({
+        port: server.port,
+        password: server.password,
+        draftsFolder: "Drafts"
+      });
+      expect(await reasonOf(w.test())).toBe("folder_not_found");
+    });
+  });
+
   describe("test", () => {
     it("is ready after a login and an EXAMINE of every folder", async () => {
       const server = await serve({ INBOX: inbox([]), Orders: inbox([]) });
@@ -445,6 +627,17 @@ describe("the Connector type imap", () => {
       });
       expect(await w.test()).toEqual({ status: "ready" });
       expect(sent(server).filter((name) => name === "EXAMINE")).toHaveLength(2);
+    });
+
+    it("logs in with AUTHENTICATE PLAIN in UTF-8 where the server offers it, never LOGIN", async () => {
+      const server = await serve(
+        { INBOX: inbox([]) },
+        { capabilities: ["AUTH=PLAIN"], password: `Pässwört-${generateTestSecret()}` }
+      );
+      const w = await connect({ port: server.port, password: server.password });
+      expect(await w.test()).toEqual({ status: "ready" });
+      expect(sent(server)).toContain("AUTHENTICATE");
+      expect(sent(server)).not.toContain("LOGIN");
     });
 
     it("refuses a wrong password as upstream_unauthorized and repeats nothing of it", async () => {
@@ -558,7 +751,16 @@ describe("the Connector type imap", () => {
         ["operations", 0, "exposure"],
         ["operations", 1, "exposure"]
       ]);
-      expect(type.catalog?.every((operation) => operation.proposedEffect === "reading")).toBe(true);
+      expect(
+        Object.fromEntries(
+          (type.catalog ?? []).map((operation) => [operation.name, operation.proposedEffect])
+        )
+      ).toEqual({
+        list_folders: "reading",
+        search_messages: "reading",
+        get_message: "reading",
+        create_draft: "changing"
+      });
     });
   });
 });

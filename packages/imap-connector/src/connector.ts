@@ -7,9 +7,14 @@ import {
 } from "@work-shape/catalyst-core";
 import { openMailboxSession, type MailboxSession } from "./mailbox";
 import {
+  createDraft,
+  createDraftInputSchema,
   getInputSchema,
   getMessage,
   IMAP_OPERATIONS,
+  listFolders,
+  listFoldersInputSchema,
+  readDraftInput,
   readMessageId,
   readSearchInput,
   searchInputSchema,
@@ -27,7 +32,7 @@ import {
 
 /** The id a Connection names as its `connectorType`. */
 export const IMAP_CONNECTOR_TYPE = "imap";
-/** The deadline of one call: login, EXAMINE, SEARCH and FETCH. */
+/** The deadline of one call: login, EXAMINE, SEARCH and FETCH, or an APPEND. */
 export const IMAP_CALL_TIMEOUT_MS = 20_000;
 /** The largest answer of one call, as JSON. */
 export const IMAP_RESULT_MAX_BYTES = 512 * 1024;
@@ -65,8 +70,8 @@ function inputOf<T>(
 const IMAP_FORM: ConnectorTypeForm = {
   title: { en: "Mailbox (IMAP)", de: "Postfach (IMAP)" },
   description: {
-    en: "A shared mailbox an agent reads, such as a feedback address. Reading leaves every mail unread.",
-    de: "Ein gemeinsames Postfach, das ein Agent liest, etwa eine Feedback-Adresse. Lesen lässt jede Mail ungelesen."
+    en: "A shared mailbox an agent reads, such as a feedback address. Reading leaves every mail unread. An agent may put drafts into it; it sends nothing.",
+    de: "Ein gemeinsames Postfach, das ein Agent liest, etwa eine Feedback-Adresse. Lesen lässt jede Mail ungelesen. Ein Agent kann Entwürfe hineinlegen; er sendet nichts."
   },
   authScheme: "password",
   fields: [
@@ -105,6 +110,16 @@ const IMAP_FORM: ConnectorTypeForm = {
       default: "INBOX"
     },
     {
+      label: { en: "Drafts folder", de: "Entwurfsordner" },
+      help: {
+        en: "Where drafts go. Left empty, the folder the server marks as drafts.",
+        de: "Wohin Entwürfe kommen. Leer gelassen, der Ordner, den der Server als Entwürfe kennzeichnet."
+      },
+      setting: "draftsFolder",
+      optional: true,
+      advanced: true
+    },
+    {
       label: { en: "Port", de: "Port" },
       help: {
         en: `IMAP over implicit TLS, ${IMAPS_PORT} at almost every provider. Port 143 is refused.`,
@@ -125,13 +140,15 @@ const IMAP_FORM: ConnectorTypeForm = {
 /**
  * The Connector type `imap`: one functional mailbox, read over IMAP with implicit TLS and the
  * password of the Connection (MBX). It reads the folders its settings list and nothing else,
- * opens them read-only and reads bodies with BODY.PEEK, so no flag of the mailbox changes. What
- * it answers is one person's to read (`privateResults`). Building it opens no connection.
+ * opens them read-only and reads bodies with BODY.PEEK, so no flag of the mailbox changes. Its
+ * one write, `create_draft`, appends a draft to the drafts folder and sends nothing. What it
+ * answers is one person's to read (`privateResults`). Building it opens no connection.
  */
 export function createImapConnectorType(): ConnectorTypeDefinition {
   return {
     type: IMAP_CONNECTOR_TYPE,
-    description: "A functional mailbox, read over IMAP with implicit TLS. It changes nothing.",
+    description:
+      "A functional mailbox over IMAP with implicit TLS: it reads without changing a flag, and puts drafts into the drafts folder. It sends nothing.",
     settingsSchema: imapSettingsSchema,
     authSchemes: ["password"],
     secretFields: ["password"],
@@ -146,13 +163,18 @@ export function createImapConnectorType(): ConnectorTypeDefinition {
       maxParallelCalls: IMAP_MAX_PARALLEL_CALLS
     },
 
-    // The login and an EXAMINE of every folder: the server is there, takes the password and
-    // has each folder. A failure is its reason, which the Connection's health records; what
-    // the server answers is not kept.
+    // The login and an EXAMINE of every folder, and of a drafts folder the settings name: the
+    // server is there, takes the password and has each folder. A failure is its reason, which
+    // the Connection's health records; what the server answers is not kept.
     async test(context) {
       const settings = imapSettingsOf(context.connection.settings);
       await withSession(context, settings, async (session) => {
         for (const folder of settings.folders) await session.examine(folder);
+        if (
+          settings.draftsFolder !== undefined &&
+          !settings.folders.includes(settings.draftsFolder)
+        )
+          await session.examine(settings.draftsFolder);
       });
       return { status: "ready" };
     },
@@ -164,6 +186,15 @@ export function createImapConnectorType(): ConnectorTypeDefinition {
         // Folder and cursor are checked before the server is contacted.
         readSearchInput(settings, read);
         return withSession(context, settings, (session) => searchMessages(session, settings, read));
+      }
+      if (operation === "list_folders") {
+        inputOf(listFoldersInputSchema, input);
+        return withSession(context, settings, (session) => listFolders(session, settings));
+      }
+      if (operation === "create_draft") {
+        const read = inputOf(createDraftInputSchema, input);
+        readDraftInput(settings, read);
+        return withSession(context, settings, (session) => createDraft(session, settings, read));
       }
       if (operation === "get_message") {
         const { id } = inputOf(getInputSchema, input);

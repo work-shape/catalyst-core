@@ -119,8 +119,10 @@ describe("the card Postfach (IMAP)", () => {
       authScheme: "password",
       exposures: ["agent"],
       operations: [
+        { name: "list_folders", effect: "reading" },
         { name: "search_messages", effect: "reading" },
-        { name: "get_message", effect: "reading" }
+        { name: "get_message", effect: "reading" },
+        { name: "create_draft", effect: "changing" }
       ]
     });
     expect(imap.fields.map((field) => field.setting ?? "secret")).toEqual([
@@ -128,10 +130,11 @@ describe("the card Postfach (IMAP)", () => {
       "username",
       "secret",
       "folders",
+      "draftsFolder",
       "port"
     ]);
     // What the fields start with: one folder and the port of implicit TLS. Never a password.
-    expect(typedInitialValues(imap)).toEqual({ 3: "INBOX", 4: "993" });
+    expect(typedInitialValues(imap)).toEqual({ 3: "INBOX", 5: "993" });
   });
 
   it("writes a port as a number and folders as a list, and never the password", () => {
@@ -143,7 +146,8 @@ describe("the card Postfach (IMAP)", () => {
         1: "feedback@example.test",
         2: PASSWORD,
         3: "INBOX, Feedback\nArchive",
-        4: "993"
+        4: "",
+        5: "993"
       }
     );
     expect(config).toMatchObject({
@@ -173,11 +177,11 @@ describe("the card Postfach (IMAP)", () => {
       0: "imap.example.test",
       1: "feedback@example.test",
       3: "INBOX, Feedback",
-      4: "993"
+      5: "993"
     });
   });
 
-  it("connects, tests and approves both tools for agents only", async () => {
+  it("connects, tests and approves the reading tools for agents only, the draft left unticked", async () => {
     const run = testSource();
     const created = vi.fn();
     act(() =>
@@ -236,18 +240,19 @@ describe("the card Postfach (IMAP)", () => {
       }
     });
 
-    // Both reading tools ticked; "Nutzen dürfen" offers Agenten and nothing else.
+    // The three reading tools ticked, create_draft not; "Nutzen dürfen" offers Agenten only.
     expect(document.querySelector('[data-connection-typed-review="imap"]')).not.toBeNull();
     expect(
       [...document.querySelectorAll("[data-approval-surface]")].map((node) =>
         node.getAttribute("data-approval-surface")
       )
     ).toEqual(["agent"]);
-    expect(element("[data-approval-count]").textContent).toContain("2");
+    expect(element("[data-approval-count]").textContent).toContain("3");
     await click("[data-connection-approve]");
     expect(run.log.at(-1)).toBe("assets.put(1)");
     const approved = required(run.puts[1]);
     expect(approved.operations).toEqual([
+      expect.objectContaining({ name: "list_folders", effect: "reading", exposure: ["agent"] }),
       expect.objectContaining({ name: "search_messages", effect: "reading", exposure: ["agent"] }),
       expect.objectContaining({ name: "get_message", effect: "reading", exposure: ["agent"] })
     ]);

@@ -7,6 +7,7 @@ import {
   asClientInstanceId,
   asToolCallId,
   asUserId,
+  createPlatformId,
   createUserPrincipal,
   type AgentRun,
   type AuthenticatedUser,
@@ -47,12 +48,13 @@ function definition(port: number, exposure: string[] = ["agent"], username = USE
     connectorType: "imap",
     displayName: "Service mailbox",
     credentialMode: "shared",
-    settings: { host: HOST, port, username, folders: ["INBOX"] },
+    settings: { host: HOST, port, username, folders: ["INBOX"], draftsFolder: "Drafts" },
     authScheme: "password",
     enabled: true,
     operations: [
       { name: "search_messages", effect: "reading", exposure, enabled: true },
-      { name: "get_message", effect: "reading", exposure: ["agent"], enabled: true }
+      { name: "get_message", effect: "reading", exposure: ["agent"], enabled: true },
+      { name: "create_draft", effect: "changing", exposure: ["agent"], enabled: true }
     ]
   };
 }
@@ -77,7 +79,8 @@ beforeAll(async () => {
             body: { type: "text/plain", charset: "utf-8", body: `Hello, ${canary.body}.` }
           }
         ]
-      }
+      },
+      Drafts: { uidValidity: 5, messages: [] }
     }
   });
   world = await createOAuthWorld({ imapsPort: server.port });
@@ -286,6 +289,38 @@ describe("an imap Connection on the call path", () => {
     for (const value of [...Object.values(canary), USERNAME, password])
       expect(text).not.toContain(value);
     expect(server.flagsOf("INBOX", 1)).toEqual([]);
+  });
+
+  it("holds a draft for the person's confirmation, and keeps no draft in the run", async () => {
+    const p = await prepare(a, await conversation(a, "private"));
+    const before = server.connections();
+    const name = "connection.mailbox.create_draft";
+    const calls = await world.calls();
+    // The Agent Run's worker makes the call, so the run can pause for its person.
+    const held = await runOperation(
+      {
+        operation: name,
+        effect: "changing",
+        input: { to: ["someone@example.test"], subject: canary.subject, text: canary.body },
+        actor: p.actor,
+        origin: origin(p.run, name),
+        correlationId: randomUUID()
+      },
+      { ...calls.deps, agentToolNames: () => [name], agentAvailable: () => Promise.resolve(true) },
+      {
+        modelRoutes: [{ id: "local", region: "eu" }],
+        runFence: {
+          runId: p.run.id,
+          lease: { jobId: createPlatformId<"JobId">("job"), leaseToken: "lease" }
+        }
+      }
+    );
+    expect(held.result.status).toBe("pending_confirmation");
+    expect(server.connections()).toBe(before);
+    expect(server.appends).toEqual([]);
+    const row = await world.worker.stores.operationRuns.get({ clientInstanceId, id: held.run.id });
+    expect(row?.inputRef).toBeUndefined();
+    expect(JSON.stringify(row)).not.toContain(canary.body);
   });
 
   it("deletes the secret when the user name changes, and keeps it when the folders do", async () => {

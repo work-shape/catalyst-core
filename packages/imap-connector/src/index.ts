@@ -7,6 +7,7 @@ export {
 } from "./connector";
 export {
   ADDRESSES_MAX,
+  DRAFT_TEXT_MAX_CHARS,
   MESSAGE_TEXT_MAX_CHARS,
   SEARCH_LIMIT_MAX,
   TEXT_PARTS_MAX_BYTES
