@@ -197,4 +197,38 @@ describe("document types and the frozen processor contract (KB 80, 95)", () => {
       })
     ).toEqual({ status: "failed", code: "knowledge_file_too_many_pages" });
   });
+  it("gives a type read by the model its own revision and key, and hands the flag to the extractor", async () => {
+    const read = knowledgeDocumentTypesSchema.parse(
+      types.map((type) => (type.id === "contracts" ? { ...type, readByModel: true } : type))
+    );
+    const plain = knowledgeProcessingOf(types, item);
+    const model = knowledgeProcessingOf(read, item);
+    expect(model).toMatchObject({ processorRevision: "tables@1+model", readByModel: true });
+    expect(plain.readByModel).toBeUndefined();
+    expect(model.key).not.toBe(plain.key);
+    // Leaving the flag off, or false, keeps the key the type had before KB-10.
+    const off = knowledgeDocumentTypesSchema.parse(
+      types.map((type) => (type.id === "contracts" ? { ...type, readByModel: false } : type))
+    );
+    expect(knowledgeProcessingOf(off, item).key).toBe(plain.key);
+    const calls: unknown[] = [];
+    await runKnowledgeExtraction({
+      format: "pdf",
+      processor: "tables",
+      processorRevision: model.processorRevision,
+      readByModel: true,
+      maxPages: 2,
+      signal: new AbortController().signal,
+      readFile: async () => new Uint8Array([1]),
+      extractor: {
+        revision: 1,
+        extract: async () => ({ pages: output.pages }),
+        process: async (input) => {
+          calls.push(input.readByModel);
+          return output;
+        }
+      }
+    });
+    expect(calls).toEqual([true]);
+  });
 });

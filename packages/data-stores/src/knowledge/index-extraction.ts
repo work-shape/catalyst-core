@@ -216,7 +216,11 @@ export async function pagesOf(
         fileId: content.fileId,
         format,
         ...(processing
-          ? { processor: processing.processor, processorRevision: processing.processorRevision }
+          ? {
+              processor: processing.processor,
+              processorRevision: processing.processorRevision,
+              ...(processing.readByModel ? { readByModel: true as const } : {})
+            }
           : {})
       },
       { clientInstanceId: runtime.clientInstanceId }

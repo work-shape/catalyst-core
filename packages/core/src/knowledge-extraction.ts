@@ -98,6 +98,11 @@ export interface KnowledgeExtractor {
     bytes: Uint8Array;
     format: KnowledgeExtractedFormat;
     processor: KnowledgeBuiltinProcessor;
+    /**
+     * Every page goes to the page-reading model where the instance names one (KB-10); without
+     * one the flag changes nothing.
+     */
+    readByModel?: boolean;
     maxPages: number;
     signal: AbortSignal;
   }): Promise<KnowledgeProcessorOutput>;
@@ -150,6 +155,7 @@ export async function runKnowledgeExtraction(input: {
   format: KnowledgeExtractedFormat;
   processor?: KnowledgeBuiltinProcessor;
   processorRevision?: string;
+  readByModel?: boolean;
   extractor: KnowledgeExtractor;
   /** `knowledge.maxPagesPerDocument`: a file of more pages fails with `knowledge_file_too_many_pages`. */
   maxPages: number;
@@ -173,6 +179,7 @@ export async function runKnowledgeExtraction(input: {
           bytes,
           format: input.format,
           processor: input.processor ?? "text",
+          ...(input.readByModel ? { readByModel: true } : {}),
           maxPages: input.maxPages,
           signal: input.signal
         }),
@@ -316,6 +323,7 @@ export function defineKnowledgeExtractHandler(input: {
         format: payload.format,
         ...(payload.processor ? { processor: payload.processor } : {}),
         ...(payload.processorRevision ? { processorRevision: payload.processorRevision } : {}),
+        ...(payload.readByModel ? { readByModel: true } : {}),
         extractor,
         maxPages,
         signal: control.signal,

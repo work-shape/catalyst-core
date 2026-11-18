@@ -162,6 +162,7 @@ export type ModelSystemPurpose =
   | "guardrail_judge"
   | "document_extraction"
   | "knowledge_field_extraction"
+  | "knowledge_page_reading"
   | "transcription"
   | ModelEmbeddingPurpose;
 
@@ -178,7 +179,8 @@ export const PERSON_OWN_PURPOSES = [
 /** Knowledge Base ingestion records usage but consumes no chat safeguard or spend budget. */
 export const KNOWLEDGE_INGESTION_PURPOSES = [
   "knowledge_embedding",
-  "knowledge_field_extraction"
+  "knowledge_field_extraction",
+  "knowledge_page_reading"
 ] as const satisfies readonly ModelSystemPurpose[];
 
 /** A model call an agent run made. */
