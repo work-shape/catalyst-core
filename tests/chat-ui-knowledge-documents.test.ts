@@ -22,7 +22,7 @@ import { UiRoot, uiLabelsDe, uiLabelsEn } from "@work-shape/catalyst-ui";
 // The Documents section of a Knowledge Base that keeps documents (KB-5f) and its Add dialog,
 // against planted answers of `knowledge.<id>.list_documents`, `retry`, `remove_documents` and
 // `add_files`: each state with the reason of a failed one in plain words, Add, Retry and Remove
-// only for whoever may change the Knowledge Base, and the limits of one add (20 files, 25 MiB
+// only for whoever may change the Knowledge Base, and the limits of one add (20 files, 100 MiB
 // each) kept by the dialog.
 
 let host: HTMLDivElement;
@@ -1082,15 +1082,16 @@ describe("the Add dialog", () => {
   it("names the limits of one add, with the formats the instance reads", () => {
     openDialog(plantedSource());
     expect(document.body.textContent).toContain(
-      "Up to 20 files at once, each up to 25 MiB: TXT, Markdown, PDF, and DOCX."
+      "Up to 20 files at once, each up to 100 MiB: TXT, Markdown, PDF, and DOCX."
     );
 
     openDialog(plantedSource(), "de");
     expect(document.body.textContent).toContain(
-      "Bis zu 20 Dateien auf einmal, jede bis 25 MiB: TXT, Markdown, PDF und DOCX."
+      "Bis zu 20 Dateien auf einmal, jede bis 100 MiB: TXT, Markdown, PDF und DOCX."
     );
 
-    // Without document processing, no hint in the dialog promises PDF or DOCX.
+    // Without document processing, no hint in the dialog promises PDF or DOCX, nor more than the
+    // 25 MiB of text one document holds.
     openDialog(plantedSource(), "en", ["txt", "markdown"]);
     expect(document.body.textContent).toContain(
       "Up to 20 files at once, each up to 25 MiB: TXT and Markdown."
@@ -1131,15 +1132,16 @@ describe("the Add dialog", () => {
     expect(checkbox("vertrag.docx").disabled).toBe(false);
   });
 
-  it("lets no file over 25 MiB and no file in another format be chosen, and says why", () => {
+  it("lets no file over its limit and no file in another format be chosen, and says why", () => {
     openDialog(
       plantedSource({
         useOpenableFiles: () =>
           ready({
             items: [
               file("handbuch.md"),
-              file("gross.pdf", { bytes: 25 * MiB + 1 }),
-              file("genau.pdf", { bytes: 25 * MiB }),
+              file("gross.pdf", { bytes: 100 * MiB + 1 }),
+              file("genau.pdf", { bytes: 100 * MiB }),
+              file("lang.md", { bytes: 25 * MiB + 1 }),
               file("tabelle.xlsx")
             ]
           })
@@ -1150,6 +1152,11 @@ describe("the Add dialog", () => {
     expect(checkbox("genau.pdf").disabled).toBe(false);
     expect(checkbox("gross.pdf").disabled).toBe(true);
     expect(document.querySelector('[data-knowledge-add-file="gross.pdf"]')?.textContent).toContain(
+      "Larger than 100 MiB"
+    );
+    // A Markdown file is its own text, which one document holds 25 MiB of.
+    expect(checkbox("lang.md").disabled).toBe(true);
+    expect(document.querySelector('[data-knowledge-add-file="lang.md"]')?.textContent).toContain(
       "Larger than 25 MiB"
     );
     expect(checkbox("tabelle.xlsx").disabled).toBe(true);

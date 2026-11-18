@@ -22,6 +22,8 @@ import { useTranslation } from "../../shared/i18n";
 import { ReadState } from "./data-store-read-state";
 import {
   addableFile,
+  addFileMaxBytes,
+  addFormatsMaxBytes,
   documentFailureText,
   KNOWLEDGE_ADD_LIMITS,
   KNOWLEDGE_ADD_REFUSALS,
@@ -593,7 +595,7 @@ export function KnowledgeAddDialog({
   const countUpload = useCallback(() => setUploaded((count) => count + 1), []);
   const close = () => (uploaded > 0 ? onAdded(uploaded) : onClose());
   const full = chosen.size >= KNOWLEDGE_ADD_LIMITS.files;
-  const size = formatFileBytes(maxBytes, locale);
+  const size = formatFileBytes(addFormatsMaxBytes(formats, maxBytes), locale);
   const formatList = uploadFormatList(formats, locale);
   const toggle = (file: KnowledgeOpenableFile, on: boolean) =>
     setChosen((current) => {
@@ -691,7 +693,10 @@ export function KnowledgeAddDialog({
                           description={
                             fit.addable
                               ? `${file.conversationTitle} · ${formatFileBytes(file.bytes, locale)}`
-                              : t(fit.reason, { size, formats: formatList })
+                              : t(fit.reason, {
+                                  size: formatFileBytes(addFileMaxBytes(file, maxBytes), locale),
+                                  formats: formatList
+                                })
                           }
                           checked={on}
                           disabled={!fit.addable || (full && !on)}

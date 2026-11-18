@@ -107,7 +107,7 @@ export const transcriptionConfigSchema = z
  * offers no semantic search; keyword and structured Knowledge Bases work all the same.
  * `maxDocuments` is how many documents one Knowledge Base holds at most: adding a file beyond
  * it is refused with the limit named. `maxFileBytes` is the largest file one Knowledge Base takes,
- * from 1 MiB to 256 MiB, 25 MiB unless set: a larger file is refused when it is added, and a
+ * from 1 MiB to 256 MiB, 100 MiB unless set: a larger file is refused when it is added, and a
  * synced item over it fails with `knowledge_file_over_limit` without being fetched. The text of
  * one document stays bounded at 25 MiB however large its file. `maxPagesPerDocument` is how many pages of one PDF or
  * DOCX extraction reads: a longer one fails with `knowledge_file_too_many_pages`, counted
@@ -133,10 +133,11 @@ export const knowledgeConfigSchema = z
       .default(KNOWLEDGE_FILE_MAX_BYTES),
     sourcePollMinutes: z.record(z.string(), z.number().int().min(1).max(1_440)).default({}),
     maxPagesPerDocument: z.number().int().positive().default(KNOWLEDGE_MAX_PAGES_PER_DOCUMENT),
+    // At least one file at `maxFileBytes`: the refine below holds it to the setting.
     pageCacheBytes: z
       .number()
       .int()
-      .min(KNOWLEDGE_FILE_MAX_BYTES)
+      .min(1024 * 1024)
       .default(KNOWLEDGE_PAGE_CACHE_BYTES_DEFAULT),
     indexConcurrency: z
       .object({

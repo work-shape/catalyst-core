@@ -1,4 +1,8 @@
-import { KNOWLEDGE_TEXT_FORMATS, knowledgeDocumentFormatOf } from "@work-shape/catalyst-core";
+import {
+  KNOWLEDGE_TEXT_FORMATS,
+  knowledgeDocumentFormatOf,
+  knowledgeFileMaxBytes
+} from "@work-shape/catalyst-core";
 import type { TranslationKey } from "../../shared/i18n";
 import { KNOWLEDGE_ADD_LIMITS, KNOWLEDGE_ADD_REFUSALS } from "./knowledge-base-model";
 
@@ -67,19 +71,35 @@ export function uploadFormatList(formats: readonly string[], locale: string): st
  */
 export function uploadableFile(
   file: { name: string; type: string; size: number },
-  formats: readonly string[]
+  formats: readonly string[],
+  maxBytes: number = KNOWLEDGE_ADD_LIMITS.bytes
 ): { uploadable: true } | { uploadable: false; reason: TranslationKey } {
-  const format = knowledgeDocumentFormatOf({
-    filename: file.name,
-    ...(file.type ? { mimeType: file.type } : {})
-  });
+  const format = uploadFormatOf(file);
   if (format === undefined || !formats.includes(format)) {
     return { uploadable: false, reason: "knowledge.uploadFormatRefused" };
   }
-  if (file.size > KNOWLEDGE_ADD_LIMITS.bytes) {
+  if (file.size > knowledgeFileMaxBytes(maxBytes, format)) {
     return { uploadable: false, reason: "knowledge.addTooLarge" };
   }
   return { uploadable: true };
+}
+
+function uploadFormatOf(file: { name: string; type: string }) {
+  return knowledgeDocumentFormatOf({
+    filename: file.name,
+    ...(file.type ? { mimeType: file.type } : {})
+  });
+}
+
+/**
+ * The largest file of this one's format the instance takes under `maxBytes`: a TXT or Markdown
+ * file is its own text, which one document holds less of than a PDF's file may be.
+ */
+export function uploadFileMaxBytes(
+  file: { name: string; type: string },
+  maxBytes: number = KNOWLEDGE_ADD_LIMITS.bytes
+): number {
+  return knowledgeFileMaxBytes(maxBytes, uploadFormatOf(file));
 }
 
 /** One chosen file in the dialog's queue. */
@@ -105,12 +125,13 @@ export function queueUploads<Source extends { name: string; type: string; size: 
   queue: readonly UploadItem<Source>[],
   files: readonly Source[],
   formats: readonly string[],
-  newId: () => string
+  newId: () => string,
+  maxBytes: number = KNOWLEDGE_ADD_LIMITS.bytes
 ): UploadItem<Source>[] {
   return [
     ...queue,
     ...files.map((file): UploadItem<Source> => {
-      const fit = uploadableFile(file, formats);
+      const fit = uploadableFile(file, formats, maxBytes);
       const id = newId();
       return fit.uploadable
         ? { id, key: id, name: file.name, file, state: "waiting" }
@@ -158,11 +179,12 @@ export function retryUpload<Source extends { name: string; type: string; size: n
   queue: readonly UploadItem<Source>[],
   id: string,
   formats: readonly string[],
-  newId: () => string
+  newId: () => string,
+  maxBytes: number = KNOWLEDGE_ADD_LIMITS.bytes
 ): UploadItem<Source>[] {
   return queue.map((item) => {
     if (item.id !== id || item.state !== "failed") return item;
-    if (!uploadableFile(item.file, formats).uploadable) return item;
+    if (!uploadableFile(item.file, formats, maxBytes).uploadable) return item;
     return {
       id: item.id,
       key: item.unanswered ? item.key : newId(),

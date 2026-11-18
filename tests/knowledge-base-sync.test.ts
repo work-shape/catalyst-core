@@ -4,12 +4,14 @@ import postgres from "postgres";
 import { describe, expect, it, vi } from "vitest";
 import {
   DocumentSourceError,
+  KNOWLEDGE_DOCUMENT_TEXT_MAX_BYTES,
   KNOWLEDGE_FILE_MAX_BYTES,
   knowledgeFetchJob,
   knowledgeExtractionKey,
   knowledgeExtractionResultSchema,
   readObjectBytes,
-  enqueueKnowledgeIndex
+  enqueueKnowledgeIndex,
+  type KnowledgeExtractor
 } from "@work-shape/catalyst-core";
 import { eventually, required, waitUntil } from "./support/assertions";
 import { clientInstanceId } from "./support/data-store-instance";
@@ -334,7 +336,7 @@ describe("initial and full source import (KB 72, 73)", () => {
       folderId: "folder",
       name: "large.txt",
       mime: "text/plain",
-      bytes: new Uint8Array(KNOWLEDGE_FILE_MAX_BYTES + 1)
+      bytes: new Uint8Array(KNOWLEDGE_DOCUMENT_TEXT_MAX_BYTES + 1)
     });
     world.world.put({ folderId: "folder", name: "bad.zip", mime: "application/zip", bytes });
     world.world.put({
@@ -592,7 +594,7 @@ describe("the file limit of release config on a synced source", () => {
 });
 
 describe("the text limit of a synced TXT or Markdown file", () => {
-  const { setup } = useKnowledgeSync({ maxFileBytes: 2 * KNOWLEDGE_FILE_MAX_BYTES });
+  const { setup } = useKnowledgeSync({ maxFileBytes: 2 * KNOWLEDGE_DOCUMENT_TEXT_MAX_BYTES });
 
   it("fails a TXT or Markdown item above the text one document holds by its listed size, without a fetch", async () => {
     const fetched: string[] = [];
@@ -607,12 +609,38 @@ describe("the text limit of a synced TXT or Markdown file", () => {
       folderId: "folder",
       name: "lang.md",
       mime: "text/markdown",
-      bytes: new Uint8Array(KNOWLEDGE_FILE_MAX_BYTES + 1).fill(0x61)
+      bytes: new Uint8Array(KNOWLEDGE_DOCUMENT_TEXT_MAX_BYTES + 1).fill(0x61)
     });
     await world.drain(await world.sync());
     expect(fetched).not.toContain(large);
     expect(
       await world.sql`select name, state, failure_code from catalyst_kb.source_items order by name`
     ).toEqual([{ name: "lang.md", state: "failed", failure_code: "knowledge_file_over_limit" }]);
+  });
+});
+
+describe("the default file limit of a synced source", () => {
+  const { setup } = useKnowledgeSync();
+
+  it("fetches a PDF larger than the text one document holds and hands all its bytes to extraction", async () => {
+    expect(KNOWLEDGE_FILE_MAX_BYTES).toBe(100 * 1024 * 1024);
+    const sizes: number[] = [];
+    const extractor: KnowledgeExtractor = {
+      revision: 1,
+      async extract({ bytes }) {
+        sizes.push(bytes.byteLength);
+        return { pages: [{ page: 1, text: "Exposé mit Grundrissen" }] };
+      }
+    };
+    const world = await setup(undefined, extractor);
+    const size = KNOWLEDGE_DOCUMENT_TEXT_MAX_BYTES + 5 * 1024 * 1024;
+    const bytes = new Uint8Array(size).fill(0x20);
+    bytes.set(new TextEncoder().encode("%PDF-1.7\n"));
+    world.world.put({ folderId: "folder", name: "expose.pdf", mime: "application/pdf", bytes });
+    await world.drain(await world.sync());
+    expect(sizes).toEqual([size]);
+    expect(await world.sql`select name, state, failure_code from catalyst_kb.source_items`).toEqual(
+      [{ name: "expose.pdf", state: "fetched", failure_code: null }]
+    );
   });
 });

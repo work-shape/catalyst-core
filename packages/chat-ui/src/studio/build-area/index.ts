@@ -182,6 +182,7 @@ export {
   retryUpload,
   settleUpload,
   uploadableFile,
+  uploadFileMaxBytes,
   uploadFormats
 } from "./knowledge-upload-model";
 export {
