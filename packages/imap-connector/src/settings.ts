@@ -24,9 +24,9 @@ const folderName = z
   .regex(PRINTABLE, { message: "A folder name holds no control character or line break" });
 
 /**
- * The settings of an `imap` Connection: the server, the account's user name and the folders it
- * reads, which are its boundary. The password is the Connection's own secret and never a
- * setting.
+ * The settings of an `imap` Connection: the server, the account's user name, the folders it
+ * reads, which are its boundary, and the folder `create_draft` writes to. The password is the
+ * Connection's own secret and never a setting.
  */
 export const imapSettingsSchema = z.strictObject({
   host: z
@@ -60,7 +60,10 @@ export const imapSettingsSchema = z.strictObject({
     .refine((folders) => new Set(folders).size === folders.length, {
       message: "A folder is listed once"
     })
-    .default(["INBOX"])
+    .default(["INBOX"]),
+  // Where a draft goes. Left out, the folder the server marks as `\Drafts` (RFC 6154). It is no
+  // folder of the boundary: a draft is written there, never read from there unless listed.
+  draftsFolder: folderName.optional()
 });
 
 export type ImapSettings = z.infer<typeof imapSettingsSchema>;

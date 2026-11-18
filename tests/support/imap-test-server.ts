@@ -8,9 +8,10 @@ import { createServer as createTlsServer } from "node:tls";
 import type { TestCertificate } from "./test-certificate";
 
 // An IMAP server in this process, for the Connector type `imap`. It speaks as much of IMAP4rev1
-// as the connector needs (LOGIN, LIST, EXAMINE, UID SEARCH, UID FETCH, LOGOUT), keeps every
-// command it was sent, and changes flags the way a real server does: a fetch of BODY[...]
-// without PEEK and a STORE mark a message as seen, so a test sees when a client changed one.
+// as the connector needs (LOGIN, AUTHENTICATE PLAIN, LIST, STATUS, EXAMINE, UID SEARCH,
+// UID FETCH, APPEND, LOGOUT), keeps every command it was sent, and changes flags the way a real
+// server does: a fetch of BODY[...] without PEEK and a STORE mark a message as seen, so a test
+// sees when a client changed one. Folder names travel in modified UTF-7 (RFC 3501, 5.1.3).
 // Accounts and mail are made up by each test.
 
 interface FakeAddress {
@@ -43,12 +44,24 @@ export interface FakeMessage {
   cc?: FakeAddress[];
   messageId?: string;
   inReplyTo?: string;
+  /** The References header's value. */
+  references?: string;
   body: FakePart;
 }
 
 export interface FakeFolder {
   uidValidity: number;
   messages: FakeMessage[];
+  /** A special-use attribute LIST reports, such as `\\Drafts`. */
+  specialUse?: string;
+}
+
+/** One message a client added with APPEND. */
+interface FakeAppend {
+  folder: string;
+  flags: string[];
+  /** The message as it was sent. */
+  raw: string;
 }
 
 export interface ImapTestServerOptions {
@@ -79,7 +92,24 @@ export interface ImapTestServer {
   flagsOf(folder: string, uid: number): string[];
   /** Folders of the account, which a test may change between calls. */
   readonly folders: Record<string, FakeFolder>;
+  /** Every message added with APPEND, in order. */
+  readonly appends: FakeAppend[];
   close(): Promise<void>;
+}
+
+/** A folder name as it travels: modified UTF-7, `&` as `&-`. */
+function encodeFolder(name: string): string {
+  return name.replace(/&|[^\x20-\x7e]+/gu, (run) =>
+    run === "&"
+      ? "&-"
+      : `&${Buffer.from(run, "utf16le").swap16().toString("base64").replace(/=+$/u, "").replace(/\//gu, ",")}-`
+  );
+}
+
+function decodeFolder(value: string): string {
+  return value.replace(/&([^-]*)-/gu, (_, run: string) =>
+    run === "" ? "&" : Buffer.from(run.replace(/,/gu, "/"), "base64").swap16().toString("utf16le")
+  );
 }
 
 /** One value of a command: an atom, a string or a list. */
@@ -129,6 +159,10 @@ function structure(part: FakePart): string {
 function sectionOf(message: FakeMessage, section: string): Buffer | undefined {
   let part: FakePart | undefined = message.body;
   const path = section.split(".").map(Number);
+  if (section.startsWith("HEADER.FIELDS")) {
+    const wanted = section.includes("REFERENCES") && message.references !== undefined;
+    return Buffer.from(wanted ? `References: ${message.references}\r\n\r\n` : "\r\n");
+  }
   if (part.children === undefined || part.children.length === 0) {
     return section === "1" || section === "TEXT" ? bodyBytes(part) : undefined;
   }
@@ -281,6 +315,7 @@ function portOf(address: string | AddressInfo | null): number {
 
 export async function startImapTestServer(options: ImapTestServerOptions): Promise<ImapTestServer> {
   const commands: ImapCommand[] = [];
+  const appends: FakeAppend[] = [];
   const serverNames: (string | false)[] = [];
   const flags = new Map<string, Set<string>>();
   const folders = options.folders;
@@ -304,6 +339,7 @@ export async function startImapTestServer(options: ImapTestServerOptions): Promi
     if ("servername" in socket)
       serverNames.push(typeof socket.servername === "string" ? socket.servername : false);
     let authenticated = false;
+    let sasl: string | undefined;
     let opened: string | undefined;
     let buffer = Buffer.alloc(0);
     let pending = "";
@@ -345,17 +381,60 @@ export async function startImapTestServer(options: ImapTestServerOptions): Promi
           }
           return send(`${tag} NO [AUTHENTICATIONFAILED] Invalid credentials`);
         }
+        case "AUTHENTICATE":
+          if (valueOf(args[0]).toUpperCase() !== "PLAIN" || !capabilities.includes("AUTH=PLAIN"))
+            return send(`${tag} NO unsupported mechanism`);
+          sasl = tag;
+          return send("+ ");
         case "LOGOUT":
           send("* BYE logging out");
           ok();
           socket.end();
           return;
-        case "LIST":
-          return ok();
       }
       if (!authenticated) return send(`${tag} BAD not authenticated`);
+      if (name === "LIST") {
+        const pattern = decodeFolder(valueOf(args[1]));
+        if (pattern === "") send('* LIST (\\Noselect) "/" ""');
+        for (const [folderName, folder] of Object.entries(folders)) {
+          if (pattern !== "*" && pattern !== "%" && pattern !== folderName) continue;
+          const attributes = ["\\HasNoChildren", ...(folder.specialUse ? [folder.specialUse] : [])];
+          send(`* LIST (${attributes.join(" ")}) "/" ${quote(encodeFolder(folderName))}`);
+        }
+        return ok();
+      }
+      if (name === "LSUB") return ok();
+      if (name === "STATUS") {
+        const folderName = decodeFolder(valueOf(args[0]));
+        const folder = folders[folderName];
+        if (folder === undefined) return send(`${tag} NO [NONEXISTENT] no such folder`);
+        const unseen = folder.messages.filter(
+          (message) => !flagSet(folderName, message).has("\\Seen")
+        ).length;
+        send(
+          `* STATUS ${quote(encodeFolder(folderName))} (MESSAGES ${folder.messages.length} UNSEEN ${unseen})`
+        );
+        return ok();
+      }
+      if (name === "APPEND") {
+        const folderName = decodeFolder(valueOf(args[0]));
+        const folder = folders[folderName];
+        if (folder === undefined) return send(`${tag} NO [TRYCREATE] no such folder`);
+        const flagToken = args[1];
+        const appendedFlags =
+          flagToken !== undefined && "list" in flagToken ? flagToken.list.map(valueOf) : [];
+        appends.push({ folder: folderName, flags: appendedFlags, raw: valueOf(args.at(-1)) });
+        const uid = Math.max(0, ...folder.messages.map((message) => message.uid)) + 1;
+        folder.messages.push({
+          uid,
+          flags: appendedFlags,
+          date: new Date(),
+          body: { type: "text/plain", body: "" }
+        });
+        return ok(`[APPENDUID ${folder.uidValidity} ${uid}] APPEND completed`);
+      }
       if (name === "EXAMINE" || name === "SELECT") {
-        const folderName = valueOf(args[0]);
+        const folderName = decodeFolder(valueOf(args[0]));
         const folder = folders[folderName];
         if (folder === undefined) return send(`${tag} NO [NONEXISTENT] no such folder`);
         opened = folderName;
@@ -447,6 +526,17 @@ export async function startImapTestServer(options: ImapTestServerOptions): Promi
         if (end < 0) return;
         const line = buffer.subarray(0, end).toString("utf8");
         buffer = buffer.subarray(end + 2);
+        if (sasl !== undefined) {
+          // The answer to AUTHENTICATE PLAIN: authzid, user and password, NUL apart, in UTF-8.
+          const tag = sasl;
+          sasl = undefined;
+          const [, user, pass] = Buffer.from(line, "base64").toString("utf8").split("\u0000");
+          if (user === options.account.username && pass === options.account.password) {
+            authenticated = true;
+            send(`${tag} OK [CAPABILITY ${capabilities}] logged in`);
+          } else send(`${tag} NO [AUTHENTICATIONFAILED] Invalid credentials`);
+          continue;
+        }
         const announced = /\{(\d+)(\+?)\}$/u.exec(line);
         if (announced !== null) {
           pending += line.slice(0, announced.index);
@@ -477,6 +567,7 @@ export async function startImapTestServer(options: ImapTestServerOptions): Promi
     connections: () => Math.max(tcp, accepted),
     serverNames,
     folders,
+    appends,
     flagsOf(folder, uid) {
       const message = folders[folder]?.messages.find((entry) => entry.uid === uid);
       return message === undefined ? [] : [...flagSet(folder, message)].sort();

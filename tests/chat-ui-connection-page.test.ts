@@ -1198,7 +1198,7 @@ describe("Connection page", () => {
   });
 
   it("offers a mailbox's operations to agents alone, and lists those its type declares that wait for approval", () => {
-    // MBX-1b: "Later" left one of the mailbox's two operations unapproved. The type allows
+    // MBX-1b: "Later" left all but one of the mailbox's operations unapproved. The type allows
     // agents alone, so the page offers no box for Apps, Workflows or outside clients.
     const imap = connectorTypeOffers(
       createConnectorTypeRegistry([createImapConnectorType()])
@@ -1250,15 +1250,17 @@ describe("Connection page", () => {
     expect(renderPage({ asset, detail, types: imap, locale: "de" })).toContain(
       "Freizugebende Tools"
     );
-    // Once both are approved, nothing waits.
-    const both = connectionAsset("feedback-mailbox", {
+    // Once every one is approved, nothing waits.
+    const all = connectionAsset("feedback-mailbox", {
       ...asset.config,
       operations: [
+        { name: "list_folders", effect: "reading", exposure: ["agent"], enabled: true },
         { name: "search_messages", effect: "reading", exposure: ["agent"], enabled: true },
-        { name: "get_message", effect: "reading", exposure: ["agent"], enabled: true }
+        { name: "get_message", effect: "reading", exposure: ["agent"], enabled: true },
+        { name: "create_draft", effect: "changing", exposure: ["agent"], enabled: true }
       ]
     });
-    expect(renderPage({ asset: both, detail, types: imap })).not.toContain(
+    expect(renderPage({ asset: all, detail, types: imap })).not.toContain(
       "data-connection-type-tools"
     );
   });
