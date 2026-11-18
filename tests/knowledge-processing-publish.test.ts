@@ -289,7 +289,7 @@ describe("confirmed, selective processing at publish (KB 80)", () => {
           file_name: "other.md",
           chunks: 2,
           document_type: "default",
-          processor_revision: "text@1"
+          processor_revision: "text@2"
         },
         {
           file_name: "report-a.md",
