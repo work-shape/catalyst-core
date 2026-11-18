@@ -12,7 +12,7 @@ import {
 } from "@work-shape/catalyst-core";
 
 /** Built-in revisions change only when their output changes. No customer processor runs here. */
-const KNOWLEDGE_PROCESSOR_VERSIONS = { text: 1, tables: 1 } as const;
+const KNOWLEDGE_PROCESSOR_VERSIONS = { text: 2, tables: 1 } as const;
 const pattern = z.array(z.string().min(1)).min(1);
 const fieldsSchema = z
   .record(z.string(), z.json())
