@@ -231,15 +231,22 @@ test("en: an MCP server that asks for a sign-in is signed in from the dialog, an
     await dialog.locator("[data-connection-approve]").click();
     // Approved for agents, the dialog offers the give to an agent (CS-5d); Done leaves it.
     await dialog.locator("[data-connection-approved-done]").click();
-    // The page names the shared sign-in: connected, the permission, nobody else to sign in.
+    // The page names the shared sign-in once: connected, since when, nobody else to sign in.
+    // The permission waits under Technical details.
     await expect(page).toHaveURL(new RegExp(`/build/connections/${id}$`, "u"));
     const section = main.locator("[data-connection-sign-in]");
+    await expect(main.locator("[data-sign-in-state]")).toHaveCount(1);
     await expect(section.locator('[data-sign-in-state="connected"]')).toHaveText("Connected");
-    await expect(section.locator("[data-sign-in-granted]")).toContainText("sample.read");
+    await expect(section.locator("[data-sign-in-since]")).toBeVisible();
     await expect(section.locator("[data-sign-in-shared]")).toBeVisible();
     await expect(section.locator("[data-sign-in-begin]")).toHaveText("Sign in again");
-    await section.scrollIntoViewIfNeeded();
+    await expect(section.locator("[data-sign-in-granted]")).toHaveCount(0);
+    await main.locator("#status").scrollIntoViewIfNeeded();
     await shoot(page, "en", "page-connected");
+    await section.getByRole("button", { name: "Technical details" }).click();
+    await expect(section.locator("[data-sign-in-granted]")).toContainText("sample.read");
+    await section.scrollIntoViewIfNeeded();
+    await shoot(page, "en", "page-connected-details");
     for (const state of states) {
       expect(state).not.toBe("");
       expect(page.url()).not.toContain(state);

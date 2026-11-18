@@ -12,7 +12,6 @@ import {
 import type { ConnectionDetail, ConnectionTestResult } from "@work-shape/catalyst-api-client";
 import { formatDateTime } from "../../shared/locale-format";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
-import { SignInStateBadge } from "./connection-sign-in-section";
 import { needsSignIn } from "./connection-sign-in-model";
 import type { ConnectionSource, ConnectionTestRun } from "./connection-source";
 
@@ -296,57 +295,51 @@ export function ConnectionStatus({
           {t("connections.testNotAllowed")}
         </Banner>
       )}
-      {/* A personal one has no shared sign-in: the reader's own is under Sign-in. */}
-      {signsInEachPerson(detail) ? null : (
+      {/* A Connection that signs in says so under Sign-in, the shared sign-in and a person's own. */}
+      {detail.oauth ? null : (
         <KeyValueList>
-          {detail.oauth ? (
-            <KeyValue label={t("connectionSignIn.sectionTitle")}>
-              <SignInStateBadge binding={detail.binding} />
-            </KeyValue>
-          ) : (
-            <KeyValue label={t("connections.credential")}>
-              <div className="grid justify-items-start gap-1">
-                {needsCredential ? (
-                  <>
-                    <Badge
-                      data-connection-credential={secret.state}
-                      tone={
-                        secret.state === "set"
-                          ? "success"
-                          : secret.state === "unreadable"
-                            ? "danger"
-                            : "neutral"
-                      }
-                    >
-                      {/* The version of the credential is for whoever may change the Connection. */}
-                      {secret.state === "set"
-                        ? secret.version === undefined || !mayTest
-                          ? t("connections.credentialSet")
-                          : t("connections.credentialSetVersion", { version: secret.version })
-                        : t(
-                            secret.state === "unreadable"
-                              ? "connections.credentialUnreadable"
-                              : "connections.credentialNotSet"
-                          )}
-                    </Badge>
-                    <span className="text-caption text-muted-foreground">
-                      {t("connections.credentialNeverShown")}
-                    </span>
-                    {credentialEditor?.(mayTest ? start : undefined)}
-                  </>
-                ) : (
-                  <>
-                    <Badge data-connection-credential="none_needed" tone="neutral">
-                      {t("connections.credentialNoneNeeded")}
-                    </Badge>
-                    <span className="text-caption text-muted-foreground">
-                      {t("connections.credentialNoneNeededText")}
-                    </span>
-                  </>
-                )}
-              </div>
-            </KeyValue>
-          )}
+          <KeyValue label={t("connections.credential")}>
+            <div className="grid justify-items-start gap-1">
+              {needsCredential ? (
+                <>
+                  <Badge
+                    data-connection-credential={secret.state}
+                    tone={
+                      secret.state === "set"
+                        ? "success"
+                        : secret.state === "unreadable"
+                          ? "danger"
+                          : "neutral"
+                    }
+                  >
+                    {/* The version of the credential is for whoever may change the Connection. */}
+                    {secret.state === "set"
+                      ? secret.version === undefined || !mayTest
+                        ? t("connections.credentialSet")
+                        : t("connections.credentialSetVersion", { version: secret.version })
+                      : t(
+                          secret.state === "unreadable"
+                            ? "connections.credentialUnreadable"
+                            : "connections.credentialNotSet"
+                        )}
+                  </Badge>
+                  <span className="text-caption text-muted-foreground">
+                    {t("connections.credentialNeverShown")}
+                  </span>
+                  {credentialEditor?.(mayTest ? start : undefined)}
+                </>
+              ) : (
+                <>
+                  <Badge data-connection-credential="none_needed" tone="neutral">
+                    {t("connections.credentialNoneNeeded")}
+                  </Badge>
+                  <span className="text-caption text-muted-foreground">
+                    {t("connections.credentialNoneNeededText")}
+                  </span>
+                </>
+              )}
+            </div>
+          </KeyValue>
         </KeyValueList>
       )}
       {needsCredential && !detail.oauth && detail.sharedCredential ? (

@@ -669,9 +669,13 @@ describe("Connection page", () => {
     expect(unsigned).toContain(">Nicht angemeldet<");
     // The recorded state names the missing sign-in, not a missing key.
     expect(unsigned).toContain(">Anmeldung nötig<");
-    expect(unsigned).toContain("auth.files.example.test");
-    expect(unsigned).toContain("catalyst-files");
-    expect(unsigned).toContain("https://chat.example.com/api/v1/connections/oauth/callback");
+    // The state of the sign-in stands once, under Sign-in, not under Status as well.
+    expect(unsigned.split("data-sign-in-state=")).toHaveLength(2);
+    // Provider, client and redirect URI are folded under Technical details.
+    expect(unsigned).toContain("data-sign-in-technical");
+    expect(unsigned).toContain(">Technische Details<");
+    expect(unsigned).not.toContain("auth.files.example.test");
+    expect(unsigned).not.toContain("https://chat.example.com/api/v1/connections/oauth/callback");
     expect(unsigned).toContain('data-sign-in-begin=""');
     expect(unsigned).toContain(">Anmelden<");
     expect(unsigned).not.toContain("data-connection-shared");
@@ -691,12 +695,31 @@ describe("Connection page", () => {
       locale: "de"
     });
     expect(signedIn).toContain('data-sign-in-state="connected"');
+    expect(signedIn.split("data-sign-in-state=")).toHaveLength(2);
+    expect(signedIn).toContain(">Konto<");
     expect(signedIn).toContain("team@files.example.test");
-    expect(signedIn).toContain("files.read");
+    // Since when stands beside the state, not in a row of its own.
+    expect(signedIn).toContain("data-sign-in-since");
+    expect(signedIn).toContain("seit 17.10.2026");
+    // The permissions granted are technical: folded with the provider.
+    expect(signedIn).not.toContain("data-sign-in-granted");
     expect(signedIn).toContain(
       "Alle, die diese Verbindung nutzen dürfen, lesen und handeln über dieses Konto."
     );
     expect(signedIn).toContain(">Neu anmelden<");
+
+    // An account the provider does not name leaves no row that says so.
+    const unnamed = renderPage({
+      asset: oauthAsset,
+      detail: {
+        health: "ok",
+        oauth,
+        binding: { state: "connected", scopes: [], connectedAt: "2026-10-17T09:00:00.000Z" }
+      },
+      locale: "de"
+    });
+    expect(unnamed).not.toContain(">Konto<");
+    expect(unnamed).not.toContain("Der Anbieter nennt kein Konto.");
 
     // A reader who may not change it sees the state, and that an administrator signs it in.
     const member = renderPage({
