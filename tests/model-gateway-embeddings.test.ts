@@ -78,7 +78,7 @@ describe("embedding bindings in release config", () => {
     expect(config.knowledge).toEqual({
       defaultEmbeddingBinding: "embedding",
       maxDocuments: 10_000,
-      maxFileBytes: 25 * 1024 * 1024,
+      maxFileBytes: 100 * 1024 * 1024,
       maxPagesPerDocument: 500,
       indexConcurrency: { perWorker: 8, total: 16 },
       withdrawShareConfirm: 0.2,
@@ -94,7 +94,7 @@ describe("embedding bindings in release config", () => {
 
     expect(config.knowledge).toEqual({
       maxDocuments: 10_000,
-      maxFileBytes: 25 * 1024 * 1024,
+      maxFileBytes: 100 * 1024 * 1024,
       maxPagesPerDocument: 500,
       indexConcurrency: { perWorker: 8, total: 16 },
       withdrawShareConfirm: 0.2,
@@ -145,6 +145,17 @@ describe("embedding bindings in release config", () => {
           knowledge: { maxFileBytes: 100 * 1024 * 1024, pageCacheBytes: 50 * 1024 * 1024 }
         })
       )
+    ).toThrow(/pageCacheBytes/u);
+    // The setting, not the default, decides how small the page cache may be.
+    expect(
+      parseClientInstanceConfig(
+        releaseConfig({
+          knowledge: { maxFileBytes: 25 * 1024 * 1024, pageCacheBytes: 50 * 1024 * 1024 }
+        })
+      ).knowledge.pageCacheBytes
+    ).toBe(50 * 1024 * 1024);
+    expect(() =>
+      parseClientInstanceConfig(releaseConfig({ knowledge: { pageCacheBytes: 50 * 1024 * 1024 } }))
     ).toThrow(/pageCacheBytes/u);
   });
 

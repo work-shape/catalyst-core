@@ -4,7 +4,7 @@ import { z } from "zod";
 import {
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_BASE_ASSET_KIND,
-  KNOWLEDGE_FILE_MAX_BYTES,
+  KNOWLEDGE_DOCUMENT_TEXT_MAX_BYTES,
   asManagedFileId,
   type JsonObject
 } from "@work-shape/catalyst-core";
@@ -192,11 +192,11 @@ describe("uploading a file to a Knowledge Base", () => {
     expect(pdf.statusCode, pdf.body).toBe(422);
     expect(reasonOf(pdf)).toBe("knowledge_file_format_unavailable");
 
-    // The route cuts a larger file after one byte more; the operation refuses it as too large.
+    // A text file above the text one document holds; the operation refuses it as too large.
     const large = await upload(instance, {
       filename: "gross.txt",
       contentType: "text/plain",
-      content: Buffer.alloc(KNOWLEDGE_FILE_MAX_BYTES + 10, 0x61)
+      content: Buffer.alloc(KNOWLEDGE_DOCUMENT_TEXT_MAX_BYTES + 10, 0x61)
     });
     expect(large.statusCode, large.body).toBe(422);
     expect(reasonOf(large)).toBe("knowledge_file_too_large");
@@ -232,18 +232,18 @@ describe("uploading a file to a Knowledge Base", () => {
 
   it("refuses a TXT or Markdown file above the text one document holds when it is added, a larger knowledge.maxFileBytes or not", async () => {
     const instance = await instanceWithKnowledgeBase({
-      maxFileBytes: 2 * KNOWLEDGE_FILE_MAX_BYTES
+      maxFileBytes: 2 * KNOWLEDGE_DOCUMENT_TEXT_MAX_BYTES
     });
     for (const filename of ["lang.txt", "lang.md"]) {
       const large = await upload(instance, {
         filename,
         contentType: filename.endsWith(".md") ? "text/markdown" : "text/plain",
-        content: Buffer.alloc(KNOWLEDGE_FILE_MAX_BYTES + 1, 0x61)
+        content: Buffer.alloc(KNOWLEDGE_DOCUMENT_TEXT_MAX_BYTES + 1, 0x61)
       });
       expect(large.statusCode, large.body).toBe(422);
       expect(reasonOf(large)).toBe("knowledge_file_too_large");
       expect(large.body).toContain(
-        `${KNOWLEDGE_FILE_MAX_BYTES} bytes, the most text one document holds`
+        `${KNOWLEDGE_DOCUMENT_TEXT_MAX_BYTES} bytes, the most text one document holds`
       );
     }
     expect((await ownedFiles(instance)).documents).toEqual([]);

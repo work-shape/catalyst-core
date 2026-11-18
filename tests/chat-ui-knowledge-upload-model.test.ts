@@ -5,6 +5,7 @@ import {
   retryUpload,
   settleUpload,
   uploadableFile,
+  uploadFileMaxBytes,
   uploadFormats
 } from "@work-shape/catalyst-chat-ui/build-area";
 
@@ -26,7 +27,7 @@ describe("the upload queue of a Knowledge Base", () => {
     ]);
   });
 
-  it("refuses before sending a format the instance does not read and a file over 25 MiB", () => {
+  it("refuses before sending a format the instance does not read and a file over its limit", () => {
     const text = ["txt", "markdown"];
     expect(uploadableFile(file("a.md"), text)).toEqual({ uploadable: true });
     expect(uploadableFile(file("a.pdf"), text)).toMatchObject({ uploadable: false });
@@ -36,6 +37,26 @@ describe("the upload queue of a Knowledge Base", () => {
       uploadable: false,
       reason: "knowledge.addTooLarge"
     });
+    // A PDF up to the instance's limit, 100 MiB unless it says; TXT and Markdown up to the
+    // 25 MiB of text one document holds, however large the limit.
+    const pdf = [...text, "pdf"];
+    const mib = 1024 * 1024;
+    expect(uploadableFile(file("a.pdf", 100 * mib), pdf)).toEqual({ uploadable: true });
+    expect(uploadableFile(file("a.pdf", 100 * mib + 1), pdf)).toMatchObject({
+      uploadable: false
+    });
+    expect(uploadableFile(file("a.pdf", 30 * mib), pdf, 20 * mib)).toMatchObject({
+      uploadable: false
+    });
+    expect(uploadableFile(file("a.pdf", 150 * mib), pdf, 200 * mib)).toEqual({
+      uploadable: true
+    });
+    expect(uploadableFile(file("a.md", 25 * mib + 1), pdf, 200 * mib)).toMatchObject({
+      uploadable: false
+    });
+    expect(uploadFileMaxBytes(file("a.pdf"))).toBe(100 * mib);
+    expect(uploadFileMaxBytes(file("a.md"), 200 * mib)).toBe(25 * mib);
+    expect(uploadFileMaxBytes(file("a.md"), 10 * mib)).toBe(10 * mib);
   });
 
   it("sends one file at a time, and Retry sends again only a failed one", () => {

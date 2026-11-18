@@ -6,6 +6,7 @@ import {
   defineJobKind,
   defineJobHandler,
   enqueueKnowledgeIndex,
+  KNOWLEDGE_DOCUMENT_TEXT_MAX_BYTES,
   KNOWLEDGE_JOB_KINDS,
   type DataStoreRecordsStore,
   type KnowledgeProcessingContent,
@@ -140,9 +141,12 @@ async function knowledgeProcessingReview(
       }
     : undefined;
   // Cross-database file metadata is not read one upload at a time. Until passage tokens
-  // exist, use the accepted file byte limit as an explicit conservative estimate.
+  // exist, use the most text a document of the accepted file limit carries as an explicit
+  // conservative estimate.
   const unestimated = groups.reduce((sum, group) => sum + group.unestimated, 0);
-  const conservativeTokens = tokens + unestimated * Math.ceil(runtime.maxFileBytes / 3);
+  const conservativeTokens =
+    tokens +
+    unestimated * Math.ceil(Math.min(runtime.maxFileBytes, KNOWLEDGE_DOCUMENT_TEXT_MAX_BYTES) / 3);
   const embeddingCost: KnowledgeProcessingCost = !next.methods.includes("semantic")
     ? { kind: "none" }
     : price

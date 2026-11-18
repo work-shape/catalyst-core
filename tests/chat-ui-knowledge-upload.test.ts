@@ -134,7 +134,7 @@ describe("uploading from the computer in the Add dialog", () => {
     expect(picker().accept).toContain(".docx");
     expect(document.body.textContent).toContain("Von deinem Computer hochladen");
     expect(document.body.textContent).toContain(
-      "TXT, Markdown, PDF und DOCX, jede Datei bis 25 MiB."
+      "TXT, Markdown, PDF und DOCX, jede Datei bis 100 MiB."
     );
   });
 

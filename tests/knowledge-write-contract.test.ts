@@ -8,6 +8,7 @@ import {
   knowledgeSourcesOutputSchema,
   KNOWLEDGE_SOURCE_FAILURE_CODES,
   KNOWLEDGE_DOCUMENT_FAILURE_CODES,
+  KNOWLEDGE_DOCUMENT_TEXT_MAX_BYTES,
   KNOWLEDGE_FILE_MAX_BYTES,
   WORKFLOW_ERROR_CODES,
   knowledgeWorkflowSourceSchema,
@@ -167,20 +168,24 @@ describe("KBW-0 write contracts", () => {
     ).toMatchObject({ accepted: 1000, withdrawn: 10 });
   });
 
-  it("uses the existing 25 MiB document limit for UTF-8 ingestion text", () => {
-    expect(KNOWLEDGE_FILE_MAX_BYTES).toBe(25 * 1024 * 1024);
+  it("bounds UTF-8 ingestion text at 25 MiB, below the 100 MiB a file may have", () => {
+    expect(KNOWLEDGE_DOCUMENT_TEXT_MAX_BYTES).toBe(25 * 1024 * 1024);
+    expect(KNOWLEDGE_FILE_MAX_BYTES).toBe(100 * 1024 * 1024);
     const schema = KNOWLEDGE_WRITE_OPERATIONS.ingest.inputSchema;
     expect(
-      schema.safeParse({ items: [{ ...item, text: "é".repeat(KNOWLEDGE_FILE_MAX_BYTES / 2) }] })
-        .success
+      schema.safeParse({
+        items: [{ ...item, text: "é".repeat(KNOWLEDGE_DOCUMENT_TEXT_MAX_BYTES / 2) }]
+      }).success
     ).toBe(true);
     expect(
-      schema.safeParse({ items: [{ ...item, text: "é".repeat(KNOWLEDGE_FILE_MAX_BYTES / 2 + 1) }] })
-        .success
+      schema.safeParse({
+        items: [{ ...item, text: "é".repeat(KNOWLEDGE_DOCUMENT_TEXT_MAX_BYTES / 2 + 1) }]
+      }).success
     ).toBe(false);
     expect(
-      schema.safeParse({ items: [{ ...item, text: "x".repeat(KNOWLEDGE_FILE_MAX_BYTES + 1) }] })
-        .success
+      schema.safeParse({
+        items: [{ ...item, text: "x".repeat(KNOWLEDGE_DOCUMENT_TEXT_MAX_BYTES + 1) }]
+      }).success
     ).toBe(false);
   });
 
@@ -323,8 +328,8 @@ describe("KBW-0 write contracts", () => {
 
   it("bounds materialized processor text by the existing document limit across pages", () => {
     const pages = [
-      { page: 1, text: "é".repeat(KNOWLEDGE_FILE_MAX_BYTES / 4) },
-      { page: 2, text: "é".repeat(KNOWLEDGE_FILE_MAX_BYTES / 4) }
+      { page: 1, text: "é".repeat(KNOWLEDGE_DOCUMENT_TEXT_MAX_BYTES / 4) },
+      { page: 2, text: "é".repeat(KNOWLEDGE_DOCUMENT_TEXT_MAX_BYTES / 4) }
     ];
     expect(parseKnowledgeProcessorOutput({ ...processed, pages })).toEqual({ ...processed, pages });
     const oversizedPages = pages.map((page) => ({ ...page, text: page.text + "é" }));
@@ -347,7 +352,10 @@ describe("KBW-0 write contracts", () => {
       },
       { ...processed, documents: [{ pageFrom: 2, pageTo: 1 }] },
       { ...processed, sections: [{ title: "Outside", pageFrom: 1, pageTo: 3 }] },
-      { ...processed, pages: [{ page: 1, text: "x".repeat(KNOWLEDGE_FILE_MAX_BYTES + 1) }] }
+      {
+        ...processed,
+        pages: [{ page: 1, text: "x".repeat(KNOWLEDGE_DOCUMENT_TEXT_MAX_BYTES + 1) }]
+      }
     ]) {
       expect(knowledgeProcessorOutputSchema.safeParse(invalid).success).toBe(false);
       expect(() => parseKnowledgeProcessorOutput(invalid)).toThrow(

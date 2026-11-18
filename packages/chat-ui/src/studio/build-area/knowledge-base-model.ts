@@ -1,7 +1,9 @@
 import {
   KNOWLEDGE_ADD_FILES_MAX_COUNT,
+  KNOWLEDGE_DOCUMENT_FORMATS,
   KNOWLEDGE_FILE_MAX_BYTES,
-  knowledgeDocumentFormatOf
+  knowledgeDocumentFormatOf,
+  knowledgeFileMaxBytes
 } from "@work-shape/catalyst-core";
 import type { BadgeTone } from "@work-shape/catalyst-ui";
 import type { TranslationKey } from "../../shared/i18n";
@@ -311,17 +313,51 @@ export function addableFile(
   formats: readonly string[],
   maxBytes: number = KNOWLEDGE_ADD_LIMITS.bytes
 ): { addable: true } | { addable: false; reason: TranslationKey } {
-  const format = knowledgeDocumentFormatOf({
-    filename: file.name,
-    ...(file.mimeType ? { mimeType: file.mimeType } : {})
-  });
+  const format = addFormatOf(file);
   if (format === undefined || !formats.includes(format)) {
     return { addable: false, reason: "knowledge.addFormatRefused" };
   }
-  if (file.bytes > maxBytes) {
+  if (file.bytes > knowledgeFileMaxBytes(maxBytes, format)) {
     return { addable: false, reason: "knowledge.addTooLarge" };
   }
   return { addable: true };
+}
+
+function addFormatOf(file: Pick<KnowledgeOpenableFile, "name" | "mimeType">) {
+  return knowledgeDocumentFormatOf({
+    filename: file.name,
+    ...(file.mimeType ? { mimeType: file.mimeType } : {})
+  });
+}
+
+/**
+ * The largest file of any of `formats` the instance takes under `maxBytes`: what a dialog names
+ * as its limit. An instance that reads only text formats takes no more than one document's text.
+ */
+export function addFormatsMaxBytes(
+  formats: readonly string[],
+  maxBytes: number = KNOWLEDGE_ADD_LIMITS.bytes
+): number {
+  return Math.max(
+    ...formats.map((format) =>
+      knowledgeFileMaxBytes(
+        maxBytes,
+        KNOWLEDGE_DOCUMENT_FORMATS.find((each) => each === format)
+      )
+    ),
+    0
+  );
+}
+
+/**
+ * The largest file of this one's format the instance takes under `maxBytes`: a TXT or Markdown
+ * file is its own text, which one document holds less of than a PDF's file may be.
+ */
+export function addFileMaxBytes(
+  file: Pick<KnowledgeOpenableFile, "name" | "mimeType">,
+  maxBytes: number = KNOWLEDGE_ADD_LIMITS.bytes
+): number {
+  return knowledgeFileMaxBytes(maxBytes, addFormatOf(file));
 }
 
 /**

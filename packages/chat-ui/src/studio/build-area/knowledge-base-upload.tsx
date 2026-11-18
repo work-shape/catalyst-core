@@ -3,7 +3,7 @@ import { useId, useRef, useState } from "react";
 import { Badge, Button, FilePicker, List, ListRow, Spinner } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import type { KnowledgeBaseSource } from "./knowledge-base-source";
-import { KNOWLEDGE_ADD_LIMITS } from "./knowledge-base-model";
+import { addFormatsMaxBytes, KNOWLEDGE_ADD_LIMITS } from "./knowledge-base-model";
 import {
   KNOWLEDGE_UPLOAD_REFUSALS,
   nextUpload,
@@ -12,6 +12,7 @@ import {
   settleUpload,
   uploadableFile,
   uploadAccept,
+  uploadFileMaxBytes,
   uploadFormatList,
   type UploadItem
 } from "./knowledge-upload-model";
@@ -55,7 +56,7 @@ export function KnowledgeUploadSection({
   const current = useRef<UploadItem[]>([]);
   const running = useRef(false);
   const titleId = useId();
-  const size = formatFileBytes(maxBytes, locale);
+  const size = formatFileBytes(addFormatsMaxBytes(formats, maxBytes), locale);
   const formatList = uploadFormatList(formats, locale);
   const update = (change: (queue: readonly UploadItem[]) => UploadItem[]) => {
     current.current = change(current.current);
@@ -111,7 +112,7 @@ export function KnowledgeUploadSection({
           multiple
           accept={uploadAccept(formats)}
           onFiles={(files) => {
-            update((queue) => queueUploads(queue, files, formats, newUploadId));
+            update((queue) => queueUploads(queue, files, formats, newUploadId, maxBytes));
             pump().catch(() => undefined);
           }}
         >
@@ -128,7 +129,7 @@ export function KnowledgeUploadSection({
           {queue.map((item) => {
             const view = STATE_VIEWS[item.state];
             const retryable =
-              item.state === "failed" && uploadableFile(item.file, formats).uploadable;
+              item.state === "failed" && uploadableFile(item.file, formats, maxBytes).uploadable;
             return (
               <ListRow
                 key={item.id}
@@ -141,7 +142,10 @@ export function KnowledgeUploadSection({
                   item.failure === undefined
                     ? formatFileBytes(item.file.size, locale)
                     : "key" in item.failure
-                      ? t(item.failure.key, { size, formats: formatList })
+                      ? t(item.failure.key, {
+                          size: formatFileBytes(uploadFileMaxBytes(item.file, maxBytes), locale),
+                          formats: formatList
+                        })
                       : item.failure.message
                 }
                 descriptionWraps="always"
@@ -162,7 +166,9 @@ export function KnowledgeUploadSection({
                       size="sm"
                       aria-label={t("knowledge.uploadRetryLabel", { name: item.name })}
                       onClick={() => {
-                        update((queue) => retryUpload(queue, item.id, formats, newUploadId));
+                        update((queue) =>
+                          retryUpload(queue, item.id, formats, newUploadId, maxBytes)
+                        );
                         pump().catch(() => undefined);
                       }}
                       data-knowledge-upload-retry={item.name}
