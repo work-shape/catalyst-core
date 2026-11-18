@@ -62,9 +62,16 @@ describe("Knowledge Base processing review at scale", () => {
       "contracts/a.md",
       "/contracts/a.md"
     ];
+    // Read with this release's text processor, so only the type rules below change them.
+    const { processorRevision } = knowledgeProcessingOf(undefined, {
+      path: "base.md",
+      name: "base.md",
+      mime: "text/markdown",
+      format: "markdown"
+    });
     for (const [index, name] of names.entries()) {
       const sha = (index + 1).toString(16).padStart(64, "0");
-      await world.sql`insert into catalyst_kb.contents (sha256,format,state) values (${sha},'markdown','pending')`;
+      await world.sql`insert into catalyst_kb.contents (sha256,format,state,processor_revision) values (${sha},'markdown','pending',${processorRevision})`;
       await world.sql`insert into catalyst_kb.documents (id,managed_file_id,content_sha256,title,file_name) values (${sha},${sha},${sha},'Example',${name})`;
     }
     const asset = required(
