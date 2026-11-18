@@ -10,6 +10,7 @@ import {
 } from "@work-shape/catalyst-api-client";
 import {
   ConnectionSignInLanding,
+  ConnectionSignInSection,
   SignInActions,
   SignInBody,
   needsSignIn,
@@ -23,11 +24,12 @@ import {
   withOAuthSettings,
   type SignInBrowser,
   type SignInCalls,
+  type ConnectionSource,
   type SignInLanding
 } from "@work-shape/catalyst-chat-ui/build-area";
 import { useTranslation } from "./support/chat-ui/shared";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
-import { connectionDetail } from "./chat-ui-connection-fixtures";
+import { connectionAsset, connectionDetail } from "./chat-ui-connection-fixtures";
 import { TranslationProvider } from "./chat-ui-render-harness";
 
 // The shared OAuth sign-in of a Connection (CS-4b4): the step the New connection dialog and the
@@ -783,5 +785,81 @@ describe("a sign-in the organisation's IT has to approve (MS-APP-2)", () => {
     // The administrator is often nobody of the instance: nothing to open, and the tab stays.
     expect(host.querySelector("button")).toBeNull();
     expect(close).not.toHaveBeenCalled();
+  });
+});
+
+describe("the Sign-in section of the Connection page", () => {
+  const REDIRECT = "https://chat.example.test/api/v1/connections/oauth/callback";
+  const LINK = "https://auth.example.test/adminconsent?client_id=files-app";
+
+  /** The section of a Connection signed in with a client the provider issued. */
+  function section(mayWrite: boolean) {
+    const detail = connectionDetail("files", {
+      oauth: {
+        registration: "preregistered",
+        providerHost: HOST,
+        redirectUri: REDIRECT,
+        adminConsentUrl: LINK
+      },
+      binding: {
+        state: "connected",
+        account: "team@example.test",
+        scopes: ["files.read", "files.write"],
+        connectedAt: CONNECTED_AT,
+        connectedBy: "user_admin"
+      }
+    });
+    const source: ConnectionSource = {
+      mayTest: () => mayWrite,
+      useDetail: () => ({ status: "ready", detail }),
+      useTest: () => ({ run: { status: "idle" }, start: () => undefined }),
+      useHolders: () => ({ status: "hidden" }),
+      setSecret: async () => undefined,
+      discover: async () => undefined,
+      readDetail: async () => detail,
+      test: async () => {
+        throw new Error("This test runs no test.");
+      },
+      principalHref: (principalId) => `/principals/${principalId}`,
+      oauthStart: async () => start(1),
+      usePersonName: (userId) => (userId === "user_admin" ? "Ada Admin" : undefined)
+    };
+    return createElement(ConnectionSignInSection, {
+      asset: connectionAsset("files", {
+        authScheme: "oauth",
+        settings: { url: "https://files.example.test/mcp", oauth: { clientId: "files-app" } }
+      }),
+      detail,
+      source,
+      mayWrite,
+      onSignedIn: () => undefined
+    });
+  }
+
+  it("leads with the state, the account and since when, and folds the technical details", async () => {
+    mount(section(true), "en");
+    expect(element('[data-sign-in-state="connected"]').textContent).toBe("Connected");
+    expect(element("[data-sign-in-since]").textContent).toContain("by Ada Admin");
+    expect(host.textContent).toContain("team@example.test");
+    expect(element("[data-sign-in-begin]").textContent).toBe("Sign in again");
+    for (const folded of [HOST, "files.read", "files-app", REDIRECT, LINK]) {
+      expect(host.textContent).not.toContain(folded);
+    }
+
+    await click("[data-sign-in-technical] button");
+    const details = element("[data-sign-in-technical]");
+    expect(details.textContent).toContain(HOST);
+    expect(element("[data-sign-in-granted]").textContent).toBe("files.readfiles.write");
+    expect(details.textContent).toContain("files-app");
+    expect(details.textContent).toContain(REDIRECT);
+    expect(element("[data-admin-consent-url]").textContent).toBe(LINK);
+  });
+
+  it("keeps the approval link for IT from a reader who may not change the Connection", async () => {
+    mount(section(false), "en");
+    expect(host.querySelector("[data-sign-in-begin]")).toBeNull();
+    await click("[data-sign-in-technical] button");
+    expect(element("[data-sign-in-technical]").textContent).toContain(REDIRECT);
+    expect(host.querySelector("[data-admin-consent-url]")).toBeNull();
   });
 });
