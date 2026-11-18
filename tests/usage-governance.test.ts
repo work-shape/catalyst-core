@@ -69,19 +69,20 @@ describe("model usage governance", () => {
         attribution: { kind: "system", purpose }
       });
     }
+    const ingestionCost = KNOWLEDGE_INGESTION_PURPOSES.length * 10_000_000;
     const imported = usageSummarySchema.parse(
       await governance.createSafeSummary({ clientInstanceId })
     );
     expect(imported.spendBudget).toMatchObject({ dailySpentMicros: 0, monthlySpentMicros: 0 });
     for (const total of [imported.today, imported.currentMonth, imported.allTime]) {
-      expect(total.cost.billableCostMicros).toBe(20_000_000);
+      expect(total.cost.billableCostMicros).toBe(ingestionCost);
     }
-    expect(imported.dailyUsage.at(-1)?.cost.billableCostMicros).toBe(20_000_000);
-    expect(imported.monthlyUsage.at(-1)?.cost.billableCostMicros).toBe(20_000_000);
-    expect(imported.attributedUsage?.map((group) => group.cost.billableCostMicros)).toEqual([
-      10_000_000, 10_000_000
-    ]);
-    expect(imported.recentEvents).toHaveLength(2);
+    expect(imported.dailyUsage.at(-1)?.cost.billableCostMicros).toBe(ingestionCost);
+    expect(imported.monthlyUsage.at(-1)?.cost.billableCostMicros).toBe(ingestionCost);
+    expect(imported.attributedUsage?.map((group) => group.cost.billableCostMicros)).toEqual(
+      KNOWLEDGE_INGESTION_PURPOSES.map(() => 10_000_000)
+    );
+    expect(imported.recentEvents).toHaveLength(KNOWLEDGE_INGESTION_PURPOSES.length);
 
     // Admission still has the full budget after the import. Finish the small reservation,
     // then record chat usage above the budget to prove the same rollups count it.
@@ -100,7 +101,7 @@ describe("model usage governance", () => {
       dailySpentMicros: 10_000_000,
       monthlySpentMicros: 10_000_000
     });
-    expect(chatted.today.cost.billableCostMicros).toBe(30_000_000);
+    expect(chatted.today.cost.billableCostMicros).toBe(ingestionCost + 10_000_000);
     await expect(governance.admitModelCall(admission(clientInstanceId))).rejects.toMatchObject({
       message: "Daily model spend budget has been reached for the instance. Resets at midnight UTC."
     });
