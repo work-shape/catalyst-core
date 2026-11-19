@@ -78,7 +78,11 @@ import {
   toolUiState
 } from "./tool-call-projection";
 import { useToolDisplayPanel } from "./tool-display-panel";
-import { readDisplayMode, renderBuiltInDisplay } from "./tool-display-rendering";
+import {
+  isGenericDataDisplay,
+  readDisplayMode,
+  renderBuiltInDisplay
+} from "./tool-display-rendering";
 import { GenericDataView } from "./generic-data-view";
 import { ToolSurfaceList } from "./tool-surface-card";
 import { SubagentCard } from "../subagents/subagent-card";
@@ -348,6 +352,11 @@ export function ToolCallPart({
         actionLabel={actionLabel}
         detailSections={detailSections}
         displayNode={renderedDisplay ?? builtInDisplay}
+        summary={
+          display && !hasRenderedNode(renderedDisplay) && isGenericDataDisplay(display)
+            ? summary
+            : undefined
+        }
         state={state}
         statusLabel={statusLabel}
         artifacts={artifacts}

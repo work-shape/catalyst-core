@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import type { LocaleCode } from "@work-shape/catalyst-api-client";
 import {
   cn,
@@ -33,6 +33,8 @@ const MAX_VALUES = 1500;
 const MAX_TEXT = 1000;
 /** The characters of a value in a table cell before it is cut. */
 const MAX_CELL_TEXT = 120;
+/** The characters of a label or a column's head before it is cut. */
+const MAX_LABEL = 80;
 /** A list of objects with more distinct fields than this is not a table: it would not fit. */
 const MAX_COLUMNS = 8;
 
@@ -51,18 +53,30 @@ interface ViewContext {
 
 export function GenericDataView({ data, className }: { data: unknown; className?: string }) {
   const { locale, t } = useTranslation();
-  const context: ViewContext = { locale, t, budget: { left: MAX_VALUES } };
+  // Drawn once per data: the view walks the whole shape, which a re-render need not repeat.
+  const content = useMemo(() => {
+    const context: ViewContext = { locale, t, budget: { left: MAX_VALUES } };
+    if (isEmpty(data)) {
+      return <p className="text-muted-foreground">{t("dataViewEmpty")}</p>;
+    }
+    if (isScalar(data)) {
+      return (
+        <p className="break-words whitespace-pre-wrap">{scalarText(data, context, MAX_TEXT)}</p>
+      );
+    }
+    return renderValue(data, 0, context);
+  }, [data, locale, t]);
   return (
     <div data-slot="generic-data-view" className={cn("grid min-w-0 gap-3 text-body", className)}>
-      {isEmpty(data) ? (
-        <p className="text-muted-foreground">{t("dataViewEmpty")}</p>
-      ) : isScalar(data) ? (
-        <p className="break-words whitespace-pre-wrap">{scalarText(data, context, MAX_TEXT)}</p>
-      ) : (
-        renderValue(data, 0, context)
-      )}
+      {content}
     </div>
   );
+}
+
+/** A key as the label of its value, cut where it is long. */
+function labelOf(key: string): string {
+  const label = readableLabel(key.slice(0, MAX_LABEL));
+  return cut(key.length > MAX_LABEL ? `${label.trimEnd()}…` : label, MAX_LABEL);
 }
 
 /** A key as a label: `due_date` and `dueDate` are "Due date", `userID` is "User ID". */
@@ -101,10 +115,13 @@ function renderObject(
 ): ReactNode {
   const entries = Object.entries(record);
   const shown = take(entries, context);
+  if (shown.length === 0) {
+    return <More count={entries.length} context={context} />;
+  }
   return (
     <div className="grid min-w-0 gap-2">
       <KeyValueList>
-        {shown.map(([key, value]) => renderField(key, readableLabel(key), value, depth, context))}
+        {shown.map(([key, value]) => renderField(key, labelOf(key), value, depth, context))}
       </KeyValueList>
       <More count={entries.length - shown.length} context={context} />
     </div>
@@ -144,6 +161,9 @@ function renderField(
 function renderList(items: unknown[], depth: number, context: ViewContext): ReactNode {
   if (items.every(isScalar)) {
     const shown = take(items, context);
+    if (shown.length === 0) {
+      return <More count={items.length} context={context} />;
+    }
     return (
       <div className="grid min-w-0 gap-1">
         <List>
@@ -166,6 +186,9 @@ function renderList(items: unknown[], depth: number, context: ViewContext): Reac
   // Objects with nested values, or values of different shapes: each item is a section under
   // its position in the list.
   const shown = take(items, context);
+  if (shown.length === 0) {
+    return <More count={items.length} context={context} />;
+  }
   return (
     <div className="grid min-w-0 gap-2">
       <KeyValueList>
@@ -186,6 +209,9 @@ function renderTable(
 ): ReactNode {
   const fit = Math.max(0, Math.floor(context.budget.left / columns.length));
   const shown = rows.slice(0, Math.min(MAX_ROWS, fit));
+  if (shown.length === 0) {
+    return <More count={total} context={context} />;
+  }
   const numeric = new Set(
     columns.filter((column) =>
       shown.every(
@@ -200,7 +226,7 @@ function renderTable(
           <TableRow>
             {columns.map((column) => (
               <TableHead key={column} align={numeric.has(column) ? "end" : "start"}>
-                {readableLabel(column)}
+                {labelOf(column)}
               </TableHead>
             ))}
           </TableRow>
@@ -252,12 +278,15 @@ function scalarText(value: Scalar, context: ViewContext, max: number): string {
     return context.t(value ? "dataViewYes" : "dataViewNo");
   }
   if (typeof value === "number") {
-    return Number.isFinite(value)
-      ? new Intl.NumberFormat(context.locale, {
-          useGrouping: false,
-          maximumFractionDigits: 20
-        }).format(value)
-      : String(value);
+    return cut(
+      Number.isFinite(value)
+        ? new Intl.NumberFormat(context.locale, {
+            useGrouping: false,
+            maximumFractionDigits: 20
+          }).format(value)
+        : String(value),
+      max
+    );
   }
   if (typeof value !== "string") {
     return cut(String(value), max);
@@ -265,24 +294,33 @@ function scalarText(value: Scalar, context: ViewContext, max: number): string {
   return dateText(value, context.locale) ?? cut(value, max);
 }
 
+/** A day or a moment written as ISO 8601, in the reader's language. A day that does not exist, such as 2026-02-31, stays text. */
 function dateText(value: string, locale: LocaleCode): string | undefined {
-  if (ISO_DAY.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`))) {
+  if (ISO_DAY.test(value) && isRealDay(value)) {
     return formatCalendarDay(value, locale);
   }
-  if (ISO_MOMENT.test(value) && !Number.isNaN(Date.parse(value))) {
+  if (ISO_MOMENT.test(value) && isRealDay(value.slice(0, 10)) && !Number.isNaN(Date.parse(value))) {
     return formatMomentShort(value, locale);
   }
   return undefined;
+}
+
+/** Whether a day of the form 2026-11-19 is on the calendar: it reads back as itself. */
+function isRealDay(day: string): boolean {
+  const date = new Date(`${day}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === day;
 }
 
 function cut(text: string, max: number): string {
   if (text.length <= max) {
     return text;
   }
-  return `${Array.from(text)
-    .slice(0, max - 1)
-    .join("")
-    .trimEnd()}…`;
+  // Cut first, so a long text is never spread into characters; a cut through a pair of
+  // surrogates leaves its first half, which is dropped.
+  const head = text.slice(0, max - 1);
+  const last = head.charCodeAt(head.length - 1);
+  const whole = last >= 0xd800 && last <= 0xdbff ? head.slice(0, -1) : head;
+  return `${whole.trimEnd()}…`;
 }
 
 function countText(value: unknown, context: ViewContext): string {

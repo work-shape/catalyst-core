@@ -123,6 +123,26 @@ describe("the generic data view", () => {
     // 1500 values at most: every value of the fifteenth table and later ones is left out.
     expect(huge.match(/<td/gu)?.length ?? 0).toBeLessThanOrEqual(1500);
     expect(text(huge)).toContain("and 50 more");
+    // Once the values are spent a list is only its count: no table of heads alone.
+    expect(huge.match(/<table/gu)).toHaveLength(15);
+    expect(huge.match(/<th[ >]/gu)).toHaveLength(30);
+
+    // A long key is cut as a label and as a column's head; a long number is cut like text.
+    const key = `field_${"x".repeat(200)}`;
+    const labelled = text(view({ [key]: 1 }));
+    expect(labelled).toContain(`Field ${"x".repeat(73)}…`);
+    expect(labelled).not.toContain("x".repeat(80));
+    const heads = view([{ [key]: 1 }]);
+    expect(/<th[^>]*>([^<]*)<\/th>/u.exec(heads)?.[1]).toHaveLength(80);
+    // A number of 301 digits in a table cell, which shows 120 characters.
+    expect(text(view([{ amount: 1e300 }]))).toMatch(/^Amount 10{118}…$/u);
+  });
+
+  it("reads a day or a moment only where it is on the calendar", () => {
+    expect(text(view({ due: "2026-02-28" }))).toContain("Due 2/28/2026");
+    expect(text(view({ due: "2026-02-31" }))).toContain("Due 2026-02-31");
+    expect(text(view({ at: "2026-02-31T10:00:00Z" }))).toContain("At 2026-02-31T10:00:00Z");
+    expect(text(view({ at: "2026-11-19T10:00:00Z" }))).not.toContain("2026-11-19T");
   });
 
   it("shows text in the data as text and never as markup", () => {
@@ -175,6 +195,36 @@ describe("a display whose kind has no widget", () => {
     expect(text(markup)).toContain("Due date 11/19/2026");
     expect(markup).not.toContain("<pre");
     expect(markup).not.toContain("&quot;status&quot;");
+    // In the thread it is bounded and scrolls.
+    expect(markup).toMatch(/data-slot="generic-data-view" class="[^"]*max-h-96 overflow-auto/u);
+  });
+
+  it("keeps the sentence of the call above the data", () => {
+    const markup = renderCall({
+      output: "Found one open item.",
+      display: { kind: "example.unknown_kind", mode: "inline", data: { status: "open" } }
+    });
+    expect(text(markup)).toContain("Found one open item. Status open");
+  });
+
+  it("is no display without a kind or without data", () => {
+    // Without data it is the call's line alone.
+    const empty = renderCall({ display: { kind: "example.unknown_kind", data: null } });
+    expect(empty).not.toContain('data-slot="generic-data-view"');
+
+    // A data part that is a record without a kind is data: all its fields show, not the inner
+    // `data` as if it were a display's.
+    const part = text(
+      renderToStaticMarkup(
+        createElement(
+          ToolDisplayPanelProvider,
+          null,
+          createElement(DataPart, { name: "page", data: { data: ["one", "two"], total: 2 } })
+        )
+      )
+    );
+    expect(part).toContain("Data one two");
+    expect(part).toContain("Total 2");
   });
 
   it("is drawn by the generic data view as a data part of a message", () => {

@@ -166,6 +166,7 @@ export function DisplayToolCall({
   actionLabel,
   detailSections,
   displayNode,
+  summary,
   state,
   statusLabel,
   artifacts,
@@ -178,6 +179,8 @@ export function DisplayToolCall({
   actionLabel?: string;
   detailSections: ToolDetailSection[];
   displayNode: ReactNode;
+  /** The sentence of the call, above its display: for data no widget words. */
+  summary?: string;
   state: "running" | "completed" | "failed";
   statusLabel: string;
   artifacts: ToolArtifactDownloadRef[];
@@ -224,6 +227,11 @@ export function DisplayToolCall({
             aria-hidden="true"
           />
         </button>
+        {open && summary ? (
+          <p className="border-b bg-muted/40 px-3 py-2 text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]">
+            {summary}
+          </p>
+        ) : null}
         {open ? <div>{displayNode}</div> : null}
       </div>
       {/* Tool cards never open the panel themselves; only the promoted result

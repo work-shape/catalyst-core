@@ -12,7 +12,13 @@ export interface KeyValueListProps extends HTMLAttributes<HTMLDListElement> {
 
 /** The list a set of `KeyValue` rows sits in. */
 export function KeyValueList({ className, layout = "inline", ...props }: KeyValueListProps) {
-  return <dl className={cn("group/key-value grid min-w-0 gap-2", className)} {...props} />;
+  return (
+    <dl
+      data-layout={layout}
+      className={cn("group/key-value grid min-w-0 gap-2", className)}
+      {...props}
+    />
+  );
 }
 
 export interface KeyValueProps extends HTMLAttributes<HTMLDivElement> {

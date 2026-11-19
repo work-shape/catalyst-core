@@ -56,22 +56,53 @@ export function renderBuiltInDisplay(display: {
     return structuredDataDisplay;
   }
   const mode = readDisplayMode(display);
-  if (
-    (display.kind === "html.rendered" || display.kind === "private_hydrated_view") &&
-    isRecord(display.data) &&
-    typeof display.data.html === "string"
-  ) {
+  if (isHtmlDisplay(display)) {
     const title = typeof display.data.title === "string" ? display.data.title : "Rendered HTML";
     return (
       <RenderedHtmlDisplay html={display.data.html} kind={display.kind} mode={mode} title={title} />
     );
   }
-  // The approval card is drawn by the tool call itself; elsewhere its ids say nothing.
-  if (display.kind === APPROVAL_REQUEST_DISPLAY_KIND || display.data === undefined) {
+  if (!isGenericDataDisplay(display)) {
     return undefined;
   }
-  // Data of a kind without a widget of the release: read from its own shape, never as JSON.
-  return <GenericDataView data={display.data} className={mode === "inline" ? "p-3" : undefined} />;
+  // Data of a kind without a widget of the release: read from its own shape, never as JSON. In
+  // the thread it is bounded and scrolls; the panel has the room.
+  return (
+    <GenericDataView
+      data={display.data}
+      className={mode === "inline" ? "max-h-96 overflow-auto p-3" : undefined}
+    />
+  );
+}
+
+/**
+ * Whether a display is drawn by the generic data view: it names a kind, carries data, and is
+ * none of the kinds the platform draws itself. A record without a kind is data, not a display.
+ */
+export function isGenericDataDisplay(display: {
+  kind?: unknown;
+  data?: unknown;
+}): display is { kind: string; data: unknown } {
+  return (
+    typeof display.kind === "string" &&
+    display.data !== undefined &&
+    display.data !== null &&
+    // The approval card is drawn by the tool call itself; elsewhere its ids say nothing.
+    display.kind !== APPROVAL_REQUEST_DISPLAY_KIND &&
+    !isHtmlDisplay(display) &&
+    renderStructuredDataResourceDisplay(display) === undefined
+  );
+}
+
+function isHtmlDisplay(display: { kind?: unknown; data?: unknown }): display is {
+  kind: "html.rendered" | "private_hydrated_view";
+  data: { html: string; title?: unknown };
+} {
+  return (
+    (display.kind === "html.rendered" || display.kind === "private_hydrated_view") &&
+    isRecord(display.data) &&
+    typeof display.data.html === "string"
+  );
 }
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
