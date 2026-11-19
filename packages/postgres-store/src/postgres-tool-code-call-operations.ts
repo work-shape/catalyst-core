@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt } from "drizzle-orm";
+import { and, eq, isNull, lt, sql } from "drizzle-orm";
 import type { ToolCodeCall, ToolCodeCallsStore } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { toolCodeCalls } from "./schema/toolCodeCalls";
@@ -47,18 +47,20 @@ export function createPostgresToolCodeCallsStore(db: PostgresConnection): ToolCo
     async startToolCodeCall({ clientInstanceId, id, startedAt }) {
       const started = await db
         .update(toolCodeCalls)
-        .set({ startedAt: new Date(startedAt), request: null, answer: null })
+        .set({ startedAt: new Date(startedAt) })
         .where(
           and(
             eq(toolCodeCalls.clientInstanceId, clientInstanceId),
             eq(toolCodeCalls.id, id),
-            isNull(toolCodeCalls.outcome)
+            isNull(toolCodeCalls.outcome),
+            // A request an earlier attempt made is never made again.
+            isNull(toolCodeCalls.request)
           )
         )
         .returning({ id: toolCodeCalls.id });
       return started.length > 0;
     },
-    async requestToolCodeCall({ clientInstanceId, id, request }) {
+    async requestToolCodeCall({ clientInstanceId, id, request, startedAt }) {
       const written = await db
         .update(toolCodeCalls)
         .set({ request })
@@ -66,7 +68,9 @@ export function createPostgresToolCodeCallsStore(db: PostgresConnection): ToolCo
           and(
             eq(toolCodeCalls.clientInstanceId, clientInstanceId),
             eq(toolCodeCalls.id, id),
-            isNull(toolCodeCalls.outcome)
+            isNull(toolCodeCalls.outcome),
+            // Only the attempt that started last makes requests.
+            eq(toolCodeCalls.startedAt, new Date(startedAt))
           )
         )
         .returning({ id: toolCodeCalls.id });
@@ -80,7 +84,8 @@ export function createPostgresToolCodeCallsStore(db: PostgresConnection): ToolCo
           and(
             eq(toolCodeCalls.clientInstanceId, clientInstanceId),
             eq(toolCodeCalls.id, id),
-            isNull(toolCodeCalls.outcome)
+            isNull(toolCodeCalls.outcome),
+            sql`(${toolCodeCalls.request}->>'seq')::integer = ${answer.seq}`
           )
         )
         .returning({ id: toolCodeCalls.id });

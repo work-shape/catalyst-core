@@ -7,9 +7,9 @@ import {
   type SandboxRequestChannel
 } from "@work-shape/catalyst-tool-execution";
 
-// The request channel of a command (TOOL-2c) is bounded: a command that writes requests faster
-// than they are answered, or more of them than it may make, or larger ones than its output may
-// be, holds no memory of the worker for it, and requests never put its idle timeout off.
+// The request channel of a command (TOOL-2c) is bounded apart from its output: a command that
+// writes requests faster than they are answered, or more or longer ones than it may make, holds
+// no memory of the worker for it, and requests never put its idle timeout off.
 
 const MARK = "end-of-requests";
 let directory = "";
@@ -84,16 +84,37 @@ describe("a command's request channel", () => {
     expect(result.stdoutPreview.trim()).toBe("done");
   });
 
-  it("counts its requests toward the output's bound and closes once they pass it", async () => {
-    const { requests, asked } = channel({ maxLines: 50 });
+  it("answers requests within its own bounds however much smaller the output's bound is", async () => {
+    const { requests, asked } = channel({ maxLines: 5 });
     const line = "x".repeat(400);
     const result = await run(
-      `for i in 1 2 3 4 5 6 7 8; do echo ${line}; read answer; done; echo ${MARK}`,
+      `for i in 1 2 3 4 5; do echo ${line}; read answer; done; echo ${MARK}; echo done`,
       requests,
       { maxStdoutBytes: 1_000 }
     );
-    expect(asked.length).toBeLessThanOrEqual(2);
-    expect(result.truncated.stdout).toBe(true);
+    expect(asked.length).toBe(5);
+    expect(result.stdoutPreview.trim()).toBe("done");
+    expect(result.truncated.stdout).toBe(false);
+  });
+
+  it("closes once its requests pass its lines of the longest request", async () => {
+    let refused = 0;
+    // Lines longer than a request may be: each is one line, but its bytes are counted.
+    const { requests } = channel({
+      maxLines: 50,
+      maxLineBytes: 100,
+      refuse: () => {
+        refused += 1;
+        return "too long";
+      }
+    });
+    const line = "x".repeat(4_000);
+    const result = await run(
+      `for i in 1 2 3 4 5 6; do echo ${line}; read answer || break; done; echo ${MARK}; echo done`,
+      requests
+    );
+    expect(refused).toBeLessThanOrEqual(2);
+    expect(result.stdoutPreview.trim()).toBe("done");
   });
 
   it("is idle while it only writes requests nobody answers any more", async () => {

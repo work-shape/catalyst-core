@@ -90,9 +90,9 @@ export interface ToolCodeCallsStore {
     id: string;
   }): Promise<ToolCodeCall | undefined>;
   /**
-   * Notes that a worker starts the handler's container now, and clears a request and answer an
-   * earlier start left. `false` where the row is gone or already has its outcome: nobody waits
-   * for the call, and the handler is not started.
+   * Notes that a worker starts the handler's container now. `false` where the row is gone or
+   * already has its outcome, so nobody waits for the call, or where an earlier attempt's
+   * handler made a request, which is never made twice: the handler is not started.
    */
   startToolCodeCall(input: {
     clientInstanceId: ClientInstanceId;
@@ -100,15 +100,20 @@ export interface ToolCodeCallsStore {
     startedAt: ISODateString;
   }): Promise<boolean>;
   /**
-   * Writes the handler's next request in place of the last. `false` where the row is gone or
-   * has its outcome: nobody waits for the call any more.
+   * Writes the handler's next request in place of the last, for the attempt that started at
+   * `startedAt`. `false` where the row is gone or has its outcome, so nobody waits for the call
+   * any more, or where another attempt started since.
    */
   requestToolCodeCall(input: {
     clientInstanceId: ClientInstanceId;
     id: string;
     request: ToolCodeCallRequest;
+    startedAt: ISODateString;
   }): Promise<boolean>;
-  /** Writes the answer to the open request. `false` where the row is gone or has its outcome. */
+  /**
+   * Writes the answer to the open request, the one of the answer's `seq`. `false` where the row
+   * is gone, has its outcome or holds another request.
+   */
   answerToolCodeCall(input: {
     clientInstanceId: ClientInstanceId;
     id: string;

@@ -74,8 +74,9 @@ export interface SandboxRequestChannel {
   maxLineBytes: number;
   /**
    * The most lines answered. Past them the command's input stream is closed and what it still
-   * writes before the end mark is dropped. The bytes of every request count toward the
-   * command's `maxStdoutBytes` as its output does; past them the channel closes too.
+   * writes before the end mark is dropped. The requests are read up to `maxLines` lines of
+   * `maxLineBytes` and their line breaks, apart from the command's `maxStdoutBytes`, which
+   * bounds its output alone; past them the channel closes too.
    */
   maxLines: number;
   /** The answer to one request: one line, without a line break. It never rejects. */
@@ -240,7 +241,6 @@ export async function runSpawnedProcess(input: {
           pause: () => child.stdout.pause(),
           resume: () => child.stdout.resume(),
           close: () => child.stdin.end(),
-          count: (bytes) => stdout.count(bytes),
           output: (chunk) => stdout.append(chunk),
           answering: (busy) => {
             // A process waits for its answer: that is no idleness, and it is not counted.
@@ -374,8 +374,6 @@ interface RequestLinesIo {
   resume(): void;
   /** Closes the process's input stream: it is answered nothing more. */
   close(): void;
-  /** Counts bytes of requests toward the output's bound. Whether the bound is passed. */
-  count(bytes: number): boolean;
   output(chunk: Buffer): void;
   answering(busy: boolean): void;
 }
@@ -384,8 +382,8 @@ interface RequestLinesIo {
  * Reads the requests of a process from its output stream until the end mark and answers each,
  * one at a time: while one is answered the stream is paused, and the rest of the chunk waits.
  * What follows the mark is the process's own output. Past `maxLines` lines, or once the
- * requests passed the output's bound, the channel is closed and nothing more is held but the
- * line being read, to find the mark.
+ * requests passed `maxLines` lines of `maxLineBytes`, the channel is closed and nothing more is
+ * held but the line being read, to find the mark.
  */
 class RequestLines {
   private held: Buffer[] = [];
@@ -395,13 +393,18 @@ class RequestLines {
   private ended = false;
   private closed = false;
   private lines = 0;
+  /** The bytes read before the end mark, and the most of them read. */
+  private bytes = 0;
+  private readonly maxBytes: number;
   /** The rest of a chunk while its request is answered. */
   private waiting: Buffer | undefined;
 
   constructor(
     private readonly channel: SandboxRequestChannel,
     private readonly io: RequestLinesIo
-  ) {}
+  ) {
+    this.maxBytes = channel.maxLines * (channel.maxLineBytes + 1);
+  }
 
   /** Reads a chunk. Whether it held output: bytes after the end mark. */
   take(chunk: Buffer): boolean {
@@ -472,7 +475,8 @@ class RequestLines {
   }
 
   private counted(bytes: number): void {
-    if (this.io.count(bytes) && !this.closed) this.close();
+    this.bytes += bytes;
+    if (this.bytes > this.maxBytes && !this.closed) this.close();
   }
 
   private close(): void {
@@ -508,30 +512,20 @@ class RequestLines {
 class BoundedOutput {
   private readonly chunks: Buffer[] = [];
   private byteLength = 0;
-  /** Every byte counted toward the bound: those kept, and a request channel's. */
-  private counted = 0;
   truncated = false;
 
   constructor(private readonly maxBytes: number) {}
 
   append(chunk: Buffer): void {
-    const remaining = this.maxBytes - this.counted;
+    const remaining = this.maxBytes - this.byteLength;
     if (remaining > 0) {
       const kept = chunk.subarray(0, remaining);
       this.chunks.push(kept);
       this.byteLength += kept.byteLength;
     }
-    this.counted += chunk.byteLength;
     if (chunk.byteLength > remaining) {
       this.truncated = true;
     }
-  }
-
-  /** Counts bytes that are not kept, as a request's. Whether the bound is passed. */
-  count(bytes: number): boolean {
-    this.counted += bytes;
-    if (this.counted > this.maxBytes) this.truncated = true;
-    return this.counted > this.maxBytes;
   }
 
   text(): string {

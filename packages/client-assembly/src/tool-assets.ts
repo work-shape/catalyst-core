@@ -170,8 +170,11 @@ interface ToolCallPorts {
  * What the policy asked of each Connection operation a code tool declares, as the call of the
  * tool was admitted, by the agent's run and tool call: the most a call its handler makes then
  * runs without asking anybody. The admission and the execution of one call are one process:
- * a call that waited is admitted again, there, before it executes. Read once; what is never
- * read goes after a while.
+ * a call that waited is admitted again, there, before it executes, and what that admission
+ * asks is what holds. The decision it waited for answers no more than it was asked: a
+ * confirmed call the policy now asks an approval of is refused (`executeConfirmedOperation`),
+ * and one it now denies is refused as it is admitted again. Read once; what is never read
+ * goes after a while.
  */
 class AdmittedPolicies {
   private readonly entries = new Map<

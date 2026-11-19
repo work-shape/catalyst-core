@@ -506,6 +506,68 @@ describe("a code tool's handler calling a Connection", () => {
       });
     });
 
+    describe("a confirmed call the policy asks an approval of by the time it resumes", () => {
+      const confirmThenRaise = async (call: OperationCall, runtime: OperationCallRuntime) => {
+        const held = await runOperation(call, f.operationCalls.deps, runtime);
+        expect(held.result.status).toBe("pending_confirmation");
+        await withTestSql(
+          (sql) => sql`
+            update operation_runs
+            set decision = ${sql.json({ mode: "confirmed", by: f.kai.id, at: new Date().toISOString() })}
+            where id = ${held.run.id}`
+        );
+        // An admin raises the write to an approval after the person confirmed.
+        f.state.centralSettings = [{ operation: "connection.crm.write", value: "approval" }];
+        const executed = f.handed.length;
+        const ended = await executeConfirmedOperation(
+          { runId: held.run.id, call },
+          f.operationCalls.deps,
+          { runtime }
+        );
+        expect(f.handed.length).toBe(executed);
+        return { held, ended };
+      };
+
+      it("refuses the tool's call, and its handler's write never runs", async () => {
+        const { call, runtime } = toolCall(
+          f.kai,
+          "write_py",
+          { text: "raised", mode: "write" },
+          { fenced: true }
+        );
+        const { held, ended } = await confirmThenRaise(call, runtime);
+        expect(ended).toMatchObject({ execution: "refused", run: { status: "denied" } });
+        expect(
+          (await f.runs()).filter(
+            (run) => run.origin.kind === "agent" && run.origin.byTool?.runId === held.run.id
+          )
+        ).toEqual([]);
+      });
+
+      it("refuses an agent's own call of the operation", async () => {
+        const tools = f.state.agentTools.get(AGENT) ?? [];
+        f.state.agentTools.set(AGENT, [...tools, "connection.crm.write"]);
+        try {
+          const { call, runtime } = toolCall(
+            f.kai,
+            "write_py",
+            { note: "raised" },
+            { fenced: true }
+          );
+          if (call.origin.kind !== "agent") throw new Error("An agent's call");
+          const plain: OperationCall = {
+            ...call,
+            operation: "connection.crm.write",
+            origin: { ...call.origin, toolName: "connection.crm.write" }
+          };
+          const { ended } = await confirmThenRaise(plain, runtime);
+          expect(ended).toMatchObject({ execution: "refused", run: { status: "denied" } });
+        } finally {
+          f.state.agentTools.set(AGENT, tools);
+        }
+      });
+    });
+
     it("asks nothing where the declared operations are allowed, and a setting on the tool lowers none", async () => {
       f.state.centralSettings = [{ operation: toolCallOperationName("write_py"), value: "allow" }];
       expect(
@@ -666,10 +728,13 @@ describe("a code tool's handler calling a Connection", () => {
         createdAt: new Date().toISOString()
       });
       // What an attempt that was stopped left: its handler's first request.
+      const startedAt = new Date(Date.now() - 1_000).toISOString();
+      await f.stores.toolCodeCalls.startToolCodeCall({ clientInstanceId, id, startedAt });
       await f.stores.toolCodeCalls.requestToolCodeCall({
         clientInstanceId,
         id,
-        request: { seq: 1, connection: "crm", operation: "echo", input: { text: "again" } }
+        request: { seq: 1, connection: "crm", operation: "echo", input: { text: "again" } },
+        startedAt
       });
       return id;
     };
@@ -691,21 +756,58 @@ describe("a code tool's handler calling a Connection", () => {
       expect(f.handed.length).toBe(executed);
     }, 20_000);
 
-    it("starts without the request and answer an earlier start left", async () => {
+    it("starts no attempt once an earlier one made a request, and keeps that request", async () => {
       const id = await written();
-      await f.stores.toolCodeCalls.answerToolCodeCall({
-        clientInstanceId,
+      expect(
+        await f.stores.toolCodeCalls.startToolCodeCall({
+          clientInstanceId,
+          id,
+          startedAt: new Date().toISOString()
+        })
+      ).toBe(false);
+      const kept = await f.stores.toolCodeCalls.getToolCodeCall({ clientInstanceId, id });
+      expect(kept?.request).toMatchObject({ seq: 1 });
+    });
+
+    it("writes only the requests of the attempt that started last, and answers only the open one", async () => {
+      const id = createPlatformId("tcc");
+      await f.stores.toolCodeCalls.createToolCodeCall({
         id,
-        answer: { seq: 1, ok: true, output: { text: "again" } }
-      });
-      await f.stores.toolCodeCalls.startToolCodeCall({
         clientInstanceId,
-        id,
-        startedAt: new Date().toISOString()
+        conversationId,
+        tool: "lookup_py",
+        revisionId: "revision",
+        input: { text: "x" },
+        timeoutSeconds: 5,
+        createdAt: new Date().toISOString()
       });
-      const started = await f.stores.toolCodeCalls.getToolCodeCall({ clientInstanceId, id });
-      expect(started?.request).toBeUndefined();
-      expect(started?.answer).toBeUndefined();
+      const first = new Date(Date.now() - 2_000).toISOString();
+      const second = new Date(Date.now() - 1_000).toISOString();
+      const calls = f.stores.toolCodeCalls;
+      expect(await calls.startToolCodeCall({ clientInstanceId, id, startedAt: first })).toBe(true);
+      expect(await calls.startToolCodeCall({ clientInstanceId, id, startedAt: second })).toBe(true);
+      const request = { seq: 1, connection: "crm", operation: "echo", input: { text: "x" } };
+      // The attempt that started first overlaps the second: its request is not written.
+      expect(
+        await calls.requestToolCodeCall({ clientInstanceId, id, request, startedAt: first })
+      ).toBe(false);
+      expect(
+        await calls.requestToolCodeCall({ clientInstanceId, id, request, startedAt: second })
+      ).toBe(true);
+      expect(
+        await calls.answerToolCodeCall({
+          clientInstanceId,
+          id,
+          answer: { seq: 2, ok: true, output: {} }
+        })
+      ).toBe(false);
+      expect(
+        await calls.answerToolCodeCall({
+          clientInstanceId,
+          id,
+          answer: { seq: 1, ok: true, output: {} }
+        })
+      ).toBe(true);
     });
   });
 });

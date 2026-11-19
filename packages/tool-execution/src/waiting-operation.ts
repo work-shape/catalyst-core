@@ -149,6 +149,10 @@ export async function executeConfirmedOperation(
       options.signal
     );
   }
+  // A confirmation answers what asks for one and no more: a call the policy now asks an
+  // approval of, such as one a setting raised while it waited, is refused, as it would be
+  // held were it made now (an agent's call never moves on to an approval).
+  if (policy.next === "await_approval") return holdForApproval(context, policy, waiting, undefined);
   return executeWaitingCall(context, decision, options.signal);
 }
 

@@ -26,6 +26,7 @@ import {
   type CodeToolConfig,
   type ConfigAssetStore,
   type ConversationId,
+  type ISODateString,
   type JobSchedule,
   type JsonObject,
   type PlatformStores,
@@ -227,6 +228,8 @@ function requestChannel(options: {
   declared: readonly string[];
   signal: AbortSignal;
   pollMs: number;
+  /** When this attempt started the handler's container: only its requests are written. */
+  startedAt(): ISODateString | undefined;
 }): CodeSandboxChannel {
   const { clientInstanceId, stores, id, signal } = options;
   const closed = () => refusedRequest("channel_closed", "Nobody waits for this call any more.");
@@ -275,8 +278,17 @@ function requestChannel(options: {
         operation: parsed.operation,
         input: unknownToJsonValue(parsed.input ?? {})
       };
+      const startedAt = options.startedAt();
+      if (startedAt === undefined) return closed();
       try {
-        if (!(await stores.toolCodeCalls.requestToolCodeCall({ clientInstanceId, id, request })))
+        if (
+          !(await stores.toolCodeCalls.requestToolCodeCall({
+            clientInstanceId,
+            id,
+            request,
+            startedAt
+          }))
+        )
           return closed();
         while (!signal.aborted) {
           await sleep(options.pollMs, undefined, { signal }).catch(() => undefined);
@@ -337,14 +349,16 @@ export function createToolCodeCallJobs(options: ToolCodeCallJobsOptions): {
           if (!call || call.outcome) return;
           // An earlier attempt's handler called a Connection and stopped before it ended. What
           // it called may have changed something outside, so the handler is not run again.
-          if (call.request) {
-            await finish(
+          const interrupted = () =>
+            finish(
               id,
               failed(
                 "interrupted",
                 "The handler stopped after it called a Connection. It is not run again, so nothing it called is called twice."
               )
             );
+          if (call.request) {
+            await interrupted();
             return;
           }
           const tool = await codeToolRevision(
@@ -376,6 +390,9 @@ export function createToolCodeCallJobs(options: ToolCodeCallJobsOptions): {
             }
           };
           watch().catch(() => undefined);
+          /** When this attempt started the container, and whether a request kept it from it. */
+          let startedAt: ISODateString | undefined;
+          let requested = false;
           let result;
           try {
             result = await run({
@@ -397,17 +414,26 @@ export function createToolCodeCallJobs(options: ToolCodeCallJobsOptions): {
                 id,
                 declared: tool.connections ?? [],
                 signal: stop.signal,
-                pollMs: options.requestPollMs ?? REQUEST_POLL_MS
+                pollMs: options.requestPollMs ?? REQUEST_POLL_MS,
+                startedAt: () => startedAt
               }),
               signal: stop.signal,
               // The operation's wait for the handler counts from here, not from the queue.
               beforeStart: async () => {
+                const at = new Date().toISOString();
                 const waited = await stores.toolCodeCalls.startToolCodeCall({
                   clientInstanceId,
                   id,
-                  startedAt: new Date().toISOString()
+                  startedAt: at
                 });
-                if (!waited) stop.abort(new Error("Nobody waits for the call"));
+                if (waited) {
+                  startedAt = at;
+                  return;
+                }
+                // An attempt that overlaps this one made a request since this one began.
+                const now = await stores.toolCodeCalls.getToolCodeCall({ clientInstanceId, id });
+                requested = now?.outcome === undefined && now?.request !== undefined;
+                stop.abort(new Error("Nobody waits for the call"));
               }
             });
           } finally {
@@ -418,6 +444,10 @@ export function createToolCodeCallJobs(options: ToolCodeCallJobsOptions): {
             throw control.signal.reason instanceof Error
               ? control.signal.reason
               : new Error("The attempt was stopped");
+          }
+          if (requested) {
+            await interrupted();
+            return;
           }
           if (result.kind === "stopped") return;
           if (result.kind === "notStarted") {
@@ -631,8 +661,6 @@ export function createToolCodeCallClient(options: {
           if (call.startedAt && call.startedAt !== seenStart) {
             seenStart = call.startedAt;
             startedAt = Math.min(Date.parse(call.startedAt), Date.now());
-            // A container started again starts its requests anew: the start cleared the last.
-            answered = 0;
           }
           const { request } = call;
           if (request && request.seq > answered && call.answer?.seq !== request.seq) {
