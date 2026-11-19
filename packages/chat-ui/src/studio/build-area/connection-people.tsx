@@ -36,7 +36,6 @@ import {
   type PersonalView
 } from "./connection-people-model";
 import {
-  AdminConsentLink,
   SignInBody,
   popupSignInBrowser,
   useConnectionSignIn,
@@ -300,16 +299,7 @@ export function PersonalSignInSection({ name, title }: { name: string; title: st
  * the account the provider named, the state, since when and the last day it was used, and
  * Revoke. Revoking deletes the stored access; the grant at the provider stays.
  */
-export function ConnectionPeopleSection({
-  name,
-  mayWrite,
-  adminConsentUrl
-}: {
-  name: string;
-  mayWrite: boolean;
-  /** The link an administrator of the people's organisation approves the app with. */
-  adminConsentUrl?: string | undefined;
-}) {
+export function ConnectionPeopleSection({ name, mayWrite }: { name: string; mayWrite: boolean }) {
   const { apiBaseUrl, authScope, client } = useSettingsPage();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -357,9 +347,6 @@ export function ConnectionPeopleSection({
   }
   return (
     <div className="grid min-w-0 gap-3" data-connection-people="">
-      {adminConsentUrl ? (
-        <AdminConsentLink url={adminConsentUrl} hint={t("connectionSignIn.adminConsentHint")} />
-      ) : null}
       {people.data.people.length === 0 ? (
         <EmptyState layout="inline">{t("personalConnections.peopleEmpty")}</EmptyState>
       ) : (

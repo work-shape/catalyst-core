@@ -127,7 +127,11 @@ export {
   type SignInTab
 } from "./connection-sign-in";
 export { ConnectionSignInLanding } from "./connection-sign-in-landing";
-export { ConnectionSignInSection, SignInStateBadge } from "./connection-sign-in-section";
+export {
+  ConnectionSignInSection,
+  SignInStateBadge,
+  SignInTechnical
+} from "./connection-sign-in-section";
 export { listedHealth } from "./connection-status";
 export { ConnectionUsedBy, usedByCount } from "./connection-used-by";
 export type {

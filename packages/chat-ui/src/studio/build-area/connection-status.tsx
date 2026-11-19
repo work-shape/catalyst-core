@@ -188,7 +188,7 @@ export function listedHealth(health: unknown, personal = false): HealthView | un
  * the instance recorded. A test that failed does not hide the recorded reason for it, a
  * missing or unreadable credential: the instance answers such a test as unauthorized.
  */
-function healthOf(detail: ConnectionDetail, run: ConnectionTestRun): HealthView {
+export function healthOf(detail: ConnectionDetail, run: ConnectionTestRun): HealthView {
   if (run.status === "running") {
     return "testing";
   }
@@ -210,7 +210,9 @@ export function ConnectionStatus({
   runtime,
   source,
   mayTest,
-  credentialEditor
+  credentialEditor,
+  test,
+  signedIn = false
 }: {
   name: string;
   detail: ConnectionDetail;
@@ -225,10 +227,19 @@ export function ConnectionStatus({
    * the reader may test.
    */
   credentialEditor?: (retest: (() => void) | undefined) => ReactNode;
+  /** The page's own test of the Connection, where it shows the same run in another place too. */
+  test?: { run: ConnectionTestRun; start(): void };
+  /**
+   * The Connection is signed in, which the page says first: "Not tested" beside that would
+   * read as a doubt, so an untested one shows the test alone.
+   */
+  signedIn?: boolean;
 }) {
   const { locale, t } = useTranslation();
-  const { run, start } = source.useTest(name);
+  const own = source.useTest(name);
+  const { run, start } = test ?? own;
   const view = healthOf(detail, run);
+  const quiet = signedIn && view === "never_tested";
   const health = HEALTH_VIEWS[view];
   const testedAt =
     run.status === "running"
@@ -240,42 +251,44 @@ export function ConnectionStatus({
   return (
     <>
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
-        <div
-          role="status"
-          data-connection-health={view}
-          className="grid min-w-0 flex-1 basis-64 gap-1.5"
-        >
-          <Badge tone={health.tone} dot>
-            {t(health.label)}
-          </Badge>
-          <p className="text-body">
-            {t(
-              // It sends no credential, so the server refused none: it wants one.
-              view === "unauthorized" && !needsCredential
-                ? "connections.healthUnauthorizedTextNoKey"
-                : view === "personal" && detail.oauth?.registration === "managed"
-                  ? "connections.healthPersonalTextManaged"
-                  : health.text
-            )}
-          </p>
-          {health.next ? (
+        {quiet ? null : (
+          <div
+            role="status"
+            data-connection-health={view}
+            className="grid min-w-0 flex-1 basis-64 gap-1.5"
+          >
+            <Badge tone={health.tone} dot>
+              {t(health.label)}
+            </Badge>
             <p className="text-body">
               {t(
-                // A Connection that sends no key cannot take one under Credential.
-                runtime && view === "unauthorized" && !needsCredential
-                  ? "connections.healthUnauthorizedNextNoKey"
-                  : runtime && health.nextRuntime
-                    ? health.nextRuntime
-                    : health.next
+                // It sends no credential, so the server refused none: it wants one.
+                view === "unauthorized" && !needsCredential
+                  ? "connections.healthUnauthorizedTextNoKey"
+                  : view === "personal" && detail.oauth?.registration === "managed"
+                    ? "connections.healthPersonalTextManaged"
+                    : health.text
               )}
             </p>
-          ) : null}
-          {testedAt ? (
-            <p className="text-caption text-muted-foreground">
-              {t("connections.lastTested", { time: formatDateTime(testedAt, locale) })}
-            </p>
-          ) : null}
-        </div>
+            {health.next ? (
+              <p className="text-body">
+                {t(
+                  // A Connection that sends no key cannot take one under Credential.
+                  runtime && view === "unauthorized" && !needsCredential
+                    ? "connections.healthUnauthorizedNextNoKey"
+                    : runtime && health.nextRuntime
+                      ? health.nextRuntime
+                      : health.next
+                )}
+              </p>
+            ) : null}
+            {testedAt ? (
+              <p className="text-caption text-muted-foreground">
+                {t("connections.lastTested", { time: formatDateTime(testedAt, locale) })}
+              </p>
+            ) : null}
+          </div>
+        )}
         {mayTest ? (
           <Button variant="outline" loading={run.status === "running"} onClick={start}>
             {t("connections.test")}

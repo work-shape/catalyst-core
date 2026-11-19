@@ -387,6 +387,11 @@ describe("Connection page", () => {
       detail: { testCredential: { state: "stale", version: 1, takesEndpoint: true } }
     });
     expect(stale).toContain("data-test-credential-stale");
+    // It needs a person: said above what agents may do too, with the way to the section.
+    expect(stale.indexOf("data-connection-test-credential-stale")).toBeLessThan(
+      stale.indexOf('id="operations"')
+    );
+    expect(stale).toContain(">Open test credential<");
     expect(stale).toContain("they never use the live key instead");
 
     // A reader who may not change the Connection sees the state and no write.
@@ -713,9 +718,12 @@ describe("Connection page", () => {
     expect(unsigned).toContain(">Anmeldung nötig<");
     // The state of the sign-in stands once, under Sign-in, not under Status as well.
     expect(unsigned.split("data-sign-in-state=")).toHaveLength(2);
-    // Provider, client and redirect URI are folded under Technical details.
-    expect(unsigned).toContain("data-sign-in-technical");
-    expect(unsigned).toContain(">Technische Details<");
+    // Provider, client and redirect URI are folded under the one Technical details, in Settings.
+    expect(unsigned).not.toContain("data-sign-in-technical");
+    expect(unsigned.split(">Technische Details<")).toHaveLength(2);
+    expect(unsigned.indexOf(">Technische Details<")).toBeGreaterThan(
+      unsigned.indexOf("data-asset-settings-trigger")
+    );
     expect(unsigned).not.toContain("auth.files.example.test");
     expect(unsigned).not.toContain("https://chat.example.com/api/v1/connections/oauth/callback");
     expect(unsigned).toContain('data-sign-in-begin=""');
@@ -742,7 +750,38 @@ describe("Connection page", () => {
     expect(signedIn).toContain("team@files.example.test");
     // Since when stands beside the state, not in a row of its own.
     expect(signedIn).toContain("data-sign-in-since");
-    expect(signedIn).toContain("seit 17.10.2026");
+    // To the minute, as a list of the build area says a moment.
+    expect(signedIn).toMatch(/seit 17\.10\.2026, \d{2}:\d{2}</u);
+    // Signed in is the state: nothing beside it says that nobody tested it.
+    expect(signedIn).not.toContain("data-connection-failing");
+    const untested = renderPage({
+      asset: oauthAsset,
+      detail: {
+        health: "unknown",
+        oauth,
+        binding: { state: "connected", scopes: [], connectedAt: "2026-10-17T09:00:00.000Z" }
+      },
+      locale: "de"
+    });
+    expect(untested).not.toContain("data-connection-health");
+    expect(untested).not.toContain(">Nicht getestet<");
+    expect(untested).toContain(">Verbindung testen<");
+
+    // A sign-in that stopped working says why above what agents may do, with the test.
+    const failing = renderPage({
+      asset: oauthAsset,
+      detail: {
+        health: "failed",
+        lastErrorCode: "upstream_unauthorized",
+        oauth,
+        binding: { state: "connected", scopes: [], connectedAt: "2026-10-17T09:00:00.000Z" }
+      },
+      locale: "de"
+    });
+    expect(failing).toContain('data-connection-failing="unauthorized"');
+    expect(failing.indexOf("data-connection-failing")).toBeLessThan(
+      failing.indexOf('id="operations"')
+    );
     // The permissions granted are technical: folded with the provider.
     expect(signedIn).not.toContain("data-sign-in-granted");
     expect(signedIn).toContain(
@@ -1217,6 +1256,24 @@ describe("Connection page", () => {
     expect(german).toContain(">Jede Person verbindet sich<");
     expect(german).toContain("Die App-Registrierung ist bereits eingerichtet.");
     expect(german).not.toContain("Nicht konfiguriert");
+    // The link an admin sends to IT stands with the sign-in, not folded under Settings.
+    const consent = renderPage({
+      asset: personal,
+      detail: {
+        ...detail("managed"),
+        oauth: {
+          registration: "managed",
+          providerHost: "login.example.test",
+          adminConsentUrl: "https://login.example.test/adminconsent"
+        }
+      },
+      settings: true
+    });
+    expect(consent.split("data-admin-consent-url")).toHaveLength(2);
+    expect(consent.indexOf("data-admin-consent-url")).toBeLessThan(
+      consent.indexOf('id="operations"')
+    );
+    expect(managed).not.toContain("data-admin-consent-url");
     const own = renderPage({ asset: personal, detail: detail("preregistered"), settings: true });
     expect(own).toContain(">Each person connects<");
     expect(own).toContain("There is no key to enter here.");
