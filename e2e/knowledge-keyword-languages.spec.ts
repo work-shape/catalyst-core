@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { Page } from "@playwright/test";
 import { z } from "zod";
+import { openKnowledgeSettings } from "./knowledge-page";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, takeTurn, test } from "./test";
 
@@ -149,6 +150,7 @@ test.describe("the keyword languages of a Knowledge Base", () => {
       await expect(page.getByRole("heading", { name: "Pressearchiv", level: 1 })).toBeVisible();
 
       // Listing none, it has German and English.
+      await openKnowledgeSettings(page);
       const advanced = page.locator('[id="advanced"]');
       await advanced.scrollIntoViewIfNeeded();
       await expect(advanced).toContainText("Sprachen der Wortsuche");
@@ -180,6 +182,7 @@ test.describe("the keyword languages of a Knowledge Base", () => {
 
       // Read back as saved; the last language checked cannot be cleared.
       await page.reload();
+      await openKnowledgeSettings(page);
       await advanced.scrollIntoViewIfNeeded();
       await expect(box("Deutsch")).toBeChecked();
       await expect(box("Französisch")).toBeChecked();
