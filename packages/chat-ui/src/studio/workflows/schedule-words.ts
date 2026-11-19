@@ -1,8 +1,8 @@
 import { isScheduleZone, scheduleZoneWords } from "@work-shape/catalyst-ui";
-import type { TranslationContextValue } from "../../shared/i18n";
+import type { TranslationContextValue, TranslationKey } from "../../shared/i18n";
 import { uiLabelsFor } from "../../shared/ui-labels";
 import type { InstanceTimeZone } from "./workflow-model";
-import type { WorkflowStepView } from "./workflow-views";
+import type { WorkflowStepView, WorkflowView } from "./workflow-views";
 
 // C9: the contract gives a schedule as a cron expression. Until it gives a form the interface
 // can put into words, the forms a person would write are read here: every day, every week on
@@ -12,11 +12,36 @@ import type { WorkflowStepView } from "./workflow-views";
 
 const NUMBER = /^\d{1,2}$/u;
 
-/** A cron expression in words, or nothing where it is none of the forms read here. */
+type ScheduleForm = "daily" | "weekly" | "monthly" | "yearly";
+
+/** A schedule as a title, "Every Monday, 08:00", and as a sentence, "Runs every Monday at 08:00". */
+const SCHEDULE_KEYS: Readonly<
+  Record<"title" | "sentence", Readonly<Record<ScheduleForm, TranslationKey>>>
+> = {
+  title: {
+    daily: "workflows.schedule.daily",
+    weekly: "workflows.schedule.weekly",
+    monthly: "workflows.schedule.monthly",
+    yearly: "workflows.schedule.yearly"
+  },
+  sentence: {
+    daily: "workflows.when.daily",
+    weekly: "workflows.when.weekly",
+    monthly: "workflows.when.monthly",
+    yearly: "workflows.when.yearly"
+  }
+};
+
+/**
+ * A cron expression in words, or nothing where it is none of the forms read here. As a
+ * sentence it reads Monday to Friday too, which the schedule field writes.
+ */
 export function scheduleInWords(
   cron: string,
-  { t, locale }: Pick<TranslationContextValue, "locale" | "t">
+  { t, locale }: Pick<TranslationContextValue, "locale" | "t">,
+  as: "title" | "sentence" = "title"
 ): string | undefined {
+  const keys = SCHEDULE_KEYS[as];
   const fields = cron.trim().split(/\s+/u);
   if (fields.length !== 5) {
     return undefined;
@@ -37,14 +62,17 @@ export function scheduleInWords(
     // One date a year. 2028 is a leap year, so 29 February is a date too.
     const at = new Date(Date.UTC(2028, Number(month) - 1, Number(day)));
     return weekday === "*" && NUMBER.test(day) && at.getUTCMonth() === Number(month) - 1
-      ? t("workflows.schedule.yearly", {
+      ? t(keys.yearly, {
           date: at.toLocaleDateString(locale, { day: "numeric", month: "long", timeZone: "UTC" }),
           time
         })
       : undefined;
   }
   if (day === "*" && weekday === "*") {
-    return t("workflows.schedule.daily", { time });
+    return t(keys.daily, { time });
+  }
+  if (as === "sentence" && day === "*" && weekday === "1-5") {
+    return t("workflows.when.weekdays", { time });
   }
   if (day === "*" && NUMBER.test(weekday) && Number(weekday) <= 7) {
     // 4 January 2026 is a Sunday, which cron counts as 0 and as 7.
@@ -52,12 +80,12 @@ export function scheduleInWords(
       weekday: "long",
       timeZone: "UTC"
     });
-    return t("workflows.schedule.weekly", { weekday: name, time });
+    return t(keys.weekly, { weekday: name, time });
   }
   if (weekday === "*" && NUMBER.test(day) && Number(day) >= 1 && Number(day) <= 31) {
     const ordinal =
       locale === "en" ? `${day}${ordinalSuffix(Number(day))}` : `${String(Number(day))}.`;
-    return t("workflows.schedule.monthly", { day: ordinal, time });
+    return t(keys.monthly, { day: ordinal, time });
   }
   return undefined;
 }
@@ -91,6 +119,42 @@ export function triggerInWords(
     return t("workflows.schedule.zoneDefault", { schedule: words });
   }
   return zone === undefined ? words : withZone(words, zone, text);
+}
+
+/**
+ * When a Workflow runs, in one line under its name: its schedule as a sentence, and every other
+ * way that starts it without a person. One a person alone starts says so. The zone of the
+ * schedule is named where it is not the instance's own, since the trigger on the canvas names it
+ * in any case. Nothing where the Workflow has no trigger to read.
+ */
+export function workflowWhen(
+  workflow: Pick<WorkflowView, "steps">,
+  text: Pick<TranslationContextValue, "locale" | "t">,
+  instance: InstanceTimeZone | undefined
+): string | undefined {
+  const { t } = text;
+  const starts = workflow.steps.find((step) => step.kind === "trigger")?.starts;
+  if (starts === undefined) return undefined;
+  const ways: string[] = [];
+  if (starts.onSchedule) {
+    const words =
+      (starts.cron === undefined ? undefined : scheduleInWords(starts.cron, text, "sentence")) ??
+      t("workflows.when.custom");
+    ways.push(
+      starts.timeZone === undefined
+        ? instance?.defaulted === true
+          ? t("workflows.schedule.zoneDefault", { schedule: words })
+          : words
+        : starts.timeZone === instance?.timeZone
+          ? words
+          : withZone(words, starts.timeZone, text)
+    );
+  }
+  if (starts.onEvent === true) ways.push(t("workflows.when.event"));
+  if (starts.bySystem === true) ways.push(t("workflows.when.system"));
+  if (starts.byParent === true) ways.push(t("workflows.when.parent"));
+  if (ways.length > 0) return ways.join(" · ");
+  return starts.byHand ? t("workflows.schedule.manualOnly") : undefined;
 }
 
 /**

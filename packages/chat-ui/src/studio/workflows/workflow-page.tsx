@@ -7,6 +7,7 @@ import {
   useRunsAvailable,
   useWorkflow,
   useWorkflowNames,
+  useWorkflowRuns,
   type WorkflowRead,
   type WorkflowReadProblem
 } from "./workflow-data";
@@ -23,7 +24,12 @@ import { WorkflowHead } from "./workflow-head";
 import { useTestRun } from "./test-run";
 import { useStepPins, type StepPinControl } from "./step-pin";
 import { editOffered, runsReadable, startOffered } from "./workflow-model";
-import type { WorkflowStartIssue, WorkflowStepRunView, WorkflowStepView } from "./workflow-views";
+import type {
+  WorkflowRunView,
+  WorkflowStartIssue,
+  WorkflowStepRunView,
+  WorkflowStepView
+} from "./workflow-views";
 import { WorkflowsFrame, routeLink, type OpenRoute } from "./workflows-frame";
 import { useWorkflowsHost } from "./workflows-host";
 
@@ -32,6 +38,9 @@ const PROBLEM_SENTENCES: Readonly<Record<WorkflowReadProblem, TranslationKey>> =
   unavailable: "workflows.unavailable",
   failed: "workflows.failed"
 };
+
+/** How many runs are read to find the last one that is no test. */
+const RECENT_RUNS = 5;
 
 /** A Workflow on the way to the one that is shown: the one a step of it started from. */
 export interface WorkflowTrailEntry {
@@ -55,6 +64,16 @@ export function WorkflowPage({ workflow, opened }: { workflow: string; opened?: 
   const read = useWorkflow(workspaceId, shownId);
   const names = useWorkflowNames(workspaceId, before);
   const runsAvailable = useRunsAvailable();
+  const readsRuns = host !== undefined && runsReadable(host.rights, read.workflow);
+  // The newest runs, for the one line the page says about them: that the last one failed.
+  const recent = useWorkflowRuns(
+    shownId,
+    RECENT_RUNS,
+    undefined,
+    runsAvailable && read.workflow !== undefined && readsRuns
+  );
+  // A test run of the draft is the tester's own matter, not the Workflow's state.
+  const lastRun = recent.rows?.find((run) => !run.test);
   const start = useStartRun({
     workflow: shownId,
     name: read.workflow?.name,
@@ -88,7 +107,8 @@ export function WorkflowPage({ workflow, opened }: { workflow: string; opened?: 
         read={read}
         trail={before.map((id, depth) => ({ id, name: names[depth], route: routeAt(depth) }))}
         runsAvailable={runsAvailable}
-        runsReadable={runsReadable(host.rights, read.workflow)}
+        runsReadable={readsRuns}
+        {...(lastRun === undefined ? {} : { lastRun })}
         edit={edit}
         editing={editing}
         {...(pins === undefined ? {} : { pins })}
@@ -126,6 +146,7 @@ export function WorkflowPageView({
   trail = [],
   runsAvailable,
   runsReadable: readsRuns = true,
+  lastRun,
   edit,
   editing,
   pins,
@@ -144,6 +165,8 @@ export function WorkflowPageView({
   runsAvailable: boolean;
   /** The reader may read the Workflow's runs: its Runs tab stands. Starting it is apart. */
   runsReadable?: boolean;
+  /** The Workflow's last run that is no test, where the reader may read its runs. */
+  lastRun?: Pick<WorkflowRunView, "id" | "status">;
   /** "Edit with the agent", for a reader who may write the Workflow. */
   edit?: WorkflowEdit;
   /** Editing by hand in a step's Settings, for a reader who may write the Workflow. */
@@ -236,6 +259,34 @@ export function WorkflowPageView({
       {workflow === undefined || workflow.refusedFor.length === 0 ? null : (
         <div className="shrink-0 border-b px-(--layout-gutter) py-2">
           <NotRunnableBanner issues={workflow.refusedFor} />
+        </div>
+      )}
+      {lastRun?.status !== "failed" || !runsAvailable || !readsRuns ? null : (
+        <div className="shrink-0 border-b px-(--layout-gutter) py-2">
+          <Banner
+            tone="danger"
+            layout="inline"
+            data-last-run-failed=""
+            action={
+              <Button asChild size="sm" variant="outline">
+                <a
+                  {...routeLink(
+                    {
+                      kind: "workflow-run",
+                      collaborationWorkspaceId: workspaceId,
+                      workflow: workflowId,
+                      run: lastRun.id
+                    },
+                    onOpenRoute
+                  )}
+                >
+                  {t("workflows.lastRunOpen")}
+                </a>
+              </Button>
+            }
+          >
+            {t("workflows.lastRunFailed")}
+          </Banner>
         </div>
       )}
       <div className="relative min-h-0 flex-1">

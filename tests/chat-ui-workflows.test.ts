@@ -443,9 +443,11 @@ describe("the page of a Workflow", () => {
       workflow?: typeof workflow;
       problem?: "missing" | "unavailable" | "failed";
       runsAvailable?: boolean;
+      lastRun?: { id: string; status: "failed" | "done" };
     } = {}
   ) =>
     createElement(WorkflowPageView, {
+      ...(input.lastRun === undefined ? {} : { lastRun: input.lastRun }),
       workspaceId: "cw_1",
       workflowId: "notify-clients",
       read: {
@@ -470,15 +472,59 @@ describe("the page of a Workflow", () => {
     expect(markup).toContain('data-testid="workflow-canvas"');
   });
 
-  it("says in its head whom every run acts as, by the account's label", () => {
-    const named = toWorkflow(
-      { name: "notify-clients", config: definition, publishedRevision: 3 },
-      { mayStart: true, runsAs: "Monthly close" }
+  it("says in its head when it runs, in words, and not whom its runs act as", () => {
+    const started = (triggers: readonly Record<string, unknown>[]) =>
+      toWorkflow(
+        {
+          name: "notify-clients",
+          config: {
+            ...definition,
+            steps: [{ ...definition.steps[0], triggers }, ...definition.steps.slice(1)]
+          },
+          publishedRevision: 3
+        },
+        { mayStart: true, runsAs: "Monthly close" }
+      );
+    const monday = { kind: "schedule", cron: "0 8 * * 1", timeZone: "Europe/Berlin" };
+    const when = (triggers: readonly Record<string, unknown>[], locale: "en" | "de" = "de") =>
+      /data-workflow-when=""[^>]*>([^<]*)</u.exec(
+        render(page({ workflow: started(triggers) }), locale)
+      )?.[1];
+    expect(when([monday, { kind: "manual" }])).toBe(
+      "Läuft jeden Montag um 08:00 (Ortszeit Berlin)"
     );
-    expect(render(page({ workflow: named }))).toContain("Runs as Monthly close");
-    expect(render(page({ workflow: named }), "de")).toContain("Läuft als Monthly close");
-    // Without a label the head names no account: never the definition's own name of it.
-    expect(render(page())).not.toContain("Runs as");
+    expect(when([monday], "en")).toBe("Runs every Monday at 08:00 AM (Berlin time)");
+    // Monday to Friday is what the schedule field writes first.
+    expect(when([{ kind: "schedule", cron: "30 7 * * 1-5" }])).toBe(
+      "Läuft montags bis freitags um 07:30"
+    );
+    expect(when([{ kind: "schedule", cron: "*/5 * * * *" }])).toBe("Läuft nach Zeitplan");
+    // Every way that starts it without a person is said; a start by hand beside one is not.
+    expect(when([{ kind: "manual" }, { kind: "platform_event" }, { kind: "webhook" }])).toBe(
+      `${de("workflows.when.event")} · ${de("workflows.when.system")}`
+    );
+    expect(when([{ kind: "parent" }])).toBe(de("workflows.when.parent"));
+    expect(when([{ kind: "manual" }])).toBe(de("workflows.schedule.manualOnly"));
+    // The account every run acts as is a line of the Settings, not of the head.
+    const markup = render(page({ workflow: started([monday]) }));
+    expect(markup).not.toContain("Monthly close");
+    expect(markup).not.toContain("Runs as");
+  });
+
+  it("says at the top that the last run failed, with the way to it", () => {
+    const failed = render(page({ lastRun: { id: "wr_9", status: "failed" } }));
+    expect(failed).toContain(t("workflows.lastRunFailed"));
+    expect(failed).toContain('href="/w/cw_1/workflows/notify-clients/runs/wr_9"');
+    expect(failed.indexOf("data-last-run-failed")).toBeLessThan(
+      failed.indexOf('data-testid="workflow-canvas"')
+    );
+    // A run that ended well says nothing, and nothing is said where the instance runs none.
+    expect(render(page({ lastRun: { id: "wr_9", status: "done" } }))).not.toContain(
+      "data-last-run-failed"
+    );
+    expect(
+      render(page({ lastRun: { id: "wr_9", status: "failed" }, runsAvailable: false }))
+    ).not.toContain("data-last-run-failed");
   });
 
   it("offers neither a start nor the runs where the instance runs no Workflow", () => {

@@ -769,7 +769,18 @@ function readSteps(value: unknown, known: StepNames): WorkflowStepView[] {
               byHand: triggers.some((trigger) => trigger.kind === "manual"),
               onSchedule: triggers.some((trigger) => trigger.kind === "schedule"),
               ...(cron === undefined ? {} : { cron }),
-              ...(timeZone === undefined ? {} : { timeZone })
+              ...(timeZone === undefined ? {} : { timeZone }),
+              ...(triggers.some((trigger) => trigger.kind === "platform_event")
+                ? { onEvent: true as const }
+                : {}),
+              ...(triggers.some(
+                (trigger) => trigger.kind === "webhook" || trigger.kind === "outside"
+              )
+                ? { bySystem: true as const }
+                : {}),
+              ...(triggers.some((trigger) => trigger.kind === "parent")
+                ? { byParent: true as const }
+                : {})
             }
           }
         : {}),

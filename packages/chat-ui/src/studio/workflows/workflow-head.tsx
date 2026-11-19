@@ -11,6 +11,7 @@ import {
 import { AssetStatus } from "../asset-head";
 import { CopyIdItem } from "../copy-id-item";
 import { useTranslation } from "../../shared/i18n";
+import { workflowWhen } from "./schedule-words";
 import type { WorkflowDraftBarState, WorkflowEdit } from "./workflow-draft";
 import type { WorkflowView } from "./workflow-views";
 import { workflowRightsOn } from "./workflow-model";
@@ -24,8 +25,8 @@ import { BackLink, TitlePlaceholder, routeLink, type OpenRoute } from "./workflo
  * the name, "Start now", "Copy ID" for whoever may change it, "Delete" for whoever may delete
  * it, with the question that names what the delete ends, and the
  * tabs Workflow, Runs and Settings. The tabs are addresses. Without runs on the instance, or
- * for a reader who may not read them, there is no Runs tab. The first paragraph under them
- * says what the Workflow does and whom every run acts as.
+ * for a reader who may not read them, there is no Runs tab. Under them stands what the Workflow
+ * does and, in words, when it runs. Whom its runs act as is read in its Settings.
  */
 export function WorkflowHead({
   workspaceId,
@@ -44,7 +45,7 @@ export function WorkflowHead({
   workflowId: string;
   /** The Workflow, once its record arrived. */
   workflow:
-    | Pick<WorkflowView, "name" | "description" | "runsAs" | "allowed" | "ownerWorkspaceId">
+    | Pick<WorkflowView, "name" | "description" | "steps" | "allowed" | "ownerWorkspaceId">
     | undefined;
   tab: "workflow" | "runs" | "settings";
   /** The instance runs Workflows and the reader may read this one's runs: its tab stands. */
@@ -63,7 +64,8 @@ export function WorkflowHead({
   onStart(): void;
   onOpenRoute: OpenRoute;
 }) {
-  const { t } = useTranslation();
+  const translation = useTranslation();
+  const { t } = translation;
   const host = useWorkflowsHost();
   const [removing, setRemoving] = useState(false);
   const mayDelete =
@@ -71,10 +73,11 @@ export function WorkflowHead({
   const share = useWorkflowShare({ workspaceId, workflowId, workflow, onOpenRoute });
   const address = { collaborationWorkspaceId: workspaceId, workflow: workflowId };
   const publishing = draft?.onPublish !== undefined;
-  const lead = [
-    workflow?.description,
-    workflow?.runsAs === undefined ? undefined : t("workflows.runsAs", { account: workflow.runsAs })
-  ].filter((part): part is string => part !== undefined && part !== "");
+  const does = workflow?.description ?? "";
+  const when =
+    workflow === undefined
+      ? undefined
+      : workflowWhen(workflow, translation, host?.instanceTimeZone);
   return (
     <>
       {/* Where a control floats beside the head, the head starts at the top edge. */}
@@ -192,8 +195,22 @@ export function WorkflowHead({
           </a>
         </TabsLink>
       </TabsNav>
-      {/* What the Workflow does, and whom every run acts as: never the person who starts it. */}
-      {lead.length === 0 ? null : <PageLead className="shrink-0 pb-3">{lead.join(" · ")}</PageLead>}
+      {/* What the Workflow does, then when it runs. Without a description the second leads. */}
+      {does === "" ? null : (
+        <PageLead className={when === undefined ? "shrink-0 pb-3" : "shrink-0"}>{does}</PageLead>
+      )}
+      {when === undefined ? null : (
+        <p
+          data-workflow-when=""
+          className={
+            does === ""
+              ? "shrink-0 px-(--layout-gutter) pt-3 pb-3 text-body text-muted-foreground"
+              : "shrink-0 px-(--layout-gutter) pt-1 pb-3 text-body text-foreground"
+          }
+        >
+          {when}
+        </p>
+      )}
     </>
   );
 }
