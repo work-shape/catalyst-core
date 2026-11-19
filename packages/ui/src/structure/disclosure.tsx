@@ -50,9 +50,11 @@ export function DisclosureTrigger({
     <Collapsible.Trigger
       className={cn(
         "group/disclosure-trigger flex w-fit items-center gap-2 rounded-md py-1 text-left text-body text-muted-foreground transition-colors hover:text-foreground focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-50",
+        className,
+        // What a variant sets of the line holds against the caller's classes, as it did while
+        // the variant was read from the attribute: an outlined line keeps its inset.
         variant === "outline" && "w-full px-4 font-medium",
-        variant === "row" && "w-full py-3",
-        className
+        variant === "row" && "w-full py-3"
       )}
       {...props}
     >
