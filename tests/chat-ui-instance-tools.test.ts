@@ -463,7 +463,7 @@ describe("the Tools section of the agent page", () => {
     for (const key of ["package:documents", "package:web", "package:skills", "connection:crm"]) {
       expect(markup).toContain(`data-tool-package="${key}"`);
     }
-    expect(row(markup, "package:documents")).toContain(">0/1<");
+    expect(row(markup, "package:documents")).not.toContain("data-tool-count");
     expect(row(markup, "package:documents")).toContain('aria-checked="false"');
     expect(row(markup, "package:web")).toContain(">1/1<");
     expect(row(markup, "package:web")).toContain('aria-checked="true"');
