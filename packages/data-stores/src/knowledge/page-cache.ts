@@ -95,8 +95,27 @@ async function readCached(files: KnowledgeFiles, objectKey: string) {
   try {
     return (await files.objects.get(objectKey)).body;
   } catch (error) {
-    // An entry whose object is gone is a miss: the fetch replaces it.
     if (error instanceof ObjectNotFound) return undefined;
+    throw error;
+  }
+}
+
+/** A synced document whose original was released, as a page open names it. */
+export interface CachedPageInput {
+  knowledgeBaseId: string;
+  knowledgeBase: string;
+  definition: KnowledgeBaseDefinition;
+  store: KnowledgeDocumentStore;
+  documentId: string;
+  reader?: KnowledgePageReader;
+}
+
+async function exists(files: KnowledgeFiles, objectKey: string): Promise<boolean> {
+  try {
+    await files.objects.head(objectKey);
+    return true;
+  } catch (error) {
+    if (error instanceof ObjectNotFound) return false;
     throw error;
   }
 }
@@ -108,16 +127,26 @@ async function readCached(files: KnowledgeFiles, objectKey: string) {
 export async function openCachedPage(
   runtime: KnowledgeRuntime,
   files: KnowledgeFiles,
-  input: {
-    knowledgeBaseId: string;
-    knowledgeBase: string;
-    definition: KnowledgeBaseDefinition;
-    store: KnowledgeDocumentStore;
-    documentId: string;
-    reader?: KnowledgePageReader;
-  },
+  input: CachedPageInput,
   signal?: AbortSignal
 ): Promise<AsyncIterable<Uint8Array>> {
+  const objectKey = await cachePageOriginal(runtime, files, input, signal);
+  const body = await readCached(files, objectKey);
+  // Evicted in the moment between: the next open fetches it again.
+  if (!body) throw unavailable();
+  return body;
+}
+
+/**
+ * The object of the page cache that holds a released original's current content, fetched
+ * through its source where none does (KB-13b). A page view reads it there (KB-14).
+ */
+export async function cachePageOriginal(
+  runtime: KnowledgeRuntime,
+  files: KnowledgeFiles,
+  input: CachedPageInput,
+  signal?: AbortSignal
+): Promise<string> {
   const { store, documentId } = input;
   const port = runtime.pageSource;
   const cache = store.pageCache;
@@ -129,10 +158,8 @@ export async function openCachedPage(
   // A source no longer published names no Connection to fetch through.
   const source = input.definition.sources?.find((candidate) => candidate.id === item.sourceId);
   if (!source) throw unavailable();
-  if (found.cached) {
-    const body = await readCached(files, found.cached.objectKey);
-    if (body) return body;
-  }
+  // An entry whose object is gone is a miss: the fetch replaces it.
+  if (found.cached && (await exists(files, found.cached.objectKey))) return found.cached.objectKey;
 
   const boundary = sourceBoundary(source);
   const started = Date.now();
@@ -246,9 +273,7 @@ export async function openCachedPage(
         runAfter: new Date(kept.expiresAt)
       }
     );
-    const body = await readCached(files, objectKey);
-    if (!body) throw unavailable();
-    return body;
+    return objectKey;
   } finally {
     await rm(directory, { recursive: true, force: true }).catch(() => {
       runtime.logger.warn(

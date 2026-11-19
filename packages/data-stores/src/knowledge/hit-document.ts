@@ -4,6 +4,7 @@ import {
   type AccessResource,
   type KnowledgeFiles,
   type KnowledgeHitDocument,
+  type KnowledgeHitOriginal,
   type KnowledgeHitPage
 } from "@work-shape/catalyst-core";
 import { decodeKnowledgeText, normalizeKnowledgeText } from "./builtin/chunking";
@@ -11,18 +12,30 @@ import { isExtracted, readCopy, readExtraction } from "./index-extraction";
 import { indexTargetOf } from "./index-job";
 import type { KnowledgeRuntime } from "./runtime";
 import { assetResource } from "../store-audience";
+import { cachePageOriginal, type KnowledgePageReader } from "./page-cache";
 
 /**
  * The document a search hit names by its file id (KB-7c): the copy a published Knowledge Base
  * owns, of a document not withdrawn whose content was indexed, with the resource on which the
- * caller checks `knowledge_base.use`. Its text is the one the index read.
+ * caller checks `knowledge_base.use`. Its text is the one the index read. `openOriginal` makes its
+ * bytes readable for a page view by `reader` (KB-14), once the caller has checked that right.
  */
 export async function knowledgeHitDocument(
   runtime: KnowledgeRuntime,
   files: KnowledgeFiles | undefined,
   fileId: string,
   signal?: AbortSignal
-): Promise<{ resource: AccessResource; document: KnowledgeHitDocument } | undefined> {
+): Promise<
+  | {
+      resource: AccessResource;
+      document: Omit<KnowledgeHitDocument, "openOriginal">;
+      openOriginal(
+        reader: KnowledgePageReader,
+        signal?: AbortSignal
+      ): Promise<KnowledgeHitOriginal>;
+    }
+  | undefined
+> {
   if (!files) return undefined;
   const file = await runtime.stores.files.getManagedFile({
     clientInstanceId: runtime.clientInstanceId,
@@ -38,8 +51,28 @@ export async function knowledgeHitDocument(
   const document = await found?.store.documentOfFile(file.id, signal);
   if (!found || !document) return undefined;
   const content = { knowledgeBaseId, contentSha256: document.contentSha256 };
+  const released = file.status === "released";
   return {
     resource: assetResource(found.asset),
+    // A released original is read from the page cache, fetched through its source on a miss,
+    // as the cited page's chip opens it: no copy of it is kept for viewing.
+    async openOriginal(reader, readSignal) {
+      if (!released) return { kind: "copy" };
+      const objectKey = await cachePageOriginal(
+        runtime,
+        files,
+        {
+          knowledgeBaseId,
+          knowledgeBase: found.asset.name,
+          definition: found.definition,
+          store: found.store,
+          documentId: document.documentId,
+          reader
+        },
+        readSignal
+      );
+      return { kind: "page_cache", objectKey };
+    },
     document: {
       fileId: file.id,
       filename: file.filename,

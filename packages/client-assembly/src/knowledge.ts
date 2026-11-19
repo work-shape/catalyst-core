@@ -443,7 +443,8 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
           knowledgeBases,
           files: runtime.files,
           clientInstanceId: parts.clientInstanceId,
-          stores: parts.stores
+          stores: parts.stores,
+          audit: runtime.auditRecorder
         }),
         jobHandlers: [
           ...fileJobs.handlers,

@@ -131,6 +131,42 @@ describe("the page cache of cited synced documents (KB 76)", () => {
     expect(audited).not.toContain("Rent");
   });
 
+  it("hands a page view of a search hit the cached original, fetched once for its reader (KB-14)", async () => {
+    const source = countedSource();
+    const world = await setup(source.wrap);
+    const { ids, items } = await synced(world, { "plan.txt": "Plan page." });
+    const documentId = required(ids["plan.txt"]);
+    const [row] = await world.sql`select managed_file_id from catalyst_kb.documents
+      where id=${documentId}`;
+    const fileId = String(row?.managed_file_id);
+    source.state.fetches = 0;
+
+    const hit = required(await world.knowledge.hitDocument(world.files, fileId));
+    expect(hit.document.original).toBe("released");
+    const original = await hit.openOriginal(reader(world));
+    expect(original).toMatchObject({ kind: "page_cache" });
+    const objectKey = original.kind === "page_cache" ? original.objectKey : "";
+    expect(objectKey.startsWith(knowledgePageCachePrefix(world.record.id, documentId))).toBe(true);
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of (await world.objects.get(objectKey)).body) chunks.push(chunk);
+    expect(Buffer.concat(chunks).toString("utf8")).toBe("Plan page.");
+    expect(await hit.openOriginal(reader(world))).toEqual(original);
+    expect(source.state.fetches).toBe(1);
+    expect(await fetchEvents(world)).toEqual([
+      expect.objectContaining({
+        status: "success",
+        metadata: expect.objectContaining({ documentId, bytes: 10 })
+      })
+    ]);
+
+    // Withdrawn: the hit is gone, and no page of it is fetched.
+    world.world.remove(required(items["plan.txt"]));
+    await world.drain(await world.sync("changes"));
+    expect(await world.knowledge.hitDocument(world.files, fileId)).toBeUndefined();
+    await expect(hit.openOriginal(reader(world))).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(source.state.fetches).toBe(1);
+  });
+
   it("fetches again after 7 days and the expiry job deletes the entry and its object", async () => {
     const source = countedSource();
     const world = await setup(source.wrap);

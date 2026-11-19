@@ -28,7 +28,24 @@ export interface KnowledgeHitDocument {
   original: "available" | "released";
   /** The text of each page, as the Knowledge Base indexed it. */
   pages(signal?: AbortSignal): Promise<KnowledgeHitPage[]>;
+  /**
+   * Where a page view reads the original's bytes (KB-14): the copy `fileId` names, or for a
+   * released original the entry of the page cache, fetched through its source for the person
+   * who opened the hit where it was not cached (KB-13b). `correlationId` goes on that fetch's
+   * audit event. Refuses a withdrawn document and an unreachable source.
+   */
+  openOriginal(input: {
+    correlationId: string;
+    signal?: AbortSignal;
+  }): Promise<KnowledgeHitOriginal>;
 }
+
+/**
+ * The original of a hit's document as a page view reads it: the copy its file id names, or an
+ * object of the Knowledge Base's page cache (below `knowledgePageCachePrefix`) whose bytes hash
+ * to the document's checksum.
+ */
+export type KnowledgeHitOriginal = { kind: "copy" } | { kind: "page_cache"; objectKey: string };
 
 export interface KnowledgeHitDocuments {
   /**
