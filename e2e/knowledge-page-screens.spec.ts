@@ -10,7 +10,9 @@ import { expect, takeTurn, test } from "./test";
 
 // Pictures of the page of a published Knowledge Base of documents, for a person to look at: its
 // lead line, the line that counts its documents, the list and the folded Settings, in German,
-// light and dark, at 1280. It runs only with KB_PAGE_SHOTS=1 and writes to test-results/kb-page.
+// light and dark, at 1280. Then the same page as one whose documents come from a synced folder:
+// its head with the main action, the source's card folded and with Adjust open. It runs only
+// with KB_PAGE_SHOTS=1 and writes to test-results/kb-page.
 // The suite's instance runs without the module `knowledge`, so a second API runs it with the
 // module on, on the same database, as knowledge-upload.spec.ts does.
 const host = process.env.E2E_HOST ?? "127.0.0.1";
@@ -32,6 +34,19 @@ const listSchema = z.looseObject({
 
 const SHOTS = resolve("test-results/kb-page");
 const TITLE = "Teamhandbuch";
+
+/** The synced folder the second set of pictures shows: a source, its Connection and its folder. */
+const SYNCED = {
+  source: "haus-a",
+  connection: "projektablage",
+  connectionTitle: "Projektablage",
+  folderId: "100",
+  folderPath: "Projekte / Haus A"
+} as const;
+
+/** An asset and a list of assets as far as the pictures change them. */
+const assetSchema = z.looseObject({ config: z.looseObject({}) });
+const assetListSchema = z.looseObject({ items: z.array(z.looseObject({})) });
 
 const FILES = [
   ["urlaub.txt", "Jede Mitarbeiterin und jeder Mitarbeiter hat 28 Urlaubstage im Jahr."],
@@ -257,6 +272,180 @@ test.describe("pictures of the page of a Knowledge Base of documents", () => {
       await view(page, name, "light");
       await openKnowledgeSettings(page);
       await picture(page, "de-light-settings");
+
+      // The same page as one whose documents all come from a synced folder. Only what the
+      // instance answers is changed: the definition names a source, a Connection that lets a
+      // person choose folders is listed, the source is up to date, and each document is its.
+      await page.route(`${apiBaseUrl}/api/v1/assets/knowledge_base/${name}`, async (route) => {
+        if (route.request().method() !== "GET") return route.fallback();
+        const response = await route.fetch({
+          url: route.request().url().replace(apiBaseUrl, knowledgeApiUrl)
+        });
+        const body = assetSchema.parse(await response.json());
+        await route.fulfill({
+          response,
+          json: {
+            ...body,
+            config: {
+              ...body.config,
+              sources: [
+                {
+                  id: SYNCED.source,
+                  connection: SYNCED.connection,
+                  folders: [SYNCED.folderId]
+                }
+              ]
+            }
+          }
+        });
+      });
+      const connectionList = (url: URL) =>
+        url.origin === new URL(apiBaseUrl).origin && url.pathname === "/api/v1/assets/connection";
+      await page.route(connectionList, async (route) => {
+        if (route.request().method() !== "GET") return route.fallback();
+        const url = new URL(route.request().url());
+        const response = await route.fetch({
+          url: route.request().url().replace(apiBaseUrl, knowledgeApiUrl)
+        });
+        const body = assetListSchema.parse(await response.json());
+        // Once, with the instance's own: the list is asked per owner.
+        const listed = url.searchParams.has("workspaceId")
+          ? []
+          : [
+              {
+                id: `connection:${SYNCED.connection}`,
+                kind: "connection",
+                name: SYNCED.connection,
+                title: SYNCED.connectionTitle,
+                scope: { kind: "instance" },
+                revision: 1,
+                publishedRevision: 1,
+                attributes: {
+                  connectorType: "test_folders",
+                  documentSource: true,
+                  browsesFolders: true,
+                  enabled: true
+                },
+                updatedAt: "2026-11-18T09:00:00.000Z"
+              }
+            ];
+        await route.fulfill({ response, json: { ...body, items: [...listed, ...body.items] } });
+      });
+      await page.route(
+        `${apiBaseUrl}/api/v1/connections/${SYNCED.connection}/source-folders*`,
+        (route) =>
+          route.fulfill({
+            json: {
+              folder: { id: SYNCED.folderId, name: "Haus A", path: SYNCED.folderPath },
+              folders: []
+            }
+          })
+      );
+      await page.route(`${apiBaseUrl}/api/v1/knowledge-bases/${name}/sources`, (route) =>
+        route.fulfill({
+          json: {
+            sources: [
+              {
+                id: SYNCED.source,
+                connection: SYNCED.connection,
+                kind: "connector",
+                items: {
+                  discovered: 0,
+                  fetched: 0,
+                  indexed: FILES.length,
+                  failed: 0,
+                  withdrawn: 0
+                },
+                failures: [],
+                last: {
+                  syncRunId: "sync-1",
+                  source: SYNCED.source,
+                  mode: "changes",
+                  state: "done",
+                  counts: {
+                    discovered: FILES.length,
+                    added: 0,
+                    changed: 0,
+                    moved: 0,
+                    withdrawn: 0,
+                    failed: 0,
+                    skipped: 0
+                  },
+                  bytesFetched: 0,
+                  startedAt: "2026-11-18T09:14:00.000Z",
+                  endedAt: "2026-11-18T09:15:00.000Z"
+                },
+                schedule: {
+                  changes: 15,
+                  full: "0 2 * * *",
+                  defaultChanges: 15,
+                  defaultFull: "0 2 * * *",
+                  minChanges: 5
+                },
+                lastChangeAt: "2026-11-18T09:15:00.000Z"
+              }
+            ]
+          }
+        })
+      );
+      await page.route(`${apiBaseUrl}/api/v1/knowledge-bases/${name}/documents*`, async (route) => {
+        if (route.request().method() !== "GET") return route.fallback();
+        const response = await route.fetch({
+          url: route.request().url().replace(apiBaseUrl, knowledgeApiUrl)
+        });
+        const body = listSchema.parse(await response.json());
+        const documents = body.documents.map((entry) => ({
+          ...entry,
+          sourceId: SYNCED.source,
+          folder: "/Projekte/Haus A",
+          originLink: `https://files.example.test/Projekte/Haus%20A/${entry.fileName}`
+        }));
+        await route.fulfill({ response, json: { ...body, documents } });
+      });
+
+      for (const theme of ["light", "dark"] as const) {
+        await view(page, name, theme);
+        const card = page.locator(`[data-knowledge-source="${SYNCED.source}"]`);
+        await expect(card).toContainText(SYNCED.folderPath);
+        await picture(page, `synced-de-${theme}`);
+        if (theme === "light") {
+          // The head of the page with its main action, and the card as it stands folded.
+          await page.screenshot({
+            path: resolve(SHOTS, "kb-page-synced-de-light-head.png"),
+            clip: { x: 0, y: 0, width: 1280, height: 420 },
+            animations: "disabled"
+          });
+          await card.screenshot({
+            path: resolve(SHOTS, "kb-page-synced-de-light-card-folded.png"),
+            animations: "disabled"
+          });
+          // What the head's menu offers beside the main action.
+          await page.getByRole("button", { name: "Weitere Aktionen" }).first().click();
+          await expect(page.getByRole("menu")).toBeVisible();
+          await page.screenshot({
+            path: resolve(SHOTS, "kb-page-synced-de-light-head-menu.png"),
+            clip: { x: 0, y: 0, width: 1280, height: 420 },
+            animations: "disabled"
+          });
+          await page.keyboard.press("Escape");
+          await expect(page.getByRole("menu")).toHaveCount(0);
+        }
+        await card.locator("[data-knowledge-source-adjust]").click();
+        await expect(card.locator("[data-knowledge-source-status]")).toBeVisible();
+        await picture(page, `synced-de-${theme}-adjust`);
+        await card.screenshot({
+          path: resolve(SHOTS, `kb-page-synced-de-${theme}-card-adjust.png`),
+          animations: "disabled"
+        });
+        // Where the time is one button, what it opens.
+        const when = card.locator("[data-knowledge-source-sync-when]");
+        if (theme === "light" && (await when.count()) > 0) {
+          await when.click();
+          await expect(page.getByRole("dialog")).toBeVisible();
+          await picture(page, "synced-de-light-adjust-time");
+          await page.keyboard.press("Escape");
+        }
+      }
     } finally {
       await page.unrouteAll({ behavior: "ignoreErrors" });
       if ((await page.request.get(assetUrl)).ok()) {
