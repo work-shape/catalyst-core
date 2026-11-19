@@ -1,5 +1,6 @@
 import type { TranslationContextValue, TranslationKey } from "../../shared/i18n";
 import type { ApiClient } from "@work-shape/catalyst-api-client";
+import type { PublishedDataConsumerKind } from "@work-shape/catalyst-core";
 import type { DataStoreUsedBy } from "./data-store-source";
 
 // Where a store's rows come from and who reads them, as the page and an App's details say it.
@@ -18,6 +19,36 @@ export function dataStoreFillers(used: DataStoreUsedBy) {
       .map((workflow) => ({ ...workflow, kind: "workflow" as const })),
     ...used.apps.filter((app) => app.writes).map((app) => ({ ...app, kind: "app" as const }))
   ];
+}
+
+/** One Knowledge Base, App or Workflow that uses a store, as the line under its rows names it. */
+export interface DataStoreUserName {
+  kind: PublishedDataConsumerKind;
+  name: string;
+  title: string;
+}
+
+/**
+ * Everything published that fills or reads a store, each once: its Knowledge Bases, then its
+ * Apps, then its Workflows, the data Workflows among them.
+ */
+export function dataStoreUsers(used: DataStoreUsedBy): DataStoreUserName[] {
+  const named: DataStoreUserName[] = [
+    ...used.knowledgeBases.map((user) => ({ ...user, kind: "knowledge_base" as const })),
+    ...used.apps.map((user) => ({ ...user, kind: "app" as const })),
+    ...[
+      ...used.workflows,
+      ...(used.dataFlows?.fills ?? []),
+      ...(used.dataFlows?.processes ?? [])
+    ].map((user) => ({ ...user, kind: "workflow" as const }))
+  ];
+  const seen = new Set<string>();
+  return named.flatMap(({ kind, name, title }) => {
+    const key = `${kind}:${name}`;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [{ kind, name, title: title.trim() || name }];
+  });
 }
 
 /**

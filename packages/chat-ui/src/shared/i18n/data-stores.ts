@@ -44,7 +44,6 @@ export const dataStores = defineTranslations({
       "Publishing creates the store's database and applies its migration. A migration cannot be taken back: a later change needs a new migration.",
     "dataStores.description":
       "Where apps, workflows and agents in conversations keep their records. This page shows what each store holds.",
-    "dataStores.descriptionLabel": "Description",
     "dataStores.empty":
       "No data stores yet. A data store is a database in which apps and workflows keep their records. Describe one to the agent, and its first save creates it.",
     "dataStores.emptyReadOnly":
@@ -92,6 +91,7 @@ export const dataStores = defineTranslations({
     "dataStores.draftUnpublished": "Draft · not published",
     "dataStores.draftUnpublishedText":
       "This Data Store has no published version yet, so it holds no data. Publishing creates its database.",
+    "dataStores.draftAdvancedHint": "The SQL a publish runs",
     "dataStores.draftAgentWorking":
       "The agent is still working on this Data Store. You can publish it once the agent is done.",
     "dataStores.draftFieldsTitle": "What it stores",
@@ -130,6 +130,8 @@ export const dataStores = defineTranslations({
       "Apps, workflows and agents can no longer reach its rows. The rows stay on the database server until they are removed there, and the name stays taken until then.",
     "dataStores.deleteDescriptionDraft":
       "It was never published, so it has no database and no rows. Its draft and migrations are deleted.",
+    "dataStores.advancedHint": "Status, columns and test copy",
+    "dataStores.advancedTitle": "Advanced",
     "dataStores.agentsTitle": "Agents",
     "dataStores.agentsDescription":
       "Agents that can read or change the rows of this store in a conversation.",
@@ -171,8 +173,6 @@ export const dataStores = defineTranslations({
     "dataStores.rowEstimate": "about 1 row",
     "dataStores.rowEstimateHint": "The database's estimate, not a count.",
     "dataStores.rowEstimates": "about {count} rows",
-    "dataStores.rowsDescription":
-      "The rows of one table, read-only and a page at a time. A long value is cut and opens whole on demand.",
     "dataStores.rowsEmpty": "This table holds no rows.",
     "dataStores.rowsEnd": "This is the end of the table.",
     "dataStores.rowsFailed": "The rows could not be loaded.",
@@ -188,7 +188,6 @@ export const dataStores = defineTranslations({
     "dataStores.rowsRangeOne": "Row {from}.",
     "dataStores.rowsRefused": "You may not read the rows of this store.",
     "dataStores.rowsTable": "Table",
-    "dataStores.rowsTitle": "Rows",
     "dataStores.reviewTitle": "Review",
     "dataStores.reviewDescription":
       "Fields the documents do not settle on their own. Decide each one against the page it cites. Your decision stays through later syncs.",
@@ -260,10 +259,14 @@ export const dataStores = defineTranslations({
     "dataStores.stateReady": "Ready",
     "dataStores.stateReadyText": "The database is at the published level and its rows are reached.",
     "dataStores.statusDescription": "Where the store's migrations stand and how large it is.",
+    "dataStores.settingsHint": "Who uses it and more",
+    "dataStores.settingsTitle": "Settings",
     "dataStores.statusTitle": "Status",
     "dataStores.tableCount": "1 table",
     "dataStores.tableCounts": "{count} tables",
     "dataStores.tablesDescription": "The tables of the store with their columns and types.",
+    "dataStores.storeEmpty":
+      "Nothing here yet. Apps, workflows and agents keep their entries here.",
     "dataStores.tablesEmpty": "This store has no tables yet.",
     "dataStores.tablesTitle": "Tables",
     "dataStores.testCopyBuilt": "Built",
@@ -288,6 +291,8 @@ export const dataStores = defineTranslations({
     "dataStores.usedByFailed": "What uses this store could not be loaded.",
     "dataStores.usedByHidden": "and {count} more you can't see",
     "dataStores.usedByKnowledgeBase": "Knowledge base",
+    "dataStores.usedByLine": "Used by",
+    "dataStores.usedByMore": "{count} more",
     "dataStores.usedByRefused": "You may not see what uses this store.",
     "dataStores.usedByTruncated":
       "There are more published apps, workflows, knowledge bases or rights than one read looks through, so these lists may be incomplete.",
@@ -350,7 +355,6 @@ export const dataStores = defineTranslations({
       "Beim Veröffentlichen entsteht die Datenbank des Speichers, und seine Migration wird angewendet. Eine Migration lässt sich nicht zurücknehmen: Eine spätere Änderung braucht eine neue Migration.",
     "dataStores.description":
       "Hier legen Apps, Workflows und Agenten in Unterhaltungen ihre Einträge ab. Diese Seite zeigt, was jeder Speicher enthält.",
-    "dataStores.descriptionLabel": "Beschreibung",
     "dataStores.empty":
       "Noch keine Datenspeicher. Ein Datenspeicher ist eine Datenbank, in der Apps und Workflows ihre Einträge ablegen. Beschreib dem Agenten einen, und sein erstes Speichern legt ihn an.",
     "dataStores.emptyReadOnly":
@@ -400,6 +404,7 @@ export const dataStores = defineTranslations({
     "dataStores.draftUnpublished": "Entwurf · nicht veröffentlicht",
     "dataStores.draftUnpublishedText":
       "Dieser Datenspeicher hat noch keine veröffentlichte Version und speichert darum noch nichts. Beim Veröffentlichen wird seine Datenbank angelegt.",
+    "dataStores.draftAdvancedHint": "Das SQL, das beim Veröffentlichen läuft",
     "dataStores.draftAgentWorking":
       "Der Agent arbeitet noch an diesem Datenspeicher. Veröffentlichen kannst du, sobald er fertig ist.",
     "dataStores.draftFieldsTitle": "Was gespeichert wird",
@@ -438,6 +443,8 @@ export const dataStores = defineTranslations({
       "Apps, Workflows und Agenten erreichen seine Zeilen dann nicht mehr. Die Zeilen bleiben auf dem Datenbankserver, bis sie dort entfernt werden, und bis dahin bleibt der Name vergeben.",
     "dataStores.deleteDescriptionDraft":
       "Er wurde nie veröffentlicht und hat darum keine Datenbank und keine Zeilen. Sein Entwurf und seine Migrationen werden gelöscht.",
+    "dataStores.advancedHint": "Status, Spalten und Testkopie",
+    "dataStores.advancedTitle": "Erweitert",
     "dataStores.agentsTitle": "Agenten",
     "dataStores.agentsDescription":
       "Agenten, die in einer Unterhaltung Zeilen dieses Speichers lesen oder ändern können.",
@@ -482,8 +489,6 @@ export const dataStores = defineTranslations({
     "dataStores.rowEstimate": "etwa 1 Zeile",
     "dataStores.rowEstimateHint": "Die Schätzung der Datenbank, keine Zählung.",
     "dataStores.rowEstimates": "etwa {count} Zeilen",
-    "dataStores.rowsDescription":
-      "Die Zeilen einer Tabelle, nur lesend und seitenweise. Ein langer Wert ist gekürzt und öffnet sich auf Wunsch ganz.",
     "dataStores.rowsEmpty": "Diese Tabelle enthält keine Zeilen.",
     "dataStores.rowsEnd": "Das ist das Ende der Tabelle.",
     "dataStores.rowsFailed": "Die Zeilen konnten nicht geladen werden.",
@@ -499,7 +504,6 @@ export const dataStores = defineTranslations({
     "dataStores.rowsRangeOne": "Zeile {from}.",
     "dataStores.rowsRefused": "Du darfst die Zeilen dieses Speichers nicht lesen.",
     "dataStores.rowsTable": "Tabelle",
-    "dataStores.rowsTitle": "Zeilen",
     "dataStores.reviewTitle": "Prüfen",
     "dataStores.reviewDescription":
       "Felder, die die Dokumente nicht von selbst klären. Entscheide jedes anhand der zitierten Seite. Deine Entscheidung bleibt auch nach späteren Synchronisierungen.",
@@ -573,10 +577,13 @@ export const dataStores = defineTranslations({
     "dataStores.stateReadyText":
       "Die Datenbank ist auf dem veröffentlichten Stand, ihre Zeilen sind erreichbar.",
     "dataStores.statusDescription": "Wo die Migrationen des Speichers stehen und wie groß er ist.",
+    "dataStores.settingsHint": "Wer ihn nutzt und mehr",
+    "dataStores.settingsTitle": "Einstellungen",
     "dataStores.statusTitle": "Status",
     "dataStores.tableCount": "1 Tabelle",
     "dataStores.tableCounts": "{count} Tabellen",
     "dataStores.tablesDescription": "Die Tabellen des Speichers mit ihren Spalten und Typen.",
+    "dataStores.storeEmpty": "Noch leer. Apps, Workflows und Agenten legen hier ihre Einträge ab.",
     "dataStores.tablesEmpty": "Dieser Speicher hat noch keine Tabellen.",
     "dataStores.tablesTitle": "Tabellen",
     "dataStores.testCopyBuilt": "Erstellt",
@@ -601,6 +608,8 @@ export const dataStores = defineTranslations({
     "dataStores.usedByFailed": "Was diesen Speicher verwendet, konnte nicht geladen werden.",
     "dataStores.usedByHidden": "und {count} weitere, die du nicht sehen kannst",
     "dataStores.usedByKnowledgeBase": "Wissensbasis",
+    "dataStores.usedByLine": "Genutzt von",
+    "dataStores.usedByMore": "{count} weiteren",
     "dataStores.usedByRefused": "Du darfst nicht sehen, was diesen Speicher verwendet.",
     "dataStores.usedByTruncated":
       "Es gibt mehr veröffentlichte Apps, Workflows, Wissensbasen oder Rechte, als ein Lesezugriff durchsieht. Diese Listen können unvollständig sein.",

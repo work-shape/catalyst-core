@@ -1,5 +1,5 @@
-import { Maximize2 } from "lucide-react";
-import { useState } from "react";
+import { Database, Maximize2 } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import {
   Banner,
   Button,
@@ -22,7 +22,10 @@ import { cellDateText, cellText, DATA_STORE_CELL_WIDTH, wholeValueText } from ".
 import { ReadState } from "./data-store-read-state";
 import type { DataStoreSource, DataStoreValuePlace } from "./data-store-source";
 
-/** The rows of one table, a page at a time, with a tab per table of the store. */
+/**
+ * The rows of one table, a page at a time. A store with several tables has a tab for each; a
+ * store without anything to show says what fills it.
+ */
 export function DataStoreRowsSection({
   store,
   source
@@ -32,30 +35,41 @@ export function DataStoreRowsSection({
 }) {
   const { t } = useTranslation();
   const [chosen, setChosen] = useState<string>();
+  const nothingYet = (
+    <EmptyState icon={<Database aria-hidden="true" />} data-data-store-empty="">
+      {t("dataStores.storeEmpty")}
+    </EmptyState>
+  );
   return (
-    <ReadState read={source.useSchema(store)} failedText={t("dataStores.schemaFailed")} rows={3}>
+    <ReadState read={source.useSchema(store)} failedText={t("dataStores.schemaFailed")} rows={4}>
       {({ tables }) => {
         const table = tables.find((candidate) => candidate.name === chosen) ?? tables[0];
-        if (!table) {
-          return <EmptyState layout="inline">{t("dataStores.tablesEmpty")}</EmptyState>;
+        if (!table) return nothingYet;
+        // A table starts at its own first page, whatever page the one before stood on.
+        const rows = (
+          <DataStoreRowsView
+            key={table.name}
+            store={store}
+            table={table.name}
+            source={source}
+            // The only table without a row is a store without anything in it.
+            empty={tables.length === 1 ? nothingYet : undefined}
+          />
+        );
+        if (tables.length === 1) {
+          return <div className="grid min-w-0 gap-2">{rows}</div>;
         }
         return (
           <Tabs value={table.name} onValueChange={setChosen} className="grid min-w-0 gap-3">
             <TabsList label={t("dataStores.rowsTable")}>
               {tables.map(({ name }) => (
                 <TabsTrigger key={name} value={name}>
-                  <code className="font-mono">{name}</code>
+                  {name}
                 </TabsTrigger>
               ))}
             </TabsList>
             <TabsContent value={table.name} className="grid min-w-0 gap-2">
-              {/* A table starts at its own first page, whatever page the one before stood on. */}
-              <DataStoreRowsView
-                key={table.name}
-                store={store}
-                table={table.name}
-                source={source}
-              />
+              {rows}
             </TabsContent>
           </Tabs>
         );
@@ -72,11 +86,14 @@ export function DataStoreRowsSection({
 function DataStoreRowsView({
   store,
   table,
-  source
+  source,
+  empty
 }: {
   store: string;
   table: string;
   source: DataStoreSource;
+  /** What stands in place of a first page without a row. The sentence of an empty table without it. */
+  empty?: ReactNode;
 }) {
   const { locale, t } = useTranslation();
   // `before`: the rows passed on the page left, which stays shown while the next one is read.
@@ -110,6 +127,7 @@ function DataStoreRowsView({
               ? t("dataStores.rowsOrderKey", { columns: order.columns.join(", ") })
               : t("dataStores.rowsOrderPhysical");
           if (rows.length === 0) {
+            if (!from && empty !== undefined) return empty;
             return (
               <EmptyState layout="inline" action={from ? toStart : undefined}>
                 {t(from ? "dataStores.rowsNoMore" : "dataStores.rowsEmpty")}

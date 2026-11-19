@@ -12,9 +12,7 @@ import {
   ListRow,
   Page,
   PageHeader,
-  PageOutline,
   Section,
-  SkeletonList,
   Table,
   TableBody,
   TableCell,
@@ -27,7 +25,7 @@ import { useDockAgentWorksOn } from "../../chat/dock/dock-subject";
 import { formatDateTime } from "../../shared/locale-format";
 import { useTranslation } from "../../shared/i18n";
 import { usePageShown } from "./asset-editor-shell";
-import { AssetPlaceLine, AssetPlaceRow } from "./asset-place";
+import { ownerFact, useKnownWorkspaces } from "./asset-place";
 import type { BuildAssetViewProps } from "./build-asset-kind";
 import {
   columnTypeView,
@@ -42,13 +40,21 @@ import {
   dataStoreDraftAhead,
   dataStoreNeverPublished
 } from "./data-store-draft";
-import { DataStorePublishSection, pendingMigrations, useDataStoreMenu } from "./data-store-head";
+import {
+  DataStoreFold,
+  DataStoreLead,
+  DataStoreMigrations,
+  DataStorePublishSection,
+  pendingMigrations,
+  useDataStoreMenu
+} from "./data-store-head";
 import { hasDataFlows } from "./data-flows-model";
 import {
   DataStoreAgents,
   DataStoreFillers,
   DataStoreProcessors,
-  DataStoreReaders
+  DataStoreReaders,
+  DataStoreUsedByLine
 } from "./data-store-provenance";
 import { ReadState } from "./data-store-read-state";
 import { DataStoreRowsSection } from "./data-store-rows";
@@ -76,12 +82,23 @@ function textOf(config: Record<string, unknown>, key: string): string | undefine
   return typeof value === "string" && value.trim() !== "" ? value : undefined;
 }
 
+/** One section of the page, under its heading. */
+interface PageSection {
+  id: string;
+  label: string;
+  description: string;
+  count?: number;
+  body: ReactNode;
+}
+
 /**
- * The page of one Data Store: the header with the store's state, where its migrations stand and
- * how large it is, what the server leaves open around it, its tables with their columns, and the
- * first rows of one table. The rows are the answer of one preview, so the page holds as many as
- * the instance hands out and never the whole table. Its only writes are a decision in "Prüfen"
- * and Reset or Delete of the test copy: Publish, Delete and "Edit with the agent" are the frame's.
+ * The page of one Data Store: what it is in a sentence, then the rows of one of its tables, as
+ * many as one preview of the instance hands out, and one line that names what uses it. Its
+ * state stands on the page only while the store is not ready. Everything else is folded under
+ * Settings: where its rows come from and who reads them, and under Advanced where its
+ * migrations stand, how large it is, its columns and its test copy. Its only writes are a
+ * decision in "Prüfen" and Reset or Delete of the test copy: Publish, Delete and "Edit with the
+ * agent" are the frame's.
  */
 export function DataStorePage(props: BuildAssetViewProps & { source: DataStoreSource }) {
   const { asset } = props;
@@ -113,11 +130,14 @@ function PublishedDataStorePage({
   const { t } = useTranslation();
   usePageShown(page, "asset");
   const head = useDataStoreMenu({ id: asset.name, title, published: true, remove, shareItem });
+  const place = ownerFact(asset.scope, useKnownWorkspaces(), t);
   const agentWorking = useDockAgentWorksOn("data_store", asset.name);
   const read = source.useStoreState(asset.name);
   const state = read.status === "ready" ? read.data : undefined;
   const conditions = state ? serverConditionsShown(source, state) : [];
-  const view = state ? DATA_STORE_STATE_VIEWS[dataStoreStateView(state)] : undefined;
+  const stateName = state ? dataStoreStateView(state) : undefined;
+  // The page names the state of a store only while it is not ready.
+  const notReady = state !== undefined && stateName !== undefined && stateName !== "ready";
   // The rows of a store are reached while it is ready, so its tables are read only then, and
   // read again at each new migration level.
   const reachable = state?.status === "ready";
@@ -146,76 +166,26 @@ function PublishedDataStorePage({
     reachable && keyColumns.size > 0 ? reviewLimit : undefined
   );
   const reviewShown = reachable && keyColumns.size > 0 && flagged.status !== "refused";
-  const sections: {
-    id: string;
-    label: string;
-    description: string;
-    count?: number;
-    body: ReactNode;
-  }[] = [
-    ...(draftAhead
+  // Where the rows come from and who reads them is read from the published definitions,
+  // whatever state the store is in.
+  const settings: PageSection[] = [
+    ...(draftAhead && pending !== undefined && pending.length > 0
       ? [
           {
             id: "pending",
             label: t("dataStores.pendingTitle"),
             description: t("dataStores.pendingDescription"),
-            count: pending?.length,
-            body:
-              pending === undefined ? (
-                <SkeletonList rows={2} />
-              ) : (
-                <DataStorePublishSection
-                  title={title}
-                  migrations={pending}
-                  firstPublish={false}
-                  publish={publish}
-                  agentWorking={agentWorking}
-                />
-              )
-          }
-        ]
-      : []),
-    {
-      id: "status",
-      label: t("dataStores.statusTitle"),
-      description: t("dataStores.statusDescription"),
-      body: (
-        <>
-          <ReadState read={read} failedText={t("dataStores.stateFailed")} rows={3}>
-            {(loaded) => (
-              <DataStoreStatus
-                state={loaded}
-                description={textOf(asset.config, "description")}
-                updatedAt={asset.updatedAt}
-              />
-            )}
-          </ReadState>
-        </>
-      )
-    },
-    ...(reviewShown
-      ? [
-          {
-            id: "review",
-            label: t("dataStores.reviewTitle"),
-            description: t("dataStores.reviewDescription"),
-            count:
-              flagged.status === "ready" ? groupFlagged(flagged.data.items).fieldCount : undefined,
+            count: pending.length,
             body: (
-              <DataStoreReview
-                store={asset.name}
-                read={flagged}
-                review={source.review}
-                keyColumns={keyColumns}
-                showMore={() => setReviewLimit((limit) => limit + REVIEW_PAGE)}
+              <DataStoreMigrations
+                migrations={pending}
+                label={t("dataStores.pendingTitle")}
+                emptyText={t("dataStores.pendingEmpty")}
               />
             )
           }
         ]
       : []),
-    // Where the rows come from and who reads them is read from the published definitions,
-    // whatever state the store is in. They stand right after the status, as a phone shows no
-    // table of contents.
     {
       id: "filled-by",
       label: t("dataStores.filledByTitle"),
@@ -249,52 +219,47 @@ function PublishedDataStorePage({
             body: <DataStoreAgents used={usedBy.data} />
           }
         ]
-      : []),
-    ...(conditions.length > 0
-      ? [
-          {
-            id: "conditions",
-            label: t("dataStores.conditionsTitle"),
-            description: t("dataStores.conditionsDescription"),
-            count: conditions.length,
-            body: <DataStoreConditions conditions={conditions} />
-          }
-        ]
-      : []),
-    ...(read.status === "failed"
+      : [])
+  ];
+  // What only whoever runs the store reads. Nothing of it while its state is not read.
+  const advanced: PageSection[] =
+    state === undefined
       ? []
       : [
+          {
+            id: "status",
+            label: t("dataStores.statusTitle"),
+            description: t("dataStores.statusDescription"),
+            body: (
+              <>
+                {/* The state of a store that is not ready stands at the top of the page. */}
+                {notReady ? null : <DataStoreStateLine state={state} badge />}
+                <DataStoreFacts state={state} updatedAt={asset.updatedAt} />
+              </>
+            )
+          },
+          ...(conditions.length > 0
+            ? [
+                {
+                  id: "conditions",
+                  label: t("dataStores.conditionsTitle"),
+                  description: t("dataStores.conditionsDescription"),
+                  count: conditions.length,
+                  body: <DataStoreConditions conditions={conditions} />
+                }
+              ]
+            : []),
           {
             id: "tables",
             label: t("dataStores.tablesTitle"),
             description: t("dataStores.tablesDescription"),
-            body:
-              state === undefined ? (
-                <SkeletonList rows={3} />
-              ) : reachable ? (
-                <DataStoreTables key={level} store={asset.name} source={source} />
-              ) : (
-                <EmptyState layout="inline">{t("dataStores.notReachable")}</EmptyState>
-              )
+            body: reachable ? (
+              <DataStoreTables key={level} store={asset.name} source={source} />
+            ) : (
+              <EmptyState layout="inline">{t("dataStores.notReachable")}</EmptyState>
+            )
           },
-          {
-            id: "rows",
-            label: t("dataStores.rowsTitle"),
-            description: t("dataStores.rowsDescription"),
-            body:
-              state === undefined ? (
-                <SkeletonList rows={3} />
-              ) : reachable ? (
-                <DataStoreRowsSection key={level} store={asset.name} source={source} />
-              ) : (
-                <EmptyState layout="inline">{t("dataStores.notReachable")}</EmptyState>
-              )
-          }
-        ]),
-    // The scratch database a draft's calls reach, apart from the live rows above.
-    ...(state === undefined
-      ? []
-      : [
+          // The scratch database a draft's calls reach, apart from the live rows.
           {
             id: "test-copy",
             label: t("dataStores.testCopyTitle"),
@@ -303,8 +268,19 @@ function PublishedDataStorePage({
               <DataStoreTestCopy store={asset.name} copy={state.testCopy} calls={source.testCopy} />
             )
           }
-        ])
-  ];
+        ];
+  const section = ({ id, label, description, count, body }: PageSection) => (
+    <Section
+      key={id}
+      id={id}
+      layout="stacked"
+      title={label}
+      description={description}
+      count={count}
+    >
+      {body}
+    </Section>
+  );
 
   return (
     <Page
@@ -314,132 +290,168 @@ function PublishedDataStorePage({
           variant="detail"
           back={back}
           title={title}
-          description={textOf(asset.config, "description")}
+          meta={<span data-asset-place="">{place}</span>}
           state={
-            view ? (
-              <Badge tone={view.tone} dot>
-                {t(view.label)}
+            notReady ? (
+              <Badge tone={DATA_STORE_STATE_VIEWS[stateName].tone} dot>
+                {t(DATA_STORE_STATE_VIEWS[stateName].label)}
               </Badge>
             ) : undefined
           }
           menu={head.menu}
         />
       }
-      outline={
-        <PageOutline
-          belowHeader
-          items={sections.map(({ id, label, count }) => ({ id, label, count }))}
-        />
-      }
     >
       {page.above}
-      {/* The first line of the content starts where the outline does. */}
       <div className="grid min-w-0 content-start pt-5">
-        <AssetPlaceRow>
-          <AssetPlaceLine owner={asset.scope} />
-        </AssetPlaceRow>
-        <Banner layout="line" className="mb-4" data-build-read-only="">
-          {t("dataStores.description")}
-        </Banner>
-        {head.failure}
-        {sections.map((section) => (
-          <Section
-            key={section.id}
-            id={section.id}
-            layout="stacked"
-            title={section.label}
-            description={section.description}
-            count={section.count}
-          >
-            {section.body}
-          </Section>
-        ))}
+        <DataStoreLead>{textOf(asset.config, "description")}</DataStoreLead>
+        {/* What the store holds, and above it only what a reader has to know or do first. */}
+        <div className="grid min-w-0 gap-5 border-b pb-6">
+          {head.failure}
+          {draftAhead ? (
+            pending === undefined ? null : (
+              <DataStorePublishSection
+                title={title}
+                migrations={pending}
+                firstPublish={false}
+                publish={publish}
+                agentWorking={agentWorking}
+                migrationsShown={false}
+              />
+            )
+          ) : null}
+          {state === undefined ? (
+            // Before the answer, and where the state cannot be read.
+            <ReadState read={read} failedText={t("dataStores.stateFailed")} rows={4}>
+              {() => null}
+            </ReadState>
+          ) : (
+            <>
+              {notReady ? <DataStoreStateLine state={state} /> : null}
+              {state.size.nearLimit ? (
+                <Banner tone="warning" data-data-store-near-limit="">
+                  {t("dataStores.nearLimit")}
+                </Banner>
+              ) : null}
+              {reachable ? (
+                <DataStoreRowsSection key={level} store={asset.name} source={source} />
+              ) : null}
+            </>
+          )}
+          <DataStoreUsedByLine {...provenance} />
+          {reviewShown ? (
+            <Section
+              id="review"
+              layout="stacked"
+              title={t("dataStores.reviewTitle")}
+              description={t("dataStores.reviewDescription")}
+              count={
+                flagged.status === "ready" ? groupFlagged(flagged.data.items).fieldCount : undefined
+              }
+            >
+              <DataStoreReview
+                store={asset.name}
+                read={flagged}
+                review={source.review}
+                keyColumns={keyColumns}
+                showMore={() => setReviewLimit((limit) => limit + REVIEW_PAGE)}
+              />
+            </Section>
+          ) : null}
+        </div>
+        <DataStoreFold label={t("dataStores.settingsTitle")} hint={t("dataStores.settingsHint")}>
+          {settings.map(section)}
+          {advanced.length === 0 ? null : (
+            <DataStoreFold
+              advanced
+              label={t("dataStores.advancedTitle")}
+              hint={t("dataStores.advancedHint")}
+            >
+              {advanced.map(section)}
+            </DataStoreFold>
+          )}
+        </DataStoreFold>
       </div>
       {head.dialog}
     </Page>
   );
 }
 
-/** The state in a word and a sentence, then the migration level, the size and the last change. */
-function DataStoreStatus({
-  state,
-  description,
-  updatedAt
-}: {
-  state: DataStoreState;
-  description: string | undefined;
-  updatedAt: string;
-}) {
-  const { locale, t } = useTranslation();
+/**
+ * The state of a store in a sentence, with what failed. On the page of a store that is not
+ * ready it stands alone, as the head names the state; under Status it has its badge.
+ */
+function DataStoreStateLine({ state, badge = false }: { state: DataStoreState; badge?: boolean }) {
+  const { t } = useTranslation();
   const name = dataStoreStateView(state);
   const view = DATA_STORE_STATE_VIEWS[name];
-  const { size, lastMigration } = state;
-  const { migration, failure } = lastMigration;
+  const { failure } = state.lastMigration;
   return (
     <>
       <div role="status" data-data-store-state={name} className="grid min-w-0 gap-1.5">
-        <Badge tone={view.tone} dot>
-          {t(view.label)}
-        </Badge>
+        {badge ? (
+          <Badge tone={view.tone} dot>
+            {t(view.label)}
+          </Badge>
+        ) : null}
         <p className="text-body">{t(view.text)}</p>
       </div>
       {failure ? (
         <InlineError data-data-store-failure={failure.code}>{failure.message}</InlineError>
       ) : null}
-      {size.nearLimit ? (
-        <Banner tone="warning" data-data-store-near-limit="">
-          {t("dataStores.nearLimit")}
-        </Banner>
-      ) : null}
-      <KeyValueList>
-        <KeyValue label={t("dataStores.schemaLevel")}>
-          {state.level === state.publishedLevel
-            ? state.level
-            : t("dataStores.schemaLevelOf", {
-                level: state.level,
-                published: state.publishedLevel
-              })}
-        </KeyValue>
-        {migration ? (
-          <KeyValue
-            label={t(
-              lastMigration.outcome === "applied"
-                ? "dataStores.lastMigration"
-                : "dataStores.nextMigration"
-            )}
-          >
-            <code className="font-mono text-code">
-              {migrationNumber(migration.number)}_{migration.name}
-            </code>
-          </KeyValue>
-        ) : null}
-        <KeyValue label={t("dataStores.size")}>
-          {size.bytes === undefined ? (
-            t("dataStores.sizeNotMeasured", {
-              limit: formatDataStoreSize(size.limitBytes, locale)
-            })
-          ) : (
-            <>
-              {t("dataStores.sizeOfLimit", {
-                size: formatDataStoreSize(size.bytes, locale),
-                limit: formatDataStoreSize(size.limitBytes, locale)
-              })}
-              {size.measuredAt ? (
-                <span className="block text-caption text-muted-foreground">
-                  {t("dataStores.sizeMeasured", { time: formatDateTime(size.measuredAt, locale) })}
-                </span>
-              ) : null}
-            </>
-          )}
-        </KeyValue>
-        <KeyValue label={t("dataStores.updated")}>{formatDateTime(updatedAt, locale)}</KeyValue>
-        {description ? (
-          <KeyValue label={t("dataStores.descriptionLabel")} foldable>
-            {description}
-          </KeyValue>
-        ) : null}
-      </KeyValueList>
     </>
+  );
+}
+
+/** Where the migrations stand, how large the store is and when it last changed. */
+function DataStoreFacts({ state, updatedAt }: { state: DataStoreState; updatedAt: string }) {
+  const { locale, t } = useTranslation();
+  const { size, lastMigration } = state;
+  const { migration } = lastMigration;
+  return (
+    <KeyValueList>
+      <KeyValue label={t("dataStores.schemaLevel")}>
+        {state.level === state.publishedLevel
+          ? state.level
+          : t("dataStores.schemaLevelOf", {
+              level: state.level,
+              published: state.publishedLevel
+            })}
+      </KeyValue>
+      {migration ? (
+        <KeyValue
+          label={t(
+            lastMigration.outcome === "applied"
+              ? "dataStores.lastMigration"
+              : "dataStores.nextMigration"
+          )}
+        >
+          <code className="font-mono text-code">
+            {migrationNumber(migration.number)}_{migration.name}
+          </code>
+        </KeyValue>
+      ) : null}
+      <KeyValue label={t("dataStores.size")}>
+        {size.bytes === undefined ? (
+          t("dataStores.sizeNotMeasured", {
+            limit: formatDataStoreSize(size.limitBytes, locale)
+          })
+        ) : (
+          <>
+            {t("dataStores.sizeOfLimit", {
+              size: formatDataStoreSize(size.bytes, locale),
+              limit: formatDataStoreSize(size.limitBytes, locale)
+            })}
+            {size.measuredAt ? (
+              <span className="block text-caption text-muted-foreground">
+                {t("dataStores.sizeMeasured", { time: formatDateTime(size.measuredAt, locale) })}
+              </span>
+            ) : null}
+          </>
+        )}
+      </KeyValue>
+      <KeyValue label={t("dataStores.updated")}>{formatDateTime(updatedAt, locale)}</KeyValue>
+    </KeyValueList>
   );
 }
 

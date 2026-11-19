@@ -5,12 +5,16 @@ import {
   Button,
   CodeBlock,
   ConfirmDialog,
+  Disclosure,
+  DisclosureContent,
+  DisclosureTrigger,
   DropdownMenuItem,
   DropdownMenuSeparator,
   EmptyState,
   InlineError,
   List,
-  ListRow
+  ListRow,
+  PageLead
 } from "@work-shape/catalyst-ui";
 import { CopyIdItem } from "../copy-id-item";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
@@ -241,6 +245,54 @@ export function DataStorePublishSection({
         </ConfirmDialog>
       )}
     </section>
+  );
+}
+
+/** What the store is, in the words of its description: the lead line of its page. */
+export function DataStoreLead({ children }: { children: string | undefined }) {
+  return children === undefined ? null : (
+    // The content column has the page's gutter already.
+    <PageLead className="px-0 pt-0 pb-5" data-asset-lead="">
+      {children}
+    </PageLead>
+  );
+}
+
+/**
+ * What a store's page keeps folded under one line: Settings at its end, and Advanced inside
+ * them. It stays in the page while folded, so what it reads is read once and a section in it
+ * is found by its id.
+ */
+export function DataStoreFold({
+  label,
+  hint,
+  advanced = false,
+  children
+}: {
+  label: string;
+  /** What is in it, in a few words after the label. */
+  hint: string;
+  /** The fold inside Settings, for what only whoever runs the store reads. */
+  advanced?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <Disclosure
+      variant="row"
+      {...(advanced ? { "data-data-store-advanced": "" } : { "data-asset-settings": "" })}
+    >
+      <DisclosureTrigger
+        {...(advanced
+          ? { "data-data-store-advanced-trigger": "" }
+          : { "data-asset-settings-trigger": "" })}
+      >
+        <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+          <span className="text-title-sm text-foreground">{label}</span>
+          <span className="text-caption">{hint}</span>
+        </span>
+      </DisclosureTrigger>
+      <DisclosureContent keepMounted>{children}</DisclosureContent>
+    </Disclosure>
   );
 }
 
