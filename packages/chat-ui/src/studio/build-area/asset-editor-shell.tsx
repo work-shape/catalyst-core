@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   Banner,
+  Disclosure,
+  DisclosureContent,
+  DisclosureTrigger,
   DropdownMenuItem,
   FormNotice,
   Page,
   PageBar,
   PageFooter,
   PageHeader,
+  PageLead,
   PageOutline,
   SaveBar,
   Section,
@@ -45,7 +49,23 @@ export interface AssetSection {
   refusalField?: BuildRefusalField;
   /** What is true of the section now, after its heading, such as a change somebody proposes. */
   state?: ReactNode;
+  /**
+   * The section has no heading of its own: its body says what it is, such as a list under a
+   * line that counts it. Its `label` still names it in the outline.
+   */
+  bare?: boolean;
   body: ReactNode;
+}
+
+/**
+ * The sections a page keeps folded at its end, under one line: what is set once and read
+ * seldom. A refused save that names a field in them opens them.
+ */
+export interface AssetSettings {
+  label: string;
+  /** What is in them, in a few words after the label. */
+  hint?: string;
+  sections: readonly AssetSection[];
 }
 
 /**
@@ -124,6 +144,9 @@ export function AssetEditorShell({
   primaryAction,
   menu,
   notices,
+  lead,
+  outline = true,
+  settings,
   sections,
   missingTranslations,
   control,
@@ -152,6 +175,12 @@ export function AssetEditorShell({
   menu?: ReactNode;
   /** What the kind tells of the asset before its sections, such as what of it cannot run. */
   notices?: ReactNode;
+  /** What the asset is, in a sentence or two: the page's lead line, first under the head. */
+  lead?: string;
+  /** `false` leaves out the outline of the sections, for a page that is short without it. */
+  outline?: boolean;
+  /** Sections kept folded at the end of the page, under one line. */
+  settings?: AssetSettings;
   sections: readonly AssetSection[];
   /** With it the page has texts per language: how many are still empty in each one. */
   missingTranslations?: LocalizedPair<number>;
@@ -180,6 +209,22 @@ export function AssetEditorShell({
   }, [unsaved, onUnsavedChange]);
 
   const formRef = useRef<HTMLFormElement>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // What to bring into view once the folded sections are open: a section, or the first field
+  // the browser refuses.
+  const [reveal, setReveal] = useState<{ section: string } | "invalid">();
+  useEffect(() => {
+    if (reveal === undefined) return;
+    if (reveal === "invalid") formRef.current?.reportValidity();
+    else scrollToSection(formRef.current, reveal.section);
+    setReveal(undefined);
+  }, [reveal]);
+  const inSettings = (id: string) =>
+    settings?.sections.some((section) => section.id === id) === true;
+  const showSection = (id: string) => {
+    if (inSettings(id)) setSettingsOpen(true);
+    setReveal({ section: id });
+  };
   const footerRef = useRef<HTMLDivElement>(null);
   const hasNotice = Boolean(notice);
   // A notice that appears is shown: where the footer rests at the end of the page it may be
@@ -192,11 +237,11 @@ export function AssetEditorShell({
     control.submit().then(
       (answer) => {
         // A refusal that names a field is read where the field is.
-        const named = sections.find(
+        const named = [...sections, ...(settings?.sections ?? [])].find(
           (section) => section.refusalField && refusalsOf(answer, section.refusalField).length > 0
         );
         if (named) {
-          scrollToSection(formRef.current, named.id);
+          showSection(named.id);
         }
       },
       () => undefined
@@ -234,6 +279,10 @@ export function AssetEditorShell({
         className="underline-offset-2 hover:underline"
         onClick={(event) => {
           event.preventDefault();
+          if (inSettings(audienceTo)) {
+            showSection(audienceTo);
+            return;
+          }
           document
             .getElementById(audienceTo)
             ?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -255,6 +304,30 @@ export function AssetEditorShell({
         {audienceLink}
         {owner === undefined || owner === "" ? null : ` · ${owner}`}
       </span>
+    );
+
+  const renderSection = (section: AssetSection) =>
+    section.bare ? (
+      // Spaced as a section is, with the hairline to the next one.
+      <div
+        key={section.id}
+        id={section.id}
+        className="min-w-0 border-b py-6 first:pt-0 last:border-b-0 has-[+[data-page-footer]]:border-b-0"
+      >
+        {section.body}
+      </div>
+    ) : (
+      <Section
+        key={section.id}
+        id={section.id}
+        layout="stacked"
+        title={section.label}
+        description={section.description}
+        count={section.count}
+        state={section.state}
+      >
+        {section.body}
+      </Section>
     );
 
   return (
@@ -292,7 +365,8 @@ export function AssetEditorShell({
         />
       }
       outline={
-        sections.length > 1 ? (
+        // Without an outline the content is centred in the page.
+        !outline ? undefined : sections.length > 1 ? (
           <PageOutline
             belowHeader
             items={sections.map((section) => ({
@@ -315,7 +389,24 @@ export function AssetEditorShell({
         className="grid min-w-0 content-start pt-5"
         noValidate={!canWrite}
         onSubmit={submit}
+        // A field the browser refuses inside the folded sections is shown, then named again.
+        onInvalidCapture={(event) => {
+          if (
+            !settingsOpen &&
+            event.target instanceof Element &&
+            event.target.closest("[data-asset-settings]")
+          ) {
+            setSettingsOpen(true);
+            setReveal("invalid");
+          }
+        }}
       >
+        {lead === undefined || lead.trim() === "" ? null : (
+          // The content column has the page's gutter already.
+          <PageLead className="px-0 pt-0 pb-5" data-asset-lead="">
+            {lead}
+          </PageLead>
+        )}
         {canWrite ? null : (
           <Banner
             tone="info"
@@ -366,19 +457,29 @@ export function AssetEditorShell({
           </PageBar>
         ) : null}
         <AssetLanguageProvider value={language}>
-          {sections.map((section) => (
-            <Section
-              key={section.id}
-              id={section.id}
-              layout="stacked"
-              title={section.label}
-              description={section.description}
-              count={section.count}
-              state={section.state}
+          {sections.map(renderSection)}
+          {settings === undefined || settings.sections.length === 0 ? null : (
+            <Disclosure
+              variant="row"
+              open={settingsOpen}
+              onOpenChange={setSettingsOpen}
+              data-asset-settings=""
             >
-              {section.body}
-            </Section>
-          ))}
+              <DisclosureTrigger data-asset-settings-trigger="">
+                <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+                  <span className="text-title-sm text-foreground">{settings.label}</span>
+                  {settings.hint === undefined ? null : (
+                    <span className="text-caption">{settings.hint}</span>
+                  )}
+                </span>
+              </DisclosureTrigger>
+              {/* Kept in the page while folded: its fields are part of the form, and what it
+                  reads is read once. */}
+              <DisclosureContent keepMounted>
+                {settings.sections.map(renderSection)}
+              </DisclosureContent>
+            </Disclosure>
+          )}
         </AssetLanguageProvider>
         {notice || waiting || general.length > 0 || (canWrite && (dirty || saving)) ? (
           <PageFooter
