@@ -111,6 +111,8 @@ export const SCOPES_HEADER = "x-test-scopes";
  * origin is then `cli`. Left out, the user's own session.
  */
 const KEY_HEADER = "x-test-key";
+/** With `x-test-key: personal`, the scopes the key carries, separated by spaces. */
+const KEY_SCOPES_HEADER = "x-test-key-scopes";
 /** The keys of the service the header names; `storeTestServicePrincipal` writes their rows. */
 const TEST_SERVICE_KEYS = ["config_assets.read", "config_assets.release"];
 const signedInUserSchema = z.object({
@@ -164,6 +166,7 @@ export function recordAuthAdapter(): AuthAdapter {
       if (!user) throw new Error(`No test user '${String(userId)}'`);
       const personal = request.headers[KEY_HEADER] === "personal";
       if (personal) await storeTestPersonalKey(user.id);
+      const keyScopes = request.headers[KEY_SCOPES_HEADER];
       return {
         id: user.id,
         externalUserId: user.id,
@@ -181,7 +184,10 @@ export function recordAuthAdapter(): AuthAdapter {
                 id: testPersonalKeyId(user.id),
                 displayLabel: "Test key",
                 authSource: "test"
-              }
+              },
+              ...(typeof keyScopes === "string"
+                ? { keyScopes: keyScopes.split(" ").filter(Boolean) }
+                : {})
             }
           : {})
       };
