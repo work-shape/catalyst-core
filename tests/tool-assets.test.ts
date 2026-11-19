@@ -8,6 +8,8 @@ import {
   createPlatformId,
   dataToolPrefixOf,
   NoopAuditRecorder,
+  TOOL_CODE_HTML_MAX_CHARS,
+  TOOL_CODE_OUTPUT_MAX_BYTES,
   TOOL_FILE_MAX_BYTES,
   TOOL_FILES_MAX,
   isToolOperationAnswer,
@@ -26,8 +28,6 @@ import {
 import { findMissingAgentToolReferences } from "@work-shape/catalyst-config-schema";
 import { createOutsideSchemaChecker } from "@work-shape/catalyst-connections";
 import {
-  TOOL_CODE_HTML_MAX_CHARS,
-  TOOL_CODE_OUTPUT_MAX_BYTES,
   createToolAssetToolSource,
   createToolOperationSource,
   toolCodeCallAnswer

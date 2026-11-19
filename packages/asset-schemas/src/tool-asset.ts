@@ -57,10 +57,14 @@ export const TOOL_CODE_ENTRY_ENDINGS: Readonly<Record<ToolCodeRuntime, readonly 
 export const TOOL_CODE_TIMEOUT_DEFAULT_SECONDS = 30;
 export const TOOL_CODE_TIMEOUT_MAX_SECONDS = 120;
 
-/** How many files a code tool holds at most, how large one is and how large all are. */
+/**
+ * How many files a code tool holds at most, how large one is and how large all are. A
+ * TypeScript tool is one bundled module that carries Zod, about 330 KiB minified, so one file
+ * may be as large as all of them.
+ */
 export const TOOL_FILES_MAX = 32;
-export const TOOL_FILE_MAX_BYTES = 256 * 1024;
-export const TOOL_FILES_MAX_BYTES = 512 * 1024;
+export const TOOL_FILE_MAX_BYTES = 1024 * 1024;
+export const TOOL_FILES_MAX_BYTES = 1024 * 1024;
 
 /**
  * A path in a code tool's folder: `/`-separated parts of letters, digits, `_`, `-` and `.`,

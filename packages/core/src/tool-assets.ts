@@ -2,7 +2,11 @@ import type { AssetKindActions } from "./asset-kinds";
 
 export {
   TOOL_ASSET_KIND,
+  TOOL_CODE_ANSWER_MAX_BYTES,
+  TOOL_CODE_HTML_MAX_CHARS,
+  TOOL_CODE_OUTPUT_MAX_BYTES,
   TOOL_CODE_ENTRY_ENDINGS,
+  TOOL_CODE_LIBRARY,
   TOOL_CODE_RUNTIMES,
   TOOL_CODE_TIMEOUT_DEFAULT_SECONDS,
   TOOL_CODE_TIMEOUT_MAX_SECONDS,
@@ -21,12 +25,15 @@ export {
   TOOL_TYPES,
   toolAssetConfigSchema,
   toolCallOperationName,
+  toolCodeAnswerSchema,
+  toolCodeDisplaySchema,
   toolCodeTimeoutSeconds,
   toolNameSchema,
   toolOfOperationName,
   type CodeToolConfig,
   type ResultToolConfig,
   type ToolAssetConfig,
+  type ToolCodeDisplay,
   type ToolCodeRuntime
 } from "@work-shape/catalyst-asset-schemas";
 

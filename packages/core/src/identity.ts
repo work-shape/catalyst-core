@@ -179,8 +179,12 @@ export interface AgentRunWriteFence {
  * live once" was switched on for this action or step of this revision.
  */
 export interface OperationDraftContext {
-  /** Agent Try has no Run live once, including when it falls back to a live revision. */
-  kind?: "agent_preview";
+  /**
+   * Agent Try has no Run live once, including when it falls back to a live revision. Nor has a
+   * code tool's handler run locally from the CLI (`tool_run`, TOOL-2d): its Connection calls go
+   * to the test credential where one is set, and a change without one is simulated.
+   */
+  kind?: "agent_preview" | "tool_run";
   /** The draft Workflow test that binds a live-once switch across agent tool calls. */
   workflowRunId?: string;
   /** The App or the Workflow whose draft makes the call. */

@@ -86,7 +86,7 @@ export async function decideTarget(input: {
   });
   if (definition.effect === "reading") return unswitched;
   if (definition.draftTarget) return definition.draftTarget;
-  if (draft.kind === "agent_preview") return unswitched;
+  if (draft.kind !== undefined) return unswitched;
   if (!deps.liveOnce || !(await admitted())) return unswitched;
   const forRun = call.origin.kind === "workflow" ? call.origin.workflowRunId : draft.workflowRunId;
   const now = deps.now ?? (() => new Date());
@@ -225,6 +225,19 @@ export async function simulateRun(
   policy: PolicyResolution
 ): Promise<OperationEnding> {
   const { run, definition, call, now } = context;
+  // An operation that cannot be called now is not simulated: a simulation would answer as if
+  // the live call could succeed. The call fails as the live one would, and nothing ran.
+  if (definition.available === false) {
+    return failRun(
+      context,
+      new AppError(
+        "CONFLICT",
+        `'${definition.name}' cannot be called now, so its call was not simulated either`,
+        { reason: "operation_unavailable" }
+      ),
+      true
+    );
+  }
   const wouldAsk: "confirmation" | "approval" | undefined =
     policy.next === "await_confirmation"
       ? "confirmation"

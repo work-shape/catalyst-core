@@ -7,6 +7,7 @@ import {
   auditActorFromIdentity,
   connectionAdminConsentReturnOf,
   connectionCallReasonOf,
+  connectionOperationName,
   connectionOAuthError,
   personalConnectionBrowserError,
   connectionOAuthReasonOf,
@@ -209,6 +210,26 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
     changeClass: "reversible",
     module: CONNECTIONS_MODULE,
     execute: (input, context) => required().test(input.name, context.runtime.signal, context.actor)
+  });
+
+  // A code tool's handler run locally calls a declared operation as a draft would (TOOL-2d):
+  // the call runs as `connection.<name>.<operation>` itself, with its right, its exposure (an
+  // API credential needs `outside`), its key scope, its policy and its audit, and goes to the
+  // test credential where one is set. A draft of `tool_run` has no Run live once, so the
+  // context names nothing a switch could be found on.
+  route.resourceOperation(apiOperations["connections.try_call"], {
+    target: ({ name, operation, input }) => ({
+      operation: connectionOperationName(name, operation),
+      input,
+      draft: {
+        kind: "tool_run",
+        asset: { kind: CONNECTION_ASSET_KIND, id: name, name },
+        revisionId: "local",
+        part: operation
+      }
+    }),
+    right: CONNECTION_ACTIONS.use,
+    notFound: "The Connection has no such operation"
   });
 
   // Who may use the Connection may choose its folders: the right a source's publish needs.

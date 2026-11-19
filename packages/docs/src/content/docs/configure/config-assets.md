@@ -550,7 +550,7 @@ The handler reads the agent's input as JSON on its input stream or from the file
 - `{ "type": "data", "kind": "...", "title": "...", "data": { ... } }`: the conversation's structured result under the tool's name, drawn by the release's widget for the kind or by the generic view.
 - `{ "type": "html", "title": "...", "html": "..." }`: the tool's own HTML in the sandboxed frame `show_view` uses. A personal conversation shows it without scripts.
 
-`output` is at most 64 KiB as JSON, HTML at most 200,000 characters, and the whole answer at most 512 KiB. A handler that ends with an error, answers no such object, or does not end within `timeoutSeconds` fails the call: the last ends as `timed_out`, and so does a call that the agent's own tool deadline ends first. `timeoutSeconds` counts from the moment a worker starts the handler's container, not while the call waits for one; a call that waits 30 seconds, or until the agent's tool deadline, without a container fails with the reason `queued`, and nothing of it ran. A handler that ends with an error hands the model the end of its error stream; the call's Operation Run keeps only the reason. A tool holds at most 32 files, each at most 256 KiB and 512 KiB together; a write whose files do not hold `entry` is refused. A call that no worker takes fails with a message the agent can pass on.
+`output` is at most 64 KiB as JSON, HTML at most 200,000 characters, and the whole answer at most 512 KiB. A handler that ends with an error, answers no such object, or does not end within `timeoutSeconds` fails the call: the last ends as `timed_out`, and so does a call that the agent's own tool deadline ends first. `timeoutSeconds` counts from the moment a worker starts the handler's container, not while the call waits for one; a call that waits 30 seconds, or until the agent's tool deadline, without a container fails with the reason `queued`, and nothing of it ran. A handler that ends with an error hands the model the end of its error stream; the call's Operation Run keeps only the reason. A tool holds at most 32 files, each at most 1 MiB and 1 MiB together; a write whose files do not hold `entry` is refused. A call that no worker takes fails with a message the agent can pass on.
 
 #### Calling a Connection
 
@@ -572,6 +572,73 @@ files:
 In Node the handler imports `{ connection }` from `"catalyst-tool"` and awaits `connection("crm").call(...)`. The call goes out of the sandbox as a request to the platform, which makes it as the tool's caller: with that person's rights, so it needs `connection.use` on the Connection, from the tool's call, and as an Operation Run of its own that the audit records without its input or output. The Connection's credential never enters the sandbox. In a draft agent's Try, the calls reach the Connection's test credential, as a Try call of the operation does.
 
 The policy of the declared operations is asked once, on the tool's call, before the handler starts: the strictest of them is the call's floor, so a `confirm` asks the person to confirm the tool's call and a `deny` refuses it. An `approval` asked of a personal Connection's operation refuses the tool's call, as such a call is refused outside a tool. Nothing inside the handler waits for a person: a call the policy asks more of than it asked when the tool's call was admitted or as the handler started, because a floor rose meanwhile, a setting changed or a guardrail asks about its input, is refused with `connection_call_waits`. A call the handler makes that the tool does not declare is refused with `connection_not_declared`, and any refused or failed call raises `ConnectionCallError` with its `code`. One call of the tool makes at most 50 requests, each at most 256 KiB, and an answer is at most 1 MiB.
+
+#### A tool's folder
+
+The definition above is what the instance stores. Written by hand, it is a folder the CLI reads: `tool.yaml` beside a handler, `main.py` with one `@tool` function, or `index.ts` that exports one `defineTool`. The CLI reads the input schema and the description from the handler itself, on your computer, and the instance never runs the code to learn them.
+
+```yaml
+# find_contact/tool.yaml
+title: Find contact
+summary: Looks up a contact in the CRM
+icon: users
+connections: [crm.find_contact]   # connection.crm.find_contact
+timeout: 20                       # seconds, timeoutSeconds
+```
+
+```python
+# find_contact/main.py
+from typing import Literal, Optional
+from catalyst_tools import tool
+
+
+@tool
+def find_contact(ctx, email: str, kind: Literal["person", "company"] = "person",
+                 limit: Optional[int] = None):
+    """Finds a contact in the CRM by e-mail address.
+
+    Args:
+        email: The contact's address.
+        kind: Which contacts to look at.
+    """
+    contact = ctx.connection("crm").call("find_contact", {"email": email, "kind": kind})
+    ctx.display.data("crm.contact", contact, "Contact")
+    return contact
+```
+
+`@tool` takes the tool's input from the function's parameters after `ctx`: their type hints give the schema (`str`, `int`, `float`, `bool`, `Literal`, `list`, `set`, `Optional`, an `Enum`, a `TypedDict` or a dataclass), a default makes a parameter optional, and the docstring gives the description and, under `Args:`, each parameter's. The function's name is the tool's, unless `tool.yaml` or `@tool(name=...)` names it. `catalyst_tools` is the platform's module, standard library only, beside the handler in the sandbox and in the CLI's local run.
+
+```ts
+// sum_figures/index.ts
+import { z } from "zod";
+import { defineTool } from "@work-shape/catalyst-tool-sdk/code";
+
+export default defineTool({
+  name: "sum_figures",
+  title: "Sum figures",
+  description: "Call with the figures to add; answers their total.",
+  inputSchema: z.object({ numbers: z.array(z.number()).describe("The figures") }),
+  async execute({ numbers }, ctx) {
+    const total = numbers.reduce((sum, n) => sum + n, 0);
+    ctx.display.html(`<b>${total}</b>`, "Total");
+    return { total };
+  }
+});
+```
+
+A TypeScript tool installs `@work-shape/catalyst-tool-sdk` and `zod` in its folder. Its input schema is the Zod schema's JSON Schema, as for a tool of a release. `ctx` is the same in both languages: `ctx.connection(name).call(operation, input)` calls a declared Connection operation, `ctx.display.data(kind, data, title)` and `ctx.display.html(html, title)` set the display, the last one winning, and `ctx.log(...)` writes to the log. What the function returns is the `output`; a refused Connection call raises `ConnectionCallError`. In `tool.yaml`, `name`, `title`, `summary`, `icon`, `description`, `connections` and `timeout` are read; the handler's own name, title and description win over the file's.
+
+```sh
+catalyst tool run find_contact --input '{"email":"ada@example.com"}'
+catalyst tool put find_contact
+catalyst tool publish find_contact --revision 3
+```
+
+`put` and `run` execute the tool's code on your computer as you, outside any sandbox: `put` loads the handler to read its schema and description, and `run` runs it. Run them only on a tool whose code you trust.
+
+`catalyst tool run <folder>` runs the handler with your `python3` or the CLI's Node, under the sandbox's bounds, and prints its `output` (`--json` prints the whole answer and `simulatedCalls`). It checks `--input` against the tool's input schema first, and the handler's answer, its requests and their answers against the sandbox's limits. A display is written to a page whose path the command prints, to open in a browser: an HTML display runs there in a frame without an origin that reaches no host, as in the chat, and a data display shows its kind and data, since its widget lives in the instance. The run's input, answer and bundle are removed when it ends. A Connection call goes to the instance with your key, as a call of a draft: to the Connection's test credential where it has one, live for a reading operation without one, and simulated for a changing one without one, which changes nothing and answers the operation's simulated output or `null`; each simulated call is named on stderr. An operation that cannot be called now is refused, not simulated. It is the operation's own call, so it needs the operation exposed to outside clients and a key that names `connection.use` on the Connection; a call the tool does not declare is refused before it leaves your computer. The run stops after the tool's timeout. Your key never enters the handler's environment.
+
+`catalyst tool put <folder>` writes the tool as its next draft: a Python tool sends its folder's files, without `tool.yaml`, hidden files and caches; a TypeScript tool is bundled with its imports into one ES module, `tool.mjs`, which is why a tool's files may hold up to 1 MiB. It replaces the revision it reads before writing; `--if-revision <n|new>` names the one you read instead. `catalyst tool publish` makes the draft callable, and `list`, `show`, `history` and `delete` work as for any asset.
 
 ## Permissions
 

@@ -14,12 +14,11 @@ import type { ISODateString } from "./time";
 // request at a time, so a row holds at most one, numbered by `seq`. Both are cleared with the
 // outcome.
 
-/** How many Connection calls one handler makes at most. A further one is refused. */
-export const TOOL_CODE_REQUESTS_MAX = 50;
-/** How large one request of a handler is at most, as one line of JSON in UTF-8. */
-export const TOOL_CODE_REQUEST_MAX_BYTES = 256 * 1024;
-/** How large the answer to one request is at most, as JSON in UTF-8. */
-export const TOOL_CODE_REQUEST_ANSWER_MAX_BYTES = 1024 * 1024;
+export {
+  TOOL_CODE_REQUESTS_MAX,
+  TOOL_CODE_REQUEST_ANSWER_MAX_BYTES,
+  TOOL_CODE_REQUEST_MAX_BYTES
+} from "@work-shape/catalyst-asset-schemas";
 
 /** One request of a handler: a call of a Connection operation its tool declares. */
 export interface ToolCodeCallRequest {

@@ -97,16 +97,16 @@
       "@work-shape/catalyst-demo/result-shapers": ["clients/demo/src/result-shapers.ts"],
       "@work-shape/catalyst-demo/sample-mcp": ["clients/demo/sample-mcp/index.ts"],
       "@work-shape/catalyst-demo/seed": ["clients/demo/src/seed/index.ts"],
+      "@work-shape/catalyst-imap-connector": ["packages/imap-connector/src/index.ts"],
       "@work-shape/catalyst-mail": ["packages/mail/src/index.ts"],
       "@work-shape/catalyst-model-provider": ["packages/model-provider/src/index.ts"],
       "@work-shape/catalyst-object-storage": ["packages/object-storage/src/index.ts"],
       "@work-shape/catalyst-postgres-connector": ["packages/postgres-connector/src/index.ts"],
-      "@work-shape/catalyst-imap-connector": ["packages/imap-connector/src/index.ts"],
-      "@work-shape/catalyst-preview-capture": ["packages/preview-capture/src/index.ts"],
       "@work-shape/catalyst-postgres-store": ["packages/postgres-store/src/index.ts"],
       "@work-shape/catalyst-postgres-store/migration-statements": [
         "packages/postgres-store/src/migration-statements.d.ts"
       ],
+      "@work-shape/catalyst-preview-capture": ["packages/preview-capture/src/index.ts"],
       "@work-shape/catalyst-quality-config": ["packages/quality-config/eslint.config.mjs"],
       "@work-shape/catalyst-quality-config/baseline": ["packages/quality-config/baseline.mjs"],
       "@work-shape/catalyst-quality-config/source-aliases": [
@@ -118,6 +118,7 @@
         "packages/tool-execution/src/native-document.ts"
       ],
       "@work-shape/catalyst-tool-sdk": ["packages/tool-sdk/src/index.ts"],
+      "@work-shape/catalyst-tool-sdk/code": ["packages/tool-sdk/src/code.ts"],
       "@work-shape/catalyst-ui": ["packages/ui/src/index.ts"],
       "@work-shape/catalyst-ui/chart-engine": ["packages/ui/src/data/chart-engine.ts"],
       "@work-shape/catalyst-ui/flow-layout": ["packages/ui/src/flow/flow-layout.ts"],
