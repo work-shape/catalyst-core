@@ -74,11 +74,11 @@ describe("the way back of a detail head", () => {
           { mode: "light", labels: uiLabelsDe },
           createElement(PageHeader, {
             variant: "detail",
-            back: createElement(
-              PageHeaderBack,
-              { label: "Zurück zu Data Stores", href: "/build/data-stores" },
-              "Data Stores"
-            ),
+            back: createElement(PageHeaderBack, {
+              label: "Zurück zu Data Stores",
+              href: "/build/data-stores",
+              children: "Data Stores"
+            }),
             title: "Orders 6dd383d5",
             meta: "Persönlich",
             state: createElement(Badge, { tone: "warning" }, "Nicht veröffentlicht")
