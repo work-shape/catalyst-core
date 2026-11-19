@@ -221,6 +221,11 @@ function useBackTextGone(): [RefObject<HTMLDivElement | null>, boolean] {
   const was = useRef(false);
   // The text's width, known while it shows.
   const width = useRef(0);
+  // The text came back in the last measure.
+  const returned = useRef(false);
+  // Where bringing the text back cut the name at once, the row's width and the name at which
+  // it stays gone: brought back there, it would leave again in every render.
+  const refused = useRef<string>(undefined);
   const follow = useFollowAFrameLater();
   useLayoutEffect(() => {
     const node = row.current;
@@ -247,9 +252,14 @@ function useBackTextGone(): [RefObject<HTMLDivElement | null>, boolean] {
       const free = room
         ? room.getBoundingClientRect().width
         : node.getBoundingClientRect().right - end.getBoundingClientRect().right;
-      const next = was.current
+      const measured = was.current
         ? cut || free < width.current + 1
         : cut || slot.getBoundingClientRect().width < width.current - 0.5;
+      const at = `${node.getBoundingClientRect().width} ${name.textContent ?? ""}`;
+      if (refused.current !== at) refused.current = undefined;
+      if (returned.current && measured) refused.current = at;
+      const next = measured || refused.current !== undefined;
+      returned.current = was.current && !next;
       was.current = next;
       setGone(next);
     };
@@ -560,10 +570,12 @@ export function PageHeader({
                 {back}
               </div>
             )}
+            {/* A line of facts takes the room up to the actions. The name keeps its own width
+              as the box's basis: the chips after it give way before it is cut. */}
             <div
               className={cn(
                 "min-w-0",
-                titleEditor === undefined && !hasMeta ? undefined : "flex-1"
+                titleEditor !== undefined ? "flex-1" : hasMeta ? "flex-auto" : undefined
               )}
             >
               <div
