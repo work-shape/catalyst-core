@@ -250,6 +250,58 @@ export const KNOWLEDGE_DOCUMENT_STATE_VIEWS: Record<
   failed: { tone: "danger", label: "knowledge.documentFailed" }
 };
 
+/** What needs a person first: a failed document, then one still being read, then the rest. */
+const DOCUMENT_ATTENTION: Record<KnowledgeDocument["state"], number> = {
+  failed: 0,
+  pending: 1,
+  indexed: 2
+};
+
+/**
+ * The documents with those that need a person first, each group in the order it was read. Only
+ * the documents read so far are ordered: the instance pages them newest first.
+ */
+export function documentsByAttention<Document extends Pick<KnowledgeDocument, "state">>(
+  documents: readonly Document[]
+): Document[] {
+  return documents
+    .map((document, index) => ({ document, index }))
+    .sort(
+      (left, right) =>
+        DOCUMENT_ATTENTION[left.document.state] - DOCUMENT_ATTENTION[right.document.state] ||
+        left.index - right.index
+    )
+    .map(({ document }) => document);
+}
+
+/**
+ * How many documents a Knowledge Base holds and how many of them can be searched. Counted
+ * exactly once every document is read; while more follow, only what the instance says of all
+ * of them is known: how many there are, and whether one failed or is still being read.
+ */
+export type KnowledgeDocumentTally =
+  | { exact: true; total: number; searchable: number; failed: number; pending: number }
+  | { exact: false; total: number | undefined; state: KnowledgeDocument["state"] | undefined };
+
+export function knowledgeDocumentTally(
+  documents: readonly Pick<KnowledgeDocument, "state">[],
+  complete: boolean,
+  summary?: { count: number; state: KnowledgeDocument["state"] }
+): KnowledgeDocumentTally {
+  if (!complete) {
+    return { exact: false, total: summary?.count, state: summary?.state };
+  }
+  const count = (state: KnowledgeDocument["state"]) =>
+    documents.filter((document) => document.state === state).length;
+  return {
+    exact: true,
+    total: documents.length,
+    searchable: count("indexed"),
+    failed: count("failed"),
+    pending: count("pending")
+  };
+}
+
 /** Why a document failed, in a sentence a person reads: one for every code the instance sends. */
 export const KNOWLEDGE_DOCUMENT_FAILURES: Record<
   NonNullable<KnowledgeDocument["failureCode"]>,

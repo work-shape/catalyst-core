@@ -37,7 +37,8 @@ import { KnowledgeBaseAgents, KnowledgeBaseHolders } from "./knowledge-base-acce
 import { KnowledgeStatus, KnowledgeTestQuery } from "./knowledge-base-checks";
 import { KnowledgeDocuments } from "./knowledge-base-documents";
 import { KnowledgeSourceChoice } from "./knowledge-base-source-choice";
-import { KnowledgeSourcesSection } from "./knowledge-base-sources";
+import { KnowledgeSourceConnectDialog, KnowledgeSourcesSection } from "./knowledge-base-sources";
+import { newKnowledgeSource } from "./knowledge-sources-model";
 import { KnowledgeTestSearch } from "./knowledge-base-test-search";
 import {
   knowledgeBaseFormToConfig,
@@ -200,8 +201,19 @@ export function KnowledgeBaseEditor({
       )
     }
   );
+  // Whether the instance offers synced sources to this reader: a Connection that syncs folders
+  // exists, or one can be made. Add then offers connecting a folder beside uploading files.
+  const sourceConnections = source.useSourceConnections?.("", frame.owner);
+  const sourceTypes = source.useSourceTypes?.();
+  const offersSources =
+    canWrite &&
+    ((sourceConnections?.status === "ready" && sourceConnections.data.items.length > 0) ||
+      (sourceTypes !== undefined && sourceTypes.length > 0));
+  const [connecting, setConnecting] = useState(false);
+  // On the page of a published one of documents the sources are the first rows of its list.
+  const sourceRows = live && documents;
   // A new one names its synced source with where its knowledge comes from; an existing one
-  // adds more under Synced sources.
+  // connects more through Add documents.
   const sourcesSection = (
     <>
       <KnowledgeSourcesSection
@@ -214,96 +226,111 @@ export function KnowledgeBaseEditor({
         canPublish={frame.draft?.canPublish === true}
         workflows={dataFlows?.fills}
         workflowPage={workflowPage}
-        adding={asset !== undefined}
+        adding={asset !== undefined && !sourceRows}
+        layout={sourceRows ? "rows" : "cards"}
         onChange={(sources) => update({ sources })}
       />
-      <FieldRefusals messages={refusalsOf(outcome, "sources")} />
+      {sourceRows && refusalsOf(outcome, "sources").length > 0 ? (
+        // Inside the frame of the list, inset as its rows are.
+        <div className="border-b px-3 py-2">
+          <FieldRefusals messages={refusalsOf(outcome, "sources")} />
+        </div>
+      ) : sourceRows ? null : (
+        <FieldRefusals messages={refusalsOf(outcome, "sources")} />
+      )}
     </>
   );
 
-  const sections: AssetSection[] = [
-    {
-      id: "about",
-      label: t("knowledge.aboutTitle"),
-      description: t("knowledge.aboutDescription"),
-      body: (
-        <>
-          <Field label={t("knowledge.titleLabel")} required>
-            <Input
-              value={form.title}
-              required
-              readOnly={!canWrite}
-              onChange={(event) => update({ title: event.target.value })}
-            />
-          </Field>
-          <Field
-            label={t("knowledge.descriptionLabel")}
-            hint={t(
-              form.holds === "documents"
-                ? "knowledge.descriptionHintDocuments"
-                : "knowledge.descriptionHint"
-            )}
+  const aboutSection: AssetSection = {
+    id: "about",
+    label: t("knowledge.aboutTitle"),
+    description: t("knowledge.aboutDescription"),
+    body: (
+      <>
+        <Field label={t("knowledge.titleLabel")} required>
+          <Input
+            value={form.title}
             required
-          >
-            <Textarea
-              value={form.description}
-              required
-              rows={3}
-              readOnly={!canWrite}
-              onChange={(event) => update({ description: event.target.value })}
-            />
-          </Field>
-        </>
-      )
-    },
-    {
-      id: "source",
-      label: t("knowledge.sourceTitle"),
-      description: t(
-        !documents
-          ? "knowledge.sourceDescription"
-          : semantic
-            ? "knowledge.sourceDocumentsDescriptionSemantic"
-            : "knowledge.sourceDocumentsDescription"
-      ),
-      ...(documents ? {} : { count: form.tables.length }),
-      refusalField: "source",
-      body: (
-        <>
-          {asset ? (
-            <KeyValueList layout="stacked">
-              <KeyValue label={t("knowledge.holdsLabel")}>
-                {t(documents ? "knowledge.holdsDocuments" : "knowledge.holdsTables")}
-              </KeyValue>
-            </KeyValueList>
-          ) : (
-            <KnowledgeSourceChoice
-              source={source}
-              owner={frame.owner}
-              form={form}
-              canWrite={canWrite}
-              uploadDescription={uploadDescription}
-              update={update}
-            />
+            readOnly={!canWrite}
+            onChange={(event) => update({ title: event.target.value })}
+          />
+        </Field>
+        <Field
+          label={t("knowledge.descriptionLabel")}
+          hint={t(
+            form.holds === "documents"
+              ? "knowledge.descriptionHintDocuments"
+              : "knowledge.descriptionHint"
           )}
-          {documents ? (
-            asset === undefined && form.sources.length > 0 ? (
-              sourcesSection
-            ) : null
-          ) : (
-            <TablesSource
-              source={source}
-              owner={frame.owner}
-              form={form}
-              canWrite={canWrite}
-              update={update}
-            />
-          )}
+          required
+        >
+          <Textarea
+            value={form.description}
+            required
+            rows={3}
+            readOnly={!canWrite}
+            onChange={(event) => update({ description: event.target.value })}
+          />
+        </Field>
+        {/* An existing one of documents has no Source section: what refuses it is said here. */}
+        {asset !== undefined && documents ? (
           <FieldRefusals messages={refusalsOf(outcome, "source")} />
-        </>
-      )
-    },
-    ...(documents && asset !== undefined && source.useSourceConnections
+        ) : null}
+      </>
+    ),
+    ...(asset !== undefined && documents ? { refusalField: "source" as const } : {})
+  };
+  // Where its knowledge comes from: chosen on a new one, and the tables of one that reads a
+  // Data Store. An existing one of documents says it with its documents and has no such section.
+  const sourceSection: AssetSection = {
+    id: "source",
+    label: t("knowledge.sourceTitle"),
+    description: t(
+      !documents
+        ? "knowledge.sourceDescription"
+        : semantic
+          ? "knowledge.sourceDocumentsDescriptionSemantic"
+          : "knowledge.sourceDocumentsDescription"
+    ),
+    ...(documents ? {} : { count: form.tables.length }),
+    refusalField: "source",
+    body: (
+      <>
+        {asset ? (
+          <KeyValueList layout="stacked">
+            <KeyValue label={t("knowledge.holdsLabel")}>{t("knowledge.holdsTables")}</KeyValue>
+          </KeyValueList>
+        ) : (
+          <KnowledgeSourceChoice
+            source={source}
+            owner={frame.owner}
+            form={form}
+            canWrite={canWrite}
+            uploadDescription={uploadDescription}
+            update={update}
+          />
+        )}
+        {documents ? (
+          asset === undefined && form.sources.length > 0 ? (
+            sourcesSection
+          ) : null
+        ) : (
+          <TablesSource
+            source={source}
+            owner={frame.owner}
+            form={form}
+            canWrite={canWrite}
+            update={update}
+          />
+        )}
+        <FieldRefusals messages={refusalsOf(outcome, "source")} />
+      </>
+    )
+  };
+  // Before its first publish the synced sources of one of documents stand as a section of
+  // their own; once it is published they are the first rows of its documents.
+  const sourcesSections: AssetSection[] =
+    documents && asset !== undefined && !sourceRows && source.useSourceConnections
       ? [
           {
             id: "sources",
@@ -314,71 +341,79 @@ export function KnowledgeBaseEditor({
             body: sourcesSection
           }
         ]
-      : []),
-    ...flowSections,
-    // Before its first publish these stand as one notice under the head, not as empty sections.
-    ...(!live
-      ? []
-      : documents
-        ? [
-            {
-              id: "documents",
-              label: t("knowledge.documentsTitle"),
-              description: t("knowledge.documentsDescription"),
-              body: (
-                <KnowledgeDocuments
-                  source={source}
-                  knowledgeBase={asset.name}
-                  publishedRevision={published}
-                  canWrite={canWrite}
-                />
-              )
-            },
-            statusSection(asset.name, published),
-            {
-              id: "test",
-              label: t("knowledge.searchTitle"),
-              description: t("knowledge.searchDescription"),
-              body: <KnowledgeTestSearch source={source} knowledgeBase={asset.name} />
-            }
-          ]
-        : [
-            statusSection(asset.name, published),
-            {
-              id: "test",
-              label: t("knowledge.testTitle"),
-              description: t("knowledge.testDescription"),
-              body: (
-                <KnowledgeTestQuery
-                  source={source}
-                  knowledgeBase={asset.name}
-                  firstTable={form.tables[0]?.name}
-                />
-              )
-            }
-          ]),
-    ...(availability
+      : [];
+  // What only a published one has: its documents, or the check of its tables and a query.
+  const documentsSections: AssetSection[] =
+    live && documents
       ? [
           {
-            id: "availability",
-            label: t("configAvailability"),
-            description: t("configAvailabilityKnowledgeBaseDescription"),
-            refusalField: "availability" as const,
+            id: "documents",
+            label: t("knowledge.documentsTitle"),
+            bare: true,
+            refusalField: "sources" as const,
             body: (
-              <AvailabilityFields
-                edit={availabilityEdit}
-                disabled={saving}
-                workspaces={availability.workspaces}
-                workspacesError={availability.workspacesError}
-                fixedReason={availability.fixedReason}
-                hiddenHint={t("configAvailabilityAssetHiddenHint")}
-                refusals={refusalsOf(outcome, "availability")}
+              <KnowledgeDocuments
+                source={source}
+                knowledgeBase={asset.name}
+                publishedRevision={published}
+                canWrite={canWrite}
+                sources={sourcesSection}
+                {...(offersSources ? { onConnect: () => setConnecting(true) } : {})}
               />
             )
           }
         ]
-      : []),
-    ...(agents === undefined || stateRead.status !== "ready"
+      : [];
+  const checkSections: AssetSection[] = !live
+    ? []
+    : documents
+      ? [
+          statusSection(asset.name, published),
+          {
+            id: "test",
+            label: t("knowledge.searchTitle"),
+            description: t("knowledge.searchDescription"),
+            body: <KnowledgeTestSearch source={source} knowledgeBase={asset.name} />
+          }
+        ]
+      : [
+          statusSection(asset.name, published),
+          {
+            id: "test",
+            label: t("knowledge.testTitle"),
+            description: t("knowledge.testDescription"),
+            body: (
+              <KnowledgeTestQuery
+                source={source}
+                knowledgeBase={asset.name}
+                firstTable={form.tables[0]?.name}
+              />
+            )
+          }
+        ];
+  const availabilitySections: AssetSection[] = availability
+    ? [
+        {
+          id: "availability",
+          label: t("configAvailability"),
+          description: t("configAvailabilityKnowledgeBaseDescription"),
+          refusalField: "availability" as const,
+          body: (
+            <AvailabilityFields
+              edit={availabilityEdit}
+              disabled={saving}
+              workspaces={availability.workspaces}
+              workspacesError={availability.workspacesError}
+              fixedReason={availability.fixedReason}
+              hiddenHint={t("configAvailabilityAssetHiddenHint")}
+              refusals={refusalsOf(outcome, "availability")}
+            />
+          )
+        }
+      ]
+    : [];
+  const agentsSections: AssetSection[] =
+    agents === undefined || stateRead.status !== "ready"
       ? []
       : [
           {
@@ -393,9 +428,10 @@ export function KnowledgeBaseEditor({
               />
             )
           }
-        ]),
-    // Who was given it by itself is shown to who is shown rights at all, as on a Connection.
-    ...(holders.status === "hidden"
+        ];
+  // Who was given it by itself is shown to who is shown rights at all, as on a Connection.
+  const accessSections: AssetSection[] =
+    holders.status === "hidden"
       ? []
       : [
           {
@@ -405,34 +441,68 @@ export function KnowledgeBaseEditor({
             count: holders.status === "ready" ? holders.holders.length : undefined,
             body: <KnowledgeBaseHolders read={holders} />
           }
-        ]),
-    ...(documents
-      ? [
-          {
-            id: "advanced",
-            label: t("knowledge.advancedTitle"),
-            description: t("knowledge.advancedDescription"),
-            refusalField: "indexing" as const,
-            body: (
-              <>
-                <KeywordLanguages
-                  languages={form.languages}
-                  disabled={!canWrite}
-                  onChange={(languages) => update({ languages })}
-                />
-                <FieldRefusals messages={refusalsOf(outcome, "indexing")} />
-              </>
-            )
-          }
-        ]
-      : [])
-  ];
+        ];
+  const advancedSections: AssetSection[] = documents
+    ? [
+        {
+          id: "advanced",
+          label: t("knowledge.advancedTitle"),
+          description: t("knowledge.advancedDescription"),
+          refusalField: "indexing" as const,
+          body: (
+            <>
+              <KeywordLanguages
+                languages={form.languages}
+                disabled={!canWrite}
+                onChange={(languages) => update({ languages })}
+              />
+              <FieldRefusals messages={refusalsOf(outcome, "indexing")} />
+            </>
+          )
+        }
+      ]
+    : [];
+  // A new one is a form to fill in: every section open, in the order it is filled. An existing
+  // one shows what it holds and keeps the rest folded under Settings: of documents, all but its
+  // documents; of tables, what is set once, with its tables, its check and its query in view.
+  const sections: AssetSection[] =
+    asset === undefined
+      ? [aboutSection, sourceSection, ...availabilitySections, ...advancedSections]
+      : documents
+        ? [...sourcesSections, ...documentsSections]
+        : [sourceSection, ...flowSections, ...checkSections];
+  const folded: AssetSection[] =
+    asset === undefined
+      ? []
+      : documents
+        ? [
+            aboutSection,
+            ...availabilitySections,
+            ...agentsSections,
+            ...accessSections,
+            ...checkSections,
+            ...advancedSections,
+            ...flowSections
+          ]
+        : [aboutSection, ...availabilitySections, ...agentsSections, ...accessSections];
 
   return (
     <AssetEditorShell
       frame={frame}
       title={form.title.trim() || form.name || t("knowledge.new")}
       sections={sections}
+      {...(asset === undefined
+        ? {}
+        : {
+            lead: form.description,
+            settings: {
+              label: t("knowledge.settingsTitle"),
+              hint: t(documents ? "knowledge.settingsHint" : "knowledge.settingsHintTables"),
+              sections: folded
+            },
+            // The page of one of documents is its list and one folded line: no outline.
+            outline: !documents
+          })}
       control={{
         changes: changedFields + (availabilityEdit.changed ? 1 : 0),
         submit,
@@ -442,11 +512,29 @@ export function KnowledgeBaseEditor({
         }
       }}
       notices={
-        asset !== undefined && published === undefined ? (
-          <Banner tone="info" className="mb-3" data-knowledge-not-published="">
-            {t(documents ? "knowledge.notPublishedDocuments" : "knowledge.notPublished")}
-          </Banner>
-        ) : undefined
+        <>
+          {asset !== undefined && published === undefined ? (
+            <Banner tone="info" className="mb-3" data-knowledge-not-published="">
+              {t(documents ? "knowledge.notPublishedDocuments" : "knowledge.notPublished")}
+            </Banner>
+          ) : null}
+          {connecting ? (
+            <KnowledgeSourceConnectDialog
+              source={source}
+              owner={frame.owner}
+              onClose={() => setConnecting(false)}
+              onAdd={(connection, connectorType) => {
+                setConnecting(false);
+                update({
+                  sources: [
+                    ...form.sources,
+                    newKnowledgeSource(connection, form.sources, connectorType)
+                  ]
+                });
+              }}
+            />
+          ) : null}
+        </>
       }
       outcome={outcome}
       saving={saving}

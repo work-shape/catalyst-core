@@ -422,14 +422,25 @@ describe("Knowledge Bases of documents", () => {
 
     expect(page).toContain("data-knowledge-documents");
     expect(page).toContain('data-knowledge-document-state="indexed"');
-    expect(page).toContain("Searchable");
+    expect(page).toContain("data-knowledge-tally");
     expect(page).toContain("data-knowledge-add");
-    expect(page).toContain("Everyone who may use this knowledge base finds every document in it");
+    // Its description is the page's lead line; the fields for it wait under Settings, folded.
+    expect(page).toContain("data-asset-lead");
+    expect(page).toMatch(
+      /data-asset-settings-trigger=""[^>]*aria-expanded="false"|aria-expanded="false"[^>]*data-asset-settings-trigger=""/u
+    );
+    expect(page.indexOf("data-knowledge-documents")).toBeLessThan(
+      page.indexOf("data-asset-settings")
+    );
+    expect(page.indexOf("data-asset-settings")).toBeLessThan(page.indexOf('id="about"'));
+    // The list is the page: no outline beside it.
+    expect(page).not.toContain("data-page-outline");
     // What it holds is told of its documents, not of rows of a table.
     expect(page).toContain("Say what the documents are about");
     expect(page).not.toContain("Say what the rows are about");
-    // What it answers from is fixed once it exists: no choice, and no data store to pick.
-    expect(page).toContain("What it answers from");
+    // What it answers from is fixed once it exists and plain from its documents: no line for
+    // it, no choice, and no data store to pick.
+    expect(page).not.toContain("What it answers from");
     expect(page).not.toContain('role="radiogroup"');
     expect(page).not.toContain("Choose a data store");
     expect(page).not.toContain("Test query");

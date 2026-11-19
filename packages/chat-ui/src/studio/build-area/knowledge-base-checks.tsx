@@ -120,7 +120,8 @@ function StatusFacts({ state }: { state: KnowledgeBaseState }) {
         {state.tables.map((table) => (
           <KeyValue
             key={table.name}
-            label={<code className="font-mono text-code">{table.name}</code>}
+            // A long name breaks inside its column instead of running into the badge.
+            label={<code className="font-mono text-code break-all">{table.name}</code>}
           >
             <Badge tone={table.readable ? "success" : "warning"}>
               {t(table.readable ? "knowledge.tableReadable" : "knowledge.tableUnreadable")}

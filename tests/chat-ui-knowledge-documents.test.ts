@@ -175,7 +175,8 @@ describe("the Documents section", () => {
     expect(row("handbuch").dataset.knowledgeDocumentState).toBe("pending");
     expect(row("handbuch").textContent).toContain("Being indexed");
     expect(row("handbuch").textContent).toContain("Markdown · 2 KiB");
-    expect(row("vertrag").textContent).toContain("Searchable");
+    // A searchable document is the rule: its row says nothing of its state.
+    expect(row("vertrag").textContent).not.toContain("Searchable");
     expect(row("vertrag").textContent).toContain("PDF · 3 MiB");
     expect(row("scan").textContent).toContain("Failed");
     expect(row("scan").textContent).toContain(
@@ -183,6 +184,86 @@ describe("the Documents section", () => {
     );
     // The code itself is the instance's, not the reader's.
     expect(row("scan").textContent).not.toContain("knowledge_text_empty");
+  });
+
+  it("says in one line how many are searchable, and under it only what needs the reader", () => {
+    const tally = () => document.querySelector("[data-knowledge-tally]")?.textContent;
+    const shown = (list: KnowledgeDocument[], extra: object = {}, locale: "en" | "de" = "de") =>
+      show(
+        createElement(KnowledgeDocuments, {
+          source: plantedSource({ useDocuments: () => ready({ documents: list, ...extra }) }),
+          knowledgeBase: "objektunterlagen",
+          publishedRevision: 1,
+          canWrite: false
+        }),
+        locale
+      );
+    const many = (count: number, state: KnowledgeDocument["state"]) =>
+      Array.from({ length: count }, (_, index) => document_(`${state}-${index}`, state));
+
+    shown([...many(63, "indexed"), ...many(2, "failed"), ...many(1, "pending")]);
+    expect(tally()).toBe(
+      "63 von 66 Dokumenten sind durchsuchbar2 konnten nicht gelesen werden. Sie stehen unten ganz oben."
+    );
+    // Whoever may only use it gets no way to add.
+    expect(document.querySelector("[data-knowledge-add]")).toBeNull();
+    shown([...many(2, "indexed"), ...many(1, "pending")]);
+    expect(tally()).toBe("2 von 3 Dokumenten sind durchsuchbar1 wird noch gelesen.");
+    shown(many(3, "indexed"));
+    expect(tally()).toBe("Alle 3 Dokumente sind durchsuchbar");
+    shown(many(3, "indexed"), {}, "en");
+    expect(tally()).toBe("All 3 documents are searchable");
+
+    // While more pages follow nothing is counted from the rows: only what the instance says of
+    // all of them stands there.
+    const more = { loading: false, load: () => undefined };
+    shown(many(2, "indexed"), { more, summary: { count: 1200, state: "failed" } });
+    expect(tally()).toBe("1.200 DokumenteEinige konnten nicht gelesen werden.");
+    shown(many(2, "indexed"), { more, summary: { count: 1200, state: "indexed" } });
+    expect(tally()).toBe("Alle 1.200 Dokumente sind durchsuchbar");
+  });
+
+  it("puts what failed first, then what is still being read, each group in the order read", () => {
+    show(
+      createElement(KnowledgeDocuments, {
+        source: plantedSource(),
+        knowledgeBase: "objektunterlagen",
+        publishedRevision: 1,
+        canWrite: true
+      })
+    );
+    expect(
+      [...document.querySelectorAll<HTMLElement>("[data-knowledge-document]")].map(
+        (each) => each.dataset.knowledgeDocument
+      )
+    ).toEqual(["scan", "handbuch", "vertrag"]);
+  });
+
+  it("offers both ways in under Add where a folder can be connected, and one where not", () => {
+    const onConnect = vi.fn();
+    show(
+      createElement(KnowledgeDocuments, {
+        source: plantedSource(),
+        knowledgeBase: "objektunterlagen",
+        publishedRevision: 1,
+        canWrite: true,
+        onConnect
+      })
+    );
+    const add = document.querySelector<HTMLButtonElement>("[data-knowledge-add]");
+    expect(add?.getAttribute("aria-haspopup")).toBe("menu");
+
+    show(
+      createElement(KnowledgeDocuments, {
+        source: plantedSource(),
+        knowledgeBase: "objektunterlagen",
+        publishedRevision: 1,
+        canWrite: true
+      })
+    );
+    expect(document.querySelector("[data-knowledge-add]")?.hasAttribute("aria-haspopup")).toBe(
+      false
+    );
   });
 
   it("speaks German, du-form, first", () => {
@@ -197,7 +278,7 @@ describe("the Documents section", () => {
     );
 
     expect(row("handbuch").textContent).toContain("Wird indexiert");
-    expect(row("vertrag").textContent).toContain("Durchsuchbar");
+    expect(row("vertrag").textContent).not.toContain("Durchsuchbar");
     expect(row("scan").textContent).toContain("Fehlgeschlagen");
     expect(row("scan").textContent).toContain(
       "Die Datei hat keinen Text zum Durchsuchen, zum Beispiel ein gescanntes PDF ohne Textebene."
@@ -231,7 +312,6 @@ describe("the Documents section", () => {
     expect(row("richtlinie").textContent).toContain(
       "PDF · 2 KiB · Original is stored at the source"
     );
-    expect(row("richtlinie").textContent).toContain("Searchable");
     expect(row("kopie").textContent).not.toContain("Original is stored at the source");
     expect(row("leer").textContent).toContain(
       "The file has no text to search, such as a scanned PDF without a text layer. · Original is stored at the source"
@@ -262,8 +342,7 @@ describe("the Documents section", () => {
     };
 
     show(createElement(KnowledgeDocuments, shown));
-    // Still searchable: the pause is beside the state, not instead of it.
-    expect(row("rechnung").textContent).toContain("Searchable");
+    // Still searchable: the pause is the one thing its row says.
     expect(row("rechnung").textContent).toContain("Fields pending");
     expect(row("rechnung").textContent).toContain(
       "PDF · 2 KiB · Fields are filled in once the budget resets or is raised"
@@ -275,7 +354,6 @@ describe("the Documents section", () => {
     expect(row("rechnung").textContent).not.toContain("fieldsPending");
 
     show(createElement(KnowledgeDocuments, shown), "de");
-    expect(row("rechnung").textContent).toContain("Durchsuchbar");
     expect(row("rechnung").textContent).toContain("Felder ausstehend");
     expect(row("rechnung").textContent).toContain(
       "Felder werden gefüllt, sobald das Budget zurückgesetzt oder erhöht wird"
@@ -312,7 +390,6 @@ describe("the Documents section", () => {
     show(createElement(KnowledgeDocuments, shown));
     expect(row("monat").textContent).toContain(budget);
     expect(row("monat").textContent).not.toContain("tokens");
-    expect(row("gross").textContent).toContain("Searchable");
     expect(row("gross").textContent).toContain("Fields pending");
     expect(row("gross").textContent).toContain(
       "Fields wait: this document needs an estimated 184,250 input tokens plus 512 reserved output tokens, exceeding the limit of 120,000 tokens per document. Raise the limit to fill them in"
@@ -847,7 +924,7 @@ describe("the Documents section", () => {
       })
     );
     expect(document.body.textContent).toContain(
-      "No documents yet. Upload files from your computer or add files from your conversations."
+      "No documents yetAdd files so agents can answer from them."
     );
 
     show(
@@ -859,7 +936,7 @@ describe("the Documents section", () => {
       })
     );
     expect(document.body.textContent).toContain(
-      "No documents yet. Somebody who may change this knowledge base adds them."
+      "No documents yetSomeone who may change this knowledge base adds them."
     );
   });
 

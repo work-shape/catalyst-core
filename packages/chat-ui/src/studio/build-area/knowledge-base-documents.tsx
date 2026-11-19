@@ -1,5 +1,5 @@
-import { ExternalLink, FileText, Link2, Plus, RotateCcw, Trash2 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { ExternalLink, FolderSync, Link2, Plus, RotateCcw, Trash2, Upload } from "lucide-react";
+import { useCallback, useState, type ReactNode } from "react";
 import {
   Badge,
   Button,
@@ -8,27 +8,37 @@ import {
   ConfirmDialog,
   Dialog,
   EmptyState,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   Field,
   FormNotice,
   Input,
   List,
   ListRow,
   LoadMore,
+  Skeleton,
   Spinner
 } from "@work-shape/catalyst-ui";
+import { FileTypeIcon } from "../../chat/files/file-type-icon";
+import { resolveFileType } from "../../chat/files/file-type";
 import { formatMomentShort } from "../../shared/locale-format";
 import { openOriginLink, safeOriginLink } from "../../shared/origin-link";
-import { useTranslation } from "../../shared/i18n";
+import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { ReadState } from "./data-store-read-state";
 import {
   addableFile,
   addFileMaxBytes,
   addFormatsMaxBytes,
   documentFailureText,
+  documentsByAttention,
+  knowledgeDocumentTally,
   KNOWLEDGE_ADD_LIMITS,
   KNOWLEDGE_ADD_REFUSALS,
   KNOWLEDGE_DOCUMENT_STATE_VIEWS,
-  KNOWLEDGE_REMOVE_REFUSALS
+  KNOWLEDGE_REMOVE_REFUSALS,
+  type KnowledgeDocumentTally
 } from "./knowledge-base-model";
 import type {
   KnowledgeBaseSource,
@@ -50,24 +60,91 @@ const FORMAT_NAMES: Record<string, string> = {
 };
 
 /**
- * The documents of a published Knowledge Base that keeps documents, each with its state: being
- * indexed, searchable, or failed with the reason. Whoever may change the Knowledge Base adds
- * documents, retries a failed one and removes one they added; a document synced from a source
- * leaves only when the source withdraws it. Whoever may use the Knowledge Base sees the list,
- * and a notice while no worker takes its documents.
+ * What the line over the documents says: how many of them can be searched, and under it, only
+ * where something needs the reader, how many failed or are still being read.
+ */
+function tallyWords(
+  tally: KnowledgeDocumentTally,
+  canWrite: boolean,
+  { locale, t }: Pick<TranslationContextValue, "locale" | "t">
+): { headline: string; detail?: string } {
+  const number = (count: number) => new Intl.NumberFormat(locale).format(count);
+  if (!tally.exact) {
+    const count = tally.total === undefined ? undefined : number(tally.total);
+    return {
+      headline:
+        count === undefined
+          ? t("knowledge.documentsTitle")
+          : tally.state === "indexed"
+            ? t("knowledge.tallyAll", { count })
+            : t("knowledge.tallyCount", { count }),
+      ...(tally.state === "failed"
+        ? { detail: t("knowledge.tallySomeFailed") }
+        : tally.state === "pending"
+          ? { detail: t("knowledge.tallySomePending") }
+          : {})
+    };
+  }
+  if (tally.total === 0) {
+    return {
+      headline: t("knowledge.tallyNone"),
+      detail: t(canWrite ? "knowledge.tallyNoneHint" : "knowledge.tallyNoneHintReadOnly")
+    };
+  }
+  const headline =
+    tally.searchable === tally.total
+      ? tally.total === 1
+        ? t("knowledge.tallyOne")
+        : t("knowledge.tallyAll", { count: number(tally.total) })
+      : tally.total === 1
+        ? t("knowledge.tallyOneNot")
+        : t("knowledge.tallySome", {
+            searchable: number(tally.searchable),
+            count: number(tally.total)
+          });
+  // What failed needs the reader; what is still being read only needs time.
+  const detail =
+    tally.failed > 0
+      ? tally.failed === 1
+        ? t("knowledge.tallyFailedOne")
+        : t("knowledge.tallyFailedMany", { count: number(tally.failed) })
+      : tally.pending > 0
+        ? tally.pending === 1
+          ? t("knowledge.tallyPendingOne")
+          : t("knowledge.tallyPendingMany", { count: number(tally.pending) })
+        : undefined;
+  return { headline, ...(detail === undefined ? {} : { detail }) };
+}
+
+/**
+ * The documents of a published Knowledge Base that keeps documents: one line that says how many
+ * of them can be searched, with the one way to add more, and under it the list. Those that
+ * failed stand first, each with its reason and Retry, then those still being read; a searchable
+ * one says nothing of its state. Only the documents read so far are ordered so: the instance
+ * pages them newest first. Whoever may change the Knowledge Base adds documents, retries a
+ * failed one and removes one they added; a document synced from a source leaves only when the
+ * source withdraws it. Whoever may use the Knowledge Base sees the line and the list, and a
+ * notice while no worker takes its documents.
  */
 export function KnowledgeDocuments({
   source,
   knowledgeBase,
   publishedRevision,
-  canWrite
+  canWrite,
+  sources,
+  onConnect
 }: {
   source: KnowledgeBaseSource;
   knowledgeBase: string;
   publishedRevision: number;
   canWrite: boolean;
+  /** The synced sources, as the first rows of the list. */
+  sources?: ReactNode;
+  /** Connects a folder, where the instance offers synced sources: Add then offers both ways. */
+  onConnect?: () => void;
 }) {
-  const { t } = useTranslation();
+  const translation = useTranslation();
+  const { t } = translation;
   // Watched while the section is open, with or without documents: a sync from a source can be
   // queued before any document exists, and waits just the same when no worker takes it.
   const state = source.useState(knowledgeBase, publishedRevision, true);
@@ -124,25 +201,78 @@ export function KnowledgeDocuments({
       );
     }
   };
+  const openAdd = () => {
+    setAdded(undefined);
+    setRemoved(undefined);
+    setAdding(true);
+  };
+  const words =
+    preparing || state.status === "failed" || state.status === "refused"
+      ? preparing
+        ? { headline: t("knowledge.statusPreparing"), detail: t("knowledge.documentsPreparing") }
+        : { headline: t("knowledge.documentsTitle") }
+      : read.status === "ready" && storeReady
+        ? tallyWords(
+            knowledgeDocumentTally(
+              read.data.documents,
+              read.data.more === undefined,
+              read.data.summary
+            ),
+            canWrite,
+            translation
+          )
+        : read.status === "loading" || !storeReady
+          ? undefined
+          : { headline: t("knowledge.documentsTitle") };
+  const addLabel = (
+    <>
+      <Plus aria-hidden="true" />
+      {t("knowledge.addDocuments")}
+    </>
+  );
   return (
-    <div className="grid gap-3" data-knowledge-documents="">
-      {canWrite ? (
-        <div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setAdded(undefined);
-              setRemoved(undefined);
-              setAdding(true);
-            }}
-            data-knowledge-add=""
-          >
-            <Plus aria-hidden="true" />
-            {t("knowledge.addDocuments")}
-          </Button>
+    <div className="grid min-w-0 gap-4" data-knowledge-documents="">
+      <div
+        className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-3 rounded-md border bg-muted/50 px-4 py-3"
+        data-knowledge-tally=""
+      >
+        <div className="grid min-w-0 gap-0.5" role="status">
+          {words === undefined ? (
+            <Skeleton className="my-1 h-4 w-56 max-w-full" />
+          ) : (
+            <>
+              <p className="text-title-sm">{words.headline}</p>
+              {words.detail === undefined ? null : (
+                <p
+                  className="text-caption text-muted-foreground"
+                  {...(preparing ? { "data-knowledge-documents-preparing": "" } : {})}
+                >
+                  {words.detail}
+                </p>
+              )}
+            </>
+          )}
         </div>
-      ) : null}
+        {!canWrite ? null : onConnect ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button data-knowledge-add="">{addLabel}</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem icon={<Upload aria-hidden="true" />} onSelect={openAdd}>
+                <span data-knowledge-add-files="">{t("knowledge.addUpload")}</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem icon={<FolderSync aria-hidden="true" />} onSelect={onConnect}>
+                <span data-knowledge-add-folder="">{t("knowledge.addConnect")}</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <Button onClick={openAdd} data-knowledge-add="">
+            {addLabel}
+          </Button>
+        )}
+      </div>
       {added === undefined ? null : (
         <FormNotice tone="success">
           {added === 1
@@ -166,81 +296,78 @@ export function KnowledgeDocuments({
           {t("knowledge.processingWaiting")}
         </FormNotice>
       ) : null}
-      {preparing ? (
-        <EmptyState layout="inline" data-knowledge-documents-preparing="">
-          {t("knowledge.documentsPreparing")}
-        </EmptyState>
-      ) : (
-        <ReadState
-          read={
-            storeReady
-              ? read
-              : state.status === "failed"
-                ? { status: "failed", message: undefined, retry: state.retry }
-                : state.status === "refused"
-                  ? state
-                  : { status: "loading" }
-          }
-          failedText={t("knowledge.documentsFailed")}
-          refusedText={t("knowledge.documentsRefused")}
-          rows={3}
-        >
-          {({ documents, more }) =>
-            documents.length === 0 ? (
-              <EmptyState layout="inline">
-                {canWrite ? t("knowledge.documentsEmpty") : t("knowledge.documentsEmptyReadOnly")}
-              </EmptyState>
-            ) : (
-              <>
-                <List aria-label={t("knowledge.documentsTitle")}>
-                  {documents.map((document) => (
-                    <DocumentRow
-                      key={document.id}
-                      document={document}
-                      retrying={retrying === document.id}
-                      onRetry={
-                        canWrite && document.state === "failed"
-                          ? () => {
-                              retry(document).catch(() => undefined);
-                            }
-                          : undefined
-                      }
-                      onRemove={
-                        // A connector-synced document leaves when its source withdraws it, not
-                        // by hand; a Workflow-fed one is removed here and held out (KBW-2b).
-                        canWrite &&
-                        (document.sourceId === undefined || isWorkflowSource(document.sourceId))
-                          ? () => {
-                              setRemoved(undefined);
-                              setRemoveFailure(undefined);
-                              setRemoving(document);
-                            }
-                          : undefined
-                      }
-                      onLink={
-                        // A document of a source or a Workflow keeps the link they give it.
-                        canWrite && source.setOriginLink && document.sourceId === undefined
-                          ? () => {
-                              setLinked(undefined);
-                              setLinking(document);
-                            }
-                          : undefined
-                      }
+      {/* The sources and the documents are one list, in one frame; with neither there is none. */}
+      <div className="min-w-0 overflow-hidden rounded-md border empty:hidden">
+        {sources}
+        {preparing ? null : (
+          <ReadState
+            read={
+              storeReady
+                ? read
+                : state.status === "failed"
+                  ? { status: "failed", message: undefined, retry: state.retry }
+                  : state.status === "refused"
+                    ? state
+                    : { status: "loading" }
+            }
+            failedText={t("knowledge.documentsFailed")}
+            refusedText={t("knowledge.documentsRefused")}
+            rows={3}
+          >
+            {({ documents, more }) =>
+              documents.length === 0 ? null : (
+                <>
+                  <List aria-label={t("knowledge.documentsTitle")} className="p-1">
+                    {documentsByAttention(documents).map((document) => (
+                      <DocumentRow
+                        key={document.id}
+                        document={document}
+                        retrying={retrying === document.id}
+                        onRetry={
+                          canWrite && document.state === "failed"
+                            ? () => {
+                                retry(document).catch(() => undefined);
+                              }
+                            : undefined
+                        }
+                        onRemove={
+                          // A connector-synced document leaves when its source withdraws it, not
+                          // by hand; a Workflow-fed one is removed here and held out (KBW-2b).
+                          canWrite &&
+                          (document.sourceId === undefined || isWorkflowSource(document.sourceId))
+                            ? () => {
+                                setRemoved(undefined);
+                                setRemoveFailure(undefined);
+                                setRemoving(document);
+                              }
+                            : undefined
+                        }
+                        onLink={
+                          // A document of a source or a Workflow keeps the link they give it.
+                          canWrite && source.setOriginLink && document.sourceId === undefined
+                            ? () => {
+                                setLinked(undefined);
+                                setLinking(document);
+                              }
+                            : undefined
+                        }
+                      />
+                    ))}
+                  </List>
+                  {more ? (
+                    <LoadMore
+                      className="border-t p-1"
+                      loading={more.loading}
+                      onLoad={more.load}
+                      label={t("knowledge.documentsMore")}
                     />
-                  ))}
-                </List>
-                {more ? (
-                  <LoadMore
-                    loading={more.loading}
-                    onLoad={more.load}
-                    label={t("knowledge.documentsMore")}
-                  />
-                ) : null}
-              </>
-            )
-          }
-        </ReadState>
-      )}
+                  ) : null}
+                </>
+              )
+            }
+          </ReadState>
+        )}
+      </div>
       <ConfirmDialog
         open={removing !== undefined}
         title={t("knowledge.removeTitle", { name: removing ? nameOf(removing) : "" })}
@@ -359,20 +486,23 @@ function DocumentRow({
     <ListRow
       data-knowledge-document={document.id}
       data-knowledge-document-state={document.state}
-      leading={<FileText aria-hidden="true" />}
+      leading={<FileTypeIcon type={resolveFileType({ filename: document.fileName })} />}
       title={title}
       description={description}
       data-knowledge-fields-pending={fieldsPending ? "" : undefined}
       descriptionWraps="always"
       chips={
         <>
-          <Badge
-            tone={view.tone}
-            dot={document.state !== "pending"}
-            leading={document.state === "pending" ? <Spinner size="sm" /> : undefined}
-          >
-            {t(view.label)}
-          </Badge>
+          {/* A searchable document is the rule and says nothing of it. */}
+          {document.state === "indexed" ? null : (
+            <Badge
+              tone={view.tone}
+              dot={document.state !== "pending"}
+              leading={document.state === "pending" ? <Spinner size="sm" /> : undefined}
+            >
+              {t(view.label)}
+            </Badge>
+          )}
           {fieldsPending ? <Badge tone="neutral">{t("knowledge.fieldsPending")}</Badge> : null}
           {origin ? (
             <span title={t("knowledge.originLinkOpen", { name: title })}>
@@ -393,7 +523,8 @@ function DocumentRow({
         </>
       }
       time={formatMomentShort(document.addedAt, locale)}
-      actionsVisible
+      // What a failed document needs stays in view; the rest shows with the pointer or the focus.
+      actionsVisible={document.state === "failed"}
       actions={
         onRetry || onRemove || onLink ? (
           <>

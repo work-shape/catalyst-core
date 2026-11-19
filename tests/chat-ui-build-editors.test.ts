@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
-import { createElement, createRef, type ReactElement } from "react";
+import { act, createElement, createRef, type ReactElement } from "react";
+import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
 import type { ConfigAssetReferences, LocaleCode } from "@work-shape/catalyst-api-client";
 import {
@@ -18,6 +19,7 @@ import {
   type BuildAssetEditorProps,
   type BuildWriteOutcome
 } from "@work-shape/catalyst-chat-ui/build-area";
+import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { headMenuItems } from "./support/head-menu";
 
@@ -676,6 +678,95 @@ describe("save bar", () => {
       /<h1 class="[^"]*\bline-clamp-[12]\b[^"]*" title="Tax review">Tax review/u
     );
     expect(started).toMatch(/<header data-variant="detail"[^>]* class="[^"]*\bmd:flex-nowrap\b/u);
+  });
+});
+
+describe("a page that keeps sections folded under one line", () => {
+  const refused: BuildWriteOutcome = {
+    ok: false,
+    conflict: false,
+    refusals: [{ field: "tools", message: "The tool documents.read is not allowed." }]
+  };
+  const shell = (submit: () => Promise<BuildWriteOutcome>, answer?: BuildWriteOutcome) =>
+    createElement(
+      TranslationProvider,
+      { children: null, locale: "en" },
+      createElement(AssetEditorShell, {
+        frame: frame({ asset: storedAsset("agent", agentBase) }),
+        title: "Handbook",
+        lead: "The staff handbook and its policies.",
+        outline: false,
+        sections: [
+          {
+            id: "documents",
+            label: "Documents",
+            bare: true,
+            body: createElement("p", null, "List")
+          }
+        ],
+        settings: {
+          label: "Settings",
+          hint: "Name, access",
+          sections: [
+            { id: "about", label: "About", body: createElement("p", null, "Fields") },
+            {
+              id: "tools",
+              label: "Tools",
+              refusalField: "tools",
+              body: createElement(FieldRefusals, { messages: refusalsOf(answer, "tools") })
+            }
+          ]
+        },
+        control: { changes: 1, submit, discard: noop },
+        outcome: answer,
+        saving: false,
+        saveLabel: "Save changes"
+      })
+    );
+
+  it("shows the lead line and the sections in view, the rest folded, and no outline", () => {
+    const markup = renderToStaticMarkup(shell(saved));
+
+    expect(markup).toMatch(/data-asset-lead=""[^>]*>.*The staff handbook and its policies\./su);
+    expect(markup).not.toContain("data-page-outline");
+    // A bare section has no heading of its own.
+    expect(markup).not.toMatch(/<h2[^>]*>Documents</u);
+    expect(markup).toMatch(/<button[^>]*aria-expanded="false"[^>]*>.*Settings.*Name, access/su);
+    // What is folded stays in the page: its fields are part of the form.
+    expect(markup.indexOf('id="about"')).toBeGreaterThan(markup.indexOf("data-asset-settings"));
+  });
+
+  it("opens the folded sections when a refused save names a field in them", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    const root = createRoot(host);
+    try {
+      await act(async () =>
+        root.render(
+          createElement(
+            UiRoot,
+            { mode: "light", labels: uiLabelsEn },
+            shell(async () => refused, refused)
+          )
+        )
+      );
+      const trigger = () => host.querySelector("[data-asset-settings-trigger]");
+      expect(trigger()?.getAttribute("aria-expanded")).toBe("false");
+
+      await act(async () => {
+        host
+          .querySelector("form")
+          ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      });
+      expect(trigger()?.getAttribute("aria-expanded")).toBe("true");
+      expect(host.querySelector("#tools")?.textContent).toContain(
+        "The tool documents.read is not allowed."
+      );
+    } finally {
+      act(() => root.unmount());
+      host.remove();
+    }
   });
 });
 

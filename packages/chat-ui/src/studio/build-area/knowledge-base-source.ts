@@ -85,6 +85,8 @@ interface KnowledgeDocumentPages {
   documents: readonly KnowledgeDocument[];
   /** Present while more documents follow. */
   more?: MoreRead;
+  /** What the first page says of all of them, from an instance that sends it. */
+  summary?: KnowledgeDocumentSummary;
 }
 
 /**
@@ -725,7 +727,8 @@ function useDocuments(
       ? undefined
       : {
           documents: query.data.pages.flatMap((page) => page.documents),
-          ...(query.hasNextPage ? { more: moreOf(query) } : {})
+          ...(query.hasNextPage ? { more: moreOf(query) } : {}),
+          ...(query.data.pages[0]?.summary ? { summary: query.data.pages[0].summary } : {})
         },
     query
   );
