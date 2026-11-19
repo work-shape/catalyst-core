@@ -328,6 +328,7 @@ export const knowledge = defineTranslations({
     "knowledge.tallyOneNot": "1 document, not searchable yet",
     "knowledge.tallyNone": "No documents yet",
     "knowledge.tallyNoneHint": "Add files so agents can answer from them.",
+    "knowledge.tallyNoneHintSynced": "They arrive with the next sync.",
     "knowledge.tallyNoneHintReadOnly": "Someone who may change this knowledge base adds them.",
     "knowledge.tallyCount": "{count} documents",
     "knowledge.tallyFailedOne": "1 could not be read. It is at the top of the list.",
@@ -675,6 +676,7 @@ export const knowledge = defineTranslations({
     "knowledge.tallyOneNot": "1 Dokument, noch nicht durchsuchbar",
     "knowledge.tallyNone": "Noch keine Dokumente",
     "knowledge.tallyNoneHint": "Füge Dateien hinzu, damit Agenten daraus antworten können.",
+    "knowledge.tallyNoneHintSynced": "Sie kommen mit der nächsten Synchronisierung.",
     "knowledge.tallyNoneHintReadOnly":
       "Jemand, der diese Wissensbasis ändern darf, fügt sie hinzu.",
     "knowledge.tallyCount": "{count} Dokumente",

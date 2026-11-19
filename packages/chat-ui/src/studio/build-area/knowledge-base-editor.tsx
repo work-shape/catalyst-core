@@ -1,4 +1,4 @@
-import { Database } from "lucide-react";
+import { Database, FolderSync, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   KNOWLEDGE_DEFAULT_KEYWORD_LANGUAGES,
@@ -9,6 +9,7 @@ import {
   Badge,
   Banner,
   Checkbox,
+  DropdownMenuItem,
   EmptyState,
   Field,
   Input,
@@ -35,7 +36,7 @@ import { hasDataFlows, type DataFlowRole } from "./data-flows-model";
 import { ReadState } from "./data-store-read-state";
 import { KnowledgeBaseAgents, KnowledgeBaseHolders } from "./knowledge-base-access";
 import { KnowledgeStatus, KnowledgeTestQuery } from "./knowledge-base-checks";
-import { KnowledgeDocuments } from "./knowledge-base-documents";
+import { KnowledgeDocuments, useKnowledgeIntake } from "./knowledge-base-documents";
 import { KnowledgeSourceChoice } from "./knowledge-base-source-choice";
 import { KnowledgeSourceConnectDialog, KnowledgeSourcesSection } from "./knowledge-base-sources";
 import { newKnowledgeSource } from "./knowledge-sources-model";
@@ -210,6 +211,12 @@ export function KnowledgeBaseEditor({
     ((sourceConnections?.status === "ready" && sourceConnections.data.items.length > 0) ||
       (sourceTypes !== undefined && sourceTypes.length > 0));
   const [connecting, setConnecting] = useState(false);
+  // Where every document comes from a synced source, the page's main action is Sync now: a file
+  // added by hand would lie beside the synced ones and never sync, so both ways to add wait in
+  // the head's menu.
+  const intake = useKnowledgeIntake(source, asset?.name ?? "", documents ? published : undefined);
+  const addsInMenu = canWrite && live && documents && intake.way === "synced";
+  const [uploading, setUploading] = useState(false);
   // On the page of a published one of documents the sources are the first rows of its list.
   const sourceRows = live && documents;
   // A new one names its synced source with where its knowledge comes from; an existing one
@@ -358,6 +365,8 @@ export function KnowledgeBaseEditor({
                 publishedRevision={published}
                 canWrite={canWrite}
                 sources={sourcesSection}
+                adding={uploading}
+                onAdding={setUploading}
                 {...(offersSources ? { onConnect: () => setConnecting(true) } : {})}
               />
             )
@@ -503,6 +512,28 @@ export function KnowledgeBaseEditor({
             // The page of one of documents is its list and one folded line: no outline.
             outline: !documents
           })}
+      {...(addsInMenu
+        ? {
+            menu: (
+              <>
+                <DropdownMenuItem
+                  icon={<Upload aria-hidden="true" />}
+                  onSelect={() => setUploading(true)}
+                >
+                  <span data-knowledge-menu-upload="">{t("knowledge.addUpload")}</span>
+                </DropdownMenuItem>
+                {offersSources ? (
+                  <DropdownMenuItem
+                    icon={<FolderSync aria-hidden="true" />}
+                    onSelect={() => setConnecting(true)}
+                  >
+                    <span data-knowledge-menu-folder="">{t("knowledge.addConnect")}</span>
+                  </DropdownMenuItem>
+                ) : null}
+              </>
+            )
+          }
+        : {})}
       control={{
         changes: changedFields + (availabilityEdit.changed ? 1 : 0),
         submit,

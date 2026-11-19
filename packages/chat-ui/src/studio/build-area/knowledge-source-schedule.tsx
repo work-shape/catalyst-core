@@ -1,9 +1,15 @@
-import { useState } from "react";
+import { ChevronDown } from "lucide-react";
+import { useId, useState } from "react";
 import {
-  Field,
+  Button,
   Input,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   ScheduleField,
   Select,
+  SettingsList,
+  SettingsRow,
   Switch,
   type ScheduleValue
 } from "@work-shape/catalyst-ui";
@@ -18,10 +24,12 @@ import {
   type KnowledgeSourceSchedule
 } from "./knowledge-sources-model";
 
-// When one source of the draft syncs by itself (SRC-SYNC): one switch for all of it, and under
-// it how often its changes are fetched and when the full sync runs. Off, the source syncs only
-// when a person asks, and its documents stay as they are. Like its folders it takes effect at
-// publish. The full sync runs in the instance's time zone, so the field offers no zone.
+// When one source of the draft syncs by itself (SRC-SYNC), as rows of settings: one switch for
+// all of it, and under it how often new and changed files are fetched and when what was deleted
+// is removed. Each row has its control at its end; the time is one button that reads as the
+// schedule does and opens its fields. Off, the source syncs only when a person asks, and its
+// documents stay as they are. Like its folders it takes effect at publish. Deleted files are
+// removed in the instance's time zone, so the fields offer no zone.
 
 /** The intervals offered for fetching changes, in minutes. A stored other one is offered too. */
 const CHANGE_INTERVALS = [5, 15, 30, 60, 240, 1_440] as const;
@@ -111,16 +119,20 @@ export function sourceScheduleSentence(
 export function KnowledgeSourceSchedule({
   schedule,
   defaults,
+  web = false,
   readOnly,
   onChange
 }: {
   schedule: KnowledgeSourceSchedule | undefined;
   /** What the source takes where it sets nothing, as far as it is known. */
   defaults: SourceScheduleDefaults;
+  /** A source of web pages: it fetches pages, not files. */
+  web?: boolean;
   readOnly: boolean;
   onChange(schedule: KnowledgeSourceSchedule | undefined): void;
 }) {
-  const { locale, t } = useTranslation();
+  const translation = useTranslation();
+  const { locale, t } = translation;
   // What the switch brings back once turned on again in this visit; the defaults otherwise.
   const [before, setBefore] = useState<KnowledgeSourceSchedule | undefined>();
   const on = syncsByItself(schedule);
@@ -152,13 +164,19 @@ export function KnowledgeSourceSchedule({
   // the one it had until it is.
   const [shown, setShown] = useState<{ cron: string; value: ScheduleValue }>();
   const fullForm = shown?.cron === fullCron ? shown.value : cronSchedule(fullCron, NO_ZONE);
+  // The row's label is the switch's; the cron field beside it names itself.
+  const cronId = useId();
+  const incomplete = fullForm !== undefined && scheduleCron(fullForm) === undefined;
+  const items = t(web ? "knowledgeSources.wordsPages" : "knowledgeSources.wordsFiles");
   return (
-    <fieldset className="grid min-w-0 gap-3" data-knowledge-source-schedule={on ? "on" : "off"}>
-      <legend className="mb-1 text-label">{t("knowledgeSources.sync")}</legend>
-      <Field
-        layout="inline"
+    <SettingsList
+      aria-label={t("knowledgeSources.sync")}
+      className="border-y"
+      data-knowledge-source-schedule={on ? "on" : "off"}
+    >
+      <SettingsRow
         label={t("knowledgeSources.syncAuto")}
-        hint={on ? undefined : t("knowledgeSources.syncAutoOff")}
+        description={t(on ? "knowledgeSources.syncAutoOn" : "knowledgeSources.syncAutoOff")}
       >
         <Switch
           checked={on}
@@ -166,102 +184,165 @@ export function KnowledgeSourceSchedule({
           data-knowledge-source-sync-auto=""
           onCheckedChange={turn}
         />
-      </Field>
+      </SettingsRow>
       {on ? (
-        <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-          <Field
-            label={t("knowledgeSources.syncChanges")}
-            hint={
-              defaults.minChanges === undefined
-                ? t("knowledgeSources.syncChangesHint")
-                : `${t("knowledgeSources.syncChangesHint")} ${t(
-                    "knowledgeSources.syncChangesFloor",
-                    {
-                      interval: lowerFirst(intervalWords(defaults.minChanges, t), locale)
-                    }
-                  )}`
-            }
+        <SettingsRow
+          label={t("knowledgeSources.syncChanges")}
+          description={
+            defaults.minChanges === undefined
+              ? t("knowledgeSources.syncChangesHint", { items })
+              : t("knowledgeSources.syncChangesHintFloor", {
+                  items,
+                  interval: lowerFirst(intervalWords(defaults.minChanges, t), locale)
+                })
+          }
+        >
+          <Select
+            className="w-60 max-w-full"
+            value={changes === undefined ? DEFAULT_CHOICE : String(changes)}
+            disabled={readOnly}
+            data-knowledge-source-sync-changes=""
+            onChange={(event) => {
+              const value = event.target.value;
+              write({
+                changes:
+                  value === DEFAULT_CHOICE
+                    ? undefined
+                    : value === SYNC_OFF
+                      ? SYNC_OFF
+                      : Number(value)
+              });
+            }}
           >
-            <Select
-              value={changes === undefined ? DEFAULT_CHOICE : String(changes)}
-              disabled={readOnly}
-              data-knowledge-source-sync-changes=""
-              onChange={(event) => {
-                const value = event.target.value;
-                write({
-                  changes:
-                    value === DEFAULT_CHOICE
-                      ? undefined
-                      : value === SYNC_OFF
-                        ? SYNC_OFF
-                        : Number(value)
-                });
-              }}
-            >
-              <option value={DEFAULT_CHOICE}>
-                {defaults.changes === undefined
-                  ? t("knowledgeSources.syncChangesDefault")
-                  : t("knowledgeSources.syncChangesDefaultIs", {
-                      interval: lowerFirst(intervalWords(defaults.changes, t), locale)
-                    })}
+            <option value={DEFAULT_CHOICE}>
+              {defaults.changes === undefined
+                ? t("knowledgeSources.syncChangesDefault")
+                : t("knowledgeSources.syncChangesDefaultIs", {
+                    interval: lowerFirst(intervalWords(defaults.changes, t), locale)
+                  })}
+            </option>
+            {intervals.map((minutes) => (
+              <option key={minutes} value={String(minutes)}>
+                {intervalWords(minutes, t)}
               </option>
-              {intervals.map((minutes) => (
-                <option key={minutes} value={String(minutes)}>
-                  {intervalWords(minutes, t)}
-                </option>
-              ))}
-              <option value={SYNC_OFF}>{t("knowledgeSources.syncNever")}</option>
-            </Select>
-          </Field>
-          <div className="grid min-w-0 content-start gap-3">
-            <Field
-              layout="inline"
-              label={t("knowledgeSources.syncFull")}
-              hint={t("knowledgeSources.syncFullHint")}
-            >
-              <Switch
-                checked={fullOn}
-                disabled={readOnly}
-                data-knowledge-source-sync-full=""
-                onCheckedChange={(value) => write({ full: value ? undefined : SYNC_OFF })}
-              />
-            </Field>
-            {!fullOn ? null : fullForm ? (
-              <ScheduleField
-                label={t("knowledgeSources.syncFullWhen")}
-                value={fullForm}
-                readOnly={readOnly}
-                zonePicker={false}
-                error={
-                  scheduleCron(fullForm) === undefined
-                    ? t("knowledgeSources.syncFullIncomplete")
-                    : undefined
-                }
-                onChange={(value) => {
-                  const cron = scheduleCron(value);
-                  setShown({ cron: cron ?? fullCron, value });
-                  if (cron !== undefined)
-                    write({ full: cron === defaults.full ? undefined : cron });
-                }}
-              />
-            ) : (
-              <Field
-                label={t("knowledgeSources.syncFullCron")}
-                hint={t("knowledgeSources.syncFullCronHint")}
-              >
-                <Input
-                  value={fullCron}
-                  readOnly={readOnly}
-                  spellCheck={false}
-                  className="font-mono"
-                  data-knowledge-source-sync-cron=""
-                  onChange={(event) => write({ full: event.target.value })}
-                />
-              </Field>
-            )}
-          </div>
-        </div>
+            ))}
+            <option value={SYNC_OFF}>{t("knowledgeSources.syncNever")}</option>
+          </Select>
+        </SettingsRow>
       ) : null}
-    </fieldset>
+      {on ? (
+        <SettingsRow
+          label={t("knowledgeSources.syncFull")}
+          description={
+            fullOn && fullForm === undefined
+              ? t("knowledgeSources.syncFullCronHint")
+              : t("knowledgeSources.syncFullHint")
+          }
+          error={fullOn && incomplete ? t("knowledgeSources.syncFullIncomplete") : undefined}
+        >
+          {!fullOn ? null : fullForm === undefined ? (
+            // A schedule the fields cannot hold stands as the cron expression it is.
+            <Input
+              id={cronId}
+              value={fullCron}
+              readOnly={readOnly}
+              spellCheck={false}
+              className="w-44 font-mono"
+              aria-label={t("knowledgeSources.syncFullCron")}
+              data-knowledge-source-sync-cron=""
+              onChange={(event) => write({ full: event.target.value })}
+            />
+          ) : (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  aria-label={t("knowledgeSources.syncFullWhenIs", {
+                    when: fullWords(fullForm, translation)
+                  })}
+                  data-knowledge-source-sync-when=""
+                >
+                  {fullWords(fullForm, translation)}
+                  <ChevronDown aria-hidden="true" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" size="md">
+                <div className="grid min-w-0 gap-3">
+                  <ScheduleField
+                    label={t("knowledgeSources.syncFullWhen")}
+                    labelHidden
+                    value={fullForm}
+                    readOnly={readOnly}
+                    zonePicker={false}
+                    error={incomplete ? t("knowledgeSources.syncFullIncomplete") : undefined}
+                    onChange={(value) => {
+                      const cron = scheduleCron(value);
+                      setShown({ cron: cron ?? fullCron, value });
+                      if (cron !== undefined)
+                        write({ full: cron === defaults.full ? undefined : cron });
+                    }}
+                  />
+                  <p className="text-caption text-muted-foreground">
+                    {t("knowledgeSources.syncFullZone")}
+                  </p>
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+          <Switch
+            checked={fullOn}
+            disabled={readOnly}
+            data-knowledge-source-sync-full=""
+            onCheckedChange={(value) => write({ full: value ? undefined : SYNC_OFF })}
+          />
+        </SettingsRow>
+      ) : null}
+    </SettingsList>
   );
+}
+
+/**
+ * The schedule on its button, in one line: "Daily at 02:00". Days of a week are named short,
+ * and a schedule that is no whole one yet asks for one.
+ */
+function fullWords(
+  form: ScheduleValue,
+  { locale, t }: Pick<TranslationContextValue, "locale" | "t">
+): string {
+  if (form.kind === "hour") {
+    return t("knowledgeSources.whenHour", { minute: String(form.minute).padStart(2, "0") });
+  }
+  const [hour = 0, minute = 0] = form.time.split(":").map(Number);
+  if (form.time === "" || Number.isNaN(hour) || Number.isNaN(minute)) {
+    return t("knowledgeSources.whenChoose");
+  }
+  // A clock time has no day: any day in UTC gives the same words.
+  const time = new Date(Date.UTC(2026, 0, 1, hour, minute)).toLocaleTimeString(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC"
+  });
+  switch (form.kind) {
+    case "day":
+      return t("knowledgeSources.whenDay", { time });
+    case "weekday":
+      return t("knowledgeSources.whenWeekday", { time });
+    case "month":
+      return t("knowledgeSources.whenMonth", { day: form.day, time });
+    case "week":
+      if (form.days.length === 0) return t("knowledgeSources.whenChoose");
+      return t("knowledgeSources.whenWeek", {
+        // 5 January 2026 is a Monday, the field's day 1.
+        days: new Intl.ListFormat(locale, { style: "narrow", type: "unit" }).format(
+          form.days.map((day) =>
+            new Date(Date.UTC(2026, 0, 4 + day)).toLocaleDateString(locale, {
+              weekday: "short",
+              timeZone: "UTC"
+            })
+          )
+        ),
+        time
+      });
+  }
 }
