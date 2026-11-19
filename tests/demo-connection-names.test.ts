@@ -42,7 +42,12 @@ describe("the demo's Connection and the names its agent carries", () => {
       Object.keys(outputSchemas).sort()
     );
     for (const operation of connection.operations) {
-      expect(operation).toMatchObject({ effect: "reading", exposure: ["agent", "bridge"] });
+      // get_customer is open to the CLI as well, for a local run of the example code tool.
+      expect(operation).toMatchObject({
+        effect: "reading",
+        exposure:
+          operation.name === "get_customer" ? ["agent", "bridge", "outside"] : ["agent", "bridge"]
+      });
       expect(operation.schemaFingerprint).toBeUndefined();
     }
     expect(config.secretStore.keys).toEqual([{ id: "local", ref: "DEMO_SECRET_STORE_KEY" }]);
