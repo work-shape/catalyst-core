@@ -551,58 +551,61 @@ function DocumentRow({
       // What a failed document needs stays in view; the rest shows with the pointer or the focus.
       actionsVisible={document.state === "failed"}
       actions={
-        origin || onRetry || onRemove || onLink ? (
-          <>
-            {origin ? (
-              <Button asChild variant="ghost" size="icon">
-                <a
-                  href={origin.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={t("knowledge.originLinkOpen", { name: title })}
-                  title={t("knowledge.originLinkOpen", { name: title })}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    openOriginLink(origin.href);
-                  }}
-                  data-knowledge-origin-link={document.id}
-                >
-                  <ExternalLink aria-hidden="true" />
-                </a>
-              </Button>
-            ) : null}
-            {onLink ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={t("knowledge.originLinkEditLabel", { name: title })}
-                title={t("knowledge.originLinkEdit")}
-                onClick={onLink}
-                data-knowledge-origin-edit={document.id}
+        // Every row keeps a slot two icons wide, so the dates of all rows stand in one column
+        // whatever actions a row has.
+        <span
+          className="flex min-w-[calc(var(--spacing-control-md)*2+0.25rem)] items-center justify-end gap-1"
+          data-knowledge-document-actions=""
+        >
+          {origin ? (
+            <Button asChild variant="ghost" size="icon">
+              <a
+                href={origin.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={t("knowledge.originLinkOpen", { name: title })}
+                title={t("knowledge.originLinkOpen", { name: title })}
+                onClick={(event) => {
+                  event.preventDefault();
+                  openOriginLink(origin.href);
+                }}
+                data-knowledge-origin-link={document.id}
               >
-                <Link2 aria-hidden="true" />
-              </Button>
-            ) : null}
-            {onRetry ? (
-              <Button variant="outline" size="sm" loading={retrying} onClick={onRetry}>
-                <RotateCcw aria-hidden="true" />
-                {t("knowledge.retry")}
-              </Button>
-            ) : null}
-            {onRemove ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={t("knowledge.removeLabel", { name: title })}
-                title={t("knowledge.remove")}
-                onClick={onRemove}
-                data-knowledge-remove={document.id}
-              >
-                <Trash2 aria-hidden="true" />
-              </Button>
-            ) : null}
-          </>
-        ) : undefined
+                <ExternalLink aria-hidden="true" />
+              </a>
+            </Button>
+          ) : null}
+          {onLink ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t("knowledge.originLinkEditLabel", { name: title })}
+              title={t("knowledge.originLinkEdit")}
+              onClick={onLink}
+              data-knowledge-origin-edit={document.id}
+            >
+              <Link2 aria-hidden="true" />
+            </Button>
+          ) : null}
+          {onRetry ? (
+            <Button variant="outline" size="sm" loading={retrying} onClick={onRetry}>
+              <RotateCcw aria-hidden="true" />
+              {t("knowledge.retry")}
+            </Button>
+          ) : null}
+          {onRemove ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t("knowledge.removeLabel", { name: title })}
+              title={t("knowledge.remove")}
+              onClick={onRemove}
+              data-knowledge-remove={document.id}
+            >
+              <Trash2 aria-hidden="true" />
+            </Button>
+          ) : null}
+        </span>
       }
     />
   );
