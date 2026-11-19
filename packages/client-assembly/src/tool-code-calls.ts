@@ -6,6 +6,7 @@ import {
   JOB_WORKER_CHECK_INTERVAL_MS,
   TOOL_ASSET_KIND,
   TOOL_CODE_CALL_KEEP_MS,
+  TOOL_CODE_LIBRARY,
   TOOL_CODE_REQUEST_ANSWER_MAX_BYTES,
   TOOL_CODE_REQUEST_MAX_BYTES,
   TOOL_CODE_REQUESTS_MAX,
@@ -50,7 +51,6 @@ import {
   type WorkflowStepFiles
 } from "@work-shape/catalyst-workflows";
 import { z } from "zod";
-import { TOOL_CODE_LIBRARY } from "./tool-code-library";
 
 // Where a code tool runs (TOOL-2b, platform-access.md, section 3a). A call is a row the
 // operation writes and a job the command worker serves: the worker runs the tool's handler in
@@ -65,7 +65,7 @@ import { TOOL_CODE_LIBRARY } from "./tool-code-library";
 //
 // Beside it the handler has a request channel (TOOL-2c): it calls a Connection operation its
 // tool declares by writing a request to the descriptor the sandbox opened, through the module
-// of `tool-code-library.ts`. The worker refuses an operation the tool does not declare, writes a
+// of `TOOL_CODE_LIBRARY`. The worker refuses an operation the tool does not declare, writes a
 // declared one on the call's row and hands the handler the answer the operation wrote there.
 // The operation, which waits for the call as the tool's caller, carries the request out as the
 // Connection's operation (`tool-assets.ts`). No credential reaches the worker or the sandbox.
