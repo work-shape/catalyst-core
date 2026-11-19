@@ -261,9 +261,11 @@ test("a member starts a Workflow with inputs from its form and sees the run end;
     await grant(root, memberId, assetId, "workflow.use")
   ];
   try {
-    // The Workflow's page says in its head whom every run acts as: the account's label.
-    await page.goto(`/w/${workspaceId}/workflows/${id}`);
-    await expect(page.getByTestId("workflow-page").getByText(`Runs as ${runAs}`)).toBeVisible();
+    // The Workflow's Settings say under "Advanced" whom every run acts as: the account's label.
+    await page.goto(`/w/${workspaceId}/workflows/${id}/settings`);
+    const advanced = page.getByTestId("workflow-settings-page").locator("[data-workflow-advanced]");
+    await advanced.locator("[data-workflow-advanced-trigger]").click();
+    await expect(advanced.locator("[data-workflow-facts]")).toContainText(runAs);
     await page.goto(`/w/${workspaceId}/workflows`);
     const card = page.getByRole("listitem").filter({ hasText: name });
     const dialog = page.getByRole("dialog", { name: `Start “${name}” now?` });

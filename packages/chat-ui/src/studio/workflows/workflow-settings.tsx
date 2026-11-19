@@ -3,6 +3,9 @@ import {
   Banner,
   Button,
   CommandLine,
+  Disclosure,
+  DisclosureContent,
+  DisclosureTrigger,
   Field,
   FieldListEditor,
   Input,
@@ -50,9 +53,11 @@ import { useWorkflowsHost } from "./workflows-host";
 
 // The Settings tab of a Workflow (workflow-canvas 9.7, WF-EDIT-5): its name and what it does,
 // when it starts, and what it asks for when started, which a holder of `workflow.write` changes
-// on the draft with one Save; the result, the failure notice, the limits, the account, the owner
-// and who may start it as read-only lines. Everyone else reads the same, read-only. A schedule
-// the field cannot read is left as it is.
+// on the draft with one Save. What the engine and other systems need is folded under "Advanced":
+// the start by another Workflow, by outside clients and by a webhook with its secret, and the
+// result, the failure notice, the limits, the account, the owner and who may start it as
+// read-only lines. Everyone else reads the same, read-only. A schedule the field cannot read is
+// left as it is.
 
 type Translate = TranslationContextValue["t"];
 type Trigger = Readonly<Record<string, unknown>>;
@@ -104,6 +109,21 @@ function switched(triggers: readonly Trigger[], kind: string, on: boolean): Trig
   const has = triggers.some((trigger) => trigger.kind === kind);
   if (on === has) return [...triggers];
   return on ? [...triggers, newTrigger(kind)] : triggers.filter((trigger) => trigger.kind !== kind);
+}
+
+/** The ways to start that stand under "Advanced": what another system or Workflow does. */
+const FOLDED_STARTS = ["parent", "outside", "webhook"] as const;
+
+/** The fields of the Workflow itself whose lines stand under "Advanced". */
+const FOLDED_FIELDS = ["outputs", "onFailure", "limits", "runAs"] as const;
+
+/** What of a manifest stands under "Advanced", to tell whether a draft changes any of it. */
+function foldedPart(manifest: WorkflowManifest): unknown {
+  const triggers = triggersOf(triggerStep(manifest));
+  return [
+    FOLDED_STARTS.map((kind) => triggers.find((trigger) => trigger.kind === kind) ?? null),
+    FOLDED_FIELDS.map((field) => manifest[field] ?? null)
+  ];
 }
 
 /** A limit a Workflow raises, in words. */
@@ -383,6 +403,22 @@ export function WorkflowSettingsForm({
   );
   const issues = editing === undefined ? [] : [...editing.issues.other];
   if (editing?.error !== undefined) issues.push(editing.error);
+  const webhook = useWorkflowWebhook(workflow.id, has("webhook"));
+  // "Advanced" opens by itself where something in it needs a person: a webhook whose address
+  // refuses every request, a draft that changes what stands there, or a Workflow that starts
+  // in no way the page shows above it.
+  const webhookWaits =
+    has("webhook") && webhook?.view !== undefined && webhook.view.secret !== "set";
+  const draftChangesFolded =
+    editing?.published !== undefined &&
+    !sameValue(foldedPart(editing.published), foldedPart(manifest));
+  const startsFoldedOnly =
+    onCount > 0 && !has("schedule") && !has("manual") && !has("platform_event");
+  const needsAdvanced = webhookWaits || draftChangesFolded || startsFoldedOnly;
+  const [advanced, setAdvanced] = useState({ open: needsAdvanced, needed: needsAdvanced });
+  if (advanced.needed !== needsAdvanced) {
+    setAdvanced({ open: advanced.open || needsAdvanced, needed: needsAdvanced });
+  }
 
   return (
     <div className="grid max-w-2xl min-w-0 gap-8" data-workflow-settings="">
@@ -426,7 +462,7 @@ export function WorkflowSettingsForm({
 
       <section className="grid gap-4" data-workflow-starts="">
         <div className="grid gap-1">
-          <h2 className="text-heading-sm">{t("workflows.workflowSettings.starts")}</h2>
+          <h2 className="text-title-sm">{t("workflows.workflowSettings.starts")}</h2>
           <p className="text-caption text-muted-foreground">
             {t("workflows.workflowSettings.startsHint")}
           </p>
@@ -457,27 +493,6 @@ export function WorkflowSettingsForm({
         )}
         {switchRow("manual", t("workflows.workflowSettings.byHand"))}
         {switchRow(
-          "parent",
-          t("workflows.workflowSettings.byParent"),
-          t("workflows.workflowSettings.byParentHint")
-        )}
-        {switchRow(
-          "outside",
-          t("workflows.workflowSettings.byOutside"),
-          t("workflows.workflowSettings.byOutsideHint")
-        )}
-        {switchRow(
-          "webhook",
-          t("workflows.workflowSettings.byWebhook"),
-          t("workflows.workflowSettings.byWebhookHint")
-        )}
-        {has("webhook") ? (
-          <WorkflowWebhook
-            workflow={workflow}
-            mayRotate={host !== undefined && workflowRightsOn(host.rights, workflow).publish}
-          />
-        ) : null}
-        {switchRow(
           "platform_event",
           t("workflows.workflowSettings.onSync"),
           t("workflows.workflowSettings.onSyncHint")
@@ -496,11 +511,6 @@ export function WorkflowSettingsForm({
             />
           </Field>
         )}
-        <WorkflowCallers
-          workspaceId={workspaceId}
-          callers={workflow.callers}
-          onOpenRoute={onOpenRoute}
-        />
         <WorkflowAppCallers
           all
           callers={workflow.appCallers}
@@ -516,47 +526,101 @@ export function WorkflowSettingsForm({
         set={set}
       />
 
-      <section className="grid gap-3" data-workflow-facts="">
-        <KeyValueList layout="stacked">
-          <KeyValue label={t("workflows.workflowSettings.result")}>
-            {resultWords(manifest.outputs, t)}
-          </KeyValue>
-          <KeyValue label={t("workflows.workflowSettings.onFailure")}>
-            {onFailureWords(manifest.onFailure, t)}
-          </KeyValue>
-          <KeyValue label={t("workflows.workflowSettings.limits")}>
-            {limitLine(manifest.limits, t)}
-          </KeyValue>
-          <KeyValue label={t("workflows.workflowSettings.runsAs")}>
-            {workflow.runsAs ?? t("workflows.workflowSettings.runsAsOwn")}
-          </KeyValue>
-          <KeyValue label={t("workflows.workflowSettings.owner")}>
-            {workflow.ownerWorkspaceId === undefined
-              ? t("workflows.workflowSettings.ownerInstance")
-              : workflow.ownerWorkspaceId === workspaceId && host?.workspace !== undefined
-                ? host.workspace.name
-                : t("workflows.workflowSettings.ownerOther")}
-          </KeyValue>
-          <KeyValue label={t("workflows.workflowSettings.mayStart")}>
-            {has("manual") ? (
-              <span>
-                {t("workflows.workflowSettings.mayStartUse")}{" "}
-                <a
-                  className="underline underline-offset-2"
-                  {...routeLink(
-                    { kind: "settings", group: "instance", page: "access" },
-                    onOpenRoute
+      <Disclosure
+        variant="row"
+        className="border-t"
+        open={advanced.open}
+        onOpenChange={(open) => setAdvanced({ open, needed: needsAdvanced })}
+        data-workflow-advanced=""
+      >
+        <DisclosureTrigger data-workflow-advanced-trigger="">
+          <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+            <span className="text-title-sm text-foreground">
+              {t("workflows.workflowSettings.advanced")}
+            </span>
+            <span className="text-caption">{t("workflows.workflowSettings.advancedHint")}</span>
+          </span>
+        </DisclosureTrigger>
+        {/* Kept in the page while folded: its switches are part of the one Save. */}
+        <DisclosureContent keepMounted>
+          <div className="grid gap-8 pt-3 pb-2">
+            <section className="grid gap-4" data-workflow-starts-more="">
+              <h3 className="text-body font-medium">
+                {t("workflows.workflowSettings.startsMore")}
+              </h3>
+              {switchRow(
+                "parent",
+                t("workflows.workflowSettings.byParent"),
+                t("workflows.workflowSettings.byParentHint")
+              )}
+              <WorkflowCallers
+                workspaceId={workspaceId}
+                callers={workflow.callers}
+                onOpenRoute={onOpenRoute}
+              />
+              {switchRow(
+                "outside",
+                t("workflows.workflowSettings.byOutside"),
+                t("workflows.workflowSettings.byOutsideHint")
+              )}
+              {switchRow(
+                "webhook",
+                t("workflows.workflowSettings.byWebhook"),
+                t("workflows.workflowSettings.byWebhookHint")
+              )}
+              {has("webhook") && webhook !== undefined ? (
+                <WorkflowWebhook
+                  workflow={workflow}
+                  webhook={webhook}
+                  mayRotate={host !== undefined && workflowRightsOn(host.rights, workflow).publish}
+                />
+              ) : null}
+            </section>
+
+            <section className="grid gap-3" data-workflow-facts="">
+              <KeyValueList layout="stacked">
+                <KeyValue label={t("workflows.workflowSettings.result")}>
+                  {resultWords(manifest.outputs, t)}
+                </KeyValue>
+                <KeyValue label={t("workflows.workflowSettings.onFailure")}>
+                  {onFailureWords(manifest.onFailure, t)}
+                </KeyValue>
+                <KeyValue label={t("workflows.workflowSettings.limits")}>
+                  {limitLine(manifest.limits, t)}
+                </KeyValue>
+                <KeyValue label={t("workflows.workflowSettings.runsAs")}>
+                  {workflow.runsAs ?? t("workflows.workflowSettings.runsAsOwn")}
+                </KeyValue>
+                <KeyValue label={t("workflows.workflowSettings.owner")}>
+                  {workflow.ownerWorkspaceId === undefined
+                    ? t("workflows.workflowSettings.ownerInstance")
+                    : workflow.ownerWorkspaceId === workspaceId && host?.workspace !== undefined
+                      ? host.workspace.name
+                      : t("workflows.workflowSettings.ownerOther")}
+                </KeyValue>
+                <KeyValue label={t("workflows.workflowSettings.mayStart")}>
+                  {has("manual") ? (
+                    <span>
+                      {t("workflows.workflowSettings.mayStartUse")}{" "}
+                      <a
+                        className="underline underline-offset-2"
+                        {...routeLink(
+                          { kind: "settings", group: "instance", page: "access" },
+                          onOpenRoute
+                        )}
+                      >
+                        {`${t("nav.settings")} › ${t("settings.access")}`}
+                      </a>
+                    </span>
+                  ) : (
+                    t("workflows.workflowSettings.mayStartNobody")
                   )}
-                >
-                  {`${t("nav.settings")} › ${t("settings.access")}`}
-                </a>
-              </span>
-            ) : (
-              t("workflows.workflowSettings.mayStartNobody")
-            )}
-          </KeyValue>
-        </KeyValueList>
-      </section>
+                </KeyValue>
+              </KeyValueList>
+            </section>
+          </div>
+        </DisclosureContent>
+      </Disclosure>
 
       {editing === undefined ? null : (
         <WorkflowSettingsBar editing={editing} triggerId={triggerId} incomplete={onCount === 0} />
@@ -570,14 +634,21 @@ export function WorkflowSettingsForm({
  * which a publisher makes and sees once (EW-4). The address takes requests once a revision with
  * the webhook is published.
  */
-function WorkflowWebhook({ workflow, mayRotate }: { workflow: WorkflowView; mayRotate: boolean }) {
+function WorkflowWebhook({
+  workflow,
+  webhook,
+  mayRotate
+}: {
+  workflow: WorkflowView;
+  /** The webhook as the form read it, which also tells it whether a person is needed here. */
+  webhook: NonNullable<ReturnType<typeof useWorkflowWebhook>>;
+  mayRotate: boolean;
+}) {
   const { t } = useTranslation();
   const { apiBaseUrl } = useWorkspaceApiClient();
-  const webhook = useWorkflowWebhook(workflow.id, true);
   const [secret, setSecret] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
-  if (webhook === undefined) return null;
   const view = webhook.view;
   const address = `${instanceUrl(apiBaseUrl, window.location.origin)}/api/v1/workflows/${encodeURIComponent(workflow.id)}/webhook`;
   const makeSecret = () => {
@@ -734,7 +805,7 @@ function StartFields({
   if (shown.items === undefined) {
     return (
       <section className="grid gap-2" data-workflow-inputs="">
-        <h2 className="text-heading-sm">{label}</h2>
+        <h2 className="text-title-sm">{label}</h2>
         <p className="text-body text-muted-foreground">
           {t("workflows.workflowSettings.asksAgentOnly")}
         </p>
