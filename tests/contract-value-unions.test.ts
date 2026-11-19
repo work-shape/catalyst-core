@@ -151,7 +151,7 @@ it("preserves the exported unions when contract lists become shared", () => {
     "queued" | "running" | "succeeded" | "failed" | "dead" | "cancelled"
   >();
   expectTypeOf<OperationRunDecisionReason>().toEqualTypeOf<
-    "inherited_approval_not_applied" | "workflow_publish" | "approved_by_caller"
+    "inherited_approval_not_applied" | "workflow_publish" | "approved_by_caller" | "tool_call"
   >();
   expectTypeOf<AccessSource>().toEqualTypeOf<"role" | "legacy_ref" | "grant" | "membership">();
   expectTypeOf<ModelUsageSource>().toEqualTypeOf<

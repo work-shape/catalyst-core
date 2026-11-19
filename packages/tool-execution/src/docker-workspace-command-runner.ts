@@ -127,6 +127,8 @@ export interface DockerCommandRunInput {
   containerName: string;
   command: WorkspaceCommandProcessInput["command"];
   signal?: AbortSignal;
+  /** Answered on the container's input stream, which `args` then keep open. */
+  requests?: WorkspaceCommandProcessInput["requests"];
 }
 
 export interface DockerRunInvocation {
@@ -220,7 +222,8 @@ export class DockerWorkspaceCommandProcessExecutor implements WorkspaceCommandPr
         args: invocation.args,
         containerName: invocation.containerName,
         command: input.command,
-        signal: input.signal
+        signal: input.signal,
+        ...(input.requests ? { requests: input.requests } : {})
       })
     );
     if (!input.sandboxLimits) {
@@ -327,6 +330,8 @@ export function createDockerRunInvocation(
   const scratch = own?.scratchBytes;
   const args = [
     "run",
+    // A command with a request channel reads its answers on its input stream.
+    ...(input.requests ? ["--interactive"] : []),
     // The container of a command with limits of its own is removed by its worker, after the
     // engine was asked how it ended.
     ...(own ? [] : ["--rm"]),
@@ -439,7 +444,8 @@ class DockerCliCommandClient implements DockerCommandClient {
       maxStdoutBytes: input.command.limits.maxStdoutBytes,
       maxStderrBytes: input.command.limits.maxStderrBytes,
       signal: input.signal,
-      onTerminate: () => this.removeContainer(input.containerName)
+      onTerminate: () => this.removeContainer(input.containerName),
+      ...(input.requests ? { requests: input.requests } : {})
     });
   }
 

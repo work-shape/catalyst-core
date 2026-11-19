@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt } from "drizzle-orm";
+import { and, eq, isNull, lt, sql } from "drizzle-orm";
 import type { ToolCodeCall, ToolCodeCallsStore } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { toolCodeCalls } from "./schema/toolCodeCalls";
@@ -13,6 +13,8 @@ function mapCall(row: typeof toolCodeCalls.$inferSelect): ToolCodeCall {
     input: row.input,
     timeoutSeconds: row.timeoutSeconds,
     ...(row.outcome ? { outcome: row.outcome } : {}),
+    ...(row.request ? { request: row.request } : {}),
+    ...(row.answer ? { answer: row.answer } : {}),
     createdAt: row.createdAt.toISOString(),
     ...(row.startedAt ? { startedAt: row.startedAt.toISOString() } : {}),
     ...(row.finishedAt ? { finishedAt: row.finishedAt.toISOString() } : {})
@@ -50,16 +52,49 @@ export function createPostgresToolCodeCallsStore(db: PostgresConnection): ToolCo
           and(
             eq(toolCodeCalls.clientInstanceId, clientInstanceId),
             eq(toolCodeCalls.id, id),
-            isNull(toolCodeCalls.outcome)
+            isNull(toolCodeCalls.outcome),
+            // A request an earlier attempt made is never made again.
+            isNull(toolCodeCalls.request)
           )
         )
         .returning({ id: toolCodeCalls.id });
       return started.length > 0;
     },
+    async requestToolCodeCall({ clientInstanceId, id, request, startedAt }) {
+      const written = await db
+        .update(toolCodeCalls)
+        .set({ request })
+        .where(
+          and(
+            eq(toolCodeCalls.clientInstanceId, clientInstanceId),
+            eq(toolCodeCalls.id, id),
+            isNull(toolCodeCalls.outcome),
+            // Only the attempt that started last makes requests.
+            eq(toolCodeCalls.startedAt, new Date(startedAt))
+          )
+        )
+        .returning({ id: toolCodeCalls.id });
+      return written.length > 0;
+    },
+    async answerToolCodeCall({ clientInstanceId, id, answer }) {
+      const written = await db
+        .update(toolCodeCalls)
+        .set({ answer })
+        .where(
+          and(
+            eq(toolCodeCalls.clientInstanceId, clientInstanceId),
+            eq(toolCodeCalls.id, id),
+            isNull(toolCodeCalls.outcome),
+            sql`(${toolCodeCalls.request}->>'seq')::integer = ${answer.seq}`
+          )
+        )
+        .returning({ id: toolCodeCalls.id });
+      return written.length > 0;
+    },
     async finishToolCodeCall({ clientInstanceId, id, outcome, finishedAt }) {
       const finished = await db
         .update(toolCodeCalls)
-        .set({ outcome, input: {}, finishedAt: new Date(finishedAt) })
+        .set({ outcome, input: {}, request: null, answer: null, finishedAt: new Date(finishedAt) })
         .where(
           and(
             eq(toolCodeCalls.clientInstanceId, clientInstanceId),

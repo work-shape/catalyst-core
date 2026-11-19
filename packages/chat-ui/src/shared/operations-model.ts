@@ -96,6 +96,8 @@ export function operationDecisionLabelKey(
       return "operations.decisionWorkflowPublish";
     case "approved_by_caller":
       return "operations.decisionApprovedByCaller";
+    case "tool_call":
+      return "operations.decisionToolCall";
     default:
       return operationDecisionLabelKeys[decision.mode];
   }

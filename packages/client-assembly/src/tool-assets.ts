@@ -1,14 +1,22 @@
 import {
   ASSET_OWNER_KINDS,
   AppError,
+  POLICY_VALUES,
   TOOL_ACTIONS,
   TOOL_ASSET_KIND,
   TOOL_NAME_MAX_LENGTH,
   TOOL_NAME_PATTERN,
   TOOL_NAME_RULE,
   TOOL_RESULT_DEFAULT_REPLY,
+  connectionOperationName,
   defineAssetKind,
+  getSubjectUserId,
+  isAppError,
+  isAuthenticatedServicePrincipal,
   isJsonObject,
+  operationDenialError,
+  parseConnectionOperationName,
+  resolvePolicy,
   liveRevisionId,
   answerAsTool,
   personalDataConversation,
@@ -20,7 +28,9 @@ import {
   toolOfOperationName,
   unknownToJsonValue,
   type AgentRunId,
+  type AuthenticatedIdentity,
   type ClientInstanceId,
+  type CollaborationWorkspaceId,
   type ConfigAssetRecord,
   type ConversationId,
   type OperationExecutionContext,
@@ -30,20 +40,30 @@ import {
   type JsonObject,
   type LocaleCode,
   type OperationDefinition,
+  type OperationOrigin,
+  type OperationResult,
   type OperationResolutionStores,
   type OperationResource,
   type OperationSource,
   type CodeToolConfig,
+  type PolicyValue,
   type ResultToolConfig,
-  type ToolAssetConfig
+  type ToolAssetConfig,
+  type ToolCodeCallRequest,
+  type ToolCodeCallRequestAnswer
 } from "@work-shape/catalyst-core";
+import { runOperation } from "@work-shape/catalyst-tool-execution";
 import {
   outsideJsonSchemaAsZod,
   outsideSchemaChecker,
   type OutsideSchemaChecker
 } from "@work-shape/catalyst-connections";
 import { resolveLocalizedString } from "@work-shape/catalyst-config-schema";
-import { workflowAssetKindOf, type WorkflowAssetKind } from "@work-shape/catalyst-server";
+import {
+  workflowAssetKindOf,
+  type OperationCalls,
+  type WorkflowAssetKind
+} from "@work-shape/catalyst-server";
 import { z } from "zod";
 import type { ModuleSeam } from "./module-assembly";
 import {
@@ -60,7 +80,10 @@ import {
 // of its own files in the sandbox of Workflow code steps, on the command worker
 // (`tool-code-calls.ts`), and answers with what the handler answered. A published tool
 // contributes one operation, `tool.<name>.call`, which an agent lists like a Connection's.
-// Nothing of it reaches outside the conversation it is called in: a handler has no network.
+// A handler has no network. It reaches outside only through the Connection operations its tool
+// declares (TOOL-2c): each request is carried out here, as the tool's caller, as its own
+// Operation Run whose origin is the tool's call, and the policy of every declared operation is
+// asked once, on the tool's call, before the handler starts.
 
 /** How long one call of a `result` tool may run, in milliseconds: one schema check in a thread. */
 const TOOL_CALL_TIMEOUT_MS = 15_000;
@@ -133,6 +156,58 @@ interface ToolCallPorts {
   codeCalls?: ToolCodeCallClient;
   /** Whether a conversation holds personal data: an HTML display then runs no script. */
   personalConversation?(conversationId: ConversationId, runId: AgentRunId): Promise<boolean>;
+  /**
+   * The call path a handler's requests are carried out on, and whose policy the tool's call
+   * asks for the operations it declares. Missing where this process has none: a handler's
+   * request is then refused.
+   */
+  operations?(): Pick<OperationCalls, "registry" | "deps"> | undefined;
+  /** What the policy asked of each declared operation where a tool's call was admitted. */
+  admitted: AdmittedPolicies;
+}
+
+/**
+ * What the policy asked of each Connection operation a code tool declares, as the call of the
+ * tool was admitted, by the agent's run and tool call: the most a call its handler makes then
+ * runs without asking anybody. The admission and the execution of one call are one process:
+ * a call that waited is admitted again, there, before it executes, and what that admission
+ * asks is what holds. The decision it waited for answers no more than it was asked: a
+ * confirmed call the policy now asks an approval of is refused (`executeConfirmedOperation`),
+ * and one it now denies is refused as it is admitted again. Read once; what is never read
+ * goes after a while.
+ */
+class AdmittedPolicies {
+  private readonly entries = new Map<
+    string,
+    { at: number; asked: ReadonlyMap<string, PolicyValue> }
+  >();
+
+  private static readonly KEEP_MS = 10 * 60 * 1_000;
+  private static readonly MOST = 1_000;
+
+  set(origin: OperationOrigin, asked: ReadonlyMap<string, PolicyValue>): void {
+    if (origin.kind !== "agent") return;
+    const now = Date.now();
+    for (const [key, entry] of this.entries) {
+      if (now - entry.at <= AdmittedPolicies.KEEP_MS && this.entries.size < AdmittedPolicies.MOST)
+        break;
+      this.entries.delete(key);
+    }
+    const key = AdmittedPolicies.keyOf(origin);
+    this.entries.delete(key);
+    this.entries.set(key, { at: now, asked });
+  }
+
+  take(origin: Extract<OperationOrigin, { kind: "agent" }>) {
+    const key = AdmittedPolicies.keyOf(origin);
+    const entry = this.entries.get(key);
+    this.entries.delete(key);
+    return entry?.asked;
+  }
+
+  private static keyOf(origin: Extract<OperationOrigin, { kind: "agent" }>): string {
+    return `${origin.agentRunId}\u0000${origin.toolCallId}`;
+  }
 }
 
 /** What a `result` tool's call writes: the agent's input as the result of its display kind. */
@@ -178,6 +253,22 @@ async function codeCall(
     });
   }
   const { signal, deadline } = context.runtime;
+  // The most each declared operation's calls run without asking anybody: what the policy asked
+  // of it as the tool's call was admitted, and no more than it asks as the handler starts. An
+  // operation the admission did not ask about runs only where the policy allows it.
+  const operations = ports.operations?.();
+  const admitted = ports.admitted.take(origin);
+  const asked = new Map<string, PolicyValue>();
+  if (operations && (config.connections ?? []).length > 0) {
+    const now = await declaredPolicies(config.connections ?? [], operations, {
+      origin,
+      actor: context.actor,
+      ...(context.workspaceId === undefined ? {} : { workspaceId: context.workspaceId })
+    });
+    for (const [name, value] of now) {
+      asked.set(name, looserPolicy(value, admitted?.get(name) ?? "allow"));
+    }
+  }
   const waiting = ports.codeCalls
     .run({
       clientInstanceId: asset.clientInstanceId,
@@ -188,7 +279,8 @@ async function codeCall(
       timeoutSeconds,
       correlationId: context.correlationId,
       ...(deadline ? { deadline } : {}),
-      ...(signal ? { signal } : {})
+      ...(signal ? { signal } : {}),
+      onRequest: (request) => connectionRequest(config, request, context, origin, asked, ports)
     })
     .then(async (result) =>
       toolCodeCallAnswer({
@@ -209,6 +301,196 @@ async function codeCall(
   return answerAsTool(await waiting);
 }
 
+function refused(code: string, message: string): ToolCodeCallRequestAnswer {
+  return { ok: false, error: { code, message } };
+}
+
+/** What a handler is answered of the run of its request. */
+function requestAnswerOf(result: OperationResult): ToolCodeCallRequestAnswer {
+  switch (result.status) {
+    case "done":
+      return { ok: true, output: unknownToJsonValue(result.output) };
+    case "dry_run":
+      // A changing call of a draft that went to no test target: nothing was changed.
+      return { ok: true, output: unknownToJsonValue(result.output ?? null), simulated: true };
+    case "failed":
+      return refused(result.error.code, result.error.message);
+    case "denied": {
+      // The policy asks more of the call than it asked when the handler started.
+      if (result.reason.kind === "policy" && result.reason.reason === "confirmation_required") {
+        return refused(
+          "connection_call_waits",
+          "The Connection call would need somebody's confirmation or approval, and was not made."
+        );
+      }
+      const error = operationDenialError(result.reason);
+      return refused(error.code.toLowerCase(), error.message);
+    }
+    case "pending_confirmation":
+    case "pending_approval":
+    case "expired":
+    case "running":
+      // A call of a handler waits for nobody (see `byTool` of the agent origin).
+      return refused("connection_call_waits", "The Connection call would wait, and was not made.");
+  }
+}
+
+/**
+ * Carries out one request of a code tool's handler: a call of a Connection operation the tool
+ * declares, as the tool's caller and from the tool's call. It is an Operation Run of its own,
+ * authorized, recorded and audited as the agent's own call of the operation would be, so it
+ * needs `connection.use` on the Connection. Its policy was asked on the tool's call. In a draft
+ * agent's Try it goes where a Try call of the operation goes: the Connection's test credential.
+ */
+async function connectionRequest(
+  config: CodeToolConfig,
+  request: ToolCodeCallRequest,
+  context: OperationExecutionContext,
+  origin: Extract<OperationOrigin, { kind: "agent" }>,
+  /** What the policy asked of each declared operation as the handler started. */
+  asked: ReadonlyMap<string, PolicyValue>,
+  ports: ToolCallPorts
+): Promise<ToolCodeCallRequestAnswer> {
+  const name = connectionOperationName(request.connection, request.operation);
+  if (!(config.connections ?? []).includes(name)) {
+    return refused(
+      "connection_not_declared",
+      `The tool does not declare '${name}' in its connections, so its handler may not call it.`
+    );
+  }
+  const operations = ports.operations?.();
+  // A Workflow test run's agent step acts within its principal's rights, which the call here
+  // could not bound: it is refused rather than made with the person's rights alone.
+  if (!operations || origin.boundBy !== undefined) {
+    return refused("connection_unavailable", "A handler cannot call a Connection here.");
+  }
+  const definition = await operations.registry.resolve(name);
+  if (!definition) {
+    return refused("connection_unavailable", `The operation '${name}' does not exist now.`);
+  }
+  const { toolRevisionId: _revision, ...rest } = origin;
+  try {
+    const outcome = await runOperation(
+      {
+        operation: name,
+        effect: definition.effect,
+        input: request.input,
+        actor: context.actor,
+        origin: { ...rest, byTool: { runId: context.runId, asked: asked.get(name) ?? "allow" } },
+        ...(context.workspaceId === undefined ? {} : { workspaceId: context.workspaceId }),
+        correlationId: context.correlationId,
+        ...(origin.draft ? { draft: { ...origin.draft } } : {})
+      },
+      operations.deps,
+      {
+        ...(context.runtime.signal ? { signal: context.runtime.signal } : {}),
+        ...(context.runtime.deadline ? { deadline: context.runtime.deadline } : {}),
+        ...(context.runtime.locale ? { locale: context.runtime.locale } : {}),
+        ...(context.runtime.modelRoutes ? { modelRoutes: context.runtime.modelRoutes } : {}),
+        ...(context.runtime.firstPartyRun ? { firstPartyRun: true as const } : {})
+      }
+    );
+    return requestAnswerOf(outcome.result);
+  } catch (error) {
+    // An input the operation does not take, or one the surface refused before a run existed.
+    if (isAppError(error) && error.exposeMessage) {
+      return refused(
+        error.code === "VALIDATION_FAILED" ? "input_invalid" : error.code.toLowerCase(),
+        error.message
+      );
+    }
+    return refused("failed", "The Connection call failed.");
+  }
+}
+
+function looserPolicy(left: PolicyValue, right: PolicyValue): PolicyValue {
+  return POLICY_VALUES.indexOf(left) <= POLICY_VALUES.indexOf(right) ? left : right;
+}
+
+function stricterPolicy(left: PolicyValue | undefined, right: PolicyValue): PolicyValue {
+  return left !== undefined && POLICY_VALUES.indexOf(left) >= POLICY_VALUES.indexOf(right)
+    ? left
+    : right;
+}
+
+/**
+ * What the policy asks of each Connection operation a code tool declares, of this caller in this
+ * workspace: by its default, the admin's settings, its own floor, a personal conversation's
+ * floor on a change, and the person's Ask me or Never. The strictest is the floor of the tool's
+ * call, so a `confirm` is asked once, on the tool's call, before the handler starts, and a
+ * `deny` refuses it. Each value is also the most a handler's call of that operation then runs
+ * without asking (`byTool.asked`). An `approval` of an operation whose calls never wait for one,
+ * a personal Connection's or one whose answer holds a secret, is a `deny`: such a call is
+ * refused where it is made outside a tool too. A declared operation that no longer exists asks
+ * nothing: its call fails in the handler.
+ */
+async function declaredPolicies(
+  declared: readonly string[],
+  operations: Pick<OperationCalls, "registry" | "deps">,
+  call: {
+    origin: OperationOrigin;
+    actor?: AuthenticatedIdentity;
+    workspaceId?: CollaborationWorkspaceId;
+  }
+): Promise<Map<string, PolicyValue>> {
+  const asked = new Map<string, PolicyValue>();
+  if (declared.length === 0) return asked;
+  const { policy } = operations.deps;
+  const targets = await operations.registry.resolveMany(declared);
+  const centralSettings = await policy.centralSettings();
+  const { actor, origin } = call;
+  const person =
+    actor && !isAuthenticatedServicePrincipal(actor) && policy.personSetting
+      ? (operation: string) =>
+          policy.personSetting?.({ userId: getSubjectUserId(actor), operation })
+      : undefined;
+  const personal =
+    origin.kind === "agent" && policy.personalConversation
+      ? await policy.personalConversation(origin.conversationId, origin.agentRunId)
+      : false;
+  for (const name of declared) {
+    const target = targets.get(name);
+    if (!target) continue;
+    let own = await target.policyFloorOf?.(origin, undefined, actor, call.workspaceId);
+    // A change in a conversation that holds personal data asks, as the agent's own call does.
+    if (personal && target.effect === "changing" && !target.personalConnection) {
+      own = stricterPolicy(own, "confirm");
+    }
+    const setting = await person?.(name);
+    const resource = target.resource(undefined);
+    let value = resolvePolicy({
+      definition: {
+        ...target,
+        ...(own === undefined ? {} : { policyFloor: stricterPolicy(target.policyFloor, own) })
+      },
+      // Read as the caller's own confirmation would count: the value that is set, not what a
+      // surface makes of it.
+      origin: { kind: "user" },
+      instanceDefaults: policy.instanceDefaults,
+      centralSettings,
+      targets: [
+        { workspaceId: call.workspaceId ?? resource?.workspaceId, assetKind: resource?.kind }
+      ],
+      // Ask me and Never hold; Always allow lowers nothing a whole tool asks.
+      ...(setting && setting !== "always_allow"
+        ? { person: { setting, mayAlwaysAllow: false } }
+        : {}),
+      callerCanConfirm: true,
+      canPause: true
+    }).value;
+    if (value === "approval" && (target.personalConnection || target.secret)) value = "deny";
+    asked.set(name, value);
+  }
+  return asked;
+}
+
+/** The strictest of what the declared operations ask: the floor of the tool's call. */
+function strictestOf(asked: ReadonlyMap<string, PolicyValue>): PolicyValue | undefined {
+  let floor: PolicyValue | undefined;
+  for (const value of asked.values()) floor = stricterPolicy(floor, value);
+  return floor === "allow" ? undefined : floor;
+}
+
 /** The operation of one published tool. */
 function definitionOf(tool: PublishedTool, ports: ToolCallPorts): OperationDefinition {
   const { asset, config, revisionId } = tool;
@@ -219,7 +501,9 @@ function definitionOf(tool: PublishedTool, ports: ToolCallPorts): OperationDefin
     description: config.description,
     // It replaces the conversation's result or shows a display. The platform starts it at
     // `allow`, as `structured_data.publish`: it writes only into the caller's own
-    // conversation, and a code tool's handler reaches nothing outside its sandbox.
+    // conversation, and a code tool's handler reaches outside its sandbox only through the
+    // Connection operations it declares, whose policy is the call's floor. `changing` is the
+    // strictest effect, so no declared operation's effect is stricter than the tool's.
     effect: "changing",
     changeClass: "reversible",
     defaultPolicy: "allow",
@@ -239,6 +523,22 @@ function definitionOf(tool: PublishedTool, ports: ToolCallPorts): OperationDefin
     outputSchema: config.type === "result" ? toolCallOutputSchema : z.unknown(),
     inputJsonSchema: jsonObjectOf(config.input),
     resource: () => resource,
+    ...(config.type === "code" && (config.connections ?? []).length > 0
+      ? {
+          policyFloorOf: async (origin, _input, actor, workspaceId) => {
+            const operations = ports.operations?.();
+            if (!operations) return undefined;
+            const asked = await declaredPolicies(config.connections ?? [], operations, {
+              origin,
+              ...(actor ? { actor } : {}),
+              ...(workspaceId === undefined ? {} : { workspaceId })
+            });
+            // Kept for the execution of this call, which follows its admission here.
+            ports.admitted.set(origin, asked);
+            return strictestOf(asked);
+          }
+        }
+      : {}),
     timeoutMs:
       config.type === "result"
         ? TOOL_CALL_TIMEOUT_MS
@@ -272,6 +572,8 @@ interface ToolSourceDeps {
   /** Where the handlers of code tools run. Without it a code tool's call fails. */
   codeCalls?: ToolCodeCallClient;
   personalConversation?(conversationId: ConversationId, runId: AgentRunId): Promise<boolean>;
+  /** See `operations` of the call's ports. */
+  operations?(): Pick<OperationCalls, "registry" | "deps"> | undefined;
 }
 
 /** The operations of every published tool. A draft is never read here. */
@@ -280,7 +582,9 @@ export function createToolOperationSource(deps: ToolSourceDeps): OperationSource
     checker: deps.checker ?? outsideSchemaChecker(),
     warn: (tool, reason) => deps.warn?.({ tool, reason }),
     ...(deps.codeCalls ? { codeCalls: deps.codeCalls } : {}),
-    ...(deps.personalConversation ? { personalConversation: deps.personalConversation } : {})
+    ...(deps.personalConversation ? { personalConversation: deps.personalConversation } : {}),
+    ...(deps.operations ? { operations: deps.operations } : {}),
+    admitted: new AdmittedPolicies()
   };
   const read = async (name: string, stores?: OperationResolutionStores) =>
     publishedTool(
@@ -379,13 +683,48 @@ export function createToolAssetToolSource(deps: ToolSourceDeps): DataToolSource 
 }
 
 /**
+ * Refuses a code tool that declares an operation that is no Connection's operation now. Each is
+ * asked of the call path as a call of it would be: a Connection's accepted operation resolves,
+ * whether or not it can be reached at this moment.
+ */
+async function assertDeclaredConnections(
+  tool: CodeToolConfig,
+  operations: Pick<OperationCalls, "registry"> | undefined
+): Promise<void> {
+  const declared = tool.connections ?? [];
+  if (declared.length === 0) return;
+  const found = operations ? await operations.registry.resolveMany(declared) : new Map();
+  const issues = declared.flatMap((name, at) =>
+    found.has(name) && parseConnectionOperationName(name) !== undefined
+      ? []
+      : [{ message: `'${name}' is no operation of a Connection`, path: ["connections", at] }]
+  );
+  if (issues.length === 0) return;
+  throw new AppError(
+    "VALIDATION_FAILED",
+    `The tool '${tool.name}' declares Connection operations that do not exist: ${issues
+      .map((issue) => issue.message.split("'")[1])
+      .join(", ")}`,
+    { reason: "tool_connection_unknown", issues }
+  );
+}
+
+/**
  * The kind `tool`: a draft until a holder of `tool.publish` publishes it, owned by the instance
  * or by one workspace. Its input schema is compiled at every write in the thread that checks
  * schemas a builder wrote, so a schema that does not compile, or is over a bound, is refused
  * before it is stored.
  */
 export function createToolAssetKind(
-  options: { checker?: OutsideSchemaChecker; defaultLocale?: LocaleCode } = {}
+  options: {
+    checker?: OutsideSchemaChecker;
+    defaultLocale?: LocaleCode;
+    /**
+     * Where the Connection operations a code tool declares are looked up at a write. Without
+     * it a tool that declares one is refused: nothing could tell it is real.
+     */
+    operations?(): Pick<OperationCalls, "registry"> | undefined;
+  } = {}
 ): WorkflowAssetKind {
   const checker = () => options.checker ?? outsideSchemaChecker();
   return workflowAssetKindOf({
@@ -426,6 +765,7 @@ export function createToolAssetKind(
     async assertScopedWrite({ definition }) {
       const tool = parseTool(definition);
       if (!tool) return;
+      if (tool.type === "code") await assertDeclaredConnections(tool, options.operations?.());
       const refusal = await checker().refusalOf(jsonObjectOf(tool.input));
       if (refusal !== undefined) {
         throw new AppError(
@@ -446,12 +786,15 @@ export function createToolAssetKind(
  * agents and skills are, because a tool asset reaches nothing a module would switch off.
  */
 export const assembleToolAssets: ModuleSeam = (parts) => {
+  // The call path exists once the operation sources are asked for, after the kinds are built.
+  let operations: OperationCalls | undefined;
   const deps: ToolSourceDeps = {
     clientInstanceId: parts.clientInstanceId,
     store: parts.stores.configAssets,
     codeCalls: createToolCodeCallClient({ stores: parts.stores }),
     personalConversation: (conversationId, runId) =>
       personalDataConversation(parts.stores, parts.clientInstanceId, conversationId, runId),
+    operations: () => operations,
     warn: ({ tool, reason }) =>
       parts.logger.warn(
         { tool, checked: "input", reason },
@@ -459,8 +802,16 @@ export const assembleToolAssets: ModuleSeam = (parts) => {
       )
   };
   return {
-    assetKinds: [createToolAssetKind({ defaultLocale: parts.config.localization.defaultLocale })],
-    operationSources: () => [createToolOperationSource(deps)],
+    assetKinds: [
+      createToolAssetKind({
+        defaultLocale: parts.config.localization.defaultLocale,
+        operations: () => operations
+      })
+    ],
+    operationSources: (runtime) => {
+      operations = runtime.operationCalls;
+      return [createToolOperationSource(deps)];
+    },
     start: () => ({ dataToolSources: [createToolAssetToolSource(deps)] })
   };
 };

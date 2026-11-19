@@ -61,8 +61,37 @@ export interface SandboxSkillFolder {
   directory: string;
 }
 
+/**
+ * A channel a command talks to its worker on while it runs, without a network (TOOL-2c). The
+ * command writes each request as one line on its output stream and reads each answer as one
+ * line on its input stream, in order. After its last request it writes `endMark` on a line of
+ * its own: what follows on its output stream is its output, as without a channel.
+ */
+export interface SandboxRequestChannel {
+  /** A line nobody but this run knows. */
+  endMark: string;
+  /** The longest request read, in bytes. A longer line is dropped and answered `refuse`. */
+  maxLineBytes: number;
+  /**
+   * The most lines answered. Past them the command's input stream is closed and what it still
+   * writes before the end mark is dropped. The requests are read up to `maxLines` lines of
+   * `maxLineBytes` and their line breaks, apart from the command's `maxStdoutBytes`, which
+   * bounds its output alone; past them the channel closes too.
+   */
+  maxLines: number;
+  /** The answer to one request: one line, without a line break. It never rejects. */
+  answer(line: string): Promise<string>;
+  /** The answer to a line that is no request: one longer than `maxLineBytes`. */
+  refuse(reason: "too_long"): string;
+}
+
 export interface WorkspaceCommandProcessInput {
   command: SandboxCommand;
+  /**
+   * Where the command asks its worker for something while it runs. Only a command the platform
+   * runs itself has one: an agent's command has none.
+   */
+  requests?: SandboxRequestChannel;
   /** In place of the sandbox's own CPU, memory and process limits. */
   sandboxLimits?: SandboxCommandLimits;
   /**
@@ -144,7 +173,8 @@ export class LocalWorkspaceCommandProcessExecutor implements WorkspaceCommandPro
       idleTimeoutSeconds: input.command.limits.idleTimeoutSeconds,
       maxStdoutBytes: input.command.limits.maxStdoutBytes,
       maxStderrBytes: input.command.limits.maxStderrBytes,
-      signal: input.signal
+      signal: input.signal,
+      ...(input.requests ? { requests: input.requests } : {})
     });
   }
 }
@@ -172,6 +202,8 @@ export async function runSpawnedProcess(input: {
   maxStderrBytes?: number;
   signal?: AbortSignal;
   onTerminate?: () => Promise<void> | void;
+  /** Requests the process writes before its output, each answered on its input stream. */
+  requests?: SandboxRequestChannel;
 }): Promise<ProcessResult> {
   if (input.signal?.aborted) {
     return cancelledProcessResult(Date.now(), input.signal.reason);
@@ -194,8 +226,29 @@ export async function runSpawnedProcess(input: {
       cwd: input.cwd,
       detached: true,
       env: input.env,
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["pipe", "pipe", "pipe"]
     });
+    // A process that ended, or closed its input, is answered nothing more. One without
+    // requests reads nothing on its input stream.
+    child.stdin.on("error", () => undefined);
+    if (!input.requests) child.stdin.end();
+    // The process's output is read one request at a time: while a request is answered, its
+    // output stream is paused, so a process that writes requests faster than they are answered
+    // waits, and so does one that reads no answers.
+    const requests = input.requests
+      ? new RequestLines(input.requests, {
+          reply: (line) => writeLine(child.stdin, line),
+          pause: () => child.stdout.pause(),
+          resume: () => child.stdout.resume(),
+          close: () => child.stdin.end(),
+          output: (chunk) => stdout.append(chunk),
+          answering: (busy) => {
+            // A process waits for its answer: that is no idleness, and it is not counted.
+            if (busy) clearTimeout(idleTimer);
+            else resetIdleTimer();
+          }
+        })
+      : undefined;
 
     const cleanupAbortListener = () => {
       input.signal?.removeEventListener("abort", abort);
@@ -255,8 +308,14 @@ export async function runSpawnedProcess(input: {
     resetIdleTimer();
     input.signal?.addEventListener("abort", abort, { once: true });
     child.stdout.on("data", (chunk: Buffer) => {
-      stdout.append(chunk);
-      resetIdleTimer();
+      if (!requests) {
+        stdout.append(chunk);
+        resetIdleTimer();
+        return;
+      }
+      // Only output after the end mark shows the process at work: requests never put the idle
+      // timeout off, and the wall timeout bounds them.
+      if (requests.take(chunk)) resetIdleTimer();
     });
     child.stderr.on("data", (chunk: Buffer) => {
       stderr.append(chunk);
@@ -283,6 +342,171 @@ export async function runSpawnedProcess(input: {
       finish(code ?? 1, signal);
     });
   });
+}
+
+/** Writes one line, and waits while the stream holds more than it takes. */
+function writeLine(stream: NodeJS.WritableStream & { writable: boolean }, line: string) {
+  return new Promise<void>((resolve) => {
+    if (!stream.writable) {
+      resolve();
+      return;
+    }
+    if (stream.write(`${line}\n`)) {
+      resolve();
+      return;
+    }
+    const done = () => {
+      stream.off("drain", done);
+      stream.off("close", done);
+      stream.off("error", done);
+      resolve();
+    };
+    stream.on("drain", done);
+    stream.on("close", done);
+    stream.on("error", done);
+  });
+}
+
+/** What the request lines of a process act on. */
+interface RequestLinesIo {
+  reply(line: string): Promise<void>;
+  pause(): void;
+  resume(): void;
+  /** Closes the process's input stream: it is answered nothing more. */
+  close(): void;
+  output(chunk: Buffer): void;
+  answering(busy: boolean): void;
+}
+
+/**
+ * Reads the requests of a process from its output stream until the end mark and answers each,
+ * one at a time: while one is answered the stream is paused, and the rest of the chunk waits.
+ * What follows the mark is the process's own output. Past `maxLines` lines, or once the
+ * requests passed `maxLines` lines of `maxLineBytes`, the channel is closed and nothing more is
+ * held but the line being read, to find the mark.
+ */
+class RequestLines {
+  private held: Buffer[] = [];
+  private heldBytes = 0;
+  /** The line being read is longer than a request may be: the rest of it is dropped. */
+  private dropping = false;
+  private ended = false;
+  private closed = false;
+  private lines = 0;
+  /** The bytes read before the end mark, and the most of them read. */
+  private bytes = 0;
+  private readonly maxBytes: number;
+  /** The rest of a chunk while its request is answered. */
+  private waiting: Buffer | undefined;
+
+  constructor(
+    private readonly channel: SandboxRequestChannel,
+    private readonly io: RequestLinesIo
+  ) {
+    this.maxBytes = channel.maxLines * (channel.maxLineBytes + 1);
+  }
+
+  /** Reads a chunk. Whether it held output: bytes after the end mark. */
+  take(chunk: Buffer): boolean {
+    if (this.waiting) {
+      // A chunk the stream had read before it paused.
+      this.waiting = Buffer.concat([this.waiting, chunk]);
+      return false;
+    }
+    return this.read(chunk);
+  }
+
+  private read(chunk: Buffer): boolean {
+    if (this.ended) {
+      this.io.output(chunk);
+      return chunk.byteLength > 0;
+    }
+    let start = 0;
+    while (start < chunk.byteLength) {
+      const newline = chunk.indexOf(10, start);
+      const end = newline === -1 ? chunk.byteLength : newline;
+      this.hold(chunk.subarray(start, end));
+      if (newline === -1) {
+        this.counted(end - start);
+        return false;
+      }
+      this.counted(end - start + 1);
+      start = newline + 1;
+      const line = this.line();
+      if (line === this.channel.endMark) {
+        this.ended = true;
+        const rest = chunk.subarray(start);
+        if (rest.byteLength > 0) this.io.output(rest);
+        return rest.byteLength > 0;
+      }
+      if (this.closed || line === "") continue;
+      this.lines += 1;
+      if (this.lines > this.channel.maxLines) {
+        this.close();
+        continue;
+      }
+      this.answer(
+        line === undefined
+          ? Promise.resolve(this.channel.refuse("too_long"))
+          : this.channel.answer(line),
+        chunk.subarray(start)
+      );
+      return false;
+    }
+    return false;
+  }
+
+  /** Answers one request, then reads on from `rest`. */
+  private answer(answer: Promise<string>, rest: Buffer): void {
+    this.waiting = rest;
+    this.io.pause();
+    this.io.answering(true);
+    const next = () => {
+      this.io.answering(false);
+      const rest = this.waiting ?? Buffer.alloc(0);
+      this.waiting = undefined;
+      this.read(rest);
+      if (this.waiting === undefined) this.io.resume();
+    };
+    answer
+      .then((text) => this.io.reply(text))
+      .then(next, next)
+      .catch(() => undefined);
+  }
+
+  private counted(bytes: number): void {
+    this.bytes += bytes;
+    if (this.bytes > this.maxBytes && !this.closed) this.close();
+  }
+
+  private close(): void {
+    this.closed = true;
+    this.io.close();
+  }
+
+  private hold(part: Buffer): void {
+    if (this.dropping) return;
+    if (this.heldBytes + part.byteLength > this.channel.maxLineBytes) {
+      this.dropping = true;
+      this.held = [];
+      this.heldBytes = 0;
+      return;
+    }
+    this.held.push(part);
+    this.heldBytes += part.byteLength;
+  }
+
+  /** The line read, or nothing where it was dropped. */
+  private line(): string | undefined {
+    if (this.dropping) {
+      this.dropping = false;
+      return undefined;
+    }
+    const text = Buffer.concat(this.held, this.heldBytes).toString("utf8");
+    this.held = [];
+    this.heldBytes = 0;
+    return text;
+  }
 }
 
 class BoundedOutput {

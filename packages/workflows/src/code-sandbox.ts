@@ -12,6 +12,7 @@ import {
   SANDBOX_SOURCE_DIRECTORY,
   type SandboxCommandLimits,
   type SandboxDataDirectories,
+  type SandboxRequestChannel,
   type WorkspaceCommandProcessExecutor
 } from "@work-shape/catalyst-tool-execution";
 import {
@@ -62,6 +63,10 @@ export async function resolve(specifier, context, nextResolve) {
   catch (error) {
     if (error.code !== 'ERR_MODULE_NOT_FOUND' || specifier.startsWith('.') || specifier.startsWith('/') || specifier.includes(':')) throw error;
     const root = process.env.WORKFLOW_SOURCE_ROOT;
+    const library = process.env.CATALYST_LIBRARY;
+    if (library && /^[a-z][a-z-]*$/.test(specifier)) {
+      try {return await nextResolve(pathToFileURL(pathResolve(library, specifier + '.mjs')).href, context);} catch {}
+    }
     const candidate = pathResolve(root, specifier);
     if (!candidate.startsWith(root + '/')) throw error;
     try {return await nextResolve(pathToFileURL(candidate).href, context);} catch {throw error;}
@@ -70,6 +75,12 @@ export async function resolve(specifier, context, nextResolve) {
 const INPUT_FILE = "input.json";
 /** The file a script writes its result to. A script that writes none prints its result. */
 const OUTPUT_FILE = "output.json";
+
+/** Where the modules of a request channel lie beside the tree, for the script to import. */
+const LIBRARY_DIRECTORY = "lib";
+/** The descriptors a script writes its requests to and reads their answers from. */
+const REQUEST_FD = 3;
+const ANSWER_FD = 4;
 
 const DIRECTORY_PREFIX = "catalyst-code-step-";
 const COMMAND_ID_PREFIX = "code-step-";
@@ -93,6 +104,19 @@ export interface CodeSandboxOptions {
    * this sandbox, such as code tools, names its own, so a sweep removes only what is its own.
    */
   commandIdPrefix?: string;
+}
+
+/**
+ * A channel the script asks its worker on while it runs (TOOL-2c): it writes a request as one
+ * line to the descriptor `$CATALYST_REQUEST_FD` and reads the answer as one line from
+ * `$CATALYST_ANSWER_FD`. The modules of `library` lie in `$CATALYST_LIBRARY`, where Python and
+ * Node import them by name. Only a script of a tree has one.
+ */
+export interface CodeSandboxChannel extends Pick<
+  SandboxRequestChannel,
+  "answer" | "refuse" | "maxLineBytes" | "maxLines"
+> {
+  library: readonly { path: string; content: string }[];
 }
 
 /** How often the worker measures what a running script has written to its output directory. */
@@ -139,10 +163,13 @@ function scriptCommand(input: {
   sourceRoot?: string;
   legacyIo?: boolean;
   data?: SandboxDataDirectories;
+  /** The line the script's requests end with, where it has a request channel. */
+  endMark?: string;
 }): string {
   const { interpreter, script, mark } = input;
   const most = String(input.maxBytes + 1);
   const quote = (value: string) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
+  const { endMark } = input;
   if (input.tree)
     return [
       ...(input.diskBytes === undefined
@@ -152,6 +179,15 @@ function scriptCommand(input: {
       'export WORKFLOW_SOURCE_ROOT="$source_root/tree"',
       `export WORKFLOW_INPUT_FILE="$source_root/${INPUT_FILE}"`,
       `export WORKFLOW_OUTPUT_FILE="$PWD/${OUTPUT_FILE}"`,
+      // With a request channel the container's output stream carries the requests while the
+      // script runs, so what the script prints is kept apart until it ended.
+      ...(endMark === undefined
+        ? []
+        : [
+            'printed_file="$PWD/.catalyst-printed"',
+            `export CATALYST_LIBRARY="$source_root/${LIBRARY_DIRECTORY}" CATALYST_REQUEST_FD=${REQUEST_FD} CATALYST_ANSWER_FD=${ANSWER_FD}`,
+            `exec ${REQUEST_FD}>&1 ${ANSWER_FD}<&0`
+          ]),
       ...(input.data
         ? [
             `export WORKFLOW_DATA_INPUT_DIRECTORY=${quote(input.data.input)} WORKFLOW_DATA_OUTPUT_DIRECTORY=${quote(input.data.output)}`
@@ -164,10 +200,13 @@ function scriptCommand(input: {
           ]
         : [
             'cd "$source_root/tree" || exit 125',
-            'export PYTHONPATH="$PWD" NODE_PATH="$PWD" PYTHONDONTWRITEBYTECODE=1'
+            `export PYTHONPATH="$PWD${endMark === undefined ? "" : ":$CATALYST_LIBRARY"}" NODE_PATH="$PWD" PYTHONDONTWRITEBYTECODE=1`
           ]),
-      `${interpreter}${interpreter === "node" ? ` --import "$source_root/${NODE_REGISTER_FILE}"` : ""} "$source_root/tree"/${quote(script)} < "$WORKFLOW_INPUT_FILE" | { head -c ${most}; cat > /dev/null; }`,
+      `${interpreter}${interpreter === "node" ? ` --import "$source_root/${NODE_REGISTER_FILE}"` : ""} "$source_root/tree"/${quote(script)} < "$WORKFLOW_INPUT_FILE" | { head -c ${most}${endMark === undefined ? "" : ' > "$printed_file"'}; cat > /dev/null; }`,
       "code=${PIPESTATUS[0]}",
+      ...(endMark === undefined
+        ? []
+        : [`printf '\\n%s\\n' '${endMark}'`, 'cat "$printed_file" 2> /dev/null']),
       `if [ -f "$WORKFLOW_OUTPUT_FILE" ] && [ ! -L "$WORKFLOW_OUTPUT_FILE" ]; then printf '\\n%s\\n' '${mark}'; head -c ${most} "$WORKFLOW_OUTPUT_FILE"; fi`,
       'exit "$code"'
     ].join("\n");
@@ -260,6 +299,8 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
      * signal is aborted by then starts no container and ends as `stopped`.
      */
     beforeStart?: () => Promise<void>;
+    /** Where the script asks its worker while it runs. Only a script of a tree has one. */
+    channel?: CodeSandboxChannel;
   }): Promise<CodeSandboxResult> {
     const { staged, signal } = input;
     const usesDatasets = staged.datasets !== undefined || holdsDatasetReference(staged.input);
@@ -364,6 +405,15 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
       } else {
         await writeFile(join(directory, script), staged.source ?? "", { flag: "wx" });
       }
+      const channel = staged.tree ? input.channel : undefined;
+      if (channel) {
+        const library = join(directory, LIBRARY_DIRECTORY);
+        await mkdir(library);
+        for (const file of channel.library) {
+          await writeFile(join(library, file.path), file.content, { flag: "wx" });
+        }
+      }
+      const endMark = channel ? `catalyst-requests-${randomUUID()}` : undefined;
       if (staged.tree && language.command === "node") {
         await writeFile(join(directory, NODE_LOADER_FILE), NODE_ROOT_LOADER, { flag: "wx" });
         await writeFile(join(directory, NODE_REGISTER_FILE), NODE_ROOT_REGISTER, { flag: "wx" });
@@ -406,6 +456,7 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
               sourceRoot: sandbox.dataPaths ? SANDBOX_SOURCE_DIRECTORY : directory,
               legacyIo: staged.legacyIo === true,
               ...(seen ? { data: seen } : {}),
+              ...(endMark === undefined ? {} : { endMark }),
               mark,
               maxBytes: outputMaxBytes,
               ...(data ? { diskBytes: room } : {})
@@ -426,6 +477,17 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
           ...(data ? { dataDirectories: data } : {}),
           // Nothing of the worker's environment: the sandbox adds a path and a home of its own.
           env: {},
+          ...(channel && endMark !== undefined
+            ? {
+                requests: {
+                  endMark,
+                  maxLineBytes: channel.maxLineBytes,
+                  maxLines: channel.maxLines,
+                  answer: (line: string) => channel.answer(line),
+                  refuse: (reason: "too_long") => channel.refuse(reason)
+                }
+              }
+            : {}),
           signal: stop.signal
         })
         .finally(() => {

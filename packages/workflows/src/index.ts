@@ -67,7 +67,7 @@ export {
   runnerPackageKey,
   type WorkflowRunnerPackage
 } from "./runner-packages";
-export { createCodeSandbox } from "./code-sandbox";
+export { createCodeSandbox, type CodeSandboxChannel } from "./code-sandbox";
 export {
   openOutputFile,
   outputFileRows,

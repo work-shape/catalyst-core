@@ -58087,7 +58087,8 @@
                 "enum": [
                   "inherited_approval_not_applied",
                   "workflow_publish",
-                  "approved_by_caller"
+                  "approved_by_caller",
+                  "tool_call"
                 ]
               },
               "by": {
@@ -58218,6 +58219,27 @@
               },
               "toolRevisionId": {
                 "type": "string"
+              },
+              "byTool": {
+                "type": "object",
+                "properties": {
+                  "runId": {
+                    "type": "string"
+                  },
+                  "asked": {
+                    "type": "string",
+                    "enum": [
+                      "allow",
+                      "confirm",
+                      "approval",
+                      "deny"
+                    ]
+                  }
+                },
+                "required": [
+                  "runId",
+                  "asked"
+                ]
               },
               "boundBy": {
                 "type": "object",

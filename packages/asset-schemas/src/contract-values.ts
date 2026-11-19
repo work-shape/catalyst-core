@@ -376,7 +376,8 @@ export type OperationRunDecisionMode = (typeof OPERATION_RUN_DECISION_MODES)[num
 export const OPERATION_RUN_DECISION_REASONS = [
   "inherited_approval_not_applied",
   "workflow_publish",
-  "approved_by_caller"
+  "approved_by_caller",
+  "tool_call"
 ] as const;
 export type OperationRunDecisionReason = (typeof OPERATION_RUN_DECISION_REASONS)[number];
 

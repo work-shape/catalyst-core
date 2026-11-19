@@ -31,7 +31,11 @@ const runOperationCallers = [
   // Workflow engine, slice A1: the call an operation step of a Workflow Run makes. It is made
   // by a job, with nobody's request to answer, as the run's service principal and from the
   // origin `workflow`, so the HTTP face cannot make it. It runs with the same dependencies.
-  { package: "packages/workflows", path: "src/operation-step.ts" }
+  { package: "packages/workflows", path: "src/operation-step.ts" },
+  // TOOL-2c: the Connection call a code tool's handler makes from its sandbox. It is made while
+  // the tool's own call runs, as that call's actor and with it as its origin, by the process
+  // that waits for the handler, so no route could make it. It runs with the same dependencies.
+  { package: "packages/client-assembly", path: "src/tool-assets.ts" }
 ];
 
 /**
