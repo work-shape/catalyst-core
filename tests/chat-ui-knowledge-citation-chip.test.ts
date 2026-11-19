@@ -458,12 +458,53 @@ describe("the row of sources under an answer", () => {
   });
 
   it("reads underscores in the chip's name as spaces, and names the file whole in its menu", async () => {
-    showRow([cited("plan", "Baubeschreibung_Haus__Abschnitt_2_2026-03-14.pdf", 12)]);
-    expect(chips()[0]?.textContent).toBe("Baubeschreibung Haus Abschnitt 2 2026-03-14, S. 12");
+    showRow([cited("plan", "Bau_Haus__Abschnitt_2_2026-03-14.pdf", 12)]);
+    expect(chips()[0]?.textContent).toBe("Bau Haus Abschnitt 2 2026-03-14, S. 12");
+    await openMenu();
+    expect(menuHeading()).toBe("Bau_Haus__Abschnitt_2_2026-03-14.pdfabgerufen 19.11.2026");
+  });
+
+  /** The two parts of a long name: the start that shortens, and the end that always shows. */
+  const parts = (chip: Element | undefined) => {
+    const start = chip?.querySelector(".truncate .truncate");
+    return [start?.textContent, start?.nextElementSibling?.textContent];
+  };
+
+  it("shortens a long name in its middle, so files that share a start keep the end that tells them apart", async () => {
+    const plans = ["0-EG", "1-OG"].map((floor, index) =>
+      cited(
+        `plan${index}`,
+        `100_Musterstadt_Projekt-ABC_Ausfuehrungsplan_Geschossplan_${floor}_2025-10-14.pdf`,
+        1
+      )
+    );
+    showRow(plans);
+    // The start gives way with an ellipsis; the end, from the start of its word, never shrinks.
+    expect(chips().map(parts)).toEqual([
+      ["100 Musterstadt Projekt-ABC Ausfuehrungsplan", " Geschossplan 0-EG 2025-10-14"],
+      ["100 Musterstadt Projekt-ABC Ausfuehrungsplan", " Geschossplan 1-OG 2025-10-14"]
+    ]);
+    const end = chips()[0]?.querySelector(".truncate .truncate")?.nextElementSibling;
+    expect(end?.className).toContain("shrink-0");
+    // Read in one, the chip says the name whole; the menu names the file as it is stored.
+    expect(chips()[1]?.textContent).toBe(
+      "100 Musterstadt Projekt-ABC Ausfuehrungsplan Geschossplan 1-OG 2025-10-14, S. 1"
+    );
     await openMenu();
     expect(menuHeading()).toBe(
-      "Baubeschreibung_Haus__Abschnitt_2_2026-03-14.pdfabgerufen 19.11.2026"
+      "100_Musterstadt_Projekt-ABC_Ausfuehrungsplan_Geschossplan_0-EG_2025-10-14.pdfabgerufen 19.11.2026"
     );
+  });
+
+  it("splits a long name of one word at the characters, as it has no word to keep", () => {
+    showRow([cited("code", `${"A".repeat(20)}${"B".repeat(10)}${"C".repeat(24)}.pdf`, 1)]);
+    expect(parts(chips()[0])).toEqual([`${"A".repeat(20)}${"B".repeat(10)}`, ` ${"C".repeat(24)}`]);
+  });
+
+  it("keeps a name whole that fits", () => {
+    showRow([cited("short", "Energieausweis_Gebaeude_Nord_2026.pdf", 1)]);
+    expect(chips()[0]?.textContent).toBe("Energieausweis Gebaeude Nord 2026, S. 1");
+    expect(parts(chips()[0])).toEqual([undefined, undefined]);
   });
 
   it("shows five documents whole, as +1 more would take the room of the fifth", () => {
