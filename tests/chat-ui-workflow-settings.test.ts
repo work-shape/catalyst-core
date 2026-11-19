@@ -26,6 +26,8 @@ import { recordedApiClient } from "./support/recorded-api-client";
 // untouched; the start fields write `inputs`; the last way to start stays on; the result, the
 // limits and the account are read-only lines; and a reader who may not write the Workflow sees
 // it all read-only. Fails without WF-EDIT-5: the Workflow had no Settings tab.
+// What other systems and the engine need is folded under "Advanced", which opens by itself
+// where something in it needs a person.
 
 const { t } = createTranslationContext("en");
 const WORKFLOW = "bookings";
@@ -66,11 +68,17 @@ function sourceOf(
   manifest: Record<string, unknown>,
   saves: { config: Config; expected: number }[],
   /** Holds each save's answer back until it settles: the instance holds the save already. */
-  answer?: Promise<void>
+  answer?: Promise<void>,
+  extra: {
+    /** The published revision, where the draft is ahead of it. */
+    published?: Record<string, unknown>;
+    /** The state of the webhook's secret, where the source has webhooks. */
+    webhookSecret?: "set" | "not_set";
+  } = {}
 ): WorkflowsSource {
   let draft: { config: Config; revision: number } = {
     config: { name: WORKFLOW, manifest },
-    revision: 2
+    revision: extra.published === undefined ? 2 : 3
   };
   const view = () => {
     const current = manifestOf(draft.config);
@@ -95,7 +103,27 @@ function sourceOf(
       test: unused,
       runLiveOnce: unused,
       listLiveOnce: unused,
-      readRevision: () => Promise.resolve(required(view().definition)),
+      readRevision: (_workflow, revision) =>
+        Promise.resolve(
+          extra.published !== undefined && revision === 2
+            ? {
+                config: { name: WORKFLOW, manifest: extra.published },
+                manifest: extra.published,
+                revision: 2
+              }
+            : required(view().definition)
+        ),
+      ...(extra.webhookSecret === undefined
+        ? {}
+        : {
+            readWebhook: () =>
+              Promise.resolve({
+                enabled: true,
+                perMinute: 60,
+                secret: required(extra.webhookSecret)
+              }),
+            rotateWebhookSecret: unused
+          }),
       validate: () => Promise.resolve([]),
       save: (_workflow, config, expected) => {
         saves.push({ config, expected });
@@ -341,6 +369,75 @@ describe("the Settings tab of a Workflow (WF-EDIT-5)", () => {
     expect(facts.textContent).toContain("Runs up to 30 hours");
     expect(facts.textContent).toContain(t("workflows.workflowSettings.onFailureNotify"));
     expect(facts.textContent).toContain(t("workflows.workflowSettings.ownerInstance"));
+  });
+
+  it("folds what other systems and the engine need under Advanced", async () => {
+    const container = await mount(sourceOf(manifestWith([{ kind: "manual" }]), []));
+    const advanced = required(container.querySelector("[data-workflow-advanced]"));
+    const trigger = required(
+      advanced.querySelector<HTMLButtonElement>("[data-workflow-advanced-trigger]")
+    );
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(trigger.textContent).toContain(t("workflows.workflowSettings.advanced"));
+    // The limits, the account, the owner and the starts by another system stand in it.
+    expect(advanced.querySelector("[data-workflow-facts]")).not.toBeNull();
+    expect(advanced.textContent).toContain(t("workflows.workflowSettings.runsAs"));
+    expect(advanced.textContent).toContain(t("workflows.workflowSettings.byWebhook"));
+    // What a person sets stays above it: the schedule, the start by hand and what it asks for.
+    const starts = required(container.querySelector("[data-workflow-starts]"));
+    expect(advanced.contains(starts)).toBe(false);
+    expect(starts.textContent).toContain(t("workflows.workflowSettings.onSchedule"));
+    expect(starts.textContent).toContain(t("workflows.workflowSettings.byHand"));
+    expect(starts.textContent).not.toContain(t("workflows.workflowSettings.byWebhook"));
+    expect(advanced.contains(required(container.querySelector("[data-workflow-inputs]")))).toBe(
+      false
+    );
+    await act(async () => trigger.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("opens Advanced by itself where something in it needs a person", async () => {
+    const open = (container: Element) =>
+      required(container.querySelector("[data-workflow-advanced-trigger]")).getAttribute(
+        "aria-expanded"
+      );
+    // Started by another Workflow alone: no way to start stands above the fold.
+    expect(open(await mount(sourceOf(manifestWith([{ kind: "parent" }]), [])))).toBe("true");
+    // A webhook without a secret refuses every request.
+    const waiting = await mount(
+      sourceOf(manifestWith([{ kind: "manual" }, { kind: "webhook" }]), [], undefined, {
+        webhookSecret: "not_set"
+      })
+    );
+    await settled(() => expect(open(waiting)).toBe("true"));
+    const secured = await mount(
+      sourceOf(manifestWith([{ kind: "manual" }, { kind: "webhook" }]), [], undefined, {
+        webhookSecret: "set"
+      })
+    );
+    await settled(() =>
+      expect(secured.querySelector("[data-workflow-webhook]")?.textContent).toContain(
+        "Set (version 1)"
+      )
+    );
+    expect(open(secured)).toBe("false");
+    // A draft that changes what stands there: the limits here.
+    const changed = await mount(
+      sourceOf(manifestWith([{ kind: "manual" }]), [], undefined, {
+        published: { ...manifestWith([{ kind: "manual" }]), limits: { duration: "2h" } }
+      })
+    );
+    await settled(() => expect(open(changed)).toBe("true"));
+    // A draft that changes only what stands above the fold leaves it folded.
+    const renamed = await mount(
+      sourceOf(manifestWith([{ kind: "manual" }]), [], undefined, {
+        published: { ...manifestWith([{ kind: "manual" }]), name: "Old bookings" }
+      })
+    );
+    await settled(() =>
+      expect(input(renamed, t("workflows.workflowSettings.name")).value).toBe("Bookings")
+    );
+    expect(open(renamed)).toBe("false");
   });
 
   it("is read-only for a reader who may not write the Workflow", async () => {

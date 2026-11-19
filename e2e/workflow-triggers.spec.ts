@@ -83,9 +83,16 @@ test("the builder sets up a webhook and a sync event, and a signed request start
   await page.goto(settingsPath);
   const settings = page.getByTestId("workflow-settings-page");
   const starts = settings.locator("[data-workflow-starts]");
-  await starts.getByRole("switch", { name: /^By a webhook/u }).click();
-  await expect(starts.locator("[data-workflow-webhook]")).toBeVisible();
-  await expect(starts.locator("[data-workflow-webhook]")).toContainText(
+  // The start by a webhook is folded under "Advanced", with what other systems need.
+  const advanced = settings.locator("[data-workflow-advanced]");
+  await expect(advanced.locator("[data-workflow-advanced-trigger]")).toHaveAttribute(
+    "aria-expanded",
+    "false"
+  );
+  await advanced.locator("[data-workflow-advanced-trigger]").click();
+  await advanced.getByRole("switch", { name: /^By a webhook/u }).click();
+  await expect(advanced.locator("[data-workflow-webhook]")).toBeVisible();
+  await expect(advanced.locator("[data-workflow-webhook]")).toContainText(
     "The address takes requests once the workflow is published with the webhook on."
   );
   await starts.getByRole("switch", { name: /^When a Knowledge Base finishes syncing/u }).click();
@@ -112,7 +119,8 @@ test("the builder sets up a webhook and a sync event, and a signed request start
   });
   expect(published.ok(), await published.text()).toBe(true);
   await page.reload();
-  const webhook = starts.locator("[data-workflow-webhook]");
+  // Without a secret the address refuses every request: "Advanced" opens by itself.
+  const webhook = advanced.locator("[data-workflow-webhook]");
   await expect(webhook).toContainText(`/api/v1/workflows/${id}/webhook`);
   await expect(webhook).toContainText("None yet: the address refuses every request");
   await webhook.getByRole("button", { name: "Make secret", exact: true }).click();
