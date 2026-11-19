@@ -88,6 +88,11 @@ export interface CodeSandboxOptions {
   outputMaxBytes: number;
   /** How much a script may write to its output directory, and so how large a dataset it writes. */
   diskBytes?: number;
+  /**
+   * What the names of its containers start with, `code-step-` where unset. Another user of
+   * this sandbox, such as code tools, names its own, so a sweep removes only what is its own.
+   */
+  commandIdPrefix?: string;
 }
 
 /** How often the worker measures what a running script has written to its output directory. */
@@ -191,6 +196,7 @@ async function stepBytes(data: SandboxDataDirectories, bound: number): Promise<n
 export function createCodeSandbox(options: CodeSandboxOptions) {
   const { sandbox, tempRoot, limits, outputMaxBytes } = options;
   const diskBytes = options.diskBytes ?? WORKFLOW_CODE_DISK_BYTES;
+  const commandIdPrefix = options.commandIdPrefix ?? COMMAND_ID_PREFIX;
   const active = new Set<string>();
   const sourceCache = createWorkflowSourceCache({
     directory: join(tempRoot, `${CACHE_PREFIX}${process.pid}`),
@@ -237,7 +243,7 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
       }
     }
     const containers = await Promise.resolve(
-      sandbox.removeLeftovers?.({ idPrefix: COMMAND_ID_PREFIX, olderThanMs }) ?? 0
+      sandbox.removeLeftovers?.({ idPrefix: commandIdPrefix, olderThanMs }) ?? 0
     ).catch(() => 0);
     return { directories, containers };
   }
@@ -249,6 +255,11 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
     signal: AbortSignal;
     /** Where the datasets of the step are read and stored. Missing where there is no store. */
     datasets?: CodeStepDatasets;
+    /**
+     * Called once everything is staged, just before the container is started. A run whose
+     * signal is aborted by then starts no container and ends as `stopped`.
+     */
+    beforeStart?: () => Promise<void>;
   }): Promise<CodeSandboxResult> {
     const { staged, signal } = input;
     const usesDatasets = staged.datasets !== undefined || holdsDatasetReference(staged.input);
@@ -359,6 +370,8 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
       }
       await writeFile(join(directory, INPUT_FILE), JSON.stringify(stagedInput), { flag: "wx" });
       const mark = `catalyst-result-${randomUUID()}`;
+      await input.beforeStart?.();
+      if (stop.signal.aborted) return { kind: "stopped" };
       // The step's data on disk is measured while the script runs: its input files and
       // what the script writes. A script that takes it past the bound is stopped: the worker's
       // disk is no script's to fill.
@@ -385,7 +398,7 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
       const result = await sandbox
         .execute({
           command: {
-            id: `${COMMAND_ID_PREFIX}${input.id}`,
+            id: `${commandIdPrefix}${input.id}`,
             command: scriptCommand({
               interpreter: language.command,
               script,

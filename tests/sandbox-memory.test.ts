@@ -104,7 +104,7 @@ describe("the defaults of a code step's sandbox", () => {
       modules: modules("workflows"),
       env: {}
     });
-    expect(sandboxMemoryNeeded(terms)).toBe(4 * GIB + 4 * 512 * MIB);
+    expect(sandboxMemoryNeeded(terms)).toBe(4 * GIB + 4 * 512 * MIB + 2 * 512 * MIB);
   });
 
   it("are raised per release, and refused where they make no sandbox", () => {
@@ -127,15 +127,31 @@ describe("the memory the sandboxes of a config can need at once", () => {
     });
 
   it("counts the workspace commands: their slots times the sandbox's memory", () => {
-    expect(terms({}, [])).toEqual([
+    expect(terms({}, [])[0]).toEqual(
       expect.objectContaining({ kind: "workspace commands", slots: 1, memoryBytes: 4 * GIB })
-    ]);
+    );
     const three = terms(
       { commandSlots: 3, sandbox: { provider: "docker", image: "x", memoryBytes: 2 * GIB } },
       []
     );
-    expect(three).toEqual([expect.objectContaining({ slots: 3, memoryBytes: 2 * GIB })]);
-    expect(sandboxMemoryNeeded(three)).toBe(6 * GIB);
+    expect(three[0]).toEqual(expect.objectContaining({ slots: 3, memoryBytes: 2 * GIB }));
+    // Beside the code tools' 2 x 512 MiB.
+    expect(sandboxMemoryNeeded(three)).toBe(6 * GIB + GIB);
+  });
+
+  it("always counts the code tools: their two slots times a code step's memory", () => {
+    // Fails before the fix: the worker ran two handlers of code tools that no term counted.
+    expect(terms({}, [])).toContainEqual(
+      expect.objectContaining({ kind: "code tools", slots: 2, memoryBytes: 512 * MIB })
+    );
+    expect(terms({ codeSteps: { memoryBytes: GIB } }, ["apps"])).toContainEqual(
+      expect.objectContaining({ kind: "code tools", slots: 2, memoryBytes: GIB })
+    );
+    expect(check({ host: 5 * GIB })).toMatchObject({ started: true });
+    expect(check({ host: 5 * GIB - 1 })).toMatchObject({
+      started: false,
+      details: { reason: "sandbox_memory_exceeds_host", neededBytes: 5 * GIB }
+    });
   });
 
   it("counts the Page builds where the module apps is on: their slots times the same memory", () => {
@@ -168,8 +184,8 @@ describe("the memory the sandboxes of a config can need at once", () => {
       terms({ stepSlots: 8, codeSteps: { slots: 8, memoryBytes: GIB } }, ["workflows"])
     ).toContainEqual(expect.objectContaining({ kind: "code steps", slots: 8, memoryBytes: GIB }));
     expect(terms({}, []).map((term) => term.kind)).not.toContain("code steps");
-    // All three together: 1 x 4 GiB, 2 x 4 GiB and 4 x 512 MiB.
-    expect(sandboxMemoryNeeded(terms({}, ["apps", "workflows"]))).toBe(14 * GIB);
+    // All four together: 1 x 4 GiB, 2 x 4 GiB, 4 x 512 MiB and 2 x 512 MiB.
+    expect(sandboxMemoryNeeded(terms({}, ["apps", "workflows"]))).toBe(15 * GIB);
   });
 
   it("counts nothing for a sandbox that runs commands as processes of the worker", () => {
@@ -179,8 +195,8 @@ describe("the memory the sandboxes of a config can need at once", () => {
 
 describe("a command worker that starts", () => {
   it("starts where the host holds every sandbox at once, to the byte", () => {
-    expect(check({ on: ["workflows"], host: 6 * GIB })).toMatchObject({ started: true });
-    expect(check({ on: ["workflows"], host: 6 * GIB - 1 })).toMatchObject({ started: false });
+    expect(check({ on: ["workflows"], host: 7 * GIB })).toMatchObject({ started: true });
+    expect(check({ on: ["workflows"], host: 7 * GIB - 1 })).toMatchObject({ started: false });
   });
 
   it("refuses with sandbox_memory_exceeds_host and names each term and its settings", () => {
@@ -195,17 +211,18 @@ describe("a command worker that starts", () => {
       code: "VALIDATION_FAILED",
       details: {
         reason: "sandbox_memory_exceeds_host",
-        neededBytes: 22 * GIB,
+        neededBytes: 23 * GIB,
         hostBytes: 16 * GIB,
         terms: [
           { kind: "workspace commands", slots: 3, memoryBytes: 4 * GIB },
           { kind: "page builds", slots: 2, memoryBytes: 4 * GIB },
-          { kind: "code steps", slots: 4, memoryBytes: 512 * MIB }
+          { kind: "code steps", slots: 4, memoryBytes: 512 * MIB },
+          { kind: "code tools", slots: 2, memoryBytes: 512 * MIB }
         ]
       }
     });
     const message = refused.started ? "" : refused.message;
-    expect(message).toContain("need 22.00 GiB of memory, and this host has 16.00 GiB");
+    expect(message).toContain("need 23.00 GiB of memory, and this host has 16.00 GiB");
     expect(message).toContain(
       "workspace commands: 3 x 4.00 GiB = 12.00 GiB (executionWorkspaces.worker.concurrency x infrastructure.sandbox.memoryBytes)"
     );
@@ -215,11 +232,14 @@ describe("a command worker that starts", () => {
     expect(message).toContain(
       "code steps: 4 x 0.50 GiB = 2.00 GiB (min(workflows.stepSlots, workflows.codeSteps.slots) x workflows.codeSteps.memoryBytes)"
     );
+    expect(message).toContain(
+      "code tools: 2 x 0.50 GiB = 1.00 GiB (2 code tool slots, fixed x workflows.codeSteps.memoryBytes)"
+    );
   });
 
   it("is refused for each term alone that does not fit, and starts once that term is lowered", () => {
-    // An instance of 8 GB.
-    const host = 8 * GIB;
+    // An instance of 9 GiB, of which the code tools always take 1 GiB.
+    const host = 9 * GIB;
     expect(check({ fields: { commandSlots: 3 }, host })).toMatchObject({ started: false });
     expect(check({ fields: { commandSlots: 2 }, host })).toMatchObject({ started: true });
     expect(check({ on: ["apps"], host })).toMatchObject({ started: false });
@@ -255,7 +275,7 @@ describe("a command worker that starts", () => {
     expect(remote.started ? remote.warnings : []).toEqual([
       expect.stringContaining("on another host, whose memory this process cannot read")
     ]);
-    expect(remote.started ? remote.warnings[0] : "").toContain("22.00 GiB");
+    expect(remote.started ? remote.warnings[0] : "").toContain("23.00 GiB");
     // A host that holds its sandboxes starts without a word.
     expect(check({ host: 64 * GIB })).toEqual({ started: true, warnings: [] });
   });

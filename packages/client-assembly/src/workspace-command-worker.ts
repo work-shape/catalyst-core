@@ -58,6 +58,7 @@ import {
   workflowsModule
 } from "@work-shape/catalyst-workflows";
 import { createPlatformStore } from "./store";
+import { TOOL_CODE_CALL_SLOTS, createToolCodeCallJobs } from "./tool-code-calls";
 
 export interface CreateClientInstanceWorkspaceCommandWorkerInput {
   config?: ClientInstanceConfig;
@@ -257,6 +258,21 @@ export async function createClientInstanceWorkspaceCommandWorker(
         }
       })
     : { handlers: [], schedules: [] };
+  // The handlers of code tools run in the same sandbox, with the limits of a code step. Tools
+  // belong to no module, so this worker always serves them.
+  const toolCodeJobs = createToolCodeCallJobs({
+    clientInstanceId,
+    stores: store,
+    sandbox: processExecutor,
+    tempRoot: env.WORKSPACE_COMMAND_TEMP_ROOT ?? tmpdir(),
+    slots: TOOL_CODE_CALL_SLOTS,
+    limits: {
+      cpuCount: codeSteps.cpuCount,
+      memoryBytes: codeSteps.memoryBytes,
+      pidsLimit: codeSteps.pidsLimit,
+      scratchBytes: codeSteps.scratchBytes
+    }
+  });
   const worker = createJobWorker({
     stores: store,
     clientInstanceId,
@@ -267,7 +283,8 @@ export async function createClientInstanceWorkspaceCommandWorker(
       ...sandboxCheck.handlers,
       ...pageBuildHandlers,
       ...assetRepoJobs.handlers,
-      ...codeStepJobs.handlers
+      ...codeStepJobs.handlers,
+      ...toolCodeJobs.handlers
     ],
     // The sweep of what a killed worker left of code steps is among them: it runs when this
     // worker starts and on its own timer, whether or not a code step ever runs again.
@@ -275,7 +292,8 @@ export async function createClientInstanceWorkspaceCommandWorker(
       ...commandJobs.schedules,
       ...sandboxCheck.schedules,
       ...assetRepoJobs.schedules,
-      ...codeStepJobs.schedules
+      ...codeStepJobs.schedules,
+      ...toolCodeJobs.schedules
     ]
   });
   let stopped: (() => void) | undefined;
