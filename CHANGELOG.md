@@ -7,6 +7,28 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.40 — 2026-11-19
+
+### Added
+
+- **Knowledge Bases:** a page view of a search hit reads a synced document's original from the
+  page cache, fetched through its source for the person on a miss and audited as
+  `knowledge_base.page_fetched`, as the cited page's chip opens it (KB-14). The description of
+  `knowledge.search` tells the model to look at a page with `view_document_page` where the page
+  itself matters.
+
+### Changed
+
+- **Chat:** the Knowledge Base sources under an answer stand in one row "Quellen", one chip per
+  document with its cited pages merged ("S. 7, 79"), side by side instead of one per line. The
+  chip names the file without its extension, with underscores as spaces, and shortens a long
+  name; a click opens the first cited page. Its menu names the file whole with its "Stand" or
+  "abgerufen" date, opens each cited page, and opens the original ("In Dropbox öffnen", else the
+  host), which was a second chip before. Past five documents the row shows four and "+n weitere".
+- **UI library:** `Chip` takes a `detail`, a muted text after the label that stays whole while
+  the label shortens, and a `trailing` action; `ChipAction` is the round icon button for it,
+  usable as the trigger of a menu.
+
 ## 0.8.0-rc.39 — 2026-11-19
 
 ### Added
