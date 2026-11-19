@@ -1,6 +1,6 @@
 // @rights-screen: included in the rights wording guard.
 import { KeyRound, Shield, Users } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Avatar,
   Badge,
@@ -18,14 +18,16 @@ import {
   ListRow,
   Page,
   PageHeader,
-  PageOutline,
+  PageLead,
   Section,
   SkeletonList
 } from "@work-shape/catalyst-ui";
 import { roleLabelKey } from "../../admin/access/role-model";
 import { verbLabel, type RightVerb } from "../../admin/access/right-words";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
+import { discoveredCandidates } from "./connection-approval-model";
 import { usePageShown } from "./asset-editor-shell";
+import { scrollToSection } from "./build-scroll";
 import {
   AssetPlaceLine,
   AssetPlaceRow,
@@ -64,7 +66,7 @@ import { ConnectionOperations, EditableOperations } from "./connection-operation
 import { PersonContextSection } from "./connection-person-context";
 import { RestToolsSection } from "./connection-rest-tools";
 import { ConnectionSignInSection } from "./connection-sign-in-section";
-import { ConnectionUsedBy, usedByCount } from "./connection-used-by";
+import { ConnectionUsedBy, usedByCount, usedByNames } from "./connection-used-by";
 import {
   AUTH_SCHEME_NONE,
   ConnectionStatus,
@@ -92,11 +94,22 @@ function settingsOf(config: Record<string, unknown>): [string, unknown][] {
     : [];
 }
 
+/** One part of the page under a heading of its own. */
+interface PageSection {
+  id: string;
+  label: string;
+  description?: string;
+  count?: number | undefined;
+  body: ReactNode;
+}
+
 /**
- * The page of one Connection: the header with whom the Connection belongs to, where it comes
- * from, its status with the test, its settings, its operations and the agents that carry
- * them. Of the credential it shows whether it is there. It reads the named members of the
- * definition only, so a reference to the credential in the revision is never on the page.
+ * The page of one Connection, for a person who does not set it up: one line of what it does,
+ * its sign-in (or its key and test) with the one action that fixes it, and what agents may do
+ * with it. Everything else is folded under Settings at its end: the name, how it reaches the
+ * service, the people, what uses it, where it is available and who may use it. Of the
+ * credential it shows whether it is there. It reads the named members of the definition only,
+ * so a reference to the credential in the revision is never on the page.
  *
  * With `editing` the reader changes a Connection made on the instance here: its settings, its
  * key and the tools it accepts. After each change the page waits a while for the discovery
@@ -177,13 +190,162 @@ export function ConnectionPage({
   const personContextHeader = personContextHeaderOf(config);
   // The mappings are admin data: only a reader who may change the Connection reads them.
   const personContext = source.mayTest(asset) ? source.personContext : undefined;
-  const sections: {
-    id: string;
-    label: string;
-    description: string;
-    count?: number;
-    body: ReactNode;
-  }[] = [
+  const mayChange = source.mayTest(asset);
+  const status = (
+    <>
+      {read.status === "loading" ? (
+        <SkeletonList rows={2} />
+      ) : read.status === "failed" ? (
+        <InlineError className="flex flex-wrap items-center justify-between gap-2">
+          <span>{read.message ?? t("connections.detailFailed")}</span>
+          <Button variant="outline" size="sm" onClick={read.retry}>
+            {t("tryAgain")}
+          </Button>
+        </InlineError>
+      ) : (
+        <ConnectionStatus
+          name={asset.name}
+          detail={read.detail}
+          needsCredential={textOf(config, "authScheme") !== AUTH_SCHEME_NONE}
+          runtime={runtime}
+          source={source}
+          mayTest={mayChange}
+          credentialEditor={
+            editing
+              ? (retest) => (
+                  <ConnectionSecretEditor
+                    name={asset.name}
+                    revision={asset.revision}
+                    secret={read.detail.secret}
+                    source={source}
+                    written={written}
+                    {...(retest ? { retest } : {})}
+                    removal={{ frame: editing, config, usedBy: read.detail }}
+                  />
+                )
+              : undefined
+          }
+        />
+      )}
+    </>
+  );
+  // The one state at the top: the sign-in of a Connection that signs in, else its key and test.
+  const signInBody = !detail?.oauth ? undefined : personal ? (
+    <PersonalSignInSection name={asset.name} title={title} />
+  ) : (
+    <ConnectionSignInSection
+      asset={asset}
+      detail={detail}
+      source={source}
+      mayWrite={mayChange}
+      {...(editing
+        ? {
+            writeOAuth: async (oauth: { clientId?: string; scopes?: string[] }) => {
+              const outcome = await editing.save(withOAuthSettings(config, oauth));
+              if (!outcome.ok || outcome.revision === undefined)
+                throw new Error("The sign-in settings were not saved");
+              written();
+              return outcome.revision;
+            }
+          }
+        : {})}
+      onSignedIn={written}
+    />
+  );
+  // The tools a server names and the Connection does not accept: beside what agents may do
+  // while there is one to accept or to wait for, else with the settings.
+  const discoveredOpen =
+    detail === undefined ||
+    waiting ||
+    signIn !== undefined ||
+    detail.operations.length === 0 ||
+    discoveredCandidates(detail.discovered).length > 0;
+  const discovered: PageSection[] =
+    editing && discovers && read.status !== "failed"
+      ? [
+          {
+            id: "discovered",
+            label: t("connections.discoveredTitle"),
+            description: t("connections.discoveredDescription"),
+            count: detail?.discovered.length,
+            body: (
+              <DiscoveredTools
+                name={asset.name}
+                asset={asset}
+                frame={editing}
+                detail={detail}
+                waiting={waiting}
+                {...(signIn === undefined
+                  ? {}
+                  : { signIn: { whose: signIn, section: SIGN_IN_SECTION_ID } })}
+                source={source}
+                written={written}
+                asked={asked}
+              />
+            )
+          }
+        ]
+      : [];
+  const typeTools = editing && offer ? typeToolsToApprove(offer, asset.config) : [];
+  // What agents may do with the Connection, and the way to more of it.
+  const main: PageSection[] =
+    read.status === "failed"
+      ? []
+      : [
+          {
+            id: "operations",
+            label: t("connectionPage.agentsMayTitle"),
+            count: detail?.operations.length,
+            body: detail ? (
+              editing ? (
+                <EditableOperations
+                  asset={asset}
+                  frame={editing}
+                  {...(offer === undefined ? {} : { exposures: offer.exposures })}
+                  operations={detail.operations}
+                  written={written}
+                />
+              ) : (
+                <ConnectionOperations operations={detail.operations} config={config} />
+              )
+            ) : (
+              <SkeletonList rows={3} />
+            )
+          },
+          ...(editing && config.connectorType === "http_api"
+            ? [
+                {
+                  id: "add-tools",
+                  label: t("connectionCreate.addHeading"),
+                  description: t("connectionCreate.addText"),
+                  body: (
+                    <RestToolsSection
+                      asset={asset}
+                      frame={editing}
+                      source={source}
+                      written={written}
+                    />
+                  )
+                }
+              ]
+            : editing && offer && typeTools.length > 0
+              ? [
+                  {
+                    id: "type-tools",
+                    label: t("connections.typeToolsTitle"),
+                    description: t("connections.typeToolsDescription"),
+                    count: typeTools.length,
+                    body: (
+                      <TypeTools asset={asset} frame={editing} offer={offer} written={written} />
+                    )
+                  }
+                ]
+              : discoveredOpen
+                ? discovered
+                : [])
+        ];
+  // What is set once and read seldom, folded under Settings.
+  const settings: PageSection[] = [
     ...(editing
       ? [
           {
@@ -194,108 +356,33 @@ export function ConnectionPage({
           }
         ]
       : []),
-    {
-      id: "status",
-      label: t("connections.statusTitle"),
-      description: t("connections.statusDescription"),
-      body: (
-        <>
-          {enabled ? null : (
-            <Banner tone="warning" data-connection-disabled="">
-              {t("connections.disabledNotice")}
-            </Banner>
-          )}
-          {read.status === "loading" ? (
-            <SkeletonList rows={2} />
-          ) : read.status === "failed" ? (
-            <InlineError className="flex flex-wrap items-center justify-between gap-2">
-              <span>{read.message ?? t("connections.detailFailed")}</span>
-              <Button variant="outline" size="sm" onClick={read.retry}>
-                {t("tryAgain")}
-              </Button>
-            </InlineError>
-          ) : (
-            <ConnectionStatus
-              name={asset.name}
-              detail={read.detail}
-              needsCredential={textOf(config, "authScheme") !== AUTH_SCHEME_NONE}
-              runtime={runtime}
-              source={source}
-              mayTest={source.mayTest(asset)}
-              credentialEditor={
-                editing
-                  ? (retest) => (
-                      <ConnectionSecretEditor
-                        name={asset.name}
-                        revision={asset.revision}
-                        secret={read.detail.secret}
-                        source={source}
-                        written={written}
-                        {...(retest ? { retest } : {})}
-                        removal={{ frame: editing, config, usedBy: read.detail }}
-                      />
-                    )
-                  : undefined
-              }
-            />
-          )}
-        </>
-      )
-    },
-    ...(detail?.oauth && personal
+    // The test of a Connection that signs in: its sign-in says first whether it works.
+    ...(signInBody
       ? [
           {
-            id: SIGN_IN_SECTION_ID,
-            label: t("connectionSignIn.sectionTitle"),
-            description: t("personalConnections.sectionDescription"),
-            body: <PersonalSignInSection name={asset.name} title={title} />
-          },
-          ...(showsPeople(config, source.mayTest(asset))
-            ? [
-                {
-                  id: "people",
-                  label: t("personalConnections.peopleTitle"),
-                  description: t("personalConnections.peopleDescription"),
-                  body: (
-                    <ConnectionPeopleSection
-                      name={asset.name}
-                      mayWrite
-                      adminConsentUrl={detail.oauth.adminConsentUrl}
-                    />
-                  )
-                }
-              ]
-            : [])
+            id: "status",
+            label: t("connections.statusTitle"),
+            description: t("connections.statusDescription"),
+            body: status
+          }
         ]
-      : detail?.oauth
-        ? [
-            {
-              id: SIGN_IN_SECTION_ID,
-              label: t("connectionSignIn.sectionTitle"),
-              description: t("connectionSignIn.sectionDescription"),
-              body: (
-                <ConnectionSignInSection
-                  asset={asset}
-                  detail={detail}
-                  source={source}
-                  mayWrite={source.mayTest(asset)}
-                  {...(editing
-                    ? {
-                        writeOAuth: async (oauth: { clientId?: string; scopes?: string[] }) => {
-                          const outcome = await editing.save(withOAuthSettings(config, oauth));
-                          if (!outcome.ok || outcome.revision === undefined)
-                            throw new Error("The sign-in settings were not saved");
-                          written();
-                          return outcome.revision;
-                        }
-                      }
-                    : {})}
-                  onSignedIn={written}
-                />
-              )
-            }
-          ]
-        : []),
+      : []),
+    ...(detail?.oauth && personal && showsPeople(config, mayChange)
+      ? [
+          {
+            id: "people",
+            label: t("personalConnections.peopleTitle"),
+            description: t("personalConnections.peopleDescription"),
+            body: (
+              <ConnectionPeopleSection
+                name={asset.name}
+                mayWrite
+                adminConsentUrl={detail.oauth.adminConsentUrl}
+              />
+            )
+          }
+        ]
+      : []),
     ...(detail?.testCredential
       ? [
           {
@@ -308,7 +395,7 @@ export function ConnectionPage({
                 revision={asset.revision}
                 testCredential={detail.testCredential}
                 source={source}
-                mayWrite={source.mayTest(asset)}
+                mayWrite={mayChange}
                 written={written}
               />
             )
@@ -317,8 +404,8 @@ export function ConnectionPage({
       : []),
     {
       id: "settings",
-      label: t("connections.settingsTitle"),
-      description: t("connections.settingsDescription"),
+      label: t("connectionPage.reachTitle"),
+      description: t("connectionPage.reachDescription"),
       body: (
         <>
           {signsIn ? <CredentialModeField value={credentialModeOf(config)} /> : null}
@@ -355,80 +442,9 @@ export function ConnectionPage({
     ...(read.status === "failed"
       ? []
       : [
-          {
-            id: "operations",
-            label: t("connections.operationsTitle"),
-            description: t("connections.operationsDescription"),
-            count: detail?.operations.length,
-            body: detail ? (
-              editing ? (
-                <EditableOperations
-                  asset={asset}
-                  frame={editing}
-                  {...(offer === undefined ? {} : { exposures: offer.exposures })}
-                  operations={detail.operations}
-                  written={written}
-                />
-              ) : (
-                <ConnectionOperations operations={detail.operations} config={config} />
-              )
-            ) : (
-              <SkeletonList rows={3} />
-            )
-          },
-          ...(editing && config.connectorType === "http_api"
-            ? [
-                {
-                  id: "add-tools",
-                  label: t("connectionCreate.addHeading"),
-                  description: t("connectionCreate.addText"),
-                  body: (
-                    <RestToolsSection
-                      asset={asset}
-                      frame={editing}
-                      source={source}
-                      written={written}
-                    />
-                  )
-                }
-              ]
-            : editing && offer && typeToolsToApprove(offer, asset.config).length > 0
-              ? [
-                  {
-                    id: "type-tools",
-                    label: t("connections.typeToolsTitle"),
-                    description: t("connections.typeToolsDescription"),
-                    count: typeToolsToApprove(offer, asset.config).length,
-                    body: (
-                      <TypeTools asset={asset} frame={editing} offer={offer} written={written} />
-                    )
-                  }
-                ]
-              : editing && discovers
-                ? [
-                    {
-                      id: "discovered",
-                      label: t("connections.discoveredTitle"),
-                      description: t("connections.discoveredDescription"),
-                      count: detail?.discovered.length,
-                      body: (
-                        <DiscoveredTools
-                          name={asset.name}
-                          asset={asset}
-                          frame={editing}
-                          detail={detail}
-                          waiting={waiting}
-                          {...(signIn === undefined
-                            ? {}
-                            : { signIn: { whose: signIn, section: SIGN_IN_SECTION_ID } })}
-                          source={source}
-                          written={written}
-                          asked={asked}
-                        />
-                      )
-                    }
-                  ]
-                : []),
+          ...(discoveredOpen || config.connectorType === "http_api" || typeTools.length > 0
+            ? []
+            : discovered),
           {
             id: "agents",
             label: t("connections.agentsTitle"),
@@ -463,6 +479,28 @@ export function ConnectionPage({
           }
         ])
   ];
+  const users = detail ? usedByNames(detail, t) : [];
+  const section = ({ id, label, description, count, body }: PageSection) => (
+    <Section
+      key={id}
+      id={id}
+      layout="stacked"
+      title={label}
+      description={description}
+      count={count}
+    >
+      {body}
+    </Section>
+  );
+  // A link of the page to a folded section unfolds Settings first, then shows the section.
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [reveal, setReveal] = useState<string>();
+  useEffect(() => {
+    if (reveal === undefined) return;
+    scrollToSection(contentRef.current, reveal);
+    setReveal(undefined);
+  }, [reveal]);
 
   return (
     <Page
@@ -473,7 +511,6 @@ export function ConnectionPage({
           variant="detail"
           back={back}
           title={title}
-          description={textOf(config, "description")}
           state={
             // An enabled Connection is as good as its last test or call, as its status says;
             // until its detail is read, the head claims nothing about it.
@@ -481,7 +518,9 @@ export function ConnectionPage({
               <Badge tone="neutral" dot>
                 {t("connections.disabled")}
               </Badge>
-            ) : headHealth ? (
+            ) : // A Connection that signs in says how it is by its sign-in, first on the page: the
+            // head does not say beside it that nobody has tested it.
+            headHealth && !(signInBody && headHealth === "never_tested") ? (
               <Badge
                 tone={HEALTH_VIEWS[headHealth].tone}
                 dot
@@ -494,23 +533,37 @@ export function ConnectionPage({
           {...actions}
         />
       }
-      outline={
-        <PageOutline
-          belowHeader
-          items={sections.map(({ id, label, count }) => ({ id, label, count }))}
-        />
-      }
     >
       {page.above}
-      {/* The first line of the content starts where the outline does. */}
-      <div className="grid min-w-0 content-start pt-5">
-        <AssetPlaceRow>
-          <AssetPlaceLine
-            owner={asset.scope}
-            audience={audience?.text}
-            {...(audience?.nowhere && availability ? { audienceTo: AVAILABILITY_SECTION_ID } : {})}
-          />
-        </AssetPlaceRow>
+      <div ref={contentRef} className="grid min-w-0 content-start pt-5">
+        {/* The content column has the page's gutter already. */}
+        <PageLead className="px-0 pt-0 pb-3" data-asset-lead="">
+          {t("connectionPage.lead", { service: title })}
+        </PageLead>
+        <div
+          // The chip that says no agent can use it leads to "Available in", under Settings.
+          onClickCapture={(event) => {
+            if (
+              event.target instanceof Element &&
+              event.target.closest(`a[href="#${AVAILABILITY_SECTION_ID}"]`)
+            ) {
+              event.preventDefault();
+              event.stopPropagation();
+              setSettingsOpen(true);
+              setReveal(AVAILABILITY_SECTION_ID);
+            }
+          }}
+        >
+          <AssetPlaceRow>
+            <AssetPlaceLine
+              owner={asset.scope}
+              audience={audience?.text}
+              {...(audience?.nowhere && availability
+                ? { audienceTo: AVAILABILITY_SECTION_ID }
+                : {})}
+            />
+          </AssetPlaceRow>
+        </div>
         {notice ? <div className="mb-4 grid gap-2">{notice}</div> : null}
         {config.origin === "release" ? (
           <Banner layout="line" className="mb-4" data-build-read-only="">
@@ -522,18 +575,45 @@ export function ConnectionPage({
             <ConnectionCatalogueUpdate update={update} frame={editing} written={written} />
           </div>
         ) : null}
-        {sections.map((section) => (
-          <Section
-            key={section.id}
-            id={section.id}
-            layout="stacked"
-            title={section.label}
-            description={section.description}
-            count={section.count}
-          >
-            {section.body}
-          </Section>
-        ))}
+        {/* Spaced as a section is, with the hairline to the next one. */}
+        <div
+          id={signInBody ? SIGN_IN_SECTION_ID : "status"}
+          className="grid min-w-0 gap-4 border-b pt-2 pb-6"
+          data-connection-state=""
+        >
+          {enabled ? null : (
+            <Banner tone="warning" data-connection-disabled="">
+              {t("connections.disabledNotice")}
+            </Banner>
+          )}
+          {signInBody ?? status}
+        </div>
+        {main.map(section)}
+        {users.length === 0 ? null : (
+          <p className="pb-6 text-body text-muted-foreground" data-connection-used-by-line="">
+            {t("connectionPage.usedByLine", {
+              names: new Intl.ListFormat(locale, { type: "conjunction" }).format(users)
+            })}
+          </p>
+        )}
+        <Disclosure
+          variant="row"
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          data-asset-settings=""
+        >
+          <DisclosureTrigger data-asset-settings-trigger="">
+            <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+              <span className="text-title-sm text-foreground">
+                {t("connectionPage.settingsTitle")}
+              </span>
+              <span className="text-caption">{t("connectionPage.settingsHint")}</span>
+            </span>
+          </DisclosureTrigger>
+          {/* Kept in the page while folded: what it reads is read once, and a section in it is
+              found by its id. */}
+          <DisclosureContent keepMounted>{settings.map(section)}</DisclosureContent>
+        </Disclosure>
       </div>
     </Page>
   );
@@ -551,8 +631,10 @@ const SETTING_LABELS = new Map<string, TranslationKey>([
 ]);
 
 /**
- * What the definition says of how the Connection reaches its system, in words. The ids of its
- * type and its authentication stand under Technical details. No setting is a credential.
+ * What the definition says of how the Connection reaches its system, in words: its type, how
+ * it signs in, and each setting that has a name in words and one line of text. A setting
+ * without such a name, a value that is a structure, and the ids of the type and the
+ * authentication stand under Technical details. No setting is a credential.
  */
 function ConnectionSettings({
   config,
@@ -569,6 +651,10 @@ function ConnectionSettings({
   const description = withDescription ? textOf(config, "description") : undefined;
   const connectorType = textOf(config, "connectorType") ?? "";
   const authScheme = textOf(config, "authScheme") ?? "";
+  const settings = settingsOf(config);
+  const inWords = (entry: [string, unknown]): entry is [string, string] =>
+    SETTING_LABELS.has(entry[0]) && typeof entry[1] === "string";
+  const technical = settings.filter((entry) => !inWords(entry));
   return (
     <div className="grid min-w-0 gap-3">
       <KeyValueList>
@@ -581,16 +667,11 @@ function ConnectionSettings({
             {description}
           </KeyValue>
         ) : null}
-        {settingsOf(config).map(([key, value]) => {
+        {settings.filter(inWords).map(([key, value]) => {
           const label = SETTING_LABELS.get(key);
           return (
-            <KeyValue
-              key={key}
-              label={label === undefined ? <code className="font-mono">{key}</code> : t(label)}
-            >
-              <code className="font-mono text-code">
-                {typeof value === "string" ? value : JSON.stringify(value)}
-              </code>
+            <KeyValue key={key} label={label === undefined ? key : t(label)}>
+              <span className="break-all">{value}</span>
             </KeyValue>
           );
         })}
@@ -604,6 +685,19 @@ function ConnectionSettings({
                 <code className="font-mono text-code">{value}</code>
               </KeyValue>
             ))}
+            {technical.map(([key, value]) => {
+              const label = SETTING_LABELS.get(key);
+              return (
+                <KeyValue
+                  key={key}
+                  label={label === undefined ? <code className="font-mono">{key}</code> : t(label)}
+                >
+                  <code className="font-mono text-code break-all">
+                    {typeof value === "string" ? value : JSON.stringify(value)}
+                  </code>
+                </KeyValue>
+              );
+            })}
           </KeyValueList>
         </DisclosureContent>
       </Disclosure>

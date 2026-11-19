@@ -68,7 +68,16 @@ export const connectionPage = defineTranslations({
     "connectionPage.kindAgent": "Agent",
     "connectionPage.kindApp": "App",
     "connectionPage.kindWorkflow": "Workflow",
-    "connectionPage.kindKnowledgeBase": "Knowledge base"
+    "connectionPage.kindKnowledgeBase": "Knowledge base",
+    "connectionPage.lead": "Connects your agents to {service}.",
+    "connectionPage.agentsMayTitle": "What agents may do with it",
+    "connectionPage.usedByLine": "Used by {names}.",
+    "connectionPage.operationMore": "Details",
+    "connectionPage.settingsTitle": "Settings",
+    "connectionPage.settingsHint": "Name, access, availability and more",
+    "connectionPage.reachTitle": "Address and access",
+    "connectionPage.reachDescription":
+      "How the connection reaches the service. No key is shown here."
   },
   de: {
     "connectionPage.request": "Anfrage",
@@ -135,6 +144,15 @@ export const connectionPage = defineTranslations({
     "connectionPage.kindAgent": "Agent",
     "connectionPage.kindApp": "App",
     "connectionPage.kindWorkflow": "Workflow",
-    "connectionPage.kindKnowledgeBase": "Wissensbasis"
+    "connectionPage.kindKnowledgeBase": "Wissensbasis",
+    "connectionPage.lead": "Verbindet deine Agenten mit {service}.",
+    "connectionPage.agentsMayTitle": "Was Agenten damit dürfen",
+    "connectionPage.usedByLine": "Genutzt von {names}.",
+    "connectionPage.operationMore": "Details",
+    "connectionPage.settingsTitle": "Einstellungen",
+    "connectionPage.settingsHint": "Name, Zugang, Verfügbarkeit und mehr",
+    "connectionPage.reachTitle": "Adresse und Zugang",
+    "connectionPage.reachDescription":
+      "Wie die Verbindung den Dienst erreicht. Ein Schlüssel wird hier nie gezeigt."
   }
 });

@@ -263,7 +263,7 @@ export const connections = defineTranslations({
     "connections.operationsTitle": "Operations",
     "connections.operationsDescription":
       "What this connection can do in the outside system, and who may call it.",
-    "connections.operationsEmpty": "This connection has no accepted operation.",
+    "connections.operationsEmpty": "Agents may not do anything with this connection yet.",
     "connections.search": "Search connections",
     "connections.settingsTitle": "Settings",
     "connections.settingsDescription":
@@ -603,7 +603,7 @@ export const connections = defineTranslations({
     "connections.operationsTitle": "Operationen",
     "connections.operationsDescription":
       "Was diese Verbindung im externen System tun kann und wer es aufrufen darf.",
-    "connections.operationsEmpty": "Diese Verbindung hat keine akzeptierte Operation.",
+    "connections.operationsEmpty": "Agenten dürfen mit dieser Verbindung noch nichts tun.",
     "connections.search": "Verbindungen durchsuchen",
     "connections.settingsTitle": "Einstellungen",
     "connections.settingsDescription":

@@ -8,6 +8,7 @@ import { availableSamplePort } from "./sample-port.mjs";
 import { sendToolCall } from "./page-surface-fixtures";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
+import { openOwnConnection } from "./connection-page";
 import { requestAnswered } from "./allowed-page-errors";
 const PROPOSE_TEST =
   "de: the agent proposes an MCP server, the dialog opens beside the chat, and the chat hears it is connected";
@@ -140,15 +141,17 @@ async function openDialog(page: Page, locale: Locale) {
   // The title of the dialog follows its step; its first step is "New connection".
   await expect(page.getByRole("dialog", { name: WORDS[locale].newConnection })).toBeVisible();
   const dialog = page.getByRole("dialog").first();
-  // An MCP server, a REST API and the types with a form of their own: the mailbox, the suite's
-  // folder source and web pages. No person's own MCP server: that is no Connection to make here.
+  // The types with a form of their own first: the mailbox, the suite's folder source and web
+  // pages. An MCP server and a REST API wait folded under "Your own connection". No person's own
+  // MCP server: that is no Connection to make here.
   const types = dialog.locator("[data-connection-type]");
   await expect(types).toHaveCount(5);
   expect(
     await types.evaluateAll((cards) =>
       cards.map((card) => card.getAttribute("data-connection-type"))
     )
-  ).toEqual(["mcp", "http_api", "imap", "test_folders", "web"]);
+  ).toEqual(["imap", "test_folders", "web", "mcp", "http_api"]);
+  await expect(dialog.locator('[data-connection-type="mcp"]')).toBeHidden();
   return { main, dialog };
 }
 /** The writes the browser sends about one Connection, in their order. */
@@ -183,6 +186,7 @@ async function removeConnection(page: Page, id: string): Promise<void> {
     const { main, dialog } = await openDialog(page, locale);
     try {
       await shoot(page, locale, "pick");
+      await openOwnConnection(dialog);
       await dialog.locator('[data-connection-type="mcp"]').getByRole("button").click();
       const field = (name: string) => dialog.locator(`[data-connection-field="${name}"]`);
       const connect = dialog.locator("[data-connection-connect]");
@@ -281,6 +285,7 @@ async function removeConnection(page: Page, id: string): Promise<void> {
     const writes = recordWrites(page, id);
     const { main, dialog } = await openDialog(page, locale);
     try {
+      await openOwnConnection(dialog);
       await dialog.locator('[data-connection-type="http_api"]').getByRole("button").click();
       const field = (name: string) => dialog.locator(`[data-connection-field="${name}"]`);
       await dialog.locator('[data-name-with-address-field="name"]').fill("Exampledata");

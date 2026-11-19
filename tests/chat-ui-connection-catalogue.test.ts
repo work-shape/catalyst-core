@@ -230,12 +230,23 @@ describe("New connection and the install of an entry", () => {
     expect(markup).toContain('data-connection-type="mcp"');
     expect(markup).toContain('data-connection-type="http_api"');
     expect(markup).toContain('data-connection-type="folder_store"');
+    // A type with a name comes first; what a developer sets up waits folded under one line.
+    expect(markup.indexOf('data-connection-type="folder_store"')).toBeLessThan(
+      markup.indexOf("data-connection-own-trigger")
+    );
+    expect(markup.indexOf("data-connection-own-trigger")).toBeLessThan(
+      markup.indexOf('data-connection-type="mcp"')
+    );
+    expect(markup).toContain("Eigene Verbindung (für Entwickler)");
+    expect(markup).toMatch(/aria-expanded="false"[^>]*data-connection-own-trigger/u);
     // Named, the entry's card on the page stands in for the card of the type it installs through.
     const named = dialog({
       ...source,
       useCatalogueEntries: () => [{ ...files, offered: true }, ledger]
     });
     expect(named).not.toContain('data-connection-type="folder_store"');
+    // With nothing else to offer, an MCP server and a REST API stand open.
+    expect(named).toMatch(/aria-expanded="true"[^>]*data-connection-own-trigger/u);
   });
 
   it("opens at the install of the entry a service's card names, with no way back to a list", () => {

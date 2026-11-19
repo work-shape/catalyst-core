@@ -245,6 +245,40 @@ describe("Connection page", () => {
     expect(markup).not.toContain("data-connection-disabled");
   });
 
+  it("leads with what it does, then its state and what agents may do, and folds the rest under Settings", () => {
+    const markup = renderPage({ asset: connectionAsset("ledger", { origin: "runtime" }) });
+    const german = renderPage({
+      asset: connectionAsset("ledger", { origin: "runtime" }),
+      locale: "de"
+    });
+    expect(markup).toContain("Connects your agents to Sample business.");
+    expect(german).toContain("Verbindet deine Agenten mit Sample business.");
+    expect(german).toContain(">Was Agenten damit dürfen<");
+    expect(german).toContain("Name, Zugang, Verfügbarkeit und mehr");
+    // No outline: the page is its state, what agents may do, and one folded line.
+    expect(markup).not.toContain("On this page");
+    const at = (marker: string) => {
+      const index = markup.indexOf(marker);
+      expect(index, marker).toBeGreaterThan(-1);
+      return index;
+    };
+    const fold = at("data-asset-settings-trigger");
+    expect(at("data-asset-lead")).toBeLessThan(at("data-connection-health"));
+    expect(at("data-connection-health")).toBeLessThan(at('id="operations"'));
+    expect(at('id="operations"')).toBeLessThan(fold);
+    for (const folded of ['id="about"', 'id="settings"', 'id="agents"']) {
+      expect(at(folded), folded).toBeGreaterThan(fold);
+    }
+    // What an operation calls and takes, and the way to take it off, wait under its Details.
+    const row = markup.slice(at('data-connection-operation="revenue_by_month"'));
+    expect(row.indexOf("data-connection-enabled")).toBeLessThan(
+      row.indexOf("data-connection-operation-more")
+    );
+    expect(row.indexOf("data-connection-remove")).toBeGreaterThan(
+      row.indexOf("data-connection-operation-more")
+    );
+  });
+
   it("says beside its place where agents may use a Connection of everyone (SCOPE-WORDS)", () => {
     const offered = renderPage({
       asset: {
@@ -279,8 +313,8 @@ describe("Connection page", () => {
     expect(markup).toContain("data-connection-technical");
     expect(markup).toContain(">Server address<");
     expect(markup).toContain("https://sample-business.example.test/mcp");
-    expect(markup).toContain(">timeoutSeconds<");
-    expect(markup).toContain(">20<");
+    // A setting without a name in words waits under Technical details, with its key.
+    expect(markup).not.toContain(">timeoutSeconds<");
     expect(markup).toContain("Revenue, customers and orders of the sample business.");
     expect(markup).toContain('data-connection-credential="set"');
     expect(markup).toContain("Set, version 2");
@@ -664,7 +698,15 @@ describe("Connection page", () => {
       locale: "de"
     });
     expect(unsigned).toContain("data-connection-sign-in");
-    expect(unsigned).toContain(">Anmeldung<");
+    // The sign-in is the first thing under the lead line, and needs no heading there.
+    expect(unsigned).not.toContain(">Anmeldung<");
+    expect(unsigned.indexOf("data-connection-sign-in")).toBeLessThan(
+      unsigned.indexOf('id="operations"')
+    );
+    // Its test waits under Settings, with everything else that is set once.
+    expect(unsigned.indexOf("data-connection-health")).toBeGreaterThan(
+      unsigned.indexOf("data-asset-settings-trigger")
+    );
     expect(unsigned).toContain('data-sign-in-state="none"');
     expect(unsigned).toContain(">Nicht angemeldet<");
     // The recorded state names the missing sign-in, not a missing key.
@@ -749,7 +791,8 @@ describe("Connection page", () => {
     expect(row("revenue_by_month")).toContain("Reading");
     expect(row("revenue_by_month")).toContain("Callable by");
     expect(row("revenue_by_month")).toContain(">Agents<");
-    expect(row("revenue_by_month")).toContain("Ready");
+    // A row that is ready says nothing of it: only what is not ready is named.
+    expect(row("revenue_by_month")).not.toContain("Ready");
 
     for (const caller of [">Agents<", ">Apps<", ">Workflows<", ">Outside clients<"]) {
       expect(row("list_customers"), caller).toContain(caller);
@@ -772,11 +815,11 @@ describe("Connection page", () => {
     expect(row("delete_order")).toContain("Switched off in the system setup.");
 
     const german = renderPage({ locale: "de" });
-    for (const text of ["Lesend", "Ändernd", "Aufrufbar durch", "Prüfung nötig", "Bereit"]) {
+    for (const text of ["Lesend", "Ändernd", "Aufrufbar durch", "Prüfung nötig"]) {
       expect(german, text).toContain(text);
     }
     expect(renderPage({ detail: { operations: [] } })).toContain(
-      "This connection has no accepted operation."
+      "Agents may not do anything with this connection yet."
     );
   });
 
@@ -869,7 +912,7 @@ describe("Connection page", () => {
     // What was not read is not shown as empty: no health, no test, no operations.
     expect(healthOf(failed)).toBeUndefined();
     expect(failed).not.toContain("Test connection");
-    expect(failed).not.toContain("This connection has no accepted operation.");
+    expect(failed).not.toContain("Agents may not do anything with this connection yet.");
     expect(
       renderPage({
         detailRead: { status: "failed", message: "The instance is busy.", retry: noop }

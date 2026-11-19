@@ -7,6 +7,7 @@ import type { BrowserContext, Locator, Page } from "@playwright/test";
 import { availableSamplePort } from "./sample-port.mjs";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
+import { openOwnConnection } from "./connection-page";
 import { toolRow } from "./tool-packages";
 import { requestAnswered } from "./allowed-page-errors";
 // The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
@@ -173,6 +174,7 @@ async function connectWithoutKey(page: Page, locale: Locale, id: string, path: s
   const main = page.getByRole("region", { name: "Studio" });
   await main.getByRole("button", { name: WORDS[locale].newConnection }).first().click();
   const dialog = page.getByRole("dialog").first();
+  await openOwnConnection(dialog);
   await dialog.locator('[data-connection-type="mcp"]').getByRole("button").click();
   await dialog.locator('[data-name-with-address-field="name"]').fill("Sample sign-in");
   await dialog.locator("[data-name-with-address-fold]").click();
@@ -241,7 +243,7 @@ test("en: an MCP server that asks for a sign-in is signed in from the dialog, an
     await expect(section.locator("[data-sign-in-shared]")).toBeVisible();
     await expect(section.locator("[data-sign-in-begin]")).toHaveText("Sign in again");
     await expect(section.locator("[data-sign-in-granted]")).toHaveCount(0);
-    await main.locator("#status").scrollIntoViewIfNeeded();
+    await main.locator("#sign-in").scrollIntoViewIfNeeded();
     await shoot(page, "en", "page-connected");
     await section.getByRole("button", { name: "Technical details" }).click();
     await expect(section.locator("[data-sign-in-granted]")).toContainText("sample.read");

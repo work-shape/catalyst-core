@@ -12,6 +12,7 @@ import {
   requestWithOrigin
 } from "./request-with-origin";
 import { expect, test } from "./test";
+import { openConnectionSettings } from "./connection-page";
 
 // The Connection Catalogue on the Connections page: the demo's OAuth entry, installed and approved.
 // The install of the API-key entry is covered by tests/connection-catalogue.test.ts and
@@ -286,6 +287,7 @@ test.describe("an OAuth entry", () => {
       await done.locator("[data-connection-give-done]").click();
       await expect(page).toHaveURL(new RegExp(`/build/connections/${OAUTH_ENTRY}$`, "u"));
       // The page has read its people before the cleanup deletes the Connection under it.
+      await openConnectionSettings(page);
       await expect(page.locator("[data-connection-people]")).toBeVisible();
     } finally {
       const found = await page.request.get(agentPath(agent));

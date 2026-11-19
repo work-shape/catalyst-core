@@ -90,7 +90,8 @@ describe("The tools of a REST API approved on its page", () => {
     expect(operations.map((operation) => operation.name)).toEqual(["list_clients", "list_months"]);
     // The page reads its Connection again every 2 s while it waits: the count is there before.
     await vi.waitFor(
-      () => expect(section()?.textContent ?? "").toMatch(/^Operations2.*List months/u),
+      () =>
+        expect(section()?.textContent ?? "").toMatch(/^What agents may do with it2.*List months/u),
       { timeout: 1000, interval: 50 }
     );
   });
