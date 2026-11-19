@@ -173,16 +173,53 @@ function knowledgePlaces(
 }
 
 /**
- * A file's name as the chip reads it: without its extension, its underscores as spaces. The
- * menu names it whole. A hyphen stays, as in a date it is no gap between words.
+ * A file's name as the reader knows it: without its extension, its underscores as spaces. A
+ * hyphen stays, as in a date it is no gap between words.
  */
-function shortFileName(fileName: string): string {
+function readableFileName(fileName: string): string {
   const name = fileName
     .replace(/\.[a-z0-9]{2,5}$/iu, "")
     .replace(/_+/gu, " ")
     .replace(/\s+/gu, " ")
     .trim();
   return name || fileName;
+}
+
+/** The start and the end of a long name the chip keeps, in characters. */
+const NAME_HEAD = 12;
+const NAME_TAIL = 24;
+/** How far the start and the end reach on to keep a word whole. */
+const NAME_WORD_REACH = 8;
+
+/**
+ * A long name shortened in its middle: files of one project often share a long start, and the
+ * end tells them apart ("… Geschossplan 1-OG 2025-10-14"). The start and the end keep a word
+ * whole where it ends or starts close by. A name that fits stays whole.
+ */
+function shortFileName(name: string): string {
+  const characters = [...name];
+  let headEnd = NAME_HEAD;
+  let tailStart = characters.length - NAME_TAIL;
+  if (tailStart - headEnd <= 3) return name;
+  const space = (index: number) => characters[index] === " ";
+  // The start runs on to the end of its word, or stops at the space before it.
+  const wordEnd = characters.findIndex((_, index) => index >= headEnd && space(index));
+  if (wordEnd !== -1 && wordEnd - headEnd <= NAME_WORD_REACH) headEnd = wordEnd;
+  else {
+    const before = characters.slice(0, headEnd).lastIndexOf(" ");
+    if (before > 0) headEnd = before;
+  }
+  // The end reaches back to the start of its word, or starts at the next word.
+  const wordStart = characters.slice(0, tailStart).lastIndexOf(" ") + 1;
+  if (wordStart > 0 && tailStart - wordStart <= NAME_WORD_REACH) tailStart = wordStart;
+  else if (!space(tailStart - 1)) {
+    const next = characters.findIndex((_, index) => index >= tailStart && space(index));
+    if (next !== -1 && next < characters.length - 1) tailStart = next + 1;
+  }
+  if (tailStart - headEnd <= 3) return name;
+  const head = characters.slice(0, headEnd).join("").trimEnd();
+  const tail = characters.slice(tailStart).join("").trimStart();
+  return `${head} … ${tail}`;
 }
 
 /** The file stores whose name the reader knows better than their address. */
@@ -230,7 +267,8 @@ function KnowledgeDocumentChip({
   const places = knowledgePlaces(t, document.fileName, document.places);
   const asOf = knowledgeCitationDate(t, locale, document);
   const origin = safeOriginLink(document.originLink);
-  const name = shortFileName(document.fileName);
+  const readable = readableFileName(document.fileName);
+  const name = shortFileName(readable);
   const stateWords =
     state === "removed"
       ? t("knowledge.citationRemoved")
@@ -349,7 +387,15 @@ function KnowledgeDocumentChip({
           </DropdownMenu>
         }
       >
-        {name}
+        {name === readable ? (
+          name
+        ) : (
+          // A screen reader reads the name whole, not its shortened form.
+          <>
+            <span aria-hidden="true">{name}</span>
+            <span className="sr-only">{readable}</span>
+          </>
+        )}
       </Chip>
     </span>
   );
@@ -418,7 +464,7 @@ export function KnowledgeSources({
       {shown.map((document) => (
         <KnowledgeDocumentChip
           key={`${document.knowledgeBase}/${document.documentId}`}
-          className="max-w-72"
+          className="max-w-[min(100%,22rem)]"
           document={document}
           {...(conversationId ? { conversationId } : {})}
         />
