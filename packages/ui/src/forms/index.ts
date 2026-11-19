@@ -38,6 +38,12 @@ export {
 export { RenameField, type RenameFieldProps, type RenameFieldSize } from "./rename-field";
 export { SaveBar, type SaveBarMode, type SaveBarWhenClean, type SaveBarProps } from "./save-bar";
 export { Select, type SelectProps } from "./select";
+export {
+  SettingsList,
+  SettingsRow,
+  type SettingsListProps,
+  type SettingsRowProps
+} from "./settings-row";
 export { Switch, type SwitchProps } from "./switch";
 export {
   SourcedValueField,
