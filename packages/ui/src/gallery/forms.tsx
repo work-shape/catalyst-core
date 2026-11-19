@@ -14,6 +14,7 @@ import { RadioGroup } from "../forms/radio-group";
 import { RenameField } from "../forms/rename-field";
 import { SaveBar } from "../forms/save-bar";
 import { Select } from "../forms/select";
+import { SettingsList, SettingsRow } from "../forms/settings-row";
 import { Switch } from "../forms/switch";
 import { Page } from "../structure/page";
 import { versionedTextEntry } from "./draft";
@@ -448,6 +449,26 @@ export const formsGallery: GalleryGroup = {
       name: "Field",
       components: ["Field"],
       render: (text) => <FieldSamples text={text} />
+    },
+    {
+      name: "SettingsRow",
+      components: ["SettingsList", "SettingsRow"],
+      render: (text) => (
+        <SettingsList aria-label={text.liveChanges} className="w-full max-w-lg">
+          <SettingsRow label={text.liveChanges} description={text.liveChangesHint}>
+            <Switch defaultChecked />
+          </SettingsRow>
+          <SettingsRow label={text.notifyByEmail} description={text.notifyByEmailHint}>
+            <Switch />
+          </SettingsRow>
+          <SettingsRow label={text.role}>
+            <Select className="w-48">
+              <option>{text.roleMember}</option>
+              <option>{text.roleAdmin}</option>
+            </Select>
+          </SettingsRow>
+        </SettingsList>
+      )
     },
     {
       name: "ProposedValue",

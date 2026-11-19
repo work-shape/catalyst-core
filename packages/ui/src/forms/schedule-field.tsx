@@ -17,6 +17,8 @@ export type ScheduleValue =
 
 export interface ScheduleFieldProps {
   label: string;
+  /** Keeps the label for assistive technology only, where what stands around the field says it. */
+  labelHidden?: boolean;
   value: ScheduleValue;
   onChange(value: ScheduleValue): void;
   error?: ReactNode;
@@ -85,6 +87,7 @@ function zoneIds(): readonly string[] {
 /** A schedule in words, with product-owned values. Parsing and cron belong to the caller. */
 export function ScheduleField({
   label,
+  labelHidden = false,
   value,
   onChange,
   error,
@@ -128,7 +131,7 @@ export function ScheduleField({
       aria-invalid={error ? true : undefined}
       aria-describedby={error ? errorId : undefined}
     >
-      <legend className="mb-2 text-label">{label}</legend>
+      <legend className={labelHidden ? "sr-only" : "mb-2 text-label"}>{label}</legend>
       <Field label={labels.scheduleFrequency}>
         <Select
           value={value.kind}
