@@ -225,6 +225,19 @@ export async function simulateRun(
   policy: PolicyResolution
 ): Promise<OperationEnding> {
   const { run, definition, call, now } = context;
+  // An operation that cannot be called now is not simulated: a simulation would answer as if
+  // the live call could succeed. The call fails as the live one would, and nothing ran.
+  if (definition.available === false) {
+    return failRun(
+      context,
+      new AppError(
+        "CONFLICT",
+        `'${definition.name}' cannot be called now, so its call was not simulated either`,
+        { reason: "operation_unavailable" }
+      ),
+      true
+    );
+  }
   const wouldAsk: "confirmation" | "approval" | undefined =
     policy.next === "await_confirmation"
       ? "confirmation"

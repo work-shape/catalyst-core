@@ -9,6 +9,7 @@ import {
   WORKFLOW_ASSET_KIND,
   type AuthenticatedIdentity,
   type OperationDraftContext,
+  type OperationRegistry,
   type ServicePrincipalRecord,
   type UserRecord
 } from "@work-shape/catalyst-core";
@@ -59,6 +60,8 @@ interface DraftCall {
   /** A call of what is live, which carries no draft context. */
   live?: true;
   preview?: true;
+  /** The registry the call is resolved in, where it is not the instance's own. */
+  registry?: OperationRegistry;
 }
 
 describe("a call made by a draft", () => {
@@ -169,8 +172,29 @@ describe("a call made by a draft", () => {
               }
             })
       },
-      t.operationCalls.deps
+      call.registry ? { ...t.operationCalls.deps, registry: call.registry } : t.operationCalls.deps
     );
+  }
+
+  /** The instance's registry, with `connection.crm.write` resolved as not callable now. */
+  function withWriteUnavailable(registry: OperationRegistry): OperationRegistry {
+    const NAME = "connection.crm.write";
+    return {
+      register: (definition) => registry.register(definition),
+      addSource: (source) => registry.addSource(source),
+      resolve: async (name, stores) => {
+        const definition = await registry.resolve(name, stores);
+        return definition && name === NAME ? { ...definition, available: false } : definition;
+      },
+      resolveMany: async (names, stores) => {
+        const found = await registry.resolveMany(names, stores);
+        const definition = found.get(NAME);
+        if (definition) found.set(NAME, { ...definition, available: false });
+        return found;
+      },
+      list: (scope) => registry.list(scope),
+      releaseNames: () => registry.releaseNames()
+    };
   }
 
   const switchOn = (t: WorkflowFixture, expectedRevision: number, userId = t.kai.id) =>
@@ -310,6 +334,22 @@ describe("a call made by a draft", () => {
     expect(
       audit.filter((event) => event.metadata?.operationRunId === run.id).map(({ type }) => type)
     ).toContain("operation.simulated");
+  });
+
+  it("refuses a changing call it cannot make now instead of simulating it", async () => {
+    const t = await ready();
+    const registry = withWriteUnavailable(t.operationCalls.deps.registry);
+    const { result, run } = await stepCall(t, { registry });
+    expect(result).toMatchObject({
+      status: "failed",
+      error: { code: "CONFLICT", details: { reason: "operation_unavailable" } }
+    });
+    expect(t.executed).toEqual([]);
+    expect(run).toMatchObject({ status: "failed" });
+    const audit = await t.stores.audit.listAuditEvents({ clientInstanceId, limit: 200 });
+    expect(
+      audit.filter((event) => event.metadata?.operationRunId === run.id).map(({ type }) => type)
+    ).not.toContain("operation.simulated");
   });
 
   it("resolves the policy of a simulated call as for the live call", async () => {
