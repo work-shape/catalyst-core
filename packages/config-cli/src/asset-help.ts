@@ -65,6 +65,12 @@ A tool is one YAML file of type result: an input schema the agent's input must m
 result kind the panel draws it with. 'catalyst tool put <name> --from <name>.tool.yaml
 --if-revision new' writes its draft, 'catalyst tool publish <name> --revision <n>' makes it
 callable, and an agent lists it as tool.<name>.call. It runs no code.
+A code tool is a folder: tool.yaml (name, title, summary, icon, connections, timeout) beside
+main.py with one @tool function or index.ts that exports one defineTool. 'catalyst tool run
+<folder> [--input <json>]' runs its handler on this computer, its Connection calls made on the
+instance with your key as a draft's: to the test credential, simulated where a change has none.
+'catalyst tool put <folder> [--if-revision <n|new>]' reads its schema and description from the
+handler, bundles TypeScript into one module and writes the next draft.
 Exit codes: 0 done, 1 refused or failed, 2 usage, 3 waits for an approval (nothing changed yet).
 `;
 }
