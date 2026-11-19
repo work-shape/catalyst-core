@@ -32,3 +32,4 @@ export * from "./preview-report";
 export * from "./data-store-description";
 export * from "./server-preview-capture";
 export * from "./html-pdf";
+export * from "./tool-asset";

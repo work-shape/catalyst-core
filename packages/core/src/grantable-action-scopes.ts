@@ -7,6 +7,7 @@ import { DATA_STORE_GRANT_SCOPES } from "./grantable-scopes/data-store";
 import { KNOWLEDGE_BASE_GRANT_SCOPES } from "./grantable-scopes/knowledge-base";
 import { WORKFLOW_GRANT_SCOPES } from "./grantable-scopes/workflow";
 import { GUARDRAIL_GRANT_SCOPES } from "./grantable-scopes/guardrail";
+import { TOOL_GRANT_SCOPES } from "./grantable-scopes/tool";
 import { FEEDBACK_GRANT_SCOPES } from "./grantable-scopes/feedback";
 import { MAIL_SENDER_GRANT_SCOPES } from "./grantable-scopes/mail-sender";
 import { WORKSPACE_GRANT_SCOPES } from "./grantable-scopes/workspace";
@@ -32,6 +33,7 @@ export const GRANTABLE_ACTION_SCOPES = {
   ...KNOWLEDGE_BASE_GRANT_SCOPES,
   ...WORKFLOW_GRANT_SCOPES,
   ...GUARDRAIL_GRANT_SCOPES,
+  ...TOOL_GRANT_SCOPES,
   ...FEEDBACK_GRANT_SCOPES,
   ...MAIL_SENDER_GRANT_SCOPES,
   ...WORKSPACE_GRANT_SCOPES,

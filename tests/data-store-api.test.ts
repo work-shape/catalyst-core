@@ -159,7 +159,8 @@ describe("a Data Store on an assembled instance", () => {
     expect(queried.statusCode).toBe(404);
     expect(instance.execution.configAssets.kinds.get(DATA_STORE_ASSET_KIND)).toBeUndefined();
     expect(startedKinds(instance)).toEqual({ jobs: [], schedules: [], retries: [] });
-    expect(instance.execution.modulesStarted.dataToolSources).toEqual([]);
+    // Only the tool assets' source, which belongs to no module.
+    expect(instance.execution.modulesStarted.dataToolSources).toHaveLength(1);
     expect(
       await instance.execution.operationCalls.registry.resolve(
         dataStoreOperationName("findings", "query")

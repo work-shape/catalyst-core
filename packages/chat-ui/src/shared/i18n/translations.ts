@@ -15,6 +15,7 @@ import { accessServicePrincipals } from "./access-service-principals";
 import { accessSkill } from "./access-skill";
 import { accessSystem } from "./access-system";
 import { accessUsers } from "./access-users";
+import { accessTool } from "./access-tool";
 import { accessWorkflow } from "./access-workflow";
 import { accessWorkspace } from "./access-workspace";
 import { administration } from "./administration";
@@ -51,6 +52,7 @@ import { files } from "./files";
 import { guardrailAnswers } from "./guardrail-answers";
 import { chatInputGuardrails } from "./chat-input-guardrails";
 import { guardrails } from "./guardrails";
+import { toolAssets } from "./tool-assets";
 import { inbox } from "./inbox";
 import { knowledge } from "./knowledge";
 import { localAgent } from "./local-agent";
@@ -108,6 +110,7 @@ export const translations = combineTranslations(common)
   .and(accessSkill)
   .and(accessSystem)
   .and(accessUsers)
+  .and(accessTool)
   .and(accessWorkflow)
   .and(accessWorkspace)
   .and(administration)
@@ -142,6 +145,7 @@ export const translations = combineTranslations(common)
   .and(platformReport)
   .and(files)
   .and(guardrails)
+  .and(toolAssets)
   .and(guardrailAnswers)
   .and(chatInputGuardrails)
   .and(inbox)

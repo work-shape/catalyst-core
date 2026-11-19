@@ -16,6 +16,8 @@ import {
   ownerOnlyOwnerOf,
   parseConnectionOperationName,
   KNOWLEDGE_BASE_ASSET_KIND,
+  TOOL_ASSET_KIND,
+  toolOfOperationName,
   type AgentConfig,
   type AgentEditableField,
   type AgentModelSettingField,
@@ -92,7 +94,8 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
                   message: `Agent '${agent.name}' references missing skill '${name}'`
                 }))
             ),
-          ...missingKnowledgeBaseIssues(context, agents)
+          ...missingKnowledgeBaseIssues(context, agents),
+          ...missingToolAssetIssues(context, agents)
         ];
       },
       validateWrite(context, agents) {
@@ -412,3 +415,31 @@ function ownServerToolIssues(
 
 /** The issue code of an agent that lists a tool of a person's own server. */
 const OWN_SERVER_TOOL_ON_AGENT = "own_server_tool_on_agent";
+
+/**
+ * The tool assets an agent lists that are not there (TOOL-1): a changed agent may list only a
+ * tool that exists, and a tool an unchanged agent lists cannot be deleted under it, as a skill
+ * cannot. Whether it is published is asked when the agent runs: a draft is not offered.
+ */
+function missingToolAssetIssues(
+  context: AssetValidationContext,
+  agents: readonly AgentConfig[]
+): AssetValidationIssue[] {
+  const tools = new Set(
+    context.definitions(TOOL_ASSET_KIND).flatMap((tool) => readDefinitionName(tool) ?? [])
+  );
+  return agents.flatMap((agent) => {
+    const changed = context.changes("agent", agent.name);
+    return agent.toolNames.flatMap((toolName, index) => {
+      const tool = toolOfOperationName(toolName);
+      if (tool === undefined || tools.has(tool)) return [];
+      if (!changed && !context.changes(TOOL_ASSET_KIND, tool)) return [];
+      return [
+        {
+          message: `Agent '${agent.name}' references missing tool '${tool}'`,
+          path: ["toolNames", index]
+        }
+      ];
+    });
+  });
+}

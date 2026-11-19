@@ -113,7 +113,8 @@ export async function runAssetCommand(
     "workflow",
     "connection",
     "data-store",
-    "knowledge-base"
+    "knowledge-base",
+    "tool"
   ].some((kind) => [kind, `${kind}s`, kind.replace("-", "_")].includes(noun));
   // A registered kind unknown to this CLI can still use offline help with a kind verb.
   if (instanceCommand === undefined && !knownKind && VERBS[verbName] === undefined) {

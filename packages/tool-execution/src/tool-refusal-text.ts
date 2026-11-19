@@ -141,6 +141,7 @@ const KIND_WORDS = {
   data_store: { en: "data stores", de: "Datenspeicher" },
   knowledge_base: { en: "knowledge bases", de: "Wissensbasen" },
   guardrail: { en: "guardrails", de: "Leitplanken" },
+  tool: { en: "tools", de: "Werkzeuge" },
   project: { en: "projects", de: "Projekte" }
 } as const satisfies Record<string, Words>;
 

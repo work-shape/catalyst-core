@@ -3,7 +3,8 @@ import {
   ASSET_ADDRESS_MAX_LENGTH,
   DATA_STORE_OPERATION_PREFIX,
   DATA_STORE_OPERATION_VERBS,
-  parseAppActionOperationName
+  parseAppActionOperationName,
+  toolOfOperationName
 } from "@work-shape/catalyst-core";
 import type { AgentConfig } from "./schemas";
 
@@ -157,7 +158,8 @@ function isDataStoreOperationName(name: string): boolean {
  * from the release. A tool that is an operation of a Connection exists as data and comes and
  * goes without a release, so a well-formed name of one is no missing reference: the run reads
  * whether it exists and goes on without one that does not. The same holds for a named action
- * of a published App, `app.<id>.<action>`, or a row tool of a Data Store. Any malformed name is a
+ * of a published App, `app.<id>.<action>`, a row tool of a Data Store, or the operation of a
+ * tool asset, `tool.<name>.call` (TOOL-1). Any malformed name is a
  * name of nothing and is reported.
  */
 export function findMissingAgentToolReferences(
@@ -169,7 +171,8 @@ export function findMissingAgentToolReferences(
       (toolName) =>
         !isConnectionOperationName(toolName) &&
         parseAppActionOperationName(toolName) === undefined &&
-        !isDataStoreOperationName(toolName)
+        !isDataStoreOperationName(toolName) &&
+        toolOfOperationName(toolName) === undefined
     )
   );
 }

@@ -9,6 +9,9 @@ import {
   appActionOperationName,
   connectionOperationName,
   parseAppActionOperationName,
+  TOOL_ASSET_KIND,
+  toolCallOperationName,
+  toolOfOperationName,
   type OperationListScope
 } from "@work-shape/catalyst-core";
 import { readDefinitionField, readDefinitionName } from "./asset-kinds/shared";
@@ -70,6 +73,11 @@ export async function findAgentToolValidation(
       existing.add(appActionOperationName(name, action.name));
     }
   }
+  // A tool asset exists from its first write; it is callable once published.
+  for (const definition of definitionsOf(validated, TOOL_ASSET_KIND)) {
+    const name = readDefinitionName(definition);
+    if (name !== undefined) existing.add(toolCallOperationName(name));
+  }
   // Other dynamic tool sources retain their own existence check.
   for (const { name } of dataTools) {
     if (!isStoredDataTool(name)) existing.add(name);
@@ -121,5 +129,9 @@ function warningMessage(agent: string, name: string): string {
 }
 
 function isStoredDataTool(name: string): boolean {
-  return name.startsWith("connection.") || parseAppActionOperationName(name) !== undefined;
+  return (
+    name.startsWith("connection.") ||
+    parseAppActionOperationName(name) !== undefined ||
+    toolOfOperationName(name) !== undefined
+  );
 }

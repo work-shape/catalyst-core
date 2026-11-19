@@ -6,6 +6,7 @@ import { dataStoreKind } from "./data-store-kind";
 import { guardrailKind } from "./guardrail-kind";
 import { knowledgeBaseKind } from "./knowledge-base-kind";
 import { skillKind } from "./skill-kind";
+import { toolKind } from "./tool-kind";
 
 /**
  * The asset kinds of the platform, in rail order. This is deliberately not the client widget
@@ -18,7 +19,8 @@ export const buildAssetKinds: readonly BuildKind[] = [
   connectionKind,
   dataStoreKind,
   knowledgeBaseKind,
-  guardrailKind
+  guardrailKind,
+  toolKind
 ];
 
 const BuildAssetKindsContext = createContext<readonly BuildKind[]>(buildAssetKinds);

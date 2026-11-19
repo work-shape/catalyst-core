@@ -61,6 +61,10 @@ Workspace asks for skill.publish on a person's account or key with config_assets
 without it the write files a request a holder of skill.approve decides in the Inbox, says so
 and exits with 3. 'catalyst skill publish <name> --revision <n>' and 'catalyst skill discard
 <name> --revision <n>' decide a draft from before this rule; until then its writes are refused.
+A tool is one YAML file of type result: an input schema the agent's input must match and the
+result kind the panel draws it with. 'catalyst tool put <name> --from <name>.tool.yaml
+--if-revision new' writes its draft, 'catalyst tool publish <name> --revision <n>' makes it
+callable, and an agent lists it as tool.<name>.call. It runs no code.
 Exit codes: 0 done, 1 refused or failed, 2 usage, 3 waits for an approval (nothing changed yet).
 `;
 }

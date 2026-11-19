@@ -7,6 +7,8 @@ Custom code tools are the primary extension point for a Workshape Catalyst clien
 
 A tool lets the agent do a bounded action: look up a record, create a ticket, fetch a document, send a draft to review, or call an internal service.
 
+A tool that only hands the agent's finished result to the panel beside the chat needs no code and no release: write it as a [tool asset](/configure/config-assets/#tools-as-assets).
+
 For larger reusable behavior, author a capability package with `@work-shape/catalyst-capability-sdk`. Capabilities can contribute tools, attachment handlers, managed object readers, and lifecycle cleanup while consuming platform-owned services such as the datasource registry and Managed Object Access.
 
 ## Configured Tool Shape

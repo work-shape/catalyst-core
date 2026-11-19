@@ -30,6 +30,7 @@ const verbOnKindKeys = {
   data_store: "rights.verbOnDataStores",
   knowledge_base: "rights.verbOnKnowledgeBases",
   guardrail: "rights.verbOnGuardrails",
+  tool: "rights.verbOnTools",
   project: "rights.verbOnProjects"
 } as const satisfies Record<string, TranslationKey>;
 
