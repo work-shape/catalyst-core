@@ -207,15 +207,17 @@ import traceback
 import types
 import typing
 
+from catalyst_tool import ConnectionCallError
 from catalyst_tool import connection as _connection
 
-__all__ = ["Context", "Display", "ToolDefinition", "describe", "tool"]
+__all__ = ["ConnectionCallError", "Context", "Display", "ToolDefinition", "describe", "tool"]
 
 _NONE = type(None)
 _UNION_TYPES = tuple(
     kind for kind in (typing.Union, getattr(types, "UnionType", None)) if kind is not None
 )
-_SEQUENCES = (list, tuple, set, frozenset, collections.abc.Sequence, collections.abc.Iterable)
+_SETS = (set, frozenset, collections.abc.Set, collections.abc.MutableSet)
+_SEQUENCES = (list, tuple, collections.abc.Sequence, collections.abc.Iterable, *_SETS)
 _PARAMETER_SECTIONS = {"args", "arguments", "parameters", "params", "attributes", "fields"}
 _OTHER_SECTIONS = {
     "returns", "return", "yields", "raises", "examples", "example", "notes", "note", "see also"
@@ -427,6 +429,8 @@ def _schema(hint, seen=frozenset()):
             schema["items"] = _schema(items[0], seen)
         elif items:
             raise TypeError(f"{hint!r} names several item types: use list[...] of one type")
+        if hint in _SETS or origin in _SETS:
+            schema["uniqueItems"] = True
         return schema
     if hint is dict or origin in (dict, collections.abc.Mapping):
         schema = {"type": "object"}
@@ -469,7 +473,14 @@ def _convert(hint, value):
     if (hint in _SEQUENCES or origin in _SEQUENCES) and isinstance(value, list):
         items = [item for item in args if item is not Ellipsis]
         converted = [_convert(items[0], item) for item in value] if len(items) == 1 else value
-        return tuple(converted) if (origin or hint) is tuple else converted
+        kind = origin or hint
+        if kind is tuple:
+            return tuple(converted)
+        if kind is frozenset:
+            return frozenset(converted)
+        if kind in _SETS:
+            return set(converted)
+        return converted
     if (hint is float) and isinstance(value, int) and not isinstance(value, bool):
         return float(value)
     return value
