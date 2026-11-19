@@ -135,7 +135,8 @@ describe("tools of Connections on the agent page", () => {
     expect(row(markup, "connection:crm")).toContain('aria-checked="mixed"');
     expect(row(markup, "connection:crm")).toContain('aria-expanded="false"');
     // A Connection the agent uses none of stands too, switched off.
-    expect(row(markup, "connection:ledger")).toContain(">0/13<");
+    expect(row(markup, "connection:ledger")).toContain('aria-checked="false"');
+    expect(row(markup, "connection:ledger")).not.toContain("data-tool-count");
     // The operations stand folded in the row, not on the page at rest.
     expect(markup).not.toContain("find_customer<");
     expect(markup).not.toContain("data-unavailable-option");

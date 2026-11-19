@@ -316,19 +316,20 @@ function PackageRow({
       actionsVisible
       actions={
         <span className="flex items-center gap-3">
-          <span
-            data-tool-count=""
-            className={cn(
-              "text-caption tabular-nums",
-              item.heldCount === 0
-                ? "text-muted-foreground"
-                : item.heldCount === total
+          {/* A row that is off says so with its switch: no "0 of". */}
+          {item.heldCount === 0 ? null : (
+            <span
+              data-tool-count=""
+              className={cn(
+                "text-caption tabular-nums",
+                item.heldCount === total
                   ? "text-success-soft-foreground"
                   : "font-semibold text-primary-soft-foreground"
-            )}
-          >
-            {item.heldCount}/{total}
-          </span>
+              )}
+            >
+              {item.heldCount}/{total}
+            </span>
+          )}
           <Switch
             aria-label={t("configToolsGroupSwitch", { group: face.title })}
             checked={state === "on"}
