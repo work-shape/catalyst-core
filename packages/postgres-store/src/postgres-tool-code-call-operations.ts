@@ -47,7 +47,7 @@ export function createPostgresToolCodeCallsStore(db: PostgresConnection): ToolCo
     async startToolCodeCall({ clientInstanceId, id, startedAt }) {
       const started = await db
         .update(toolCodeCalls)
-        .set({ startedAt: new Date(startedAt) })
+        .set({ startedAt: new Date(startedAt), request: null, answer: null })
         .where(
           and(
             eq(toolCodeCalls.clientInstanceId, clientInstanceId),

@@ -72,6 +72,12 @@ export interface SandboxRequestChannel {
   endMark: string;
   /** The longest request read, in bytes. A longer line is dropped and answered `refuse`. */
   maxLineBytes: number;
+  /**
+   * The most lines answered. Past them the command's input stream is closed and what it still
+   * writes before the end mark is dropped. The bytes of every request count toward the
+   * command's `maxStdoutBytes` as its output does; past them the channel closes too.
+   */
+  maxLines: number;
   /** The answer to one request: one line, without a line break. It never rejects. */
   answer(line: string): Promise<string>;
   /** The answer to a line that is no request: one longer than `maxLineBytes`. */
@@ -225,9 +231,22 @@ export async function runSpawnedProcess(input: {
     // requests reads nothing on its input stream.
     child.stdin.on("error", () => undefined);
     if (!input.requests) child.stdin.end();
+    // The process's output is read one request at a time: while a request is answered, its
+    // output stream is paused, so a process that writes requests faster than they are answered
+    // waits, and so does one that reads no answers.
     const requests = input.requests
-      ? new RequestLines(input.requests, (line) => {
-          if (child.stdin.writable) child.stdin.write(`${line}\n`);
+      ? new RequestLines(input.requests, {
+          reply: (line) => writeLine(child.stdin, line),
+          pause: () => child.stdout.pause(),
+          resume: () => child.stdout.resume(),
+          close: () => child.stdin.end(),
+          count: (bytes) => stdout.count(bytes),
+          output: (chunk) => stdout.append(chunk),
+          answering: (busy) => {
+            // A process waits for its answer: that is no idleness, and it is not counted.
+            if (busy) clearTimeout(idleTimer);
+            else resetIdleTimer();
+          }
         })
       : undefined;
 
@@ -289,9 +308,14 @@ export async function runSpawnedProcess(input: {
     resetIdleTimer();
     input.signal?.addEventListener("abort", abort, { once: true });
     child.stdout.on("data", (chunk: Buffer) => {
-      const output = requests ? requests.take(chunk) : chunk;
-      if (output.byteLength > 0) stdout.append(output);
-      resetIdleTimer();
+      if (!requests) {
+        stdout.append(chunk);
+        resetIdleTimer();
+        return;
+      }
+      // Only output after the end mark shows the process at work: requests never put the idle
+      // timeout off, and the wall timeout bounds them.
+      if (requests.take(chunk)) resetIdleTimer();
     });
     child.stderr.on("data", (chunk: Buffer) => {
       stderr.append(chunk);
@@ -320,12 +344,48 @@ export async function runSpawnedProcess(input: {
   });
 }
 
-const NO_BYTES = Buffer.alloc(0);
+/** Writes one line, and waits while the stream holds more than it takes. */
+function writeLine(stream: NodeJS.WritableStream & { writable: boolean }, line: string) {
+  return new Promise<void>((resolve) => {
+    if (!stream.writable) {
+      resolve();
+      return;
+    }
+    if (stream.write(`${line}\n`)) {
+      resolve();
+      return;
+    }
+    const done = () => {
+      stream.off("drain", done);
+      stream.off("close", done);
+      stream.off("error", done);
+      resolve();
+    };
+    stream.on("drain", done);
+    stream.on("close", done);
+    stream.on("error", done);
+  });
+}
+
+/** What the request lines of a process act on. */
+interface RequestLinesIo {
+  reply(line: string): Promise<void>;
+  pause(): void;
+  resume(): void;
+  /** Closes the process's input stream: it is answered nothing more. */
+  close(): void;
+  /** Counts bytes of requests toward the output's bound. Whether the bound is passed. */
+  count(bytes: number): boolean;
+  output(chunk: Buffer): void;
+  answering(busy: boolean): void;
+}
 
 /**
- * Reads the requests of a process from its output stream until the end mark, and writes the
- * answer to each, one after the other, in the order they came. What follows the mark is the
- * process's own output.
+ * Reads the requests of a process from its output stream until the end mark and answers each,
+ * one at a time: while one is answered the stream is paused, and the rest of the chunk waits.
+ * What follows the mark is the process's own output. Past `maxLines` lines, or once the
+ * requests passed the output's bound, the channel is closed and nothing more is held but the
+ * line being read, to find the mark.
  */
 class RequestLines {
   private held: Buffer[] = [];
@@ -333,36 +393,91 @@ class RequestLines {
   /** The line being read is longer than a request may be: the rest of it is dropped. */
   private dropping = false;
   private ended = false;
-  private answered: Promise<void> = Promise.resolve();
+  private closed = false;
+  private lines = 0;
+  /** The rest of a chunk while its request is answered. */
+  private waiting: Buffer | undefined;
 
   constructor(
     private readonly channel: SandboxRequestChannel,
-    private readonly reply: (line: string) => void
+    private readonly io: RequestLinesIo
   ) {}
 
-  /** What of the chunk is output: nothing before the end mark, and all of it after. */
-  take(chunk: Buffer): Buffer {
-    if (this.ended) return chunk;
+  /** Reads a chunk. Whether it held output: bytes after the end mark. */
+  take(chunk: Buffer): boolean {
+    if (this.waiting) {
+      // A chunk the stream had read before it paused.
+      this.waiting = Buffer.concat([this.waiting, chunk]);
+      return false;
+    }
+    return this.read(chunk);
+  }
+
+  private read(chunk: Buffer): boolean {
+    if (this.ended) {
+      this.io.output(chunk);
+      return chunk.byteLength > 0;
+    }
     let start = 0;
     while (start < chunk.byteLength) {
       const newline = chunk.indexOf(10, start);
+      const end = newline === -1 ? chunk.byteLength : newline;
+      this.hold(chunk.subarray(start, end));
       if (newline === -1) {
-        this.hold(chunk.subarray(start));
-        return NO_BYTES;
+        this.counted(end - start);
+        return false;
       }
-      this.hold(chunk.subarray(start, newline));
+      this.counted(end - start + 1);
       start = newline + 1;
       const line = this.line();
-      if (line === undefined) {
-        this.answer(() => Promise.resolve(this.channel.refuse("too_long")));
-      } else if (line === this.channel.endMark) {
+      if (line === this.channel.endMark) {
         this.ended = true;
-        return chunk.subarray(start);
-      } else if (line !== "") {
-        this.answer(() => this.channel.answer(line));
+        const rest = chunk.subarray(start);
+        if (rest.byteLength > 0) this.io.output(rest);
+        return rest.byteLength > 0;
       }
+      if (this.closed || line === "") continue;
+      this.lines += 1;
+      if (this.lines > this.channel.maxLines) {
+        this.close();
+        continue;
+      }
+      this.answer(
+        line === undefined
+          ? Promise.resolve(this.channel.refuse("too_long"))
+          : this.channel.answer(line),
+        chunk.subarray(start)
+      );
+      return false;
     }
-    return NO_BYTES;
+    return false;
+  }
+
+  /** Answers one request, then reads on from `rest`. */
+  private answer(answer: Promise<string>, rest: Buffer): void {
+    this.waiting = rest;
+    this.io.pause();
+    this.io.answering(true);
+    const next = () => {
+      this.io.answering(false);
+      const rest = this.waiting ?? Buffer.alloc(0);
+      this.waiting = undefined;
+      this.read(rest);
+      if (this.waiting === undefined) this.io.resume();
+    };
+    answer
+      .then((text) => this.io.reply(text))
+      .then(next, next)
+      .catch(() => undefined);
+  }
+
+  private counted(bytes: number): void {
+    if (this.io.count(bytes) && !this.closed) this.close();
+  }
+
+  private close(): void {
+    this.closed = true;
+    this.io.close();
   }
 
   private hold(part: Buffer): void {
@@ -388,29 +503,35 @@ class RequestLines {
     this.heldBytes = 0;
     return text;
   }
-
-  private answer(next: () => Promise<string>): void {
-    this.answered = this.answered.then(next).then(this.reply, () => undefined);
-  }
 }
 
 class BoundedOutput {
   private readonly chunks: Buffer[] = [];
   private byteLength = 0;
+  /** Every byte counted toward the bound: those kept, and a request channel's. */
+  private counted = 0;
   truncated = false;
 
   constructor(private readonly maxBytes: number) {}
 
   append(chunk: Buffer): void {
-    const remaining = this.maxBytes - this.byteLength;
+    const remaining = this.maxBytes - this.counted;
     if (remaining > 0) {
       const kept = chunk.subarray(0, remaining);
       this.chunks.push(kept);
       this.byteLength += kept.byteLength;
     }
+    this.counted += chunk.byteLength;
     if (chunk.byteLength > remaining) {
       this.truncated = true;
     }
+  }
+
+  /** Counts bytes that are not kept, as a request's. Whether the bound is passed. */
+  count(bytes: number): boolean {
+    this.counted += bytes;
+    if (this.counted > this.maxBytes) this.truncated = true;
+    return this.counted > this.maxBytes;
   }
 
   text(): string {

@@ -90,8 +90,9 @@ export interface ToolCodeCallsStore {
     id: string;
   }): Promise<ToolCodeCall | undefined>;
   /**
-   * Notes that a worker starts the handler's container now. `false` where the row is gone or
-   * already has its outcome: nobody waits for the call, and the handler is not started.
+   * Notes that a worker starts the handler's container now, and clears a request and answer an
+   * earlier start left. `false` where the row is gone or already has its outcome: nobody waits
+   * for the call, and the handler is not started.
    */
   startToolCodeCall(input: {
     clientInstanceId: ClientInstanceId;

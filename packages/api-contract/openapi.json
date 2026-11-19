@@ -58222,10 +58222,20 @@
                 "properties": {
                   "runId": {
                     "type": "string"
+                  },
+                  "asked": {
+                    "type": "string",
+                    "enum": [
+                      "allow",
+                      "confirm",
+                      "approval",
+                      "deny"
+                    ]
                   }
                 },
                 "required": [
-                  "runId"
+                  "runId",
+                  "asked"
                 ]
               },
               "boundBy": {

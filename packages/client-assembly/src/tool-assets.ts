@@ -207,6 +207,17 @@ async function codeCall(
     });
   }
   const { signal, deadline } = context.runtime;
+  // What the policy asks of each declared operation as the handler starts: the most each of
+  // its calls then runs without asking anybody.
+  const operations = ports.operations?.();
+  const asked =
+    operations && (config.connections ?? []).length > 0
+      ? await declaredPolicies(config.connections ?? [], operations, {
+          origin,
+          actor: context.actor,
+          ...(context.workspaceId === undefined ? {} : { workspaceId: context.workspaceId })
+        })
+      : new Map<string, PolicyValue>();
   const waiting = ports.codeCalls
     .run({
       clientInstanceId: asset.clientInstanceId,
@@ -218,7 +229,7 @@ async function codeCall(
       correlationId: context.correlationId,
       ...(deadline ? { deadline } : {}),
       ...(signal ? { signal } : {}),
-      onRequest: (request) => connectionRequest(config, request, context, origin, ports)
+      onRequest: (request) => connectionRequest(config, request, context, origin, asked, ports)
     })
     .then(async (result) =>
       toolCodeCallAnswer({
@@ -254,6 +265,13 @@ function requestAnswerOf(result: OperationResult): ToolCodeCallRequestAnswer {
     case "failed":
       return refused(result.error.code, result.error.message);
     case "denied": {
+      // The policy asks more of the call than it asked when the handler started.
+      if (result.reason.kind === "policy" && result.reason.reason === "confirmation_required") {
+        return refused(
+          "connection_call_waits",
+          "The Connection call would need somebody's confirmation or approval, and was not made."
+        );
+      }
       const error = operationDenialError(result.reason);
       return refused(error.code.toLowerCase(), error.message);
     }
@@ -278,6 +296,8 @@ async function connectionRequest(
   request: ToolCodeCallRequest,
   context: OperationExecutionContext,
   origin: Extract<OperationOrigin, { kind: "agent" }>,
+  /** What the policy asked of each declared operation as the handler started. */
+  asked: ReadonlyMap<string, PolicyValue>,
   ports: ToolCallPorts
 ): Promise<ToolCodeCallRequestAnswer> {
   const name = connectionOperationName(request.connection, request.operation);
@@ -305,7 +325,7 @@ async function connectionRequest(
         effect: definition.effect,
         input: request.input,
         actor: context.actor,
-        origin: { ...rest, byTool: { runId: context.runId } },
+        origin: { ...rest, byTool: { runId: context.runId, asked: asked.get(name) ?? "allow" } },
         ...(context.workspaceId === undefined ? {} : { workspaceId: context.workspaceId }),
         correlationId: context.correlationId,
         ...(origin.draft ? { draft: { ...origin.draft } } : {})
@@ -339,13 +359,17 @@ function stricterPolicy(left: PolicyValue | undefined, right: PolicyValue): Poli
 }
 
 /**
- * What the policy asks of the Connection operations a code tool declares, as the floor of the
- * tool's call: the strictest of what each asks of this caller in this workspace, by its default,
- * the admin's settings, its own floor and the person's Ask me or Never. A `confirm` is so asked
- * once, on the tool's call, before the handler starts, and a `deny` refuses the tool's call.
- * A declared operation that no longer exists asks nothing: its call fails in the handler.
+ * What the policy asks of each Connection operation a code tool declares, of this caller in this
+ * workspace: by its default, the admin's settings, its own floor, a personal conversation's
+ * floor on a change, and the person's Ask me or Never. The strictest is the floor of the tool's
+ * call, so a `confirm` is asked once, on the tool's call, before the handler starts, and a
+ * `deny` refuses it. Each value is also the most a handler's call of that operation then runs
+ * without asking (`byTool.asked`). An `approval` of an operation whose calls never wait for one,
+ * a personal Connection's or one whose answer holds a secret, is a `deny`: such a call is
+ * refused where it is made outside a tool too. A declared operation that no longer exists asks
+ * nothing: its call fails in the handler.
  */
-async function declaredPolicyFloor(
+async function declaredPolicies(
   declared: readonly string[],
   operations: Pick<OperationCalls, "registry" | "deps">,
   call: {
@@ -353,25 +377,33 @@ async function declaredPolicyFloor(
     actor?: AuthenticatedIdentity;
     workspaceId?: CollaborationWorkspaceId;
   }
-): Promise<PolicyValue | undefined> {
-  if (declared.length === 0) return undefined;
+): Promise<Map<string, PolicyValue>> {
+  const asked = new Map<string, PolicyValue>();
+  if (declared.length === 0) return asked;
   const { policy } = operations.deps;
   const targets = await operations.registry.resolveMany(declared);
   const centralSettings = await policy.centralSettings();
-  const { actor } = call;
+  const { actor, origin } = call;
   const person =
     actor && !isAuthenticatedServicePrincipal(actor) && policy.personSetting
       ? (operation: string) =>
           policy.personSetting?.({ userId: getSubjectUserId(actor), operation })
       : undefined;
-  let floor: PolicyValue | undefined;
+  const personal =
+    origin.kind === "agent" && policy.personalConversation
+      ? await policy.personalConversation(origin.conversationId, origin.agentRunId)
+      : false;
   for (const name of declared) {
     const target = targets.get(name);
     if (!target) continue;
-    const own = await target.policyFloorOf?.(call.origin, undefined, actor, call.workspaceId);
+    let own = await target.policyFloorOf?.(origin, undefined, actor, call.workspaceId);
+    // A change in a conversation that holds personal data asks, as the agent's own call does.
+    if (personal && target.effect === "changing" && !target.personalConnection) {
+      own = stricterPolicy(own, "confirm");
+    }
     const setting = await person?.(name);
     const resource = target.resource(undefined);
-    const value = resolvePolicy({
+    let value = resolvePolicy({
       definition: {
         ...target,
         ...(own === undefined ? {} : { policyFloor: stricterPolicy(target.policyFloor, own) })
@@ -391,8 +423,16 @@ async function declaredPolicyFloor(
       callerCanConfirm: true,
       canPause: true
     }).value;
-    floor = stricterPolicy(floor, value);
+    if (value === "approval" && (target.personalConnection || target.secret)) value = "deny";
+    asked.set(name, value);
   }
+  return asked;
+}
+
+/** The strictest of what the declared operations ask: the floor of the tool's call. */
+function strictestOf(asked: ReadonlyMap<string, PolicyValue>): PolicyValue | undefined {
+  let floor: PolicyValue | undefined;
+  for (const value of asked.values()) floor = stricterPolicy(floor, value);
   return floor === "allow" ? undefined : floor;
 }
 
@@ -433,11 +473,13 @@ function definitionOf(tool: PublishedTool, ports: ToolCallPorts): OperationDefin
           policyFloorOf: async (origin, _input, actor, workspaceId) => {
             const operations = ports.operations?.();
             return operations
-              ? declaredPolicyFloor(config.connections ?? [], operations, {
-                  origin,
-                  ...(actor ? { actor } : {}),
-                  ...(workspaceId === undefined ? {} : { workspaceId })
-                })
+              ? strictestOf(
+                  await declaredPolicies(config.connections ?? [], operations, {
+                    origin,
+                    ...(actor ? { actor } : {}),
+                    ...(workspaceId === undefined ? {} : { workspaceId })
+                  })
+                )
               : undefined;
           }
         }

@@ -88,8 +88,8 @@ async function policyInputOf(context: OperationPolicyContext): Promise<PolicyInp
     workflowDeleted: call.workflowDeleted === true,
     // Only an Agent Run's worker holds a call for its actor's confirmation: the run pauses
     // and resumes when its person decided. The hold of the run says the worker makes the call.
-    // A code tool handler's call is taken as one that could wait: what it would wait for, the
-    // tool's call asked already, and `admit` makes it without waiting (TOOL-2c).
+    // A code tool handler's call is taken as one that could wait: `admit` makes it without
+    // waiting where the tool's call asked as much already, and refuses it otherwise (TOOL-2c).
     canPause: workerCall || (call.origin.kind === "agent" && call.origin.byTool !== undefined),
     // Nobody present who could be asked, while the call acts for a person: a run marked
     // unattended, in its worker, or a CLI call sent unattended. A subagent's call never is
@@ -157,6 +157,11 @@ export async function resolveGuardedPolicy(context: OperationPolicyContext): Pro
       offersAlwaysAllow?: true;
       /** The answers the person is shown where the call waits (GR-3). */
       shown?: GuardrailAnswerRef[];
+      /**
+       * A guardrail asked for an approval of this call's input, whether or not that made the
+       * policy stricter: a value set already at `approval` keeps its own source.
+       */
+      guardrailAsked?: true;
     }
   | { denial: OperationDenial; policy: PolicyResolution }
 > {
@@ -180,6 +185,7 @@ export async function resolveGuardedPolicy(context: OperationPolicyContext): Pro
       policy,
       ...(asking ? { approvalAskedBy: asking } : {}),
       ...(offers ? { offersAlwaysAllow: true as const } : {}),
+      ...(guardrailOutcome === "require_approval" ? { guardrailAsked: true as const } : {}),
       ...withShown
     };
   }

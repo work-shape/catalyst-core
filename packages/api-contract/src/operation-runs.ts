@@ -4,6 +4,7 @@ import {
   OPERATION_RUN_DECISION_REASONS,
   OPERATION_RUN_STATUSES,
   OPERATION_TARGETS,
+  POLICY_VALUES,
   PRINCIPAL_HOLDER_KINDS
 } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
@@ -24,9 +25,10 @@ export const operationRunOriginSchema = z.discriminatedUnion("kind", [
     toolRevisionId: z.string().optional(),
     /**
      * A call a code tool's handler made: the run of the tool's call it was made in. `toolName`
-     * then names the tool's operation.
+     * then names the tool's operation. `asked` is what the policy asked of the operation when
+     * the handler started: the most the call ran without asking anybody.
      */
-    byTool: z.object({ runId: z.string() }).optional(),
+    byTool: z.object({ runId: z.string(), asked: z.enum(POLICY_VALUES) }).optional(),
     /**
      * A Workflow agent step's call in a test run of a draft, which acts as the person testing:
      * the service principal whose rights bounded theirs.

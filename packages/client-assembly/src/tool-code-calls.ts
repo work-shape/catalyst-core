@@ -234,6 +234,8 @@ function requestChannel(options: {
   return {
     library: TOOL_CODE_LIBRARY,
     maxLineBytes: TOOL_CODE_REQUEST_MAX_BYTES,
+    // A few past the bound are answered `too_many_requests`; then the channel closes.
+    maxLines: TOOL_CODE_REQUESTS_MAX + 5,
     refuse: () =>
       refusedRequest(
         "request_too_large",
@@ -333,6 +335,18 @@ export function createToolCodeCallJobs(options: ToolCodeCallJobsOptions): {
           const call = await stores.toolCodeCalls.getToolCodeCall({ clientInstanceId, id });
           // The operation gave up on the call, or an earlier attempt ended it.
           if (!call || call.outcome) return;
+          // An earlier attempt's handler called a Connection and stopped before it ended. What
+          // it called may have changed something outside, so the handler is not run again.
+          if (call.request) {
+            await finish(
+              id,
+              failed(
+                "interrupted",
+                "The handler stopped after it called a Connection. It is not run again, so nothing it called is called twice."
+              )
+            );
+            return;
+          }
           const tool = await codeToolRevision(
             stores.configAssets,
             clientInstanceId,
@@ -617,6 +631,8 @@ export function createToolCodeCallClient(options: {
           if (call.startedAt && call.startedAt !== seenStart) {
             seenStart = call.startedAt;
             startedAt = Math.min(Date.parse(call.startedAt), Date.now());
+            // A container started again starts its requests anew: the start cleared the last.
+            answered = 0;
           }
           const { request } = call;
           if (request && request.seq > answered && call.answer?.seq !== request.seq) {

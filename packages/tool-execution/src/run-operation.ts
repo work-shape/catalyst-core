@@ -3,6 +3,7 @@ import {
   AppError,
   IDEMPOTENCY_KEY_MAX_LENGTH,
   INTERRUPTED_RUN_ERROR,
+  POLICY_VALUES,
   assertOperationChecksRights,
   createPlatformId,
   holdsForPublishedRun,
@@ -571,15 +572,20 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     return { ending: await simulateRun(context, policy) };
   }
   // A call a code tool's handler made waits for nobody: the call of the tool asked the policy
-  // of every Connection operation it declares before the handler started (TOOL-2c). What the
-  // policy asks of it now is what that call asked, or was answered, already. Only a guardrail
-  // of this call's own input asks something the tool's call could not, and it is refused.
+  // of every Connection operation it declares before the handler started (TOOL-2c). It runs
+  // where the policy asks no more of it now than it asked then. A floor that rose since, such
+  // as a person's own server after another Connection ran, a setting raised meanwhile, or a
+  // guardrail that asks about this call's own input, would make it wait: it is refused.
   if (
     call.origin.kind === "agent" &&
     call.origin.byTool !== undefined &&
     (policy.next === "await_confirmation" || policy.next === "await_approval")
   ) {
-    if (policy.source === "guardrail") {
+    const { asked } = call.origin.byTool;
+    if (
+      guarded.guardrailAsked === true ||
+      POLICY_VALUES.indexOf(policy.value) > POLICY_VALUES.indexOf(asked)
+    ) {
       return {
         ending: await denyRun(context, {
           kind: "policy",

@@ -10,6 +10,7 @@ import {
   asToolCallId,
   createPlatformId,
   toolCallOperationName,
+  type CollaborationWorkspaceId,
   type ConversationId,
   type JobWorker,
   type JsonObject,
@@ -17,10 +18,13 @@ import {
   type OperationCall,
   type OperationCallRuntime,
   type OperationOrigin,
+  type OperationSource,
   type UserRecord
 } from "@work-shape/catalyst-core";
-import { createOutsideSchemaChecker } from "@work-shape/catalyst-connections";
+import { defineJobKind } from "@work-shape/catalyst-capability-sdk";
+import { createOutsideSchemaChecker, ownServerPolicyFloor } from "@work-shape/catalyst-connections";
 import {
+  TOOL_CODE_CALL_JOB_KIND,
   createJobWorker,
   createToolAssetKind,
   createToolCodeCallClient,
@@ -30,6 +34,7 @@ import {
 import {
   DockerWorkspaceCommandProcessExecutor,
   LocalWorkspaceCommandProcessExecutor,
+  executeApprovedOperation,
   executeConfirmedOperation,
   runOperation
 } from "@work-shape/catalyst-tool-execution";
@@ -42,6 +47,8 @@ import {
 } from "./support/connection-operations";
 import { generateTestSecret } from "./support/test-connector";
 import { withTestSql } from "./support/test-sql";
+import { required, waitUntil } from "./support/assertions";
+import { guardedEvents } from "./support/guardrails";
 
 // A code tool's handler calls a Connection (TOOL-2c, platform-access.md section 3a): only an
 // operation the tool declares, as the tool's caller, with the tool's call as its origin, and
@@ -81,6 +88,11 @@ try:
             out = {"done": done, "code": error.code}
     elif mode == "write":
         out = connection("crm").call("write", {"note": data["text"]})
+    elif mode == "mixed":
+        connection("crm").call("echo", {"text": data["text"]})
+        out = connection("mine").call("read", {"text": data["text"]})
+    elif mode == "diary":
+        out = connection("diary").call("echo", {"text": data["text"]})
     else:
         out = connection("crm").call("echo", {"text": data["text"]})
     answer = {"output": out}
@@ -144,8 +156,23 @@ const refusalSchema = z.object({
 let f: ConnectionOperationsFixture;
 let conversationId: ConversationId;
 let crm = "";
+let workspaceId: CollaborationWorkspaceId;
 let tempRoot = "";
 const workers: JobWorker[] = [];
+
+async function newConversation(): Promise<ConversationId> {
+  return (
+    await f.stores.conversations.createConversation({
+      clientInstanceId,
+      collaborationWorkspaceId: workspaceId,
+      createdByUserId: f.kai.id,
+      createdByExternalUserId: f.kai.id,
+      visibility: "private",
+      title: "Tools",
+      retainedUntil: "2099-01-01T00:00:00.000Z"
+    })
+  ).id;
+}
 
 async function putTool(config: JsonObject) {
   return f.call(f.admin.id, "assets.put", {
@@ -165,15 +192,54 @@ async function publishTool(config: JsonObject) {
 }
 
 beforeAll(async () => {
-  f = await fixtureOn((options) =>
-    setupAccessInstance({
-      ...options,
-      furtherKinds: [
-        ...(options.furtherKinds ?? []),
-        createToolAssetKind({ checker, operations: () => f.operationCalls })
-      ]
-    })
+  f = await fixtureOn(
+    (options) =>
+      setupAccessInstance({
+        ...options,
+        furtherKinds: [
+          ...(options.furtherKinds ?? []),
+          createToolAssetKind({ checker, operations: () => f.operationCalls })
+        ]
+      }),
+    {
+      // A guardrail that asks for an approval of a write whose input names it.
+      events: (stores) =>
+        guardedEvents(stores, {
+          "approved-writes": {
+            displayName: "Writes that need an approval",
+            on: "operation.before_call",
+            filter: { operation: "connection.crm.write" },
+            check: { kind: "pattern", pattern: "needs-approval", reason: "Asks an approver." },
+            outcome: "require_approval"
+          }
+        }).events
+    }
   );
+  // Two Connections that stand on the CRM's `echo` otherwise: a person's own server, as far as
+  // its floor goes (PMCP-4), which asks once an operation of another Connection ran in the
+  // conversation; and a personal Connection, whose calls never wait for an approval.
+  const ownServer: OperationSource = {
+    async resolve(name, stores) {
+      if (name !== "connection.mine.read" && name !== "connection.diary.echo") return undefined;
+      const echo = await f.operationCalls.registry.resolve("connection.crm.echo", stores);
+      if (!echo) return undefined;
+      return name === "connection.diary.echo"
+        ? { ...echo, name, effect: "changing", personalConnection: true }
+        : {
+            ...echo,
+            name,
+            policyFloorOf: (origin) =>
+              ownServerPolicyFloor(
+                { clientInstanceId, stores: f.stores },
+                "mine",
+                { effect: "reading" },
+                origin
+              )
+          };
+    },
+    list: () => Promise.resolve({ operations: [], truncated: [] })
+  };
+  f.operationCalls.registry.addSource(ownServer);
   f.operationCalls.registry.addSource(
     createToolOperationSource({
       clientInstanceId,
@@ -186,27 +252,22 @@ beforeAll(async () => {
   crm = await f.seed("crm", {
     operations: [operationOf("echo"), operationOf("write", { effect: "changing" })]
   });
-  const workspaceId = await f.sharedWorkspace("tools");
-  conversationId = (
-    await f.stores.conversations.createConversation({
-      clientInstanceId,
-      collaborationWorkspaceId: workspaceId,
-      createdByUserId: f.kai.id,
-      createdByExternalUserId: f.kai.id,
-      visibility: "private",
-      title: "Tools",
-      retainedUntil: "2099-01-01T00:00:00.000Z"
-    })
-  ).id;
+  workspaceId = await f.sharedWorkspace("tools");
+  conversationId = await newConversation();
   tempRoot = await mkdtemp(join(tmpdir(), "tool-code-connections-"));
   await publishTool(pythonTool("lookup_py", ["connection.crm.echo"]));
   await publishTool(pythonTool("write_py", ["connection.crm.echo", "connection.crm.write"]));
   await publishTool(nodeTool);
+  await publishTool(pythonTool("mixed_py", ["connection.crm.echo", "connection.mine.read"]));
+  await publishTool(pythonTool("diary_py", ["connection.diary.echo"]));
   f.state.agentTools.set(
     AGENT,
-    ["lookup_py", "write_py", "lookup_js"].map((tool) => toolCallOperationName(tool))
+    ["lookup_py", "write_py", "lookup_js", "mixed_py", "diary_py"].map((tool) =>
+      toolCallOperationName(tool)
+    )
   );
   await f.grant(f.kai.id, "connection.use", { assetId: crm });
+
   startWorker();
 });
 
@@ -253,10 +314,10 @@ function startWorker() {
   workers.push(worker);
 }
 
-const originOf = (tool: string): OperationOrigin => ({
+const originOf = (tool: string, conversation = conversationId): OperationOrigin => ({
   kind: "agent",
   agentRunId: asAgentRunId(createPlatformId("run")),
-  conversationId: asConversationId(conversationId),
+  conversationId: asConversationId(conversation),
   agentName: AGENT,
   toolCallId: asToolCallId(createPlatformId("call")),
   toolName: toolCallOperationName(tool)
@@ -267,9 +328,9 @@ function toolCall(
   user: UserRecord,
   tool: string,
   given: JsonObject,
-  further: { fenced?: boolean; preview?: boolean } = {}
+  further: { fenced?: boolean; preview?: boolean; conversation?: ConversationId } = {}
 ): { call: OperationCall; runtime: OperationCallRuntime } {
-  const origin = originOf(tool);
+  const origin = originOf(tool, further.conversation);
   // An Agent Run's worker holds the run's fence: only its call can wait for a confirmation.
   const runtime: OperationCallRuntime =
     further.fenced && origin.kind === "agent"
@@ -486,5 +547,137 @@ describe("a code tool's handler calling a Connection", () => {
         subject: TEST_CREDENTIAL_SUBJECT
       });
     }
+  });
+  describe("a floor that rose while the handler runs", () => {
+    it("refuses a call the policy asks more of now than when the handler started (PMCP-4)", async () => {
+      // A chat where nothing ran yet: the own server's floor asks nothing as the handler starts.
+      const fresh = await newConversation();
+      const outcome = await callTool(
+        f.kai,
+        "mixed_py",
+        { text: "x", mode: "mixed" },
+        { conversation: fresh }
+      );
+      expect(outputOf(outcome)).toEqual({ code: "connection_call_waits" });
+      const inner = (await f.runs()).filter(
+        (run) => run.origin.kind === "agent" && run.origin.byTool?.runId === outcome.run.id
+      );
+      expect(
+        inner
+          .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+          .map((run) => [run.operation, run.status])
+      ).toEqual([
+        ["connection.crm.echo", "done"],
+        ["connection.mine.read", "denied"]
+      ]);
+      expect(inner[1]?.origin).toMatchObject({ byTool: { asked: "allow" } });
+    });
+
+    it("refuses a call a guardrail asks an approval of, though the policy asked one already", async () => {
+      f.state.centralSettings = [{ operation: "connection.crm.write", value: "approval" }];
+      const approved = async (text: string) => {
+        const { call } = toolCall(f.kai, "write_py", { text, mode: "write" });
+        const held = await runOperation(call, f.operationCalls.deps);
+        expect(held.result.status).toBe("pending_approval");
+        const ended = await executeApprovedOperation(
+          { runId: held.run.id, call },
+          { id: f.admin.id, label: "Admin", at: new Date().toISOString() },
+          f.operationCalls.deps
+        );
+        expect(ended).toMatchObject({ execution: "done" });
+        return (await f.runs()).find(
+          (run) => run.origin.kind === "agent" && run.origin.byTool?.runId === held.run.id
+        );
+      };
+      // The approval of the tool's call is the approval of its write.
+      expect(await approved("fine")).toMatchObject({
+        status: "done",
+        decision: { mode: "direct", reason: "tool_call" },
+        origin: { byTool: { asked: "approval" } }
+      });
+      // A guardrail that asks about this write's own input asks what nobody approved.
+      expect(await approved("needs-approval")).toMatchObject({ status: "denied" });
+    });
+  });
+
+  it("refuses the tool's call where a personal Connection's operation asks for an approval", async () => {
+    f.state.centralSettings = [{ operation: "connection.diary.echo", value: "approval" }];
+    const executed = f.handed.length;
+    const outcome = await callTool(f.kai, "diary_py", { text: "x", mode: "diary" });
+    expect(outcome.result).toMatchObject({ status: "denied" });
+    expect(f.handed.length).toBe(executed);
+  });
+
+  describe("a call whose handler stopped after a request", () => {
+    const job = defineJobKind({
+      kind: TOOL_CODE_CALL_JOB_KIND,
+      payloadSchema: z.strictObject({ callId: z.string().min(1) }),
+      maxAttempts: 3,
+      backoff: { baseMs: 500, maxMs: 2_000 },
+      leaseMs: 60_000,
+      heartbeatMs: 15_000,
+      concurrency: {}
+    });
+    const written = async () => {
+      const id = createPlatformId("tcc");
+      await f.stores.toolCodeCalls.createToolCodeCall({
+        id,
+        clientInstanceId,
+        conversationId,
+        tool: "lookup_py",
+        revisionId:
+          required(
+            await f.stores.configAssets.getConfigAsset({
+              clientInstanceId,
+              kind: "tool",
+              name: "lookup_py"
+            })
+          ).publishedRevisionId ?? "",
+        input: { text: "again" },
+        timeoutSeconds: 5,
+        createdAt: new Date().toISOString()
+      });
+      // What an attempt that was stopped left: its handler's first request.
+      await f.stores.toolCodeCalls.requestToolCodeCall({
+        clientInstanceId,
+        id,
+        request: { seq: 1, connection: "crm", operation: "echo", input: { text: "again" } }
+      });
+      return id;
+    };
+
+    it("is not run again: the retried job ends it as interrupted", async () => {
+      const id = await written();
+      const executed = f.handed.length;
+      await f.stores.jobs.enqueue(job, { callId: id }, { clientInstanceId, subject: id });
+      await waitUntil(
+        async () =>
+          (await f.stores.toolCodeCalls.getToolCodeCall({ clientInstanceId, id }))?.outcome !==
+          undefined,
+        "the call ended",
+        15_000
+      );
+      expect(
+        (await f.stores.toolCodeCalls.getToolCodeCall({ clientInstanceId, id }))?.outcome
+      ).toMatchObject({ kind: "failed", error: { code: "interrupted" } });
+      expect(f.handed.length).toBe(executed);
+    }, 20_000);
+
+    it("starts without the request and answer an earlier start left", async () => {
+      const id = await written();
+      await f.stores.toolCodeCalls.answerToolCodeCall({
+        clientInstanceId,
+        id,
+        answer: { seq: 1, ok: true, output: { text: "again" } }
+      });
+      await f.stores.toolCodeCalls.startToolCodeCall({
+        clientInstanceId,
+        id,
+        startedAt: new Date().toISOString()
+      });
+      const started = await f.stores.toolCodeCalls.getToolCodeCall({ clientInstanceId, id });
+      expect(started?.request).toBeUndefined();
+      expect(started?.answer).toBeUndefined();
+    });
   });
 });

@@ -114,7 +114,7 @@ export interface CodeSandboxOptions {
  */
 export interface CodeSandboxChannel extends Pick<
   SandboxRequestChannel,
-  "answer" | "refuse" | "maxLineBytes"
+  "answer" | "refuse" | "maxLineBytes" | "maxLines"
 > {
   library: readonly { path: string; content: string }[];
 }
@@ -482,6 +482,7 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
                 requests: {
                   endMark,
                   maxLineBytes: channel.maxLineBytes,
+                  maxLines: channel.maxLines,
                   answer: (line: string) => channel.answer(line),
                   refuse: (reason: "too_long") => channel.refuse(reason)
                 }

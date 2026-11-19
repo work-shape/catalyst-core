@@ -48,9 +48,11 @@ export type OperationOrigin =
        * Set on a call a code tool's handler made (TOOL-2c): the Operation Run of the tool's
        * call it was made in. `toolName` then names that tool's operation, which the agent lists,
        * and the call is one of the Connection operations the tool declares. Their policy was
-       * asked on the tool's call, so the call itself waits for nobody.
+       * asked on the tool's call, so the call itself waits for nobody: `asked` is what the
+       * policy asked of this operation when the handler started. A call the policy now asks
+       * more of is refused, as is one a guardrail asks about.
        */
-      byTool?: { runId: OperationRunId };
+      byTool?: { runId: OperationRunId; asked: PolicyValue };
       /**
        * A Workflow agent step's call in a test run of a draft, which acts as the person
        * testing: the service principal whose rights bounded theirs (ADR-0031).

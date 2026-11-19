@@ -9,7 +9,11 @@ section: Added
   never holds the credential. The platform makes the call as the tool's caller, with their rights
   (`connection.use`), as an Operation Run of its own whose origin is the tool's call; an
   undeclared operation is refused with `connection_not_declared`, and one call makes at most 50
-  requests of at most 256 KiB. The policy of the declared operations is the floor of the tool's
-  call, asked once before the handler starts; nothing inside the handler waits. In a draft
-  agent's Try the calls reach the Connection's test credential. A run so allowed records the
-  decision reason `tool_call`.
+  requests of at most 256 KiB, read one at a time. The policy of the declared operations is the
+  floor of the tool's call, asked once before the handler starts, and an `approval` asked of a
+  personal Connection's operation refuses the tool's call. Nothing inside the handler waits: a
+  call the policy asks more of than it asked as the handler started, or one a guardrail asks
+  about, is refused with `connection_call_waits`. A handler that stopped after it called a
+  Connection is not run again; its call fails as `interrupted`. In a draft agent's Try the calls
+  reach the Connection's test credential. A run so allowed records the decision reason
+  `tool_call`.
