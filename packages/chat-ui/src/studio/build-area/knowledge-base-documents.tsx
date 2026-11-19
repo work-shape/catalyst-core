@@ -551,10 +551,10 @@ function DocumentRow({
       // What a failed document needs stays in view; the rest shows with the pointer or the focus.
       actionsVisible={document.state === "failed"}
       actions={
-        // Every row keeps a slot two icons wide, so the dates of all rows stand in one column
-        // whatever actions a row has.
+        // Every row keeps a slot three icons wide (open, link, remove: the most a ready row has),
+        // so the dates of all rows stand in one column whatever actions a row has.
         <span
-          className="flex min-w-[calc(var(--spacing-control-md)*2+0.25rem)] items-center justify-end gap-1"
+          className="flex min-w-[calc(var(--spacing-control-md)*3+0.5rem)] items-center justify-end gap-1"
           data-knowledge-document-actions=""
         >
           {origin ? (
