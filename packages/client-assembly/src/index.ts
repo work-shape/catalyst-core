@@ -92,11 +92,8 @@ export {
   createToolOperationSource
 } from "./tool-assets";
 export {
-  TOOL_CODE_ANSWER_MAX_BYTES,
   TOOL_CODE_CALL_JOB_KIND,
   TOOL_CODE_CALL_SLOTS,
-  TOOL_CODE_HTML_MAX_CHARS,
-  TOOL_CODE_OUTPUT_MAX_BYTES,
   TOOL_CODE_SWEEP_JOB_KIND,
   createToolCodeCallClient,
   createToolCodeCallJobs,

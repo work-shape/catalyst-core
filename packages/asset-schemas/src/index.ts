@@ -34,3 +34,4 @@ export * from "./server-preview-capture";
 export * from "./html-pdf";
 export * from "./tool-asset";
 export * from "./tool-code-library";
+export * from "./tool-code-answer";
