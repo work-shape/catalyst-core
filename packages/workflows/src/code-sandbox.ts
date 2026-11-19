@@ -88,6 +88,11 @@ export interface CodeSandboxOptions {
   outputMaxBytes: number;
   /** How much a script may write to its output directory, and so how large a dataset it writes. */
   diskBytes?: number;
+  /**
+   * What the names of its containers start with, `code-step-` where unset. Another user of
+   * this sandbox, such as code tools, names its own, so a sweep removes only what is its own.
+   */
+  commandIdPrefix?: string;
 }
 
 /** How often the worker measures what a running script has written to its output directory. */
@@ -191,6 +196,7 @@ async function stepBytes(data: SandboxDataDirectories, bound: number): Promise<n
 export function createCodeSandbox(options: CodeSandboxOptions) {
   const { sandbox, tempRoot, limits, outputMaxBytes } = options;
   const diskBytes = options.diskBytes ?? WORKFLOW_CODE_DISK_BYTES;
+  const commandIdPrefix = options.commandIdPrefix ?? COMMAND_ID_PREFIX;
   const active = new Set<string>();
   const sourceCache = createWorkflowSourceCache({
     directory: join(tempRoot, `${CACHE_PREFIX}${process.pid}`),
@@ -237,7 +243,7 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
       }
     }
     const containers = await Promise.resolve(
-      sandbox.removeLeftovers?.({ idPrefix: COMMAND_ID_PREFIX, olderThanMs }) ?? 0
+      sandbox.removeLeftovers?.({ idPrefix: commandIdPrefix, olderThanMs }) ?? 0
     ).catch(() => 0);
     return { directories, containers };
   }
@@ -385,7 +391,7 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
       const result = await sandbox
         .execute({
           command: {
-            id: `${COMMAND_ID_PREFIX}${input.id}`,
+            id: `${commandIdPrefix}${input.id}`,
             command: scriptCommand({
               interpreter: language.command,
               script,

@@ -8,6 +8,8 @@ import {
   createPlatformId,
   dataToolPrefixOf,
   NoopAuditRecorder,
+  TOOL_FILE_MAX_BYTES,
+  TOOL_FILES_MAX,
   isToolOperationAnswer,
   toolAssetConfigSchema,
   toolCallOperationName,
@@ -16,6 +18,7 @@ import {
   type AuthenticatedUser,
   type ConfigAssetStore,
   type JsonObject,
+  type JsonValue,
   type OperationDefinition,
   type OperationExecutionContext,
   type OperationOrigin
@@ -23,8 +26,11 @@ import {
 import { findMissingAgentToolReferences } from "@work-shape/catalyst-config-schema";
 import { createOutsideSchemaChecker } from "@work-shape/catalyst-connections";
 import {
+  TOOL_CODE_HTML_MAX_CHARS,
+  TOOL_CODE_OUTPUT_MAX_BYTES,
   createToolAssetToolSource,
-  createToolOperationSource
+  createToolOperationSource,
+  toolCodeCallAnswer
 } from "@work-shape/catalyst-client-assembly";
 
 // Tools an instance adds without a release (TOOL-1): the definition, the operation a published
@@ -134,6 +140,69 @@ describe("a tool's definition", () => {
     expect(toolAssetConfigSchema.safeParse({ ...definition, type: "code" }).success).toBe(false);
     expect(toolAssetConfigSchema.safeParse({ ...definition, run: "echo" }).success).toBe(false);
     expect(toolAssetConfigSchema.safeParse({ ...definition, name: "Submit-Review" }).success).toBe(
+      false
+    );
+  });
+
+  it("takes a code tool whose handler is among its bounded files", () => {
+    const code = {
+      name: "sum",
+      type: "code",
+      title: { en: "Sum" },
+      description: "Adds numbers.",
+      input: { type: "object" },
+      runtime: "python",
+      entry: "main.py",
+      files: [
+        { path: "main.py", content: "print('{}')" },
+        { path: "lib/util.py", content: "" }
+      ]
+    };
+    const accepted = (overrides: Record<string, unknown>) =>
+      toolAssetConfigSchema.safeParse({ ...code, ...overrides }).success;
+    expect(accepted({})).toBe(true);
+    expect(
+      accepted({ runtime: "node", entry: "index.mjs", files: [{ path: "index.mjs", content: "" }] })
+    ).toBe(true);
+    expect(accepted({ timeoutSeconds: 120 })).toBe(true);
+    // The handler must be among the files, in the runtime's language.
+    expect(accepted({ entry: "missing.py" })).toBe(false);
+    expect(accepted({ runtime: "node" })).toBe(false);
+    expect(accepted({ files: [] })).toBe(false);
+    // A timeout of at most two minutes; no result block, no Connections yet.
+    expect(accepted({ timeoutSeconds: 121 })).toBe(false);
+    expect(accepted({ timeoutSeconds: 0 })).toBe(false);
+    expect(accepted({ result: definition.result })).toBe(false);
+    expect(accepted({ connections: ["crm.find_contact"] })).toBe(false);
+    // Paths stay inside the folder, once each.
+    for (const path of ["../main.py", "/etc/main.py", ".hidden.py", "a//b.py", "lib/../x.py"]) {
+      expect(accepted({ files: [...code.files, { path, content: "" }] }), path).toBe(false);
+    }
+    expect(accepted({ files: [...code.files, { path: "MAIN.py", content: "" }] })).toBe(false);
+    expect(accepted({ files: [...code.files, { path: "main.py/x.py", content: "" }] })).toBe(false);
+    // Bounded in count and size.
+    const many = Array.from({ length: TOOL_FILES_MAX }, (_, at) => ({
+      path: `f${String(at)}.py`,
+      content: ""
+    }));
+    expect(accepted({ entry: "f0.py", files: many })).toBe(true);
+    expect(accepted({ entry: "f0.py", files: [...many, { path: "g.py", content: "" }] })).toBe(
+      false
+    );
+    const large = "x".repeat(TOOL_FILE_MAX_BYTES + 1);
+    expect(accepted({ files: [...code.files, { path: "big.py", content: large }] })).toBe(false);
+    const half = "x".repeat(TOOL_FILE_MAX_BYTES);
+    expect(
+      accepted({
+        files: [
+          ...code.files,
+          { path: "a.py", content: half },
+          { path: "b.py", content: half },
+          { path: "c.py", content: "x" }
+        ]
+      })
+    ).toBe(false);
+    expect(accepted({ files: [...code.files, { path: "nul.py", content: "a\u0000b" }] })).toBe(
       false
     );
   });
@@ -261,5 +330,68 @@ describe("the operation of a published tool", () => {
         contextOf({ ...agentOrigin, toolRevisionId: "rev-3" })
       )
     ).resolves.toBeTruthy();
+  });
+});
+
+describe("a code tool's answer", () => {
+  const answer = (value: JsonValue, personal = false) =>
+    toolCodeCallAnswer({
+      tool: "sum",
+      timeoutSeconds: 30,
+      result: { status: "ended", outcome: { kind: "answered", value } },
+      personal
+    });
+
+  it("hands the model its output, bounded, and refuses an answer of another shape", () => {
+    expect(answer({ output: "fine" })).toEqual({ status: "success", output: "fine" });
+    expect(answer({ output: null })).toEqual({ status: "success", output: null });
+    const big = answer({ output: "x".repeat(TOOL_CODE_OUTPUT_MAX_BYTES + 1) });
+    expect(big).toMatchObject({
+      status: "failed",
+      error: { details: { reason: "tool_answer_invalid" } }
+    });
+    expect(JSON.stringify(big).length).toBeLessThan(2_000);
+    const invalids: JsonValue[] = [
+      "text",
+      [1],
+      {},
+      { output: 1, extra: true },
+      { output: 1, display: { type: "pdf" } },
+      { output: 1, display: { type: "data", kind: "Bad Kind", title: "T", data: {} } },
+      { output: 1, display: { type: "data", kind: "a.b", data: {} } },
+      { output: 1, display: { type: "html", html: "x".repeat(TOOL_CODE_HTML_MAX_CHARS + 1) } }
+    ];
+    for (const invalid of invalids) {
+      expect(answer(invalid), JSON.stringify(invalid).slice(0, 80)).toMatchObject({
+        status: "failed",
+        error: { code: "handler_failed", details: { reason: "tool_answer_invalid" } }
+      });
+    }
+  });
+
+  it("names a timeout as timed_out, and any other failure as the handler's", () => {
+    const ended = (code: string) =>
+      toolCodeCallAnswer({
+        tool: "sum",
+        timeoutSeconds: 5,
+        result: { status: "ended", outcome: { kind: "failed", error: { code, message: "m" } } },
+        personal: false
+      });
+    expect(ended("code_timeout")).toMatchObject({
+      status: "timed_out",
+      error: { code: "timed_out" }
+    });
+    expect(ended("code_out_of_memory")).toMatchObject({
+      status: "failed",
+      error: { code: "handler_failed", details: { reason: "code_out_of_memory" } }
+    });
+    expect(
+      toolCodeCallAnswer({
+        tool: "sum",
+        timeoutSeconds: 5,
+        result: { status: "cancelled" },
+        personal: false
+      })
+    ).toMatchObject({ status: "cancelled" });
   });
 });

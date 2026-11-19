@@ -2,9 +2,11 @@ import { z } from "zod";
 import { localizedStringSchema } from "./schemas";
 
 // A tool an instance adds without a release (TOOL-1, platform-access.md, section 3a): an asset
-// of kind `tool`. It holds no code. Its one type, `result`, checks the agent's input against a
-// declared JSON Schema and writes it as the conversation's structured result of one display
-// kind. Its operation is `tool.<name>.call`.
+// of kind `tool`. Its operation is `tool.<name>.call`. It has two types:
+// - `result` holds no code. It checks the agent's input against a declared JSON Schema and
+//   writes it as the conversation's structured result of one display kind.
+// - `code` holds a handler in Python or JavaScript among its files, which a call runs in the
+//   sandbox of Workflow code steps (TOOL-2b).
 
 /** The kind's id, as the asset store keeps it. */
 export const TOOL_ASSET_KIND = "tool";
@@ -33,8 +35,40 @@ export const TOOL_INPUT_SCHEMA_MAX_DEPTH = 24;
 /** What a call of a `result` tool answers the agent where the tool names no sentence. */
 export const TOOL_RESULT_DEFAULT_REPLY = "Done.";
 
-/** The types of tool. `result` hands the agent's finished result to the panel. */
-export const TOOL_TYPES = ["result"] as const;
+/**
+ * The types of tool. `result` hands the agent's finished result to the panel; `code` runs a
+ * handler of its own files in the sandbox.
+ */
+export const TOOL_TYPES = ["result", "code"] as const;
+
+/** What a code tool's handler is run with: the runner image's `python3` or `node`. */
+export const TOOL_CODE_RUNTIMES = ["python", "node"] as const;
+export type ToolCodeRuntime = (typeof TOOL_CODE_RUNTIMES)[number];
+
+/** The endings of a handler file of each runtime. */
+export const TOOL_CODE_ENTRY_ENDINGS: Readonly<Record<ToolCodeRuntime, readonly string[]>> = {
+  python: [".py"],
+  node: [".js", ".mjs"]
+};
+
+/** How long a handler may run where its tool names no time, and at most, in seconds. */
+export const TOOL_CODE_TIMEOUT_DEFAULT_SECONDS = 30;
+export const TOOL_CODE_TIMEOUT_MAX_SECONDS = 120;
+
+/** How many files a code tool holds at most, how large one is and how large all are. */
+export const TOOL_FILES_MAX = 32;
+export const TOOL_FILE_MAX_BYTES = 256 * 1024;
+export const TOOL_FILES_MAX_BYTES = 512 * 1024;
+
+/**
+ * A path in a code tool's folder: `/`-separated parts of letters, digits, `_`, `-` and `.`,
+ * each starting with a letter, a digit or `_`. No part is `..`, none is hidden and none is
+ * empty, so a path never leaves the folder.
+ */
+export const TOOL_FILE_PATH_PATTERN =
+  /^(?:[A-Za-z0-9_][A-Za-z0-9_.-]*\/)*[A-Za-z0-9_][A-Za-z0-9_.-]*$/u;
+const TOOL_FILE_PATH_RULE =
+  "A file path is '/'-separated parts of letters, digits, '_', '-' and '.', none of them hidden";
 
 export const toolNameSchema = z
   .string()
@@ -106,26 +140,117 @@ export const toolResultSchema = z
   })
   .strict();
 
-export const toolAssetConfigSchema = z
+/** What both types share. */
+const toolFields = {
+  name: toolNameSchema,
+  /** What people read: the agent page and Studio. */
+  title: localizedStringSchema,
+  summary: localizedStringSchema.optional(),
+  /** What the agent reads: when to call it and what it hands over. */
+  description: z.string().trim().min(1).max(TOOL_DESCRIPTION_MAX_CHARS),
+  icon: z
+    .string()
+    .regex(/^[a-z][a-z0-9-]*$/u)
+    .max(40)
+    .optional(),
+  input: toolInputSchemaSchema
+};
+
+export const toolFilePathSchema = z
+  .string()
+  .max(200, "A file path is at most 200 characters long")
+  .regex(TOOL_FILE_PATH_PATTERN, TOOL_FILE_PATH_RULE);
+
+/** One file of a code tool's folder, as text. */
+export const toolFileSchema = z
   .object({
-    name: toolNameSchema,
-    type: z.enum(TOOL_TYPES),
-    /** What people read: the agent page and Studio. */
-    title: localizedStringSchema,
-    summary: localizedStringSchema.optional(),
-    /** What the agent reads: when to call it and what it hands over. */
-    description: z.string().trim().min(1).max(TOOL_DESCRIPTION_MAX_CHARS),
-    icon: z
-      .string()
-      .regex(/^[a-z][a-z0-9-]*$/u)
-      .max(40)
-      .optional(),
-    input: toolInputSchemaSchema,
-    result: toolResultSchema
+    path: toolFilePathSchema,
+    // Source text: a NUL byte is no text a database column keeps.
+    content: z.string().refine((text) => !text.includes("\u0000"), "A file is text without NUL")
   })
   .strict();
 
+const resultToolSchema = z
+  .object({ ...toolFields, type: z.literal("result"), result: toolResultSchema })
+  .strict();
+
+const codeToolSchema = z
+  .object({
+    ...toolFields,
+    type: z.literal("code"),
+    runtime: z.enum(TOOL_CODE_RUNTIMES),
+    /** The handler: the path of one of `files`. */
+    entry: toolFilePathSchema,
+    timeoutSeconds: z.number().int().min(1).max(TOOL_CODE_TIMEOUT_MAX_SECONDS).optional(),
+    /** The folder of the tool: the handler and whatever it reads or imports. */
+    files: z.array(toolFileSchema).min(1).max(TOOL_FILES_MAX)
+  })
+  .strict()
+  .superRefine((tool, context) => {
+    const endings = TOOL_CODE_ENTRY_ENDINGS[tool.runtime];
+    if (!endings.some((ending) => tool.entry.endsWith(ending))) {
+      context.addIssue({
+        code: "custom",
+        path: ["entry"],
+        message: `A ${tool.runtime} handler is a file ending in ${endings.map((e) => `'${e}'`).join(" or ")}`
+      });
+    }
+    if (!tool.files.some((file) => file.path === tool.entry)) {
+      context.addIssue({
+        code: "custom",
+        path: ["entry"],
+        message: `The files hold no '${tool.entry}': the handler must be among them`
+      });
+    }
+    let total = 0;
+    const seen = new Set<string>();
+    tool.files.forEach((file, at) => {
+      const bytes = new TextEncoder().encode(file.content).byteLength;
+      total += bytes;
+      if (bytes > TOOL_FILE_MAX_BYTES) {
+        context.addIssue({
+          code: "custom",
+          path: ["files", at, "content"],
+          message: `'${file.path}' has ${bytes} bytes; a file of a tool has at most ${TOOL_FILE_MAX_BYTES}`
+        });
+      }
+      // Two paths that differ only in case, or a file where another has a folder, are one
+      // place on some disks.
+      const key = file.path.toLowerCase();
+      if (
+        seen.has(key) ||
+        [...seen].some((other) => key.startsWith(`${other}/`) || other.startsWith(`${key}/`))
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["files", at, "path"],
+          message: `'${file.path}' is held twice, or as a file and a folder`
+        });
+      }
+      seen.add(key);
+    });
+    if (total > TOOL_FILES_MAX_BYTES) {
+      context.addIssue({
+        code: "custom",
+        path: ["files"],
+        message: `The files have ${total} bytes together; a tool's files have at most ${TOOL_FILES_MAX_BYTES}`
+      });
+    }
+  });
+
+export const toolAssetConfigSchema = z.discriminatedUnion("type", [
+  resultToolSchema,
+  codeToolSchema
+]);
+
 export type ToolAssetConfig = z.infer<typeof toolAssetConfigSchema>;
+export type ResultToolConfig = Extract<ToolAssetConfig, { type: "result" }>;
+export type CodeToolConfig = Extract<ToolAssetConfig, { type: "code" }>;
+
+/** How long a call of a code tool may run, in seconds. */
+export function toolCodeTimeoutSeconds(tool: Pick<CodeToolConfig, "timeoutSeconds">): number {
+  return tool.timeoutSeconds ?? TOOL_CODE_TIMEOUT_DEFAULT_SECONDS;
+}
 
 /** The operation a published tool contributes. */
 export function toolCallOperationName(tool: string): string {

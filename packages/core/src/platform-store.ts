@@ -49,6 +49,7 @@ import type { PersonalApiKeyStore } from "./personal-api-keys";
 import type { FeedbackStore } from "./feedback";
 import type { PlatformReportStore } from "./platform-reports";
 import type { StructuredDataStore } from "./structured-data";
+import type { ToolCodeCallsStore } from "./tool-code-calls";
 import type { WorkflowRunDatasetsStore } from "./workflows";
 import type { WorkflowRunsStore } from "./workflow-runs";
 
@@ -133,6 +134,8 @@ export interface PlatformStores {
   projects: ProjectStore;
   /** The files of each project with their versions (PRJ-2). */
   projectFiles: ProjectFileStore;
+  /** The calls of code tools while they run (TOOL-2b): the input until the handler ended. */
+  toolCodeCalls: ToolCodeCallsStore;
   /** Resolves after commit; a rejected callback rolls back all domain writes. Nested calls use savepoints. */
   transaction<T>(fn: (stores: PlatformStores) => Promise<T>): Promise<T>;
   /**
