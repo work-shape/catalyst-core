@@ -608,9 +608,9 @@ describe("Data Stores in Build", () => {
     // One line names what fills and what reads it, a link where there is a page.
     const line = main.slice(main.indexOf("data-data-store-used-by-line"));
     expect(line).toContain("Used by ");
-    expect(line).toMatch(
-      /href="\/build\/knowledge-bases\/visits-knowledge"[^>]*>Visits knowledge</u
-    );
+    // A Knowledge Base stands as text: its reader may use it without being able to open it.
+    expect(line).toContain(">Visits knowledge<");
+    expect(line).not.toContain('href="/build/knowledge-bases/visits-knowledge"');
     expect(line).toMatch(/href="\/w\/ws_1\/apps\/visits-board"[^>]*>Visits board</u);
     expect(line).toContain(">Nightly rollup<");
     expect(line).toContain(">Weekly report<");
