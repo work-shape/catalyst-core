@@ -203,7 +203,7 @@ describe("the Documents section", () => {
 
     shown([...many(63, "indexed"), ...many(2, "failed"), ...many(1, "pending")]);
     expect(tally()).toBe(
-      "63 von 66 Dokumenten sind durchsuchbar2 konnten nicht gelesen werden. Sie stehen unten ganz oben."
+      "63 von 66 Dokumenten sind durchsuchbar2 konnten nicht gelesen werden. Sie stehen oben in der Liste."
     );
     // Whoever may only use it gets no way to add.
     expect(document.querySelector("[data-knowledge-add]")).toBeNull();

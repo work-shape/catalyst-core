@@ -160,8 +160,8 @@ export const knowledgeSources = defineTranslations({
     "knowledgeSources.details": "Details",
     "knowledgeSources.connectTitle": "Connect a folder",
     "knowledgeSources.rowFrom": "Folders from {connection}",
-    "knowledgeSources.rowDocument": "1 document",
-    "knowledgeSources.rowDocuments": "{count} documents",
+    "knowledgeSources.rowDocument": "1 searchable",
+    "knowledgeSources.rowDocuments": "{count} searchable",
     "knowledgeSources.sentenceBoth":
       "Keeps itself up to date: new and changed {items} {interval}, deleted {items} are removed {full}.",
     "knowledgeSources.sentenceChangesOnly":
@@ -341,8 +341,8 @@ export const knowledgeSources = defineTranslations({
     "knowledgeSources.details": "Details",
     "knowledgeSources.connectTitle": "Ordner verbinden",
     "knowledgeSources.rowFrom": "Ordner aus {connection}",
-    "knowledgeSources.rowDocument": "1 Dokument",
-    "knowledgeSources.rowDocuments": "{count} Dokumente",
+    "knowledgeSources.rowDocument": "1 durchsuchbar",
+    "knowledgeSources.rowDocuments": "{count} durchsuchbar",
     "knowledgeSources.sentenceBoth":
       "Hält sich automatisch aktuell: neue und geänderte {items} {interval}, gelöschte {items} werden {full} entfernt.",
     "knowledgeSources.sentenceChangesOnly":
