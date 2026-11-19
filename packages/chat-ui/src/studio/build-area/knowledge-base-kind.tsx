@@ -16,9 +16,7 @@ import {
   type KnowledgeBaseState,
   type KnowledgeDocumentSummary
 } from "./knowledge-base-source";
-
-/** The kind's segment in an address: `/build/knowledge-bases`. */
-const KNOWLEDGE_BASES_BUILD_PATH = "knowledge-bases";
+import { KNOWLEDGE_BASES_BUILD_PATH } from "../../shared/build-route";
 
 /** Stands for a number or a time the row may not show: unread, refused or not sent. */
 const UNKNOWN = "—";

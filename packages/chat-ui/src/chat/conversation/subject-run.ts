@@ -7,7 +7,7 @@ import {
   WORKFLOW_ASSET_KIND
 } from "@work-shape/catalyst-core";
 import { AGENT_ASSET_KIND } from "../../shared/build-rights";
-import { AGENTS_BUILD_PATH } from "../../shared/build-route";
+import { AGENTS_BUILD_PATH, KNOWLEDGE_BASES_BUILD_PATH } from "../../shared/build-route";
 import type { WorkspaceRoute } from "../../shared/routes";
 import { FORMER_OPEN_TOOL_NAME } from "../../studio/pages/page-save";
 import { DATA_STORE_CHANGE_VERBS } from "../../studio/build-area/agent-data-stores-model";
@@ -178,10 +178,9 @@ export function sameAsset(a: SubjectAsset | undefined, b: SubjectAsset | undefin
   return a !== undefined && b !== undefined && a.kind === b.kind && a.name === b.name;
 }
 
-/** The path segments of skills, Data Stores and Knowledge Bases in Build. */
+/** The path segments of skills and Data Stores in Build. */
 const SKILLS_BUILD_PATH = "skills";
 const DATA_STORES_BUILD_PATH = "data-stores";
-const KNOWLEDGE_BASES_BUILD_PATH = "knowledge-bases";
 const SKILL_ASSET_KIND = "skill";
 
 /**
