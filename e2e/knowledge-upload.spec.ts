@@ -403,9 +403,11 @@ test.describe("uploading files from the computer into a Knowledge Base", () => {
       await picture(page, "origin-link-dialog-en-light-1280");
       await page.locator("[data-knowledge-origin-save]").click();
       await expect(page.getByText(/The link of .* was saved\./u)).toBeVisible();
-      const chip = row.locator("[data-knowledge-origin-link]");
-      await expect(chip).toHaveText("dms.example.test");
-      await expect(chip.locator("xpath=ancestor::a[1]")).toHaveAttribute("href", original);
+      // The original is an icon button among the row's actions, which show with the pointer.
+      const chip = row.locator("a[data-knowledge-origin-link]");
+      await row.hover();
+      await expect(chip).toHaveAttribute("href", original);
+      await expect(chip).toHaveAttribute("aria-label", /^Open the original of /u);
       await picture(page, "origin-link-row-en-light-1280");
 
       // It opens in a tab of its own, which cannot reach back into the page.

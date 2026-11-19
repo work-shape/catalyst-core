@@ -11,6 +11,8 @@ import {
   X
 } from "lucide-react";
 import {
+  createContext,
+  useContext,
   useEffect,
   useId,
   useRef,
@@ -84,6 +86,12 @@ import { formatEmbeddingCost, formatStoreBytes } from "./knowledge-cost";
 // how fresh that makes it. Its Workflow's runs decide what it holds, so it has no Sync now and
 // no Try again here. A document a person removed by hand stays out of every later run; only
 // who may publish the Knowledge Base lets it back in, with Allow again (KBW-2b).
+
+/**
+ * The ids of the synced sources whose documents keep no copy of their file here, as the list
+ * of documents read them: such a source says once where the originals are.
+ */
+export const ReleasedSourcesContext = createContext<ReadonlySet<string>>(new Set());
 
 /** The search of the Connection chooser before the reader types. */
 const NO_SEARCH = "";
@@ -338,8 +346,11 @@ function SourceItem({
   const folders = sourceFolderIds(entry.folders);
   // Folded until the reader asks, unless something in it needs a person.
   const [open, setOpen] = useState<boolean>();
-  const needsPerson =
-    status !== undefined && (status.confirmation !== undefined || status.failures.length > 0);
+  // Only a confirmation waits for the reader here. Failed documents stand first in the list
+  // with their fix, so the row counts them and stays folded.
+  const needsPerson = status?.confirmation !== undefined;
+  const failed = status?.failures.reduce((sum, failure) => sum + failure.count, 0) ?? 0;
+  const released = useContext(ReleasedSourcesContext).has(entry.id);
   const unfolded = open ?? (startsOpen || needsPerson);
   const view = status === undefined ? undefined : sourceStateView(status);
   const connectionTitle = choice?.title || entry.connection;
@@ -356,7 +367,8 @@ function SourceItem({
             : t("knowledgeSources.rowDocuments", {
                 count: new Intl.NumberFormat(locale).format(searchable)
               })
-        ])
+        ]),
+    ...(released ? [t("knowledgeSources.rowOriginals", { connection: connectionTitle })] : [])
   ].join(" · ");
   const addressField = (key: "pages" | "prefixes" | "sitemaps") => (
     <Field label={t(`knowledgeSources.${key}`)} hint={t(`knowledgeSources.${key}Hint`)} optional>
@@ -454,6 +466,13 @@ function SourceItem({
                   {t(view.label)}
                 </Badge>
               )}
+              {failed > 0 ? (
+                <Badge tone="danger" dot data-knowledge-source-failed="">
+                  {t("knowledgeSources.failedCount", {
+                    count: new Intl.NumberFormat(locale).format(failed)
+                  })}
+                </Badge>
+              ) : null}
             </div>
             {facts === "" ? null : (
               <span className="text-caption text-muted-foreground">{facts}</span>

@@ -305,6 +305,37 @@ describe("the state of a synced source", () => {
     expect(page).toContain("Quelle hinzufügen");
   });
 
+  it("stays folded over failed items and counts them in its row; only a confirmation unfolds it", () => {
+    const adjust = (page: string) =>
+      /<button[^>]*data-knowledge-source-adjust=""[^>]*>/u.exec(page)?.[0] ??
+      /<button[^>]*aria-expanded="[^"]*"[^>]*data-knowledge-source-adjust/u.exec(page)?.[0];
+    const failing = render("de");
+    expect(adjust(failing)).toContain('aria-expanded="false"');
+    expect(failing).toMatch(/data-knowledge-source-failed="">.*?2 fehlgeschlagen/su);
+    const calm = render("de", {
+      status: { sources: [{ ...running, items: { ...running.items, failed: 0 }, failures: [] }] }
+    });
+    expect(calm).not.toContain("data-knowledge-source-failed");
+    const waiting = render("de", {
+      status: {
+        sources: [
+          {
+            ...running,
+            failures: [],
+            confirmation: {
+              syncRunId: "sync_1",
+              items: 12_000,
+              bytes: 1_000,
+              stop: 10_000,
+              storeBytes: 1_000
+            }
+          }
+        ]
+      }
+    });
+    expect(adjust(waiting)).toContain('aria-expanded="true"');
+  });
+
   it("shows the same in English", () => {
     const page = render("en");
     expect(page).toContain("Initial import running");

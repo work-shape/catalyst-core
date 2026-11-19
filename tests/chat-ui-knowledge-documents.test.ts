@@ -10,6 +10,7 @@ import {
   KNOWLEDGE_DOCUMENT_FAILURES,
   KnowledgeAddDialog,
   KnowledgeDocuments,
+  KnowledgeSourcesSection,
   knowledgeStateStillChanging,
   type KnowledgeBaseSource,
   type KnowledgeBaseState,
@@ -287,41 +288,120 @@ describe("the Documents section", () => {
     expect(button("Dokumente hinzufügen")).toBeDefined();
   });
 
-  it("says plainly when a document's original is stored at its source", () => {
+  it("says once, in the source's row, that the originals stay at the source, and never in a document's row", () => {
     const synced = [
       document_("richtlinie", "indexed", {
         format: "pdf",
         fileName: "richtlinie.pdf",
+        sourceId: "ablage",
         originalStatus: "released"
       }),
       document_("kopie", "indexed", { originalStatus: "available" }),
       document_("leer", "failed", {
+        sourceId: "ablage",
         originalStatus: "released",
         failureCode: "knowledge_text_empty"
       })
     ];
-    const source = plantedSource({ useDocuments: () => ready({ documents: synced }) });
-    const shown = {
-      source,
-      knowledgeBase: "objektunterlagen",
-      publishedRevision: 1,
-      canWrite: true
+    const entry = (id: string) => ({
+      id,
+      connection: id,
+      folders: "100",
+      include: "",
+      exclude: ""
+    });
+    const shown = (documents: KnowledgeDocument[]) => {
+      const source = plantedSource({
+        useDocuments: () => ready({ documents }),
+        useSourceConnections: () =>
+          ready({
+            items: [
+              { name: "ablage", title: "Ablage" },
+              { name: "archiv", title: "Archiv" }
+            ]
+          })
+      });
+      return createElement(KnowledgeDocuments, {
+        source,
+        knowledgeBase: "objektunterlagen",
+        publishedRevision: 1,
+        canWrite: true,
+        sources: createElement(KnowledgeSourcesSection, {
+          source,
+          knowledgeBase: "objektunterlagen",
+          published: 1,
+          owner: undefined,
+          sources: [entry("ablage"), entry("archiv")],
+          canWrite: true,
+          layout: "rows",
+          onChange: () => undefined
+        })
+      });
     };
+    const sourceRow = (id: string) =>
+      document.querySelector(`[data-knowledge-source="${id}"]`)?.textContent ?? "";
 
-    show(createElement(KnowledgeDocuments, shown));
-    expect(row("richtlinie").textContent).toContain(
-      "PDF · 2 KiB · Original is stored at the source"
-    );
-    expect(row("kopie").textContent).not.toContain("Original is stored at the source");
+    show(shown(synced));
+    expect(row("richtlinie").textContent).toContain("PDF · 2 KiB");
+    expect(document.body.textContent?.match(/The originals stay in/gu)).toHaveLength(1);
+    expect(sourceRow("ablage")).toContain("The originals stay in Ablage");
+    // A source whose documents keep their copy here says nothing of it.
+    expect(sourceRow("archiv")).not.toContain("originals");
     expect(row("leer").textContent).toContain(
-      "The file has no text to search, such as a scanned PDF without a text layer. · Original is stored at the source"
+      "The file has no text to search, such as a scanned PDF without a text layer."
     );
-    // No way to open the original: the notice is text, not an action.
-    expect(button("Open", row("richtlinie"))).toBeUndefined();
 
-    show(createElement(KnowledgeDocuments, shown), "de");
-    expect(row("richtlinie").textContent).toContain("Original liegt in der Quelle");
-    expect(row("kopie").textContent).not.toContain("Original liegt in der Quelle");
+    show(shown(synced), "de");
+    expect(sourceRow("ablage")).toContain("Die Originale bleiben in Ablage");
+    expect(row("richtlinie").textContent).not.toContain("Original");
+
+    show(shown([document_("kopie", "indexed", { sourceId: "ablage" })]), "de");
+    expect(sourceRow("ablage")).not.toContain("Originale");
+  });
+
+  it("tells two files of one name apart by their folder, on one line that is cut and never wraps", () => {
+    const twins = [
+      document_("a", "indexed", {
+        title: "Grundriss.pdf",
+        fileName: "Grundriss.pdf",
+        format: "pdf",
+        sourceId: "ablage",
+        folder: "/Projekte/Haus A"
+      }),
+      document_("b", "indexed", {
+        title: "Grundriss.pdf",
+        fileName: "Grundriss.pdf",
+        format: "pdf",
+        sourceId: "ablage",
+        folder: "/Projekte/Haus B"
+      }),
+      // At the top of what is synced, and added by hand: no folder to name.
+      document_("oben", "indexed", { sourceId: "ablage", folder: "/" }),
+      document_("hand", "indexed"),
+      document_("kaputt", "failed", {
+        sourceId: "ablage",
+        folder: "/Projekte/Haus A",
+        failureCode: "knowledge_text_empty"
+      })
+    ];
+    show(
+      createElement(KnowledgeDocuments, {
+        source: plantedSource({ useDocuments: () => ready({ documents: twins }) }),
+        knowledgeBase: "objektunterlagen",
+        publishedRevision: 1,
+        canWrite: false
+      })
+    );
+    const folder = (id: string) => row(id).querySelector("[data-knowledge-document-folder]");
+    expect(row("a").textContent).toContain("Projekte / Haus A· PDF · 2 KiB");
+    expect(row("b").textContent).toContain("Projekte / Haus B· PDF · 2 KiB");
+    expect(folder("a")?.className).toContain("truncate");
+    expect(folder("a")?.getAttribute("title")).toBe("Projekte / Haus A");
+    expect(folder("oben")).toBeNull();
+    expect(folder("hand")).toBeNull();
+    // A failed one keeps its folder over the reason, which may take the lines it needs.
+    expect(folder("kaputt")?.textContent).toBe("Projekte / Haus A");
+    expect(row("kaputt").textContent).toContain("The file has no text to search");
   });
 
   it("marks a searchable document whose fields wait for the budget, in both languages", () => {
@@ -738,24 +818,28 @@ describe("the Documents section", () => {
       })();
     const save = () => document.querySelector<HTMLButtonElement>("[data-knowledge-origin-save]");
 
-    it("shows the original's host as a link out that opens apart, and leaves out any address that is no web address", async () => {
+    it("offers the original as an icon button among the row's actions, named by the document, and leaves out any address that is no web address", async () => {
       const open = vi.spyOn(window, "open").mockImplementation(() => null);
       const linked = [
         document_("vertrag", "indexed", { originLink: "https://dms.example.test/akte/7" }),
         document_("skript", "indexed", { originLink: "javascript:alert(1)" })
       ];
-      show(
-        createElement(KnowledgeDocuments, {
-          source: plantedSource({ useDocuments: () => ready({ documents: linked }) }),
-          knowledgeBase: "objektunterlagen",
-          publishedRevision: 1,
-          canWrite: false
-        })
+      const shown = createElement(KnowledgeDocuments, {
+        source: plantedSource({ useDocuments: () => ready({ documents: linked }) }),
+        knowledgeBase: "objektunterlagen",
+        publishedRevision: 1,
+        canWrite: false
+      });
+      show(shown);
+      const anchor = row("vertrag").querySelector<HTMLAnchorElement>(
+        "a[data-knowledge-origin-link]"
       );
-      const origin = row("vertrag").querySelector("[data-knowledge-origin-link]");
-      expect(origin?.textContent).toBe("dms.example.test");
-      const anchor = origin?.closest("a");
       expect(anchor?.getAttribute("href")).toBe("https://dms.example.test/akte/7");
+      // An icon alone: the host is not written into the row, so nothing wraps under the name.
+      expect(anchor?.textContent).toBe("");
+      expect(row("vertrag").textContent).not.toContain("dms.example.test");
+      expect(anchor?.getAttribute("aria-label")).toBe("Open the original of vertrag");
+      expect(anchor?.getAttribute("title")).toBe("Open the original of vertrag");
       await act(async () => anchor?.click());
       expect(open).toHaveBeenCalledWith(
         "https://dms.example.test/akte/7",
@@ -766,6 +850,10 @@ describe("the Documents section", () => {
       expect(row("skript").querySelector("a")).toBeNull();
       // A reader who may only use the Knowledge Base sees the link and cannot change it.
       expect(editButton("vertrag")).toBeNull();
+      show(shown, "de");
+      expect(
+        row("vertrag").querySelector("[data-knowledge-origin-link]")?.getAttribute("aria-label")
+      ).toBe("Original von vertrag öffnen");
       open.mockRestore();
     });
 
@@ -827,9 +915,9 @@ describe("the Documents section", () => {
       expect(originDialog()).toBeNull();
       expect(document.body.textContent).toContain("The link of vertrag was saved.");
       show(createElement(KnowledgeDocuments, shownProps));
-      expect(row("vertrag").querySelector("[data-knowledge-origin-link]")?.textContent).toBe(
-        "dms.example.test"
-      );
+      expect(
+        row("vertrag").querySelector("[data-knowledge-origin-link]")?.getAttribute("href")
+      ).toBe("https://dms.example.test/akte/7");
 
       // Cleared from the same dialog.
       await act(async () => editButton("vertrag")?.click());
