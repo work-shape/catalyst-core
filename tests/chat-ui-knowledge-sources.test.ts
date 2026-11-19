@@ -765,23 +765,42 @@ describe("when a source syncs by itself (SRC-SYNC)", () => {
     expect(page).toContain("Gelöschtes entfernen");
     // What the pass does is said without the word "vollständig".
     expect(page).not.toMatch(/vollständig/iu);
-    expect(page).toContain("In der Standardzeitzone für alle Arbeitsbereiche.");
-    // The published source says how it syncs now.
+    // The published source says how it syncs now, where the draft sets it otherwise.
     expect(page).toContain("Ruft Änderungen ab");
     expect(page).toContain("Alle 30 Minuten");
     expect(page).not.toContain("Zeitzone</");
+  });
+
+  it("sets each of them in a row of its own, the control beside its words", () => {
+    const page = render("de", { status: schedule(15, "0 2 * * *") });
+    const rows = page.match(/data-slot="settings-row"/gu) ?? [];
+    expect(rows).toHaveLength(3);
+    // No heading says "Synchronisierung" over "Automatisch synchronisieren".
+    expect(page).not.toMatch(/<legend[^>]*>Synchronisierung</u);
+    // Deleted files leave with the pass of their own row, not with the changes.
+    expect(page).toContain("Holt neue und geänderte Dateien.");
+    expect(page).not.toContain("Neue, geänderte und gelöschte Dateien seit");
+    expect(page).toContain("Nimmt heraus, was in der Quelle gelöscht oder verschoben wurde.");
+    // The time is one button that reads as the schedule does.
+    expect(page).toMatch(/data-knowledge-source-sync-when=""[^>]*>Täglich um 02:00</u);
+    expect(page).not.toContain("Wiederholt sich");
+    // It syncs as the rows say, so the published state does not say it again.
+    expect(page).not.toContain("Ruft Änderungen ab");
+    expect(render("en", { status: schedule(15, "0 2 * * *") })).toMatch(
+      /data-knowledge-source-sync-when=""[^>]*>Daily at 02:00 AM</u
+    );
   });
 
   it("offers no interval below its type's floor, and shows its type's full sync as the default", () => {
     const page = render("en", {
       status: schedule(60, "0 3 * * 1", { defaultFull: "0 3 * * 1", minChanges: 60 })
     });
-    expect(page).toContain("At most every hour for this kind of source.");
+    expect(page).toContain("Fetches new and changed files, at most every hour.");
     expect(page).not.toContain('value="15"');
     expect(page).toContain('value="60"');
     expect(page).toContain('value="240"');
     // Weekly on Monday, as the type gives it, where the source sets nothing.
-    expect(page).toMatch(/>Monday</u);
+    expect(page).toMatch(/>Mon at 03:00 AM</u);
     // Before its first publish the Connection's list says the same.
     const draft = render("en", {
       unpublished: true,
@@ -794,14 +813,15 @@ describe("when a source syncs by itself (SRC-SYNC)", () => {
         }
       ]
     });
-    expect(draft).toContain("At most every hour for this kind of source.");
+    expect(draft).toContain("Fetches new and changed files, at most every hour.");
     expect(draft).not.toContain('value="15"');
   });
 
   it("says a source switched off syncs only by hand, and keeps Sync now", () => {
     const page = render("de", { sources: [off], status: schedule("off", "off") });
     expect(page).toContain('data-knowledge-source-schedule="off"');
-    expect(page).toContain("Aus: Die Quelle synchronisiert nur, wenn jemand");
+    expect(page).toContain("Synchronisiert nur, wenn jemand auf „Jetzt synchronisieren“ klickt.");
+    expect(page.match(/data-slot="settings-row"/gu)).toHaveLength(1);
     expect(page).not.toContain("Änderungen abrufen");
     expect(page).toContain("Automatische Synchronisierung aus");
     expect(page).toContain("Jetzt synchronisieren");

@@ -155,6 +155,12 @@ export function KnowledgeSourcesSection({
     status?.status === "ready" && knowledgeBase !== undefined && published !== undefined
       ? status.data.sources.filter((entry): entry is WorkflowSourceStatus => "workflowId" in entry)
       : [];
+  // As rows of the documents, one synced source alone has its Sync now as the main action over
+  // the list; several each keep their own.
+  const syncInRow =
+    !rows ||
+    (status?.status === "ready" &&
+      status.data.sources.filter((entry) => !("workflowId" in entry)).length > 1);
   const change = (id: string, patch: Partial<KnowledgeSourceForm>) =>
     onChange(sources.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)));
   const [search, setSearch] = useState(NO_SEARCH);
@@ -260,6 +266,10 @@ export function KnowledgeSourcesSection({
                   status={statusOf(entry.id)}
                   canWrite={canWrite}
                   canConfirm={canPublish}
+                  syncShown={syncInRow}
+                  // The rows above say how it syncs; the published way is named only where a
+                  // change to them waits for its publish, and where it does not sync by itself.
+                  scheduleShown={!publishedAsSet(entry.schedule, statusOf(entry.id)?.schedule)}
                 />
               )}
             </SourceItem>
@@ -592,6 +602,7 @@ function SourceItem({
             <KnowledgeSourceSchedule
               schedule={entry.schedule}
               defaults={defaults}
+              web={web}
               readOnly={!canWrite}
               onChange={(schedule) => onChange({ schedule })}
             />
@@ -660,7 +671,9 @@ function SourceStatus({
   canWrite,
   fedByWorkflow = false,
   canRelease = false,
-  canConfirm = false
+  canConfirm = false,
+  scheduleShown = true,
+  syncShown = true
 }: {
   source: KnowledgeBaseSource;
   knowledgeBase: string;
@@ -674,6 +687,10 @@ function SourceStatus({
   canRelease?: boolean;
   /** The reader may let a first import that waits at 10,000 items go on (KB-ISO-1b). */
   canConfirm?: boolean;
+  /** `false` leaves out how the published source syncs by itself, where the page says it above. */
+  scheduleShown?: boolean;
+  /** `false` leaves out Sync now, where the page offers it for this source elsewhere. */
+  syncShown?: boolean;
 }) {
   const { locale, t } = useTranslation();
   const [busy, setBusy] = useState<"sync" | "confirm" | KnowledgeSourceFailureCode>();
@@ -784,7 +801,7 @@ function SourceStatus({
           })}
         </p>
       ) : null}
-      {status.schedule ? <ScheduleLine schedule={status.schedule} /> : null}
+      {status.schedule && scheduleShown ? <ScheduleLine schedule={status.schedule} /> : null}
       <KeyValueList layout="stacked">
         {status.running?.estimatedEndAt ? (
           <KeyValue label={t("knowledgeSources.estimatedEnd")}>
@@ -869,7 +886,7 @@ function SourceStatus({
         </ul>
       ) : null}
       {notice ? <FormNotice tone={notice.tone}>{notice.text}</FormNotice> : null}
-      {canWrite && !fedByWorkflow && source.syncSource ? (
+      {canWrite && !fedByWorkflow && syncShown && source.syncSource ? (
         <div>
           <Button
             variant="outline"
@@ -887,6 +904,22 @@ function SourceStatus({
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Whether the published source syncs by itself exactly as the draft sets it: then its settings
+ * say it already. One that does not sync by itself is never the same: its note says what follows.
+ */
+function publishedAsSet(
+  set: KnowledgeSourceForm["schedule"],
+  published: KnowledgeSourceStatus["schedule"]
+): boolean {
+  if (published === undefined) return false;
+  if (published.changes === "off" && published.full === "off") return false;
+  return (
+    (set?.changes ?? published.defaultChanges) === published.changes &&
+    (set?.full ?? published.defaultFull) === published.full
   );
 }
 

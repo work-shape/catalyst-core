@@ -1,4 +1,13 @@
-import { ExternalLink, FolderSync, Link2, Plus, RotateCcw, Trash2, Upload } from "lucide-react";
+import {
+  ExternalLink,
+  FolderSync,
+  Link2,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  Trash2,
+  Upload
+} from "lucide-react";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   Badge,
@@ -42,8 +51,10 @@ import {
 import type {
   KnowledgeBaseSource,
   KnowledgeDocument,
-  KnowledgeOpenableFile
+  KnowledgeOpenableFile,
+  KnowledgeSourceStatus
 } from "./knowledge-base-source";
+import type { ActionNotice } from "./build-model";
 import { ReleasedSourcesContext } from "./knowledge-base-sources";
 import { KnowledgeUploadSection } from "./knowledge-base-upload";
 import { uploadFormatList, uploadFormats } from "./knowledge-upload-model";
@@ -66,6 +77,7 @@ const FORMAT_NAMES: Record<string, string> = {
 function tallyWords(
   tally: KnowledgeDocumentTally,
   canWrite: boolean,
+  synced: boolean,
   { locale, t }: Pick<TranslationContextValue, "locale" | "t">
 ): { headline: string; detail?: string } {
   const number = (count: number) => new Intl.NumberFormat(locale).format(count);
@@ -88,7 +100,13 @@ function tallyWords(
   if (tally.total === 0) {
     return {
       headline: t("knowledge.tallyNone"),
-      detail: t(canWrite ? "knowledge.tallyNoneHint" : "knowledge.tallyNoneHintReadOnly")
+      detail: t(
+        synced
+          ? "knowledge.tallyNoneHintSynced"
+          : canWrite
+            ? "knowledge.tallyNoneHint"
+            : "knowledge.tallyNoneHintReadOnly"
+      )
     };
   }
   const headline =
@@ -116,9 +134,55 @@ function tallyWords(
   return { headline, ...(detail === undefined ? {} : { detail }) };
 }
 
+/** A source a Connection syncs, as the state of the sources names it: not one a Workflow fills. */
+type SyncedSource = Extract<KnowledgeSourceStatus, { connection: string }>;
+
+/**
+ * How documents come into a published Knowledge Base of documents, which decides its main
+ * action. `synced`: a Connection syncs them and nobody added one by hand, so the action is Sync
+ * now, and files added by hand, which would never sync, wait in the head's menu. `uploads`: no
+ * source syncs, so it is Add documents. `both`: Add documents stays, with Sync now beside it.
+ * Only the documents read so far are looked at. Where the reader cannot sync, it is `uploads`.
+ */
+export interface KnowledgeIntake {
+  /** `pending` until the sources are read: no action shows, so none is swapped for another. */
+  way: "pending" | "uploads" | "synced" | "both";
+  /** The published sources a Connection syncs. */
+  synced: readonly SyncedSource[];
+}
+
+/** A hook: how documents come into the Knowledge Base, read with what the page reads anyway. */
+export function useKnowledgeIntake(
+  source: KnowledgeBaseSource,
+  knowledgeBase: string,
+  /** Absent, nothing is read and the way is `uploads`. */
+  publishedRevision: number | undefined
+): KnowledgeIntake {
+  const state = source.useState(knowledgeBase, publishedRevision, true);
+  const storeReady =
+    publishedRevision !== undefined &&
+    state.status === "ready" &&
+    state.data.status !== "preparing" &&
+    state.data.status !== "unchecked";
+  const documents = source.useDocuments(knowledgeBase, storeReady);
+  const sources = source.useSources?.(knowledgeBase, publishedRevision);
+  const synced =
+    source.syncSource !== undefined && sources?.status === "ready"
+      ? sources.data.sources.filter((entry): entry is SyncedSource => "connection" in entry)
+      : [];
+  const uploaded =
+    documents.status === "ready" &&
+    documents.data.documents.some((document) => document.sourceId === undefined);
+  if (source.syncSource !== undefined && sources?.status === "loading") {
+    return { way: publishedRevision === undefined ? "uploads" : "pending", synced };
+  }
+  return { way: synced.length === 0 ? "uploads" : uploaded ? "both" : "synced", synced };
+}
+
 /**
  * The documents of a published Knowledge Base that keeps documents: one line that says how many
- * of them can be searched, with the one way to add more, and under it the list. Those that
+ * of them can be searched, with its main action, and under it the list. The main action is the
+ * one way to add more, or Sync now where every document comes from a synced source. Those that
  * failed stand first, each with its reason and Retry, then those still being read; a searchable
  * one says nothing of its state. Only the documents read so far are ordered so: the instance
  * pages them newest first. Whoever may change the Knowledge Base adds documents, retries a
@@ -132,7 +196,9 @@ export function KnowledgeDocuments({
   publishedRevision,
   canWrite,
   sources,
-  onConnect
+  onConnect,
+  adding: addingGiven,
+  onAdding
 }: {
   source: KnowledgeBaseSource;
   knowledgeBase: string;
@@ -142,6 +208,9 @@ export function KnowledgeDocuments({
   sources?: ReactNode;
   /** Connects a folder, where the instance offers synced sources: Add then offers both ways. */
   onConnect?: () => void;
+  /** Whether the Add dialog is open, where the page opens it from elsewhere too, such as a menu. */
+  adding?: boolean;
+  onAdding?(adding: boolean): void;
 }) {
   const translation = useTranslation();
   const { t } = translation;
@@ -169,7 +238,34 @@ export function KnowledgeDocuments({
       ),
     [documentsRead]
   );
-  const [adding, setAdding] = useState(false);
+  const [addingHere, setAddingHere] = useState(false);
+  const adding = addingGiven ?? addingHere;
+  const setAdding = onAdding ?? setAddingHere;
+  const intake = useKnowledgeIntake(source, knowledgeBase, publishedRevision);
+  const [syncing, setSyncing] = useState(false);
+  const [syncNotice, setSyncNotice] = useState<ActionNotice>();
+  // Every synced source at once: the same call as Sync now of each one's own row.
+  const syncAll = async () => {
+    const { syncSource } = source;
+    if (!syncSource) return;
+    setSyncing(true);
+    setSyncNotice(undefined);
+    const answers = await Promise.all(
+      intake.synced.map((entry) => syncSource(knowledgeBase, entry.id))
+    );
+    setSyncing(false);
+    const refused = answers.find((answer) => !answer.ok);
+    setSyncNotice(
+      refused === undefined
+        ? { tone: "success", text: t("knowledgeSources.syncStarted") }
+        : {
+            tone: "error",
+            text: refused.refused
+              ? t("knowledgeSources.refused")
+              : (refused.message ?? t("knowledgeSources.syncFailed"))
+          }
+    );
+  };
   const [added, setAdded] = useState<number>();
   const [retrying, setRetrying] = useState<string>();
   const [failure, setFailure] = useState<string>();
@@ -232,6 +328,7 @@ export function KnowledgeDocuments({
               read.data.summary
             ),
             canWrite,
+            intake.way === "synced",
             translation
           )
         : read.status === "loading" || !storeReady
@@ -266,26 +363,49 @@ export function KnowledgeDocuments({
             </>
           )}
         </div>
-        {!canWrite ? null : onConnect ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button data-knowledge-add="">{addLabel}</Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem icon={<Upload aria-hidden="true" />} onSelect={openAdd}>
-                <span data-knowledge-add-files="">{t("knowledge.addUpload")}</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem icon={<FolderSync aria-hidden="true" />} onSelect={onConnect}>
-                <span data-knowledge-add-folder="">{t("knowledge.addConnect")}</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : (
-          <Button onClick={openAdd} data-knowledge-add="">
-            {addLabel}
-          </Button>
+        {!canWrite || intake.way === "pending" ? null : (
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {intake.way === "uploads" ? null : (
+              <Button
+                variant={intake.way === "synced" ? "primary" : "outline"}
+                loading={syncing}
+                disabled={syncing || intake.synced.every((entry) => entry.running !== undefined)}
+                data-knowledge-sync=""
+                onClick={() => {
+                  syncAll().catch(() => setSyncing(false));
+                }}
+              >
+                <RefreshCw aria-hidden="true" />
+                {t("knowledgeSources.syncNow")}
+              </Button>
+            )}
+            {intake.way === "synced" ? null : onConnect ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button data-knowledge-add="">{addLabel}</Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem icon={<Upload aria-hidden="true" />} onSelect={openAdd}>
+                    <span data-knowledge-add-files="">{t("knowledge.addUpload")}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem icon={<FolderSync aria-hidden="true" />} onSelect={onConnect}>
+                    <span data-knowledge-add-folder="">{t("knowledge.addConnect")}</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button onClick={openAdd} data-knowledge-add="">
+                {addLabel}
+              </Button>
+            )}
+          </div>
         )}
       </div>
+      {syncNotice ? (
+        <FormNotice tone={syncNotice.tone} data-knowledge-sync-notice="">
+          {syncNotice.text}
+        </FormNotice>
+      ) : null}
       {added === undefined ? null : (
         <FormNotice tone="success">
           {added === 1
@@ -433,6 +553,7 @@ export function KnowledgeDocuments({
           onClose={() => setAdding(false)}
           onAdded={(count) => {
             setAdding(false);
+            setRemoved(undefined);
             setAdded(count);
           }}
         />

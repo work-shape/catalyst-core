@@ -267,6 +267,80 @@ describe("the Documents section", () => {
     );
   });
 
+  it("leads with Sync now where every document comes from a synced source, and with Add documents otherwise", async () => {
+    const synced = (id: string) => ({
+      id,
+      connection: "ablage",
+      items: { discovered: 0, fetched: 0, indexed: 1, failed: 0, withdrawn: 0 },
+      failures: []
+    });
+    const syncSource = vi.fn<NonNullable<KnowledgeBaseSource["syncSource"]>>(async () => ({
+      ok: true,
+      data: {}
+    }));
+    const fromSource = [document_("richtlinie", "indexed", { sourceId: "ablage" })];
+    const shown = (list: KnowledgeDocument[], extra: Partial<KnowledgeBaseSource> = {}) =>
+      show(
+        createElement(KnowledgeDocuments, {
+          source: plantedSource({
+            useDocuments: () => ready({ documents: list }),
+            useSources: () => ready({ sources: [synced("ablage"), synced("archiv")] }),
+            syncSource,
+            ...extra
+          }),
+          knowledgeBase: "objektunterlagen",
+          publishedRevision: 1,
+          canWrite: true,
+          onConnect: () => undefined
+        }),
+        "de"
+      );
+    const sync = () => document.querySelector<HTMLButtonElement>("[data-knowledge-sync]");
+    const add = () => document.querySelector("[data-knowledge-add]");
+
+    // Only synced documents: a file added by hand would never sync, so Add is not the action.
+    shown(fromSource);
+    expect(sync()?.textContent).toBe("Jetzt synchronisieren");
+    expect(add()).toBeNull();
+    await act(async () => sync()?.click());
+    // Every synced source, with the call its own row makes.
+    expect(syncSource.mock.calls).toEqual([
+      ["objektunterlagen", "ablage"],
+      ["objektunterlagen", "archiv"]
+    ]);
+    expect(document.querySelector("[data-knowledge-sync-notice]")?.textContent).toBe(
+      "Die Synchronisierung läuft."
+    );
+    // No document yet: they come with the sync, not by hand.
+    shown([]);
+    expect(document.querySelector("[data-knowledge-tally]")?.textContent).toContain(
+      "Sie kommen mit der nächsten Synchronisierung."
+    );
+
+    // Synced and added by hand: Add documents stays the action, Sync now stands beside it.
+    shown([...fromSource, document_("notiz", "indexed")]);
+    expect(add()).not.toBeNull();
+    expect(sync()).not.toBeNull();
+    expect(
+      [...document.querySelectorAll("[data-knowledge-tally] button")].map((each) =>
+        each.textContent.trim()
+      )
+    ).toEqual(["Jetzt synchronisieren", "Dokumente hinzufügen"]);
+
+    // No synced source, or one only a Workflow fills: Add documents as before.
+    shown(fromSource, { useSources: () => ready({ sources: [] }) });
+    expect(sync()).toBeNull();
+    expect(add()).not.toBeNull();
+    // Until the sources are read neither stands there, so one is never swapped for the other.
+    shown(fromSource, { useSources: () => ({ status: "loading" }) });
+    expect(sync()).toBeNull();
+    expect(add()).toBeNull();
+    // An instance that offers no sync keeps Add documents too.
+    shown(fromSource, { syncSource: undefined });
+    expect(sync()).toBeNull();
+    expect(add()).not.toBeNull();
+  });
+
   it("speaks German, du-form, first", () => {
     show(
       createElement(KnowledgeDocuments, {
