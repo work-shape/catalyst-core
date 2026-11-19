@@ -74,12 +74,13 @@ function instructionsSection(toolNames: string[], withInstructions = true): stri
 }
 
 describe("the platform instructions on an agent's page", () => {
-  it("fold away above the agent's own instructions, and are absent where the instance names none", () => {
+  it("fold away under the agent's own instructions, and are absent where the instance names none", () => {
     const section = instructionsSection([]);
     expect(section).toContain("data-platform-instructions");
     expect(section).toContain("Platform instructions");
-    expect(section.indexOf("Platform instructions")).toBeLessThan(
-      section.indexOf("Agent instructions")
+    // The agent's own text comes first: it is what the reader came to write.
+    expect(section.indexOf("Agent instructions")).toBeLessThan(
+      section.indexOf("Platform instructions")
     );
     expect(instructionsSection([], false)).not.toContain("Platform instructions");
   });

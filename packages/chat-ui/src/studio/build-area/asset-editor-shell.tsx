@@ -66,6 +66,12 @@ export interface AssetSettings {
   /** What is in them, in a few words after the label. */
   hint?: string;
   sections: readonly AssetSection[];
+  /**
+   * Whether they stand open, where the kind's page holds that itself, to open them for what it
+   * leads to inside them. Without it the shell holds it.
+   */
+  open?: boolean;
+  onOpenChange?(open: boolean): void;
 }
 
 /**
@@ -209,7 +215,9 @@ export function AssetEditorShell({
   }, [unsaved, onUnsavedChange]);
 
   const formRef = useRef<HTMLFormElement>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [ownSettingsOpen, setOwnSettingsOpen] = useState(false);
+  const settingsOpen = settings?.open ?? ownSettingsOpen;
+  const setSettingsOpen = settings?.onOpenChange ?? setOwnSettingsOpen;
   // What to bring into view once the folded sections are open: a section, or the first field
   // the browser refuses.
   const [reveal, setReveal] = useState<{ section: string } | "invalid">();

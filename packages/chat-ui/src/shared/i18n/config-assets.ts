@@ -95,8 +95,7 @@ export const configAssets = defineTranslations({
     configMakeDefault: "Make default",
     configMarkdown: "Markdown",
     configMaxSteps: "Max steps",
-    configMaxStepsHint:
-      "Maximum model and tool turns for one response. Empty uses the setting for all workspaces.",
+    configMaxStepsHint: "The most steps the agent takes for one answer. Empty uses the default.",
     configModelDefault: "Model default",
     configModelIsDefault: "Default",
     configModelUserSelectable: "Selectable by users",
@@ -314,7 +313,7 @@ export const configAssets = defineTranslations({
     configMarkdown: "Markdown",
     configMaxSteps: "Maximale Schritte",
     configMaxStepsHint:
-      "Maximale Anzahl an Modell- und Werkzeugdurchläufen pro Antwort. Leer verwendet die Bereitstellungskonfiguration.",
+      "Wie viele Schritte der Agent für eine Antwort höchstens macht. Leer gilt der Standard.",
     configModelDefault: "Modellstandard",
     configModelIsDefault: "Standard",
     configModelUserSelectable: "Für Nutzer wählbar",
