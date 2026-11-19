@@ -299,29 +299,31 @@ describe("agent page", () => {
   });
 
   it("makes model, reasoning effort and fast mode editable by permission, not by edit policy", () => {
+    const whole = (canManageAgentModels: boolean, modelBindingId = "fast") =>
+      agentPage({
+        config: {
+          modelBindingId,
+          reasoningEffort: "high",
+          fastMode: modelBindingId === "fast"
+        },
+        references: {
+          modelBindingIds: ["fast", "plain"],
+          modelBindings: [
+            { id: "fast", model: "gpt-fast" },
+            { id: "plain", model: "gpt-plain" }
+          ],
+          fastModeModelBindingIds: ["fast"],
+          reasoningEfforts: ["low", "high"]
+        },
+        // The legacy entries no longer make the model settings editable.
+        editableAgentFields: canManageAgentModels ? [] : ["modelBindingId", "reasoningEffort"],
+        canManageAgentModels
+      });
     const page = (canManageAgentModels: boolean, modelBindingId = "fast") =>
-      section(
-        agentPage({
-          config: {
-            modelBindingId,
-            reasoningEffort: "high",
-            fastMode: modelBindingId === "fast"
-          },
-          references: {
-            modelBindingIds: ["fast", "plain"],
-            modelBindings: [
-              { id: "fast", model: "gpt-fast" },
-              { id: "plain", model: "gpt-plain" }
-            ],
-            fastModeModelBindingIds: ["fast"],
-            reasoningEfforts: ["low", "high"]
-          },
-          // The legacy entries no longer make the model settings editable.
-          editableAgentFields: canManageAgentModels ? [] : ["modelBindingId", "reasoningEffort"],
-          canManageAgentModels
-        }),
-        "model"
-      );
+      section(whole(canManageAgentModels, modelBindingId), "model");
+    // The engine's settings wait under "Advanced", at the end of Settings.
+    const advanced = (markup: string) =>
+      /<div[^>]*data-agent-advanced="".*$/u.exec(markup)?.[0] ?? "";
     const fastSwitch = (markup: string) => /<button[^>]*role="switch"[^>]*>/u.exec(markup)?.[0];
     const effortSelect = (markup: string) =>
       /<select[^>]*aria-label="Default model: Reasoning effort"[^>]*>/u.exec(markup)?.[0];
@@ -332,9 +334,12 @@ describe("agent page", () => {
     expect(editable).toContain('<option value="fast" selected="">GPT-fast</option>');
     expect(defaultSelect(editable)).not.toContain('disabled=""');
     expect(effortSelect(editable)).not.toContain('disabled=""');
-    expect(fastSwitch(editable)).toContain('aria-checked="true"');
-    expect(fastSwitch(editable)).not.toContain('disabled=""');
-    expect(editable).toContain("Fast runs are billed at a higher rate.");
+    expect(fastSwitch(editable)).toBeUndefined();
+    const knobs = advanced(whole(true));
+    expect(fastSwitch(knobs)).toContain('aria-checked="true"');
+    expect(fastSwitch(knobs)).not.toContain('disabled=""');
+    expect(knobs).toContain("Fast runs are billed at a higher rate.");
+    expect(fastSwitch(advanced(whole(false)))).toContain('disabled=""');
     expect(editable).toContain('data-model-binding="plain"');
 
     const readOnly = page(false);
@@ -343,10 +348,9 @@ describe("agent page", () => {
     // A model the agent does not offer is no row for a reader who cannot offer it.
     expect(readOnly).not.toContain('data-model-binding="plain"');
     expect(effortSelect(readOnly)).toContain('disabled=""');
-    expect(fastSwitch(readOnly)).toContain('disabled=""');
 
     // No fast-mode control for a binding that does not support it.
-    expect(fastSwitch(page(true, "plain"))).toBeUndefined();
+    expect(fastSwitch(advanced(whole(true, "plain")))).toBeUndefined();
   });
 
   it.each([
@@ -461,17 +465,18 @@ describe("agent page", () => {
     });
 
     expect(section(markup, "model")).toBe("");
-    expect(markup).not.toContain('href="#model"');
-    expect(agentPage({ canManageAgentModels: true })).toContain('href="#model"');
+    expect(section(agentPage({ canManageAgentModels: true }), "model")).not.toBe("");
   });
 
-  it("lists the sections in the page's outline, with how many things each one holds", () => {
+  it("leads with what the agent does and what shapes it, and folds the rest under Settings", () => {
     const markup = agentPage({
       config: {
+        description: "Checks contracts for missing signatures.",
         toolNames: ["read_skill", "show_view"],
         skillNames: ["tax-review"],
         initialPrompts: []
       },
+      editableAgentFields: ["maxSteps"],
       canManageAgentModels: true
     });
     const index = /<nav aria-label="On this page".*?<\/nav>/u.exec(markup)?.[0] ?? "";
@@ -483,22 +488,34 @@ describe("agent page", () => {
           .trim()}`
     );
 
+    // What holds nothing shows no count.
     expect(entries).toEqual([
-      "overview: Overview",
       "instructions: Instructions",
-      "model: Model",
       "skills: Skills 1",
       "tools: Tools 2",
-      "prompts: Starter prompts 0"
+      "prompts: Starter prompts"
     ]);
+    expect(markup).toMatch(/data-asset-lead=""><p[^>]*>Checks contracts for missing signatures\./u);
+    expect(agentPage({ config: { description: "" } })).toContain(
+      "An agent that works by the instructions below."
+    );
     // The sections are no list of pages: nothing of the kinds' rail is on the page.
     expect(markup).not.toContain("data-sub-rail");
-    // Every entry of the outline leads to a section of the page.
-    for (const id of ["overview", "instructions", "model", "skills", "tools", "prompts"]) {
+    // The name, the model and the engine's settings wait under Settings, closed.
+    const settings = /<div[^>]*data-asset-settings="".*$/u.exec(markup)?.[0] ?? "";
+    expect(/<button[^>]*data-asset-settings-trigger=""[^>]*>/u.exec(settings)?.[0]).toContain(
+      'aria-expanded="false"'
+    );
+    expect(markup.indexOf('id="prompts"')).toBeLessThan(markup.indexOf('data-asset-settings=""'));
+    for (const id of ["overview", "model", "advanced"]) {
+      expect(settings).toContain(`id="${id}"`);
+    }
+    for (const id of ["instructions", "skills", "tools", "prompts"]) {
       expect(section(markup, id)).not.toBe("");
+      expect(settings).not.toContain(`id="${id}"`);
     }
     // The availability is a section only where the frame hands one.
-    expect(markup).not.toContain('href="#availability"');
+    expect(markup).not.toContain('id="availability"');
   });
 
   it("names the skills an agent has by their titles, and falls back to the id", () => {
