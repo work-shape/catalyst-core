@@ -1,8 +1,12 @@
 import { BookOpen, Bot, Database, LayoutGrid, MessagesSquare, Workflow } from "lucide-react";
 import type { ReactNode } from "react";
 import type { PublishedDataConsumerKind } from "@work-shape/catalyst-core";
-import { Chip, EmptyState, List, ListRow } from "@work-shape/catalyst-ui";
-import { AGENTS_BUILD_PATH, useBuildNavigation } from "../../shared/build-route";
+import { Chip, EmptyState, List, ListRow, TextLink } from "@work-shape/catalyst-ui";
+import {
+  AGENTS_BUILD_PATH,
+  KNOWLEDGE_BASES_BUILD_PATH,
+  useBuildNavigation
+} from "../../shared/build-route";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { DataFlowList } from "./data-flows";
 import { ReadState } from "./data-store-read-state";
@@ -10,6 +14,7 @@ import {
   audienceLine,
   conversationWritersLine,
   dataStoreFillers,
+  dataStoreUsers,
   fillerLine,
   runsAsLine
 } from "./data-store-provenance-model";
@@ -33,6 +38,67 @@ interface ProvenanceProps {
   /** The workspace the store belongs to, where it belongs to one. */
   workspaceId: string | undefined;
   source: DataStoreSource;
+}
+
+/** How many names the line under the rows says before it counts the rest. */
+const USED_BY_NAMED = 5;
+
+/**
+ * "Used by": one line that names what fills the store and what reads it, each a link where the
+ * interface has a page for it. Nothing while that is read, where it cannot be read, or where
+ * nothing the reader may see uses the store: Settings says each of those in full.
+ */
+export function DataStoreUsedByLine({ store, workspaceId, source }: ProvenanceProps) {
+  const { locale, t } = useTranslation();
+  const read = source.useUsedBy(store);
+  const pageOf = source.useUsingPage(workspaceId);
+  const { href, open } = useBuildNavigation();
+  if (read.status !== "ready") return null;
+  const users = dataStoreUsers(read.data);
+  if (users.length === 0) return null;
+  const named = users.slice(0, USED_BY_NAMED);
+  const more = users.length - named.length;
+  const items: ReactNode[] = named.map((user) => {
+    const place = { kindPath: KNOWLEDGE_BASES_BUILD_PATH, name: user.name };
+    const page =
+      user.kind === "knowledge_base"
+        ? { href: href(place), open: () => open(place) }
+        : pageOf(user.kind, user.name);
+    return page === undefined ? (
+      <span
+        key={`${user.kind}:${user.name}`}
+        className="text-foreground"
+        title={t(KINDS[user.kind].label)}
+      >
+        {user.title}
+      </span>
+    ) : (
+      <TextLink
+        key={`${user.kind}:${user.name}`}
+        href={page.href}
+        title={t(KINDS[user.kind].label)}
+        onClick={(event) => {
+          if (opensInPlace(event)) {
+            event.preventDefault();
+            page.open();
+          }
+        }}
+      >
+        {user.title}
+      </TextLink>
+    );
+  });
+  if (more > 0) items.push(t("dataStores.usedByMore", { count: formatCount(more, locale) }));
+  // The list's own words and commas, with each name in its place.
+  let next = 0;
+  const parts = new Intl.ListFormat(locale, { type: "conjunction" })
+    .formatToParts(items.map((_, index) => String(index)))
+    .map((part) => (part.type === "element" ? items[next++] : part.value));
+  return (
+    <p className="min-w-0 text-body text-muted-foreground" data-data-store-used-by-line="">
+      {t("dataStores.usedByLine")} {parts}
+    </p>
+  );
 }
 
 /**

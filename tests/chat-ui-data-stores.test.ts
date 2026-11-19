@@ -582,18 +582,90 @@ describe("Data Stores in Build", () => {
     );
   });
 
+  it("leads with what the store is and its rows, names what uses it in one line, and folds the rest under Settings", () => {
+    const page = render({ kindPath: "data-stores", name: "visit-log" });
+    const main = page.slice(0, page.indexOf("data-asset-settings"));
+    const settings = page.slice(page.indexOf("data-asset-settings"));
+    const advanced = page.slice(page.indexOf("data-data-store-advanced"));
+
+    // The description is the lead line, said once, and not in the head.
+    expect(main).toMatch(/data-asset-lead=""[^>]*>.*Every visit of a page of the public site\./u);
+    expect(page).not.toContain('data-slot="page-header-description"');
+    expect(page.split("Every visit of a page of the public site.").length - 1).toBe(1);
+    // Whose it is stands in the muted line under the name, not as a chip of its own.
+    expect(page).toMatch(/data-asset-place="">for everyone</u);
+    expect(page).not.toContain(">Everyone<");
+    // The sentence of the list is the list's.
+    expect(page).not.toContain("This page shows what each store holds.");
+    expect(page).not.toContain("On this page");
+    // A ready store names no state before Settings.
+    expect(main).not.toContain("data-data-store-state");
+    expect(main).not.toContain(">Ready<");
+    // The rows of the first table, with a tab per table.
+    expect(main).toContain('data-data-store-rows="visits"');
+    expect(main).toMatch(/role="tab"[^>]*>visits</u);
+    expect(main).toMatch(/role="tab"[^>]*>pages</u);
+    // One line names what fills and what reads it, a link where there is a page.
+    const line = main.slice(main.indexOf("data-data-store-used-by-line"));
+    expect(line).toContain("Used by ");
+    expect(line).toMatch(
+      /href="\/build\/knowledge-bases\/visits-knowledge"[^>]*>Visits knowledge</u
+    );
+    expect(line).toMatch(/href="\/w\/ws_1\/apps\/visits-board"[^>]*>Visits board</u);
+    expect(line).toContain(">Nightly rollup<");
+    expect(line).toContain(">Weekly report<");
+    // Everything else waits under Settings, the technical part under Advanced inside it.
+    for (const id of ["filled-by", "read-by"]) {
+      expect(main).not.toContain(`id="${id}"`);
+      expect(settings).toContain(`id="${id}"`);
+      expect(advanced).not.toContain(`id="${id}"`);
+    }
+    for (const id of ["status", "tables", "test-copy"]) {
+      expect(main).not.toContain(`id="${id}"`);
+      expect(advanced).toContain(`id="${id}"`);
+    }
+    expect(settings).toMatch(/>Settings<.*>Advanced</su);
+  });
+
+  it("says what fills a store that holds nothing, in place of an empty table", () => {
+    const address = { kindPath: "data-stores", name: "visit-log" };
+    const said = "Nothing here yet. Apps, workflows and agents keep their entries here.";
+    // No table yet.
+    const noTables = render(address, { schema: ready({ schemaLevel: 0, tables: [] }) });
+    expect(noTables).toContain(said);
+    expect(noTables).not.toContain('role="tab"');
+    // One table without a row: no tab for the only table.
+    const oneTable = { ...schema, tables: schema.tables.slice(0, 1) };
+    const noRows = render(address, {
+      schema: ready(oneTable),
+      rows: ready({ ...visitRows, rows: [], next: undefined })
+    });
+    expect(noRows).toContain(said);
+    expect(noRows).not.toContain('role="tab"');
+    expect(noRows).not.toContain("This table holds no rows.");
+    expect(
+      render(address, {
+        locale: "de",
+        schema: ready(oneTable),
+        rows: ready({ ...visitRows, rows: [], next: undefined })
+      })
+    ).toContain("Noch leer. Apps, Workflows und Agenten legen hier ihre Einträge ab.");
+    // Nothing published uses it: the page has no such line.
+    expect(render(address, { usedBy: ready(nothingUses) })).not.toContain(
+      "data-data-store-used-by-line"
+    );
+  });
+
   it("shows a store's state, its tables with columns, types and row estimates, and the first page of a table with long values cut", () => {
     const page = render({ kindPath: "data-stores", name: "visit-log" });
 
     expect(page).toContain(">Visit log</h1>");
-    // The head says what the store does after its name; its id is behind "Copy ID".
-    expect(page).toMatch(/data-slot="page-header-description"[^>]*>Every visit of a page/u);
+    // Its id is behind "Copy ID".
     expect(page).not.toContain(">visit-log<");
     expect(page).toContain('aria-label="More actions"');
     expect(page).toContain('data-data-store-state="ready"');
     expect(page).toContain("8 MB of 500 MB");
     expect(page).toContain("0002_add_referrer");
-    expect(page).toContain("Every visit of a page of the public site.");
     // A ready store without anything open on the server has no such section.
     expect(page).not.toContain("Open on the server");
 
@@ -646,8 +718,13 @@ describe("Data Stores in Build", () => {
       }
     );
 
-    expect(page).toContain('data-data-store-state="provisioning_failed"');
-    expect(page).toContain("Setup failed");
+    // The head names the state, and the page says it in a sentence before Settings, once.
+    const main = page.slice(0, page.indexOf("data-asset-settings"));
+    expect(main).toContain('data-data-store-state="provisioning_failed"');
+    expect(page.split("data-data-store-state=").length - 1).toBe(1);
+    expect(page.split("Setup failed").length - 1).toBe(1);
+    expect(main).toContain("Setup failed");
+    expect(main).not.toContain("data-data-store-rows");
     expect(page).toContain("The server refused CREATE DATABASE.");
     expect(page).toContain('data-data-store-condition="sessions_open"');
     expect(page).toContain("Hide the server&#x27;s sessions from this store");
@@ -926,9 +1003,9 @@ describe("What uses a Data Store", () => {
     const section = (id: string) =>
       page.slice(page.indexOf(`id="${id}"`)).split("</section>")[0] ?? "";
     const filled = section("filled-by");
-    // Both stand right after the status: a phone shows no table of contents to jump by.
-    expect(page.indexOf('id="status"')).toBeLessThan(page.indexOf('id="filled-by"'));
-    expect(page.indexOf('id="read-by"')).toBeLessThan(page.indexOf('id="tables"'));
+    // Both stand first under Settings, before what is Advanced.
+    expect(page.indexOf("data-asset-settings")).toBeLessThan(page.indexOf('id="filled-by"'));
+    expect(page.indexOf('id="read-by"')).toBeLessThan(page.indexOf('id="status"'));
     expect(filled).toContain(">Filled by</h2>");
     expect(filled).toContain('data-data-store-used-by="workflow"');
     expect(filled).toContain(">Nightly rollup<");
@@ -1025,7 +1102,7 @@ describe("Rows written from conversations (C-3)", () => {
       ...(conversationWriters ? { conversationWriters } : {})
     });
 
-  it("names agents in conversations as writers by counts only, and the intro says they keep records", () => {
+  it("names agents in conversations as writers by counts only, and the list's intro says they keep records", () => {
     const page = render(address, {
       usedBy: written({ agents: 1, conversations: 3, truncated: false })
     });
@@ -1035,7 +1112,10 @@ describe("Rows written from conversations (C-3)", () => {
     expect(filled).toContain('data-data-store-conversation-writers=""');
     expect(filled).toContain(">Agents in conversations<");
     expect(filled).toContain(">1 agent in 3 conversations<");
-    expect(page).toContain("Where apps, workflows and agents in conversations keep their records.");
+    // The list says so of every store.
+    expect(render({ kindPath: "data-stores" })).toContain(
+      "Where apps, workflows and agents in conversations keep their records."
+    );
 
     const german = render(address, {
       locale: "de",
@@ -1044,7 +1124,7 @@ describe("Rows written from conversations (C-3)", () => {
     const gefuellt = section(german, "filled-by");
     expect(gefuellt).toContain(">Agenten in Unterhaltungen<");
     expect(gefuellt).toContain(">Mindestens 2 Agenten in 1 Unterhaltung<");
-    expect(german).toContain(
+    expect(render({ kindPath: "data-stores" }, { locale: "de" })).toContain(
       "Hier legen Apps, Workflows und Agenten in Unterhaltungen ihre Einträge ab."
     );
   });

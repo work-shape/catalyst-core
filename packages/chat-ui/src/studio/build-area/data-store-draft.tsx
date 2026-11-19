@@ -16,10 +16,12 @@ import {
 } from "@work-shape/catalyst-ui";
 import { useDockAgentWorksOn } from "../../chat/dock/dock-subject";
 import { useTranslation } from "../../shared/i18n";
-import { AssetPlaceLine, AssetPlaceRow } from "./asset-place";
+import { ownerFact, useKnownWorkspaces } from "./asset-place";
 import type { BuildAssetViewProps } from "./build-asset-kind";
 import { draftTablesOf, type DraftTable } from "./data-store-draft-fields";
 import {
+  DataStoreFold,
+  DataStoreLead,
   DataStoreMigrations,
   DataStorePublishSection,
   migrationsOf,
@@ -66,6 +68,7 @@ export function DataStoreDraftPage({
   const tables = useMemo(() => draftTablesOf(migrations), [migrations]);
   const agentWorking = useDockAgentWorksOn("data_store", asset.name);
   const head = useDataStoreMenu({ id: asset.name, title, published: false, remove, shareItem });
+  const place = ownerFact(asset.scope, useKnownWorkspaces(), t);
   return (
     <Page
       ref={page.ref}
@@ -74,7 +77,7 @@ export function DataStoreDraftPage({
           variant="detail"
           back={back}
           title={title}
-          description={description}
+          meta={<span data-asset-place="">{place}</span>}
           state={
             <Badge tone="warning" data-data-store-draft="">
               {t("dataStores.draftUnpublished")}
@@ -85,44 +88,49 @@ export function DataStoreDraftPage({
       }
     >
       {page.above}
-      <div className="grid min-w-0 content-start gap-6 pt-5">
-        <AssetPlaceRow>
-          <AssetPlaceLine owner={asset.scope} />
-        </AssetPlaceRow>
-        {head.failure}
-        {description === undefined ? null : <p className="text-body">{description}</p>}
-        <DataStorePublishSection
-          title={title}
-          migrations={migrations}
-          firstPublish
-          publish={publish}
-          agentWorking={agentWorking}
-          migrationsShown={false}
-        />
-        {tables.length === 0 ? null : (
-          <Section
-            id="fields"
-            layout="stacked"
-            title={t("dataStores.draftFieldsTitle")}
-            description={t("dataStores.draftFieldsDescription")}
-          >
-            <DraftTables tables={tables} />
-          </Section>
-        )}
-        <Section
-          id="migrations"
-          layout="stacked"
-          title={t("dataStores.draftMigrationsTitle")}
-          description={t("dataStores.draftMigrationsDescription")}
-          count={migrations.length}
-        >
-          <DataStoreMigrations
+      <div className="grid min-w-0 content-start pt-5">
+        <DataStoreLead>{description}</DataStoreLead>
+        <div className="grid min-w-0 gap-5 border-b pb-6">
+          {head.failure}
+          <DataStorePublishSection
+            title={title}
             migrations={migrations}
-            label={t("dataStores.draftMigrationsTitle")}
-            emptyText={t("dataStores.draftMigrationsEmpty")}
-            folded
+            firstPublish
+            publish={publish}
+            agentWorking={agentWorking}
+            migrationsShown={false}
           />
-        </Section>
+          {tables.length === 0 ? null : (
+            <Section
+              id="fields"
+              layout="stacked"
+              title={t("dataStores.draftFieldsTitle")}
+              description={t("dataStores.draftFieldsDescription")}
+            >
+              <DraftTables tables={tables} />
+            </Section>
+          )}
+        </div>
+        {/* The SQL that runs, for whoever wants to read it. */}
+        <DataStoreFold
+          label={t("dataStores.advancedTitle")}
+          hint={t("dataStores.draftAdvancedHint")}
+        >
+          <Section
+            id="migrations"
+            layout="stacked"
+            title={t("dataStores.draftMigrationsTitle")}
+            description={t("dataStores.draftMigrationsDescription")}
+            count={migrations.length}
+          >
+            <DataStoreMigrations
+              migrations={migrations}
+              label={t("dataStores.draftMigrationsTitle")}
+              emptyText={t("dataStores.draftMigrationsEmpty")}
+              folded
+            />
+          </Section>
+        </DataStoreFold>
       </div>
       {head.dialog}
     </Page>
