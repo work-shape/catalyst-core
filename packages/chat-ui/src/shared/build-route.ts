@@ -4,6 +4,9 @@ import type { WorkspaceRoute } from "./routes";
 /** The path segment of Agents in Build. */
 export const AGENTS_BUILD_PATH = "agents";
 
+/** The path segment of Knowledge Bases in Build. */
+export const KNOWLEDGE_BASES_BUILD_PATH = "knowledge-bases";
+
 /** Where the reader is inside the Build area: a kind's list, or one asset of it. */
 export interface BuildLocation {
   /** The kind's path segment. Absent at `/build`. */
