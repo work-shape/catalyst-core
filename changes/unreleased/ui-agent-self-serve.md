@@ -8,7 +8,8 @@ section: Changed
   folded under **Settings**: name, description and welcome, the model, available in and who may
   use it. Max steps, fast mode and the fallback model wait under **Advanced** there, and the hint
   of max steps no longer names the deployment configuration. Settings open by themselves on a
-  model the instance cannot run, on a refused save that names a field in them, and from "View
-  changes" of a draft that changes one. The platform's instructions fold under the agent's own
+  model the instance cannot run, on a draft that changes a field in them, and on a refused save
+  that names one. "View changes" goes to the first change in the order of the page, and the line
+  beside Settings names only what is in them for the reader. The platform's instructions fold under the agent's own
   text, not above it. The outline and the headings count only what is there: no "Skills 0", and a
   tool row that is off shows its switch without "0/5". A new agent still starts with its name.

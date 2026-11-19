@@ -313,7 +313,7 @@ export const configAssets = defineTranslations({
     configMarkdown: "Markdown",
     configMaxSteps: "Maximale Schritte",
     configMaxStepsHint:
-      "Wie viele Schritte der Agent für eine Antwort höchstens macht. Leer gilt der Standard.",
+      "Wie viele Schritte der Agent für eine Antwort höchstens macht. Ist es leer, gilt der Standard.",
     configModelDefault: "Modellstandard",
     configModelIsDefault: "Standard",
     configModelUserSelectable: "Für Nutzer wählbar",

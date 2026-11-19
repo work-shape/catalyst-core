@@ -297,12 +297,24 @@ export function AgentEditor({
   // Which version each text the draft changes shows: the draft to edit, what is live, or the
   // changed lines. The page never grows: each shows in the field's own box.
   const [views, setViews] = useState<Partial<Record<DraftAgentField, TextVersion>>>({});
-  // Settings stay folded while nothing in them needs a person: a model the instance cannot
-  // run is chosen there, so they open on it.
+  // Settings stay folded while nothing in them needs a person. They start open on a model the
+  // instance cannot run, which is chosen there, and on a draft that changes a field in them,
+  // which would else show no change on the page.
   const [settingsOpen, setSettingsOpen] = useState(
-    () => (frame.asset?.unavailableModels ?? []).length > 0
+    () =>
+      (frame.asset?.unavailableModels ?? []).length > 0 ||
+      proposed.fields.some((field) => FOLDED_FIELDS.has(field))
   );
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  // The same for what the draft changes under "Advanced" there.
+  const [advancedOpen, setAdvancedOpen] = useState(() => {
+    if (held === null || live === undefined) return false;
+    const draft = state.baseline;
+    return (
+      proposed.fields.includes("maxSteps") ||
+      live.fastMode !== draft.fastMode ||
+      live.useModelFallback !== draft.useModelFallback
+    );
+  });
   const versionsOf = <Field extends DraftAgentField & keyof AgentFormState>(
     field: Field
   ): FieldVersions<AgentFormState[Field]> | undefined =>
@@ -371,7 +383,9 @@ export function AgentEditor({
           const first = proposed.fields[0];
           // A field under Settings is unfolded before the page goes to it.
           if (proposed.fields.some((field) => FOLDED_FIELDS.has(field))) setSettingsOpen(true);
-          if (proposed.fields.includes("maxSteps")) setAdvancedOpen(true);
+          if (proposed.fields.includes("maxSteps") || proposed.fields.includes("model")) {
+            setAdvancedOpen(true);
+          }
           window.requestAnimationFrame(() => {
             document
               .querySelector(`[data-draft-group="${first ?? ""}"]`)
@@ -995,6 +1009,18 @@ export function AgentEditor({
     ...useSections,
     ...advancedSections
   ];
+  // The line beside "Settings" names what is in them for this reader, and no more.
+  const settingsNames = [
+    !isNew && t("build.agentSettingsName"),
+    modelSections.length > 0 && t("build.agentSettingsModel"),
+    availabilitySections.length > 0 && t("build.agentSettingsAvailability")
+  ].filter((name) => name !== false);
+  const settingsHint =
+    settingsNames.length === 0
+      ? undefined
+      : folded.length > settingsNames.length || !isNew
+        ? t("build.agentSettingsHint", { items: sentenceCase(settingsNames.join(", ")) })
+        : sentenceCase(settingsNames.join(", "));
   // While Publish or Discard is on its way nothing is typed: either reads the page again.
   const whileIdle = (section: AssetSection): AssetSection => ({
     ...section,
@@ -1141,7 +1167,7 @@ export function AgentEditor({
       sections={sections.map(whileIdle)}
       settings={{
         label: t("build.agentSettings"),
-        hint: t(isNew ? "build.agentSettingsHintNew" : "build.agentSettingsHint"),
+        ...(settingsHint === undefined ? {} : { hint: settingsHint }),
         sections: folded.map(whileIdle),
         open: settingsOpen,
         onOpenChange: setSettingsOpen
@@ -1272,6 +1298,9 @@ export function AgentEditor({
     </>
   );
 }
+
+/** A line of words with its first letter in upper case. */
+const sentenceCase = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /** The fields of an existing agent that wait under Settings. */
 const FOLDED_FIELDS: ReadonlySet<DraftAgentField> = new Set([
