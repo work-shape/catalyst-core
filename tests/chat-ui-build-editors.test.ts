@@ -535,7 +535,7 @@ describe("agent page", () => {
           config: { modelBindingId: "gone" },
           status: {
             chatAvailable: false,
-            unavailableModels: [{ name: "gone", field: "modelBindingId" }]
+            unavailableModels: [{ name: "gone", field: "modelBindingId", reason: "unknown_model" }]
           }
         })
       )
