@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { Page } from "@playwright/test";
+import { chooseAddDocuments, offersFolder, openKnowledgeSettings } from "./knowledge-page";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, takeTurn, test } from "./test";
 
@@ -230,32 +231,37 @@ test.describe("uploading files from the computer into a Knowledge Base", () => {
       // Published in the same step: its Documents section is there, with no notice and no draft.
       await expect(page.locator("[data-knowledge-documents]")).toBeVisible({ timeout: 30000 });
       await expect(page.locator("[data-knowledge-not-published]")).toHaveCount(0);
-      for (const section of ["status", "test"]) {
+      // Its status and its test search wait under Settings, folded until asked for.
+      await expect(page.locator('[id="status"]')).toBeHidden();
+      await picture(page, "kb-page-1-new-de-light-1280");
+      await openKnowledgeSettings(page);
+      for (const section of ["about", "status", "test"]) {
         await expect(page.locator(`[id="${section}"]`)).toBeVisible();
       }
       const asset = await page.request.get(assetUrl);
       expect(await asset.json()).toMatchObject({ publishedRevision: 1 });
-      // Synced sources says in one neutral line what to connect, or offers the chooser.
-      const sources = page.locator("[data-knowledge-sources]");
-      await expect(
-        sources.locator("[data-knowledge-sources-none], [data-knowledge-source-add]").first()
-      ).toBeVisible();
-      if ((await sources.locator("[data-knowledge-sources-none]").count()) > 0) {
-        await expect(sources).toContainText(
-          "Um Ordner aus Testordner oder Webseiten zu synchronisieren, lege zuerst eine Verbindung an."
-        );
-        await expect(sources.locator("[data-knowledge-source-connect]")).toBeVisible();
-      }
-      await expect(page.getByText("Lege zuerst unter Verbindungen eine an.")).toHaveCount(0);
-      await picture(page, "kb-page-1-new-de-light-1280");
+      // Where the instance offers synced sources, Add documents offers connecting a folder: one
+      // neutral line says what to connect, or the chooser of a Connection stands there.
       await page.locator('[id="documents"]').scrollIntoViewIfNeeded();
       await picture(page, "kb-page-1-new-documents-de-light-1280");
-      // New connection leads to the Connections with their New connection dialog open.
-      const connect = sources.locator("[data-knowledge-source-connect]");
-      if ((await connect.count()) > 0) {
-        await connect.click();
-        await expect(page).toHaveURL(/\/build\/connections$/u);
-        await expect(page.getByRole("dialog")).toBeVisible();
+      await expect(page.getByText("Lege zuerst unter Verbindungen eine an.")).toHaveCount(0);
+      if (await offersFolder(page)) {
+        await chooseAddDocuments(page, "folder");
+        const sources = page.locator("[data-knowledge-source-connect-dialog]");
+        await expect(
+          sources.locator("[data-knowledge-sources-none], [data-knowledge-source-add]").first()
+        ).toBeVisible();
+        // New connection leads to the Connections with their New connection dialog open.
+        const connect = sources.locator("[data-knowledge-source-connect]");
+        if ((await sources.locator("[data-knowledge-sources-none]").count()) > 0) {
+          await expect(sources).toContainText(
+            "Um Ordner aus Testordner oder Webseiten zu synchronisieren, lege zuerst eine Verbindung an."
+          );
+          await expect(connect).toBeVisible();
+          await connect.click();
+          await expect(page).toHaveURL(/\/build\/connections$/u);
+          await expect(page.getByRole("dialog")).toBeVisible();
+        }
       }
       // One of tables, saved as a draft: one notice under the head instead of three empty sections.
       const store = await requestWithOrigin(page, "put", storeUrl, {
@@ -364,7 +370,7 @@ test.describe("uploading files from the computer into a Knowledge Base", () => {
         );
       await page.setViewportSize({ width: 1280, height: 900 });
       await view(page, name, "en", "light");
-      await page.locator("[data-knowledge-add]").click();
+      await chooseAddDocuments(page, "files");
       const [file] = FILES;
       await page.locator("[data-knowledge-upload] input[data-file-picker]").setInputFiles({
         name: file.name,
@@ -479,7 +485,7 @@ test.describe("uploading files from the computer into a Knowledge Base", () => {
       );
       await page.setViewportSize({ width: 1280, height: 900 });
       await view(page, name, "en", "light");
-      await page.locator("[data-knowledge-add]").click();
+      await chooseAddDocuments(page, "files");
       const upload = page.locator("[data-knowledge-upload]");
       await expect(upload).toContainText(WORDS.en.title);
       await upload.locator("input[data-file-picker]").setInputFiles(
@@ -512,6 +518,7 @@ test.describe("uploading files from the computer into a Knowledge Base", () => {
         { timeout: 120000 }
       );
       // The test search on the page finds each file by the word only it holds.
+      await openKnowledgeSettings(page);
       const search = page.locator("[data-knowledge-test-search]");
       for (const file of FILES) {
         await search.getByRole("searchbox").fill(file.word);
@@ -530,7 +537,7 @@ test.describe("uploading files from the computer into a Knowledge Base", () => {
             const width = Number(1280);
             await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
             await view(page, name, locale, theme);
-            await page.locator("[data-knowledge-add]").click();
+            await chooseAddDocuments(page, "files");
             await expect(upload).toContainText(WORDS[locale].title);
             await upload.locator("input[data-file-picker]").setInputFiles({
               name: "tabelle.csv",
@@ -554,7 +561,7 @@ test.describe("uploading files from the computer into a Knowledge Base", () => {
       // system's file dialog.
       await page.setViewportSize({ width: 390, height: 640 });
       await view(page, name, "en", "light");
-      await page.locator("[data-knowledge-add]").click();
+      await chooseAddDocuments(page, "files");
       const dialog = page.locator("[data-knowledge-add-dialog]");
       const body = dialog.locator("xpath=..");
       const choose = page.locator("[data-knowledge-upload-choose]");
