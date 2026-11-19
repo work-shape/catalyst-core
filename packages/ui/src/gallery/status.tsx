@@ -1,11 +1,22 @@
-import { Bot, Check, Inbox, KeyRound, LayoutGrid, Shield, Users, X } from "lucide-react";
+import {
+  Bot,
+  Check,
+  ChevronDown,
+  FileText,
+  Inbox,
+  KeyRound,
+  LayoutGrid,
+  Shield,
+  Users,
+  X
+} from "lucide-react";
 import { useState } from "react";
 import { Button } from "../actions/button";
 import { Spinner } from "../feedback/spinner";
 import { Avatar, type AvatarKind, type AvatarSize } from "../status/avatar";
 import { AvatarStack } from "../status/avatar-stack";
 import { Badge, type BadgeAppearance, type BadgeTone } from "../status/badge";
-import { Chip, ScopeChip, type ChipSize } from "../status/chip";
+import { Chip, ChipAction, ScopeChip, type ChipSize } from "../status/chip";
 import { CountBadge, type CountBadgeTone } from "../status/count-badge";
 import { fileTypeIcons } from "../status/file-type-icons";
 import {
@@ -260,7 +271,7 @@ export const statusGallery: GalleryGroup = {
     },
     {
       name: "Chip",
-      components: ["Chip", "ScopeChip"],
+      components: ["Chip", "ChipAction", "ScopeChip"],
       render: (text) => (
         <>
           {chipSizes.map((size) => (
@@ -283,6 +294,20 @@ export const statusGallery: GalleryGroup = {
               </Chip>
               <Chip size={size} pressed onClick={() => undefined}>
                 {text.emptyPresetBriefing}
+              </Chip>
+              <Chip
+                size={size}
+                className="max-w-56"
+                leading={<FileText aria-hidden="true" />}
+                detail={text.chipPages}
+                onClick={() => undefined}
+                trailing={
+                  <ChipAction label={text.moreActions}>
+                    <ChevronDown aria-hidden="true" />
+                  </ChipAction>
+                }
+              >
+                {text.fileTreeOffer}
               </Chip>
             </Samples>
           ))}

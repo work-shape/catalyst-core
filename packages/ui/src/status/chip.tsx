@@ -1,5 +1,11 @@
 import { Building2, Lock, UserRound, X } from "lucide-react";
-import { useId, type MouseEventHandler, type ReactNode } from "react";
+import {
+  forwardRef,
+  useId,
+  type ButtonHTMLAttributes,
+  type MouseEventHandler,
+  type ReactNode
+} from "react";
 import { cn } from "../cn";
 import { useUiLabels } from "../ui-root";
 import { Avatar, type AvatarAccent } from "./avatar";
@@ -16,6 +22,16 @@ export interface ChipProps {
   children: ReactNode;
   /** An avatar or an icon before the label. */
   leading?: ReactNode;
+  /**
+   * A short muted text after the label, such as the pages of a document. It stays whole while a
+   * long label shortens with an ellipsis, and is read after the label, after a comma.
+   */
+  detail?: ReactNode;
+  /**
+   * An action of its own after the label, inside the pill: a `ChipAction`, alone or as the
+   * trigger of a menu or popover on the object.
+   */
+  trailing?: ReactNode;
   size?: ChipSize;
   /** Says that the object cannot be changed here. It shows a lock and is read out. */
   lockLabel?: string;
@@ -33,10 +49,47 @@ export interface ChipProps {
   className?: string;
 }
 
+const interactiveClassName = "transition-colors hover:bg-state-hover focus-visible:focus-ring";
+
+export interface ChipActionProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
+  /** What the action does, read out in place of its icon, such as "Details of report.pdf". */
+  label: string;
+  /** The icon of the action. */
+  children: ReactNode;
+}
+
+/**
+ * A round icon button at the trailing edge of a chip, given to its `trailing`: an action on
+ * the object of its own beside the chip's click, such as the menu of its details. It forwards
+ * its ref and props, so it can be the trigger of a menu or popover.
+ */
+export const ChipAction = forwardRef<HTMLButtonElement, ChipActionProps>(function ChipAction(
+  { label, children, className, ...props },
+  ref
+) {
+  return (
+    <button
+      ref={ref}
+      type="button"
+      aria-label={label}
+      className={cn(
+        "mr-0.5 inline-flex aspect-square h-[calc(100%-0.25rem)] shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground data-[state=open]:bg-state-hover data-[state=open]:text-foreground [&_svg]:size-3 [&_svg]:stroke-2",
+        interactiveClassName,
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+});
+
 /** A small pill that names an object: a scope, a role, a group, a requester. */
 export function Chip({
   children,
   leading,
+  detail,
+  trailing,
   size = "md",
   lockLabel,
   onRemove,
@@ -49,15 +102,20 @@ export function Chip({
   const labelId = useId();
   const bodyClassName = cn(
     "inline-flex h-full min-w-0 items-center gap-1 rounded-full pl-2 [&_svg]:size-3 [&_svg]:shrink-0 [&_svg]:stroke-2",
-    onRemove ? "pr-1" : "pr-2"
+    onRemove || trailing !== undefined ? "pr-1" : "pr-2"
   );
-  const interactiveClassName = "transition-colors hover:bg-state-hover focus-visible:focus-ring";
   const body = (
     <>
       {leading}
       <span id={labelId} className="truncate">
         {children}
       </span>
+      {detail === undefined ? null : (
+        <span className="shrink-0 text-muted-foreground">
+          <span className="sr-only">, </span>
+          {detail}
+        </span>
+      )}
       {lockLabel === undefined ? null : (
         <>
           <Lock aria-hidden="true" className="text-muted-foreground" />
@@ -92,19 +150,11 @@ export function Chip({
       ) : (
         <span className={bodyClassName}>{body}</span>
       )}
+      {trailing}
       {onRemove ? (
-        <button
-          type="button"
-          aria-label={labels.remove}
-          aria-describedby={labelId}
-          className={cn(
-            "mr-0.5 inline-flex aspect-square h-[calc(100%-0.25rem)] shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground [&_svg]:size-3 [&_svg]:stroke-2",
-            interactiveClassName
-          )}
-          onClick={onRemove}
-        >
+        <ChipAction label={labels.remove} aria-describedby={labelId} onClick={onRemove}>
           <X aria-hidden="true" />
-        </button>
+        </ChipAction>
       ) : null}
     </span>
   );

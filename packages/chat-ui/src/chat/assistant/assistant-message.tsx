@@ -28,7 +28,11 @@ import {
   type AssistantWorkTimelineItem
 } from "./assistant-work-grouping";
 import type { AssistantUiMessageCustomMetadata } from "./assistant-ui-adapter";
-import { AssistantSourcePart } from "./assistant-source-part";
+import {
+  AssistantKnowledgeSources,
+  AssistantSourcePart,
+  knowledgeCitationOfPart
+} from "./assistant-source-part";
 import { useTranslation } from "../../shared/i18n";
 import { modelDisplayLabel } from "../../shared/model-label";
 import { MarkdownText } from "../markdown/markdown-text";
@@ -184,6 +188,12 @@ function AssistantMessage({
     () => createVisibleFinalAssistantPartIndices(messageParts, finalTextIndex, folded),
     [finalTextIndex, folded, messageParts]
   );
+  // The Knowledge Base passages the answer cites stand in one row under it, one chip per
+  // document, not one part each.
+  const knowledgeCitations = useMemo(
+    () => messageParts.flatMap((part) => knowledgeCitationOfPart(part) ?? []),
+    [messageParts]
+  );
   const completedWorkTimelineItems = useMemo(
     () => createAssistantWorkTimelineItems(messageParts, completedWorkIndices, { toolUIs }, folded),
     [completedWorkIndices, folded, messageParts, toolUIs]
@@ -253,13 +263,15 @@ function AssistantMessage({
                 partComponents={completedWorkPartComponents}
               />
             </AssistantWorkGroup>
-            {visibleFinalPartIndices.map((index) => (
-              <MessagePrimitive.PartByIndex
-                key={`part-${index}`}
-                index={index}
-                components={assistantPartComponents}
-              />
-            ))}
+            {visibleFinalPartIndices
+              .filter((index) => !isKnowledgeCitationPart(messageParts[index]))
+              .map((index) => (
+                <MessagePrimitive.PartByIndex
+                  key={`part-${index}`}
+                  index={index}
+                  components={assistantPartComponents}
+                />
+              ))}
           </>
         ) : (
           <MessagePrimitive.GroupedParts groupBy={groupBy}>
@@ -274,6 +286,7 @@ function AssistantMessage({
             }
           </MessagePrimitive.GroupedParts>
         )}
+        <AssistantKnowledgeSources citations={knowledgeCitations} />
         <MessageError />
       </div>
       {modelFallback && !messageRunning ? (
@@ -407,7 +420,8 @@ function renderAssistantGroupedPart({
     case "reasoning":
       return <AssistantReasoningPart />;
     case "source":
-      return <AssistantSourcePart {...part} />;
+      // The row under the answer shows the Knowledge Base passages it cites.
+      return isKnowledgeCitationPart(part) ? null : <AssistantSourcePart {...part} />;
     case "image":
       return <ImagePart />;
     case "file":
@@ -478,6 +492,10 @@ function AssistantWorkTimeline({
       })}
     </div>
   );
+}
+
+function isKnowledgeCitationPart(part: PartState | undefined): boolean {
+  return part !== undefined && knowledgeCitationOfPart(part) !== undefined;
 }
 
 /** How long the work history of a run that just ended stays open before it folds itself. */

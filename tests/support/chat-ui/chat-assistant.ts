@@ -9,7 +9,10 @@ export {
   isRecentlyActiveAssistantRunId,
   rememberRecentlyActiveAssistantRunId
 } from "../../../packages/chat-ui/src/chat/assistant/recently-active-runs";
-export { AssistantSourcePart } from "../../../packages/chat-ui/src/chat/assistant/assistant-source-part";
+export {
+  AssistantKnowledgeSources,
+  AssistantSourcePart
+} from "../../../packages/chat-ui/src/chat/assistant/assistant-source-part";
 export {
   AssistantThread,
   ThreadStartBlock,
