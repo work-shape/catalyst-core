@@ -166,6 +166,11 @@ export interface LayoutGalleryText {
   keyCreated: string;
   keyCreatedValue: string;
   keyLastActive: string;
+  keyPlan: string;
+  keySeats: string;
+  keySeatsValue: string;
+  keyRenews: string;
+  keyRenewsValue: string;
   keyPrompt: string;
   keyPromptValue: string;
   keyInline: string;
@@ -366,6 +371,11 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     keyCreated: "Created",
     keyCreatedValue: "3 March, 09:41",
     keyLastActive: "Last active",
+    keyPlan: "Plan",
+    keySeats: "Seats",
+    keySeatsValue: "12",
+    keyRenews: "Renews",
+    keyRenewsValue: "1 April",
     keyPrompt: "Request",
     keyPromptValue:
       "Compare the three offers for the roof renovation, list what each one leaves out, and say which one you would take and why. Keep the answer short enough to read on a phone, name the page of each offer you quote from, and flag every price that is not fixed. If an offer misses the scaffolding, say so first.",
@@ -566,6 +576,11 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     keyCreated: "Erstellt",
     keyCreatedValue: "3. März, 09:41",
     keyLastActive: "Zuletzt aktiv",
+    keyPlan: "Tarif",
+    keySeats: "Plätze",
+    keySeatsValue: "12",
+    keyRenews: "Verlängert sich",
+    keyRenewsValue: "1. April",
     keyPrompt: "Anfrage",
     keyPromptValue:
       "Vergleiche die drei Angebote für die Dachsanierung, liste auf, was jedes auslässt, und sag, welches du nehmen würdest und warum. Halte die Antwort so kurz, dass sie auf einem Telefon lesbar ist, nenne die Seite jedes Angebots, aus dem du zitierst, und markiere jeden Preis, der nicht fest ist. Wenn einem Angebot das Gerüst fehlt, sag das zuerst.",

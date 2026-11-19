@@ -65,6 +65,14 @@ export function formatDate(value: string, locale: LocaleCode): string {
   return new Date(value).toLocaleDateString(locale);
 }
 
+/**
+ * A day without a time, such as a due date written "2026-11-19": the same day in every time
+ * zone, where `formatDate` would read it as midnight in UTC and show the day before west of it.
+ */
+export function formatCalendarDay(value: string, locale: LocaleCode): string {
+  return new Date(`${value}T00:00:00Z`).toLocaleDateString(locale, { timeZone: "UTC" });
+}
+
 export function formatTime(value: string, locale: LocaleCode): string {
   return new Date(value).toLocaleTimeString(locale);
 }

@@ -19,3 +19,7 @@ export {
   formatWorkspaceCommandActionLabel,
   projectWorkspaceToolDisplay
 } from "../../../packages/chat-ui/src/chat/tools/workspace-tool-display";
+export {
+  GenericDataView,
+  readableLabel
+} from "../../../packages/chat-ui/src/chat/tools/generic-data-view";

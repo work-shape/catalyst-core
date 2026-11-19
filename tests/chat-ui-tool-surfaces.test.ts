@@ -151,7 +151,8 @@ describe("chat UI message history projection", () => {
     ]);
   });
 
-  it("does not render inert final surface cards for unsupported display payloads", () => {
+  it("opens a final surface of a kind without a widget in the generic data view", () => {
+    // Its data is read from its own shape (TOOL-2), so the card has something to open.
     const markup = renderToStaticMarkup(
       createElement(
         ToolDisplayPanelProvider,
@@ -176,8 +177,8 @@ describe("chat UI message history projection", () => {
       )
     );
 
-    expect(markup).not.toContain("Unsupported Dashboard");
-    expect(markup).not.toContain("button");
+    expect(markup).toContain("Unsupported Dashboard");
+    expect(markup).toContain("Open in side panel");
   });
 
   it("renders final surface cards as whole-card side panel openers", () => {

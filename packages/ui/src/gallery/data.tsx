@@ -587,6 +587,12 @@ export const dataGallery: GalleryGroup = {
                 </KeyValue>
                 <KeyValue label={text.keyCreated}>{text.keyCreatedValue}</KeyValue>
                 <KeyValue label={text.keyLastActive}>{text.today}</KeyValue>
+                <KeyValue label={text.keyPlan} layout="stacked">
+                  <KeyValueList className="border-l pl-3">
+                    <KeyValue label={text.keySeats}>{text.keySeatsValue}</KeyValue>
+                    <KeyValue label={text.keyRenews}>{text.keyRenewsValue}</KeyValue>
+                  </KeyValueList>
+                </KeyValue>
                 <KeyValue label={text.keyPrompt} copyValue={text.keyPromptValue} foldable>
                   {text.keyPromptValue}
                 </KeyValue>
