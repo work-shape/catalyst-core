@@ -750,8 +750,10 @@ describe("when a source syncs by itself (SRC-SYNC)", () => {
     expect(set({ full: "off" })).toContain("Gelöschte Dateien werden nicht automatisch entfernt.");
     expect(set({ changes: "off" })).toContain("Wird nachts mit der Quelle abgeglichen");
     expect(set({ changes: "off", full: "off" })).toContain("Hält sich nicht automatisch aktuell.");
-    // The controls wait behind Adjust.
-    expect(render("de")).toMatch(/data-knowledge-source-adjust=""[^>]*>.*?Anpassen/su);
+    // The controls wait behind the row's toggle. This source has failed items, so the toggle
+    // leads to them; a fetch failure has no document row and its retry lives in here.
+    expect(render("de")).toMatch(/data-knowledge-source-adjust=""[^>]*>.*?Fehler ansehen/su);
+    expect(render("de")).toMatch(/data-knowledge-source-failed=""[^>]*>.*?2 fehlgeschlagen/su);
   });
 
   it("offers the switch, the interval and the full sync, with the default named", () => {
