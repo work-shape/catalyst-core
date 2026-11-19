@@ -701,13 +701,37 @@ describe("when a source syncs by itself (SRC-SYNC)", () => {
     expect(syncsByItself(undefined)).toBe(true);
   });
 
+  it("says in one sentence how a source keeps itself current, from its schedule and defaults", () => {
+    const sentence = (page: string) =>
+      page.split('data-knowledge-source-sentence="">')[1]?.split("</p>")[0];
+    // Nothing set: the instance's interval and the nightly pass.
+    expect(sentence(render("de", { status: schedule(30, "0 2 * * *") }))).toBe(
+      "Hält sich automatisch aktuell: neue und geänderte Dateien alle 15 Minuten, gelöschte Dateien werden nachts entfernt."
+    );
+    expect(sentence(render("en", { status: schedule(30, "0 2 * * *") }))).toBe(
+      "Keeps itself up to date: new and changed files every 15 minutes, deleted files are removed every night."
+    );
+    const set = (value: KnowledgeSourceForm["schedule"]) =>
+      sentence(render("de", { sources: [{ ...handbookSource, schedule: value }] }));
+    expect(set({ changes: 60, full: "0 14 * * *" })).toBe(
+      "Hält sich automatisch aktuell: neue und geänderte Dateien stündlich, gelöschte Dateien werden jeden Tag, 14:00 entfernt."
+    );
+    expect(set({ full: "off" })).toContain("Gelöschte Dateien werden nicht automatisch entfernt.");
+    expect(set({ changes: "off" })).toContain("Wird nachts mit der Quelle abgeglichen");
+    expect(set({ changes: "off", full: "off" })).toContain("Hält sich nicht automatisch aktuell.");
+    // The controls wait behind Adjust.
+    expect(render("de")).toMatch(/data-knowledge-source-adjust=""[^>]*>.*?Anpassen/su);
+  });
+
   it("offers the switch, the interval and the full sync, with the default named", () => {
     const page = render("de", { status: schedule(30, "0 2 * * *") });
     expect(page).toContain('data-knowledge-source-schedule="on"');
     expect(page).toContain("Automatisch synchronisieren");
     expect(page).toContain("Änderungen abrufen");
     expect(page).toContain("Standard (alle 15 Minuten)");
-    expect(page).toContain("Vollständig synchronisieren");
+    expect(page).toContain("Gelöschtes entfernen");
+    // What the pass does is said without the word "vollständig".
+    expect(page).not.toMatch(/vollständig/iu);
     expect(page).toContain("In der Standardzeitzone für alle Arbeitsbereiche.");
     // The published source says how it syncs now.
     expect(page).toContain("Ruft Änderungen ab");
@@ -765,7 +789,7 @@ describe("when a source syncs by itself (SRC-SYNC)", () => {
     });
     expect(custom).toContain('value="*/30 1-5 * * *"');
     expect(custom).toContain("Every hour");
-    expect(custom).toMatch(/>Full sync<\/dt>.*?>Never</su);
+    expect(custom).toMatch(/>Removes what was deleted<\/dt>.*?>Never</su);
   });
 
   it("gives a reader who may not change it the settings to read, not to change", () => {

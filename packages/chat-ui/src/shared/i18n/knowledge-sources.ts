@@ -38,9 +38,9 @@ export const knowledgeSources = defineTranslations({
     "knowledgeSources.everyHour": "Every hour",
     "knowledgeSources.everyHours": "Every {hours} hours",
     "knowledgeSources.everyDay": "Once a day",
-    "knowledgeSources.syncFull": "Full sync",
+    "knowledgeSources.syncFull": "Remove what was deleted",
     "knowledgeSources.syncFullHint":
-      "Reads the whole source and takes out what is no longer there. In the default time zone for all workspaces.",
+      "Lists the whole source once, by name and date only, and takes out what was deleted or moved. Unchanged files are never downloaded or read again. In the default time zone for all workspaces.",
     "knowledgeSources.syncFullWhen": "When",
     "knowledgeSources.syncFullIncomplete": "Choose at least one day and a time.",
     "knowledgeSources.syncFullCron": "Schedule (cron)",
@@ -50,7 +50,7 @@ export const knowledgeSources = defineTranslations({
       "This source syncs only when someone clicks Sync now. Files deleted or made private in the source stay searchable until the next sync.",
     "knowledgeSources.syncChangesFloor": "At most {interval} for this kind of source.",
     "knowledgeSources.syncChangesEvery": "Fetches changes",
-    "knowledgeSources.syncFullAt": "Full sync",
+    "knowledgeSources.syncFullAt": "Removes what was deleted",
     "knowledgeSources.syncModeOff": "Never",
     "knowledgeSources.pickTitle": "Choose folders",
     "knowledgeSources.pickDescription":
@@ -155,7 +155,25 @@ export const knowledgeSources = defineTranslations({
     "knowledgeSources.lastRun": "Last run",
     "knowledgeSources.workflowFreshness": "As of the last run {elapsed} ago",
     "knowledgeSources.workflowNote":
-      "The workflow's runs decide what this source holds: a complete run removes what it no longer names. To keep a document out, remove it under Documents: no run brings it back."
+      "The workflow's runs decide what this source holds: a complete run removes what it no longer names. To keep a document out, remove it under Documents: no run brings it back.",
+    "knowledgeSources.adjust": "Adjust",
+    "knowledgeSources.details": "Details",
+    "knowledgeSources.connectTitle": "Connect a folder",
+    "knowledgeSources.rowFrom": "Folders from {connection}",
+    "knowledgeSources.rowDocument": "1 document",
+    "knowledgeSources.rowDocuments": "{count} documents",
+    "knowledgeSources.sentenceBoth":
+      "Keeps itself up to date: new and changed {items} {interval}, deleted {items} are removed {full}.",
+    "knowledgeSources.sentenceChangesOnly":
+      "Keeps itself up to date: new and changed {items} {interval}. Deleted {items} are not removed automatically.",
+    "knowledgeSources.sentenceFullOnly":
+      "Is compared with its source {full}: new, changed and deleted {items} follow then.",
+    "knowledgeSources.sentenceOff":
+      "Does not keep itself up to date. New, changed and deleted {items} follow only when someone clicks Sync now.",
+    "knowledgeSources.wordsFiles": "files",
+    "knowledgeSources.wordsPages": "pages",
+    "knowledgeSources.wordsNightly": "every night",
+    "knowledgeSources.wordsRegularly": "regularly"
   },
   de: {
     "knowledgeSources.title": "Synchronisierte Quellen",
@@ -195,9 +213,9 @@ export const knowledgeSources = defineTranslations({
     "knowledgeSources.everyHour": "Stündlich",
     "knowledgeSources.everyHours": "Alle {hours} Stunden",
     "knowledgeSources.everyDay": "Einmal am Tag",
-    "knowledgeSources.syncFull": "Vollständig synchronisieren",
+    "knowledgeSources.syncFull": "Gelöschtes entfernen",
     "knowledgeSources.syncFullHint":
-      "Liest die ganze Quelle und nimmt heraus, was dort nicht mehr liegt. In der Standardzeitzone für alle Arbeitsbereiche.",
+      "Listet die ganze Quelle einmal auf, nur nach Name und Datum, und nimmt heraus, was gelöscht oder verschoben wurde. Unveränderte Dateien werden nie erneut heruntergeladen oder gelesen. In der Standardzeitzone für alle Arbeitsbereiche.",
     "knowledgeSources.syncFullWhen": "Wann",
     "knowledgeSources.syncFullIncomplete": "Wähle mindestens einen Tag und eine Uhrzeit.",
     "knowledgeSources.syncFullCron": "Zeitplan (cron)",
@@ -207,7 +225,7 @@ export const knowledgeSources = defineTranslations({
       "Diese Quelle synchronisiert nur, wenn jemand auf „Jetzt synchronisieren“ klickt. Dateien, die in der Quelle gelöscht oder nicht mehr freigegeben sind, bleiben bis zur nächsten Synchronisierung durchsuchbar.",
     "knowledgeSources.syncChangesFloor": "Bei dieser Art Quelle höchstens {interval}.",
     "knowledgeSources.syncChangesEvery": "Ruft Änderungen ab",
-    "knowledgeSources.syncFullAt": "Vollständig",
+    "knowledgeSources.syncFullAt": "Entfernt Gelöschtes",
     "knowledgeSources.syncModeOff": "Nie",
     "knowledgeSources.pickTitle": "Ordner wählen",
     "knowledgeSources.pickDescription":
@@ -318,6 +336,24 @@ export const knowledgeSources = defineTranslations({
     "knowledgeSources.lastRun": "Letzter Lauf",
     "knowledgeSources.workflowFreshness": "Stand: letzter Lauf vor {elapsed}",
     "knowledgeSources.workflowNote":
-      "Was diese Quelle enthält, bestimmen die Läufe des Workflows: Ein vollständiger Lauf entfernt, was er nicht mehr nennt. Um ein Dokument herauszuhalten, entferne es unter Dokumente: Kein Lauf bringt es zurück."
+      "Was diese Quelle enthält, bestimmen die Läufe des Workflows: Ein Lauf, der zu Ende läuft, entfernt, was er nicht mehr nennt. Um ein Dokument herauszuhalten, entferne es unter Dokumente: Kein Lauf bringt es zurück.",
+    "knowledgeSources.adjust": "Anpassen",
+    "knowledgeSources.details": "Details",
+    "knowledgeSources.connectTitle": "Ordner verbinden",
+    "knowledgeSources.rowFrom": "Ordner aus {connection}",
+    "knowledgeSources.rowDocument": "1 Dokument",
+    "knowledgeSources.rowDocuments": "{count} Dokumente",
+    "knowledgeSources.sentenceBoth":
+      "Hält sich automatisch aktuell: neue und geänderte {items} {interval}, gelöschte {items} werden {full} entfernt.",
+    "knowledgeSources.sentenceChangesOnly":
+      "Hält sich automatisch aktuell: neue und geänderte {items} {interval}. Gelöschte {items} werden nicht automatisch entfernt.",
+    "knowledgeSources.sentenceFullOnly":
+      "Wird {full} mit der Quelle abgeglichen: Neue, geänderte und gelöschte {items} folgen dann.",
+    "knowledgeSources.sentenceOff":
+      "Hält sich nicht automatisch aktuell. Neue, geänderte und gelöschte {items} folgen erst, wenn jemand auf „Jetzt synchronisieren“ klickt.",
+    "knowledgeSources.wordsFiles": "Dateien",
+    "knowledgeSources.wordsPages": "Seiten",
+    "knowledgeSources.wordsNightly": "nachts",
+    "knowledgeSources.wordsRegularly": "regelmäßig"
   }
 });

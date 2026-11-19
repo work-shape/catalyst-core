@@ -9,6 +9,7 @@ import {
 } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { cronSchedule, scheduleCron } from "../workflows/schedule-cron";
+import { scheduleInWords } from "../workflows/schedule-words";
 import type { KnowledgeChoice, KnowledgeSourceStatus } from "./knowledge-base-source";
 import {
   FULL_SYNC_DEFAULT,
@@ -62,6 +63,49 @@ export function intervalWords(minutes: number, t: TranslationContextValue["t"]):
 /** "Alle 15 Minuten" inside a sentence: "wie die Instanz es vorgibt (alle 15 Minuten)". */
 function lowerFirst(text: string, locale: string): string {
   return text.charAt(0).toLocaleLowerCase(locale) + text.slice(1);
+}
+
+/** A full pass every night: a cron of one clock time before six, on every day. */
+function nightly(cron: string): boolean {
+  const [minute = "", hour = "", ...rest] = cron.trim().split(/\s+/u);
+  return (
+    /^\d+$/u.test(minute) &&
+    /^\d+$/u.test(hour) &&
+    Number(hour) < 6 &&
+    rest.length === 3 &&
+    rest.every((field) => field === "*")
+  );
+}
+
+/**
+ * How one source keeps itself current, in one sentence a person reads in place of its schedule:
+ * how often new and changed files arrive, and when deleted ones leave. Built from what the
+ * source sets and, where it sets nothing, what it takes. The pass that removes deleted files
+ * lists the source by name and date; it downloads no unchanged file again.
+ */
+export function sourceScheduleSentence(
+  schedule: KnowledgeSourceSchedule | undefined,
+  defaults: SourceScheduleDefaults,
+  web: boolean,
+  translation: Pick<TranslationContextValue, "locale" | "t">
+): string {
+  const { locale, t } = translation;
+  const items = t(web ? "knowledgeSources.wordsPages" : "knowledgeSources.wordsFiles");
+  if (!syncsByItself(schedule)) return t("knowledgeSources.sentenceOff", { items });
+  const changes = schedule?.changes ?? defaults.changes;
+  const fullCron = schedule?.full ?? defaults.full;
+  const regularly = t("knowledgeSources.wordsRegularly");
+  const interval =
+    typeof changes === "number" ? lowerFirst(intervalWords(changes, t), locale) : regularly;
+  const inWords = scheduleInWords(fullCron, translation);
+  const full = nightly(fullCron)
+    ? t("knowledgeSources.wordsNightly")
+    : inWords === undefined
+      ? regularly
+      : lowerFirst(inWords, locale);
+  if (fullCron === SYNC_OFF) return t("knowledgeSources.sentenceChangesOnly", { items, interval });
+  if (changes === SYNC_OFF) return t("knowledgeSources.sentenceFullOnly", { items, full });
+  return t("knowledgeSources.sentenceBoth", { items, interval, full });
 }
 
 export function KnowledgeSourceSchedule({

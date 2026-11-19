@@ -212,12 +212,6 @@ export const knowledge = defineTranslations({
     "knowledge.createsLive":
       "Goes live when it is created, available in no workspace, so you can add files at once. Later changes are saved as a draft.",
     "knowledge.documentsTitle": "Documents",
-    "knowledge.documentsDescription":
-      "Everyone who may use this knowledge base finds every document in it, once the document is searchable.",
-    "knowledge.documentsEmpty":
-      "No documents yet. Upload files from your computer or add files from your conversations.",
-    "knowledge.documentsEmptyReadOnly":
-      "No documents yet. Somebody who may change this knowledge base adds them.",
     "knowledge.documentsFailed": "The documents could not be loaded.",
     "knowledge.documentsPreparing":
       "Its store is being made. The documents show here by themselves once it is ready.",
@@ -328,7 +322,26 @@ export const knowledge = defineTranslations({
     "knowledge.addRefused": "You may not add documents to this knowledge base.",
     "knowledge.addFailed": "The files could not be added.",
     "knowledge.addedOne": "1 document added. It is being indexed.",
-    "knowledge.addedMany": "{count} documents added. They are being indexed."
+    "knowledge.addedMany": "{count} documents added. They are being indexed.",
+    "knowledge.tallyAll": "All {count} documents are searchable",
+    "knowledge.tallyOne": "1 document is searchable",
+    "knowledge.tallySome": "{searchable} of {count} documents are searchable",
+    "knowledge.tallyOneNot": "1 document, not searchable yet",
+    "knowledge.tallyNone": "No documents yet",
+    "knowledge.tallyNoneHint": "Add files so agents can answer from them.",
+    "knowledge.tallyNoneHintReadOnly": "Someone who may change this knowledge base adds them.",
+    "knowledge.tallyCount": "{count} documents",
+    "knowledge.tallyFailedOne": "1 could not be read. It is at the top of the list.",
+    "knowledge.tallyFailedMany": "{count} could not be read. They are at the top of the list.",
+    "knowledge.tallyPendingOne": "1 is still being read.",
+    "knowledge.tallyPendingMany": "{count} are still being read.",
+    "knowledge.tallySomeFailed": "Some could not be read.",
+    "knowledge.tallySomePending": "Some are still being read.",
+    "knowledge.addUpload": "Upload files",
+    "knowledge.addConnect": "Connect a folder",
+    "knowledge.settingsTitle": "Settings",
+    "knowledge.settingsHint": "Name, availability, access, test search",
+    "knowledge.settingsHintTables": "Name, availability, access"
   },
   de: {
     "knowledge.kind": "Wissen",
@@ -545,12 +558,6 @@ export const knowledge = defineTranslations({
     "knowledge.createsLive":
       "Ist sofort veröffentlicht und in keinem Arbeitsbereich verfügbar, damit du gleich Dateien hinzufügen kannst. Spätere Änderungen werden als Entwurf gespeichert.",
     "knowledge.documentsTitle": "Dokumente",
-    "knowledge.documentsDescription":
-      "Jeder, der diese Wissensbasis nutzen darf, findet jedes Dokument darin, sobald es durchsuchbar ist.",
-    "knowledge.documentsEmpty":
-      "Noch keine Dokumente. Lade Dateien von deinem Computer hoch oder füge Dateien aus deinen Unterhaltungen hinzu.",
-    "knowledge.documentsEmptyReadOnly":
-      "Noch keine Dokumente. Jemand, der diese Wissensbasis ändern darf, fügt sie hinzu.",
     "knowledge.documentsFailed": "Die Dokumente konnten nicht geladen werden.",
     "knowledge.documentsPreparing":
       "Ihr Speicher wird angelegt. Die Dokumente erscheinen hier von selbst, sobald er bereit ist.",
@@ -663,6 +670,27 @@ export const knowledge = defineTranslations({
     "knowledge.addRefused": "Du darfst dieser Wissensbasis keine Dokumente hinzufügen.",
     "knowledge.addFailed": "Die Dateien konnten nicht hinzugefügt werden.",
     "knowledge.addedOne": "1 Dokument hinzugefügt. Es wird jetzt indexiert.",
-    "knowledge.addedMany": "{count} Dokumente hinzugefügt. Sie werden jetzt indexiert."
+    "knowledge.addedMany": "{count} Dokumente hinzugefügt. Sie werden jetzt indexiert.",
+    "knowledge.tallyAll": "Alle {count} Dokumente sind durchsuchbar",
+    "knowledge.tallyOne": "1 Dokument ist durchsuchbar",
+    "knowledge.tallySome": "{searchable} von {count} Dokumenten sind durchsuchbar",
+    "knowledge.tallyOneNot": "1 Dokument, noch nicht durchsuchbar",
+    "knowledge.tallyNone": "Noch keine Dokumente",
+    "knowledge.tallyNoneHint": "Füge Dateien hinzu, damit Agenten daraus antworten können.",
+    "knowledge.tallyNoneHintReadOnly":
+      "Jemand, der diese Wissensbasis ändern darf, fügt sie hinzu.",
+    "knowledge.tallyCount": "{count} Dokumente",
+    "knowledge.tallyFailedOne": "1 konnte nicht gelesen werden. Es steht unten ganz oben.",
+    "knowledge.tallyFailedMany":
+      "{count} konnten nicht gelesen werden. Sie stehen unten ganz oben.",
+    "knowledge.tallyPendingOne": "1 wird noch gelesen.",
+    "knowledge.tallyPendingMany": "{count} werden noch gelesen.",
+    "knowledge.tallySomeFailed": "Einige konnten nicht gelesen werden.",
+    "knowledge.tallySomePending": "Einige werden noch gelesen.",
+    "knowledge.addUpload": "Dateien hochladen",
+    "knowledge.addConnect": "Ordner verbinden",
+    "knowledge.settingsTitle": "Einstellungen",
+    "knowledge.settingsHint": "Name, Verfügbarkeit, Zugriff, Testsuche",
+    "knowledge.settingsHintTables": "Name, Verfügbarkeit, Zugriff"
   }
 });
