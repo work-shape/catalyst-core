@@ -457,6 +457,15 @@ describe("the row of sources under an answer", () => {
     expect(document.activeElement).toBe(chip(chips()[4] ?? host));
   });
 
+  it("reads underscores in the chip's name as spaces, and names the file whole in its menu", async () => {
+    showRow([cited("plan", "Baubeschreibung_Haus__Abschnitt_2_2026-03-14.pdf", 12)]);
+    expect(chips()[0]?.textContent).toBe("Baubeschreibung Haus Abschnitt 2 2026-03-14, S. 12");
+    await openMenu();
+    expect(menuHeading()).toBe(
+      "Baubeschreibung_Haus__Abschnitt_2_2026-03-14.pdfabgerufen 19.11.2026"
+    );
+  });
+
   it("shows five documents whole, as +1 more would take the room of the fifth", () => {
     showRow(["a", "b", "c", "d", "e"].map((id) => cited(id, `akte-${id}.pdf`, 1)));
     expect(chips()).toHaveLength(5);

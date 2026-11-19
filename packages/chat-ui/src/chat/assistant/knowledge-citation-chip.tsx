@@ -172,9 +172,17 @@ function knowledgePlaces(
   );
 }
 
-/** A file's name without its extension, which the chip leaves out; the menu names it whole. */
+/**
+ * A file's name as the chip reads it: without its extension, its underscores as spaces. The
+ * menu names it whole. A hyphen stays, as in a date it is no gap between words.
+ */
 function shortFileName(fileName: string): string {
-  return fileName.replace(/\.[a-z0-9]{2,5}$/iu, "") || fileName;
+  const name = fileName
+    .replace(/\.[a-z0-9]{2,5}$/iu, "")
+    .replace(/_+/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+  return name || fileName;
 }
 
 /** The file stores whose name the reader knows better than their address. */
