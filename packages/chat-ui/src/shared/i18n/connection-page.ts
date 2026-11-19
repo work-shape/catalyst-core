@@ -75,6 +75,7 @@ export const connectionPage = defineTranslations({
     "connectionPage.operationMore": "Details",
     "connectionPage.settingsTitle": "Settings",
     "connectionPage.settingsHint": "Name, access, availability and more",
+    "connectionPage.showTestCredential": "Open test credential",
     "connectionPage.reachTitle": "Address and access",
     "connectionPage.reachDescription":
       "How the connection reaches the service. No key is shown here."
@@ -151,6 +152,7 @@ export const connectionPage = defineTranslations({
     "connectionPage.operationMore": "Details",
     "connectionPage.settingsTitle": "Einstellungen",
     "connectionPage.settingsHint": "Name, Zugang, Verfügbarkeit und mehr",
+    "connectionPage.showTestCredential": "Testzugang öffnen",
     "connectionPage.reachTitle": "Adresse und Zugang",
     "connectionPage.reachDescription":
       "Wie die Verbindung den Dienst erreicht. Ein Schlüssel wird hier nie gezeigt."

@@ -9,14 +9,11 @@ import {
   CardHeader,
   CardTitle,
   Chip,
-  Disclosure,
-  DisclosureContent,
-  DisclosureTrigger,
   KeyValue,
   KeyValueList,
   type BadgeTone
 } from "@work-shape/catalyst-ui";
-import { formatDateTime } from "../../shared/locale-format";
+import { formatMomentShort } from "../../shared/locale-format";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import type { BuildAsset } from "./build-asset-kind";
 import type { ConnectionSource } from "./connection-source";
@@ -35,7 +32,8 @@ import { oauthSettingsOf } from "./connection-sign-in-model";
 // state of its shared sign-in with who signed in and since when, the account where the provider
 // names one, and whose account everyone uses. A person who may change the Connection signs it
 // in, or again, here. The provider's host, the permissions granted, the app registration, a
-// client's id, the redirect URI and the approval link for IT are folded under Technical details.
+// client's id, the redirect URI and the approval link for IT are `SignInTechnical`, which the
+// page folds under the Technical details of its settings.
 
 type BindingView = "connected" | "needs_reconnect" | "revoked" | "none";
 
@@ -79,64 +77,19 @@ export function ConnectionSignInSection({
 }) {
   const { locale, t } = useTranslation();
   const [signingIn, setSigningIn] = useState(false);
-  const { binding, oauth } = detail;
+  const { binding } = detail;
   const connectedBy = source.usePersonName?.(binding?.connectedBy);
-  const clientId = oauthSettingsOf(asset.config).clientId;
-  const preregistered = oauth?.registration === "preregistered";
   const signedIn = binding !== undefined && binding.state !== "revoked";
   const since = signedIn
     ? connectedBy
       ? t("connectionSignIn.connectedBy", {
-          time: formatDateTime(binding.connectedAt, locale),
+          time: formatMomentShort(binding.connectedAt, locale),
           name: connectedBy
         })
       : t("connectionSignIn.connectedSince", {
-          time: formatDateTime(binding.connectedAt, locale)
+          time: formatMomentShort(binding.connectedAt, locale)
         })
     : undefined;
-  // What only whoever sets the sign-in up reads: folded under Technical details.
-  const technical = [
-    oauth?.providerHost ? (
-      <KeyValue key="provider" label={t("connectionSignIn.provider")}>
-        <code className="font-mono text-code">{oauth.providerHost}</code>
-      </KeyValue>
-    ) : null,
-    signedIn ? (
-      <KeyValue key="scopes" label={t("connectionSignIn.scopesGranted")}>
-        {binding.scopes.length === 0 ? (
-          <span className="text-muted-foreground">{t("connectionSignIn.scopesGrantedNone")}</span>
-        ) : (
-          <span className="flex min-w-0 flex-wrap gap-1.5" data-sign-in-granted="">
-            {binding.scopes.map((scope) => (
-              <Chip key={scope} size="sm">
-                <code className="font-mono">{scope}</code>
-              </Chip>
-            ))}
-          </span>
-        )}
-      </KeyValue>
-    ) : null,
-    oauth?.registration === "managed" ? (
-      <KeyValue key="registration" label={t("connectionSignIn.appRegistration")}>
-        <span data-sign-in-managed="">{t("connectionSignIn.appManaged")}</span>
-      </KeyValue>
-    ) : null,
-    preregistered && typeof clientId === "string" ? (
-      <KeyValue key="client" label={t("connectionSignIn.clientId")} copyValue={clientId}>
-        <code className="font-mono text-code break-all">{clientId}</code>
-      </KeyValue>
-    ) : null,
-    preregistered && oauth.redirectUri ? (
-      <KeyValue
-        key="redirect"
-        label={t("connectionSignIn.redirectUri")}
-        copyValue={oauth.redirectUri}
-      >
-        <code className="font-mono text-code break-all">{oauth.redirectUri}</code>
-      </KeyValue>
-    ) : null
-  ].filter((row) => row !== null);
-  const adminConsent = mayWrite && oauth?.adminConsentUrl ? oauth.adminConsentUrl : undefined;
   return (
     <div className="grid min-w-0 gap-4" data-connection-sign-in="">
       <KeyValueList>
@@ -195,21 +148,77 @@ export function ConnectionSignInSection({
           {t(signedIn ? "connectionSignIn.restart" : "connectionSignIn.start")}
         </Button>
       )}
-      {technical.length > 0 || adminConsent ? (
-        <Disclosure data-sign-in-technical="">
-          <DisclosureTrigger>{t("connectionCreate.details")}</DisclosureTrigger>
-          <DisclosureContent>
-            <div className="grid min-w-0 gap-3">
-              {technical.length > 0 ? <KeyValueList>{technical}</KeyValueList> : null}
-              {adminConsent ? (
-                <AdminConsentLink
-                  url={adminConsent}
-                  hint={t("connectionSignIn.adminConsentHint")}
-                />
-              ) : null}
-            </div>
-          </DisclosureContent>
-        </Disclosure>
+    </div>
+  );
+}
+
+/**
+ * What only whoever sets the shared sign-in up reads: the provider's host, the permissions
+ * granted, the app registration, a client's id, the redirect URI and the approval link for IT.
+ * Nothing where there is none of it.
+ */
+export function SignInTechnical({
+  asset,
+  detail,
+  mayWrite
+}: {
+  asset: BuildAsset;
+  detail: ConnectionDetail;
+  mayWrite: boolean;
+}) {
+  const { t } = useTranslation();
+  const { binding, oauth } = detail;
+  const clientId = oauthSettingsOf(asset.config).clientId;
+  const preregistered = oauth?.registration === "preregistered";
+  const signedIn = binding !== undefined && binding.state !== "revoked";
+  const technical = [
+    oauth?.providerHost ? (
+      <KeyValue key="provider" label={t("connectionSignIn.provider")}>
+        <code className="font-mono text-code">{oauth.providerHost}</code>
+      </KeyValue>
+    ) : null,
+    signedIn ? (
+      <KeyValue key="scopes" label={t("connectionSignIn.scopesGranted")}>
+        {binding.scopes.length === 0 ? (
+          <span className="text-muted-foreground">{t("connectionSignIn.scopesGrantedNone")}</span>
+        ) : (
+          <span className="flex min-w-0 flex-wrap gap-1.5" data-sign-in-granted="">
+            {binding.scopes.map((scope) => (
+              <Chip key={scope} size="sm">
+                <code className="font-mono">{scope}</code>
+              </Chip>
+            ))}
+          </span>
+        )}
+      </KeyValue>
+    ) : null,
+    oauth?.registration === "managed" ? (
+      <KeyValue key="registration" label={t("connectionSignIn.appRegistration")}>
+        <span data-sign-in-managed="">{t("connectionSignIn.appManaged")}</span>
+      </KeyValue>
+    ) : null,
+    preregistered && typeof clientId === "string" ? (
+      <KeyValue key="client" label={t("connectionSignIn.clientId")} copyValue={clientId}>
+        <code className="font-mono text-code break-all">{clientId}</code>
+      </KeyValue>
+    ) : null,
+    preregistered && oauth.redirectUri ? (
+      <KeyValue
+        key="redirect"
+        label={t("connectionSignIn.redirectUri")}
+        copyValue={oauth.redirectUri}
+      >
+        <code className="font-mono text-code break-all">{oauth.redirectUri}</code>
+      </KeyValue>
+    ) : null
+  ].filter((row) => row !== null);
+  const adminConsent = mayWrite && oauth?.adminConsentUrl ? oauth.adminConsentUrl : undefined;
+  if (technical.length === 0 && !adminConsent) return null;
+  return (
+    <div className="grid min-w-0 gap-3" data-sign-in-technical="">
+      {technical.length > 0 ? <KeyValueList>{technical}</KeyValueList> : null}
+      {adminConsent ? (
+        <AdminConsentLink url={adminConsent} hint={t("connectionSignIn.adminConsentHint")} />
       ) : null}
     </div>
   );

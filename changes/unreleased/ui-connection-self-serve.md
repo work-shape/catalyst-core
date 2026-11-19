@@ -13,7 +13,12 @@ section: Changed
   available in and who may use it. A setting without a name in words, and a value that is a
   structure, stand under Technical details there and no longer as raw keys and JSON on the page.
   The outline is gone, and the head of a Connection that signs in no longer says "Not tested"
-  beside its sign-in.
+  beside its sign-in, nor does its test under Settings while it is signed in. What needs a person
+  stands above the operations: why a signed-in Connection fails, with the test; that the test
+  credential no longer fits; and the link an admin sends to IT for a Connection each person
+  signs in to. The tools a server names stay under the operations. The provider, the client and
+  the permissions of a shared sign-in stand under the one Technical details, in Settings, and
+  "since" says the moment to the minute.
 - **Studio, New connection:** the Connector types with a name come first. An MCP server and a
   REST API wait under one line, "Your own connection (for developers)", which stands open only
   where the instance offers nothing else.

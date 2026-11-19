@@ -13,6 +13,7 @@ import {
   ConnectionSignInSection,
   SignInActions,
   SignInBody,
+  SignInTechnical,
   needsSignIn,
   readSignInLanding,
   readSignInMessage,
@@ -824,29 +825,39 @@ describe("the Sign-in section of the Connection page", () => {
       oauthStart: async () => start(1),
       usePersonName: (userId) => (userId === "user_admin" ? "Ada Admin" : undefined)
     };
-    return createElement(ConnectionSignInSection, {
-      asset: connectionAsset("files", {
-        authScheme: "oauth",
-        settings: { url: "https://files.example.test/mcp", oauth: { clientId: "files-app" } }
-      }),
-      detail,
-      source,
-      mayWrite,
-      onSignedIn: () => undefined
+    const asset = connectionAsset("files", {
+      authScheme: "oauth",
+      settings: { url: "https://files.example.test/mcp", oauth: { clientId: "files-app" } }
     });
+    return createElement(
+      "div",
+      null,
+      createElement(
+        "div",
+        { "data-top": "" },
+        createElement(ConnectionSignInSection, {
+          asset,
+          detail,
+          source,
+          mayWrite,
+          onSignedIn: () => undefined
+        })
+      ),
+      // What the page folds under the technical details of its settings.
+      createElement(SignInTechnical, { asset, detail, mayWrite })
+    );
   }
 
-  it("leads with the state, the account and since when, and folds the technical details", async () => {
+  it("leads with the state, the account and since when, and leaves the technical details to the settings", () => {
     mount(section(true), "en");
     expect(element('[data-sign-in-state="connected"]').textContent).toBe("Connected");
     expect(element("[data-sign-in-since]").textContent).toContain("by Ada Admin");
     expect(host.textContent).toContain("team@example.test");
     expect(element("[data-sign-in-begin]").textContent).toBe("Sign in again");
     for (const folded of [HOST, "files.read", "files-app", REDIRECT, LINK]) {
-      expect(host.textContent).not.toContain(folded);
+      expect(element("[data-top]").textContent).not.toContain(folded);
     }
 
-    await click("[data-sign-in-technical] button");
     const details = element("[data-sign-in-technical]");
     expect(details.textContent).toContain(HOST);
     expect(element("[data-sign-in-granted]").textContent).toBe("files.readfiles.write");
@@ -855,10 +866,9 @@ describe("the Sign-in section of the Connection page", () => {
     expect(element("[data-admin-consent-url]").textContent).toBe(LINK);
   });
 
-  it("keeps the approval link for IT from a reader who may not change the Connection", async () => {
+  it("keeps the approval link for IT from a reader who may not change the Connection", () => {
     mount(section(false), "en");
     expect(host.querySelector("[data-sign-in-begin]")).toBeNull();
-    await click("[data-sign-in-technical] button");
     expect(element("[data-sign-in-technical]").textContent).toContain(REDIRECT);
     expect(host.querySelector("[data-admin-consent-url]")).toBeNull();
   });

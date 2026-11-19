@@ -25,7 +25,6 @@ import {
 import { roleLabelKey } from "../../admin/access/role-model";
 import { verbLabel, type RightVerb } from "../../admin/access/right-words";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
-import { discoveredCandidates } from "./connection-approval-model";
 import { usePageShown } from "./asset-editor-shell";
 import { scrollToSection } from "./build-scroll";
 import {
@@ -65,12 +64,14 @@ import { offerText, type ConnectorTypeOffer } from "./connection-typed-model";
 import { ConnectionOperations, EditableOperations } from "./connection-operations";
 import { PersonContextSection } from "./connection-person-context";
 import { RestToolsSection } from "./connection-rest-tools";
-import { ConnectionSignInSection } from "./connection-sign-in-section";
+import { AdminConsentLink } from "./connection-sign-in";
+import { ConnectionSignInSection, SignInTechnical } from "./connection-sign-in-section";
 import { ConnectionUsedBy, usedByCount, usedByNames } from "./connection-used-by";
 import {
   AUTH_SCHEME_NONE,
   ConnectionStatus,
   HEALTH_VIEWS,
+  healthOf,
   recordedHealth
 } from "./connection-status";
 import { withOAuthSettings } from "./connection-sign-in-model";
@@ -191,6 +192,8 @@ export function ConnectionPage({
   // The mappings are admin data: only a reader who may change the Connection reads them.
   const personContext = source.mayTest(asset) ? source.personContext : undefined;
   const mayChange = source.mayTest(asset);
+  // One test for the page: the top and the settings show the same run.
+  const test = source.useTest(asset.name);
   const status = (
     <>
       {read.status === "loading" ? (
@@ -210,6 +213,8 @@ export function ConnectionPage({
           runtime={runtime}
           source={source}
           mayTest={mayChange}
+          test={test}
+          signedIn={read.detail.oauth !== undefined}
           credentialEditor={
             editing
               ? (retest) => (
@@ -252,14 +257,24 @@ export function ConnectionPage({
       onSignedIn={written}
     />
   );
-  // The tools a server names and the Connection does not accept: beside what agents may do
-  // while there is one to accept or to wait for, else with the settings.
-  const discoveredOpen =
-    detail === undefined ||
-    waiting ||
-    signIn !== undefined ||
-    detail.operations.length === 0 ||
-    discoveredCandidates(detail.discovered).length > 0;
+  // What needs a person stands at the top, the healthy detail under Settings. A Connection that
+  // signs in and whose last test or call failed says why, with the test beside it.
+  const failing = detail?.oauth
+    ? ((health) => (health === "testing" ? recordedHealth(detail) : health))(
+        healthOf(detail, test.run)
+      )
+    : undefined;
+  const failure =
+    failing !== undefined && HEALTH_VIEWS[failing].tone === "danger"
+      ? HEALTH_VIEWS[failing]
+      : undefined;
+  // The link an admin sends to IT, for a Connection each person signs in to.
+  const adminConsentUrl =
+    detail?.oauth && personal && showsPeople(config, mayChange)
+      ? detail.oauth.adminConsentUrl
+      : undefined;
+  // The tools a server names and the Connection does not accept, always under what agents may
+  // do: a discovery asked for there answers there.
   const discovered: PageSection[] =
     editing && discovers && read.status !== "failed"
       ? [
@@ -340,10 +355,13 @@ export function ConnectionPage({
                     )
                   }
                 ]
-              : discoveredOpen
-                ? discovered
-                : [])
+              : discovered)
         ];
+  // What only whoever set a shared sign-in up reads, with the other technical details.
+  const signInTechnical =
+    detail?.oauth && !personal ? (
+      <SignInTechnical asset={asset} detail={detail} mayWrite={mayChange} />
+    ) : undefined;
   // What is set once and read seldom, folded under Settings.
   const settings: PageSection[] = [
     ...(editing
@@ -373,13 +391,7 @@ export function ConnectionPage({
             id: "people",
             label: t("personalConnections.peopleTitle"),
             description: t("personalConnections.peopleDescription"),
-            body: (
-              <ConnectionPeopleSection
-                name={asset.name}
-                mayWrite
-                adminConsentUrl={detail.oauth.adminConsentUrl}
-              />
-            )
+            body: <ConnectionPeopleSection name={asset.name} mayWrite />
           }
         ]
       : []),
@@ -414,11 +426,18 @@ export function ConnectionPage({
               asset={asset}
               frame={editing}
               written={written}
-              view={<ConnectionSettings config={config} offer={offer} withDescription={false} />}
+              view={
+                <ConnectionSettings
+                  config={config}
+                  offer={offer}
+                  withDescription={false}
+                  technical={signInTechnical}
+                />
+              }
               {...(detail?.secret.state === "set" ? { keyUsers: detail } : {})}
             />
           ) : (
-            <ConnectionSettings config={config} offer={offer} />
+            <ConnectionSettings config={config} offer={offer} technical={signInTechnical} />
           )}
         </>
       )
@@ -442,9 +461,6 @@ export function ConnectionPage({
     ...(read.status === "failed"
       ? []
       : [
-          ...(discoveredOpen || config.connectorType === "http_api" || typeTools.length > 0
-            ? []
-            : discovered),
           {
             id: "agents",
             label: t("connections.agentsTitle"),
@@ -586,7 +602,54 @@ export function ConnectionPage({
               {t("connections.disabledNotice")}
             </Banner>
           )}
+          {failure ? (
+            <Banner
+              tone="danger"
+              title={t(failure.label)}
+              data-connection-failing={failing}
+              action={
+                mayChange ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    loading={test.run.status === "running"}
+                    onClick={test.start}
+                  >
+                    {t("connections.test")}
+                  </Button>
+                ) : undefined
+              }
+            >
+              {t(failure.text)}
+              {failure.next
+                ? ` ${t(runtime && failure.nextRuntime ? failure.nextRuntime : failure.next)}`
+                : null}
+            </Banner>
+          ) : null}
+          {detail?.testCredential?.state === "stale" ? (
+            <Banner
+              tone="warning"
+              data-connection-test-credential-stale=""
+              action={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSettingsOpen(true);
+                    setReveal("test-credential");
+                  }}
+                >
+                  {t("connectionPage.showTestCredential")}
+                </Button>
+              }
+            >
+              {t("connections.testCredentialStaleNotice")}
+            </Banner>
+          ) : null}
           {signInBody ?? status}
+          {adminConsentUrl ? (
+            <AdminConsentLink url={adminConsentUrl} hint={t("connectionSignIn.adminConsentHint")} />
+          ) : null}
         </div>
         {main.map(section)}
         {users.length === 0 ? null : (
@@ -639,9 +702,12 @@ const SETTING_LABELS = new Map<string, TranslationKey>([
 function ConnectionSettings({
   config,
   withDescription = true,
-  offer
+  offer,
+  technical: more
 }: {
   config: Record<string, unknown>;
+  /** What else only whoever set the Connection up reads, as the sign-in's own details. */
+  technical?: ReactNode;
   /** The type's own form, where it has one: its title names the type. */
   offer?: ConnectorTypeOffer | undefined;
   /** Without it the description stands in its own section, where it is changed. */
@@ -679,6 +745,7 @@ function ConnectionSettings({
       <Disclosure data-connection-technical="">
         <DisclosureTrigger>{t("connectionCreate.details")}</DisclosureTrigger>
         <DisclosureContent>
+          {more}
           <KeyValueList>
             {Object.entries({ connectorType, authScheme }).map(([key, value]) => (
               <KeyValue key={key} label={<code className="font-mono">{key}</code>}>

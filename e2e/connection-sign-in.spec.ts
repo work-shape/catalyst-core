@@ -7,7 +7,7 @@ import type { BrowserContext, Locator, Page } from "@playwright/test";
 import { availableSamplePort } from "./sample-port.mjs";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
-import { openOwnConnection } from "./connection-page";
+import { openConnectionSettings, openOwnConnection } from "./connection-page";
 import { toolRow } from "./tool-packages";
 import { requestAnswered } from "./allowed-page-errors";
 // The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
@@ -234,7 +234,7 @@ test("en: an MCP server that asks for a sign-in is signed in from the dialog, an
     // Approved for agents, the dialog offers the give to an agent (CS-5d); Done leaves it.
     await dialog.locator("[data-connection-approved-done]").click();
     // The page names the shared sign-in once: connected, since when, nobody else to sign in.
-    // The permission waits under Technical details.
+    // The permission waits under the Technical details of its settings.
     await expect(page).toHaveURL(new RegExp(`/build/connections/${id}$`, "u"));
     const section = main.locator("[data-connection-sign-in]");
     await expect(main.locator("[data-sign-in-state]")).toHaveCount(1);
@@ -245,9 +245,11 @@ test("en: an MCP server that asks for a sign-in is signed in from the dialog, an
     await expect(section.locator("[data-sign-in-granted]")).toHaveCount(0);
     await main.locator("#sign-in").scrollIntoViewIfNeeded();
     await shoot(page, "en", "page-connected");
-    await section.getByRole("button", { name: "Technical details" }).click();
-    await expect(section.locator("[data-sign-in-granted]")).toContainText("sample.read");
-    await section.scrollIntoViewIfNeeded();
+    await openConnectionSettings(page);
+    const reach = main.locator("#settings");
+    await reach.getByRole("button", { name: "Technical details" }).click();
+    await expect(reach.locator("[data-sign-in-granted]")).toContainText("sample.read");
+    await reach.scrollIntoViewIfNeeded();
     await shoot(page, "en", "page-connected-details");
     for (const state of states) {
       expect(state).not.toBe("");
