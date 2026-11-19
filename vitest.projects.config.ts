@@ -37,6 +37,7 @@ const isolatedPureFiles = new Set([
   "tests/chat-ui-workflow-fix-with-agent.test.ts",
   "tests/chat-ui-workflow-rights.test.ts",
   "tests/ui-chart.test.ts",
+  "tests/ui-library-page-head-back.test.ts",
   "tests/ui-library-page-head-fold.test.ts",
   "tests/ui-table-fold.test.ts",
   "tests/ui-tabs-scroll.test.ts"
