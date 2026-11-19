@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
 import { z } from "zod";
+import { openDataStoreAdvanced } from "./data-store-page";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
-// DT-2: the Data Store page shows the store's test copy, the scratch database a draft's calls
+// DT-2: the Data Store page shows the store's test copy under Advanced, the scratch database a draft's calls
 // reach, with its level, seed files and size against its own limit, and resets and deletes it
 // through the instance. The copy is made here by the reset route, as the CLI makes it; a draft's
 // first changing call makes it the same way (tests/data-store-test-copy.test.ts).
@@ -67,7 +68,10 @@ test("the Data Store page shows the test copy, resets it and deletes it", async 
     });
     await page.goto(`/build/data-stores/${store}`);
     await expect(page.getByRole("heading", { name: title, level: 1 })).toBeVisible();
+    // The test copy waits under Settings, in Advanced: the page itself leads with the rows.
     const section = page.locator('[id="test-copy"]');
+    await expect(section).toBeHidden();
+    await openDataStoreAdvanced(page);
     await expect(section.locator('[data-data-store-test-copy="absent"]')).toContainText(
       "A draft's first call that changes the store makes it."
     );
@@ -90,6 +94,7 @@ test("the Data Store page shows the test copy, resets it and deletes it", async 
     expect(await liveRows.json()).toMatchObject({ rows: [] });
 
     await page.reload();
+    await openDataStoreAdvanced(page);
     const present = section.locator('[data-data-store-test-copy="present"]');
     await expect(present).toContainText("Seed files");
     await expect(present).toContainText("500 MB");
