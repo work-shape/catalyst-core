@@ -9,4 +9,9 @@ section: Added
   limits of a code step. The handler reads the input as a code step does and answers
   `{ "output", "display"? }`; a `data` display becomes the conversation's structured result and an
   `html` display is shown as `show_view` shows it. A handler past its time is stopped and the call
-  fails with `timed_out`. Code tools cannot call Connections yet.
+  fails with `timed_out`; the time counts from the start of its container, and a call that
+  finds no free container within 30 seconds, or before the agent's tool deadline, fails with the
+  reason `queued`. The end of a failed handler's error stream reaches the model alone; the
+  Operation Run keeps the reason. Each command worker runs at most two handlers at once, and its
+  startup memory check counts them as `code tools` with the memory of a code step. Code tools
+  cannot call Connections yet.

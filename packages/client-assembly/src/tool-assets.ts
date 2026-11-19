@@ -47,7 +47,8 @@ import { workflowAssetKindOf, type WorkflowAssetKind } from "@work-shape/catalys
 import { z } from "zod";
 import type { ModuleSeam } from "./module-assembly";
 import {
-  TOOL_CODE_START_GRACE_MS,
+  TOOL_CODE_END_GRACE_MS,
+  toolCodeCallMaxWaitMs,
   createToolCodeCallClient,
   toolCodeCallAnswer,
   type ToolCodeCallClient
@@ -241,7 +242,7 @@ function definitionOf(tool: PublishedTool, ports: ToolCallPorts): OperationDefin
     timeoutMs:
       config.type === "result"
         ? TOOL_CALL_TIMEOUT_MS
-        : toolCodeTimeoutSeconds(config) * 1_000 + 2 * TOOL_CODE_START_GRACE_MS,
+        : toolCodeCallMaxWaitMs(toolCodeTimeoutSeconds(config)) + TOOL_CODE_END_GRACE_MS,
     async execute(input, context) {
       const origin = context.origin;
       if (origin.kind !== "agent") {

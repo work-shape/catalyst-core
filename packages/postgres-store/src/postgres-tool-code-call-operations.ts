@@ -14,6 +14,7 @@ function mapCall(row: typeof toolCodeCalls.$inferSelect): ToolCodeCall {
     timeoutSeconds: row.timeoutSeconds,
     ...(row.outcome ? { outcome: row.outcome } : {}),
     createdAt: row.createdAt.toISOString(),
+    ...(row.startedAt ? { startedAt: row.startedAt.toISOString() } : {}),
     ...(row.finishedAt ? { finishedAt: row.finishedAt.toISOString() } : {})
   };
 }
@@ -40,6 +41,20 @@ export function createPostgresToolCodeCallsStore(db: PostgresConnection): ToolCo
         .where(and(eq(toolCodeCalls.clientInstanceId, clientInstanceId), eq(toolCodeCalls.id, id)))
         .limit(1);
       return row ? mapCall(row) : undefined;
+    },
+    async startToolCodeCall({ clientInstanceId, id, startedAt }) {
+      const started = await db
+        .update(toolCodeCalls)
+        .set({ startedAt: new Date(startedAt) })
+        .where(
+          and(
+            eq(toolCodeCalls.clientInstanceId, clientInstanceId),
+            eq(toolCodeCalls.id, id),
+            isNull(toolCodeCalls.outcome)
+          )
+        )
+        .returning({ id: toolCodeCalls.id });
+      return started.length > 0;
     },
     async finishToolCodeCall({ clientInstanceId, id, outcome, finishedAt }) {
       const finished = await db

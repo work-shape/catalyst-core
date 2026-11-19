@@ -8,6 +8,8 @@ import {
   asConversationId,
   asToolCallId,
   createActorAccess,
+  createAuthorizer,
+  createOperationRegistry,
   createPlatformId,
   isToolOperationAnswer,
   NoopAuditRecorder,
@@ -19,6 +21,7 @@ import {
   type Logger,
   type OperationExecutionContext,
   type OperationOrigin,
+  type ToolCodeCallOutcome,
   type ToolHandlerResult
 } from "@work-shape/catalyst-core";
 import { createOutsideSchemaChecker } from "@work-shape/catalyst-connections";
@@ -29,9 +32,11 @@ import {
   createToolCodeCallJobs,
   createToolOperationSource
 } from "@work-shape/catalyst-client-assembly";
+import { createAuditingEventEmitter } from "@work-shape/catalyst-server";
 import {
   DockerWorkspaceCommandProcessExecutor,
   LocalWorkspaceCommandProcessExecutor,
+  runOperation,
   type WorkspaceCommandProcessExecutor,
   createDockerRunInvocation,
   type WorkspaceCommandProcessInput
@@ -142,6 +147,8 @@ let t: Awaited<ReturnType<typeof setupAccessInstance>>;
 let conversationId: ConversationId;
 let tempRoot = "";
 const handed: WorkspaceCommandProcessInput[] = [];
+/** How the worker ended each call, as it wrote it on the call's row. */
+const finished: ToolCodeCallOutcome[] = [];
 const workers: JobWorker[] = [];
 
 async function putAndPublish(config: JsonObject, name = String(config.name)) {
@@ -185,20 +192,32 @@ afterAll(async () => {
 afterEach(async () => {
   await Promise.all(workers.splice(0).map((worker) => worker.stop()));
   handed.length = 0;
+  finished.length = 0;
 });
 
 /** The command worker: its jobs on the local sandbox, with a path to the test's interpreters. */
-function startWorker(sandbox?: WorkspaceCommandProcessExecutor) {
+function startWorker(sandbox?: WorkspaceCommandProcessExecutor, slots = 2) {
   const local = new LocalWorkspaceCommandProcessExecutor();
+  const toolCodeCalls: typeof t.stores.toolCodeCalls = {
+    ...t.stores.toolCodeCalls,
+    finishToolCodeCall(input) {
+      finished.push(input.outcome);
+      return t.stores.toolCodeCalls.finishToolCodeCall(input);
+    }
+  };
+  const stores = new Proxy(t.stores, {
+    get: (target, key, receiver) =>
+      key === "toolCodeCalls" ? toolCodeCalls : Reflect.get(target, key, receiver)
+  });
   const worker = createJobWorker({
     stores: t.stores,
     clientInstanceId,
     logger: silent,
     handlers: createToolCodeCallJobs({
       clientInstanceId,
-      stores: t.stores,
+      stores,
       tempRoot,
-      slots: 2,
+      slots,
       limits: LIMITS,
       cancelCheckMs: 50,
       sandbox: sandbox ?? {
@@ -230,13 +249,17 @@ const actor: AuthenticatedUser = {
 async function call(
   tool: string,
   given: JsonObject,
-  options: { deadline?: Date; personal?: boolean } = {}
+  options: { deadline?: Date; personal?: boolean; queueMaxMs?: number } = {}
 ): Promise<ToolHandlerResult> {
   const source = createToolOperationSource({
     clientInstanceId,
     store: t.stores.configAssets,
     checker,
-    codeCalls: createToolCodeCallClient({ stores: t.stores, pollMs: 20 }),
+    codeCalls: createToolCodeCallClient({
+      stores: t.stores,
+      pollMs: 20,
+      ...(options.queueMaxMs ? { queueMaxMs: options.queueMaxMs } : {})
+    }),
     personalConversation: async () => options.personal ?? false
   });
   const operation = await source.resolve(toolCallOperationName(tool));
@@ -449,6 +472,125 @@ describe("a code tool's handler", () => {
     expect(failed.status === "failed" ? failed.error.message : "").toContain(
       "the ledger is closed"
     );
+  });
+
+  // Fails before the fix: the message of the outcome the worker stored held the end of the
+  // error stream, where any reader of the error would keep it.
+  it("hands the end of its error stream to the model alone, never to the call's run", async () => {
+    startWorker();
+    const source = createToolOperationSource({
+      clientInstanceId,
+      store: t.stores.configAssets,
+      checker,
+      codeCalls: createToolCodeCallClient({ stores: t.stores, pollMs: 20 }),
+      personalConversation: async () => false
+    });
+    const registry = createOperationRegistry();
+    registry.addSource(source);
+    const audit = new NoopAuditRecorder();
+    const operation = toolCallOperationName("sum_py");
+    const outcome = await runOperation(
+      {
+        operation,
+        effect: "changing",
+        input: { numbers: [], mode: "fail" },
+        actor,
+        origin: {
+          kind: "agent",
+          agentRunId: asAgentRunId("run-3"),
+          conversationId: asConversationId(conversationId),
+          agentName: "calculator",
+          toolCallId: asToolCallId("call-3"),
+          toolName: operation
+        },
+        correlationId: "tool-code-calls"
+      },
+      {
+        clientInstanceId,
+        registry,
+        resolveResource: (resource) => Promise.resolve({ resource }),
+        runs: t.stores.operationRuns,
+        authorizer: createAuthorizer(),
+        events: createAuditingEventEmitter(audit),
+        audit,
+        policy: {
+          instanceDefaults: { reading: "allow", changing: "allow" },
+          centralSettings: () => []
+        },
+        agentToolNames: () => [operation],
+        logger: silent
+      }
+    );
+    // The model reads it in the tool's answer.
+    expect(outcome.toolResult).toMatchObject({
+      status: "failed",
+      error: { code: "handler_failed", details: { reason: "code_failed" } }
+    });
+    expect(JSON.stringify(outcome.toolResult)).toContain("the ledger is closed");
+    // The stored error is the reason and a plain sentence; the end of the stream is beside it.
+    expect(finished).toEqual([
+      {
+        kind: "failed",
+        error: { code: "code_failed", message: expect.not.stringContaining("ledger") as unknown },
+        stderrTail: expect.stringContaining("the ledger is closed") as unknown
+      }
+    ]);
+    // The run keeps the reason, and nothing the handler wrote.
+    const run = await t.stores.operationRuns.get({ clientInstanceId, id: outcome.run.id });
+    expect(run).toMatchObject({ status: "failed", error: { code: "handler_failed" } });
+    expect(JSON.stringify(run)).not.toContain("ledger");
+    expect(JSON.stringify(run)).not.toContain("checked");
+    expect(await leftRows()).toBe(0);
+  });
+
+  // The wait counts from the start the worker wrote on the row: a call that queued past its
+  // handler's time and the grace after it still runs, and answers.
+  it("counts its handler's time from the start of its container, not while it queued", async () => {
+    const started: (string | undefined)[] = [];
+    const local = new LocalWorkspaceCommandProcessExecutor();
+    const answer = call("slow_py", { numbers: [2, 5] });
+    // Longer than the handler's second and the grace after it.
+    await new Promise((resolve) => setTimeout(resolve, 7_000));
+    startWorker({
+      async execute(given) {
+        const id = given.command.id.slice("tool-call-".length);
+        started.push(
+          (await t.stores.toolCodeCalls.getToolCodeCall({ clientInstanceId, id }))?.startedAt
+        );
+        return local.execute({
+          ...given,
+          env: { ...given.env, PATH: `${dirname(process.execPath)}:/usr/local/bin:/usr/bin:/bin` }
+        });
+      }
+    });
+    expect(await answer).toEqual({ status: "success", output: { total: 7 } });
+    // The worker wrote when it started the container, before the container ran.
+    expect(started).toEqual([expect.any(String)]);
+    expect(await leftRows()).toBe(0);
+  }, 20_000);
+
+  it("fails with the reason queued where no container starts within the time a call may queue", async () => {
+    // One slot, which a handler that sleeps past its second holds.
+    startWorker(undefined, 1);
+    const busy = call("slow_py", { numbers: [], mode: "sleep" });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const queued = await call("sum_py", { numbers: [1] }, { queueMaxMs: 300 });
+    expect(queued).toMatchObject({
+      status: "failed",
+      error: { code: "handler_failed", details: { reason: "queued" } }
+    });
+    expect(queued.status === "failed" ? queued.error.message : "").toContain("did not start");
+    expect(await busy).toMatchObject({ status: "timed_out" });
+    // Bounded by the agent's deadline as well, where it comes before the queue's own bound.
+    const busyAgain = call("slow_py", { numbers: [], mode: "sleep" });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const began = Date.now();
+    expect(
+      await call("sum_py", { numbers: [1] }, { deadline: new Date(Date.now() + 300) })
+    ).toMatchObject({ status: "failed", error: { details: { reason: "queued" } } });
+    expect(Date.now() - began).toBeLessThan(5_000);
+    await busyAgain;
+    expect(await leftRows()).toBe(0);
   });
 });
 

@@ -91,7 +91,7 @@ export const TOOL_CODE_CALL_SLOTS = 2;
 
 /** How large a handler's answer may be, as JSON in UTF-8: what it hands the model and a display. */
 export const TOOL_CODE_ANSWER_MAX_BYTES = 512 * 1024;
-/** How much of a handler's error stream a failed call names, from its end. */
+/** How much of a handler's error stream a failed call hands the model, from its end. */
 const STDERR_TAIL_BYTES = 400;
 /** What the names of a call's directory and container start with. */
 const COMMAND_ID_PREFIX = "tool-call-";
@@ -160,15 +160,13 @@ export function createToolCodeFiles(options: {
   };
 }
 
-/** The last bytes of what a handler wrote to its error stream, for a failed call's message. */
-function stderrTail(text: string): string {
+/** The last bytes of what a handler wrote to its error stream, for the model alone. */
+function stderrTail(text: string): string | undefined {
   const bytes = Buffer.from(text.trim(), "utf8");
-  if (bytes.byteLength === 0) return "";
-  const tail =
-    bytes.byteLength <= STDERR_TAIL_BYTES
-      ? bytes.toString("utf8")
-      : `…${bytes.subarray(bytes.byteLength - STDERR_TAIL_BYTES).toString("utf8")}`;
-  return `\nIts error stream ends with:\n${tail}`;
+  if (bytes.byteLength === 0) return undefined;
+  return bytes.byteLength <= STDERR_TAIL_BYTES
+    ? bytes.toString("utf8")
+    : `…${bytes.subarray(bytes.byteLength - STDERR_TAIL_BYTES).toString("utf8")}`;
 }
 
 export interface ToolCodeCallJobsOptions {
@@ -208,9 +206,10 @@ export function createToolCodeCallJobs(options: ToolCodeCallJobsOptions): {
       outcome,
       finishedAt: new Date().toISOString()
     });
-  const failed = (code: string, message: string): ToolCodeCallOutcome => ({
+  const failed = (code: string, message: string, tail?: string): ToolCodeCallOutcome => ({
     kind: "failed",
-    error: { code, message }
+    error: { code, message },
+    ...(tail ? { stderrTail: tail } : {})
   });
 
   return {
@@ -267,7 +266,16 @@ export function createToolCodeCallJobs(options: ToolCodeCallJobsOptions): {
                 input: call.input,
                 timeoutSeconds: call.timeoutSeconds
               },
-              signal: stop.signal
+              signal: stop.signal,
+              // The operation's wait for the handler counts from here, not from the queue.
+              beforeStart: async () => {
+                const waited = await stores.toolCodeCalls.startToolCodeCall({
+                  clientInstanceId,
+                  id,
+                  startedAt: new Date().toISOString()
+                });
+                if (!waited) stop.abort(new Error("Nobody waits for the call"));
+              }
             });
           } finally {
             over = true;
@@ -283,16 +291,17 @@ export function createToolCodeCallJobs(options: ToolCodeCallJobsOptions): {
             throw new Error(`The sandbox could not start the container: ${result.reason}`);
           }
           const { outcome, log } = result;
+          if (outcome.kind === "output") {
+            await finish(id, { kind: "answered", value: outcome.value });
+            return;
+          }
+          // The message stays a plain sentence; what the handler wrote goes beside it, for the
+          // model alone.
+          const tail =
+            outcome.error.code === WORKFLOW_CODE_ERRORS.failed ? stderrTail(log.stderr) : undefined;
           await finish(
             id,
-            outcome.kind === "output"
-              ? { kind: "answered", value: outcome.value }
-              : failed(
-                  outcome.error.code,
-                  outcome.error.code === WORKFLOW_CODE_ERRORS.failed
-                    ? `${outcome.error.message.replace("script", "handler")}${stderrTail(log.stderr)}`
-                    : outcome.error.message.replace("script", "handler")
-                )
+            failed(outcome.error.code, outcome.error.message.replace("script", "handler"), tail)
           );
         },
         async onExhausted(job, tx) {
@@ -326,8 +335,13 @@ export function createToolCodeCallJobs(options: ToolCodeCallJobsOptions): {
 /** How one call ended, as the operation that waited for it reads it. */
 export type ToolCodeCallResult =
   | { status: "ended"; outcome: ToolCodeCallOutcome }
-  /** It did not end before the wait ran out: the handler's time or the agent's deadline. */
+  /** Its handler started and did not end before the wait ran out: its time or the deadline. */
   | { status: "timed_out" }
+  /**
+   * No container was started for it before the wait ran out: every sandbox for code tools
+   * stayed busy for the time a call may queue, or the agent's deadline came first.
+   */
+  | { status: "queued" }
   /** The agent's run was cancelled. */
   | { status: "cancelled" }
   /** No worker took the call: the platform runs no sandbox now. */
@@ -348,11 +362,17 @@ export interface ToolCodeCallClient {
   }): Promise<ToolCodeCallResult>;
 }
 
+/** How long a call may wait for a worker to start its handler's container. */
+const TOOL_CODE_QUEUE_MAX_MS = 30_000;
 /**
- * How long a call waits beside its handler's time: for a worker to take the job and start the
- * container.
+ * How long a call waits past its handler's time from the moment its container started: for
+ * the sandbox to stop the handler and the worker to write how it ended.
  */
-export const TOOL_CODE_START_GRACE_MS = 10_000;
+export const TOOL_CODE_END_GRACE_MS = 5_000;
+/** The longest a call can wait in all: queued to the last moment, then its handler's time. */
+export function toolCodeCallMaxWaitMs(timeoutSeconds: number): number {
+  return TOOL_CODE_QUEUE_MAX_MS + timeoutSeconds * 1_000 + TOOL_CODE_END_GRACE_MS;
+}
 const POLL_MS = 200;
 
 /** Writes a call and its job, and waits for the call's outcome on its row. */
@@ -361,10 +381,13 @@ export function createToolCodeCallClient(options: {
   pollMs?: number;
   /** For a test: in place of `JOB_UNCLAIMED_MS`. */
   unclaimedMs?: number;
+  /** For a test: in place of `TOOL_CODE_QUEUE_MAX_MS`. */
+  queueMaxMs?: number;
 }): ToolCodeCallClient {
   const { stores } = options;
   const pollMs = options.pollMs ?? POLL_MS;
   const unclaimedMs = options.unclaimedMs ?? JOB_UNCLAIMED_MS;
+  const queueMaxMs = options.queueMaxMs ?? TOOL_CODE_QUEUE_MAX_MS;
   return {
     async run(input) {
       const { clientInstanceId } = input;
@@ -393,20 +416,41 @@ export function createToolCodeCallClient(options: {
         await stores.toolCodeCalls.removeToolCodeCall({ clientInstanceId, id });
         await stores.jobs.withdraw(toolCodeCallJob, { clientInstanceId, dedupeKey });
       };
-      const started = Date.now();
-      const until = Math.min(
-        started + input.timeoutSeconds * 1_000 + TOOL_CODE_START_GRACE_MS,
-        input.deadline?.getTime() ?? Number.POSITIVE_INFINITY
+      const queued = Date.now();
+      const deadline = input.deadline?.getTime() ?? Number.POSITIVE_INFINITY;
+      // While the call is queued, it waits at most `queueMaxMs`; once a worker started its
+      // container, the handler's time from then and a moment to write how it ended. Never
+      // longer than the agent's deadline, nor than the longest a call can wait in all.
+      const last = Math.min(
+        deadline,
+        queued + queueMaxMs + input.timeoutSeconds * 1_000 + TOOL_CODE_END_GRACE_MS
       );
-      let nextWorkerCheck = started + unclaimedMs;
+      let startedAt: number | undefined;
+      let seenStart: string | undefined;
+      const until = () =>
+        Math.min(
+          startedAt === undefined
+            ? queued + queueMaxMs
+            : startedAt + input.timeoutSeconds * 1_000 + TOOL_CODE_END_GRACE_MS,
+          last
+        );
+      // A call that never started says why: no worker at all, or every sandbox busy.
+      const ranOut = async (): Promise<ToolCodeCallResult> => {
+        if (startedAt !== undefined) return { status: "timed_out" };
+        const noWorker = await noWorkerTakesJobs(stores.jobs, {
+          clientInstanceId,
+          kind: toolCodeCallJob,
+          unclaimedMs: Math.min(unclaimedMs, Date.now() - queued)
+        }).catch(() => false);
+        return noWorker ? { status: "no_worker" } : { status: "queued" };
+      };
+      let nextWorkerCheck = queued + unclaimedMs;
       try {
         while (true) {
           if (input.signal?.aborted)
-            return isOperationTimeout(input.signal)
-              ? { status: "timed_out" }
-              : { status: "cancelled" };
-          if (Date.now() >= until) return { status: "timed_out" };
-          await sleep(Math.max(1, Math.min(pollMs, until - Date.now())), undefined, {
+            return isOperationTimeout(input.signal) ? await ranOut() : { status: "cancelled" };
+          if (Date.now() >= until()) return await ranOut();
+          await sleep(Math.max(1, Math.min(pollMs, until() - Date.now())), undefined, {
             ...(input.signal ? { signal: input.signal } : {})
           }).catch(() => undefined);
           if (input.signal?.aborted) continue;
@@ -414,6 +458,12 @@ export function createToolCodeCallClient(options: {
           if (call?.outcome) return { status: "ended", outcome: call.outcome };
           // The row went with its conversation.
           if (!call) return { status: "cancelled" };
+          // A worker's clock can run ahead of this one: a start is never later than when it is
+          // first seen here. An attempt that started the container again moves it.
+          if (call.startedAt && call.startedAt !== seenStart) {
+            seenStart = call.startedAt;
+            startedAt = Math.min(Date.parse(call.startedAt), Date.now());
+          }
           if (Date.now() >= nextWorkerCheck) {
             nextWorkerCheck = Date.now() + JOB_WORKER_CHECK_INTERVAL_MS;
             if (
@@ -509,12 +559,21 @@ export function toolCodeCallAnswer(input: {
   if (result.status === "no_worker") {
     return failure("no_worker", WORKSPACE_COMMAND_NO_WORKER_MESSAGE);
   }
+  if (result.status === "queued") {
+    return failure(
+      "queued",
+      `The tool '${tool}' did not start: every sandbox for code tools stayed busy. Nothing of it ran; it can be called again.`
+    );
+  }
   const { outcome } = result;
   if (outcome.kind === "failed") {
     if (outcome.error.code === WORKFLOW_CODE_ERRORS.timeout) return timedOut;
+    // The end of the handler's error stream reaches the model in this answer alone: the run
+    // of the call keeps the reason code and no text of the tool.
+    const tail = outcome.stderrTail ? `\nIts error stream ends with:\n${outcome.stderrTail}` : "";
     return failure(
       outcome.error.code,
-      `The handler of the tool '${tool}' failed: ${outcome.error.message}`
+      `The handler of the tool '${tool}' failed: ${outcome.error.message}${tail}`
     );
   }
   const parsed = toolCodeAnswerSchema.safeParse(outcome.value);

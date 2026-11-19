@@ -8,6 +8,7 @@ CREATE TABLE "tool_code_calls" (
 	"timeout_seconds" integer NOT NULL,
 	"outcome" jsonb,
 	"created_at" timestamp with time zone NOT NULL,
+	"started_at" timestamp with time zone,
 	"finished_at" timestamp with time zone
 );
 --> statement-breakpoint

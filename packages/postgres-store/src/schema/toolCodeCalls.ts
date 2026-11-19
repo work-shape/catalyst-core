@@ -28,6 +28,8 @@ export const toolCodeCalls = pgTable(
     timeoutSeconds: integer("timeout_seconds").notNull(),
     outcome: jsonb("outcome").$type<ToolCodeCallOutcome>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    // When a worker started the handler's container: the operation's wait counts from here.
+    startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true })
   },
   (table) => [

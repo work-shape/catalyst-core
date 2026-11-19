@@ -2,9 +2,10 @@ import { totalmem } from "node:os";
 import { AppError, type Logger, type ModuleSnapshot } from "@work-shape/catalyst-core";
 import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import type { ClientInstanceEnv } from "./env";
+import { TOOL_CODE_CALL_SLOTS } from "./tool-code-calls";
 
 // The command worker starts every sandbox of an instance: the containers of agent commands,
-// of Page builds and of the code steps of Workflows. Each kind has slots and a memory limit,
+// of Page builds, of the code steps of Workflows and of the handlers of code tools. Each kind has slots and a memory limit,
 // and all of them can be full at one moment. A config in which they then need more memory
 // than the host has is refused when the worker starts, with each term named, so an operator
 // sees which number to lower before a full host ends containers at random.
@@ -74,6 +75,13 @@ export function sandboxMemoryTerms(input: {
       ]
     });
   }
+  // Tools belong to no module: the worker always serves code tools, with a code step's memory.
+  terms.push({
+    kind: "code tools",
+    slots: TOOL_CODE_CALL_SLOTS,
+    memoryBytes: config.workflows.codeSteps.memoryBytes,
+    settings: [`${TOOL_CODE_CALL_SLOTS} code tool slots, fixed`, "workflows.codeSteps.memoryBytes"]
+  });
   return terms;
 }
 

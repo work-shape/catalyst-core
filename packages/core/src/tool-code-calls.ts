@@ -11,7 +11,16 @@ import type { ISODateString } from "./time";
 export type ToolCodeCallOutcome =
   /** The JSON the handler answered with, at most the bound of an answer. */
   | { kind: "answered"; value: JsonValue }
-  | { kind: "failed"; error: { code: string; message: string } };
+  | {
+      kind: "failed";
+      /** A reason code and a plain sentence, with nothing the handler wrote. */
+      error: { code: string; message: string };
+      /**
+       * The end of what the handler wrote to its error stream, for the model alone: the
+       * operation hands it on in the tool's answer, which its run does not keep.
+       */
+      stderrTail?: string;
+    };
 
 export interface ToolCodeCall {
   id: string;
@@ -26,6 +35,8 @@ export interface ToolCodeCall {
   timeoutSeconds: number;
   outcome?: ToolCodeCallOutcome;
   createdAt: ISODateString;
+  /** When a worker last started the handler's container. Missing while the call is queued. */
+  startedAt?: ISODateString;
   finishedAt?: ISODateString;
 }
 
@@ -36,11 +47,22 @@ export interface ToolCodeCall {
 export const TOOL_CODE_CALL_KEEP_MS = 60 * 60 * 1000;
 
 export interface ToolCodeCallsStore {
-  createToolCodeCall(call: Omit<ToolCodeCall, "outcome" | "finishedAt">): Promise<void>;
+  createToolCodeCall(
+    call: Omit<ToolCodeCall, "outcome" | "finishedAt" | "startedAt">
+  ): Promise<void>;
   getToolCodeCall(input: {
     clientInstanceId: ClientInstanceId;
     id: string;
   }): Promise<ToolCodeCall | undefined>;
+  /**
+   * Notes that a worker starts the handler's container now. `false` where the row is gone or
+   * already has its outcome: nobody waits for the call, and the handler is not started.
+   */
+  startToolCodeCall(input: {
+    clientInstanceId: ClientInstanceId;
+    id: string;
+    startedAt: ISODateString;
+  }): Promise<boolean>;
   /**
    * Writes how the handler ended and clears the input, once. `false` where the row is gone or
    * already has its outcome: the operation gave up on it, and nothing is kept.

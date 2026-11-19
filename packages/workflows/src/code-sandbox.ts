@@ -255,6 +255,11 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
     signal: AbortSignal;
     /** Where the datasets of the step are read and stored. Missing where there is no store. */
     datasets?: CodeStepDatasets;
+    /**
+     * Called once everything is staged, just before the container is started. A run whose
+     * signal is aborted by then starts no container and ends as `stopped`.
+     */
+    beforeStart?: () => Promise<void>;
   }): Promise<CodeSandboxResult> {
     const { staged, signal } = input;
     const usesDatasets = staged.datasets !== undefined || holdsDatasetReference(staged.input);
@@ -365,6 +370,8 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
       }
       await writeFile(join(directory, INPUT_FILE), JSON.stringify(stagedInput), { flag: "wx" });
       const mark = `catalyst-result-${randomUUID()}`;
+      await input.beforeStart?.();
+      if (stop.signal.aborted) return { kind: "stopped" };
       // The step's data on disk is measured while the script runs: its input files and
       // what the script writes. A script that takes it past the bound is stopped: the worker's
       // disk is no script's to fill.
