@@ -112,8 +112,7 @@ export class ConnectionCallError extends Error {
 let held = Buffer.alloc(0);
 const pause = new Int32Array(new SharedArrayBuffer(4));
 
-function descriptor(name) {
-  const value = process.env[name];
+function descriptor(value) {
   if (value === undefined)
     throw new ConnectionCallError("channel_unavailable", "This handler runs without the platform's request channel");
   return Number(value);
@@ -158,8 +157,8 @@ function readLine(fd) {
 
 /** Calls \`connection.<connection>.<operation>\` and answers its output. */
 export async function call(connection, operation, input = {}) {
-  write(descriptor("CATALYST_REQUEST_FD"), Buffer.from(JSON.stringify({ connection, operation, input }) + "\\n", "utf8"));
-  const answer = JSON.parse(readLine(descriptor("CATALYST_ANSWER_FD")));
+  write(descriptor(process.env.CATALYST_REQUEST_FD), Buffer.from(JSON.stringify({ connection, operation, input }) + "\\n", "utf8"));
+  const answer = JSON.parse(readLine(descriptor(process.env.CATALYST_ANSWER_FD)));
   if (answer.ok) return answer.output;
   throw new ConnectionCallError(answer.error?.code ?? "failed", answer.error?.message ?? "");
 }
