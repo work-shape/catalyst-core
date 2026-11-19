@@ -7,6 +7,170 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.42 — 2026-11-20
+
+### Added
+
+- **Code tools call Connections (TOOL-2c):** a code tool lists in `connections` the
+  `connection.<name>.<operation>` operations its handler may call; a write naming one that does
+  not exist is refused. The handler calls one through `catalyst_tool` (Python) or `catalyst-tool`
+  (Node), over a request channel on the container's own streams: the sandbox keeps no network and
+  never holds the credential. The platform makes the call as the tool's caller, with their rights
+  (`connection.use`), as an Operation Run of its own whose origin is the tool's call; an
+  undeclared operation is refused with `connection_not_declared`, and one call makes at most 50
+  requests of at most 256 KiB, read one at a time and bounded apart from its output. The policy of the declared operations is the
+  floor of the tool's call, asked once before the handler starts, and an `approval` asked of a
+  personal Connection's operation refuses the tool's call. Nothing inside the handler waits: a
+  call the policy asks more of than it asked when the tool's call was admitted or as the
+  handler started, or one a guardrail asks about, is refused with `connection_call_waits`. A handler that stopped after it called a
+  Connection is not run again, nor answered for an attempt that overlaps it; its call fails as
+  `interrupted`. In a draft agent's Try the calls
+  reach the Connection's test credential. A run so allowed records the decision reason
+  `tool_call`.
+
+- **A confirmed call the policy now asks an approval of is refused:** an agent's call its person
+  confirmed is asked again as it resumes, and where a setting raised it to `approval` meanwhile
+  it is refused rather than run without an approver.
+- **Tools:** a code tool can be written as a folder: `tool.yaml` beside `main.py` with one
+  `@tool` function (the platform's `catalyst_tools` module, standard library only) or `index.ts`
+  that exports one `defineTool` from `@work-shape/catalyst-tool-sdk/code`. The input schema and
+  the description come from the handler: Python type hints and the docstring, or the Zod schema.
+  The handler gets `ctx` with `connection(name).call(...)`, `display.data(...)`,
+  `display.html(...)` and `log(...)`.
+- **CLI:** `catalyst tool put <folder>` derives the definition locally, bundles a TypeScript tool
+  into one ES module and writes the next draft; `catalyst tool run <folder> --input <json>` runs
+  the handler on this computer, and prints its output and the path of a page with its display.
+  `run` checks `--input` against the tool's input schema and holds the handler to the sandbox's
+  limits on its answer, display and requests; it names every simulated call on stderr and counts
+  them in `--json`. An HTML display runs there in a frame without an origin that reaches no host.
+  Both commands run the tool's code on your computer, as you, outside any sandbox.
+- **Connections:** `connections.try_call` (`POST /api/v1/connections/{name}/operations/{operation}/tries`)
+  calls a Connection operation as a draft's call: to the test credential where one is set, and
+  simulated where a changing call has none. An operation that cannot be called now is refused,
+  not simulated. `catalyst tool run` makes its handler's Connection
+  calls with it; it needs `connection.use` and the operation's exposure to outside clients.
+- **Tools:** a code tool's files may hold up to 1 MiB, each and together, so a bundled
+  TypeScript tool fits.
+- **Code tools (TOOL-2b):** a tool asset of type `code` holds a handler in Python or JavaScript
+  among its files (`runtime`, `entry`, `timeoutSeconds` up to 120 seconds, at most 32 files and
+  512 KiB). A call of `tool.<name>.call` runs the handler on the workspace command worker in the
+  sandbox of Workflow code steps: no network, a read-only root, an empty environment and the
+  limits of a code step. The handler reads the input as a code step does and answers
+  `{ "output", "display"? }`; a `data` display becomes the conversation's structured result and an
+  `html` display is shown as `show_view` shows it. A handler past its time is stopped and the call
+  fails with `timed_out`; the time counts from the start of its container, and a call that
+  finds no free container within 30 seconds, or before the agent's tool deadline, fails with the
+  reason `queued`. The end of a failed handler's error stream reaches the model alone; the
+  Operation Run keeps the reason. Each command worker runs at most two handlers at once, and its
+  startup memory check counts them as `code tools` with the memory of a code step. Code tools
+  cannot call Connections yet.
+- **Tools as assets (TOOL-1):** an instance adds a tool without a release. A tool asset of type
+  `result` declares an input JSON Schema and a display kind; `catalyst tool put` writes its draft
+  and `catalyst tool publish` makes it live as the operation `tool.<name>.call`, which agents list
+  in `toolNames`. A call checks the agent's input against the schema and writes it as the
+  conversation's structured result, which the panel draws with the release's widget for that
+  kind. It holds no code and reaches nothing outside the conversation. New rights `tool.read`,
+  `tool.write`, `tool.publish`, `tool.approve` and `tool.delete`; Studio lists tools under
+  "Werkzeuge".
+
+### Changed
+
+- **Release:** The config-cli package may pack to 440,000 bytes: the code tool commands took it to 367,163.
+- **Chat:** a tool's display or structured result of a kind the release has no widget for is
+  drawn by a generic data view instead of raw JSON. An object shows as labelled values, its keys
+  made readable (`due_date` is "Due date"), with nested objects as sections; a list of flat
+  objects is a table; a list of plain values is a list. Days and moments read in the reader's
+  language. The view is bounded: four levels, 50 rows per list with "and N more", long values
+  cut. It shows the data as text, never as markup. `KeyValue` takes `layout="stacked"` for a
+  value that is itself a group of values.
+- **Studio, Agent page:** the page leads with one line of what the agent does: its description,
+  or a plain sentence while it has none. Under it stands what shapes the agent: its instructions,
+  its knowledge, data and skills, its tools and its starter prompts. Everything set once is
+  folded under **Settings**: name, description and welcome, the model, available in and who may
+  use it. Max steps, fast mode and the fallback model wait under **Advanced** there, and the hint
+  of max steps no longer names the deployment configuration. Settings open by themselves on a
+  model the instance cannot run, on a draft that changes a field in them, and on a refused save
+  that names one. "View changes" goes to the first change in the order of the page, and the line
+  beside Settings names only what is in them for the reader. The platform's instructions fold under the agent's own
+  text, not above it. The outline and the headings count only what is there: no "Skills 0", and a
+  tool row that is off shows its switch without "0/5". A new agent still starts with its name.
+- **Studio, Connection page:** the page leads with one line of what the Connection does,
+  "Connects your agents to …". Under it stands its one state with the one action that fixes it:
+  the sign-in of a Connection that signs in, else its key and its test. Then "What agents may do
+  with it": each operation by its name, whether it reads or changes, and its switch; a row says
+  its status only while it is not ready. What an operation calls and takes, who else may call it
+  and Remove wait under **Details** in its row. One line, "Used by …", names what uses it.
+  Everything else is folded under **Settings**: name and description, the test of a Connection
+  that signs in, the people, the test credential, address and access, person context, used by,
+  available in and who may use it. A setting without a name in words, and a value that is a
+  structure, stand under Technical details there and no longer as raw keys and JSON on the page.
+  The outline is gone, and the head of a Connection that signs in no longer says "Not tested"
+  beside its sign-in, nor does its test under Settings while it is signed in. What needs a person
+  stands above the operations: why a signed-in Connection fails, with the test; that the test
+  credential no longer fits; and the link an admin sends to IT for a Connection each person
+  signs in to. The tools a server names stay under the operations. The provider, the client and
+  the permissions of a shared sign-in stand under the one Technical details, in Settings, and
+  "since" says the moment to the minute.
+- **Studio, New connection:** the Connector types with a name come first. An MCP server and a
+  REST API wait under one line, "Your own connection (for developers)", which stands open only
+  where the instance offers nothing else.
+- **UI library:** a `Disclosure` takes its look from its own variant. A bare one folded inside a
+  `row` one no longer stretches across the column.
+- **Studio, Data Store page:** the page leads with what the store is and what it holds. Its
+  description is the lead line, said once and no longer cut off in the head. Under it stand the
+  rows of one table, with a tab per table only where the store has several; a store without
+  anything in it says "Nothing here yet. Apps, workflows and agents keep their entries here."
+  One line, "Used by …", names the Knowledge Bases, Apps and Workflows that fill or read it, each
+  a link to its page. The head names a state only while the store is not ready, and the page then
+  says it in one sentence. Everything else is folded under **Settings**: Filled by, Processed
+  by, Read by and Agents, and under **Advanced** inside it the status with the schema level, the
+  last migration and the size, what is to do on the server, the tables with their columns and
+  types, and the test copy. The sentence about the list, the lone place chip and the outline are
+  gone from this page; whose the store is stands in the line under its name. A draft that waits
+  keeps its notice with Publish at the top, and its migrations with their SQL are under
+  Settings. The page of a store never published shows its description as the lead line too, and
+  keeps its migrations' SQL under Advanced.
+- **Knowledge Base page:** a document's row stays one line of name and one of facts. The link to
+  its original is an icon button among the row's actions instead of a chip with the host. Two
+  files of one name from two folders are told apart: a synced document's row names its folder
+  before the format and the size, cut with an ellipsis where it does not fit. That the originals
+  stay at the source is said once, in the synced folder's row, and no longer in every document's
+  row. A synced folder's row opens by itself only for a confirmation the reader must give; failed
+  items show as a count in the row, and the failed documents stand first in the list as before.
+- **API:** `GET /api/v1/knowledge-bases/{knowledgeBase}/documents` answers one more optional,
+  read-only field per document, `folder`: the folder of a synced document below the folder that
+  is synced, without the file name (`/` at the top), absent for a file added by hand. It is the
+  folder part of the `path` a search match already carries, for the same right.
+- **Knowledge Bases:** a Knowledge Base whose documents all come from a synced folder leads with
+  **Sync now** in place of **Add documents**; uploading files and connecting another folder wait in
+  the head's menu, since an uploaded file would lie beside the synced ones and never sync. One with
+  both kinds keeps **Add documents** with **Sync now** beside it.
+- **Knowledge Bases:** behind **Adjust**, a synced source sets how it keeps itself up to date in
+  one column of rows, each control beside its label: the switch, how often changes are fetched, and
+  when deleted files are removed, as one button that reads like "Daily at 02:00". The published
+  schedule is named a second time only where a change waits for its publish.
+- **Interface library:** `SettingsList` and `SettingsRow` put a setting's label, one line about it
+  and its control in one row; `ScheduleField` takes `labelHidden`.
+
+### Fixed
+
+- **UI library:** the page of a Data Store never published no longer fails with "Maximum update
+  depth exceeded" at phone width. In a detail head with a line of facts, the name now keeps its
+  own width and the chips after it give way first; before, bringing back the text of the way back
+  cut the name, which took the text away again in every render. Where that would still happen,
+  the text stays gone until the row's width or the name changes.
+
+### Database
+
+- **Tools:** migration 0208 `tool_code_call_requests` adds the nullable `jsonb` columns `request`
+  and `answer` to `tool_code_calls`: the request a running handler made of a Connection and its
+  answer, carried between the command worker and the process that waits for the call, and cleared
+  when the call ends. A rollback leaves the columns unused.
+- **Tools:** migration 0207 `tool_code_calls` creates the table `tool_code_calls`, which holds a
+  code tool's call while its handler runs: the input until the handler ended, when a worker
+  started its container, then how it ended, until the operation read it. Rows go with their conversation and the command worker's sweep
+  removes rows older than an hour. It changes no existing table. A rollback leaves the table unused.
+
 ## 0.8.0-rc.41 — 2026-11-19
 
 ### Changed
