@@ -1,6 +1,6 @@
 import { Collapsible } from "radix-ui";
 import { ChevronDown } from "lucide-react";
-import type { ButtonHTMLAttributes, HTMLAttributes } from "react";
+import { createContext, useContext, type ButtonHTMLAttributes, type HTMLAttributes } from "react";
 import { cn } from "../cn";
 
 /**
@@ -17,18 +17,26 @@ export interface DisclosureProps extends HTMLAttributes<HTMLDivElement> {
   disabled?: boolean;
 }
 
+/**
+ * The variant of the nearest Disclosure. Its line and its content read it here, not from an
+ * ancestor's attribute: a bare one folded inside a `row` one keeps its own look.
+ */
+const DisclosureVariantContext = createContext<DisclosureVariant>("ghost");
+
 /** Content that folds away under one line, such as advanced settings or a long value. */
 export function Disclosure({ className, variant = "ghost", ...props }: DisclosureProps) {
   return (
-    <Collapsible.Root
-      data-variant={variant}
-      className={cn(
-        "group/disclosure w-full min-w-0",
-        variant === "outline" && "rounded-md border py-3",
-        className
-      )}
-      {...props}
-    />
+    <DisclosureVariantContext.Provider value={variant}>
+      <Collapsible.Root
+        data-variant={variant}
+        className={cn(
+          "group/disclosure w-full min-w-0",
+          variant === "outline" && "rounded-md border py-3",
+          className
+        )}
+        {...props}
+      />
+    </DisclosureVariantContext.Provider>
   );
 }
 
@@ -37,19 +45,18 @@ export function DisclosureTrigger({
   children,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement>) {
+  const variant = useContext(DisclosureVariantContext);
   return (
     <Collapsible.Trigger
       className={cn(
         "group/disclosure-trigger flex w-fit items-center gap-2 rounded-md py-1 text-left text-body text-muted-foreground transition-colors hover:text-foreground focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-50",
-        "group-data-[variant=outline]/disclosure:w-full group-data-[variant=outline]/disclosure:px-4 group-data-[variant=outline]/disclosure:font-medium",
-        "group-data-[variant=row]/disclosure:w-full group-data-[variant=row]/disclosure:py-3",
+        variant === "outline" && "w-full px-4 font-medium",
+        variant === "row" && "w-full py-3",
         className
       )}
       {...props}
     >
-      <span className="min-w-0 group-data-[variant=outline]/disclosure:grow group-data-[variant=row]/disclosure:grow">
-        {children}
-      </span>
+      <span className={cn("min-w-0", variant !== "ghost" && "grow")}>{children}</span>
       <ChevronDown
         aria-hidden="true"
         className="size-4 shrink-0 transition-transform duration-200 ease-out group-data-[state=closed]/disclosure-trigger:-rotate-90"
@@ -72,6 +79,7 @@ export function DisclosureContent({
   keepMounted = false,
   ...props
 }: DisclosureContentProps) {
+  const variant = useContext(DisclosureVariantContext);
   return (
     <Collapsible.Content
       className={cn(
@@ -85,9 +93,10 @@ export function DisclosureContent({
     >
       <div
         className={cn(
-          "mt-1 flex flex-col gap-1",
-          "group-data-[variant=outline]/disclosure:mt-3 group-data-[variant=outline]/disclosure:gap-2 group-data-[variant=outline]/disclosure:border-t group-data-[variant=outline]/disclosure:px-4 group-data-[variant=outline]/disclosure:pt-3",
-          "group-data-[variant=row]/disclosure:mt-3 group-data-[variant=row]/disclosure:gap-0"
+          "flex flex-col",
+          variant === "ghost" && "mt-1 gap-1",
+          variant === "outline" && "mt-3 gap-2 border-t px-4 pt-3",
+          variant === "row" && "mt-3 gap-0"
         )}
       >
         {children}
