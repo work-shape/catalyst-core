@@ -260,6 +260,70 @@ describe("catalyst tool put <folder>", () => {
     expect(bundle).not.toMatch(/from\s*"(?:zod|\.\/add|@work-shape)/u);
   });
 
+  it("gives a set or frozenset hint unique items", async () => {
+    const folder = await folderOf({
+      "tool.yaml": "{}\n",
+      "main.py": [
+        "from typing import FrozenSet, Set",
+        "from catalyst_tools import tool",
+        "",
+        "@tool",
+        "def tagged(ctx, tags: Set[str], ids: FrozenSet[int]):",
+        '    """Takes tags."""',
+        "    return {}",
+        ""
+      ].join("\n")
+    });
+    const { fetchImpl, received } = freshInstance();
+    const result = await run(["tool", "put", folder], { fetchImpl });
+    expect(result.code, result.err).toBe(0);
+    const put = received.find((request) => request.body !== undefined);
+    const { config } = putBodySchema.parse(put?.body);
+    expect(config.input.properties).toEqual({
+      tags: { type: "array", items: { type: "string" }, uniqueItems: true },
+      ids: { type: "array", items: { type: "integer" }, uniqueItems: true }
+    });
+  });
+
+  it("reads a TypeScript tool in a process of its own, without the CLI's key", async () => {
+    const folder = await typescriptFolder({
+      "tool.yaml": "{}\n",
+      "index.ts": [
+        'import { z } from "zod";',
+        'import { defineTool } from "@work-shape/catalyst-tool-sdk/code";',
+        "",
+        "export default defineTool({",
+        '  name: "keyless",',
+        '  description: "key " + String(process.env.CATALYST_API_KEY) + " marker " + String(Reflect.get(globalThis, "toolSdkTestMarker")),',
+        "  inputSchema: z.object({}),",
+        "  async execute() {",
+        "    return {};",
+        "  }",
+        "});",
+        ""
+      ].join("\n")
+    });
+    // Read in this process, the tool would see this marker.
+    Reflect.set(globalThis, "toolSdkTestMarker", "in the CLI");
+    const { fetchImpl, received } = freshInstance();
+    const result = await run(["tool", "put", folder], { fetchImpl }).finally(() =>
+      Reflect.deleteProperty(globalThis, "toolSdkTestMarker")
+    );
+    expect(result.code, result.err).toBe(0);
+    const put = received.find((request) => request.body !== undefined);
+    expect(putBodySchema.parse(put?.body).config.description).toBe(
+      "key undefined marker undefined"
+    );
+
+    // A tool that ends its process while it is read ends that process alone.
+    const exiting = await typescriptFolder({
+      "tool.yaml": "{}\n",
+      "index.ts": "process.exit(7);\n"
+    });
+    const ended = await run(["tool", "put", exiting], { fetchImpl: freshInstance().fetchImpl });
+    expect(ended.code).toBe(1);
+  });
+
   it("refuses a folder without tool.yaml and sends nothing", async () => {
     const folder = await folderOf({ "main.py": PYTHON_TOOL });
     const { fetchImpl, received } = freshInstance();
@@ -298,7 +362,8 @@ export default defineTool({
 
 const answerSchema = z.object({
   output: z.unknown(),
-  display: z.looseObject({ type: z.string() }).optional()
+  display: z.looseObject({ type: z.string() }).optional(),
+  simulatedCalls: z.number()
 });
 
 /** A stubbed instance whose Connection calls answer from the test credential. */
@@ -358,26 +423,167 @@ describe("catalyst tool run <folder>", () => {
     const answer = answerSchema.parse(JSON.parse(result.out));
     expect(answer.output).toEqual({ sum: 6, looked: null, refused: "connection_not_declared" });
     expect(answer.display).toEqual({ type: "html", title: "Sum", html: "<b>1 + 2 + 3</b>" });
-    // Only the declared operation reached the instance.
+    // Only the declared operation reached the instance, and its simulation is said, not hidden.
     expect(received).toHaveLength(1);
+    expect(answer.simulatedCalls).toBe(1);
+    expect(result.err).toContain(
+      "Simulated connection.crm.search: the Connection has no test credential"
+    );
+    // The display runs in a frame without an origin, under a policy that reaches no host.
     const page = /open (\S+display\.html)/u.exec(result.err)?.[1];
-    expect(await readFile(page ?? "", "utf8")).toBe("<b>1 + 2 + 3</b>");
+    const html = await readFile(page ?? "", "utf8");
+    expect(html).toMatch(
+      /<meta http-equiv="Content-Security-Policy" content="[^"]*default-src 'none'[^"]*connect-src 'none'/u
+    );
+    expect(html).toContain('<iframe sandbox="allow-scripts"');
+    expect(html).toContain('srcdoc="&lt;b&gt;1 + 2 + 3&lt;/b&gt;"');
+    expect(html).not.toContain("allow-same-origin");
     await rm(dirname(page ?? ""), { recursive: true, force: true });
   });
 
-  it("fails where the input does not fit the tool's schema, and calls nothing", async () => {
-    const folder = await typescriptFolder({
-      "tool.yaml": "connections: [crm.search]\n",
-      "index.ts": SUM_TOOL,
-      "add.ts": "export const add = (a: number, b: number): number => a + b;\n"
+  it("refuses an input that does not fit the tool's input schema before it runs anything", async () => {
+    const folder = await folderOf({
+      "tool.yaml": "connections: [connection.crm.search]\n",
+      "main.py": PYTHON_TOOL
     });
     const { fetchImpl, received } = connectionInstance("test");
-    const result = await run(["tool", "run", folder, "--input", '{"numbers":"x"}'], {
-      fetchImpl
-    });
+    const result = await run(
+      ["tool", "run", folder, "--input", '{"query":7,"kinds":["robot"],"other":1}'],
+      { fetchImpl }
+    );
     expect(result.code).toBe(1);
-    expect(result.err).toContain("does not fit the tool's schema");
-    expect(result.err).toContain("The handler failed");
+    expect(result.err).toContain("--input does not fit the tool's input schema:");
+    expect(result.err).toContain("/query: must be string");
+    expect(result.err).toContain("/kinds/0: must be equal to one of the allowed values");
+    expect(result.err).not.toContain("looking for");
     expect(received).toEqual([]);
+  });
+
+  it("removes the run's input and answer when it ends", async () => {
+    const folder = await folderOf({
+      "tool.yaml": "{}\n",
+      "main.py": [
+        "import os",
+        "from catalyst_tools import tool",
+        "",
+        "@tool",
+        "def where(ctx):",
+        '    """Says where its files are."""',
+        '    return {"input": os.environ["WORKFLOW_INPUT_FILE"], "output": os.environ["WORKFLOW_OUTPUT_FILE"]}',
+        ""
+      ].join("\n")
+    });
+    const result = await run(["tool", "run", folder]);
+    expect(result.code, result.err).toBe(0);
+    const files = z.object({ input: z.string(), output: z.string() }).parse(JSON.parse(result.out));
+    await expect(readFile(files.input, "utf8")).rejects.toThrow(/ENOENT/u);
+    await expect(readFile(files.output, "utf8")).rejects.toThrow(/ENOENT/u);
+    await expect(readFile(join(dirname(files.input), "lib/catalyst_tools.py"))).rejects.toThrow(
+      /ENOENT/u
+    );
+  });
+
+  it("refuses an answer past the sandbox's limits, as the sandbox would", async () => {
+    const folder = await folderOf({
+      "tool.yaml": "{}\n",
+      "main.py": [
+        "from catalyst_tools import tool",
+        "",
+        "@tool",
+        "def big(ctx):",
+        '    """Answers too much."""',
+        '    return {"text": "x" * 70000}',
+        ""
+      ].join("\n")
+    });
+    const result = await run(["tool", "run", folder]);
+    expect(result.code).toBe(1);
+    expect(result.err).toContain("The handler's answer is not one the sandbox takes:");
+    expect(result.err).toContain("a tool hands the model at most 65536");
+    expect(result.out).toBe("");
+  });
+
+  it("refuses a display the chat would not show", async () => {
+    const folder = await folderOf({
+      "tool.yaml": "{}\n",
+      "main.py": [
+        "from catalyst_tools import tool",
+        "",
+        "@tool",
+        "def shown(ctx):",
+        '    """Shows a page too long for the frame."""',
+        '    ctx.display.html("x" * 200001, "Long")',
+        '    return {"ok": True}',
+        ""
+      ].join("\n")
+    });
+    const result = await run(["tool", "run", folder]);
+    expect(result.code).toBe(1);
+    expect(result.err).toContain("display.html:");
+  });
+
+  it("answers too_many_requests past the sandbox's bound of Connection calls", async () => {
+    const folder = await folderOf({
+      "tool.yaml": "connections: [crm.search]\n",
+      "main.py": [
+        "from catalyst_tools import tool, ConnectionCallError",
+        "",
+        "@tool",
+        "def many(ctx):",
+        '    """Calls the CRM too often."""',
+        "    for index in range(51):",
+        "        try:",
+        '            ctx.connection("crm").call("search", {"q": str(index)})',
+        "        except ConnectionCallError as error:",
+        '            return {"made": index, "code": error.code}',
+        '    return {"made": 51}',
+        ""
+      ].join("\n")
+    });
+    const { fetchImpl, received } = connectionInstance("test");
+    const result = await run(["tool", "run", folder], { fetchImpl });
+    expect(result.code, result.err).toBe(0);
+    expect(JSON.parse(result.out)).toEqual({ made: 50, code: "too_many_requests" });
+    expect(received).toHaveLength(50);
+  });
+
+  it("converts a list to the set or frozenset a parameter's hint names", async () => {
+    const folder = await folderOf({
+      "tool.yaml": "{}\n",
+      "main.py": [
+        "from typing import FrozenSet, Set",
+        "from catalyst_tools import tool",
+        "",
+        "@tool",
+        "def tagged(ctx, tags: Set[str], ids: FrozenSet[int], plain: set):",
+        '    """Tells the kinds it was handed."""',
+        '    return {"tags": type(tags).__name__, "ids": type(ids).__name__, "plain": type(plain).__name__, "sorted": sorted(tags)}',
+        ""
+      ].join("\n")
+    });
+    const result = await run([
+      "tool",
+      "run",
+      folder,
+      "--input",
+      '{"tags":["b","a"],"ids":[1,2],"plain":[3]}'
+    ]);
+    expect(result.code, result.err).toBe(0);
+    expect(JSON.parse(result.out)).toEqual({
+      tags: "set",
+      ids: "frozenset",
+      plain: "set",
+      sorted: ["a", "b"]
+    });
+    // A list with a repeated item is no set: the schema says so before the handler runs.
+    const repeated = await run([
+      "tool",
+      "run",
+      folder,
+      "--input",
+      '{"tags":["a","a"],"ids":[1],"plain":[]}'
+    ]);
+    expect(repeated.code).toBe(1);
+    expect(repeated.err).toContain("must NOT have duplicate items");
   });
 });

@@ -4,7 +4,16 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { Readable, Writable } from "node:stream";
-import { toolCodeTimeoutSeconds } from "@work-shape/catalyst-asset-schemas";
+import {
+  TOOL_CODE_ANSWER_MAX_BYTES,
+  TOOL_CODE_REQUESTS_MAX,
+  TOOL_CODE_REQUEST_ANSWER_MAX_BYTES,
+  TOOL_CODE_REQUEST_MAX_BYTES,
+  toolCodeAnswerSchema,
+  toolCodeTimeoutSeconds,
+  utf8Bytes,
+  type ToolCodeDisplay
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { ConfigApiError, type ConfigApi } from "./api";
 import {
@@ -25,6 +34,7 @@ import {
   writeToolLibrary,
   type ToolFolder
 } from "./tool-folder";
+import { toolInputIssues } from "./tool-input";
 
 // `catalyst tool put <folder>` and `catalyst tool run <folder>` (TOOL-2d, platform-access.md,
 // section 3a): a code tool written as a folder. `put` reads the folder's definition here and
@@ -139,12 +149,15 @@ const channelRequestSchema = z.object({
 type ChannelRequest = z.infer<typeof channelRequestSchema>;
 
 const objectSchema = z.record(z.string(), z.unknown());
-/** What a handler answers. */
-const handlerAnswerSchema = z.looseObject({ output: z.unknown(), display: z.unknown() });
 
 type ChannelAnswer =
   | { ok: true; output: unknown; simulated?: true }
   | { ok: false; error: { code: string; message: string } };
+
+const refused = (code: string, message: string): ChannelAnswer => ({
+  ok: false,
+  error: { code, message }
+});
 
 function parseInput(text: string | undefined): Record<string, unknown> {
   if (text === undefined) return {};
@@ -169,7 +182,37 @@ async function runFolder(
 ): Promise<number> {
   const input = parseInput(values.input);
   const tool = await readToolFolder(folder, env, { bundle: false });
+  const issues = toolInputIssues(tool.config.input, input);
+  if (issues.length > 0) {
+    writeError(
+      options,
+      [
+        "--input does not fit the tool's input schema:",
+        ...issues.map((issue) => `  ${issue}`)
+      ].join("\n")
+    );
+    return EXIT.refused;
+  }
+  // The work folder holds the input, the answer, the library and the bundle. It is removed
+  // however the run ends; only a display's page outlives it, in a folder of its own.
   const work = await mkdtemp(join(tmpdir(), "catalyst-tool-run-"));
+  try {
+    return await runInFolder({ folder, work, tool, input, values, options, env });
+  } finally {
+    await rm(work, { recursive: true, force: true });
+  }
+}
+
+async function runInFolder(run: {
+  folder: string;
+  work: string;
+  tool: ToolFolder;
+  input: Record<string, unknown>;
+  values: Values;
+  options: ConfigCommandOptions;
+  env: ConfigCliEnv;
+}): Promise<number> {
+  const { folder, work, tool, input, values, options } = run;
   const library = join(work, "lib");
   await mkdir(library);
   await writeToolLibrary(library);
@@ -197,13 +240,14 @@ async function runFolder(
   }
   let instance: Promise<{ api: ConfigApi }> | undefined;
   const connect = () => (instance ??= openInstance(options));
+  let simulatedCalls = 0;
   const ended = await runHandler({
     command,
     args,
     folder,
     input,
     env: {
-      ...toolHandlerEnv(env),
+      ...toolHandlerEnv(run.env),
       WORKFLOW_INPUT_FILE: inputFile,
       WORKFLOW_OUTPUT_FILE: outputFile,
       CATALYST_LIBRARY: library,
@@ -213,7 +257,17 @@ async function runFolder(
     },
     timeoutSeconds: toolCodeTimeoutSeconds(tool.config),
     stderr: (text) => (options.stderr ?? process.stderr.write.bind(process.stderr))(text),
-    answer: (request) => answerRequest(tool, request, connect)
+    answer: async (request) => {
+      const answer = await answerRequest(tool, request, connect);
+      if (answer.ok && answer.simulated) {
+        simulatedCalls += 1;
+        writeError(
+          options,
+          `Simulated connection.${request.connection}.${request.operation}: the Connection has no test credential, so nothing changed and the handler got a simulated answer.`
+        );
+      }
+      return answer;
+    }
   });
   const written = await readFile(outputFile, "utf8").catch(() => undefined);
   if (ended.timedOut) {
@@ -227,21 +281,45 @@ async function runFolder(
     writeError(options, `The handler failed (exit ${String(ended.code)}).`);
     return EXIT.refused;
   }
-  let answer: z.infer<typeof handlerAnswerSchema>;
+  const text = written ?? ended.stdout;
+  if (
+    (written === undefined && ended.stdoutOverflow) ||
+    utf8Bytes(text) > TOOL_CODE_ANSWER_MAX_BYTES
+  ) {
+    writeError(
+      options,
+      `The handler answered more than ${TOOL_CODE_ANSWER_MAX_BYTES} bytes; the sandbox takes at most that.`
+    );
+    return EXIT.refused;
+  }
+  let raw: unknown;
   try {
-    answer = handlerAnswerSchema.parse(JSON.parse(written ?? ended.stdout));
+    raw = JSON.parse(text);
   } catch {
     writeError(options, "The handler answered no JSON object: it writes { output, display? }.");
     return EXIT.refused;
   }
-  if (values.json) writeOutput(options, JSON.stringify(answer, null, 2));
+  const parsed = toolCodeAnswerSchema.safeParse(raw);
+  if (!parsed.success) {
+    writeError(
+      options,
+      [
+        "The handler's answer is not one the sandbox takes:",
+        ...parsed.error.issues.map(
+          (issue) =>
+            `  ${issue.path.length > 0 ? issue.path.join(".") : "answer"}: ${issue.message}`
+        )
+      ].join("\n")
+    );
+    return EXIT.refused;
+  }
+  const answer = parsed.data;
+  if (values.json) writeOutput(options, JSON.stringify({ ...answer, simulatedCalls }, null, 2));
   else writeOutput(options, JSON.stringify(answer.output ?? null, null, 2));
   if (answer.display !== undefined) {
-    const page = join(work, "display.html");
+    const page = join(await mkdtemp(join(tmpdir(), "catalyst-tool-display-")), "display.html");
     await writeFile(page, displayPage(answer.display));
     writeError(options, `The handler showed a display: open ${page} in a browser.`);
-  } else {
-    await rm(work, { recursive: true, force: true });
   }
   return EXIT.done;
 }
@@ -254,13 +332,10 @@ async function answerRequest(
 ): Promise<ChannelAnswer> {
   const name = `connection.${request.connection}.${request.operation}`;
   if (!(tool.config.connections ?? []).includes(name)) {
-    return {
-      ok: false,
-      error: {
-        code: "connection_not_declared",
-        message: `The tool does not declare '${name}' in its connections, so its handler may not call it.`
-      }
-    };
+    return refused(
+      "connection_not_declared",
+      `The tool does not declare '${name}' in its connections, so its handler may not call it.`
+    );
   }
   try {
     const { api } = await connect();
@@ -275,13 +350,10 @@ async function answerRequest(
       "The Connection call has no answer."
     );
     if (result.status !== "done") {
-      return {
-        ok: false,
-        error: {
-          code: "approval_required",
-          message: `The call waits for a decision (run ${result.run.id}); a local run does not wait for it.`
-        }
-      };
+      return refused(
+        "approval_required",
+        `The call waits for a decision (run ${result.run.id}); a local run does not wait for it.`
+      );
     }
     return {
       ok: true,
@@ -289,14 +361,55 @@ async function answerRequest(
       ...(result.output.target === "dry_run" ? { simulated: true as const } : {})
     };
   } catch (error) {
-    return {
-      ok: false,
-      error:
-        error instanceof ConfigApiError
-          ? { code: (error.code ?? "failed").toLowerCase(), message: error.message }
-          : { code: "failed", message: error instanceof Error ? error.message : String(error) }
-    };
+    return error instanceof ConfigApiError
+      ? refused((error.code ?? "failed").toLowerCase(), error.message)
+      : refused("failed", error instanceof Error ? error.message : String(error));
   }
+}
+
+/**
+ * Answers one line of the request channel within the sandbox's bounds: at most
+ * `TOOL_CODE_REQUESTS_MAX` requests, each at most `TOOL_CODE_REQUEST_MAX_BYTES`, each answer
+ * at most `TOOL_CODE_REQUEST_ANSWER_MAX_BYTES`.
+ */
+async function answerLine(
+  line: string,
+  seq: number,
+  answer: (request: ChannelRequest) => Promise<ChannelAnswer>
+): Promise<ChannelAnswer> {
+  if (seq > TOOL_CODE_REQUESTS_MAX) {
+    return refused(
+      "too_many_requests",
+      `A handler makes at most ${TOOL_CODE_REQUESTS_MAX} Connection calls in one call of its tool.`
+    );
+  }
+  if (utf8Bytes(line) > TOOL_CODE_REQUEST_MAX_BYTES) {
+    return refused(
+      "request_too_large",
+      `A request is at most ${TOOL_CODE_REQUEST_MAX_BYTES} bytes as one line of JSON.`
+    );
+  }
+  let request: ChannelRequest | undefined;
+  try {
+    const parsed = channelRequestSchema.safeParse(JSON.parse(line));
+    request = parsed.success ? parsed.data : undefined;
+  } catch {
+    request = undefined;
+  }
+  if (!request) {
+    return refused(
+      "request_invalid",
+      'A request is one line of JSON: { "connection": ..., "operation": ..., "input": ... }.'
+    );
+  }
+  const answered = await answer(request);
+  const bytes = utf8Bytes(JSON.stringify(answered));
+  return bytes <= TOOL_CODE_REQUEST_ANSWER_MAX_BYTES
+    ? answered
+    : refused(
+        "answer_too_large",
+        `The answer has ${bytes} bytes as JSON; a handler is handed at most ${TOOL_CODE_REQUEST_ANSWER_MAX_BYTES}.`
+      );
 }
 
 /** Runs the handler with the request channel on descriptors 3 and 4, as the sandbox does. */
@@ -309,7 +422,7 @@ function runHandler(input: {
   timeoutSeconds: number;
   stderr: (text: string) => void;
   answer: (request: ChannelRequest) => Promise<ChannelAnswer>;
-}): Promise<{ code: number | null; stdout: string; timedOut: boolean }> {
+}): Promise<{ code: number | null; stdout: string; stdoutOverflow: boolean; timedOut: boolean }> {
   return new Promise((done, failed) => {
     const child = spawn(input.command, input.args, {
       cwd: input.folder,
@@ -317,8 +430,17 @@ function runHandler(input: {
       stdio: ["pipe", "pipe", "pipe", "pipe", "pipe"]
     });
     let stdout = "";
+    let stdoutOverflow = false;
     let timedOut = false;
-    child.stdout.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
+    child.stdout.setEncoding("utf8").on("data", (chunk: string) => {
+      // An answer past the bound is refused anyway; what is past it is not kept.
+      if (stdoutOverflow) return;
+      stdout += chunk;
+      if (stdout.length > TOOL_CODE_ANSWER_MAX_BYTES) {
+        stdoutOverflow = true;
+        stdout = "";
+      }
+    });
     child.stderr.setEncoding("utf8").on("data", input.stderr);
     child.stdin.on("error", () => undefined);
     child.stdin.end(JSON.stringify(input.input));
@@ -331,25 +453,12 @@ function runHandler(input: {
     answers.on("error", () => undefined);
     // Requests are answered one after another, in order: the handler waits for each answer.
     let queue = Promise.resolve();
+    let made = 0;
     createInterface({ input: requests }).on("line", (line) => {
+      made += 1;
+      const seq = made;
       queue = queue.then(async () => {
-        let request: ChannelRequest | undefined;
-        try {
-          const parsed = channelRequestSchema.safeParse(JSON.parse(line));
-          request = parsed.success ? parsed.data : undefined;
-        } catch {
-          request = undefined;
-        }
-        const answer: ChannelAnswer = request
-          ? await input.answer(request)
-          : {
-              ok: false,
-              error: {
-                code: "request_invalid",
-                message:
-                  'A request is one line of JSON: { "connection": ..., "operation": ..., "input": ... }.'
-              }
-            };
+        const answer = await answerLine(line, seq, input.answer);
         if (!answers.destroyed) answers.write(`${JSON.stringify(answer)}\n`);
       });
     });
@@ -367,7 +476,7 @@ function runHandler(input: {
     });
     child.on("close", (code) => {
       clearTimeout(timer);
-      done({ code, stdout, timedOut });
+      done({ code, stdout, stdoutOverflow, timedOut });
     });
   });
 }
@@ -379,23 +488,54 @@ const escapeHtml = (text: string) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char
   );
 
+// What the chat's frame allows a display, said again for a page opened from a file: nothing
+// from any host, no form, no other address for its frame.
+const CLOSED_DIRECTIVES = [
+  "default-src 'none'",
+  "style-src 'unsafe-inline'",
+  "img-src data: blob:",
+  "font-src data:",
+  "connect-src 'none'",
+  "frame-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'"
+];
+
+const policyTag = (scriptSrc: string) =>
+  `<meta http-equiv="Content-Security-Policy" content="${[...CLOSED_DIRECTIVES, `script-src ${scriptSrc}`].join("; ")}">`;
+
 /**
- * A page of what the handler showed. An HTML display is its own page, as the chat shows it in a
- * frame; a data display is shown as its kind and data, since its widget lives in the instance.
+ * A page of what the handler showed. An HTML display runs in a frame without an origin, as
+ * the chat shows it, under a policy that lets it reach no host; the frame's document inherits
+ * that policy. A data display is shown as its kind and data, since its widget lives in the
+ * instance.
  */
-function displayPage(display: unknown): string {
-  const parsed = objectSchema.safeParse(display);
-  const shown = parsed.success ? parsed.data : {};
-  const title = typeof shown.title === "string" ? shown.title : "Display";
-  if (shown.type === "html" && typeof shown.html === "string") return shown.html;
+function displayPage(display: ToolCodeDisplay): string {
+  const title = display.title ?? "Display";
+  const head = (scriptSrc: string) =>
+    [
+      "<!doctype html>",
+      "<html><head>",
+      policyTag(scriptSrc),
+      '<meta charset="utf-8">',
+      `<title>${escapeHtml(title)}</title>`,
+      "</head>"
+    ].join("\n");
+  if (display.type === "html") {
+    return [
+      head("'unsafe-inline' 'unsafe-eval'"),
+      '<body style="margin:0">',
+      `<iframe sandbox="allow-scripts" title="${escapeHtml(title)}" style="border:0;width:100vw;height:100vh" srcdoc="${escapeHtml(display.html)}"></iframe>`,
+      "</body></html>",
+      ""
+    ].join("\n");
+  }
   return [
-    "<!doctype html>",
-    '<html><head><meta charset="utf-8"><title>',
-    escapeHtml(title),
-    '</title></head><body style="font-family:system-ui,sans-serif;margin:2rem">',
+    head("'none'"),
+    '<body style="font-family:system-ui,sans-serif;margin:2rem">',
     `<h1>${escapeHtml(title)}</h1>`,
-    `<p>A data display of kind <code>${escapeHtml(String(shown.kind ?? ""))}</code>. The chat shows it with the widget registered for that kind.</p>`,
-    `<pre>${escapeHtml(JSON.stringify(shown.data ?? null, null, 2))}</pre>`,
+    `<p>A data display of kind <code>${escapeHtml(display.kind)}</code>. The chat shows it with the widget registered for that kind.</p>`,
+    `<pre>${escapeHtml(JSON.stringify(display.data, null, 2))}</pre>`,
     "</body></html>",
     ""
   ].join("\n");

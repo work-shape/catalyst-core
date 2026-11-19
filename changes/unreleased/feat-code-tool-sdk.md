@@ -11,9 +11,14 @@ section: Added
 - **CLI:** `catalyst tool put <folder>` derives the definition locally, bundles a TypeScript tool
   into one ES module and writes the next draft; `catalyst tool run <folder> --input <json>` runs
   the handler on this computer, and prints its output and the path of a page with its display.
+  `run` checks `--input` against the tool's input schema and holds the handler to the sandbox's
+  limits on its answer, display and requests; it names every simulated call on stderr and counts
+  them in `--json`. An HTML display runs there in a frame without an origin that reaches no host.
+  Both commands run the tool's code on your computer, as you, outside any sandbox.
 - **Connections:** `connections.try_call` (`POST /api/v1/connections/{name}/operations/{operation}/tries`)
   calls a Connection operation as a draft's call: to the test credential where one is set, and
-  simulated where a changing call has none. `catalyst tool run` makes its handler's Connection
+  simulated where a changing call has none. An operation that cannot be called now is refused,
+  not simulated. `catalyst tool run` makes its handler's Connection
   calls with it; it needs `connection.use` and the operation's exposure to outside clients.
 - **Tools:** a code tool's files may hold up to 1 MiB, each and together, so a bundled
   TypeScript tool fits.

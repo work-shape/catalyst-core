@@ -70,7 +70,8 @@ main.py with one @tool function or index.ts that exports one defineTool. 'cataly
 <folder> [--input <json>]' runs its handler on this computer, its Connection calls made on the
 instance with your key as a draft's: to the test credential, simulated where a change has none.
 'catalyst tool put <folder> [--if-revision <n|new>]' reads its schema and description from the
-handler, bundles TypeScript into one module and writes the next draft.
+handler, bundles TypeScript into one module and writes the next draft. Both run the tool's
+code on this computer as you, outside any sandbox: run only a tool whose code you trust.
 Exit codes: 0 done, 1 refused or failed, 2 usage, 3 waits for an approval (nothing changed yet).
 `;
 }

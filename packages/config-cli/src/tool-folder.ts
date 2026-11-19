@@ -2,7 +2,6 @@ import { spawn } from "node:child_process";
 import { lstat, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, sep } from "node:path";
-import { pathToFileURL } from "node:url";
 import {
   TOOL_CODE_LIBRARY,
   loadYamlData,
@@ -123,7 +122,11 @@ function capture(
     let err = "";
     child.stdout.setEncoding("utf8").on("data", (chunk: string) => (out += chunk));
     child.stderr.setEncoding("utf8").on("data", (chunk: string) => (err += chunk));
-    const timer = setTimeout(() => child.kill("SIGKILL"), DESCRIBE_TIMEOUT_MS);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGKILL");
+    }, DESCRIBE_TIMEOUT_MS);
     child.on("error", (error) => {
       clearTimeout(timer);
       reject(
@@ -134,7 +137,13 @@ function capture(
     });
     child.on("close", (code) => {
       clearTimeout(timer);
-      if (code === 0) resolve(out);
+      if (timedOut) {
+        reject(
+          new ToolFolderError(
+            `Reading the tool's handler took longer than ${String(DESCRIBE_TIMEOUT_MS / 1000)} seconds and was stopped.`
+          )
+        );
+      } else if (code === 0) resolve(out);
       else reject(new ToolFolderError(err.trim() || `'${command}' ended with ${String(code)}.`));
     });
   });
@@ -261,42 +270,71 @@ export async function bundleTool(input: {
   }
 }
 
-const codeToolShape = z.looseObject({
-  name: z.string(),
-  description: z.string(),
-  title: z.unknown().optional(),
-  inputJsonSchema: z.record(z.string(), z.unknown()),
-  execute: z.custom<(...args: unknown[]) => unknown>((value) => typeof value === "function")
-});
+/**
+ * What reads a bundled TypeScript tool, in a child process of its own: it imports the bundle,
+ * so the tool's own code runs there, with the handler's environment and the describe timeout,
+ * never in this CLI's process with its key. It writes every export that looks like a tool.
+ */
+const NODE_DESCRIBE = [
+  'import { writeFileSync } from "node:fs";',
+  "import { pathToFileURL } from 'node:url';",
+  "const loaded = await import(pathToFileURL(process.argv[2]).href);",
+  "const tools = [];",
+  "for (const [name, value] of Object.entries(loaded)) {",
+  "  if (value && typeof value === 'object' && typeof value.execute === 'function')",
+  "    tools.push({ export: name, name: value.name, description: value.description, title: value.title, input: value.inputJsonSchema });",
+  "}",
+  "writeFileSync(process.argv[3], JSON.stringify(tools));",
+  ""
+].join("\n");
+
+const describedToolsSchema = z.array(
+  z.object({
+    export: z.string(),
+    name: z.string(),
+    description: z.string(),
+    title: z.unknown().optional(),
+    input: z.record(z.string(), z.unknown())
+  })
+);
 
 async function describeNode(
   folder: string,
-  source: string
+  source: string,
+  env: ConfigCliEnv
 ): Promise<{ described: Described; exportName: string }> {
   const bundle = await bundleTool({ folder, source });
   const directory = await mkdtemp(join(tmpdir(), "catalyst-tool-describe-"));
   try {
     const file = join(directory, "describe.mjs");
+    const reader = join(directory, "reader.mjs");
+    const answer = join(directory, "described.json");
     await writeFile(file, bundle);
-    const module = z.record(z.string(), z.unknown()).parse(await import(pathToFileURL(file).href));
-    const tools = Object.entries(module).flatMap(([name, value]) => {
-      const parsed = codeToolShape.safeParse(value);
-      return parsed.success ? [{ name, tool: parsed.data }] : [];
+    await writeFile(reader, NODE_DESCRIBE);
+    await capture(process.execPath, [reader, file, answer], {
+      cwd: folder,
+      env: toolHandlerEnv(env)
     });
-    const chosen = tools.find((entry) => entry.name === "default") ?? tools[0];
-    if (!chosen || (tools.length > 1 && chosen.name !== "default")) {
+    const parsed = describedToolsSchema.safeParse(JSON.parse(await readFile(answer, "utf8")));
+    if (!parsed.success) {
+      throw new ToolFolderError(
+        `${source} exports a tool without a name, a description or an input schema: make it with defineTool from @work-shape/catalyst-tool-sdk/code.`
+      );
+    }
+    const tools = parsed.data;
+    const chosen = tools.find((entry) => entry.export === "default") ?? tools[0];
+    if (!chosen || (tools.length > 1 && chosen.export !== "default")) {
       throw new ToolFolderError(
         `${source} exports ${tools.length === 0 ? "no tool" : `${String(tools.length)} tools`}: it exports one, made with defineTool from @work-shape/catalyst-tool-sdk/code, best as its default export.`
       );
     }
-    const { tool } = chosen;
     return {
-      exportName: chosen.name,
+      exportName: chosen.export,
       described: {
-        name: tool.name,
-        description: tool.description,
-        ...(tool.title === undefined ? {} : { title: tool.title }),
-        input: tool.inputJsonSchema
+        name: chosen.name,
+        description: chosen.description,
+        ...(chosen.title === undefined || chosen.title === null ? {} : { title: chosen.title }),
+        input: chosen.input
       }
     };
   } finally {
@@ -364,7 +402,7 @@ export async function readToolFolder(
     described = await describePython(folder, env);
     files = await pythonFiles(folder);
   } else {
-    ({ described, exportName } = await describeNode(folder, source));
+    ({ described, exportName } = await describeNode(folder, source, env));
     files =
       options.bundle === false
         ? []
