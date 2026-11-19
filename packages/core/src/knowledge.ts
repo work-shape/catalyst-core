@@ -978,6 +978,12 @@ export interface KnowledgeDocumentEntry {
    */
   sourceId?: string;
   /**
+   * The folder of a synced or Workflow-fed document below its source's boundary, without the
+   * file name, such as `/Projekte/Nord`; `/` at the top. It is the folder part of the `path` a
+   * search match carries. None for a file added by hand.
+   */
+  folder?: string;
+  /**
    * Where the original lives (DS-6b): filled by its source for a synced document, entered by
    * the builder for one added by hand.
    */

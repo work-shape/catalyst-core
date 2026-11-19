@@ -169,8 +169,16 @@ describe("initial and full source import (KB 72, 73)", () => {
     });
     expect(listed.statusCode, listed.body).toBe(200);
     expect(JSON.parse(listed.body)).toMatchObject({
-      documents: [{ id: String(required(document).id), sourceId: SOURCE }]
+      // Its folder below the boundary, here the top: the folder part of its item's path.
+      documents: [{ id: String(required(document).id), sourceId: SOURCE, folder: "/" }]
     });
+    // Below a folder it is the path without the file name, and never the file name itself.
+    await world.sql`update catalyst_kb.source_items set path='/Projekte/Haus A/source.txt'`;
+    const moved = await world.instance.api.call("knowledge_bases.list_documents", {
+      params: { knowledgeBase: KB }
+    });
+    expect(JSON.parse(moved.body)).toMatchObject({ documents: [{ folder: "/Projekte/Haus A" }] });
+    await world.sql`update catalyst_kb.source_items set path='/source.txt'`;
     const response = await world.instance.api.call("knowledge_bases.remove_documents", {
       params: { knowledgeBase: KB },
       payload: { documentIds: [String(required(document).id)] }
