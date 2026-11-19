@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import {
   useEffect,
+  useId,
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
@@ -342,6 +343,7 @@ function SourceItem({
   const unfolded = open ?? (startsOpen || needsPerson);
   const view = status === undefined ? undefined : sourceStateView(status);
   const connectionTitle = choice?.title || entry.connection;
+  const titleId = useId();
   const named = browses && folders.length > 0;
   const searchable = status === undefined ? undefined : sourceItemCounts(status.items).searchable;
   const facts = [
@@ -437,7 +439,7 @@ function SourceItem({
           <IconTile>{web ? <Globe aria-hidden="true" /> : <Folder aria-hidden="true" />}</IconTile>
           <div className="grid min-w-0 flex-1 gap-0.5">
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="min-w-0 text-body font-medium wrap-anywhere">
+              <span id={titleId} className="min-w-0 text-body font-medium wrap-anywhere">
                 {named
                   ? folders.map((folder, index) => (
                       <span key={folder}>
@@ -460,7 +462,12 @@ function SourceItem({
               {sourceScheduleSentence(entry.schedule, defaults, web, translation)}
             </p>
           </div>
-          <DisclosureTrigger className="shrink-0 text-caption" data-knowledge-source-adjust="">
+          <DisclosureTrigger
+            className="shrink-0 text-caption"
+            // Each row's toggle is told apart by the folder or Connection it adjusts.
+            aria-describedby={titleId}
+            data-knowledge-source-adjust=""
+          >
             {t(canWrite ? "knowledgeSources.adjust" : "knowledgeSources.details")}
           </DisclosureTrigger>
         </div>

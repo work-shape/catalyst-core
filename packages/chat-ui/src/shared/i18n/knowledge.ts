@@ -340,8 +340,8 @@ export const knowledge = defineTranslations({
     "knowledge.addUpload": "Upload files",
     "knowledge.addConnect": "Connect a folder",
     "knowledge.settingsTitle": "Settings",
-    "knowledge.settingsHint": "Name, availability, access, test search",
-    "knowledge.settingsHintTables": "Name, availability, access"
+    "knowledge.settingsHint": "Name, availability and more",
+    "knowledge.settingsHintTables": "Name, availability and more"
   },
   de: {
     "knowledge.kind": "Wissen",
@@ -680,9 +680,9 @@ export const knowledge = defineTranslations({
     "knowledge.tallyNoneHintReadOnly":
       "Jemand, der diese Wissensbasis ändern darf, fügt sie hinzu.",
     "knowledge.tallyCount": "{count} Dokumente",
-    "knowledge.tallyFailedOne": "1 konnte nicht gelesen werden. Es steht unten ganz oben.",
+    "knowledge.tallyFailedOne": "1 konnte nicht gelesen werden. Es steht oben in der Liste.",
     "knowledge.tallyFailedMany":
-      "{count} konnten nicht gelesen werden. Sie stehen unten ganz oben.",
+      "{count} konnten nicht gelesen werden. Sie stehen oben in der Liste.",
     "knowledge.tallyPendingOne": "1 wird noch gelesen.",
     "knowledge.tallyPendingMany": "{count} werden noch gelesen.",
     "knowledge.tallySomeFailed": "Einige konnten nicht gelesen werden.",
@@ -690,7 +690,7 @@ export const knowledge = defineTranslations({
     "knowledge.addUpload": "Dateien hochladen",
     "knowledge.addConnect": "Ordner verbinden",
     "knowledge.settingsTitle": "Einstellungen",
-    "knowledge.settingsHint": "Name, Verfügbarkeit, Zugriff, Testsuche",
-    "knowledge.settingsHintTables": "Name, Verfügbarkeit, Zugriff"
+    "knowledge.settingsHint": "Name, Verfügbarkeit und mehr",
+    "knowledge.settingsHintTables": "Name, Verfügbarkeit und mehr"
   }
 });
