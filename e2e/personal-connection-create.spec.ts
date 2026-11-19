@@ -5,6 +5,7 @@ import type { BrowserContext } from "@playwright/test";
 import { availableSamplePort } from "./sample-port.mjs";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
+import { openOwnConnection } from "./connection-page";
 
 // A personal MCP server made in the New connection dialog against the demo's sample MCP server,
 // whose small authorization server signs one demo account in without a page to click. The
@@ -105,6 +106,7 @@ test("en: a personal MCP server is made in the dialog, signed in with the person
     const main = page.getByRole("region", { name: "Studio" });
     await main.getByRole("button", { name: "New connection" }).first().click();
     const dialog = page.getByRole("dialog").first();
+    await openOwnConnection(dialog);
     await dialog.locator('[data-connection-type="mcp"]').getByRole("button").click();
     await dialog.locator('[data-name-with-address-field="name"]').fill("My sample");
     await dialog.locator("[data-name-with-address-fold]").click();

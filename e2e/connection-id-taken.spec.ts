@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 import { ALLOWED_URL } from "./connection-fixtures";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
+import { openOwnConnection } from "./connection-page";
 
 // An earlier attempt left an MCP Connection saved without tools. The list marks it incomplete.
 // A new connection under its Id says the Id is taken and by which Connection, and offers to
@@ -58,6 +59,7 @@ test("de: a taken Id names the Connection that holds it, and the incomplete one 
     // A new MCP server under the same Id.
     await main.getByRole("button", { name: "Neue Verbindung" }).first().click();
     const dialog = page.getByRole("dialog").first();
+    await openOwnConnection(dialog);
     await dialog.locator('[data-connection-type="mcp"]').getByRole("button").click();
     await dialog.locator('[data-name-with-address-field="name"]').fill("Zweiter Versuch");
     await dialog.locator("[data-name-with-address-fold]").click();

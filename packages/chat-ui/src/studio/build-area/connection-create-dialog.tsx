@@ -7,6 +7,9 @@ import {
   Button,
   ConfirmDialog,
   Dialog,
+  Disclosure,
+  DisclosureContent,
+  DisclosureTrigger,
   IconButton,
   Step,
   Steps,
@@ -144,7 +147,13 @@ export function ConnectionCreateFlow({
   start
 }: BuildCreateDialogProps & { source: ConnectionSource; browser?: SignInBrowser }) {
   const { locale, t } = useTranslation();
-  const allOffers = source.useConnectorTypes?.() ?? [];
+  const readOffers = source.useConnectorTypes?.();
+  const allOffers = readOffers ?? [];
+  // Whether the types are read: until then the dialog does not know what else it offers.
+  const offersRead = source.useConnectorTypes === undefined || readOffers !== undefined;
+  // "Your own connection" as the reader left it; untouched, it is open only where the
+  // instance offers nothing with a name.
+  const [ownOpen, setOwnOpen] = useState<boolean>();
   const entries = entriesToShow(source.useCatalogueEntries?.() ?? []);
   // An entry's card stands in for the card of a type it names.
   const replaced = typesWithEntries(entries);
@@ -924,44 +933,64 @@ export function ConnectionCreateFlow({
       case "entry":
         return null;
       case "pick":
-        // The catalogue's services stand on the Connections page itself (CAT-PAGE): here only
-        // what a person connects of their own.
+        // The catalogue's services stand on the Connections page itself (CAT-PAGE): here the
+        // types with a form of their own come first, by name. An MCP server and a REST API,
+        // which only a developer sets up, wait folded under one quiet line; where the instance
+        // offers nothing else, they are what the dialog is for and stand open.
         return (
           <div
-            className="grid min-w-0 gap-2"
+            className="grid min-w-0 gap-3"
             role="group"
             aria-label={t("connectionCreate.typesLabel")}
           >
-            <ChoiceCard
-              icon={<Plug aria-hidden="true" />}
-              title={t("connectionCreate.mcpTitle")}
-              text={t("connectionCreate.mcpText")}
-              onChoose={() => pick("mcp")}
-              data-connection-type="mcp"
-            />
-            <ChoiceCard
-              icon={<Code aria-hidden="true" />}
-              title={t("connectionCreate.restTitle")}
-              text={t("connectionCreate.restText")}
-              onChoose={() => pick("http_api")}
-              data-connection-type="http_api"
-            />
-            {offers.map((offer) => (
-              <ChoiceCard
-                key={offer.type}
-                icon={
-                  offer.documentSource ? (
-                    <FileText aria-hidden="true" />
-                  ) : (
-                    <Plug aria-hidden="true" />
-                  )
-                }
-                title={offerText(offer.title, locale)}
-                text={offerText(offer.description, locale)}
-                onChoose={() => setStage({ step: "typed", offer })}
-                data-connection-type={offer.type}
-              />
-            ))}
+            {offers.length === 0 ? null : (
+              <div className="grid min-w-0 gap-2">
+                {offers.map((offer) => (
+                  <ChoiceCard
+                    key={offer.type}
+                    icon={
+                      offer.documentSource ? (
+                        <FileText aria-hidden="true" />
+                      ) : (
+                        <Plug aria-hidden="true" />
+                      )
+                    }
+                    title={offerText(offer.title, locale)}
+                    text={offerText(offer.description, locale)}
+                    onChoose={() => setStage({ step: "typed", offer })}
+                    data-connection-type={offer.type}
+                  />
+                ))}
+              </div>
+            )}
+            <Disclosure
+              open={ownOpen ?? (offersRead && offers.length === 0)}
+              onOpenChange={setOwnOpen}
+              data-connection-own=""
+            >
+              <DisclosureTrigger data-connection-own-trigger="">
+                {t("connectionCreate.ownTitle")}
+              </DisclosureTrigger>
+              {/* Kept in the dialog while folded, so its cards are found by their type. */}
+              <DisclosureContent keepMounted>
+                <div className="grid min-w-0 gap-2 pt-1">
+                  <ChoiceCard
+                    icon={<Plug aria-hidden="true" />}
+                    title={t("connectionCreate.mcpTitle")}
+                    text={t("connectionCreate.mcpText")}
+                    onChoose={() => pick("mcp")}
+                    data-connection-type="mcp"
+                  />
+                  <ChoiceCard
+                    icon={<Code aria-hidden="true" />}
+                    title={t("connectionCreate.restTitle")}
+                    text={t("connectionCreate.restText")}
+                    onChoose={() => pick("http_api")}
+                    data-connection-type="http_api"
+                  />
+                </div>
+              </DisclosureContent>
+            </Disclosure>
           </div>
         );
       case "form":

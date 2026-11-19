@@ -5,6 +5,9 @@ import {
   Button,
   Checkbox,
   Chip,
+  Disclosure,
+  DisclosureContent,
+  DisclosureTrigger,
   EmptyState,
   List,
   Switch,
@@ -25,10 +28,11 @@ import {
   withoutOperation
 } from "./connection-form-model";
 
-// The accepted operations of a Connection: what each does, what it calls and takes, who may call
-// it and whether it is callable now. On a Connection made on the instance, a reader who may
-// change it switches an operation off or on, takes it off here, or accepts the new description
-// of one the server changed.
+// The accepted operations of a Connection, as what agents may do with it: a row names one, says
+// whether it reads or changes, and what it does. What it calls and takes, who else may call it
+// and the way to take it off are folded under "Details". On a Connection made on the instance,
+// a reader who may change it switches an operation off or on in its row, or accepts the new
+// description of one the server changed.
 
 const OPERATION_STATUS: Record<
   ConnectionOperationDetail["status"],
@@ -99,8 +103,48 @@ export function EditableOperations({
       <ConnectionOperations
         operations={operations}
         config={asset.config}
-        actions={(operation) => (
-          <div className="flex flex-wrap items-center gap-2">
+        control={(operation) => (
+          <Switch
+            aria-label={t("connectionPage.operationSwitch", {
+              name: operationTitle(operation.name)
+            })}
+            checked={operation.enabled}
+            disabled={blocked}
+            data-connection-enabled={operation.name}
+            onCheckedChange={(enabled) => {
+              write
+                .write(
+                  `enabled:${operation.name}`,
+                  withOperationEnabled(asset.config, operation.name, enabled)
+                )
+                .catch(() => undefined);
+            }}
+          />
+        )}
+        review={(operation) =>
+          operation.status === "needs_review" && operation.discoveredFingerprint ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="justify-self-start"
+              disabled={blocked}
+              loading={write.saving === `review:${operation.name}`}
+              onClick={() => {
+                const fingerprint = operation.discoveredFingerprint ?? "";
+                write
+                  .write(
+                    `review:${operation.name}`,
+                    withReviewedOperation(asset.config, operation.name, fingerprint)
+                  )
+                  .catch(() => undefined);
+              }}
+            >
+              {t("connections.acceptNewDescription")}
+            </Button>
+          ) : null
+        }
+        more={(operation) => (
+          <div className="grid min-w-0 justify-items-start gap-3">
             <div
               role="group"
               aria-label={t("connections.operationExposure")}
@@ -135,42 +179,6 @@ export function EditableOperations({
                 />
               ))}
             </div>
-            {operation.status === "needs_review" && operation.discoveredFingerprint ? (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={blocked}
-                loading={write.saving === `review:${operation.name}`}
-                onClick={() => {
-                  const fingerprint = operation.discoveredFingerprint ?? "";
-                  write
-                    .write(
-                      `review:${operation.name}`,
-                      withReviewedOperation(asset.config, operation.name, fingerprint)
-                    )
-                    .catch(() => undefined);
-                }}
-              >
-                {t("connections.acceptNewDescription")}
-              </Button>
-            ) : null}
-            <Switch
-              className="ml-auto"
-              aria-label={t("connectionPage.operationSwitch", {
-                name: operationTitle(operation.name)
-              })}
-              checked={operation.enabled}
-              disabled={blocked}
-              data-connection-enabled={operation.name}
-              onCheckedChange={(enabled) => {
-                write
-                  .write(
-                    `enabled:${operation.name}`,
-                    withOperationEnabled(asset.config, operation.name, enabled)
-                  )
-                  .catch(() => undefined);
-              }}
-            />
             <Button
               size="sm"
               variant="ghost"
@@ -196,23 +204,49 @@ export function EditableOperations({
 export function ConnectionOperations({
   operations,
   config,
-  actions
+  control,
+  review,
+  more
 }: {
   operations: ConnectionOperationDetail[];
   /** The Connection's definition: a REST API declares there what each operation sends. */
   config: Record<string, unknown>;
-  /** What the reader may do to one operation, below it. */
-  actions?: (operation: ConnectionOperationDetail) => ReactNode;
+  /** The one control of a row, at its end: the switch that turns the operation off or on. */
+  control?: (operation: ConnectionOperationDetail) => ReactNode;
+  /** What the reader does about an operation that waits, under the sentence that says so. */
+  review?: (operation: ConnectionOperationDetail) => ReactNode;
+  /** What else the reader may do to one operation, folded under Details. */
+  more?: (operation: ConnectionOperationDetail) => ReactNode;
 }) {
   const { locale, t } = useTranslation();
   if (operations.length === 0) {
     return <EmptyState layout="inline">{t("connections.operationsEmpty")}</EmptyState>;
   }
   return (
-    <List aria-label={t("connections.operationsTitle")}>
+    <List aria-label={t("connectionPage.agentsMayTitle")}>
       {operations.map((operation) => {
         // An operation that is switched off is disabled, whatever the catalog says of it.
         const status = OPERATION_STATUS[operation.enabled ? operation.status : "disabled"];
+        const shown = operation.enabled ? operation.status : "disabled";
+        // Callable by agents alone is what the section says of every row: only another answer
+        // is said in the row itself.
+        const agentsOnly = operation.exposure.length === 1 && operation.exposure[0] === "agent";
+        const exposure = (
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-caption text-muted-foreground">
+            {operation.exposure.length === 0 ? (
+              t("connections.exposureNone")
+            ) : (
+              <>
+                <span>{t("connections.operationExposure")}</span>
+                {operation.exposure.map((surface) => (
+                  <Chip key={surface} size="sm">
+                    {t(EXPOSURE_LABELS[surface])}
+                  </Chip>
+                ))}
+              </>
+            )}
+          </div>
+        );
         return (
           <li
             key={operation.name}
@@ -230,9 +264,15 @@ export function ConnectionOperations({
                     : "connections.effectReading"
                 )}
               </Badge>
-              <Badge tone={status.tone} dot className="ml-auto">
-                {t(status.label)}
-              </Badge>
+              <span className="ml-auto flex shrink-0 items-center gap-2">
+                {/* A row that is ready says nothing of it: only what is not ready is named. */}
+                {shown === "ready" ? null : (
+                  <Badge tone={status.tone} dot data-connection-operation-status={shown}>
+                    {t(status.label)}
+                  </Badge>
+                )}
+                {control?.(operation)}
+              </span>
             </div>
             {operation.description ? (
               // A description to accept again is shown whole: the model of an agent that
@@ -247,42 +287,38 @@ export function ConnectionOperations({
                 {operation.description}
               </p>
             ) : null}
-            <OperationDetails operation={operation} config={config} />
-            <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-caption text-muted-foreground">
-              {operation.exposure.length === 0 ? (
-                t("connections.exposureNone")
-              ) : (
-                <>
-                  <span>{t("connections.operationExposure")}</span>
-                  {operation.exposure.map((exposure) => (
-                    <Chip key={exposure} size="sm">
-                      {t(EXPOSURE_LABELS[exposure])}
-                    </Chip>
-                  ))}
-                </>
-              )}
-            </div>
-            {operation.paging ? (
-              <p
-                data-connection-paging={operation.name}
-                className="text-caption break-words text-muted-foreground"
-              >
-                {t("connections.paging")} {operationPagingText(operation.paging, t, locale)}
-              </p>
-            ) : null}
+            {agentsOnly ? null : exposure}
             {status.text ? (
-              <p className="text-caption text-muted-foreground">
-                {t(status.text)}
-                {operation.status === "needs_review" && operation.discoveredFingerprint ? (
-                  <>
-                    {" "}
-                    {t("connections.statusNeedsReviewFingerprint")}{" "}
-                    <code className="font-mono break-all">{operation.discoveredFingerprint}</code>
-                  </>
-                ) : null}
-              </p>
+              <p className="text-caption text-muted-foreground">{t(status.text)}</p>
             ) : null}
-            {actions?.(operation)}
+            {review?.(operation)}
+            <Disclosure>
+              <DisclosureTrigger data-connection-operation-more={operation.name}>
+                {t("connectionPage.operationMore")}
+              </DisclosureTrigger>
+              {/* Kept in the page while folded: what it holds is found by its name. */}
+              <DisclosureContent keepMounted>
+                <div className="grid min-w-0 gap-3 pb-1">
+                  <OperationDetails operation={operation} config={config} />
+                  {agentsOnly && more === undefined ? exposure : null}
+                  {operation.paging ? (
+                    <p
+                      data-connection-paging={operation.name}
+                      className="text-caption break-words text-muted-foreground"
+                    >
+                      {t("connections.paging")} {operationPagingText(operation.paging, t, locale)}
+                    </p>
+                  ) : null}
+                  {operation.status === "needs_review" && operation.discoveredFingerprint ? (
+                    <p className="text-caption text-muted-foreground">
+                      {t("connections.statusNeedsReviewFingerprint")}{" "}
+                      <code className="font-mono break-all">{operation.discoveredFingerprint}</code>
+                    </p>
+                  ) : null}
+                  {more?.(operation)}
+                </div>
+              </DisclosureContent>
+            </Disclosure>
           </li>
         );
       })}

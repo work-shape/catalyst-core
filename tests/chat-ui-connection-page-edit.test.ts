@@ -104,10 +104,11 @@ describe("The switch of an operation (CONN-PAGE 2)", () => {
     expect(toggle?.getAttribute("role")).toBe("switch");
     expect(toggle?.getAttribute("aria-checked")).toBe("true");
     expect(toggle?.getAttribute("aria-label")).toBe("Revenue by month can be called");
-    // It stands in the same row as Remove.
-    expect(
-      toggle?.parentElement?.querySelector('[data-connection-remove="revenue_by_month"]')
-    ).not.toBeNull();
+    // It stands in the row itself; Remove waits in the same row, folded under Details.
+    const row = toggle?.closest('[data-connection-operation="revenue_by_month"]');
+    const more = row?.querySelector('[data-connection-operation-more="revenue_by_month"]');
+    expect(more?.getAttribute("aria-expanded")).toBe("false");
+    expect(row?.querySelector('[data-connection-remove="revenue_by_month"]')).not.toBeNull();
     await act(async () => toggle?.click());
     await vi.waitFor(() => expect(puts).toHaveLength(1), WAIT);
     expect(puts[0]?.operations).toEqual([{ ...OPERATIONS[0], enabled: false }, OPERATIONS[1]]);

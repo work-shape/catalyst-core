@@ -9,6 +9,7 @@ import {
   removeGrantsOn
 } from "./connection-fixtures";
 import { expect, test } from "./test";
+import { openConnectionSettings } from "./connection-page";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
@@ -729,6 +730,7 @@ test("a Connection says who may use it: the roles first, then each person with t
     // The administrator manages users: the roles, then the person with what they may do.
     await page.setViewportSize(WIDE);
     await page.goto(`/build/connections/${connection.name}`);
+    await openConnectionSettings(page);
     const section = page.locator('[id="access"]');
     await expect(section.getByText("Who may use it", { exact: true })).toBeVisible();
     const rows = section.locator("[data-holder-kind]");
@@ -747,6 +749,7 @@ test("a Connection says who may use it: the roles first, then each person with t
 
     // The person reads the page and manages no users: the built-in roles, and no one counted.
     await reader.goto(`/build/connections/${connection.name}`);
+    await openConnectionSettings(reader);
     const readerSection = reader.locator('[id="access"]');
     await expect(readerSection.getByText("Who may use it", { exact: true })).toBeVisible();
     await expect(readerSection.locator('[data-holder-kind="role"]').first()).toBeVisible();

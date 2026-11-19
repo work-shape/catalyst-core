@@ -8,6 +8,7 @@ import { z } from "zod";
 import { availableSamplePort } from "./sample-port.mjs";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
+import { openConnectionSettings } from "./connection-page";
 
 // Personal connections (CS-9a-UI) against the demo's sample MCP server, whose small
 // authorization server signs one demo account in without a page to click. The administrator
@@ -205,6 +206,7 @@ test("de: a person connects their own account, the admin sees and revokes it, an
 
     // The administrator finds the person under People and revokes the sign-in.
     await page.goto(`/build/connections/${id}`);
+    await openConnectionSettings(page);
     const people = page.locator("[data-connection-people]");
     const row = people.locator(`[data-person="${personId}"]`);
     await expect(row).toBeVisible();
