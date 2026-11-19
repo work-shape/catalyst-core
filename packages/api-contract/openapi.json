@@ -26983,6 +26983,9 @@
                           "sourceId": {
                             "type": "string"
                           },
+                          "folder": {
+                            "type": "string"
+                          },
                           "originLink": {
                             "type": "string"
                           },

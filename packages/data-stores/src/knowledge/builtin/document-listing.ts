@@ -34,6 +34,7 @@ const documentRow = z.object({
   failure_code: z.string().nullable(),
   page_count: z.number().int().nullable(),
   source_id: z.string().nullable(),
+  source_path: z.string().nullable(),
   origin_link: z.string().nullable(),
   added_at: z.string(),
   updated_at: z.string(),
@@ -110,7 +111,7 @@ export async function listKnowledgeDocuments(
   const rows = z.array(documentRow).parse(
     await sql.run(
       `select d.id, d.managed_file_id, d.file_name, d.title, c.format, c.state,
-               c.failure_code, c.page_count, s.source_id, d.origin_link, d.fields_pending,
+               c.failure_code, c.page_count, s.source_id, s.path as source_path, d.origin_link, d.fields_pending,
                d.fields_pending_reason,
                to_char(d.added_at at time zone 'UTC', ${ISO_UTC}) as added_at,
                to_char(c.updated_at at time zone 'UTC', ${ISO_UTC}) as updated_at,
@@ -139,6 +140,14 @@ export async function listKnowledgeDocuments(
 
 const waitCodeSchema = z.enum(KNOWLEDGE_DOCUMENT_WAIT_CODES);
 
+/**
+ * The folder of a source item's path: all of it before the file name, `/` at the top. The path
+ * is relative to the source's boundary, so the folder names nothing above what is synced.
+ */
+function knowledgeDocumentFolder(path: string): string {
+  return path.slice(0, path.lastIndexOf("/")) || "/";
+}
+
 function entryOf(row: z.infer<typeof documentRow>): KnowledgeDocumentEntry {
   const code = knowledgeDocumentFailureCodeSchema.safeParse(row.failure_code);
   const waitCode = waitCodeSchema.safeParse(row.failure_code);
@@ -159,6 +168,7 @@ function entryOf(row: z.infer<typeof documentRow>): KnowledgeDocumentEntry {
       : {}),
     ...(row.state === "pending" && waitCode.success ? { waitCode: waitCode.data } : {}),
     ...(row.source_id === null ? {} : { sourceId: row.source_id }),
+    ...(row.source_path === null ? {} : { folder: knowledgeDocumentFolder(row.source_path) }),
     ...(row.origin_link === null ? {} : { originLink: row.origin_link }),
     addedAt: row.added_at,
     updatedAt: row.updated_at
