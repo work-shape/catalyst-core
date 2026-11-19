@@ -222,7 +222,6 @@ export const knowledge = defineTranslations({
       "Processing is waiting: the knowledge base service is not responding.",
     "knowledge.documentIndexed": "Searchable",
     "knowledge.documentFailed": "Failed",
-    "knowledge.originalReleased": "Original is stored at the source",
     "knowledge.fieldsPending": "Fields pending",
     "knowledge.fieldsPendingMonthlyBudget":
       "Fields are filled in once the budget resets or is raised",
@@ -567,7 +566,6 @@ export const knowledge = defineTranslations({
     "knowledge.processingWaiting": "Verarbeitung wartet auf den Dienst für Wissensbasen.",
     "knowledge.documentIndexed": "Durchsuchbar",
     "knowledge.documentFailed": "Fehlgeschlagen",
-    "knowledge.originalReleased": "Original liegt in der Quelle",
     "knowledge.fieldsPending": "Felder ausstehend",
     "knowledge.fieldsPendingMonthlyBudget":
       "Felder werden gefüllt, sobald das Budget zurückgesetzt oder erhöht wird",

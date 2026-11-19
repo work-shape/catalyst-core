@@ -1,10 +1,9 @@
 import { ExternalLink, FolderSync, Link2, Plus, RotateCcw, Trash2, Upload } from "lucide-react";
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   Badge,
   Button,
   Checkbox,
-  Chip,
   ConfirmDialog,
   Dialog,
   EmptyState,
@@ -45,6 +44,7 @@ import type {
   KnowledgeDocument,
   KnowledgeOpenableFile
 } from "./knowledge-base-source";
+import { ReleasedSourcesContext } from "./knowledge-base-sources";
 import { KnowledgeUploadSection } from "./knowledge-base-upload";
 import { uploadFormatList, uploadFormats } from "./knowledge-upload-model";
 import { formatFileBytes } from "./skill-form-model";
@@ -156,6 +156,19 @@ export function KnowledgeDocuments({
     (state.data.status === "preparing" || state.data.status === "unchecked");
   const storeReady = state.status === "ready" && !preparing;
   const read = source.useDocuments(knowledgeBase, storeReady);
+  // The sources whose documents keep no copy here: their rows say so once, for all of them.
+  const documentsRead = read.status === "ready" ? read.data.documents : undefined;
+  const releasedSources = useMemo(
+    () =>
+      new Set(
+        (documentsRead ?? []).flatMap((document) =>
+          document.sourceId !== undefined && document.originalStatus === "released"
+            ? [document.sourceId]
+            : []
+        )
+      ),
+    [documentsRead]
+  );
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState<number>();
   const [retrying, setRetrying] = useState<string>();
@@ -298,7 +311,9 @@ export function KnowledgeDocuments({
       ) : null}
       {/* The sources and the documents are one list, in one frame; with neither there is none. */}
       <div className="min-w-0 overflow-hidden rounded-md border empty:hidden">
-        {sources}
+        <ReleasedSourcesContext.Provider value={releasedSources}>
+          {sources}
+        </ReleasedSourcesContext.Provider>
         {preparing ? null : (
           <ReadState
             read={
@@ -426,9 +441,16 @@ export function KnowledgeDocuments({
   );
 }
 
+/** A folder path as a row names it: `/Projects/North` reads `Projects / North`; the top, nothing. */
+function folderWords(folder: string | undefined): string | undefined {
+  const names = folder?.split("/").filter((name) => name !== "") ?? [];
+  return names.length === 0 ? undefined : names.join(" / ");
+}
+
 /**
- * One document: its name, format and size, when it was added, its state, whether its
- * original is stored at the source, and whether its fields wait, with the reason.
+ * One document: its name, the folder it lies in at its source, its format and size, when it
+ * was added, its state, and whether its fields wait, with the reason. The row is one line of
+ * name and one of facts; only what needs the reader, a failure or waiting fields, takes more.
  */
 function DocumentRow({
   document,
@@ -474,14 +496,33 @@ function DocumentRow({
           limit: numbers.format(pendingReason.maxTokensPerDocument)
         })
       : t("knowledge.fieldsPendingMonthlyBudget");
-  // A synced document whose original stays at its source keeps no copy of the file here.
   // Only a web address is shown as a link, so opening it never runs script.
   const origin = safeOriginLink(document.originLink);
-  const description = [
-    summary,
-    ...(document.originalStatus === "released" ? [t("knowledge.originalReleased")] : []),
-    ...(fieldsPending ? [fieldsPendingText] : [])
-  ].join(" · ");
+  // Two files of one name from two folders are told apart by the folder.
+  const folder = folderWords(document.folder);
+  const words = [summary, ...(fieldsPending ? [fieldsPendingText] : [])].join(" · ");
+  // A reason is a sentence and takes the lines it needs; the facts stay on one line.
+  const sentence = document.state === "failed" || fieldsPending;
+  const folderName =
+    folder === undefined ? null : (
+      <span className="min-w-0 truncate" title={folder} data-knowledge-document-folder="">
+        {folder}
+      </span>
+    );
+  const description = sentence ? (
+    <>
+      {folderName === null ? null : <span className="flex min-w-0">{folderName}</span>}
+      {words}
+    </>
+  ) : folderName === null ? (
+    words
+  ) : (
+    // The folder gives way first: the format and the size are never cut.
+    <span className="flex min-w-0 gap-1">
+      {folderName}
+      <span className="shrink-0">· {words}</span>
+    </span>
+  );
   return (
     <ListRow
       data-knowledge-document={document.id}
@@ -490,7 +531,7 @@ function DocumentRow({
       title={title}
       description={description}
       data-knowledge-fields-pending={fieldsPending ? "" : undefined}
-      descriptionWraps="always"
+      descriptionWraps={sentence ? "always" : false}
       chips={
         <>
           {/* A searchable document is the rule and says nothing of it. */}
@@ -504,30 +545,32 @@ function DocumentRow({
             </Badge>
           )}
           {fieldsPending ? <Badge tone="neutral">{t("knowledge.fieldsPending")}</Badge> : null}
-          {origin ? (
-            <span title={t("knowledge.originLinkOpen", { name: title })}>
-              <Chip
-                size="sm"
-                leading={<ExternalLink aria-hidden="true" />}
-                href={origin.href}
-                onClick={(event) => {
-                  event.preventDefault();
-                  openOriginLink(origin.href);
-                }}
-                className="max-w-48"
-              >
-                <span data-knowledge-origin-link={document.id}>{origin.host}</span>
-              </Chip>
-            </span>
-          ) : null}
         </>
       }
       time={formatMomentShort(document.addedAt, locale)}
       // What a failed document needs stays in view; the rest shows with the pointer or the focus.
       actionsVisible={document.state === "failed"}
       actions={
-        onRetry || onRemove || onLink ? (
+        origin || onRetry || onRemove || onLink ? (
           <>
+            {origin ? (
+              <Button asChild variant="ghost" size="icon">
+                <a
+                  href={origin.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={t("knowledge.originLinkOpen", { name: title })}
+                  title={t("knowledge.originLinkOpen", { name: title })}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    openOriginLink(origin.href);
+                  }}
+                  data-knowledge-origin-link={document.id}
+                >
+                  <ExternalLink aria-hidden="true" />
+                </a>
+              </Button>
+            ) : null}
             {onLink ? (
               <Button
                 variant="ghost"

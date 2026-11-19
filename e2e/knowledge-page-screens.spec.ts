@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { Page } from "@playwright/test";
+import { z } from "zod";
 import { chooseAddDocuments, openKnowledgeSettings } from "./knowledge-page";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, takeTurn, test } from "./test";
@@ -23,6 +24,11 @@ const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-supera
 /** The API with `knowledge` on listens beside the suite's own, on a port no other spec takes. */
 const knowledgeApiPort = Number(new URL(apiBaseUrl).port) + 31;
 const knowledgeApiUrl = `http://${host}:${knowledgeApiPort}`;
+
+/** The list of documents as far as the pictures change it; the rest passes through. */
+const listSchema = z.looseObject({
+  documents: z.array(z.looseObject({ fileName: z.string() }))
+});
 
 const SHOTS = resolve("test-results/kb-page");
 const TITLE = "Teamhandbuch";
@@ -217,6 +223,32 @@ test.describe("pictures of the page of a Knowledge Base of documents", () => {
         FILES.length,
         { timeout: 120000 }
       );
+
+      // Two of the documents are shown as a synced source would list them: one name in two
+      // folders, each with its original. Only the answered list is changed, not the store.
+      const twins: Record<string, string> = {
+        "urlaub.txt": "/Projekte/Haus A",
+        "homeoffice.txt": "/Projekte/Haus B"
+      };
+      await page.route(`${apiBaseUrl}/api/v1/knowledge-bases/${name}/documents*`, async (route) => {
+        if (route.request().method() !== "GET") return route.fallback();
+        const response = await route.fetch({
+          url: route.request().url().replace(apiBaseUrl, knowledgeApiUrl)
+        });
+        const body = listSchema.parse(await response.json());
+        const documents = body.documents.map((entry) => {
+          const folder = twins[entry.fileName];
+          return folder === undefined
+            ? entry
+            : {
+                ...entry,
+                title: "Grundriss.txt",
+                folder,
+                originLink: `https://files.example.test${encodeURI(folder)}/Grundriss.txt`
+              };
+        });
+        await route.fulfill({ response, json: { ...body, documents } });
+      });
 
       for (const theme of ["light", "dark"] as const) {
         await view(page, name, theme);
