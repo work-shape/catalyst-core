@@ -185,41 +185,33 @@ function readableFileName(fileName: string): string {
   return name || fileName;
 }
 
-/** The start and the end of a long name the chip keeps, in characters. */
-const NAME_HEAD = 12;
+/** The end of a long name the chip always shows, in characters. */
 const NAME_TAIL = 24;
-/** How far the start and the end reach on to keep a word whole. */
+/** How far the end reaches back to keep a word whole. */
 const NAME_WORD_REACH = 8;
 
 /**
- * A long name shortened in its middle: files of one project often share a long start, and the
- * end tells them apart ("… Geschossplan 1-OG 2025-10-14"). The start and the end keep a word
- * whole where it ends or starts close by. A name that fits stays whole.
+ * A long name split where the chip shortens it: files of one project often share a long start,
+ * and the end tells them apart ("… Geschossplan 1-OG 2025-10-14"). The start gives way with an
+ * ellipsis as the chip narrows; the end, about its last 24 characters from the start of a word,
+ * always shows. A short name is not split.
  */
-function shortFileName(name: string): string {
+function splitFileName(name: string): { start: string; end: string } | undefined {
   const characters = [...name];
-  let headEnd = NAME_HEAD;
-  let tailStart = characters.length - NAME_TAIL;
-  if (tailStart - headEnd <= 3) return name;
+  let at = characters.length - NAME_TAIL;
+  if (at <= NAME_TAIL / 2) return undefined;
   const space = (index: number) => characters[index] === " ";
-  // The start runs on to the end of its word, or stops at the space before it.
-  const wordEnd = characters.findIndex((_, index) => index >= headEnd && space(index));
-  if (wordEnd !== -1 && wordEnd - headEnd <= NAME_WORD_REACH) headEnd = wordEnd;
-  else {
-    const before = characters.slice(0, headEnd).lastIndexOf(" ");
-    if (before > 0) headEnd = before;
-  }
   // The end reaches back to the start of its word, or starts at the next word.
-  const wordStart = characters.slice(0, tailStart).lastIndexOf(" ") + 1;
-  if (wordStart > 0 && tailStart - wordStart <= NAME_WORD_REACH) tailStart = wordStart;
-  else if (!space(tailStart - 1)) {
-    const next = characters.findIndex((_, index) => index >= tailStart && space(index));
-    if (next !== -1 && next < characters.length - 1) tailStart = next + 1;
+  const wordStart = characters.slice(0, at).lastIndexOf(" ") + 1;
+  if (wordStart > 0 && at - wordStart <= NAME_WORD_REACH) at = wordStart;
+  else if (!space(at - 1)) {
+    const next = characters.findIndex((_, index) => index >= at && space(index));
+    if (next !== -1 && next < characters.length - 1) at = next + 1;
   }
-  if (tailStart - headEnd <= 3) return name;
-  const head = characters.slice(0, headEnd).join("").trimEnd();
-  const tail = characters.slice(tailStart).join("").trimStart();
-  return `${head} … ${tail}`;
+  return {
+    start: characters.slice(0, at).join("").trimEnd(),
+    end: characters.slice(at).join("").trimStart()
+  };
 }
 
 /** The file stores whose name the reader knows better than their address. */
@@ -267,8 +259,8 @@ function KnowledgeDocumentChip({
   const places = knowledgePlaces(t, document.fileName, document.places);
   const asOf = knowledgeCitationDate(t, locale, document);
   const origin = safeOriginLink(document.originLink);
-  const readable = readableFileName(document.fileName);
-  const name = shortFileName(readable);
+  const name = readableFileName(document.fileName);
+  const split = splitFileName(name);
   const stateWords =
     state === "removed"
       ? t("knowledge.citationRemoved")
@@ -387,14 +379,14 @@ function KnowledgeDocumentChip({
           </DropdownMenu>
         }
       >
-        {name === readable ? (
+        {split === undefined ? (
           name
         ) : (
-          // A screen reader reads the name whole, not its shortened form.
-          <>
-            <span aria-hidden="true">{name}</span>
-            <span className="sr-only">{readable}</span>
-          </>
+          // The start shortens with an ellipsis, the end that tells files apart stays whole.
+          <span className="flex min-w-0">
+            <span className="min-w-0 truncate">{split.start}</span>
+            <span className="shrink-0 whitespace-pre">{` ${split.end}`}</span>
+          </span>
         )}
       </Chip>
     </span>
