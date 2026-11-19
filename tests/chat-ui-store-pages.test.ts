@@ -344,14 +344,15 @@ describe("publishing a Data Store's later draft", () => {
 
     const pending = page.querySelector("[data-data-store-pending]");
     expect(pending).not.toBeNull();
-    const numbers = [...(pending?.querySelectorAll("[data-data-store-migration]") ?? [])].map(
-      (row) => row.getAttribute("data-data-store-migration")
+    // The notice says what publishing does; the migrations it applies wait under Settings.
+    const numbers = [...page.querySelectorAll("[data-data-store-migration]")].map((row) =>
+      row.getAttribute("data-data-store-migration")
     );
     expect(numbers).toEqual(["2"]);
-    expect(pending?.querySelector("[data-data-store-migration-sql]")?.textContent).toContain(
+    expect(page.querySelector("[data-data-store-migration-sql]")?.textContent).toContain(
       "alter table leads add email text;"
     );
-    expect(pending?.textContent).not.toContain("create table leads");
+    expect(page.textContent).not.toContain("create table leads");
 
     await act(async () =>
       page.querySelector<HTMLButtonElement>("[data-data-store-publish]")?.click()
@@ -948,9 +949,8 @@ describe("two Data Stores' pages on one query client", () => {
       if (change > 0) await act(async () => go("leads"));
       const leads = await shownSql("Leads");
       // The publish applies the later migration alone.
-      expect(required(container.querySelector("[data-data-store-pending]")).textContent).toContain(
-        "alter table leads add email text;"
-      );
+      expect(container.querySelector("[data-data-store-pending]")).not.toBeNull();
+      expect(leads).toContain("alter table leads add email text;");
       expect(leads).not.toContain("create table leads");
       expect(leads).not.toContain("contacts");
       if (change === 2) break;
