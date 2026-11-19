@@ -311,6 +311,14 @@ describe("the Documents section", () => {
     expect(document.querySelector("[data-knowledge-sync-notice]")?.textContent).toBe(
       "Die Synchronisierung läuft."
     );
+    // One of several refuses: the ones that started are said with what stopped the other.
+    syncSource.mockImplementation(async (_knowledgeBase, id) =>
+      id === "archiv" ? { ok: false, refused: true, message: undefined } : { ok: true, data: {} }
+    );
+    await act(async () => sync()?.click());
+    expect(document.querySelector("[data-knowledge-sync-notice]")?.textContent).toBe(
+      "1 von 2 Quellen werden synchronisiert. Bei den anderen: Du darfst diese Wissensbasis nicht ändern."
+    );
     // No document yet: they come with the sync, not by hand.
     shown([]);
     expect(document.querySelector("[data-knowledge-tally]")?.textContent).toContain(
@@ -335,6 +343,16 @@ describe("the Documents section", () => {
     shown(fromSource, { useSources: () => ({ status: "loading" }) });
     expect(sync()).toBeNull();
     expect(add()).toBeNull();
+    // The same while the documents are read: whether one was added by hand is not known yet.
+    shown(fromSource, { useDocuments: () => ({ status: "loading" }) });
+    expect(sync()).toBeNull();
+    expect(add()).toBeNull();
+    // Documents that could not be read leave it unknown, so Add documents stays.
+    shown(fromSource, {
+      useDocuments: () => ({ status: "failed", message: undefined, retry: () => undefined })
+    });
+    expect(add()).not.toBeNull();
+    expect(sync()).not.toBeNull();
     // An instance that offers no sync keeps Add documents too.
     shown(fromSource, { syncSource: undefined });
     expect(sync()).toBeNull();

@@ -267,7 +267,7 @@ export function KnowledgeSourceSchedule({
                   <ChevronDown aria-hidden="true" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="end" size="md">
+              <PopoverContent align="end" size="md" aria-label={t("knowledgeSources.syncFull")}>
                 <div className="grid min-w-0 gap-3">
                   <ScheduleField
                     label={t("knowledgeSources.syncFullWhen")}
@@ -275,7 +275,7 @@ export function KnowledgeSourceSchedule({
                     value={fullForm}
                     readOnly={readOnly}
                     zonePicker={false}
-                    error={incomplete ? t("knowledgeSources.syncFullIncomplete") : undefined}
+                    // What is missing is said once, in the row under its label.
                     onChange={(value) => {
                       const cron = scheduleCron(value);
                       setShown({ cron: cron ?? fullCron, value });
@@ -334,7 +334,7 @@ function fullWords(
       if (form.days.length === 0) return t("knowledgeSources.whenChoose");
       return t("knowledgeSources.whenWeek", {
         // 5 January 2026 is a Monday, the field's day 1.
-        days: new Intl.ListFormat(locale, { style: "narrow", type: "unit" }).format(
+        days: new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(
           form.days.map((day) =>
             new Date(Date.UTC(2026, 0, 4 + day)).toLocaleDateString(locale, {
               weekday: "short",

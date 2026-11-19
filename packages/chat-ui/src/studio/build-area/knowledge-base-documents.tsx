@@ -143,9 +143,14 @@ type SyncedSource = Extract<KnowledgeSourceStatus, { connection: string }>;
  * now, and files added by hand, which would never sync, wait in the head's menu. `uploads`: no
  * source syncs, so it is Add documents. `both`: Add documents stays, with Sync now beside it.
  * Only the documents read so far are looked at. Where the reader cannot sync, it is `uploads`.
+ * Where a source syncs but the documents could not be read, nobody knows whether one was added
+ * by hand, so it is `both` and Add documents stays.
  */
 export interface KnowledgeIntake {
-  /** `pending` until the sources are read: no action shows, so none is swapped for another. */
+  /**
+   * `pending` until the sources and the documents are read: no action shows, so none is swapped
+   * for another.
+   */
   way: "pending" | "uploads" | "synced" | "both";
   /** The published sources a Connection syncs. */
   synced: readonly SyncedSource[];
@@ -170,13 +175,19 @@ export function useKnowledgeIntake(
     source.syncSource !== undefined && sources?.status === "ready"
       ? sources.data.sources.filter((entry): entry is SyncedSource => "connection" in entry)
       : [];
-  const uploaded =
-    documents.status === "ready" &&
-    documents.data.documents.some((document) => document.sourceId === undefined);
-  if (source.syncSource !== undefined && sources?.status === "loading") {
-    return { way: publishedRevision === undefined ? "uploads" : "pending", synced };
+  if (source.syncSource === undefined || publishedRevision === undefined) {
+    return { way: "uploads", synced };
   }
-  return { way: synced.length === 0 ? "uploads" : uploaded ? "both" : "synced", synced };
+  if (sources?.status === "loading") return { way: "pending", synced };
+  if (synced.length === 0) return { way: "uploads", synced };
+  if (state.status === "loading") return { way: "pending", synced };
+  if (state.status !== "ready") return { way: "both", synced };
+  // A store still being made holds no document yet, added by hand or synced.
+  if (!storeReady) return { way: "synced", synced };
+  if (documents.status === "loading") return { way: "pending", synced };
+  if (documents.status !== "ready") return { way: "both", synced };
+  const uploaded = documents.data.documents.some((document) => document.sourceId === undefined);
+  return { way: uploaded ? "both" : "synced", synced };
 }
 
 /**
@@ -255,16 +266,26 @@ export function KnowledgeDocuments({
     );
     setSyncing(false);
     const refused = answers.find((answer) => !answer.ok);
-    setSyncNotice(
-      refused === undefined
-        ? { tone: "success", text: t("knowledgeSources.syncStarted") }
-        : {
-            tone: "error",
-            text: refused.refused
-              ? t("knowledgeSources.refused")
-              : (refused.message ?? t("knowledgeSources.syncFailed"))
-          }
-    );
+    if (refused === undefined) {
+      setSyncNotice({ tone: "success", text: t("knowledgeSources.syncStarted") });
+      return;
+    }
+    const reason = refused.refused
+      ? t("knowledgeSources.refused")
+      : (refused.message ?? t("knowledgeSources.syncFailed"));
+    const started = answers.filter((answer) => answer.ok).length;
+    // Of several sources, the ones that did start are said too.
+    setSyncNotice({
+      tone: "error",
+      text:
+        started === 0
+          ? reason
+          : t("knowledgeSources.syncStartedSome", {
+              started: String(started),
+              count: String(answers.length),
+              reason
+            })
+    });
   };
   const [added, setAdded] = useState<number>();
   const [retrying, setRetrying] = useState<string>();

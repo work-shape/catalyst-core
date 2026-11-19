@@ -139,6 +139,8 @@ export const knowledgeSources = defineTranslations({
     "knowledgeSources.retryFailed": "The items could not be tried again.",
     "knowledgeSources.syncNow": "Sync now",
     "knowledgeSources.syncStarted": "The sync has started.",
+    "knowledgeSources.syncStartedSome":
+      "{started} of {count} sources are syncing. For the others: {reason}",
     "knowledgeSources.syncFailed": "The sync could not be started.",
     "knowledgeSources.refused": "You may not change this knowledge base.",
     "knowledgeSources.statusFailed": "The state of the sources could not be read.",
@@ -327,6 +329,8 @@ export const knowledgeSources = defineTranslations({
     "knowledgeSources.retryFailed": "Die Elemente ließen sich nicht erneut versuchen.",
     "knowledgeSources.syncNow": "Jetzt synchronisieren",
     "knowledgeSources.syncStarted": "Die Synchronisierung läuft.",
+    "knowledgeSources.syncStartedSome":
+      "{started} von {count} Quellen werden synchronisiert. Bei den anderen: {reason}",
     "knowledgeSources.syncFailed": "Die Synchronisierung ließ sich nicht starten.",
     "knowledgeSources.refused": "Du darfst diese Wissensbasis nicht ändern.",
     "knowledgeSources.statusFailed": "Der Stand der Quellen ließ sich nicht lesen.",
