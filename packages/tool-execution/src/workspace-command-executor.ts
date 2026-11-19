@@ -61,8 +61,30 @@ export interface SandboxSkillFolder {
   directory: string;
 }
 
+/**
+ * A channel a command talks to its worker on while it runs, without a network (TOOL-2c). The
+ * command writes each request as one line on its output stream and reads each answer as one
+ * line on its input stream, in order. After its last request it writes `endMark` on a line of
+ * its own: what follows on its output stream is its output, as without a channel.
+ */
+export interface SandboxRequestChannel {
+  /** A line nobody but this run knows. */
+  endMark: string;
+  /** The longest request read, in bytes. A longer line is dropped and answered `refuse`. */
+  maxLineBytes: number;
+  /** The answer to one request: one line, without a line break. It never rejects. */
+  answer(line: string): Promise<string>;
+  /** The answer to a line that is no request: one longer than `maxLineBytes`. */
+  refuse(reason: "too_long"): string;
+}
+
 export interface WorkspaceCommandProcessInput {
   command: SandboxCommand;
+  /**
+   * Where the command asks its worker for something while it runs. Only a command the platform
+   * runs itself has one: an agent's command has none.
+   */
+  requests?: SandboxRequestChannel;
   /** In place of the sandbox's own CPU, memory and process limits. */
   sandboxLimits?: SandboxCommandLimits;
   /**
@@ -144,7 +166,8 @@ export class LocalWorkspaceCommandProcessExecutor implements WorkspaceCommandPro
       idleTimeoutSeconds: input.command.limits.idleTimeoutSeconds,
       maxStdoutBytes: input.command.limits.maxStdoutBytes,
       maxStderrBytes: input.command.limits.maxStderrBytes,
-      signal: input.signal
+      signal: input.signal,
+      ...(input.requests ? { requests: input.requests } : {})
     });
   }
 }
@@ -172,6 +195,8 @@ export async function runSpawnedProcess(input: {
   maxStderrBytes?: number;
   signal?: AbortSignal;
   onTerminate?: () => Promise<void> | void;
+  /** Requests the process writes before its output, each answered on its input stream. */
+  requests?: SandboxRequestChannel;
 }): Promise<ProcessResult> {
   if (input.signal?.aborted) {
     return cancelledProcessResult(Date.now(), input.signal.reason);
@@ -194,8 +219,17 @@ export async function runSpawnedProcess(input: {
       cwd: input.cwd,
       detached: true,
       env: input.env,
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["pipe", "pipe", "pipe"]
     });
+    // A process that ended, or closed its input, is answered nothing more. One without
+    // requests reads nothing on its input stream.
+    child.stdin.on("error", () => undefined);
+    if (!input.requests) child.stdin.end();
+    const requests = input.requests
+      ? new RequestLines(input.requests, (line) => {
+          if (child.stdin.writable) child.stdin.write(`${line}\n`);
+        })
+      : undefined;
 
     const cleanupAbortListener = () => {
       input.signal?.removeEventListener("abort", abort);
@@ -255,7 +289,8 @@ export async function runSpawnedProcess(input: {
     resetIdleTimer();
     input.signal?.addEventListener("abort", abort, { once: true });
     child.stdout.on("data", (chunk: Buffer) => {
-      stdout.append(chunk);
+      const output = requests ? requests.take(chunk) : chunk;
+      if (output.byteLength > 0) stdout.append(output);
       resetIdleTimer();
     });
     child.stderr.on("data", (chunk: Buffer) => {
@@ -283,6 +318,80 @@ export async function runSpawnedProcess(input: {
       finish(code ?? 1, signal);
     });
   });
+}
+
+const NO_BYTES = Buffer.alloc(0);
+
+/**
+ * Reads the requests of a process from its output stream until the end mark, and writes the
+ * answer to each, one after the other, in the order they came. What follows the mark is the
+ * process's own output.
+ */
+class RequestLines {
+  private held: Buffer[] = [];
+  private heldBytes = 0;
+  /** The line being read is longer than a request may be: the rest of it is dropped. */
+  private dropping = false;
+  private ended = false;
+  private answered: Promise<void> = Promise.resolve();
+
+  constructor(
+    private readonly channel: SandboxRequestChannel,
+    private readonly reply: (line: string) => void
+  ) {}
+
+  /** What of the chunk is output: nothing before the end mark, and all of it after. */
+  take(chunk: Buffer): Buffer {
+    if (this.ended) return chunk;
+    let start = 0;
+    while (start < chunk.byteLength) {
+      const newline = chunk.indexOf(10, start);
+      if (newline === -1) {
+        this.hold(chunk.subarray(start));
+        return NO_BYTES;
+      }
+      this.hold(chunk.subarray(start, newline));
+      start = newline + 1;
+      const line = this.line();
+      if (line === undefined) {
+        this.answer(() => Promise.resolve(this.channel.refuse("too_long")));
+      } else if (line === this.channel.endMark) {
+        this.ended = true;
+        return chunk.subarray(start);
+      } else if (line !== "") {
+        this.answer(() => this.channel.answer(line));
+      }
+    }
+    return NO_BYTES;
+  }
+
+  private hold(part: Buffer): void {
+    if (this.dropping) return;
+    if (this.heldBytes + part.byteLength > this.channel.maxLineBytes) {
+      this.dropping = true;
+      this.held = [];
+      this.heldBytes = 0;
+      return;
+    }
+    this.held.push(part);
+    this.heldBytes += part.byteLength;
+  }
+
+  /** The line read, or nothing where it was dropped. */
+  private line(): string | undefined {
+    if (this.dropping) {
+      this.dropping = false;
+      return undefined;
+    }
+    const text = Buffer.concat(this.held, this.heldBytes).toString("utf8");
+    this.held = [];
+    this.heldBytes = 0;
+    return text;
+  }
+
+  private answer(next: () => Promise<string>): void {
+    this.answered = this.answered.then(next).then(this.reply, () => undefined);
+  }
 }
 
 class BoundedOutput {
