@@ -45,6 +45,13 @@ export type OperationOrigin =
        */
       toolRevisionId?: string;
       /**
+       * Set on a call a code tool's handler made (TOOL-2c): the Operation Run of the tool's
+       * call it was made in. `toolName` then names that tool's operation, which the agent lists,
+       * and the call is one of the Connection operations the tool declares. Their policy was
+       * asked on the tool's call, so the call itself waits for nobody.
+       */
+      byTool?: { runId: OperationRunId };
+      /**
        * A Workflow agent step's call in a test run of a draft, which acts as the person
        * testing: the service principal whose rights bounded theirs (ADR-0031).
        */

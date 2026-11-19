@@ -23,7 +23,9 @@ import {
   personalApiKeyLacksAction,
   moduleOffError,
   operationDenialError,
+  parseConnectionOperationName,
   toErrorEnvelope,
+  toolOfOperationName,
   type AccessDecision,
   type ActorAccess,
   type AgentRunId,
@@ -449,7 +451,13 @@ export async function authorizeOrigin(
   if (call.origin.kind !== "agent") {
     return { allowed: true };
   }
-  const { agentName, toolName, conversationId, agentRunId } = call.origin;
+  const { agentName, toolName, conversationId, agentRunId, byTool } = call.origin;
+  // A call a code tool's handler made is made under the tool the agent lists, and reaches only a
+  // Connection's operation: which ones, the tool's call checked against what the tool declares.
+  const named = byTool
+    ? toolOfOperationName(toolName) !== undefined &&
+      parseConnectionOperationName(definition.name) !== undefined
+    : toolName === definition.name;
   const listed =
     (await deps.agentToolNames?.(
       agentName,
@@ -458,7 +466,7 @@ export async function authorizeOrigin(
         ? undefined
         : { runId: agentRunId, user: call.actor }
     )) ?? [];
-  return toolName === definition.name &&
+  return named &&
     (listed.includes(toolName) ||
       (isKnowledgeAddFilesOperation(toolName) && listed.includes(KNOWLEDGE_ADD_FILES_TOOL_NAME)))
     ? { allowed: true }

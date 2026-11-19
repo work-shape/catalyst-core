@@ -570,6 +570,27 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
   if (run.target === "dry_run") {
     return { ending: await simulateRun(context, policy) };
   }
+  // A call a code tool's handler made waits for nobody: the call of the tool asked the policy
+  // of every Connection operation it declares before the handler started (TOOL-2c). What the
+  // policy asks of it now is what that call asked, or was answered, already. Only a guardrail
+  // of this call's own input asks something the tool's call could not, and it is refused.
+  if (
+    call.origin.kind === "agent" &&
+    call.origin.byTool !== undefined &&
+    (policy.next === "await_confirmation" || policy.next === "await_approval")
+  ) {
+    if (policy.source === "guardrail") {
+      return {
+        ending: await denyRun(context, {
+          kind: "policy",
+          operation: definition.name,
+          reason: "confirmation_required",
+          ...(approvalAskedBy ? { guardrail: approvalAskedBy } : {})
+        })
+      };
+    }
+    return { access: accessOf(rights), decision: { mode: "direct", reason: "tool_call" } };
+  }
   // A subagent never waits for a decision: the call does not run, and the agent that started
   // the subagent makes it where its person is asked (CR-1).
   if (

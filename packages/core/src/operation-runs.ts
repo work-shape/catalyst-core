@@ -51,7 +51,9 @@ export interface OperationRunActor {
  * revision made a call whose policy asks its caller to confirm, and publishing the Workflow
  * was that confirmation: the publish review lists its changing operations. `approved_by_caller`:
  * a guardrail asked for an approval and the caller holds the right that decides it, so their
- * own call was the approval (`approval` of the operation's definition).
+ * own call was the approval (`approval` of the operation's definition). `tool_call`: a code
+ * tool's handler made the call, and the call of the tool asked the policy of every Connection
+ * operation the tool declares before its handler started (TOOL-2c).
  */
 export type OperationRunDecisionReason = (typeof OPERATION_RUN_DECISION_REASONS)[number];
 

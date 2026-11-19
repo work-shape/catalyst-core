@@ -6,7 +6,11 @@ import {
   JOB_WORKER_CHECK_INTERVAL_MS,
   TOOL_ASSET_KIND,
   TOOL_CODE_CALL_KEEP_MS,
+  TOOL_CODE_REQUEST_ANSWER_MAX_BYTES,
+  TOOL_CODE_REQUEST_MAX_BYTES,
+  TOOL_CODE_REQUESTS_MAX,
   TOOL_RESULT_KIND_PATTERN,
+  connectionOperationName,
   createPlatformId,
   defineJobHandler,
   defineJobKind,
@@ -27,6 +31,8 @@ import {
   type PlatformStores,
   type RegisteredJobHandler,
   type ToolCodeCallOutcome,
+  type ToolCodeCallRequest,
+  type ToolCodeCallRequestAnswer,
   type ToolHandlerResult
 } from "@work-shape/catalyst-core";
 import {
@@ -38,10 +44,12 @@ import {
 import {
   WORKFLOW_CODE_ERRORS,
   createCodeSandbox,
+  type CodeSandboxChannel,
   type WorkflowSourceTree,
   type WorkflowStepFiles
 } from "@work-shape/catalyst-workflows";
 import { z } from "zod";
+import { TOOL_CODE_LIBRARY } from "./tool-code-library";
 
 // Where a code tool runs (TOOL-2b, platform-access.md, section 3a). A call is a row the
 // operation writes and a job the command worker serves: the worker runs the tool's handler in
@@ -53,6 +61,13 @@ import { z } from "zod";
 // The handler's contract is the code step's: its input as JSON on its input stream and in the
 // file `$WORKFLOW_INPUT_FILE`; its answer as JSON on its output stream or in the file
 // `$WORKFLOW_OUTPUT_FILE`.
+//
+// Beside it the handler has a request channel (TOOL-2c): it calls a Connection operation its
+// tool declares by writing a request to the descriptor the sandbox opened, through the module
+// of `tool-code-library.ts`. The worker refuses an operation the tool does not declare, writes a
+// declared one on the call's row and hands the handler the answer the operation wrote there.
+// The operation, which waits for the call as the tool's caller, carries the request out as the
+// Connection's operation (`tool-assets.ts`). No credential reaches the worker or the sandbox.
 
 /** The job that runs one call's handler on the command worker. */
 export const TOOL_CODE_CALL_JOB_KIND = "tool.run_code";
@@ -97,6 +112,8 @@ const STDERR_TAIL_BYTES = 400;
 const COMMAND_ID_PREFIX = "tool-call-";
 /** How often a running handler's job looks whether its call is still waited for. */
 const CANCEL_CHECK_MS = 1_000;
+/** How often a handler's open request looks for its answer on the call's row. */
+const REQUEST_POLL_MS = 50;
 /** How long a run that ended is kept beside the longest a handler may run, for the sweep. */
 const LEFTOVER_AGE_MS = 2 * 120 * 1_000 + 60_000;
 
@@ -181,6 +198,100 @@ export interface ToolCodeCallJobsOptions {
   limits: SandboxCommandLimits;
   /** For a test: in place of a second. */
   cancelCheckMs?: number;
+  /** For a test: how often an open request looks for its answer. */
+  requestPollMs?: number;
+}
+
+/** What a request is answered where it is refused before the operation was asked. */
+function refusedRequest(code: string, message: string): string {
+  const answer: ToolCodeCallRequestAnswer = { ok: false, error: { code, message } };
+  return JSON.stringify(answer);
+}
+
+const requestSchema = z.strictObject({
+  connection: z.string().min(1).max(200),
+  operation: z.string().min(1).max(200),
+  input: z.unknown().optional()
+});
+
+/**
+ * The request channel of one call. A request names a Connection operation the tool declares;
+ * any other is refused here with `connection_not_declared`. A declared one is written on the
+ * call's row, where the operation that waits for the call answers it. At most
+ * `TOOL_CODE_REQUESTS_MAX` requests, each at most `TOOL_CODE_REQUEST_MAX_BYTES`.
+ */
+function requestChannel(options: {
+  clientInstanceId: ClientInstanceId;
+  stores: PlatformStores;
+  id: string;
+  declared: readonly string[];
+  signal: AbortSignal;
+  pollMs: number;
+}): CodeSandboxChannel {
+  const { clientInstanceId, stores, id, signal } = options;
+  const closed = () => refusedRequest("channel_closed", "Nobody waits for this call any more.");
+  let made = 0;
+  return {
+    library: TOOL_CODE_LIBRARY,
+    maxLineBytes: TOOL_CODE_REQUEST_MAX_BYTES,
+    refuse: () =>
+      refusedRequest(
+        "request_too_large",
+        `A request is at most ${TOOL_CODE_REQUEST_MAX_BYTES} bytes as one line of JSON.`
+      ),
+    async answer(line) {
+      made += 1;
+      const seq = made;
+      if (seq > TOOL_CODE_REQUESTS_MAX) {
+        return refusedRequest(
+          "too_many_requests",
+          `A handler makes at most ${TOOL_CODE_REQUESTS_MAX} Connection calls in one call of its tool.`
+        );
+      }
+      let parsed: z.infer<typeof requestSchema> | undefined;
+      try {
+        parsed = requestSchema.parse(JSON.parse(line));
+      } catch {
+        parsed = undefined;
+      }
+      if (!parsed) {
+        return refusedRequest(
+          "request_invalid",
+          'A request is one line of JSON: { "connection": ..., "operation": ..., "input": ... }.'
+        );
+      }
+      const name = connectionOperationName(parsed.connection, parsed.operation);
+      if (!options.declared.includes(name)) {
+        return refusedRequest(
+          "connection_not_declared",
+          `The tool does not declare '${name}' in its connections, so its handler may not call it.`
+        );
+      }
+      const request: ToolCodeCallRequest = {
+        seq,
+        connection: parsed.connection,
+        operation: parsed.operation,
+        input: unknownToJsonValue(parsed.input ?? {})
+      };
+      try {
+        if (!(await stores.toolCodeCalls.requestToolCodeCall({ clientInstanceId, id, request })))
+          return closed();
+        while (!signal.aborted) {
+          await sleep(options.pollMs, undefined, { signal }).catch(() => undefined);
+          const call = await stores.toolCodeCalls.getToolCodeCall({ clientInstanceId, id });
+          if (!call || call.outcome) return closed();
+          if (call.answer?.seq === seq) {
+            const { seq: _answered, ...answer } = call.answer;
+            return JSON.stringify(answer);
+          }
+        }
+      } catch {
+        // A store that did not answer: the handler is told, and its call goes on.
+        return refusedRequest("channel_failed", "The platform could not carry the request.");
+      }
+      return closed();
+    }
+  };
 }
 
 /** What the command worker serves for code tools, and what it runs by itself. */
@@ -266,6 +377,14 @@ export function createToolCodeCallJobs(options: ToolCodeCallJobsOptions): {
                 input: call.input,
                 timeoutSeconds: call.timeoutSeconds
               },
+              channel: requestChannel({
+                clientInstanceId,
+                stores,
+                id,
+                declared: tool.connections ?? [],
+                signal: stop.signal,
+                pollMs: options.requestPollMs ?? REQUEST_POLL_MS
+              }),
               signal: stop.signal,
               // The operation's wait for the handler counts from here, not from the queue.
               beforeStart: async () => {
@@ -359,11 +478,44 @@ export interface ToolCodeCallClient {
     /** The agent's tool deadline, where it has one. */
     deadline?: Date;
     signal?: AbortSignal;
+    /**
+     * Carries out a request of the handler: a call of a Connection operation its tool
+     * declares, as the tool's caller. Without it every request is refused.
+     */
+    onRequest?(request: ToolCodeCallRequest): Promise<ToolCodeCallRequestAnswer>;
   }): Promise<ToolCodeCallResult>;
 }
 
 /** How long a call may wait for a worker to start its handler's container. */
 const TOOL_CODE_QUEUE_MAX_MS = 30_000;
+
+/** The answer to a request, or the refusal of one larger than an answer may be. */
+async function answerOf(
+  request: ToolCodeCallRequest,
+  onRequest: ((request: ToolCodeCallRequest) => Promise<ToolCodeCallRequestAnswer>) | undefined
+): Promise<ToolCodeCallRequestAnswer> {
+  if (!onRequest) {
+    return {
+      ok: false,
+      error: { code: "connection_unavailable", message: "This process calls no Connections." }
+    };
+  }
+  const answer = await onRequest(request).catch((): ToolCodeCallRequestAnswer => ({
+    ok: false,
+    error: { code: "failed", message: "The Connection call failed." }
+  }));
+  const bytes = Buffer.byteLength(JSON.stringify(answer), "utf8");
+  return bytes <= TOOL_CODE_REQUEST_ANSWER_MAX_BYTES
+    ? answer
+    : {
+        ok: false,
+        error: {
+          code: "answer_too_large",
+          message: `The answer has ${bytes} bytes as JSON; a handler is handed at most ${TOOL_CODE_REQUEST_ANSWER_MAX_BYTES}.`
+        }
+      };
+}
+
 /**
  * How long a call waits past its handler's time from the moment its container started: for
  * the sandbox to stop the handler and the worker to write how it ended.
@@ -445,6 +597,8 @@ export function createToolCodeCallClient(options: {
         return noWorker ? { status: "no_worker" } : { status: "queued" };
       };
       let nextWorkerCheck = queued + unclaimedMs;
+      /** The request answered last: each is carried out once. */
+      let answered = 0;
       try {
         while (true) {
           if (input.signal?.aborted)
@@ -463,6 +617,17 @@ export function createToolCodeCallClient(options: {
           if (call.startedAt && call.startedAt !== seenStart) {
             seenStart = call.startedAt;
             startedAt = Math.min(Date.parse(call.startedAt), Date.now());
+          }
+          const { request } = call;
+          if (request && request.seq > answered && call.answer?.seq !== request.seq) {
+            answered = request.seq;
+            const answer = await answerOf(request, input.onRequest);
+            await stores.toolCodeCalls.answerToolCodeCall({
+              clientInstanceId,
+              id,
+              answer: { ...answer, seq: request.seq }
+            });
+            continue;
           }
           if (Date.now() >= nextWorkerCheck) {
             nextWorkerCheck = Date.now() + JOB_WORKER_CHECK_INTERVAL_MS;

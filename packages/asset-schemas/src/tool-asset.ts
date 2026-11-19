@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CONNECTION_NAME_PATTERN } from "./contract-values";
 import { localizedStringSchema } from "./schemas";
 
 // A tool an instance adds without a release (TOOL-1, platform-access.md, section 3a): an asset
@@ -6,7 +7,8 @@ import { localizedStringSchema } from "./schemas";
 // - `result` holds no code. It checks the agent's input against a declared JSON Schema and
 //   writes it as the conversation's structured result of one display kind.
 // - `code` holds a handler in Python or JavaScript among its files, which a call runs in the
-//   sandbox of Workflow code steps (TOOL-2b).
+//   sandbox of Workflow code steps (TOOL-2b). Its `connections` names the Connection operations
+//   the handler may call through the platform (TOOL-2c).
 
 /** The kind's id, as the asset store keeps it. */
 export const TOOL_ASSET_KIND = "tool";
@@ -69,6 +71,25 @@ export const TOOL_FILE_PATH_PATTERN =
   /^(?:[A-Za-z0-9_][A-Za-z0-9_.-]*\/)*[A-Za-z0-9_][A-Za-z0-9_.-]*$/u;
 const TOOL_FILE_PATH_RULE =
   "A file path is '/'-separated parts of letters, digits, '_', '-' and '.', none of them hidden";
+
+/** How many Connection operations one code tool declares at most. */
+export const TOOL_CONNECTIONS_MAX = 32;
+
+/**
+ * A Connection operation a code tool declares, `connection.<name>.<operation>`: the Connection's
+ * name and the operation's, as `parseConnectionOperationName` reads them.
+ */
+const TOOL_CONNECTION_OPERATION_PATTERN = new RegExp(
+  `^connection\\.${CONNECTION_NAME_PATTERN.source.slice(1, -1)}\\.[A-Za-z][A-Za-z0-9_-]*$`,
+  "u"
+);
+const TOOL_CONNECTION_OPERATION_RULE =
+  "A declared Connection operation is named connection.<connection>.<operation>";
+
+export const toolConnectionOperationSchema = z
+  .string()
+  .max(200, TOOL_CONNECTION_OPERATION_RULE)
+  .regex(TOOL_CONNECTION_OPERATION_PATTERN, TOOL_CONNECTION_OPERATION_RULE);
 
 export const toolNameSchema = z
   .string()
@@ -182,6 +203,12 @@ const codeToolSchema = z
     /** The handler: the path of one of `files`. */
     entry: toolFilePathSchema,
     timeoutSeconds: z.number().int().min(1).max(TOOL_CODE_TIMEOUT_MAX_SECONDS).optional(),
+    /**
+     * The Connection operations the handler may call, each `connection.<name>.<operation>`. A
+     * call of any other is refused with `connection_not_declared`. Each must be an operation of
+     * a Connection when the tool is written.
+     */
+    connections: z.array(toolConnectionOperationSchema).max(TOOL_CONNECTIONS_MAX).optional(),
     /** The folder of the tool: the handler and whatever it reads or imports. */
     files: z.array(toolFileSchema).min(1).max(TOOL_FILES_MAX)
   })
@@ -202,6 +229,17 @@ const codeToolSchema = z
         message: `The files hold no '${tool.entry}': the handler must be among them`
       });
     }
+    const declared = new Set<string>();
+    tool.connections?.forEach((name, at) => {
+      if (declared.has(name)) {
+        context.addIssue({
+          code: "custom",
+          path: ["connections", at],
+          message: `'${name}' is declared twice`
+        });
+      }
+      declared.add(name);
+    });
     let total = 0;
     const seen = new Set<string>();
     tool.files.forEach((file, at) => {

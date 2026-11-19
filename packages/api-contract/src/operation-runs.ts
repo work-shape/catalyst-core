@@ -23,6 +23,11 @@ export const operationRunOriginSchema = z.discriminatedUnion("kind", [
     /** The revision a data tool was read from when the call was made, where it names one. */
     toolRevisionId: z.string().optional(),
     /**
+     * A call a code tool's handler made: the run of the tool's call it was made in. `toolName`
+     * then names the tool's operation.
+     */
+    byTool: z.object({ runId: z.string() }).optional(),
+    /**
      * A Workflow agent step's call in a test run of a draft, which acts as the person testing:
      * the service principal whose rights bounded theirs.
      */
@@ -122,6 +127,8 @@ export const operationRunSchema = z.object({
        * policy asks for a confirmation, and publishing the Workflow was that confirmation.
        * `approved_by_caller`: a guardrail asked for an approval and the caller holds the right
        * that decides it, so their own call was the approval; `by` is caller and approver.
+       * `tool_call`: a code tool's handler made the call, and the call of the tool asked the
+       * policy of the Connection operations it declares before the handler started.
        */
       reason: z.enum(OPERATION_RUN_DECISION_REASONS).optional(),
       by: z.string(),

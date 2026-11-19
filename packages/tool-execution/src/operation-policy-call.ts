@@ -47,7 +47,12 @@ export interface OperationPolicyContext {
 /** What the policy is resolved from for this call, before a guardrail answered. */
 async function policyInputOf(context: OperationPolicyContext): Promise<PolicyInput> {
   const { definition, call, resource, deps, runtime } = context;
-  let callFloor = await definition.policyFloorOf?.(call.origin, call.input, call.actor);
+  let callFloor = await definition.policyFloorOf?.(
+    call.origin,
+    call.input,
+    call.actor,
+    call.workspaceId
+  );
   if (
     call.origin.kind === "agent" &&
     definition.effect === "changing" &&
@@ -83,7 +88,9 @@ async function policyInputOf(context: OperationPolicyContext): Promise<PolicyInp
     workflowDeleted: call.workflowDeleted === true,
     // Only an Agent Run's worker holds a call for its actor's confirmation: the run pauses
     // and resumes when its person decided. The hold of the run says the worker makes the call.
-    canPause: workerCall,
+    // A code tool handler's call is taken as one that could wait: what it would wait for, the
+    // tool's call asked already, and `admit` makes it without waiting (TOOL-2c).
+    canPause: workerCall || (call.origin.kind === "agent" && call.origin.byTool !== undefined),
     // Nobody present who could be asked, while the call acts for a person: a run marked
     // unattended, in its worker, or a CLI call sent unattended. A subagent's call never is
     // one: it is refused before it could wait (CR-1).

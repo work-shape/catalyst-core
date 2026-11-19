@@ -370,12 +370,14 @@ interface OperationDefinitionBase<Input, Output> {
    * on that asset. Asked with the policy, and again before a call that waited is executed. The
    * stricter of it and `policyFloor` holds. It is told the call's input, which can name the
    * asset the call writes, and who makes it where a caller is known: a publish that hands a
-   * source's data on reads who publishes it (DS-13c).
+   * source's data on reads who publishes it (DS-13c), and the workspace the call is made in,
+   * where a floor asks a setting narrowed to one (TOOL-2c).
    */
   policyFloorOf?(
     origin: OperationOrigin,
     input: unknown,
-    actor?: AuthenticatedIdentity
+    actor?: AuthenticatedIdentity,
+    workspaceId?: CollaborationWorkspaceId
   ): PolicyValue | undefined | Promise<PolicyValue | undefined>;
   /**
    * Who decides a call of the operation that waits for an approval, where it is not every
