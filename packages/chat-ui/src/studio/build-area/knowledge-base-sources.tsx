@@ -347,9 +347,10 @@ function SourceItem({
   // Folded until the reader asks, unless something in it needs a person.
   const [open, setOpen] = useState<boolean>();
   // Only a confirmation waits for the reader here. Failed documents stand first in the list
-  // with their fix, so the row counts them and stays folded.
+  // with their fix, so the row counts them and stays folded; its toggle then says it leads to the
+  // failures, since a fetch failure has no document row and its fix lives in here.
   const needsPerson = status?.confirmation !== undefined;
-  const failed = status?.failures.reduce((sum, failure) => sum + failure.count, 0) ?? 0;
+  const failed = status === undefined ? 0 : sourceItemCounts(status.items).failed;
   const released = useContext(ReleasedSourcesContext).has(entry.id);
   const unfolded = open ?? (startsOpen || needsPerson);
   const view = status === undefined ? undefined : sourceStateView(status);
@@ -487,7 +488,13 @@ function SourceItem({
             aria-describedby={titleId}
             data-knowledge-source-adjust=""
           >
-            {t(canWrite ? "knowledgeSources.adjust" : "knowledgeSources.details")}
+            {t(
+              failed > 0
+                ? "knowledgeSources.reviewFailures"
+                : canWrite
+                  ? "knowledgeSources.adjust"
+                  : "knowledgeSources.details"
+            )}
           </DisclosureTrigger>
         </div>
         {/* Kept in the page while folded: its fields are part of the form. */}

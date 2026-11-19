@@ -31,7 +31,8 @@ import {
 //
 // Sensitive data. Payloads, run results and audit events carry ids, counts and codes, never a
 // file name, path or title. `source_items` and `locate` answer names and paths to holders of
-// `knowledge_base.read`, as `list_documents` does.
+// `knowledge_base.read`; `list_documents` answers names and folders to holders of
+// `knowledge_base.use`, the right under which search already answers full paths.
 
 /**
  * The job that walks one source: `list` for modes `initial` and `full`, `changes` for mode
