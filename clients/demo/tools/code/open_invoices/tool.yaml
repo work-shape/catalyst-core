@@ -1,0 +1,14 @@
+# The parts of the tool that main.py does not say. The name, the description and the input
+# schema come from the @tool function in main.py.
+title:
+  en: Open invoices
+  de: Offene Rechnungen
+summary:
+  en: Sums a customer's unpaid invoices in the sample business system.
+  de: Summiert die unbezahlten Rechnungen eines Kunden im Beispiel-Geschäftssystem.
+icon: document
+# The Connection operations main.py may call, as <connection>.<operation>.
+connections:
+  - sample-business.get_customer
+# Seconds the handler may run, at most 120.
+timeout: 20
