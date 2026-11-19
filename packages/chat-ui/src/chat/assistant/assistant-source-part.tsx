@@ -4,18 +4,25 @@ import {
   readKnowledgeCitationSources,
   type KnowledgeCitationSource
 } from "@work-shape/catalyst-core";
-import { Chip } from "@work-shape/catalyst-ui";
-import { openOriginLink, safeOriginLink } from "../../shared/origin-link";
 import { useAttachmentContentContext } from "../files/attachment-content";
-import { KnowledgeCitationChip } from "./knowledge-citation-chip";
+import { KnowledgeCitationChip, KnowledgeSources } from "./knowledge-citation-chip";
+
+/** The Knowledge Base passage a source part of an answer cites, if it cites one. */
+export function knowledgeCitationOfPart(part: {
+  type: string;
+  sourceType?: string;
+  providerMetadata?: { vivdCatalyst?: { knowledge?: unknown } } | undefined;
+}): KnowledgeCitationSource | undefined {
+  return part.type === "source" && part.sourceType === "document"
+    ? readKnowledgeCitationSources([part.providerMetadata?.vivdCatalyst?.knowledge])[0]
+    : undefined;
+}
 
 export function AssistantSourcePart(part: SourceMessagePartProps) {
-  const knowledge =
-    part.sourceType === "document"
-      ? readKnowledgeCitationSources([part.providerMetadata?.vivdCatalyst?.knowledge])[0]
-      : undefined;
+  const conversation = useConversationOfCitation();
+  const knowledge = knowledgeCitationOfPart(part);
   if (knowledge) {
-    return <KnowledgeSourceChips source={knowledge} />;
+    return <KnowledgeCitationChip citation={knowledge} {...conversation} />;
   }
   if (part.sourceType === "url") {
     const label = sourcePartLabel(part);
@@ -67,34 +74,22 @@ function sourceUrlHost(url: string): string | undefined {
 }
 
 /**
- * The chips of a cited Knowledge Base passage: the passage itself, and beside it its origin
- * link where it has one.
+ * The conversation a citation stands in: its workspace is where the reader may use the
+ * Knowledge Base through availability.
  */
-function KnowledgeSourceChips({ source }: { source: KnowledgeCitationSource }) {
-  // The conversation the citation stands in: its workspace is where the reader may use the
-  // Knowledge Base through availability.
+function useConversationOfCitation(): { conversationId?: string } {
   const conversationId = useAttachmentContentContext()?.selectedConversationId;
-  const origin = safeOriginLink(source.originLink);
-  return (
-    <>
-      <KnowledgeCitationChip
-        className="chat-source-chip"
-        citation={source}
-        {...(conversationId ? { conversationId } : {})}
-      />
-      {origin ? (
-        <Chip
-          className="chat-source-chip"
-          leading={<ExternalLink aria-hidden="true" />}
-          href={origin.href}
-          onClick={(event) => {
-            event.preventDefault();
-            openOriginLink(origin.href);
-          }}
-        >
-          {origin.host}
-        </Chip>
-      ) : null}
-    </>
+  return conversationId ? { conversationId } : {};
+}
+
+/** The row of the Knowledge Base documents an answer cites, one chip per document. */
+export function AssistantKnowledgeSources({
+  citations
+}: {
+  citations: readonly KnowledgeCitationSource[];
+}) {
+  const conversation = useConversationOfCitation();
+  return citations.length === 0 ? null : (
+    <KnowledgeSources className="mt-2" citations={citations} {...conversation} />
   );
 }

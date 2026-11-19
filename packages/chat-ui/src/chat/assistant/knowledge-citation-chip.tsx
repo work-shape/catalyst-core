@@ -3,17 +3,34 @@ import {
   knowledgeDocumentFormatOf,
   resolveFilePreviewCapability
 } from "@work-shape/catalyst-core";
-import { FileText } from "lucide-react";
-import { useState } from "react";
-import { Chip, Spinner } from "@work-shape/catalyst-ui";
+import { ChevronDown, FileText } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
+import {
+  Chip,
+  ChipAction,
+  cn,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  Spinner
+} from "@work-shape/catalyst-ui";
 import { useOptionalWorkspaceApiClient } from "../../shared/api/workspace-api-client";
 import { useTranslation } from "../../shared/i18n";
+import { safeOriginLink } from "../../shared/origin-link";
 import { apiErrorCode, apiErrorReason, apiErrorStatus } from "../../shared/workspace-utils";
 import { saveBlobAsFile } from "../files/conversation-file-content";
 import { rasterImageType, viewerObjectUrl, type FileViewer } from "../files/viewer-object-url";
 
 /** How long an opened source's address stays valid, for its tab to load it. */
 const OPENED_SOURCE_URL_MS = 60_000;
+
+/** The documents a row of sources shows before "+n more"; one more than this shows them all. */
+const SHOWN_DOCUMENTS = 4;
+
+type Translate = ReturnType<typeof useTranslation>["t"];
 
 /** The document and page a passage or a value cites, by the Knowledge Base's name. */
 export interface KnowledgeCitation {
@@ -27,6 +44,53 @@ export interface KnowledgeCitation {
   statedAt?: string;
   /** When the platform fetched the synced document. */
   retrievedAt?: string;
+  /** Where the document lives outside the platform, such as its folder in a file store. */
+  originLink?: string;
+}
+
+/** A place in a cited document: its page, slide or sheet. */
+type KnowledgeCitedPlace = Pick<KnowledgeCitation, "page" | "sheet">;
+
+/** One cited document with every place an answer cites in it, in page order. */
+interface KnowledgeCitedDocument extends Omit<KnowledgeCitation, "page" | "sheet"> {
+  places: KnowledgeCitedPlace[];
+}
+
+/**
+ * The cited documents of an answer, each once, in the order the answer first cites them; the
+ * places of one document are merged and ordered by page.
+ */
+function groupKnowledgeCitations(
+  citations: readonly KnowledgeCitation[]
+): KnowledgeCitedDocument[] {
+  const documents = new Map<string, KnowledgeCitedDocument>();
+  for (const { page, sheet, ...citation } of citations) {
+    const key = `${citation.knowledgeBase}/${citation.documentId}`;
+    const document = documents.get(key) ?? { ...citation, places: [] };
+    documents.set(key, document);
+    document.originLink ??= citation.originLink;
+    document.statedAt ??= citation.statedAt;
+    document.retrievedAt ??= citation.retrievedAt;
+    if (!document.places.some((place) => place.page === page && place.sheet === sheet)) {
+      document.places.push({
+        ...(page === undefined ? {} : { page }),
+        ...(sheet === undefined ? {} : { sheet })
+      });
+    }
+  }
+  for (const document of documents.values()) {
+    document.places.sort(
+      (left, right) =>
+        (left.page ?? Number.MAX_SAFE_INTEGER) - (right.page ?? Number.MAX_SAFE_INTEGER)
+    );
+    // A citation of the whole document says nothing beside one of its pages.
+    if (document.places.some((place) => place.page !== undefined || place.sheet !== undefined)) {
+      document.places = document.places.filter(
+        (place) => place.page !== undefined || place.sheet !== undefined
+      );
+    }
+  }
+  return [...documents.values()];
 }
 
 /**
@@ -35,7 +99,7 @@ export interface KnowledgeCitation {
  * shown as its "Stand".
  */
 function knowledgeCitationDate(
-  t: ReturnType<typeof useTranslation>["t"],
+  t: Translate,
   locale: string,
   citation: Pick<KnowledgeCitation, "statedAt" | "retrievedAt">
 ): string | undefined {
@@ -63,7 +127,7 @@ function knowledgeCitationDate(
  * own way.
  */
 export function knowledgeOfficePlace(
-  t: ReturnType<typeof useTranslation>["t"],
+  t: Translate,
   citation: Pick<KnowledgeCitation, "fileName" | "page" | "sheet">
 ): string | undefined {
   const format = knowledgeDocumentFormatOf({ filename: citation.fileName });
@@ -73,54 +137,127 @@ export function knowledgeOfficePlace(
   return t(format === "xlsx" ? "knowledge.citationSheet" : "knowledge.citationSlide", { page });
 }
 
+/** One place of a document as the reader counts it: "S. 4", "Folie 4", a sheet's name. */
+function knowledgePlace(t: Translate, fileName: string, place: KnowledgeCitedPlace) {
+  return (
+    knowledgeOfficePlace(t, { fileName, ...place }) ??
+    (place.page === undefined
+      ? undefined
+      : t("knowledge.citationPage", { page: String(place.page) }))
+  );
+}
+
 /**
- * The chip of a cited Knowledge Base passage, "file name, p. 4", in a spreadsheet "file name,
- * sheet name" and in a deck "file name, slide 4". A click reads the file through
- * the API, with the reader's own session or token, and opens it at the page in a new tab; a
- * blocked tab, or a file no viewer of ours shows, saves it instead. A removed source says so and
- * opens nothing. A synced document whose source cannot be reached says so ("Quelle nicht
- * erreichbar") and can be tried again; the passage the answer cites stays readable beside it
- * (KB-13). An answer in a conversation names it, as its workspace is where the reader may use
- * the Knowledge Base.
+ * Every place of a document in one: "S. 7, 79", "Folie 3, 4", or a spreadsheet's sheet names.
  */
-export function KnowledgeCitationChip({
-  citation,
+function knowledgePlaces(
+  t: Translate,
+  fileName: string,
+  places: readonly KnowledgeCitedPlace[]
+): string | undefined {
+  if (places.some((place) => place.sheet !== undefined)) {
+    const names = places.flatMap((place) => knowledgePlace(t, fileName, place) ?? []);
+    return names.length === 0 ? undefined : names.join(", ");
+  }
+  const pages = places.flatMap((place) => (place.page === undefined ? [] : [place.page]));
+  if (pages.length === 0) return undefined;
+  const format = knowledgeDocumentFormatOf({ filename: fileName });
+  return t(
+    format === "xlsx"
+      ? "knowledge.citationSheet"
+      : format === "pptx"
+        ? "knowledge.citationSlide"
+        : "knowledge.citationPage",
+    { page: pages.join(", ") }
+  );
+}
+
+/**
+ * A file's name as the chip reads it: without its extension, its underscores as spaces. The
+ * menu names it whole. A hyphen stays, as in a date it is no gap between words.
+ */
+function shortFileName(fileName: string): string {
+  const name = fileName
+    .replace(/\.[a-z0-9]{2,5}$/iu, "")
+    .replace(/_+/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+  return name || fileName;
+}
+
+/** The file stores whose name the reader knows better than their address. */
+const KNOWN_FILE_STORES: ReadonlyArray<[RegExp, string]> = [
+  [/(^|\.)dropbox\.com$/u, "Dropbox"],
+  [/(^|\.)sharepoint\.com$/u, "SharePoint"],
+  [/(^|\.)(onedrive\.live\.com|1drv\.ms)$/u, "OneDrive"],
+  [/^(drive|docs)\.google\.com$/u, "Google Drive"],
+  [/(^|\.)box\.com$/u, "Box"]
+];
+
+/** "In Dropbox öffnen" for a file store the reader knows by name, else the original's host. */
+function originLabel(t: Translate, host: string): string {
+  const store = KNOWN_FILE_STORES.find(([pattern]) => pattern.test(host))?.[1];
+  return store === undefined
+    ? t("knowledge.citationOpenOriginal", { host: host.replace(/^www\./u, "") })
+    : t("knowledge.citationOpenIn", { store });
+}
+
+type OpenState = "idle" | "opening" | "removed" | "unreachable" | "failed";
+
+/**
+ * The chip of a cited Knowledge Base document: its name without the extension, shortened where
+ * it is long, and the places the answer cites, "S. 7, 79". A click opens the first of them; its
+ * menu names the file whole with its date, opens each place, and opens the original where the
+ * document has one. A click reads the file through the API, with the reader's own session or
+ * token, and opens it at the page in a new tab; a blocked tab, or a file no viewer of ours
+ * shows, saves it instead. A removed source says so and opens nothing. A synced document whose
+ * source cannot be reached says so ("Quelle nicht erreichbar") and can be tried again (KB-13).
+ * An answer in a conversation names it, as its workspace is where the reader may use the
+ * Knowledge Base.
+ */
+function KnowledgeDocumentChip({
+  document,
   conversationId,
   className
 }: {
-  citation: KnowledgeCitation;
+  document: KnowledgeCitedDocument;
   conversationId?: string;
   className?: string;
 }) {
   const { locale, t } = useTranslation();
   const api = useOptionalWorkspaceApiClient();
-  const [state, setState] = useState<"idle" | "opening" | "removed" | "unreachable" | "failed">(
-    "idle"
-  );
-  const place =
-    knowledgeOfficePlace(t, citation) ??
-    (citation.page === undefined
-      ? undefined
-      : t("knowledge.citationPage", { page: String(citation.page) }));
-  const asOf = knowledgeCitationDate(t, locale, citation);
-  const label = [citation.fileName, place, asOf].filter((part) => part !== undefined).join(", ");
-  const open = async () => {
+  const [state, setState] = useState<OpenState>("idle");
+  const places = knowledgePlaces(t, document.fileName, document.places);
+  const asOf = knowledgeCitationDate(t, locale, document);
+  const origin = safeOriginLink(document.originLink);
+  const name = shortFileName(document.fileName);
+  const stateWords =
+    state === "removed"
+      ? t("knowledge.citationRemoved")
+      : state === "unreachable"
+        ? t("knowledge.citationUnreachable")
+        : state === "failed"
+          ? t("knowledge.citationFailed")
+          : undefined;
+  const detail = [places, stateWords].filter((part) => part !== undefined).join(" · ");
+  const canOpen = api !== undefined && state !== "removed";
+  const open = async (place: KnowledgeCitedPlace | undefined) => {
     if (!api) return;
     setState("opening");
     try {
       const blob = await api.client.knowledge_bases.open_document({
-        params: { knowledgeBase: citation.knowledgeBase, documentId: citation.documentId },
+        params: { knowledgeBase: document.knowledgeBase, documentId: document.documentId },
         ...(conversationId ? { query: { conversationId } } : {})
       });
-      const viewer = citationViewer(citation.fileName, blob.type);
+      const viewer = citationViewer(document.fileName, blob.type);
       if (!viewer) {
-        saveBlobAsFile(blob, citation.fileName);
+        saveBlobAsFile(blob, document.fileName);
         setState("idle");
         return;
       }
       const url = viewerObjectUrl(blob, viewer);
       const tab = window.open(
-        citation.page === undefined ? url : `${url}#page=${citation.page}`,
+        place?.page === undefined ? url : `${url}#page=${place.page}`,
         "_blank"
       );
       if (tab) {
@@ -128,7 +265,7 @@ export function KnowledgeCitationChip({
         window.setTimeout(() => URL.revokeObjectURL(url), OPENED_SOURCE_URL_MS);
       } else {
         URL.revokeObjectURL(url);
-        saveBlobAsFile(blob, citation.fileName);
+        saveBlobAsFile(blob, document.fileName);
       }
       setState("idle");
     } catch (error) {
@@ -143,28 +280,162 @@ export function KnowledgeCitationChip({
       );
     }
   };
+  const openPlace = (place: KnowledgeCitedPlace | undefined) => {
+    open(place).catch(() => undefined);
+  };
   return (
-    <Chip
-      {...(className ? { className } : {})}
-      leading={state === "opening" ? <Spinner size="sm" /> : <FileText aria-hidden="true" />}
-      {...(api && state !== "removed" && state !== "opening"
-        ? {
-            onClick: () => {
-              open().catch(() => undefined);
-            }
-          }
-        : {})}
+    <span
+      className="contents"
+      data-knowledge-source={document.documentId}
+      data-knowledge-source-state={state}
     >
-      <span data-knowledge-source={citation.documentId} data-knowledge-source-state={state}>
-        {state === "removed"
-          ? t("knowledge.citationRemoved", { name: label })
-          : state === "unreachable"
-            ? t("knowledge.citationUnreachable", { name: label })
-            : state === "failed"
-              ? t("knowledge.citationFailed", { name: label })
-              : label}
+      <Chip
+        className={className}
+        leading={state === "opening" ? <Spinner size="sm" /> : <FileText aria-hidden="true" />}
+        detail={detail === "" ? undefined : detail}
+        {...(canOpen && state !== "opening"
+          ? { onClick: () => openPlace(document.places[0]) }
+          : {})}
+        trailing={
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <ChipAction
+                label={t("knowledge.citationDetails", { name: document.fileName })}
+                data-knowledge-source-details=""
+              >
+                <ChevronDown aria-hidden="true" />
+              </ChipAction>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="max-w-80">
+              <DropdownMenuGroup
+                label={
+                  <>
+                    <span className="block break-words text-foreground">{document.fileName}</span>
+                    {asOf === undefined ? null : <span className="block font-normal">{asOf}</span>}
+                  </>
+                }
+              >
+                {(document.places.length === 0 ? [undefined] : document.places).map((place) => {
+                  const where =
+                    place === undefined ? undefined : knowledgePlace(t, document.fileName, place);
+                  return (
+                    <DropdownMenuItem
+                      key={`${place?.page ?? ""}/${place?.sheet ?? ""}`}
+                      icon={<FileText aria-hidden="true" />}
+                      disabled={!canOpen || state === "opening"}
+                      onSelect={() => openPlace(place)}
+                    >
+                      {where === undefined
+                        ? t("knowledge.citationOpen")
+                        : t("knowledge.citationOpenPlace", { place: where })}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuGroup>
+              {origin ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    href={origin.href}
+                    accessibleName={t("knowledge.citationOpensNewTab", {
+                      label: originLabel(t, origin.host)
+                    })}
+                  >
+                    {originLabel(t, origin.host)}
+                  </DropdownMenuItem>
+                </>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        }
+      >
+        {name}
+      </Chip>
+    </span>
+  );
+}
+
+/** The chip of one cited passage or value, as a cited document with that one place. */
+export function KnowledgeCitationChip({
+  citation,
+  conversationId,
+  className
+}: {
+  citation: KnowledgeCitation;
+  conversationId?: string;
+  className?: string;
+}) {
+  const [document] = groupKnowledgeCitations([citation]);
+  return document ? (
+    <KnowledgeDocumentChip
+      document={document}
+      {...(conversationId ? { conversationId } : {})}
+      {...(className ? { className } : {})}
+    />
+  ) : null;
+}
+
+/**
+ * The row of sources under an answer: "Quellen", then one chip per cited document side by side.
+ * Past a handful of documents it shows the first four and "+n more", which shows the rest.
+ */
+export function KnowledgeSources({
+  citations,
+  conversationId,
+  className
+}: {
+  citations: readonly KnowledgeCitation[];
+  conversationId?: string;
+  className?: string;
+}) {
+  const { t } = useTranslation();
+  const labelId = useId();
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const documents = groupKnowledgeCitations(citations);
+  const folds = documents.length > SHOWN_DOCUMENTS + 1;
+  const shown = folds && !expanded ? documents.slice(0, SHOWN_DOCUMENTS) : documents;
+  // The first chip "+n more" showed takes the focus the button had.
+  const focusRevealed = useRef(false);
+  useEffect(() => {
+    if (!expanded || !focusRevealed.current) return;
+    focusRevealed.current = false;
+    const chips = rowRef.current?.querySelectorAll<HTMLElement>("[data-knowledge-source]");
+    chips?.[SHOWN_DOCUMENTS]?.querySelector<HTMLElement>("button")?.focus();
+  }, [expanded]);
+  if (documents.length === 0) return null;
+  return (
+    <div
+      ref={rowRef}
+      role="group"
+      aria-labelledby={labelId}
+      className={cn("flex min-w-0 flex-wrap items-center gap-1.5", className)}
+      data-knowledge-citations=""
+    >
+      <span id={labelId} className="mr-0.5 text-caption text-muted-foreground">
+        {t("knowledge.citationSources")}
       </span>
-    </Chip>
+      {shown.map((document) => (
+        <KnowledgeDocumentChip
+          key={`${document.knowledgeBase}/${document.documentId}`}
+          className="max-w-72"
+          document={document}
+          {...(conversationId ? { conversationId } : {})}
+        />
+      ))}
+      {folds && !expanded ? (
+        <Chip
+          onClick={() => {
+            focusRevealed.current = true;
+            setExpanded(true);
+          }}
+        >
+          {t("knowledge.citationMoreSources", {
+            count: String(documents.length - SHOWN_DOCUMENTS)
+          })}
+        </Chip>
+      ) : null}
+    </div>
   );
 }
 

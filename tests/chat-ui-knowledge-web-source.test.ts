@@ -171,27 +171,44 @@ describe("the citation of a web page", () => {
     );
   }
 
-  it("names the page with the date it states, and links the page", () => {
+  /** Opens the chip's menu: its heading, and the items it offers. */
+  async function menu(): Promise<{ heading: string; items: HTMLElement[] }> {
+    const trigger = host.querySelector<HTMLButtonElement>("[data-knowledge-source-details]");
+    await act(async () => {
+      trigger?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    let opened: HTMLElement | null = null;
+    await vi.waitFor(() => {
+      opened = document.getElementById(trigger?.getAttribute("aria-controls") ?? "");
+      expect(opened).not.toBeNull();
+    });
+    const content = opened as HTMLElement | null;
+    return {
+      heading: content?.querySelector('[role="group"] > div')?.textContent ?? "",
+      items: [...(content?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
+    };
+  }
+
+  it("names the page on its chip, and with the date it states in its menu, which links the page", async () => {
     show("de");
     expect(host.querySelector("[data-knowledge-source]")?.textContent).toBe(
-      "Section 7 Depreciation, Stand 01.11.2026"
+      "Section 7 Depreciation"
     );
-    expect(host.querySelector("a")?.getAttribute("href")).toBe("https://www.example.org/law/s7");
+    const german = await menu();
+    expect(german.heading).toBe("Section 7 DepreciationStand 01.11.2026");
+    expect(german.items.at(-1)?.getAttribute("href")).toBe("https://www.example.org/law/s7");
+    expect(german.items.at(-1)?.textContent).toBe("Original öffnen (example.org)");
+    act(() => root.render(null));
     show("en");
-    expect(host.querySelector("[data-knowledge-source]")?.textContent).toBe(
-      "Section 7 Depreciation, as of 01/11/2026"
-    );
+    expect((await menu()).heading).toBe("Section 7 Depreciationas of 01/11/2026");
   });
 
-  it("names a page that states no date only with the day it was retrieved, never as its Stand", () => {
+  it("names a page that states no date only with the day it was retrieved, never as its Stand", async () => {
     const { statedAt: _stated, ...unstated } = page;
     show("de", unstated);
-    expect(host.querySelector("[data-knowledge-source]")?.textContent).toBe(
-      "Section 7 Depreciation, abgerufen 10.11.2026"
-    );
+    expect((await menu()).heading).toBe("Section 7 Depreciationabgerufen 10.11.2026");
+    act(() => root.render(null));
     show("en", unstated);
-    expect(host.querySelector("[data-knowledge-source]")?.textContent).toBe(
-      "Section 7 Depreciation, retrieved 10/11/2026"
-    );
+    expect((await menu()).heading).toBe("Section 7 Depreciationretrieved 10/11/2026");
   });
 });

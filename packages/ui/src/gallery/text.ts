@@ -76,6 +76,7 @@ export interface GalleryText
   dropFiles: string;
   chooseFolder: string;
   moreActions: string;
+  chipPages: string;
   name: string;
   namePlaceholder: string;
   rename: string;
@@ -343,6 +344,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     dropFiles: "Drop a folder or files here",
     chooseFolder: "Choose folder",
     moreActions: "More actions",
+    chipPages: "p. 7, 79",
     name: "Name",
     namePlaceholder: "Support assistant",
     rename: "Rename",
@@ -648,6 +650,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     dropFiles: "Ordner oder Dateien hier ablegen",
     chooseFolder: "Ordner auswählen",
     moreActions: "Weitere Aktionen",
+    chipPages: "S. 7, 79",
     name: "Name",
     namePlaceholder: "Support-Assistent",
     rename: "Umbenennen",

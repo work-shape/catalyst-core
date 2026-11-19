@@ -14,7 +14,15 @@ export {
   type BadgeTone
 } from "./badge";
 export { ChangeTag, type ChangeKind, type ChangeTagProps } from "./change-tag";
-export { Chip, ScopeChip, type ChipProps, type ChipSize, type ScopeChipProps } from "./chip";
+export {
+  Chip,
+  ChipAction,
+  ScopeChip,
+  type ChipActionProps,
+  type ChipProps,
+  type ChipSize,
+  type ScopeChipProps
+} from "./chip";
 export {
   ConnectionIcon,
   type ConnectionIconProps,

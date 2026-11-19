@@ -1358,8 +1358,9 @@ describe("Prüfen: the records of a Data Store that wait for a person (REC-2)", 
     expect(page).toContain(">Not evidenced</span>");
     expect(page).toContain(">Quote not found on the page</span>");
     // Each candidate cites its document and page.
-    expect(page).toContain("a1.pdf, p. 3");
-    expect(page).toContain("b1.pdf, p. 4");
+    const text = page.replace(/<[^>]+>/gu, "");
+    expect(text).toContain("a1, p. 3");
+    expect(text).toContain("b1, p. 4");
     expect(page).toContain("“Kaufpreis 200”");
     expect(page.match(/data-review-confirm=""/gu)).toHaveLength(3);
     expect(page.match(/data-review-correct=""/gu)).toHaveLength(3);

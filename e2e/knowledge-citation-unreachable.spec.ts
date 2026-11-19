@@ -122,19 +122,21 @@ test("a cited page whose source cannot be reached says so in German and opens on
   );
   await page.goto(`${uiOrigin}/c/${encodeURIComponent(conversation.id)}`);
   const chip = page.locator("[data-knowledge-source]");
-  await expect(chip).toHaveText("reiserichtlinie.pdf, S. 3");
+  // The chip's own button opens the page; the one after it opens its menu.
+  const open = chip.locator("button").first();
+  await expect(chip).toHaveText("reiserichtlinie, S. 3");
   await expect(page.getByText("[K1]")).toHaveCount(0);
 
-  await chip.click();
-  await expect(chip).toHaveText("reiserichtlinie.pdf, S. 3: Quelle nicht erreichbar");
+  await open.click();
+  await expect(chip).toHaveText("reiserichtlinie, S. 3 · Quelle nicht erreichbar");
   await expect(chip).toHaveAttribute("data-knowledge-source-state", "unreachable");
   expect(opened).toEqual([conversation.id]);
 
   // Reachable again: the same chip opens the page in a tab of its own.
   reachable = true;
-  await chip.click();
+  await open.click();
   await expect
     .poll(() => page.evaluate(() => Reflect.get(window, "opened")))
     .toEqual([expect.stringMatching(/^blob:.*#page=3$/u)]);
-  await expect(chip).toHaveText("reiserichtlinie.pdf, S. 3");
+  await expect(chip).toHaveText("reiserichtlinie, S. 3");
 });
