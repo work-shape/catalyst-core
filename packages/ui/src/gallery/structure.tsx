@@ -35,7 +35,7 @@ import type { GalleryText } from "./text";
 const cardPaddings: readonly CardPadding[] = ["md", "lg"];
 const pageWidths: readonly PageWidth[] = ["narrow", "default", "wide"];
 const sectionLayouts: readonly SectionLayout[] = ["split", "stacked"];
-const disclosureVariants: readonly DisclosureVariant[] = ["ghost", "outline"];
+const disclosureVariants: readonly DisclosureVariant[] = ["ghost", "outline", "row"];
 
 function pageWidthLabel(width: PageWidth, text: GalleryText): string {
   const labels: Record<PageWidth, string> = {
