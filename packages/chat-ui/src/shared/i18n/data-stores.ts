@@ -110,7 +110,7 @@ export const dataStores = defineTranslations({
     "dataStores.draftMigrationsEmpty": "The draft has no migration.",
     "dataStores.draftAhead": "Draft ahead of what is published",
     "dataStores.draftAheadText":
-      "A draft saved after the last publish adds {count} migrations. Publishing applies them to the live store in this order.",
+      "A draft saved after the last publish adds {count} migrations. Publishing applies them to the live store.",
     "dataStores.draftAheadTextOne":
       "A draft saved after the last publish adds 1 migration. Publishing applies it to the live store.",
     "dataStores.draftAheadTextNone":
@@ -292,6 +292,8 @@ export const dataStores = defineTranslations({
     "dataStores.usedByHidden": "and {count} more you can't see",
     "dataStores.usedByKnowledgeBase": "Knowledge base",
     "dataStores.usedByLine": "Used by",
+    "dataStores.usedByLineHidden": "{count} you can't see",
+    "dataStores.usedByLineOthers": "others",
     "dataStores.usedByMore": "{count} more",
     "dataStores.usedByRefused": "You may not see what uses this store.",
     "dataStores.usedByTruncated":
@@ -423,7 +425,7 @@ export const dataStores = defineTranslations({
     "dataStores.draftMigrationsEmpty": "Der Entwurf hat keine Migration.",
     "dataStores.draftAhead": "Entwurf weiter als die veröffentlichte Fassung",
     "dataStores.draftAheadText":
-      "Ein Entwurf, der nach dem letzten Veröffentlichen gespeichert wurde, bringt {count} Migrationen mit. Beim Veröffentlichen werden sie in dieser Reihenfolge auf den laufenden Speicher angewendet.",
+      "Ein Entwurf, der nach dem letzten Veröffentlichen gespeichert wurde, bringt {count} Migrationen mit. Beim Veröffentlichen werden sie auf den laufenden Speicher angewendet.",
     "dataStores.draftAheadTextOne":
       "Ein Entwurf, der nach dem letzten Veröffentlichen gespeichert wurde, bringt 1 Migration mit. Beim Veröffentlichen wird sie auf den laufenden Speicher angewendet.",
     "dataStores.draftAheadTextNone":
@@ -609,6 +611,8 @@ export const dataStores = defineTranslations({
     "dataStores.usedByHidden": "und {count} weitere, die du nicht sehen kannst",
     "dataStores.usedByKnowledgeBase": "Wissensbasis",
     "dataStores.usedByLine": "Genutzt von",
+    "dataStores.usedByLineHidden": "{count}, die du nicht sehen kannst",
+    "dataStores.usedByLineOthers": "weitere",
     "dataStores.usedByMore": "{count} weiteren",
     "dataStores.usedByRefused": "Du darfst nicht sehen, was diesen Speicher verwendet.",
     "dataStores.usedByTruncated":

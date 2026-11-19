@@ -2,11 +2,7 @@ import { BookOpen, Bot, Database, LayoutGrid, MessagesSquare, Workflow } from "l
 import type { ReactNode } from "react";
 import type { PublishedDataConsumerKind } from "@work-shape/catalyst-core";
 import { Chip, EmptyState, List, ListRow, TextLink } from "@work-shape/catalyst-ui";
-import {
-  AGENTS_BUILD_PATH,
-  KNOWLEDGE_BASES_BUILD_PATH,
-  useBuildNavigation
-} from "../../shared/build-route";
+import { AGENTS_BUILD_PATH, useBuildNavigation } from "../../shared/build-route";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { DataFlowList } from "./data-flows";
 import { ReadState } from "./data-store-read-state";
@@ -52,18 +48,15 @@ export function DataStoreUsedByLine({ store, workspaceId, source }: ProvenancePr
   const { locale, t } = useTranslation();
   const read = source.useUsedBy(store);
   const pageOf = source.useUsingPage(workspaceId);
-  const { href, open } = useBuildNavigation();
   if (read.status !== "ready") return null;
   const users = dataStoreUsers(read.data);
   if (users.length === 0) return null;
   const named = users.slice(0, USED_BY_NAMED);
   const more = users.length - named.length;
   const items: ReactNode[] = named.map((user) => {
-    const place = { kindPath: KNOWLEDGE_BASES_BUILD_PATH, name: user.name };
-    const page =
-      user.kind === "knowledge_base"
-        ? { href: href(place), open: () => open(place) }
-        : pageOf(user.kind, user.name);
+    // A Knowledge Base may be listed to a reader who can use it but not open it, and the answer
+    // names no workspace: it stands as text, as in Settings.
+    const page = user.kind === "knowledge_base" ? undefined : pageOf(user.kind, user.name);
     return page === undefined ? (
       <span
         key={`${user.kind}:${user.name}`}
@@ -89,6 +82,13 @@ export function DataStoreUsedByLine({ store, workspaceId, source }: ProvenancePr
     );
   });
   if (more > 0) items.push(t("dataStores.usedByMore", { count: formatCount(more, locale) }));
+  // What the reader may not see is counted, so the line never looks complete when it is not.
+  const hidden = read.data.hidden.fills + read.data.hidden.reads;
+  if (hidden > 0) {
+    items.push(t("dataStores.usedByLineHidden", { count: formatCount(hidden, locale) }));
+  } else if (read.data.truncated) {
+    items.push(t("dataStores.usedByLineOthers"));
+  }
   // The list's own words and commas, with each name in its place.
   let next = 0;
   const parts = new Intl.ListFormat(locale, { type: "conjunction" })
