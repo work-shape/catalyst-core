@@ -86,6 +86,11 @@ export {
   createWorkflowAssetKind,
   type PublishedWorkflow
 } from "./workflow-assets";
+export {
+  createToolAssetKind,
+  createToolAssetToolSource,
+  createToolOperationSource
+} from "./tool-assets";
 export { checkWorkflowOwnRights, type WorkflowOwnRightsModules } from "./workflow-owned-account";
 export {
   assertSandboxMemoryFitsHost,

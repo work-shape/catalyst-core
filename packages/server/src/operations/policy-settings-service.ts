@@ -11,6 +11,7 @@ import {
   AppError,
   CENTRAL_POLICY_ENTRIES_MAX,
   DATA_STORE_OPERATION_PREFIX,
+  TOOL_OPERATION_PREFIX,
   KNOWLEDGE_OPERATION_PREFIX,
   PAGE_ACTION_OPERATION_PREFIX,
   WORKFLOW_OPERATION_PREFIX,
@@ -62,6 +63,8 @@ function kindOf(
   const prefix = dataToolPrefixOf(name);
   if (prefix === "connection.") return "connection";
   if (prefix === DATA_STORE_OPERATION_PREFIX) return "data_store";
+  // A tool asset's operation is a tool of the instance, as a release tool is.
+  if (prefix === TOOL_OPERATION_PREFIX) return "tool";
   if (prefix !== undefined || name.startsWith(PAGE_ACTION_OPERATION_PREFIX)) return "app";
   if (name.startsWith(WORKFLOW_OPERATION_PREFIX)) return "workflow";
   if (name.startsWith(KNOWLEDGE_OPERATION_PREFIX)) return "knowledge_base";

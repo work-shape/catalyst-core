@@ -93,7 +93,9 @@ describe("the vocabulary of Connection rights", () => {
             (action) =>
               action !== "agent.publish" &&
               action !== "agent.approve" &&
-              !/^(?:connection|app|workflow|data_store|knowledge_base|guardrail)\./u.test(action)
+              !/^(?:connection|app|workflow|data_store|knowledge_base|guardrail|tool)\./u.test(
+                action
+              )
           )
         }) +
         "\n"
@@ -128,7 +130,7 @@ describe("the vocabulary of Connection rights", () => {
       const bundle = action === "builder" || action === "publisher";
       expect(scopes.includes("workspace"), action).toBe(
         bundle ||
-          /^(?:agent|skill|app|data_store|guardrail)\./u.test(action) ||
+          /^(?:agent|skill|app|data_store|guardrail|tool)\./u.test(action) ||
           // Feedback on the agents a workspace owns is reviewed there (LU-4).
           action === "feedback.review" ||
           // A workspace's Owners see what its members used there (LU-3).

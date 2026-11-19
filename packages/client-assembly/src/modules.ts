@@ -30,6 +30,7 @@ import { projectsModule } from "./platform-modules/projects";
 import { resourcesModule } from "./platform-modules/resources";
 import { userInvitationsModule } from "./platform-modules/user-invitations";
 import { workshaperModule } from "./platform-modules/workshaper";
+import { assembleToolAssets } from "./tool-assets";
 import { assembleWorkflows, workflowsModule } from "./workflows";
 
 /**
@@ -54,7 +55,7 @@ export const platformModules = [
  * The seams of the modules that are assembled through one. A new one is one more entry. A seam
  * comes after the seams whose offers it takes: Knowledge Bases after Data Stores.
  */
-const moduleSeams = [assembleWorkflows, assembleDataStores, assembleKnowledge];
+const moduleSeams = [assembleWorkflows, assembleDataStores, assembleKnowledge, assembleToolAssets];
 
 /**
  * Builds what the modules with a seam add to this process, each list in the order of the

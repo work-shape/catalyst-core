@@ -74,6 +74,11 @@ describe("permissions", () => {
       "guardrail.write",
       "guardrail.publish",
       "guardrail.delete",
+      "tool.read",
+      "tool.write",
+      "tool.publish",
+      "tool.approve",
+      "tool.delete",
       "operations.approve",
       "feedback.review",
       "users.manage",
@@ -103,7 +108,7 @@ describe("permissions", () => {
     // project's, which membership alone carries: no key names one, so nobody holds one through
     // the legacy column.
     const unkeyed = (action: string) =>
-      /^(?:connection|app|workflow|data_store|knowledge_base|guardrail|mail_sender|project)\./u.test(
+      /^(?:connection|app|workflow|data_store|knowledge_base|guardrail|tool|mail_sender|project)\./u.test(
         action
       ) ||
       action === "service_principals.manage" ||
@@ -220,6 +225,11 @@ describe("permissions", () => {
       "guardrail.write",
       "guardrail.publish",
       "guardrail.delete",
+      "tool.read",
+      "tool.write",
+      "tool.publish",
+      "tool.approve",
+      "tool.delete",
       "operations.approve",
       "feedback.review",
       "users.manage",

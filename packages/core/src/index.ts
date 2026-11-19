@@ -99,6 +99,7 @@ export * from "./shipped-agents";
 export * from "./skill-folders";
 export * from "./subagents";
 export * from "./time";
+export * from "./tool-assets";
 export * from "./types";
 export * from "./viewer-scope-sql";
 export * from "./workflow-blocks";
