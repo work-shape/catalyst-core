@@ -16,6 +16,7 @@ import {
   type OperationAuthorizeContext,
   type OperationChangeClass,
   type OperationDefinition,
+  type OperationDraftContext,
   type OperationEffect,
   type OperationExecutionContext,
   type OperationOrigin,
@@ -131,6 +132,12 @@ export interface OperationFace {
       absent?: { right: string; notFound: string };
       /** The file the request carried, for the call alone. */
       upload?: OperationUpload;
+      /**
+       * Set where the route makes a draft's call, as a try does: the call path decides where it
+       * goes (ADR-0031), and the answer names it as `{ target, output }`, a simulated change
+       * included.
+       */
+      draft?: OperationDraftContext;
     },
     reply: FastifyReply
   ): Promise<unknown>;
@@ -255,7 +262,8 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
           actor: call.identity,
           origin: call.origin,
           idempotencyKey: call.idempotencyKey,
-          correlationId: call.correlationId
+          correlationId: call.correlationId,
+          ...(call.draft ? { draft: call.draft } : {})
         },
         absent
           ? { ...deps, registry: { ...registry, resolve: () => Promise.resolve(absent) } }
@@ -273,6 +281,17 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
       const { result, run } = outcome;
       if (!outcome.unrecorded) void reply.header("operation-run-id", run.id);
       if (outcome.replayed) void reply.header("idempotent-replayed", "true");
+      // A draft's call answers where it went beside what it answered.
+      if (call.draft && (result.status === "done" || result.status === "dry_run")) {
+        const answer = {
+          target: result.status === "dry_run" ? "dry_run" : run.target,
+          output: result.output ?? null
+        };
+        if (operation.response.kind === "json") {
+          checkResponse(options, operation, operation.response.schema, answer);
+        }
+        return answer;
+      }
       switch (result.status) {
         case "done":
           if (operation.response.kind === "blob") {

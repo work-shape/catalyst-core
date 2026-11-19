@@ -86,7 +86,7 @@ export async function decideTarget(input: {
   });
   if (definition.effect === "reading") return unswitched;
   if (definition.draftTarget) return definition.draftTarget;
-  if (draft.kind === "agent_preview") return unswitched;
+  if (draft.kind !== undefined) return unswitched;
   if (!deps.liveOnce || !(await admitted())) return unswitched;
   const forRun = call.origin.kind === "workflow" ? call.origin.workflowRunId : draft.workflowRunId;
   const now = deps.now ?? (() => new Date());

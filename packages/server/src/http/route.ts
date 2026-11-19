@@ -35,6 +35,7 @@ import {
   type OperationAuthorization,
   type OperationAuthorizeContext,
   type OperationBeforeEvent,
+  type OperationDraftContext,
   type OperationOrigin,
   type OperationResource,
   type OperationRegistry,
@@ -184,6 +185,11 @@ export interface ResourceOperationTarget {
   /** The name the registry resolves, such as `data_store.<id>.query`. */
   operation: string;
   input: unknown;
+  /**
+   * Set where the route tries the operation as a draft would call it (ADR-0031). The answer is
+   * then `{ target, output }`; see `draft` of `OperationFace.answer`.
+   */
+  draft?: OperationDraftContext;
 }
 
 /**
@@ -621,6 +627,7 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
               effect: resolved?.effect,
               runs: target.operation,
               ...(staged ? { upload: staged.upload } : {}),
+              ...(target.draft ? { draft: target.draft } : {}),
               ...(resolved ? {} : { absent: { right: binding.right, notFound: binding.notFound } })
             },
             reply
