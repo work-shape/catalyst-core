@@ -154,8 +154,20 @@ export interface WorkflowStepView {
   /**
    * On a trigger: what may start a run, the cron expression of its schedule, and the zone its
    * clock time is in, where the schedule names one. Without one it runs in the instance's.
+   * The other ways are named only where they are on.
    */
-  starts?: { byHand: boolean; onSchedule: boolean; cron?: string; timeZone?: string };
+  starts?: {
+    byHand: boolean;
+    onSchedule: boolean;
+    cron?: string;
+    timeZone?: string;
+    /** A Knowledge Base that finished syncing starts it. */
+    onEvent?: true;
+    /** Another system starts it: a webhook or an outside client. */
+    bySystem?: true;
+    /** A step of another Workflow starts it. */
+    byParent?: true;
+  };
   /** On a loop: how many entries run at once, where the definition says more than one. */
   concurrency?: number;
   /** On a `workflow` step: the id of the Workflow it starts. */
