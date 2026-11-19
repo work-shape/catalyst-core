@@ -789,6 +789,14 @@ describe("when a source syncs by itself (SRC-SYNC)", () => {
     expect(render("en", { status: schedule(15, "0 2 * * *") })).toMatch(
       /data-knowledge-source-sync-when=""[^>]*>Daily at 02:00 AM</u
     );
+    // Several days of a week read as a list in both languages.
+    const weekly = (locale: "de" | "en") =>
+      render(locale, {
+        sources: [{ ...handbookSource, schedule: { full: "0 2 * * 1,3,5" } }],
+        status: schedule(15, "0 2 * * 1,3,5")
+      });
+    expect(weekly("en")).toContain(">Mon, Wed, and Fri at 02:00 AM<");
+    expect(weekly("de")).toContain(">Mo, Mi und Fr um 02:00<");
   });
 
   it("offers no interval below its type's floor, and shows its type's full sync as the default", () => {
