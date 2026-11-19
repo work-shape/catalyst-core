@@ -322,9 +322,11 @@ connections:
       - name: list_customers
         effect: reading
         exposure: [agent, bridge]
+      # `outside` as well: `catalyst tool run` of the example code tool (tools/code/open_invoices)
+      # calls it from the CLI.
       - name: get_customer
         effect: reading
-        exposure: [agent, bridge]
+        exposure: [agent, bridge, outside]
       - name: list_orders
         effect: reading
         exposure: [agent, bridge]

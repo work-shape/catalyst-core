@@ -157,7 +157,7 @@ Beside the instance runs a small outside system: the Compose service `sample-mcp
 
 The instance reaches it through the Connection `sample-business` ("Sample business" under Studio > Connections), which release config defines in `config/app.yaml`:
 
-- `connections.sample-business` names the Connector type `mcp`, the address `http://sample-mcp:8787/mcp`, the secret `DEMO_SAMPLE_MCP_KEY` and the six accepted operations, each reading and open to agents and to Pages.
+- `connections.sample-business` names the Connector type `mcp`, the address `http://sample-mcp:8787/mcp`, the secret `DEMO_SAMPLE_MCP_KEY` and the six accepted operations, each reading and open to agents and to Pages. `get_customer` is open to outside clients as well, so the example code tool below runs from the CLI.
 - `egress.allow` lists the one target a Connection may reach: `sample-mcp`, port 8787, as a private target whose address lies in a private range. Docker gives a Compose network such a range. Remove the entry and the Connection's test answers `network_denied`.
 - `secretStore.keys` names `DEMO_SECRET_STORE_KEY`, the key that encrypts the secrets of Connections in the database.
 
@@ -172,6 +172,10 @@ Which five customers ordered most in the last twelve months?
 ```
 
 [docs/try-connections.md](docs/try-connections.md) walks through the Connection page, three questions with what a right answer looks like, a refusal and a stopped sample server.
+
+### An example code tool
+
+`tools/code/open_invoices/` is a code tool in Python to copy: `tool.yaml` beside a `main.py` with one `@tool` function, which calls `get_customer`, sums the customer's unpaid invoices and shows them as a data display. Its [README](tools/code/open_invoices/README.md) takes it from `catalyst tool run` through `put` and `publish` to an agent's `toolNames`.
 
 ## The sample accounting system and its Connection
 
