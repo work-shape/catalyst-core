@@ -205,9 +205,17 @@ export function createToolOperationSource(deps: ToolSourceDeps): OperationSource
       const published = await read(tool, stores);
       return published && definitionOf(published, checker, warn);
     },
-    async resolveMany(names) {
+    async resolveMany(names, stores) {
       const wanted = [...new Set(names.flatMap((name) => toolOfOperationName(name) ?? []))];
       if (wanted.length === 0) return [];
+      // Inside a caller's transaction its own readers are asked, one name at a time, so the
+      // lookup borrows no second connection.
+      if (stores) {
+        const found = await Promise.all(wanted.map((tool) => read(tool, stores)));
+        return found.flatMap((published) =>
+          published ? [definitionOf(published, checker, warn)] : []
+        );
+      }
       const assets = await deps.store.listPublishedConfigAssets({
         clientInstanceId: deps.clientInstanceId,
         kind: TOOL_ASSET_KIND,

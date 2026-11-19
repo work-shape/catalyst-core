@@ -154,6 +154,23 @@ describe("a tool's definition", () => {
 });
 
 describe("the operation of a published tool", () => {
+  it("reads through a caller's transaction stores where it is handed them", async () => {
+    const { resolveMany } = createToolOperationSource({
+      clientInstanceId,
+      store: storeOf(),
+      checker
+    });
+    if (resolveMany === undefined) throw new Error("The source resolves no names at once");
+    expect(await resolveMany([operationName])).toEqual([]);
+    const inTransaction = storeOf(record());
+    const found = await resolveMany([operationName], {
+      configAssets: inTransaction,
+      connections: { getConnectionState: async () => undefined },
+      dataStores: { getDataStore: async () => undefined }
+    });
+    expect(found.map((operation) => operation.name)).toEqual([operationName]);
+  });
+
   it("is offered from the published revision only", async () => {
     const draftOnly = record({ publishedRevisionId: undefined, publishedConfig: undefined });
     const source = createToolOperationSource({
