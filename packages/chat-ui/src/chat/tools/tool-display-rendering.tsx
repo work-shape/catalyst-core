@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { RenderedHtmlDisplay, type ToolDisplayMode } from "../views/rendered-html-display";
 import { renderStructuredDataResourceDisplay } from "../files/structured-data-resource-display";
+import { APPROVAL_REQUEST_DISPLAY_KIND } from "../approvals/approval-request-model";
+import { GenericDataView } from "./generic-data-view";
 
 export type { ToolDisplayMode } from "../views/rendered-html-display";
 
@@ -53,18 +55,23 @@ export function renderBuiltInDisplay(display: {
   if (structuredDataDisplay) {
     return structuredDataDisplay;
   }
+  const mode = readDisplayMode(display);
   if (
-    (display.kind !== "html.rendered" && display.kind !== "private_hydrated_view") ||
-    !isRecord(display.data) ||
-    typeof display.data.html !== "string"
+    (display.kind === "html.rendered" || display.kind === "private_hydrated_view") &&
+    isRecord(display.data) &&
+    typeof display.data.html === "string"
   ) {
+    const title = typeof display.data.title === "string" ? display.data.title : "Rendered HTML";
+    return (
+      <RenderedHtmlDisplay html={display.data.html} kind={display.kind} mode={mode} title={title} />
+    );
+  }
+  // The approval card is drawn by the tool call itself; elsewhere its ids say nothing.
+  if (display.kind === APPROVAL_REQUEST_DISPLAY_KIND || display.data === undefined) {
     return undefined;
   }
-  const title = typeof display.data.title === "string" ? display.data.title : "Rendered HTML";
-  const mode = readDisplayMode(display);
-  return (
-    <RenderedHtmlDisplay html={display.data.html} kind={display.kind} mode={mode} title={title} />
-  );
+  // Data of a kind without a widget of the release: read from its own shape, never as JSON.
+  return <GenericDataView data={display.data} className={mode === "inline" ? "p-3" : undefined} />;
 }
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);

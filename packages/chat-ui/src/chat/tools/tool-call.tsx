@@ -69,7 +69,6 @@ import {
   ToolCallHead
 } from "./tool-call-presentation";
 import {
-  formatDetails,
   getToolSummary,
   hasRenderedNode,
   readToolDisplayProjection,
@@ -80,6 +79,7 @@ import {
 } from "./tool-call-projection";
 import { useToolDisplayPanel } from "./tool-display-panel";
 import { readDisplayMode, renderBuiltInDisplay } from "./tool-display-rendering";
+import { GenericDataView } from "./generic-data-view";
 import { ToolSurfaceList } from "./tool-surface-card";
 import { SubagentCard } from "../subagents/subagent-card";
 import { readWorkspacePromotedSurfacesData } from "./tool-surfaces";
@@ -496,7 +496,7 @@ export function DataPart({
   );
   const hasDisplay = hasRenderedNode(renderedDisplay) || hasRenderedNode(builtInDisplay);
   const displayMode = isToolDisplayPayload(data) ? readDisplayMode(data) : "inline";
-  const details = formatDetails(data);
+  const hasData = data !== undefined && data !== null && data !== "";
 
   if (hasDisplay && displayPresentation === "full") {
     if (displayMode === "side_panel" && displayPanel.available && isToolDisplayPayload(data)) {
@@ -519,11 +519,7 @@ export function DataPart({
         <Wrench size={14} aria-hidden="true" />
         <span>{t("structuredOutput", { name })}</span>
       </div>
-      {details ? (
-        <pre className="mt-2 max-h-56 overflow-auto rounded-md bg-muted px-3 py-2 font-mono text-xs leading-5 [overflow-wrap:anywhere]">
-          {details}
-        </pre>
-      ) : null}
+      {hasData ? <GenericDataView data={data} className="mt-2 max-h-96 overflow-auto" /> : null}
     </div>
   );
 }

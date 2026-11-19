@@ -29,6 +29,7 @@ import {
 } from "./resources-panel-model";
 import { StructuredDataCopyAllButton, StructuredDataView } from "./structured-data-view";
 import { displayPanelKey, renderBuiltInDisplay } from "../tools/tool-display-rendering";
+import { GenericDataView } from "../tools/generic-data-view";
 import type { Surface } from "../surface/surface";
 import { useToolDisplayPanel } from "../tools/tool-display-panel";
 import { getArtifactFileType } from "../tools/tool-artifacts";
@@ -172,11 +173,7 @@ export function ResourcesPanel({
       const display = resource.preview.display;
       const fallback = (isToolDisplayPayload(display)
         ? renderBuiltInDisplay(display)
-        : undefined) ?? (
-        <pre className="overflow-auto whitespace-pre-wrap p-4 text-xs">
-          {JSON.stringify(display, null, 2)}
-        </pre>
-      );
+        : undefined) ?? <GenericDataView data={display} />;
       const node = isToolDisplayPayload(display) ? (
         <ToolDisplayWidgetNode
           display={display}

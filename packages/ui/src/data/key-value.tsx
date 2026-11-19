@@ -12,13 +12,7 @@ export interface KeyValueListProps extends HTMLAttributes<HTMLDListElement> {
 
 /** The list a set of `KeyValue` rows sits in. */
 export function KeyValueList({ className, layout = "inline", ...props }: KeyValueListProps) {
-  return (
-    <dl
-      data-layout={layout}
-      className={cn("group/key-value grid min-w-0 gap-2", className)}
-      {...props}
-    />
-  );
+  return <dl className={cn("group/key-value grid min-w-0 gap-2", className)} {...props} />;
 }
 
 export interface KeyValueProps extends HTMLAttributes<HTMLDivElement> {
@@ -27,6 +21,11 @@ export interface KeyValueProps extends HTMLAttributes<HTMLDivElement> {
   copyValue?: string;
   /** Shows a long value on three lines with a control that unfolds it. */
   foldable?: boolean;
+  /**
+   * Puts this row's label above its value in an `inline` list, for a value that is itself a
+   * group of values, such as a nested `KeyValueList`: beside a label it would lose its width.
+   */
+  layout?: "stacked";
 }
 
 /** One labelled value, inside a `KeyValueList`. The value is the children. */
@@ -35,6 +34,7 @@ export function KeyValue({
   label,
   copyValue,
   foldable = false,
+  layout,
   children,
   ...props
 }: KeyValueProps) {
@@ -43,7 +43,9 @@ export function KeyValue({
   return (
     <div
       className={cn(
-        "grid min-w-0 gap-x-3 gap-y-0.5 group-data-[layout=inline]/key-value:grid-cols-[7rem_minmax(0,1fr)] group-data-[layout=inline]/key-value:items-baseline",
+        "grid min-w-0 gap-x-3 gap-y-0.5",
+        layout !== "stacked" &&
+          "group-data-[layout=inline]/key-value:grid-cols-[7rem_minmax(0,1fr)] group-data-[layout=inline]/key-value:items-baseline",
         className
       )}
       {...props}

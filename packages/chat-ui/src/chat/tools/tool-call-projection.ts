@@ -415,7 +415,7 @@ function readErrorSentence(result: unknown): string | undefined {
   return readTrimmedString(result.error);
 }
 
-export function formatDetails(value: unknown): string | undefined {
+function formatDetails(value: unknown): string | undefined {
   if (value === undefined || value === null || value === "") {
     return undefined;
   }
