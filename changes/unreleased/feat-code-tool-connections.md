@@ -12,8 +12,8 @@ section: Added
   requests of at most 256 KiB, read one at a time. The policy of the declared operations is the
   floor of the tool's call, asked once before the handler starts, and an `approval` asked of a
   personal Connection's operation refuses the tool's call. Nothing inside the handler waits: a
-  call the policy asks more of than it asked as the handler started, or one a guardrail asks
-  about, is refused with `connection_call_waits`. A handler that stopped after it called a
+  call the policy asks more of than it asked when the tool's call was admitted or as the
+  handler started, or one a guardrail asks about, is refused with `connection_call_waits`. A handler that stopped after it called a
   Connection is not run again; its call fails as `interrupted`. In a draft agent's Try the calls
   reach the Connection's test credential. A run so allowed records the decision reason
   `tool_call`.

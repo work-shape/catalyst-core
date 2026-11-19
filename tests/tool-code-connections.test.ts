@@ -93,6 +93,8 @@ try:
         out = connection("mine").call("read", {"text": data["text"]})
     elif mode == "diary":
         out = connection("diary").call("echo", {"text": data["text"]})
+    elif mode == "gate":
+        out = connection("gate").call("read", {"text": data["text"]})
     else:
         out = connection("crm").call("echo", {"text": data["text"]})
     answer = {"output": out}
@@ -158,6 +160,8 @@ let conversationId: ConversationId;
 let crm = "";
 let workspaceId: CollaborationWorkspaceId;
 let tempRoot = "";
+/** How often the gate operation's floor was read: it rises after the first read. */
+let gateReads = 0;
 const workers: JobWorker[] = [];
 
 async function newConversation(): Promise<ConversationId> {
@@ -220,9 +224,18 @@ beforeAll(async () => {
   // conversation; and a personal Connection, whose calls never wait for an approval.
   const ownServer: OperationSource = {
     async resolve(name, stores) {
-      if (name !== "connection.mine.read" && name !== "connection.diary.echo") return undefined;
+      if (
+        name !== "connection.mine.read" &&
+        name !== "connection.diary.echo" &&
+        name !== "connection.gate.read"
+      )
+        return undefined;
       const echo = await f.operationCalls.registry.resolve("connection.crm.echo", stores);
       if (!echo) return undefined;
+      if (name === "connection.gate.read") {
+        // A floor that asks nothing the first time it is read, and a confirm after that.
+        return { ...echo, name, policyFloorOf: () => (gateReads++ === 0 ? undefined : "confirm") };
+      }
       return name === "connection.diary.echo"
         ? { ...echo, name, effect: "changing", personalConnection: true }
         : {
@@ -260,9 +273,10 @@ beforeAll(async () => {
   await publishTool(nodeTool);
   await publishTool(pythonTool("mixed_py", ["connection.crm.echo", "connection.mine.read"]));
   await publishTool(pythonTool("diary_py", ["connection.diary.echo"]));
+  await publishTool(pythonTool("gate_py", ["connection.gate.read"]));
   f.state.agentTools.set(
     AGENT,
-    ["lookup_py", "write_py", "lookup_js", "mixed_py", "diary_py"].map((tool) =>
+    ["lookup_py", "write_py", "lookup_js", "mixed_py", "diary_py", "gate_py"].map((tool) =>
       toolCallOperationName(tool)
     )
   );
@@ -571,6 +585,20 @@ describe("a code tool's handler calling a Connection", () => {
         ["connection.mine.read", "denied"]
       ]);
       expect(inner[1]?.origin).toMatchObject({ byTool: { asked: "allow" } });
+    });
+
+    it("refuses a call whose floor rose between the tool call's admission and the handler's start", async () => {
+      gateReads = 0;
+      const outcome = await callTool(f.kai, "gate_py", { text: "x", mode: "gate" });
+      expect(outcome.result).toMatchObject({ status: "done" });
+      expect(outputOf(outcome)).toEqual({ code: "connection_call_waits" });
+      const inner = (await f.runs()).filter(
+        (run) => run.origin.kind === "agent" && run.origin.byTool?.runId === outcome.run.id
+      );
+      expect(inner.map((run) => [run.operation, run.status])).toEqual([
+        ["connection.gate.read", "denied"]
+      ]);
+      expect(inner[0]?.origin).toMatchObject({ byTool: { asked: "allow" } });
     });
 
     it("refuses a call a guardrail asks an approval of, though the policy asked one already", async () => {

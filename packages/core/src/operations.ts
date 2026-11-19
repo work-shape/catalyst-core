@@ -49,8 +49,9 @@ export type OperationOrigin =
        * call it was made in. `toolName` then names that tool's operation, which the agent lists,
        * and the call is one of the Connection operations the tool declares. Their policy was
        * asked on the tool's call, so the call itself waits for nobody: `asked` is what the
-       * policy asked of this operation when the handler started. A call the policy now asks
-       * more of is refused, as is one a guardrail asks about.
+       * policy asked of this operation when the tool's call was admitted, and no more than it
+       * asked as the handler started. A call the policy now asks more of is refused, as is one a
+       * guardrail asks about.
        */
       byTool?: { runId: OperationRunId; asked: PolicyValue };
       /**

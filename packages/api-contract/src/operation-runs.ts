@@ -26,7 +26,8 @@ export const operationRunOriginSchema = z.discriminatedUnion("kind", [
     /**
      * A call a code tool's handler made: the run of the tool's call it was made in. `toolName`
      * then names the tool's operation. `asked` is what the policy asked of the operation when
-     * the handler started: the most the call ran without asking anybody.
+     * the tool's call was admitted, and no more than it asked as the handler started: the most
+     * the call ran without asking anybody.
      */
     byTool: z.object({ runId: z.string(), asked: z.enum(POLICY_VALUES) }).optional(),
     /**

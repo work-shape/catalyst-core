@@ -162,6 +162,49 @@ interface ToolCallPorts {
    * request is then refused.
    */
   operations?(): Pick<OperationCalls, "registry" | "deps"> | undefined;
+  /** What the policy asked of each declared operation where a tool's call was admitted. */
+  admitted: AdmittedPolicies;
+}
+
+/**
+ * What the policy asked of each Connection operation a code tool declares, as the call of the
+ * tool was admitted, by the agent's run and tool call: the most a call its handler makes then
+ * runs without asking anybody. The admission and the execution of one call are one process:
+ * a call that waited is admitted again, there, before it executes. Read once; what is never
+ * read goes after a while.
+ */
+class AdmittedPolicies {
+  private readonly entries = new Map<
+    string,
+    { at: number; asked: ReadonlyMap<string, PolicyValue> }
+  >();
+
+  private static readonly KEEP_MS = 10 * 60 * 1_000;
+  private static readonly MOST = 1_000;
+
+  set(origin: OperationOrigin, asked: ReadonlyMap<string, PolicyValue>): void {
+    if (origin.kind !== "agent") return;
+    const now = Date.now();
+    for (const [key, entry] of this.entries) {
+      if (now - entry.at <= AdmittedPolicies.KEEP_MS && this.entries.size < AdmittedPolicies.MOST)
+        break;
+      this.entries.delete(key);
+    }
+    const key = AdmittedPolicies.keyOf(origin);
+    this.entries.delete(key);
+    this.entries.set(key, { at: now, asked });
+  }
+
+  take(origin: Extract<OperationOrigin, { kind: "agent" }>) {
+    const key = AdmittedPolicies.keyOf(origin);
+    const entry = this.entries.get(key);
+    this.entries.delete(key);
+    return entry?.asked;
+  }
+
+  private static keyOf(origin: Extract<OperationOrigin, { kind: "agent" }>): string {
+    return `${origin.agentRunId}\u0000${origin.toolCallId}`;
+  }
 }
 
 /** What a `result` tool's call writes: the agent's input as the result of its display kind. */
@@ -207,17 +250,22 @@ async function codeCall(
     });
   }
   const { signal, deadline } = context.runtime;
-  // What the policy asks of each declared operation as the handler starts: the most each of
-  // its calls then runs without asking anybody.
+  // The most each declared operation's calls run without asking anybody: what the policy asked
+  // of it as the tool's call was admitted, and no more than it asks as the handler starts. An
+  // operation the admission did not ask about runs only where the policy allows it.
   const operations = ports.operations?.();
-  const asked =
-    operations && (config.connections ?? []).length > 0
-      ? await declaredPolicies(config.connections ?? [], operations, {
-          origin,
-          actor: context.actor,
-          ...(context.workspaceId === undefined ? {} : { workspaceId: context.workspaceId })
-        })
-      : new Map<string, PolicyValue>();
+  const admitted = ports.admitted.take(origin);
+  const asked = new Map<string, PolicyValue>();
+  if (operations && (config.connections ?? []).length > 0) {
+    const now = await declaredPolicies(config.connections ?? [], operations, {
+      origin,
+      actor: context.actor,
+      ...(context.workspaceId === undefined ? {} : { workspaceId: context.workspaceId })
+    });
+    for (const [name, value] of now) {
+      asked.set(name, looserPolicy(value, admitted?.get(name) ?? "allow"));
+    }
+  }
   const waiting = ports.codeCalls
     .run({
       clientInstanceId: asset.clientInstanceId,
@@ -352,6 +400,10 @@ async function connectionRequest(
   }
 }
 
+function looserPolicy(left: PolicyValue, right: PolicyValue): PolicyValue {
+  return POLICY_VALUES.indexOf(left) <= POLICY_VALUES.indexOf(right) ? left : right;
+}
+
 function stricterPolicy(left: PolicyValue | undefined, right: PolicyValue): PolicyValue {
   return left !== undefined && POLICY_VALUES.indexOf(left) >= POLICY_VALUES.indexOf(right)
     ? left
@@ -472,15 +524,15 @@ function definitionOf(tool: PublishedTool, ports: ToolCallPorts): OperationDefin
       ? {
           policyFloorOf: async (origin, _input, actor, workspaceId) => {
             const operations = ports.operations?.();
-            return operations
-              ? strictestOf(
-                  await declaredPolicies(config.connections ?? [], operations, {
-                    origin,
-                    ...(actor ? { actor } : {}),
-                    ...(workspaceId === undefined ? {} : { workspaceId })
-                  })
-                )
-              : undefined;
+            if (!operations) return undefined;
+            const asked = await declaredPolicies(config.connections ?? [], operations, {
+              origin,
+              ...(actor ? { actor } : {}),
+              ...(workspaceId === undefined ? {} : { workspaceId })
+            });
+            // Kept for the execution of this call, which follows its admission here.
+            ports.admitted.set(origin, asked);
+            return strictestOf(asked);
           }
         }
       : {}),
@@ -528,7 +580,8 @@ export function createToolOperationSource(deps: ToolSourceDeps): OperationSource
     warn: (tool, reason) => deps.warn?.({ tool, reason }),
     ...(deps.codeCalls ? { codeCalls: deps.codeCalls } : {}),
     ...(deps.personalConversation ? { personalConversation: deps.personalConversation } : {}),
-    ...(deps.operations ? { operations: deps.operations } : {})
+    ...(deps.operations ? { operations: deps.operations } : {}),
+    admitted: new AdmittedPolicies()
   };
   const read = async (name: string, stores?: OperationResolutionStores) =>
     publishedTool(

@@ -573,7 +573,8 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
   }
   // A call a code tool's handler made waits for nobody: the call of the tool asked the policy
   // of every Connection operation it declares before the handler started (TOOL-2c). It runs
-  // where the policy asks no more of it now than it asked then. A floor that rose since, such
+  // where the policy asks no more of it now than it asked then, when the tool's call was
+  // admitted and as its handler started. A floor that rose since, such
   // as a person's own server after another Connection ran, a setting raised meanwhile, or a
   // guardrail that asks about this call's own input, would make it wait: it is refused.
   if (
