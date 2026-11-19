@@ -13,6 +13,8 @@ function mapCall(row: typeof toolCodeCalls.$inferSelect): ToolCodeCall {
     input: row.input,
     timeoutSeconds: row.timeoutSeconds,
     ...(row.outcome ? { outcome: row.outcome } : {}),
+    ...(row.request ? { request: row.request } : {}),
+    ...(row.answer ? { answer: row.answer } : {}),
     createdAt: row.createdAt.toISOString(),
     ...(row.startedAt ? { startedAt: row.startedAt.toISOString() } : {}),
     ...(row.finishedAt ? { finishedAt: row.finishedAt.toISOString() } : {})
@@ -56,10 +58,38 @@ export function createPostgresToolCodeCallsStore(db: PostgresConnection): ToolCo
         .returning({ id: toolCodeCalls.id });
       return started.length > 0;
     },
+    async requestToolCodeCall({ clientInstanceId, id, request }) {
+      const written = await db
+        .update(toolCodeCalls)
+        .set({ request })
+        .where(
+          and(
+            eq(toolCodeCalls.clientInstanceId, clientInstanceId),
+            eq(toolCodeCalls.id, id),
+            isNull(toolCodeCalls.outcome)
+          )
+        )
+        .returning({ id: toolCodeCalls.id });
+      return written.length > 0;
+    },
+    async answerToolCodeCall({ clientInstanceId, id, answer }) {
+      const written = await db
+        .update(toolCodeCalls)
+        .set({ answer })
+        .where(
+          and(
+            eq(toolCodeCalls.clientInstanceId, clientInstanceId),
+            eq(toolCodeCalls.id, id),
+            isNull(toolCodeCalls.outcome)
+          )
+        )
+        .returning({ id: toolCodeCalls.id });
+      return written.length > 0;
+    },
     async finishToolCodeCall({ clientInstanceId, id, outcome, finishedAt }) {
       const finished = await db
         .update(toolCodeCalls)
-        .set({ outcome, input: {}, finishedAt: new Date(finishedAt) })
+        .set({ outcome, input: {}, request: null, answer: null, finishedAt: new Date(finishedAt) })
         .where(
           and(
             eq(toolCodeCalls.clientInstanceId, clientInstanceId),

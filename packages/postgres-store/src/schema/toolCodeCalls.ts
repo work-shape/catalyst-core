@@ -3,7 +3,9 @@ import type {
   ClientInstanceId,
   ConversationId,
   JsonObject,
-  ToolCodeCallOutcome
+  ToolCodeCallAnswer,
+  ToolCodeCallOutcome,
+  ToolCodeCallRequest
 } from "@work-shape/catalyst-core";
 import { conversations } from "./conversations";
 
@@ -11,7 +13,8 @@ import { conversations } from "./conversations";
  * One call of a code tool while it runs (TOOL-2b): the agent's input for the command worker,
  * and how the handler ended for the operation that waits. The worker clears the input with
  * the outcome; the operation removes the row once it read it; the worker's sweep removes a row
- * nobody read. The row goes with its conversation.
+ * nobody read. The row goes with its conversation. While the handler runs it carries the one
+ * request the handler made of a Connection, and its answer (TOOL-2c).
  */
 export const toolCodeCalls = pgTable(
   "tool_code_calls",
@@ -27,6 +30,9 @@ export const toolCodeCalls = pgTable(
     input: jsonb("input").$type<JsonObject>().notNull(),
     timeoutSeconds: integer("timeout_seconds").notNull(),
     outcome: jsonb("outcome").$type<ToolCodeCallOutcome>(),
+    // The handler's request to a Connection and its answer (TOOL-2c), cleared with the outcome.
+    request: jsonb("request").$type<ToolCodeCallRequest>(),
+    answer: jsonb("answer").$type<ToolCodeCallAnswer>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     // When a worker started the handler's container: the operation's wait counts from here.
     startedAt: timestamp("started_at", { withTimezone: true }),
