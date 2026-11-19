@@ -112,6 +112,8 @@ describe("a Knowledge Base document on a search hit's file id", () => {
       original: "available"
     });
     expect(await document.pages()).toEqual([{ page: 1, text: FILE_TEXT }]);
+    // A page view reads a document added by hand from the copy its file id names (KB-14).
+    expect(await document.openOriginal({ correlationId: "corr_view" })).toEqual({ kind: "copy" });
 
     // The file of the conversation it was added from is no Knowledge Base's.
     expect(
