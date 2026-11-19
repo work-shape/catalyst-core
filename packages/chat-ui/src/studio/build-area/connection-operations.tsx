@@ -13,7 +13,7 @@ import {
   Switch,
   type BadgeTone
 } from "@work-shape/catalyst-ui";
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import type { BuildAsset, BuildAssetEditorProps } from "./build-asset-kind";
 import { operationTitle } from "./connection-approval-model";
@@ -219,6 +219,7 @@ export function ConnectionOperations({
   more?: (operation: ConnectionOperationDetail) => ReactNode;
 }) {
   const { locale, t } = useTranslation();
+  const listId = useId();
   if (operations.length === 0) {
     return <EmptyState layout="inline">{t("connections.operationsEmpty")}</EmptyState>;
   }
@@ -230,6 +231,7 @@ export function ConnectionOperations({
         const shown = operation.enabled ? operation.status : "disabled";
         // Callable by agents alone is what the section says of every row: only another answer
         // is said in the row itself.
+        const titleId = `${listId}-${operation.name}`;
         const agentsOnly = operation.exposure.length === 1 && operation.exposure[0] === "agent";
         const exposure = (
           <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-caption text-muted-foreground">
@@ -254,7 +256,7 @@ export function ConnectionOperations({
             className="grid min-w-0 gap-1.5 border-b py-3 first:pt-0 last:border-b-0 last:pb-0"
           >
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <span className="min-w-0 text-label break-words">
+              <span id={titleId} className="min-w-0 text-label break-words">
                 {operationTitle(operation.name)}
               </span>
               <Badge tone={operation.effect === "changing" ? "warning" : "neutral"}>
@@ -293,7 +295,11 @@ export function ConnectionOperations({
             ) : null}
             {review?.(operation)}
             <Disclosure>
-              <DisclosureTrigger data-connection-operation-more={operation.name}>
+              <DisclosureTrigger
+                // Each row's toggle is told apart by the operation it unfolds.
+                aria-describedby={titleId}
+                data-connection-operation-more={operation.name}
+              >
                 {t("connectionPage.operationMore")}
               </DisclosureTrigger>
               {/* Kept in the page while folded: what it holds is found by its name. */}
