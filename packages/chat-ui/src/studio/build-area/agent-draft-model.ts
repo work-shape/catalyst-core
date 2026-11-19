@@ -34,20 +34,23 @@ const MODEL_PARTS = [
   "modelReasoningEfforts"
 ] as const satisfies readonly (keyof AgentFormState)[];
 
-/** Each field in the order of the page, with the parts of the form it shows. */
+/**
+ * Each field in the order of the page, with the parts of the form it shows: what shapes the
+ * agent first, then what waits under Settings.
+ */
 const FIELD_PARTS: readonly (readonly [DraftAgentField, readonly (keyof AgentFormState)[]])[] = [
+  ["instructions", ["instructions"]],
+  ["additionalInstructions", ["additionalInstructions"]],
+  ["knowledgeBases", ["knowledgeBases"]],
+  ["skillNames", ["skillNames"]],
+  ["toolNames", ["toolNames", "ownServers"]],
+  ["initialPrompts", ["initialPrompts"]],
   ["displayName", ["displayName"]],
   ["description", ["description"]],
   ["welcomeMessage", ["welcomeMessage"]],
   ["welcomeSubtitle", ["welcomeSubtitle"]],
-  ["instructions", ["instructions"]],
-  ["additionalInstructions", ["additionalInstructions"]],
-  ["maxSteps", ["maxSteps"]],
   ["model", MODEL_PARTS],
-  ["skillNames", ["skillNames"]],
-  ["knowledgeBases", ["knowledgeBases"]],
-  ["toolNames", ["toolNames", "ownServers"]],
-  ["initialPrompts", ["initialPrompts"]]
+  ["maxSteps", ["maxSteps"]]
 ];
 
 const same = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);

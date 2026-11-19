@@ -518,6 +518,51 @@ describe("agent page", () => {
     expect(markup).not.toContain('id="availability"');
   });
 
+  it("opens Settings on a model the instance cannot run, and says only what is in them", () => {
+    const trigger = (markup: string) =>
+      /<button[^>]*data-asset-settings-trigger=""[^>]*>.*?<\/button>/u.exec(markup)?.[0] ?? "";
+
+    const healthy = trigger(agentPage({ canManageAgentModels: true }));
+    expect(healthy).toContain('aria-expanded="false"');
+    expect(healthy).toContain("Name, model and more");
+    // A reader who sets no model and no availability is told of neither.
+    const plain = trigger(agentPage());
+    expect(plain).toContain("Name and more");
+    expect(plain).not.toContain("model");
+    expect(
+      trigger(
+        agentPage({
+          config: { modelBindingId: "gone" },
+          status: {
+            chatAvailable: false,
+            unavailableModels: [{ name: "gone", field: "modelBindingId" }]
+          }
+        })
+      )
+    ).toContain('aria-expanded="true"');
+  });
+
+  it("starts a new agent with its name in front, and folds only what is set once", () => {
+    const markup = agentPage({
+      started: startedAgentForm({ name: "tax-a", title: "A" }, "en"),
+      editableAgentFields: ["displayName", "instructions"],
+      canManageAgentModels: true
+    });
+    const settings = /<div[^>]*data-asset-settings="".*$/u.exec(markup)?.[0] ?? "";
+
+    expect(section(markup, "overview")).not.toBe("");
+    expect(markup.indexOf('id="overview"')).toBeLessThan(markup.indexOf('id="instructions"'));
+    expect(settings).not.toContain('id="overview"');
+    expect(settings).toContain('id="model"');
+    // The name is on the page, so the line beside Settings does not name it.
+    expect(settings).toMatch(/data-asset-settings-trigger=""[^>]*>.*?>Model</u);
+    expect(markup).not.toContain("data-asset-lead");
+    // Without anything to fold there is no Settings line.
+    expect(
+      agentPage({ started: startedAgentForm({ name: "tax-b", title: "B" }, "en") })
+    ).not.toContain("data-asset-settings");
+  });
+
   it("names the skills an agent has by their titles, and falls back to the id", () => {
     const skillsOf = (editableAgentFields: string[]) =>
       section(
