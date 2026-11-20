@@ -3,6 +3,14 @@ import { defineTranslations } from "./translation-area";
 
 export const build = defineTranslations({
   en: {
+    "build.overview": "Overview",
+    "build.overviewLead": "Here you build what your team works with in chat.",
+    "build.overviewEmptyLead": "Nothing is built yet. Most people start with an agent.",
+    "build.overviewNew": "New",
+    "build.overviewList": "What you build in Studio",
+    "build.overviewMore": "{count}+",
+    "build.purposeAgents": "Agents answer questions and get tasks done for your team.",
+    "build.purposeSkills": "Skills are instructions an agent reads when a task calls for them.",
     "build.instructionsLine": "instructions, line {line}",
     "build.refusedAgentTools":
       "Nothing was saved because the agent refers to tools unavailable here. Ask an administrator to check its instructions and which tools are enabled here.",
@@ -228,6 +236,15 @@ export const build = defineTranslations({
     "build.headForWorkspace": "for {workspace}"
   },
   de: {
+    "build.overview": "Übersicht",
+    "build.overviewLead": "Hier baust du, womit dein Team im Chat arbeitet.",
+    "build.overviewEmptyLead": "Noch ist nichts gebaut. Die meisten fangen mit einem Agenten an.",
+    "build.overviewNew": "Neu",
+    "build.overviewList": "Was du in Studio baust",
+    "build.overviewMore": "{count}+",
+    "build.purposeAgents": "Agenten beantworten Fragen und erledigen Aufgaben für dein Team.",
+    "build.purposeSkills":
+      "Skills sind Anleitungen, die ein Agent liest, wenn eine Aufgabe sie braucht.",
     "build.instructionsLine": "Anweisungen, Zeile {line}",
     "build.refusedAgentTools":
       "Es wurde nichts gespeichert, weil der Agent hier nicht verfügbare Tools nennt. Bitte lass einen Administrator seine Anweisungen und die hier aktivierten Tools prüfen.",

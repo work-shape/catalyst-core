@@ -48,8 +48,16 @@ if (
   throw new Error("The platform registry has no agent, skill and connection entry.");
 }
 /** A kind that only lists, as a module's kind without a page is: Connections without their page. */
-const { kind, path, label, searchLabel, emptyText, icon } = connectionKind;
-const listedConnections: BuildKind = { kind, path, label, searchLabel, emptyText, icon };
+const { kind, path, label, overviewText, searchLabel, emptyText, icon } = connectionKind;
+const listedConnections: BuildKind = {
+  kind,
+  path,
+  label,
+  overviewText,
+  searchLabel,
+  emptyText,
+  icon
+};
 
 function row(kind: string, name: string, overrides: Partial<BuildAssetRow> = {}): BuildAssetRow {
   return {
@@ -203,6 +211,7 @@ const plantedKind: BuildAssetKind = {
   label: "settings.apiAccess",
   searchLabel: "build.agentsSearch",
   newLabel: "configNewAgent",
+  overviewText: "build.purposeAgents",
   titleLabel: "configTitle",
   deleteTitle: "configDeleteSkillTitle",
   deleteDescription: "configDeleteSkillDescription",
@@ -266,8 +275,8 @@ describe("Studio frame", () => {
     }
   });
 
-  it("lands on the Agents list, titled by the name with what the agent does beneath", () => {
-    const markup = render({});
+  it("shows the Agents list, titled by the name with what the agent does beneath", () => {
+    const markup = render({ kindPath: "agents" });
 
     expect(markup).toContain('<h1 class="min-w-0 break-words outline-none text-title-lg">Agents');
     expect(markup).toContain(">Workflow Assistant<");
@@ -673,8 +682,10 @@ describe("Studio with rights in a workspace", () => {
       { source: holder([{ ...taxWorkspace, actions: ["agent.read"] }]) }
     );
 
-    // The address of the kind without an item lands on the first kind with one.
-    expect(agentsOnly).toContain(">Steuer-Agent<");
+    // The address of the kind without an item shows the overview, with a row for the kind
+    // the holder reads and none for the other.
+    expect(agentsOnly).toContain('data-build-overview-kind="agents"');
+    expect(agentsOnly).not.toContain('data-build-overview-kind="skills"');
     expect(agentsOnly).not.toContain("Tax review");
   });
 });
@@ -843,16 +854,9 @@ describe("Studio asset page", () => {
 describe("Studio addresses", () => {
   const kinds = visibleBuildKinds(buildAssetKinds, source().kinds);
 
-  it("opens the first kind at /build and at a kind the reader has not, and marks the address for correction", () => {
-    expect(resolveBuildPlace(kinds, {})).toMatchObject({
-      kind: { entry: agentKind },
-      corrected: true
-    });
-    expect(resolveBuildPlace(kinds, { kindPath: "nothing", name: "x" })).toMatchObject({
-      kind: { entry: agentKind },
-      name: undefined,
-      corrected: true
-    });
+  it("names no kind at /build and at a kind the reader has not, where the overview stands", () => {
+    expect(resolveBuildPlace(kinds, {})).toBeUndefined();
+    expect(resolveBuildPlace(kinds, { kindPath: "nothing", name: "x" })).toBeUndefined();
     expect(resolveBuildPlace(kinds, { kindPath: "skills", name: "tax-review" })).toEqual({
       kind: kinds[1],
       name: "tax-review",

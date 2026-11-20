@@ -10,6 +10,7 @@ export const toolKind: BuildListedKind = {
   kind: "tool",
   path: "tools",
   label: "toolAssets.kind",
+  overviewText: "toolAssets.purpose",
   description: "toolAssets.description",
   searchLabel: "toolAssets.search",
   emptyText: "toolAssets.empty",
