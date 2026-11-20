@@ -412,11 +412,9 @@ export function WorkflowSettingsForm({
       }
     />
   );
-  // One way to start in one row: what it is, one line about it, and its switch at the end.
+  // One way to start in one row: its switch, then what it is and one line about it.
   const switchRow = (kind: string, label: string, hint: ReactNode) => (
-    <SettingsRow label={label} description={hint}>
-      {startSwitch(kind)}
-    </SettingsRow>
+    <SettingsRow label={label} description={hint} leading={startSwitch(kind)} />
   );
   const startsId = useId();
   const startsMoreId = useId();
@@ -509,6 +507,7 @@ export function WorkflowSettingsForm({
             error={
               scheduleIncomplete ? t("workflows.workflowSettings.scheduleIncomplete") : undefined
             }
+            leading={startSwitch("schedule")}
           >
             {schedule === undefined ? null : scheduleForm === undefined ? (
               changeWithAgent
@@ -543,7 +542,6 @@ export function WorkflowSettingsForm({
                 </PopoverContent>
               </Popover>
             )}
-            {startSwitch("schedule")}
           </SettingsRow>
           {switchRow(
             "manual",
@@ -556,9 +554,11 @@ export function WorkflowSettingsForm({
             t("workflows.workflowSettings.onSyncHint")
           )}
           {event === undefined ? null : (
+            // Part of the row above: its text starts where that row's text starts.
             <SettingsRow
               label={t("workflows.workflowSettings.onSyncKnowledgeBase")}
               description={t("workflows.workflowSettings.onSyncKnowledgeBaseHint")}
+              className="ps-14"
             >
               <Input
                 className="w-60 max-w-full"

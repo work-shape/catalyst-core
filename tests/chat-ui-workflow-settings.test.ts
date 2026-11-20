@@ -429,7 +429,13 @@ describe("the Settings tab of a Workflow (WF-EDIT-5)", () => {
       t("workflows.workflowSettings.byHand"),
       t("workflows.workflowSettings.onSync")
     ]);
-    for (const row of rows) expect(row.querySelector('[role="switch"]')).not.toBeNull();
+    for (const row of rows) {
+      // The switch stands before its label, and the label names it.
+      const toggle = required(
+        row.querySelector('[data-slot="settings-row-leading"] [role="switch"]')
+      );
+      expect(row.querySelector("label")?.getAttribute("for")).toBe(toggle.id);
+    }
     // The schedule's row holds its button, named for what it sets.
     const when = required(rows[0]?.querySelector("[data-workflow-schedule-when]"));
     expect(when.textContent).toBe("Every Monday at 08:00 AM");
