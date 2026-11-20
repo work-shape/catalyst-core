@@ -15,6 +15,18 @@ import { TargetBadge } from "../status/target-badge";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
 
+const manyStarterIcons = [
+  "pencil",
+  "file-text",
+  "calendar",
+  "mail",
+  "calculator",
+  "search",
+  "users",
+  "lightbulb",
+  "clipboard-list"
+];
+
 const liveOnceStates: readonly RunLiveOnceState[] = ["off", "busy", "on"];
 
 /** A switch beside the marker it changes: it is set after a moment, as an instance answers. */
@@ -216,7 +228,7 @@ export const actionsGallery: GalleryGroup = {
       name: "Starter",
       components: ["Starter", "StarterList"],
       render: (text) => (
-        <div className="max-w-2xl" data-gallery-sample="starters">
+        <div className="grid max-w-2xl gap-6" data-gallery-sample="starters">
           <StarterList label={text.starterListLabel}>
             <Starter
               icon={<SkillIcon icon="spreadsheet" size="lg" />}
@@ -241,6 +253,20 @@ export const actionsGallery: GalleryGroup = {
               disabled
             />
           </StarterList>
+          <Samples label={text.starterMany}>
+            <StarterList
+              label={text.starterListLabel}
+              more={{ show: text.starterMore, hide: text.starterFewer }}
+            >
+              {text.starterManyTitles.map((title, index) => (
+                <Starter
+                  key={title}
+                  icon={<SkillIcon icon={manyStarterIcons[index]} size="md" />}
+                  title={title}
+                />
+              ))}
+            </StarterList>
+          </Samples>
         </div>
       )
     },

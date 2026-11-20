@@ -40,6 +40,7 @@ export {
   type IconRegistry,
   type RegistryIconProps
 } from "./registry-icon";
+export { starterIconNames, starterIcons, type StarterIconKey } from "./starter-icons";
 export {
   KnowsHowTo,
   SkillIcon,

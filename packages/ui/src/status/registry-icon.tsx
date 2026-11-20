@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { createContext, useContext, type ComponentType, type ReactNode } from "react";
 import { fileTypeIcons } from "./file-type-icons";
+import { starterIcons } from "./starter-icons";
 
 /** An icon of the registry. It is drawn at the size its place gives it. */
 export type IconComponent = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
@@ -44,10 +45,11 @@ export type IconFamily = "file" | "service" | "skill" | "tool";
  * `prompt` for a request an agent's author wrote,
  * one per kind of part of a graph, one per category of what a part touches and one per file type
  * (`spreadsheet`, `document`, `presentation`, `pdf`, `image`, `archive`, `text`, and `file` for
- * every other type, which is also the generic icon of the family). None of them is a mark of a
- * vendor.
+ * every other type, which is also the generic icon of the family), and the starter icons an
+ * agent's author picks from. None of them is a mark of a vendor.
  */
 export const genericIcons = {
+  ...starterIcons,
   ...fileTypeIcons,
   agent: Bot,
   app: LayoutGrid,
