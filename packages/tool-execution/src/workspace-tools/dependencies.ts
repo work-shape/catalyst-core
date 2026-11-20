@@ -14,6 +14,7 @@ import {
   createWorkspaceCommandClient,
   type WorkspaceCommandClient
 } from "../workspace-command-client";
+import type { DirectWebDownloader } from "@work-shape/catalyst-web-access";
 import type { WorkspaceSkillSource } from "../run-skills";
 import type { WorkspaceCommandTelemetry } from "../workspace-command-telemetry";
 import { DEFAULT_LIMITS, type WorkspaceCommandServiceLimits } from "../workspace-tool-schemas";
@@ -37,6 +38,9 @@ export interface WorkspaceSourceFileReader {
     bytes: Uint8Array;
   }>;
 }
+
+/** The downloader the instance builds from `webAccess.download`, for `web_download`. */
+export type WorkspaceWebDownloader = Pick<DirectWebDownloader, "download">;
 
 export interface WorkspaceCommandResultSource {
   resolveWorkspaceCommand(input: {
@@ -72,6 +76,11 @@ export interface WorkspaceCommandServiceOptions {
    * `workspace.html_to_pdf`; without it they do not.
    */
   htmlPdf?: HtmlPdfService;
+  /**
+   * The instance's downloader of public files (`webAccess.download`). With it the workspace
+   * tools include `web_download`; without it they do not.
+   */
+  webDownload?: WorkspaceWebDownloader;
   execResultWaitMs?: number;
   execResultPollIntervalMs?: number;
   now?: () => string;
@@ -91,6 +100,7 @@ export interface WorkspaceToolDependencies {
   readonly telemetry?: WorkspaceCommandTelemetry;
   readonly projectFolder?: ProjectFolderPort;
   readonly htmlPdf?: HtmlPdfService;
+  readonly webDownload?: WorkspaceWebDownloader;
   readonly limits: WorkspaceCommandServiceLimits;
   readonly now: () => string;
 }
@@ -120,6 +130,7 @@ export function resolveWorkspaceToolDependencies(
     telemetry: options.telemetry,
     projectFolder: options.projectFolder,
     htmlPdf: options.htmlPdf,
+    webDownload: options.webDownload,
     limits: {
       ...DEFAULT_LIMITS,
       ...options.limits

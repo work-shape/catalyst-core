@@ -9,6 +9,7 @@ import { workspacePreviewImagesTool } from "./preview-images";
 import { workspacePromoteArtifactTool } from "./promote-artifact";
 import { workspaceReadFileTool } from "./read-file";
 import { WorkspaceCommandService } from "./service";
+import { workspaceWebDownloadTool } from "./web-download";
 import { workspaceWriteFileTool } from "./write-file";
 
 export {
@@ -20,7 +21,8 @@ export type {
   WorkspaceCommandResultSource,
   WorkspaceCommandServiceOptions,
   WorkspaceSourceFileReader,
-  WorkspaceToolStore
+  WorkspaceToolStore,
+  WorkspaceWebDownloader
 } from "./dependencies";
 export {
   EXECUTION_WORKSPACE_ARTIFACT_METADATA_SOURCE,
@@ -29,13 +31,14 @@ export {
 } from "./preview-images";
 export { WorkspaceCommandService } from "./service";
 export { HTML_TO_PDF_TOOL_NAME } from "./html-to-pdf";
+export { WEB_DOWNLOAD_TOOL_NAME } from "./web-download";
 
 export function createWorkspaceToolDefinitions(
   options: WorkspaceCommandServiceOptions | { service: WorkspaceCommandService }
 ): AnyToolDefinition[] {
   const service = "service" in options ? options.service : new WorkspaceCommandService(options);
   const deps = service.dependencies;
-  const { htmlPdf } = deps;
+  const { htmlPdf, webDownload } = deps;
 
   return [
     workspaceExecTool(deps),
@@ -46,6 +49,7 @@ export function createWorkspaceToolDefinitions(
     workspaceEditFileTool(deps),
     workspacePromoteArtifactTool(deps),
     workspacePreviewImagesTool(deps),
-    ...(htmlPdf ? [workspaceHtmlToPdfTool({ ...deps, htmlPdf })] : [])
+    ...(htmlPdf ? [workspaceHtmlToPdfTool({ ...deps, htmlPdf })] : []),
+    ...(webDownload ? [workspaceWebDownloadTool({ ...deps, webDownload })] : [])
   ];
 }

@@ -1,4 +1,7 @@
-import { WORKFLOW_PAGING_DEFAULTS } from "@work-shape/catalyst-core";
+import {
+  WEB_DOWNLOAD_DEFAULT_CONTENT_TYPES,
+  WORKFLOW_PAGING_DEFAULTS
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { workflowDurationSchema } from "@work-shape/catalyst-core";
 
@@ -65,6 +68,40 @@ const webSearchConfigSchema = z.preprocess(
   z.object({ enabled: z.boolean().default(false) }).default({ enabled: false })
 );
 
+const MIB = 1024 * 1024;
+
+/** `type/subtype`, `type/*` or `*\/*`, lower case, as a response's Content-Type names it. */
+const MEDIA_TYPE_PATTERN =
+  /^(?:\*\/\*|[a-z0-9][a-z0-9!#$&^_.+-]*\/(?:\*|[a-z0-9][a-z0-9!#$&^_.+-]*))$/u;
+
+/**
+ * `web_download`: one file from a public address into the conversation's execution workspace.
+ * It needs `webAccess.enabled` and `executionWorkspaces.enabled` as well.
+ */
+const webDownloadConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    timeoutMs: z.number().int().positive().max(300_000).default(60_000),
+    maxBytes: z
+      .number()
+      .int()
+      .positive()
+      .max(100 * MIB)
+      .default(25 * MIB),
+    maxRedirects: z.number().int().nonnegative().max(10).default(5),
+    contentTypes: z
+      .array(
+        z
+          .string()
+          .trim()
+          .toLowerCase()
+          .regex(MEDIA_TYPE_PATTERN, "Write a media type as type/subtype, type/* or */*")
+      )
+      .min(1)
+      .default(() => [...WEB_DOWNLOAD_DEFAULT_CONTENT_TYPES])
+  })
+  .prefault({});
+
 // Parse the missing object through its child defaults. Zod's object .default() only
 // copies the outer object, so nested search/fetch objects otherwise leak between configs.
 export const webAccessConfigSchema = z
@@ -84,7 +121,8 @@ export const webAccessConfigSchema = z
         maxTextCharacters: z.number().int().positive().max(200000).default(20000),
         maxRedirects: z.number().int().nonnegative().max(10).default(5)
       })
-      .prefault({})
+      .prefault({}),
+    download: webDownloadConfigSchema
   })
   .prefault({});
 
