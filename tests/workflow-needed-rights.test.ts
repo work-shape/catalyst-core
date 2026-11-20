@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import {
   workflowRightsLacking,
   workflowNeededRightResource,
@@ -6,6 +7,8 @@ import {
   asClientInstanceId,
   asUserId,
   createActorAccess,
+  type ConfigAssetRecord,
+  type OperationDefinition,
   type PermissionGrant,
   type OperationResource,
   type WorkflowInputMapping,
@@ -13,6 +16,7 @@ import {
   type WorkflowStep
 } from "@work-shape/catalyst-core";
 import {
+  resolveWorkflowNeededRights,
   workflowNeededRights,
   workflowOperationNames,
   type NeededRightOperation
@@ -233,5 +237,64 @@ describe("the rights a Workflow's account needs", () => {
           : { allowed: false, reason: "no_grant" }
     });
     expect(lacking.map((right) => right.action)).toEqual(["data_store.read"]);
+  });
+
+  it("names a right once that a trigger names by its asset's name and a step by its id", async () => {
+    const definition = manifest([step("pending", "knowledge.handbook.pending", { limit: { value: 10 } })]);
+    definition.steps[0] = {
+      id: "start",
+      name: "Start",
+      type: "trigger",
+      triggers: [
+        { kind: "manual" },
+        {
+          kind: "platform_event",
+          event: "knowledge_base.sync_finished",
+          filter: { knowledgeBase: "handbook" }
+        }
+      ]
+    };
+    const pending: OperationDefinition = {
+      name: "knowledge.handbook.pending",
+      effect: "reading",
+      auth: "principal",
+      scope: null,
+      action: "knowledge_base.read",
+      inputSchema: z.object({}),
+      outputSchema: z.unknown(),
+      timeoutMs: 1000,
+      resource: () => resource("knowledge_base", "handbook"),
+      execute: () => Promise.reject(new Error("not called"))
+    };
+    const handbook: ConfigAssetRecord = {
+      id: "knowledge_base-handbook",
+      clientInstanceId: asClientInstanceId("instance"),
+      kind: "knowledge_base",
+      name: "handbook",
+      scope: { kind: "instance" },
+      status: "active",
+      activeRevisionId: "rev-1",
+      revision: 1,
+      config: {},
+      createdAt: "2026-11-20T00:00:00.000Z",
+      updatedAt: "2026-11-20T00:00:00.000Z"
+    };
+    const rights = await resolveWorkflowNeededRights(
+      {
+        clientInstanceId: asClientInstanceId("instance"),
+        configAssets: {
+          getConfigAsset: ({ kind, name }) =>
+            Promise.resolve(kind === handbook.kind && name === handbook.name ? handbook : undefined)
+        },
+        registry: () => ({
+          resolveMany: (names) =>
+            Promise.resolve(new Map(names.includes(pending.name) ? [[pending.name, pending]] : []))
+        })
+      },
+      definition
+    );
+    expect(
+      rights.map(({ action, asset, steps, neededFor }) => [action, asset.assetId, steps, neededFor])
+    ).toEqual([["knowledge_base.read", "knowledge_base-handbook", ["start", "pending"], "publish"]]);
   });
 });
