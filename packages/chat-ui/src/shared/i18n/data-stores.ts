@@ -2,7 +2,7 @@ import { defineTranslations } from "./translation-area";
 
 export const dataStores = defineTranslations({
   en: {
-    "dataStores.purpose": "Data is tables where agents and apps keep their records.",
+    "dataStores.purpose": "Data lives in tables where agents and apps keep their records.",
     "dataStores.useTitle": "Read “{title}” in this chat?",
     "dataStores.useBody":
       "The agent answers from its records here. Your right to read them is checked on every answer.",
