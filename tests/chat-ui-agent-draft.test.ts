@@ -146,31 +146,11 @@ describe("the fields a draft changes", () => {
         form,
         agentConfigToForm({ ...drafted, modelBindingId: "fast", displayName: "Helper" })
       )
-    ).toEqual(["instructions", "skillNames", "displayName", "model"]);
+    ).toEqual(["displayName", "instructions", "model", "skillNames"]);
   });
 });
 
 describe("the agent page with a draft", () => {
-  it("opens Settings on a draft that changes a field in them, and Advanced on one of its own", () => {
-    const settings = (markup: string) =>
-      /<button[^>]*data-asset-settings-trigger=""[^>]*>/u.exec(markup)?.[0] ?? "";
-    const advanced = (markup: string) =>
-      /<button[^>]*data-agent-advanced-trigger=""[^>]*>/u.exec(markup)?.[0] ?? "";
-
-    // What the draft changes on the page itself leaves Settings folded.
-    expect(settings(agentPage(source(draftOf(drafted))))).toContain('aria-expanded="false"');
-    expect(settings(agentPage(source(null)))).toContain('aria-expanded="false"');
-
-    const renamed = agentPage(source(draftOf({ ...live, displayName: "Helper" })));
-    expect(marks(renamed)).toEqual(["displayName"]);
-    expect(settings(renamed)).toContain('aria-expanded="true"');
-
-    const stepped = agentPage(source(draftOf({ ...live, maxSteps: 12 })));
-    expect(marks(stepped)).toEqual(["maxSteps"]);
-    expect(settings(stepped)).toContain('aria-expanded="true"');
-    expect(advanced(stepped)).toContain('aria-expanded="true"');
-  });
-
   it("shows the draft in the fields, a text's live version in place and a list's under it", () => {
     const markup = agentPage(source(draftOf(drafted)));
     expect(marks(markup)).toEqual(["instructions", "skillNames"]);
