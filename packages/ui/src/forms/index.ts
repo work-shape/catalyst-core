@@ -81,3 +81,4 @@ export {
   type TemplateTextFieldProps,
   type TemplateTextProps
 } from "./template-text-field";
+export { IconPicker, type IconPickerOption, type IconPickerProps } from "./icon-picker";

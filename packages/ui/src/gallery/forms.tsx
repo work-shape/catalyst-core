@@ -7,6 +7,7 @@ import { Checkbox } from "../forms/checkbox";
 import { ChipInput } from "../forms/chip-input";
 import { ComposerFrame } from "../forms/composer-frame";
 import { Field } from "../forms/field";
+import { IconPicker } from "../forms/icon-picker";
 import { Input, Textarea } from "../forms/input";
 import { NameWithAddress, addressOf, type NameAndAddress } from "../forms/name-with-address";
 import { ProposedValue } from "../forms/proposed-value";
@@ -16,12 +17,43 @@ import { SaveBar } from "../forms/save-bar";
 import { Select } from "../forms/select";
 import { SettingsList, SettingsRow } from "../forms/settings-row";
 import { Switch } from "../forms/switch";
+import { starterIconNames } from "../status/starter-icons";
 import { Page } from "../structure/page";
 import { versionedTextEntry } from "./draft";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
 
 const rowAgents = ["rowAgent", "rowWorkflow", "rowKnowledge"] as const;
+
+const iconPickerOptions = starterIconNames.map((name) => ({ name, label: name }));
+
+/** An icon picker with nothing chosen, one with an icon chosen, and one that is disabled. */
+function IconPickerSamples({ text }: { text: GalleryText }) {
+  const [none, setNone] = useState<string | undefined>(undefined);
+  const [chosen, setChosen] = useState<string | undefined>("calendar");
+  return (
+    <Samples>
+      {(
+        [
+          [none, setNone, false],
+          [chosen, setChosen, false],
+          ["mail", () => undefined, true]
+        ] as const
+      ).map(([value, onChange, disabled], index) => (
+        <IconPicker
+          key={index}
+          label={text.iconPickerLabel}
+          options={iconPickerOptions}
+          value={value}
+          defaultIcon="prompt"
+          defaultLabel={text.iconPickerDefault}
+          disabled={disabled}
+          onChange={onChange}
+        />
+      ))}
+    </Samples>
+  );
+}
 
 /** A list of short values as chips: empty, filled, wrong and disabled. */
 function ChipInputSamples({ text }: { text: GalleryText }) {
@@ -445,6 +477,11 @@ export const formsGallery: GalleryGroup = {
       name: "ChipInput",
       components: ["ChipInput"],
       render: (text) => <ChipInputSamples text={text} />
+    },
+    {
+      name: "IconPicker",
+      components: ["IconPicker"],
+      render: (text) => <IconPickerSamples text={text} />
     },
     {
       name: "Field",
