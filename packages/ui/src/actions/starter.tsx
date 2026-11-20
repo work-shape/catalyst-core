@@ -49,7 +49,7 @@ export const Starter = forwardRef<HTMLButtonElement, StarterProps>(function Star
       {icon === undefined ? null : <span className="flex shrink-0 items-center">{icon}</span>}
       <span className="grid min-w-0 gap-0.5">
         {/* A short card is narrow, so its title may take a second line. */}
-        <span className={cn("text-label", compact ? "line-clamp-2 break-words" : "truncate")}>
+        <span className={cn(compact ? "line-clamp-2 break-words" : "truncate", "text-label")}>
           {title}
         </span>
         {hint === undefined || compact ? null : (
