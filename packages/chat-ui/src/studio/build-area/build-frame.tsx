@@ -72,7 +72,12 @@ import { AssetPlaceLine, AssetPlacesProvider, assetPlace } from "./asset-place";
 import { scrollPageToTop } from "./build-scroll";
 import { BUILT_WITH_AGENT, BuildListEmpty } from "./build-list-empty";
 import { BuildWithAgentDialog } from "../build-with-agent-dialog";
-import { CAPABILITIES_BUILD_PATH, CapabilitiesPage } from "./capabilities-page";
+import {
+  CAPABILITIES_BUILD_PATH,
+  CapabilitiesPage,
+  TOOL_ASSET_KIND,
+  TOOLS_BUILD_PATH
+} from "./capabilities-page";
 
 /** The commands the CLI entry names, in the order a person runs them. */
 const CLI_COMMANDS = ["catalyst config pull", "catalyst config diff", "catalyst config push"];
@@ -112,7 +117,9 @@ function BuildFrameBody({
   const { location, open, href } = useBuildNavigation();
   const kinds = visibleBuildKinds(useBuildAssetKinds(), source.kinds);
   // "Fähigkeiten" stands below the kinds and is no kind: its address names no place of one.
-  const onCapabilities = location.kindPath === CAPABILITIES_BUILD_PATH;
+  // The own tools are listed there too: the address of their former list opens it.
+  const fromTools = location.kindPath === TOOLS_BUILD_PATH;
+  const onCapabilities = fromTools || location.kindPath === CAPABILITIES_BUILD_PATH;
   const place = onCapabilities ? undefined : resolveBuildPlace(kinds, location);
   const placePath = place?.kind.entry.path;
   const corrected = place?.corrected ?? false;
@@ -190,6 +197,11 @@ function BuildFrameBody({
       openRef.current({ kindPath: placePath }, { replace: true });
     }
   }, [corrected, placePath]);
+  useEffect(() => {
+    if (fromTools) {
+      openRef.current({ kindPath: CAPABILITIES_BUILD_PATH }, { replace: true });
+    }
+  }, [fromTools]);
 
   // An editor with unsaved changes is not left without a question. The question is one promise:
   // the back button, the router and a second attempt while it is open all wait for one answer.
@@ -307,7 +319,11 @@ function BuildFrameBody({
     return (
       <Page ref={pageRef} subRail={rail(CAPABILITIES_BUILD_PATH)}>
         {loadError}
-        <CapabilitiesPage />
+        {source.kinds.some((kind) => kind.kind === TOOL_ASSET_KIND) ? (
+          <CapabilitiesWithToolAssets source={source} />
+        ) : (
+          <CapabilitiesPage />
+        )}
       </Page>
     );
   }
@@ -608,6 +624,11 @@ function useSettledText(text: string): string {
     return () => window.clearTimeout(timer);
   }, [settled, text]);
   return settled;
+}
+
+/** "Fähigkeiten" for a reader who may see tool assets: its own tools name them too. */
+function CapabilitiesWithToolAssets({ source }: { source: BuildSource }) {
+  return <CapabilitiesPage ownTools={source.useList(TOOL_ASSET_KIND, firstListView)} />;
 }
 
 /** A kind that adds no rows of its own to its list. */

@@ -1,21 +1,18 @@
 import { defineTranslations } from "./translation-area";
 
-// Build > Tools: tools an instance adds without a release (TOOL-1).
+// The instance's own tools, added without a release (TOOL-1), as Studio's "Fähigkeiten" page
+// says them in its group "Eigene Werkzeuge".
 export const toolAssets = defineTranslations({
   en: {
-    "toolAssets.kind": "Tools",
     "toolAssets.description":
-      "Your own tools, added without a release. An agent calls one to hand its finished result to the panel beside the chat. Tools are written and published with the CLI: catalyst tool put and catalyst tool publish.",
-    "toolAssets.search": "Search tools",
+      "A tool of your own computes something or calls a Connection, and can show its result in the panel beside the chat. Add one with the CLI: catalyst tool put, then catalyst tool publish.",
     "toolAssets.empty":
-      "No tools of your own yet. A tool hands an agent's finished result to the panel beside the chat. It is written and published with the CLI."
+      "No tools of your own yet. A tool computes something or calls a Connection, and can show its result in the panel beside the chat. Add one with the CLI: catalyst tool put, then catalyst tool publish."
   },
   de: {
-    "toolAssets.kind": "Werkzeuge",
     "toolAssets.description":
-      "Eigene Werkzeuge, ohne Release hinzugefügt. Ein Agent ruft eines auf, um sein fertiges Ergebnis an das Panel neben dem Chat zu geben. Werkzeuge werden mit der CLI geschrieben und veröffentlicht: catalyst tool put und catalyst tool publish.",
-    "toolAssets.search": "Werkzeuge durchsuchen",
+      "Ein eigenes Werkzeug berechnet etwas oder ruft eine Verbindung auf und kann sein Ergebnis im Panel neben dem Chat zeigen. Du fügst es mit der CLI hinzu: catalyst tool put, dann catalyst tool publish.",
     "toolAssets.empty":
-      "Noch keine eigenen Werkzeuge. Ein Werkzeug gibt das fertige Ergebnis eines Agenten an das Panel neben dem Chat. Es wird mit der CLI geschrieben und veröffentlicht."
+      "Noch keine eigenen Werkzeuge. Ein Werkzeug berechnet etwas oder ruft eine Verbindung auf und kann sein Ergebnis im Panel neben dem Chat zeigen. Du fügst es mit der CLI hinzu: catalyst tool put, dann catalyst tool publish."
   }
 });

@@ -21,6 +21,8 @@ import { AGENTS_BUILD_PATH, useBuildNavigation } from "../../shared/build-route"
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { moduleTexts } from "../../shared/module-texts";
 import { useSettingsPage } from "../../shared/settings-page-context";
+import { AssetPlaceLine } from "./asset-place";
+import type { BuildList } from "./build-data";
 import { instanceSentence } from "./build-refusals";
 
 // Studio's "Fähigkeiten" page (TOOLS-2): what this instance's agents can be given, one row per
@@ -28,9 +30,20 @@ import { instanceSentence } from "./build-refusals";
 // own tools last. A row folds out its skills, its tools and the agents that use them, each agent
 // a link to its page. A module that is off reaches only an instance admin, marked so. The page
 // changes nothing: a module is switched in the deployment's config, a tool given on the agent page.
+//
+// "Eigene Werkzeuge" is the one place Studio lists the instance's own tools: those its release
+// brings, and the tool assets added without a release (TOOL-1), which the frame reads from the
+// assets for a reader who may see them. The group is there for such a reader with none yet,
+// and then says how a tool is added.
 
 /** The path segment of the page in Studio, below the kinds. */
 export const CAPABILITIES_BUILD_PATH = "capabilities";
+
+/** The asset kind of a tool added without a release, as the server stores it. */
+export const TOOL_ASSET_KIND = "tool";
+
+/** Where the tool assets had a list of their own. The address opens this page. */
+export const TOOLS_BUILD_PATH = "tools";
 
 /** The icon and the sentence of each module whose tools an agent can be given. */
 const MODULE_FACES: Partial<Record<string, { icon: string; text: TranslationKey }>> = {
@@ -55,7 +68,12 @@ const GROUP_TITLES: Record<ToolGroupName, TranslationKey> = {
 
 type CapabilityTool = CapabilityPackage["tools"][number];
 
-export function CapabilitiesPage() {
+export function CapabilitiesPage({
+  ownTools
+}: {
+  /** The tool assets the reader may see. Absent for a reader who is shown none. */
+  ownTools?: BuildList;
+}) {
   const { t } = useTranslation();
   const { apiBaseUrl, authScope, client } = useSettingsPage();
   // Under the assets' key: a save of an agent changes who uses what, and reads this again.
@@ -64,7 +82,7 @@ export function CapabilitiesPage() {
     queryFn: ({ signal }) => client.platform.capabilities.get({ signal }),
     retry: false
   });
-  const packages = query.data?.packages;
+  const packages = withOwnPackage(query.data?.packages, ownTools !== undefined);
   return (
     <>
       <PageHeader title={t("capabilities.title")} description={t("capabilities.description")} />
@@ -88,7 +106,11 @@ export function CapabilitiesPage() {
       ) : (
         <List aria-label={t("capabilities.title")} data-capabilities="">
           {packages.map((item) => (
-            <PackageRow key={packageKey(item)} item={item} />
+            <PackageRow
+              key={packageKey(item)}
+              item={item}
+              {...(item.kind === "own" && ownTools ? { ownTools } : {})}
+            />
           ))}
         </List>
       )}
@@ -96,16 +118,32 @@ export function CapabilitiesPage() {
   );
 }
 
+/** The packages, with one for the own tools where the reader is shown tool assets and it is missing. */
+function withOwnPackage(
+  packages: readonly CapabilityPackage[] | undefined,
+  showsToolAssets: boolean
+): readonly CapabilityPackage[] | undefined {
+  if (!packages || !showsToolAssets || packages.some((item) => item.kind === "own")) {
+    return packages;
+  }
+  return [...packages, { kind: "own", enabled: true, tools: [], skills: [], agents: [] }];
+}
+
 /** `general`, `own` or `module:<name>`: what a row is found by. */
 function packageKey(item: CapabilityPackage): string {
   return item.kind === "module" ? `module:${item.module ?? ""}` : item.kind;
 }
 
-function PackageRow({ item }: { item: CapabilityPackage }) {
+function PackageRow({ item, ownTools }: { item: CapabilityPackage; ownTools?: BuildList }) {
   const { t } = useTranslation();
   const face = usePackageFace(item);
+  // Counted once every tool asset is read: a list with more to read has no number yet.
+  const toolCount =
+    ownTools?.hasMore || (ownTools && !ownTools.rows)
+      ? 0
+      : item.tools.length + (ownTools?.rows?.length ?? 0);
   const counts = [
-    item.tools.length > 0 ? count(t, "tools", item.tools.length) : undefined,
+    toolCount > 0 ? count(t, "tools", toolCount) : undefined,
     item.skills.length > 0 ? count(t, "skills", item.skills.length) : undefined,
     item.enabled ? count(t, "agents", item.agents.length) : undefined
   ].filter((part) => part !== undefined);
@@ -159,13 +197,15 @@ function PackageRow({ item }: { item: CapabilityPackage }) {
             </ul>
           </Part>
         ) : null}
-        {item.tools.length > 0 ? (
+        {item.tools.length > 0 || ownTools ? (
           <Part title={t("capabilities.tools")}>
+            {/* The tools people added themselves stand before those the release brings. */}
+            {ownTools ? <ToolAssets list={ownTools} alone={item.tools.length === 0} /> : null}
             {item.kind === "general" ? (
               <GroupedTools tools={item.tools} />
-            ) : (
+            ) : item.tools.length > 0 ? (
               <Tools tools={item.tools} />
-            )}
+            ) : null}
           </Part>
         ) : null}
         {item.enabled ? (
@@ -232,6 +272,71 @@ function Tools({ tools }: { tools: readonly CapabilityTool[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * The tool assets of the instance, each with what it does, where it sits and what it is: the
+ * display kind a `result` tool hands the panel, or the runtime a `code` tool's handler runs in.
+ * Above them, what an own tool is and how one is added; with none, that alone.
+ */
+function ToolAssets({ list, alone }: { list: BuildList; alone: boolean }) {
+  const { t } = useTranslation();
+  if (list.error) {
+    return (
+      <InlineError className="flex flex-wrap items-center justify-between gap-2">
+        <span>{list.error}</span>
+        <Button variant="outline" size="sm" onClick={list.retry}>
+          {t("tryAgain")}
+        </Button>
+      </InlineError>
+    );
+  }
+  if (!list.rows) {
+    return <SkeletonList rows={2} />;
+  }
+  if (list.rows.length === 0) {
+    return alone ? (
+      <p className="text-body text-muted-foreground" data-capability-tool-assets="empty">
+        {t("toolAssets.empty")}
+      </p>
+    ) : null;
+  }
+  return (
+    <div className="grid min-w-0 gap-2" data-capability-tool-assets="">
+      <p className="text-caption text-muted-foreground">{t("toolAssets.description")}</p>
+      <List aria-label={t("capabilities.own")}>
+        {list.rows.map((asset) => {
+          const kind = asset.attributes?.resultKind ?? asset.attributes?.runtime;
+          return (
+            <ListRow
+              key={asset.name}
+              size="compact"
+              data-capability-tool-asset={asset.name}
+              title={asset.title.trim() || asset.name}
+              description={asset.description?.trim() || undefined}
+              chips={
+                <>
+                  <AssetPlaceLine owner={asset.scope} />
+                  {typeof kind === "string" ? <Badge>{kind}</Badge> : null}
+                </>
+              }
+            />
+          );
+        })}
+      </List>
+      {list.hasMore ? (
+        <Button
+          variant="outline"
+          size="sm"
+          className="justify-self-start"
+          loading={list.loadingMore}
+          onClick={list.loadMore}
+        >
+          {t("build.showMore")}
+        </Button>
+      ) : null}
+    </div>
   );
 }
 

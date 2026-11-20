@@ -90,6 +90,27 @@ describe("platform.capabilities.get", () => {
     ]);
   });
 
+  it("names an agent that calls a tool asset among the users of the own tools", async () => {
+    const { t } = await instance();
+    await applyAtCurrentRevisions(t.stores.configAssets, {
+      clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: "caller",
+          config: agent("caller", { displayName: "Caller", toolNames: ["tool.open_items.call"] })
+        }
+      ]
+    });
+
+    const own = (await read(t, t.admin.id)).find((item) => item.kind === "own");
+
+    // The tool asset itself is read from the assets; the package lists the release's tools.
+    expect(own?.tools.map((tool) => tool.name)).toEqual(["known.tool", "second.tool"]);
+    expect(own?.agents).toEqual([{ name: "caller", title: "Caller" }]);
+  });
+
   it("refuses a user who holds no right on any kind anywhere", async () => {
     const { t } = await instance();
     await t.expectRefused(

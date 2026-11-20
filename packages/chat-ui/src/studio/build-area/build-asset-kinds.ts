@@ -6,12 +6,11 @@ import { dataStoreKind } from "./data-store-kind";
 import { guardrailKind } from "./guardrail-kind";
 import { knowledgeBaseKind } from "./knowledge-base-kind";
 import { skillKind } from "./skill-kind";
-import { toolKind } from "./tool-kind";
 
 /**
  * The asset kinds of the platform, in rail order. This is deliberately not the client widget
  * registry: an asset page changes how the instance behaves, so a client assembly must not
- * replace it.
+ * replace it. A tool asset is no kind of the rail: "Fähigkeiten" lists it among the own tools.
  */
 export const buildAssetKinds: readonly BuildKind[] = [
   agentKind,
@@ -19,8 +18,7 @@ export const buildAssetKinds: readonly BuildKind[] = [
   connectionKind,
   dataStoreKind,
   knowledgeBaseKind,
-  guardrailKind,
-  toolKind
+  guardrailKind
 ];
 
 const BuildAssetKindsContext = createContext<readonly BuildKind[]>(buildAssetKinds);
