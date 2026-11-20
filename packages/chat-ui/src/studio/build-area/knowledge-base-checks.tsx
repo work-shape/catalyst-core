@@ -125,7 +125,11 @@ function StatusFacts({ state }: { state: KnowledgeBaseState }) {
       {state.tables.length === 0 ? null : (
         // A row per table: its name as a person reads it, the name itself small under it, and
         // whether it could be read after both, on a line of its own where they do not fit.
-        <List aria-label={t("knowledge.tables")} className="-mx-2" data-knowledge-table-states="">
+        <List
+          aria-label={t("knowledge.tableStates")}
+          className="-mx-2"
+          data-knowledge-table-states=""
+        >
           {state.tables.map((table) => (
             <ListRow
               key={table.name}
@@ -149,7 +153,8 @@ function StatusFacts({ state }: { state: KnowledgeBaseState }) {
 /**
  * What needs a person, at the top of the page of a Knowledge Base of tables: the last check
  * could not read every table, so agents do not answer from them. It says how many and leads
- * to the status, which waits folded. Nothing while the check found no problem.
+ * to the status, which waits folded. A published one never checked says that the same way.
+ * Nothing while the check found no problem.
  */
 export function KnowledgeTablesAttention({
   source,
@@ -165,13 +170,17 @@ export function KnowledgeTablesAttention({
 }) {
   const { locale, t } = useTranslation();
   const read = source.useState(knowledgeBase, publishedRevision);
-  if (read.status !== "ready" || read.data.status !== "needs_attention") {
+  if (
+    read.status !== "ready" ||
+    (read.data.status !== "needs_attention" && read.data.status !== "unchecked")
+  ) {
     return null;
   }
+  const unchecked = read.data.status === "unchecked";
   const unreadable = read.data.tables.filter((table) => !table.readable).length;
   return (
     <Banner
-      tone="warning"
+      tone={unchecked ? "info" : "warning"}
       className="mb-3"
       data-knowledge-attention=""
       action={
@@ -180,11 +189,13 @@ export function KnowledgeTablesAttention({
         </Button>
       }
     >
-      {unreadable === 0
-        ? t("knowledge.attentionGeneral")
-        : t(unreadable === 1 ? "knowledge.attentionOne" : "knowledge.attentionMany", {
-            count: new Intl.NumberFormat(locale).format(unreadable)
-          })}
+      {unchecked
+        ? t("knowledge.attentionUnchecked")
+        : unreadable === 0
+          ? t("knowledge.attentionGeneral")
+          : t(unreadable === 1 ? "knowledge.attentionOne" : "knowledge.attentionMany", {
+              count: new Intl.NumberFormat(locale).format(unreadable)
+            })}
     </Banner>
   );
 }

@@ -10,7 +10,8 @@ section: Changed
   that has the Knowledge Base; the line under it names those agents. The Data Store, the name,
   the availability and the rights are folded under **Settings**, and under **Advanced** inside
   them whether each table can be read and the SQL test. Where the last check could not read a
-  table, the page says so at the top with the way to the status, and Settings open by
-  themselves while no Data Store is chosen. Choosing "Knowledge from your data" on a new one no
+  table, or a published one was never checked, the page says so at the top with the way to
+  the status. Settings open by themselves while no Data Store is chosen and when a save is
+  refused for its source. Choosing "Knowledge from your data" on a new one no
   longer speaks of SQL.
 - **`Textarea`:** `grows` makes the field as tall as its text, from one line.
