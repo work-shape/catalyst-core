@@ -7,6 +7,16 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.44 — 2026-11-20
+
+### Changed
+
+- The card of a synced source of a Knowledge Base says in one line what the published source does right now: the sync that runs with how many of its items are through, or when it last synced and when it syncs next. The page reads the sources again while a sync runs and once more shortly after the next one is expected, and not otherwise.
+- Where the draft sets a source's folders, addresses or settings otherwise than the published revision, which is the one that syncs, the card says the change is not active yet. A reader who may publish gets the page's Publish there, with its question before anything goes live.
+- Studio has one place for tools: the rail no longer shows "Werkzeuge" beside "Fähigkeiten". The tools added without a release are listed on Fähigkeiten under "Eigene Werkzeuge", with what each does and where it sits, and `/build/tools` opens that page. The group also names the agents that call such a tool.
+- The text about your own tools says what they do: a tool computes something or calls a Connection, and can show its result in the panel beside the chat.
+- On a Workflow's Settings, each way to start has its switch before its label, so the two read as one on a wide page. A settings row takes such a switch with `leading`.
+
 ## 0.8.0-rc.43 — 2026-11-20
 
 ### Changed
