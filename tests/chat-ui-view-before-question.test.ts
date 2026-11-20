@@ -20,7 +20,7 @@ const runId = "run_question";
 const view = {
   kind: "html.rendered",
   version: 1,
-  mode: "inline",
+  mode: "inline" as const,
   displayId: "display_proposal",
   title: "Proposal",
   data: { title: "Proposal", html: "<p>Split the skill in two.</p>" }
@@ -165,5 +165,63 @@ describe("a view shown before a question of the same run", () => {
     const answers = toUiMessages(messages).filter((entry) => entry.role === "assistant");
     expect(answers).toHaveLength(1);
     expect(partKinds(required(answers[0]).parts)).toEqual(["text", "tool:show_view"]);
+  });
+
+  it("leaves a run whose question failed without its own end", () => {
+    // A question that failed does not wait for the person, so the run did not stop there.
+    const messages = persistedRun();
+    const askCall = { toolCallId: "call_ask", toolName: "ask_question", input: question };
+    messages[4] = message(
+      "msg_ask_result",
+      "tool",
+      "{}",
+      createToolResultMetadata({
+        runId,
+        toolCall: askCall,
+        result: { status: "failed", error: { code: "validation_failed", message: "No options." } },
+        modelOutput: { text: "{}" }
+      })
+    );
+    const answers = toUiMessages(messages).filter((entry) => entry.role === "assistant");
+    expect(answers).toHaveLength(2);
+    expect(
+      answers.some((answer) => partKinds(answer.parts).includes("data-workspace-promoted-surfaces"))
+    ).toBe(false);
+  });
+
+  it("keeps the view after the run's final answer when a data call that does not wait came last", () => {
+    // Only a call that waits for the person ends the run's turn; a data call that answered at
+    // once leaves the view where a final answer puts it.
+    const projection: AgentRunProjection = {
+      runId,
+      lastSequence: 8,
+      status: "completed",
+      text: "Here is my proposal.",
+      reasoning: [],
+      activeToolCalls: [],
+      parts: [
+        {
+          type: "tool_call",
+          toolCallId: "call_show",
+          toolName: "show_view",
+          input: {},
+          state: "output_available",
+          output: { status: "success", output: { displayed: true }, display: view }
+        },
+        {
+          type: "tool_call",
+          toolCallId: "call_data",
+          toolName: "data_store.use",
+          input: {},
+          state: "output_available",
+          output: { status: "success", output: { rows: [] } }
+        },
+        { type: "text", text: "Here is my proposal." }
+      ]
+    };
+    const [answer] = toUiMessages([], { run: { id: runId, status: "completed" }, projection });
+    const kinds = partKinds(required(answer).parts);
+    expect(kinds.at(-1)).toBe("data-workspace-promoted-surfaces");
+    expect(kinds.indexOf("tool:data_store.use")).toBeLessThan(kinds.indexOf("text"));
   });
 });

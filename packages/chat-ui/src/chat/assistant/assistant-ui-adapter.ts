@@ -34,7 +34,7 @@ import {
   appendAssistantWebSourceParts,
   appendWorkspacePromotedArtifactsPart,
   appendWorkspacePromotedSurfacesPart,
-  isPersonToolName,
+  waitsForPerson,
   splitProjectionAtSteers,
   toActiveRunUiMessages,
   toProjectionUiMessageParts,
@@ -220,7 +220,7 @@ function toPersistedUiMessages(
     }
   }
 
-  const runEnds = readRunEnds(messages);
+  const runEnds = readRunEnds(messages, toolResultsByToolCallId);
   const assistantRunMessageGroups = createAssistantRunMessageGroups(messages, runEnds);
   return messages.flatMap((message): UIMessage[] => {
     if (message.role === "system") {
@@ -541,7 +541,14 @@ function projectionWithPersistedFinalTextFallback(
  * turn ended on a call that waits for the person, such as a question (ASK-1), the message of that
  * call. Such a run writes no final answer, and its last message stands for one.
  */
-function readRunEnds(messages: Message[]): Map<string, string> {
+function readRunEnds(
+  messages: Message[],
+  toolResultsByToolCallId: ReadonlyMap<string, PersistedToolResult>
+): Map<string, string> {
+  const waited = (call: { toolCallId: string; toolName: string }) => {
+    const result = toolResultsByToolCallId.get(call.toolCallId);
+    return result?.status !== "failed" && waitsForPerson(call.toolName, result?.output);
+  };
   const lastByRunId = new Map<string, Message>();
   const finalByRunId = new Map<string, Message>();
   for (const message of messages) {
@@ -555,9 +562,7 @@ function readRunEnds(messages: Message[]): Map<string, string> {
   for (const [runId, last] of lastByRunId) {
     const end =
       finalByRunId.get(runId) ??
-      (readCompatibleAssistantToolCalls(last).some((call) => isPersonToolName(call.toolName))
-        ? last
-        : undefined);
+      (readCompatibleAssistantToolCalls(last).some(waited) ? last : undefined);
     if (end) ends.set(end.id, runId);
   }
   return ends;
