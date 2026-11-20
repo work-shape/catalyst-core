@@ -119,7 +119,11 @@ function BuildFrameBody({
   // "Fähigkeiten" stands below the kinds and is no kind: its address names no place of one.
   // The own tools are listed there too: the address of their former list opens it.
   const fromTools = location.kindPath === TOOLS_BUILD_PATH;
-  const onCapabilities = fromTools || location.kindPath === CAPABILITIES_BUILD_PATH;
+  const showsToolAssets = source.kinds.some((kind) => kind.kind === TOOL_ASSET_KIND);
+  // A reader shown tools and no kind of the rail has that page alone: every address opens it.
+  const onlyCapabilities = kinds.length === 0 && showsToolAssets;
+  const atCapabilities = location.kindPath === CAPABILITIES_BUILD_PATH;
+  const onCapabilities = atCapabilities || fromTools || onlyCapabilities;
   const place = onCapabilities ? undefined : resolveBuildPlace(kinds, location);
   const placePath = place?.kind.entry.path;
   const corrected = place?.corrected ?? false;
@@ -198,10 +202,10 @@ function BuildFrameBody({
     }
   }, [corrected, placePath]);
   useEffect(() => {
-    if (fromTools) {
+    if (onCapabilities && !atCapabilities) {
       openRef.current({ kindPath: CAPABILITIES_BUILD_PATH }, { replace: true });
     }
-  }, [fromTools]);
+  }, [onCapabilities, atCapabilities]);
 
   // An editor with unsaved changes is not left without a question. The question is one promise:
   // the back button, the router and a second attempt while it is open all wait for one answer.
@@ -286,19 +290,23 @@ function BuildFrameBody({
 
   // The kinds, and below them "Fähigkeiten", which shows what the kinds' agents can be given.
   const rail = (value: string) =>
-    kinds.length === 0 ? undefined : (
+    kinds.length === 0 && !showsToolAssets ? undefined : (
       <SubRail
         title={t("nav.build")}
         label={t("build.kinds")}
         groups={[
-          {
-            id: "kinds",
-            items: kinds.map((kind) => ({
-              id: kind.entry.path,
-              label: t(kind.entry.label),
-              icon: <RegistryIcon name={kind.entry.icon} />
-            }))
-          },
+          ...(kinds.length === 0
+            ? []
+            : [
+                {
+                  id: "kinds",
+                  items: kinds.map((kind) => ({
+                    id: kind.entry.path,
+                    label: t(kind.entry.label),
+                    icon: <RegistryIcon name={kind.entry.icon} />
+                  }))
+                }
+              ]),
           {
             id: "capabilities",
             items: [
@@ -319,11 +327,7 @@ function BuildFrameBody({
     return (
       <Page ref={pageRef} subRail={rail(CAPABILITIES_BUILD_PATH)}>
         {loadError}
-        {source.kinds.some((kind) => kind.kind === TOOL_ASSET_KIND) ? (
-          <CapabilitiesWithToolAssets source={source} />
-        ) : (
-          <CapabilitiesPage />
-        )}
+        {showsToolAssets ? <CapabilitiesWithToolAssets source={source} /> : <CapabilitiesPage />}
       </Page>
     );
   }
@@ -626,9 +630,12 @@ function useSettledText(text: string): string {
   return settled;
 }
 
+/** The page has no owner control, so it lists the tools of every owner the reader is offered. */
+const EVERY_OWNERS_TOOLS: BuildListFilter = { text: "", everyOwner: true };
+
 /** "Fähigkeiten" for a reader who may see tool assets: its own tools name them too. */
 function CapabilitiesWithToolAssets({ source }: { source: BuildSource }) {
-  return <CapabilitiesPage ownTools={source.useList(TOOL_ASSET_KIND, firstListView)} />;
+  return <CapabilitiesPage ownTools={source.useList(TOOL_ASSET_KIND, EVERY_OWNERS_TOOLS)} />;
 }
 
 /** A kind that adds no rows of its own to its list. */

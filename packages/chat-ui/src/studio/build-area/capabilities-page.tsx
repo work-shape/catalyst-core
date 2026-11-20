@@ -123,9 +123,13 @@ function withOwnPackage(
   packages: readonly CapabilityPackage[] | undefined,
   showsToolAssets: boolean
 ): readonly CapabilityPackage[] | undefined {
-  if (!packages || !showsToolAssets || packages.some((item) => item.kind === "own")) {
-    return packages;
+  if (!packages) return packages;
+  if (!showsToolAssets) {
+    // The instance names the package for agents that call a tool asset alone. A reader who is
+    // shown no tool asset would read a count with nothing under it, so the group is left out.
+    return packages.filter((item) => item.kind !== "own" || item.tools.length > 0);
   }
+  if (packages.some((item) => item.kind === "own")) return packages;
   return [...packages, { kind: "own", enabled: true, tools: [], skills: [], agents: [] }];
 }
 
