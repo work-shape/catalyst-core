@@ -7,6 +7,44 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.43 — 2026-11-20
+
+### Changed
+
+- Studio opens on Agents again; the overview of every kind is gone.
+- The Agent page is as it was before its redesign: the new page read no better.
+- The Web pages connection says in plain words what it does, and its field asks for websites, not hosts.
+- **Knowledge Base of tables:** the page of a Knowledge Base that answers from the tables of a
+  Data Store leads with what agents do with them: "Your agents answer questions from these
+  tables." Its tables stand first, each by a name a person reads ("Open Invoices") with the
+  table's own name small under it, and the sentence about a row is a field that grows with its
+  text. Under them a question in plain words opens in the chat beside the page, for an agent
+  that has the Knowledge Base; the line under it names those agents. The Data Store, the name,
+  the availability and the rights are folded under **Settings**, and under **Advanced** inside
+  them whether each table can be read and the SQL test. Where the last check could not read a
+  table, or a published one was never checked, the page says so at the top with the way to
+  the status. Settings open by themselves while no Data Store is chosen and when a save is
+  refused for its source. Choosing "Knowledge from your data" on a new one no
+  longer speaks of SQL.
+- **`Textarea`:** `grows` makes the field as tall as its text, from one line.
+- **Workflow page:** under the name stands what the workflow does and, in words, when it runs:
+  "Runs every Monday at 08:00", "Runs every Monday and Wednesday at 08:00", "Runs Monday to
+  Friday at 07:30", "Runs every hour, on the hour", "Starts when a Knowledge Base finishes
+  syncing", or that it is started by hand only. The line is the published revision's: a draft
+  that differs does not change it, and a workflow never published says "Once published: …". The
+  account its runs act as is no longer in the head; it is a line of the Settings. Where the last
+  run failed, stopped at a limit or ended with failed items, the page says so above the canvas,
+  with the way to that run.
+- **Workflow, Settings:** the ways to start are rows, each with one line about it and its switch
+  beside it. The schedule is one button that reads as the schedule does, "Every Monday at 08:00",
+  and opens repeat, days, time and time zone. The start by another workflow, by outside clients
+  and by a webhook with its secret, and the result, the failure notice, the limits, the account,
+  the owner and who may start it are folded under **Advanced**. Advanced opens by itself for a
+  webhook that has no secret yet, for a draft that changes something in it, and for a workflow
+  that starts only in a way listed there.
+- **Knowledge Base, source:** a full sync on one day of the week names the day in full, "Every
+  Monday at 03:00".
+
 ## 0.8.0-rc.42 — 2026-11-20
 
 ### Added
