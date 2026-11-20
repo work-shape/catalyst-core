@@ -38,7 +38,6 @@ export const connectionKind: BuildAssetKind = {
   kind: "connection",
   path: CONNECTIONS_BUILD_PATH,
   label: "connections.kind",
-  overviewText: "connections.purpose",
   description: "connections.description",
   searchLabel: "connections.search",
   emptyText: "connections.empty",

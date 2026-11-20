@@ -56,7 +56,6 @@ function guardrailKind(read: ShippedGuardrailsRead): BuildKind {
     kind: "agent",
     path: "guardrails",
     label: "guardrails.kind",
-    overviewText: "guardrails.purpose",
     searchLabel: "guardrails.search",
     emptyText: "guardrails.empty",
     icon: "guardrail",

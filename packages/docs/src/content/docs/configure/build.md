@@ -3,7 +3,7 @@ title: Agents and skills in Studio
 description: Create, edit, restore and delete agents and skills in Studio, connect outside systems, and read the other lists Studio holds.
 ---
 
-**Studio** is the area of the interface where agents and skills are made. It stands in the main rail as a row of its own and opens at `/build`, on an **Overview** (**Übersicht**): one row per kind you may see, with a sentence on what the kind is for, how many there are and the way to its list, and one **New** button for what you may create. The old address `/admin/config` leads there. Beside **Agents** (German: **Agenten**) and **Skills**, Studio lists **Connections** (**Verbindungen**), **Data stores** (**Datenspeicher**), **Knowledge bases** (**Wissensbasen**) and **Guardrails** (**Leitplanken**), each for a person who may read one. Apps and Workflows are not in Studio: each has a row of its own in the main rail.
+**Studio** is the area of the interface where agents and skills are made. It stands in the main rail as a row of its own and opens at `/build`. The old address `/admin/config` leads there. Beside **Agents** (German: **Agenten**) and **Skills**, Studio lists **Connections** (**Verbindungen**), **Data stores** (**Datenspeicher**), **Knowledge bases** (**Wissensbasen**) and **Guardrails** (**Leitplanken**), each for a person who may read one. Apps and Workflows are not in Studio: each has a row of its own in the main rail.
 
 Studio works on the [asset API](/reference/api/assets/): it reads a list page by page, reads one asset when its page opens and writes one asset at a time. It never loads the whole set of agents and skills.
 
