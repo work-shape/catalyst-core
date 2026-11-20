@@ -100,7 +100,6 @@ export function workshaperAgent(input: {
     initialPrompts: [
       {
         title: { en: "What can I do here?", de: "Was kann ich hier machen?" },
-        icon: "lightbulb",
         prompt: {
           en: "I'm new here. Ask me what I want to get done and show me what the platform offers for it.",
           de: "Ich bin neu hier. Frag mich, was ich erledigen will, und zeig mir, was die Plattform dafür bietet."
@@ -108,7 +107,6 @@ export function workshaperAgent(input: {
       },
       {
         title: { en: "Automate a task", de: "Aufgabe automatisieren" },
-        icon: "sparkles",
         prompt: {
           en: "I have a task I do again and again. Help me decide whether it should be a Workflow, an App or an agent, and set it up with me.",
           de: "Ich habe eine Aufgabe, die immer wiederkommt. Hilf mir zu entscheiden, ob das ein Workflow, eine App oder ein Agent werden soll, und richte es mit mir ein."
