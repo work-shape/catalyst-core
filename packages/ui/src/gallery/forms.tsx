@@ -306,6 +306,7 @@ export const formsGallery: GalleryGroup = {
           <Textarea aria-label={text.instructions} defaultValue={text.instructionsSample} />
           <Textarea aria-label={text.instructions} variant="code" defaultValue={text.codeSample} />
           <Textarea aria-label={text.instructions} defaultValue={text.invalidValue} invalid />
+          <Textarea aria-label={text.instructions} grows rows={2} defaultValue={text.cardBody} />
         </div>
       )
     },
