@@ -259,7 +259,8 @@ function BuildFrameBody({
   // An asset page tells when its heading stands: it is read after the frame rendered.
   const [shownCount, setShownCount] = useState(0);
   const pageShown = useCallback(() => setShownCount((count) => count + 1), []);
-  const focusKey = creating ? "new" : (place?.name ?? "");
+  // The overview has a key of its own: from one of its rows the focus moves to the list's heading.
+  const focusKey = creating ? "new" : onOverview ? "overview" : (place?.name ?? "");
   const focusedKey = useRef(focusKey);
   useEffect(() => {
     if (focusedKey.current === focusKey) {

@@ -2,7 +2,8 @@ import { defineTranslations } from "./translation-area";
 
 export const knowledge = defineTranslations({
   en: {
-    "knowledge.purpose": "Knowledge is documents an agent answers from and names as its source.",
+    "knowledge.purpose":
+      "Knowledge is made of documents an agent answers from and names as its source.",
     "knowledge.kind": "Knowledge",
     "knowledge.description":
       "A knowledge base holds documents, or describes tables of a data store. An agent that has it answers from them and says where the answer comes from.",
@@ -346,7 +347,7 @@ export const knowledge = defineTranslations({
   },
   de: {
     "knowledge.purpose":
-      "Wissen sind Dokumente, aus denen ein Agent antwortet und die er als Quelle nennt.",
+      "Wissen besteht aus Dokumenten, aus denen ein Agent antwortet und die er als Quelle nennt.",
     "knowledge.kind": "Wissen",
     "knowledge.description":
       "Eine Wissensbasis enthält Dokumente oder beschreibt Tabellen eines Datenspeichers. Ein Agent, der sie hat, antwortet daraus und sagt, woher die Antwort kommt.",
