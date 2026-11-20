@@ -8,9 +8,11 @@ import {
   Field,
   FormNotice,
   IconButton,
+  IconPicker,
   Input,
   TextVersionSwitch,
   VersionedText,
+  starterIconNames,
   type TextVersion
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
@@ -221,6 +223,18 @@ export function InitialPromptsEditor({
   const { t } = useTranslation();
   const replace = (index: number, patch: Partial<AgentFormState["initialPrompts"][number]>) =>
     onChange(prompts.map((entry, at) => (at === index ? { ...entry, ...patch } : entry)));
+  // No `icon` key stands for the usual icon, so a starter put back to it equals an untouched one.
+  const setIcon = (index: number, icon: string | undefined) =>
+    onChange(
+      prompts.map(({ icon: before, ...entry }, at) => {
+        const next = at === index ? starterIconNames.find((name) => name === icon) : before;
+        return next === undefined ? entry : { ...entry, icon: next };
+      })
+    );
+  const iconOptions = starterIconNames.map((name) => ({
+    name,
+    label: t(`starterIcon.${name}`)
+  }));
 
   return (
     <div className="grid gap-4">
@@ -231,6 +245,17 @@ export function InitialPromptsEditor({
         <PromptCard
           key={index}
           title={t("configPromptNumber", { number: index + 1 })}
+          icon={
+            <IconPicker
+              label={t("configPromptIcon", { number: index + 1 })}
+              options={iconOptions}
+              value={prompt.icon}
+              defaultIcon="prompt"
+              defaultLabel={t("configPromptIconDefault")}
+              disabled={disabled}
+              onChange={(icon) => setIcon(index, icon)}
+            />
+          }
           remove={
             disabled ? null : (
               <IconButton
@@ -276,10 +301,12 @@ export function InitialPromptsEditor({
 
 function PromptCard({
   title,
+  icon,
   remove,
   children
 }: {
   title: string;
+  icon: ReactNode;
   remove: ReactNode;
   children: ReactNode;
 }) {
@@ -287,7 +314,10 @@ function PromptCard({
     <fieldset className="grid gap-3 rounded-md border p-4">
       <legend className="sr-only">{title}</legend>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-label text-muted-foreground">{title}</span>
+        <span className="flex min-w-0 items-center gap-2.5">
+          {icon}
+          <span className="text-label text-muted-foreground">{title}</span>
+        </span>
         {remove}
       </div>
       {children}

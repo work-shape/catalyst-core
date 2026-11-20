@@ -39,11 +39,32 @@ describe("asset form model", () => {
         {
           title: { de: "Wetter", en: "Weather" },
           prompt: { de: "Prüfe das Wetter.", en: "Check the weather." }
+        },
+        {
+          title: { de: "Woche", en: "Week" },
+          prompt: { de: "Plane die Woche.", en: "Plan the week." },
+          icon: "calendar"
         }
       ]
     };
 
     expect(agentFormToConfig(agentConfigToForm(config))).toEqual(config);
+  });
+
+  it("reads a starter icon nobody draws as no icon, so the agent can be saved", () => {
+    const form = agentConfigToForm({
+      name: "weather",
+      displayName: "Weather",
+      instructions: "x",
+      toolNames: [],
+      skillNames: [],
+      initialPrompts: [{ title: "Weather", prompt: "Check the weather.", icon: "rocket" }]
+    });
+
+    expect(form.initialPrompts[0]).not.toHaveProperty("icon");
+    expect(agentFormToConfig(form).initialPrompts).toEqual([
+      { title: "Weather", prompt: "Check the weather." }
+    ]);
   });
 
   it("lets the person's own MCP servers in unless the agent says `ownServers: false`", () => {
