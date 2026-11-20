@@ -1,5 +1,7 @@
 import type { AgentRunProjection, DraftAttachment, Message } from "@work-shape/catalyst-api-client";
 import {
+  ASK_QUESTION_TOOL_NAME,
+  DATA_STORE_USE_TOOL_NAME,
   isJsonObject,
   unknownToJsonValue,
   type JsonObject,
@@ -34,6 +36,24 @@ import type { AssistantUiActiveRun, AssistantUiMessageMetadata } from "./assista
 
 interface UiMessagePartProjectionOptions {
   includeSyntheticWebSearchTool?: boolean;
+  /**
+   * The run this message ends, where it ends one without being its final answer: the message of
+   * a call that waits for the person. Its run's displays and files stand with it.
+   */
+  endsRunId?: string;
+}
+
+/**
+ * Calls that wait for the person: a step that makes one ends the run's turn, and the run has no
+ * final answer (ASK-1, STORE-USE-1).
+ */
+const PERSON_TOOL_NAMES: ReadonlySet<string> = new Set([
+  ASK_QUESTION_TOOL_NAME,
+  DATA_STORE_USE_TOOL_NAME
+]);
+
+export function isPersonToolName(toolName: string): boolean {
+  return PERSON_TOOL_NAMES.has(toolName);
 }
 
 export function toAttachmentFilePart(
@@ -444,7 +464,7 @@ export function toUiMessageParts(
       !toolCalls.some((toolCall) => toolCall.toolName === "web_search")
   });
   appendAssistantKnowledgeSourceParts(parts, message);
-  const finalRunId = readCompatibleAssistantFinalRunId(message);
+  const finalRunId = options.endsRunId ?? readCompatibleAssistantFinalRunId(message);
   appendWorkspacePromotedSurfacesPart(
     parts,
     finalRunId ? (surfacedSurfacesByRunId.get(finalRunId) ?? []) : []
@@ -472,10 +492,19 @@ export function appendWorkspacePromotedSurfacesPart(
   if (uniqueSurfaces.length === 0) {
     return;
   }
-  parts.push({
+  const part = {
     type: WORKSPACE_PROMOTED_SURFACES_DATA_TYPE,
     data: createWorkspacePromotedSurfacesData(uniqueSurfaces)
-  } as UIMessage["parts"][number]);
+  } as UIMessage["parts"][number];
+  // A run that asks the person about what it showed shows it above the question.
+  const asking = parts.findIndex(
+    (candidate) => candidate.type === "dynamic-tool" && isPersonToolName(candidate.toolName)
+  );
+  if (asking < 0) {
+    parts.push(part);
+  } else {
+    parts.splice(asking, 0, part);
+  }
 }
 
 export function appendWorkspacePromotedArtifactsPart(

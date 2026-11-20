@@ -502,6 +502,7 @@ function ToolStatusIcon({ state }: { state: "running" | "completed" | "failed" }
 export function CompactToolCall({
   actionLabel,
   detailSections,
+  display,
   outcome,
   state,
   statusLabel,
@@ -514,6 +515,8 @@ export function CompactToolCall({
 }: {
   actionLabel?: string;
   detailSections: ToolDetailSection[];
+  /** What the call showed, such as an overview: the row shows it again, open from the start. */
+  display?: ReactNode;
   /** What the call came to, shown under its row whether the row is open or not. */
   outcome?: ReactNode;
   state: "running" | "completed" | "failed";
@@ -526,7 +529,9 @@ export function CompactToolCall({
   toolName: string;
   result: unknown;
 }) {
-  const [open, setOpen] = useState(state === "failed");
+  // A row is drawn once its group in the work history opens: one that showed something shows it
+  // again right away, so the click that opens the group opens what the step showed.
+  const [open, setOpen] = useState(state === "failed" || Boolean(display));
 
   return (
     <div
@@ -563,6 +568,7 @@ export function CompactToolCall({
           <ToolArtifactList artifacts={surfacedArtifacts} />
         </div>
       ) : null}
+      {open && display ? <div className="border-t">{display}</div> : null}
       {open ? (
         <div className="grid gap-2 border-t bg-muted/40 px-2.5 py-2">
           {summary ? (

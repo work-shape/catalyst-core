@@ -34,6 +34,7 @@ import {
   appendAssistantWebSourceParts,
   appendWorkspacePromotedArtifactsPart,
   appendWorkspacePromotedSurfacesPart,
+  isPersonToolName,
   splitProjectionAtSteers,
   toActiveRunUiMessages,
   toProjectionUiMessageParts,
@@ -62,6 +63,8 @@ interface AiSdkMessageFormatRepository {
 }
 
 interface AssistantRunMessageGroup {
+  runId: string;
+  /** The run's final answer, or the message of the call that ended its turn for the person. */
   finalMessage: Message;
   messageIds: Set<string>;
   messages: Message[];
@@ -217,7 +220,8 @@ function toPersistedUiMessages(
     }
   }
 
-  const assistantRunMessageGroups = createAssistantRunMessageGroups(messages);
+  const runEnds = readRunEnds(messages);
+  const assistantRunMessageGroups = createAssistantRunMessageGroups(messages, runEnds);
   return messages.flatMap((message): UIMessage[] => {
     if (message.role === "system") {
       // The stored text is a note for the model. Only a decision has a place
@@ -277,7 +281,8 @@ function toPersistedUiMessages(
         message,
         toolResultsByToolCallId,
         surfacedArtifactsByRunId,
-        surfacedSurfacesByRunId
+        surfacedSurfacesByRunId,
+        runEnds.get(message.id)
       )
     ];
   });
@@ -300,9 +305,10 @@ function toPersistedUiMessage(
   message: Message,
   toolResultsByToolCallId: Map<string, PersistedToolResult>,
   surfacedArtifactsByRunId: Map<string, ToolArtifactDownloadRef[]>,
-  surfacedSurfacesByRunId: Map<string, ToolSurfaceRef[]>
+  surfacedSurfacesByRunId: Map<string, ToolSurfaceRef[]>,
+  endsRunId: string | undefined
 ): UIMessage {
-  const metadata = createPersistedUiMessageMetadata(message);
+  const metadata = createPersistedUiMessageMetadata(message, [message], endsRunId);
   return {
     id: message.id,
     role: message.role as UIMessage["role"],
@@ -311,7 +317,8 @@ function toPersistedUiMessage(
       message,
       toolResultsByToolCallId,
       surfacedArtifactsByRunId,
-      surfacedSurfacesByRunId
+      surfacedSurfacesByRunId,
+      endsRunId ? { endsRunId } : {}
     )
   };
 }
@@ -340,12 +347,13 @@ function toCombinedAssistantRunUiMessage(
       surfacedArtifactsByRunId,
       surfacedSurfacesByRunId,
       {
-        includeSyntheticWebSearchTool: !runHasExplicitWebSearchTool
+        includeSyntheticWebSearchTool: !runHasExplicitWebSearchTool,
+        ...(message.id === group.finalMessage.id ? { endsRunId: group.runId } : {})
       }
     )
   );
   const metadata = isFinal
-    ? createPersistedUiMessageMetadata(group.finalMessage, group.messages)
+    ? createPersistedUiMessageMetadata(group.finalMessage, group.messages, group.runId)
     : undefined;
   return {
     id: last.id,
@@ -458,7 +466,11 @@ function toCompletedRunProjectionUiMessage(
       ...(surfacedArtifactsByRunId.get(projection.runId) ?? [])
     ])
   );
-  const persistedMetadata = createPersistedUiMessageMetadata(finalMessage);
+  const persistedMetadata = createPersistedUiMessageMetadata(
+    finalMessage,
+    [finalMessage],
+    readCompatibleAssistantFinalRunId(finalMessage)
+  );
   const metadata = {
     custom: {
       ...persistedMetadata?.custom,
@@ -524,8 +536,36 @@ function projectionWithPersistedFinalTextFallback(
   };
 }
 
+/**
+ * The message each stored run ends with, by message id: its final answer, or, for a run whose
+ * turn ended on a call that waits for the person, such as a question (ASK-1), the message of that
+ * call. Such a run writes no final answer, and its last message stands for one.
+ */
+function readRunEnds(messages: Message[]): Map<string, string> {
+  const lastByRunId = new Map<string, Message>();
+  const finalByRunId = new Map<string, Message>();
+  for (const message of messages) {
+    if (message.role !== "assistant" || readSteeredRunId(message)) continue;
+    const runId = readCompatibleMessageRunId(message);
+    if (!runId) continue;
+    lastByRunId.set(runId, message);
+    if (readCompatibleAssistantFinalRunId(message) === runId) finalByRunId.set(runId, message);
+  }
+  const ends = new Map<string, string>();
+  for (const [runId, last] of lastByRunId) {
+    const end =
+      finalByRunId.get(runId) ??
+      (readCompatibleAssistantToolCalls(last).some((call) => isPersonToolName(call.toolName))
+        ? last
+        : undefined);
+    if (end) ends.set(end.id, runId);
+  }
+  return ends;
+}
+
 function createAssistantRunMessageGroups(
-  messages: Message[]
+  messages: Message[],
+  runEnds: ReadonlyMap<string, string>
 ): Map<string, AssistantRunMessageGroup> {
   const messagesByRunId = new Map<string, Message[]>();
   const finalMessageByRunId = new Map<string, Message>();
@@ -552,7 +592,7 @@ function createAssistantRunMessageGroups(
       continue;
     }
     messagesByRunId.set(runId, [...(messagesByRunId.get(runId) ?? []), message]);
-    if (readCompatibleAssistantFinalRunId(message) === runId) {
+    if (runEnds.get(message.id) === runId) {
       finalMessageByRunId.set(runId, message);
     }
   }
@@ -579,6 +619,7 @@ function createAssistantRunMessageGroups(
       }
     }
     groups.set(runId, {
+      runId,
       finalMessage,
       messageIds: new Set(groupedMessages.map((message) => message.id)),
       messages: groupedMessages,
@@ -594,9 +635,9 @@ function isRenderableMessage(message: Message): boolean {
 
 function createPersistedUiMessageMetadata(
   message: Message,
-  runMessages: Message[] = [message]
+  runMessages: Message[],
+  completedRunId: string | undefined
 ): AssistantUiMessageMetadata | undefined {
-  const completedRunId = readCompatibleAssistantFinalRunId(message);
   const contextCompacted = runMessages.some(readCompatibleAssistantContextCompacted);
   const modelFallback =
     message.role === "assistant" ? readAssistantModelFallback(message.metadata) : undefined;
