@@ -223,6 +223,12 @@ export interface KnowledgeBaseSource {
   /** Searches the documents of the published revision, as an agent does. */
   search(knowledgeBase: string, query: string): Promise<KnowledgeCall<KnowledgeSearchAnswer>>;
   /**
+   * Opens the chat beside the page with a new conversation and this question in its composer,
+   * for the person to send to an agent that has the Knowledge Base. Absent where the page has no
+   * chat beside it.
+   */
+  askInChat?(question: string): void;
+  /**
    * A hook: the Data Stores the reader may read whose name or id holds `search`: those of the
    * workspace `owner` names first, then the instance's own, a page of each at a time.
    */
@@ -377,7 +383,8 @@ export type KnowledgeHoldersRead =
 /** The Knowledge Base pages on the instance's own operations. */
 export function useKnowledgeBaseSource(): KnowledgeBaseSource {
   const { t } = useTranslation();
-  const { apiBaseUrl, authScope, client, activeWorkspace, user } = useSettingsPage();
+  const { apiBaseUrl, authScope, client, activeWorkspace, user, startDockedChat } =
+    useSettingsPage();
   const queryClient = useQueryClient();
   const api = { apiBaseUrl, authScope, client };
   // The grant rows are read by who manages users; the names of principals by who manages them.
@@ -466,6 +473,7 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
       called(t, () =>
         client.knowledge_bases.search({ params: { knowledgeBase }, body: { query } })
       ),
+    ...(startDockedChat ? { askInChat: startDockedChat } : {}),
     useDataStores: (search, owner) =>
       knowledgeReadOf(
         t,

@@ -137,7 +137,8 @@ function render(
     settings,
     availability,
     reindex,
-    documents
+    documents,
+    askInChat
   }: {
     newAsset?: boolean;
     state?: KnowledgeBaseState;
@@ -152,6 +153,8 @@ function render(
     reindex?: KnowledgeBaseSource["reindex"];
     /** Its documents, where not the handbook alone. */
     documents?: KnowledgeDocument[];
+    /** The page has a chat beside it that takes a question. */
+    askInChat?: KnowledgeBaseSource["askInChat"];
   } = {}
 ): string {
   const name = newAsset ? undefined : asset.name;
@@ -187,6 +190,7 @@ function render(
     useState: () => ready(state),
     ...(availability === undefined ? {} : { useAvailability: () => availability }),
     ...(reindex === undefined ? {} : { reindex }),
+    ...(askInChat === undefined ? {} : { askInChat }),
     ...(documents === undefined ? {} : { useDocuments: () => ready({ documents }) })
   }));
   const kinds = buildAssetKinds.map((kind) => (kind.kind === "knowledge_base" ? planted : kind));
@@ -269,6 +273,108 @@ describe("Knowledge Bases in Build", () => {
     expect(page).toContain("Say what the rows are about");
   });
 
+  // What stands on the page before the folded Settings, and the Settings themselves.
+  const mainOf = (page: string) => page.split("data-asset-settings=")[0] ?? "";
+  const foldedOf = (page: string) => page.slice(mainOf(page).length);
+  const ok: KnowledgeBaseState = {
+    ...needsAttention,
+    status: "ok",
+    tables: needsAttention.tables.map((table) => ({ ...table, readable: true }))
+  };
+
+  it("leads with what agents do with the tables and keeps SQL and the status under Advanced", () => {
+    const asset = {
+      ...knowledgeBase({ revision: 2, publishedRevision: 2 }),
+      config: {
+        ...knowledgeBase({ revision: 2 }).config,
+        tables: [{ name: "open_invoices", description: "One row per open invoice." }]
+      }
+    };
+    const page = render(asset, { state: ok, askInChat: noop });
+    const main = mainOf(page);
+    const folded = foldedOf(page);
+
+    expect(main).toMatch(
+      /data-asset-lead=""><p[^>]*>Your agents answer questions from these tables\.<\/p>/u
+    );
+    // A table is named as a person reads it, with its own name small under it.
+    expect(main).toMatch(/<label[^>]*>Open Invoices<\/label>/u);
+    expect(main).toContain(">open_invoices</code>");
+    // The sentence about a row takes the lines it needs.
+    expect(main).toMatch(/<textarea[^>]*aria-label="What a row of Open Invoices is"/u);
+    expect(main).not.toMatch(/<input[^>]*aria-label="What a row of/u);
+    // The test in plain words comes first; nothing of SQL, the status or the store before the fold.
+    expect(main).toContain("Ask something that is in the tables");
+    expect(main).toContain("Ask in chat");
+    expect(main).not.toContain("SQL");
+    expect(main).not.toContain("select * from");
+    expect(main).not.toContain("data-knowledge-state");
+    expect(main).not.toContain("Readable");
+    expect(main).not.toContain("Choose a data store");
+    expect(main).not.toContain("data-knowledge-attention");
+    // Settings stay folded, with Advanced folded inside them.
+    expect(folded).toMatch(/<button[^>]*aria-expanded="false"[^>]*data-asset-settings-trigger/u);
+    expect(folded).toContain("Name, data store, availability and more");
+    const advanced = folded.slice(folded.indexOf("data-knowledge-advanced="));
+    expect(advanced).toMatch(
+      /<button[^>]*aria-expanded="false"[^>]*data-knowledge-advanced-trigger/u
+    );
+    expect(advanced).toContain("Status and SQL test");
+    expect(advanced).toContain(">SQL test</h2>");
+    expect(advanced).toContain("select * from open_invoices limit 20");
+    expect(advanced).toContain('data-knowledge-state="ok"');
+    expect(folded.indexOf('id="data-store"')).toBeLessThan(folded.indexOf('id="status"'));
+
+    const german = mainOf(render(asset, { state: ok, askInChat: noop, locale: "de" }));
+    expect(german).toContain("Deine Agenten beantworten Fragen aus diesen Tabellen.");
+    expect(german).toContain("Frag etwas, das in den Tabellen steht");
+    expect(german).not.toContain("SQL");
+  });
+
+  it("says at the top that a table cannot be read, and names each table's state in a row of its own", () => {
+    const page = render(knowledgeBase({ revision: 2, publishedRevision: 2 }));
+    const main = mainOf(page);
+
+    expect(main).toContain("data-knowledge-attention");
+    expect(main).toContain("1 table cannot be read. Agents do not answer from it.");
+    expect(main).toContain("Show status");
+    expect(main.indexOf("data-knowledge-attention")).toBeLessThan(main.indexOf('id="source"'));
+    // The label and the badge are not squeezed into one narrow column: a row per table.
+    const row = /<li[^>]*data-knowledge-table-state="invoices".*?<\/li>/su.exec(page)?.[0] ?? "";
+    expect(row).toContain("Invoices");
+    expect(row).toContain(">invoices</code>");
+    expect(row).toContain("Cannot be read");
+    // The backend could not be asked at all: no table is counted.
+    const unreachable = mainOf(
+      render(knowledgeBase({ revision: 2, publishedRevision: 2 }), {
+        state: { ...needsAttention, tables: ok.tables, problem: "The data store is not reachable." }
+      })
+    );
+    expect(unreachable).toContain("The tables cannot be read right now.");
+  });
+
+  it("offers the question only where the page has a chat, and names the agents that have it", () => {
+    const asset = knowledgeBase({ revision: 2, publishedRevision: 2 });
+    expect(render(asset, { state: ok })).not.toContain("data-knowledge-ask");
+    const named = render(asset, {
+      state: { ...ok, agents: [{ name: "advisor", title: "Advisor" }] },
+      askInChat: noop
+    });
+    expect(named).toContain("Send it to an agent that has this knowledge base: Advisor.");
+    const none = render(asset, { state: { ...ok, agents: [] }, askInChat: noop });
+    expect(none).toContain("No agent you can see has this knowledge base yet.");
+  });
+
+  it("opens Settings by itself while no data store is chosen, which is chosen there", () => {
+    const asset = knowledgeBase({ revision: 1 });
+    const page = render({
+      ...asset,
+      config: { ...asset.config, backend: { dataStore: "" }, tables: [] }
+    });
+    expect(page).toMatch(/<button[^>]*aria-expanded="true"[^>]*data-asset-settings-trigger/u);
+    expect(mainOf(page)).toContain("Choose a data store to see its tables.");
+  });
+
   // AVAIL-1: agents can use a Knowledge Base in the workspaces it is available in.
   it("says beside its place who uses a Knowledge Base of everyone (SCOPE-WORDS)", () => {
     const line = (markup: string) =>
@@ -314,9 +420,10 @@ describe("Knowledge Bases in Build", () => {
     // One notice under the head, not a Status and a Test query section that each say "publish".
     expect(page).toContain("data-knowledge-not-published");
     expect(page).toContain(
-      "Not published yet. Publish it to see whether it can read its tables and to try a query."
+      "Not published yet. Publish it so agents can answer from its tables and you can try a question."
     );
-    expect(page).not.toContain(">Test query<");
+    expect(page).not.toContain("data-knowledge-ask");
+    expect(page).not.toContain(">SQL test<");
     expect(page).not.toContain(">Status<");
   });
 });
