@@ -9,14 +9,16 @@ import {
   Badge,
   Banner,
   Checkbox,
+  Disclosure,
+  DisclosureContent,
+  DisclosureTrigger,
   DropdownMenuItem,
   EmptyState,
   Field,
   Input,
-  KeyValue,
-  KeyValueList,
   Picker,
   PickerButton,
+  Section,
   Textarea
 } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
@@ -35,7 +37,12 @@ import { DataFlowList, useWorkflowPage } from "./data-flows";
 import { hasDataFlows, type DataFlowRole } from "./data-flows-model";
 import { ReadState } from "./data-store-read-state";
 import { KnowledgeBaseAgents, KnowledgeBaseHolders } from "./knowledge-base-access";
-import { KnowledgeStatus, KnowledgeTestQuery } from "./knowledge-base-checks";
+import {
+  KnowledgeAsk,
+  KnowledgeStatus,
+  KnowledgeTablesAttention,
+  KnowledgeTestQuery
+} from "./knowledge-base-checks";
 import { KnowledgeDocuments, useKnowledgeIntake } from "./knowledge-base-documents";
 import { KnowledgeSourceChoice } from "./knowledge-base-source-choice";
 import { KnowledgeSourceConnectDialog, KnowledgeSourcesSection } from "./knowledge-base-sources";
@@ -44,6 +51,7 @@ import { KnowledgeTestSearch } from "./knowledge-base-test-search";
 import {
   knowledgeBaseFormToConfig,
   knowledgeBasePublishesOnCreate,
+  knowledgeTableLabel,
   knowledgeTableRows,
   type KnowledgeBaseForm,
   type KnowledgeTableForm
@@ -73,10 +81,13 @@ const FLOW_SECTIONS = {
  * to answer from documents or from tables of a Data Store; that stays once it is created. One of
  * documents goes live on create, available nowhere, so files can be added at once (KB-PAGE-1).
  * With documents, the published Knowledge Base lists them with their state, takes more and has
- * a search to try; with tables, it names the Data Store with a sentence per table, and once
- * published whether it can read them and a query to try. Before its first publish, one notice
- * under the head says what publishing opens, in place of those sections. The frame saves the
- * form as a draft and publishes it.
+ * a search to try. With tables, the page says in one line what agents do with them, lists the
+ * tables by a name a person reads with a sentence each, and once published takes a question in
+ * plain words for the chat beside it; the Data Store, and under Advanced whether the tables can
+ * be read and a statement to try, wait folded under Settings, and a check that could not read
+ * a table says so at the top. Before its first publish, one notice under the head says what
+ * publishing opens, in place of those sections. The frame saves the form as a draft and
+ * publishes it.
  * Where it is available applies at once, saved with the same save bar.
  */
 export function KnowledgeBaseEditor({
@@ -127,6 +138,20 @@ export function KnowledgeBaseEditor({
   };
   const published = asset?.publishedRevision;
   const documents = form.holds === "documents";
+  // The page of an existing one of tables holds its folds itself: Settings start open where no
+  // Data Store is chosen yet, which is chosen there, and the notice of a table that cannot be
+  // read opens them down to the status.
+  const [settingsOpen, setSettingsOpen] = useState(
+    () => asset !== undefined && initialForm.holds === "tables" && initialForm.dataStore === ""
+  );
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const showStatus = () => {
+    setSettingsOpen(true);
+    setAdvancedOpen(true);
+    window.requestAnimationFrame(() => {
+      document.getElementById("status")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
   // A definition that names no methods searches by meaning and by words, as the instance reads it.
   const semantic = form.methods.length === 0 || form.methods.includes("semantic");
   // What only a published Knowledge Base has: its documents, its status and a test.
@@ -303,20 +328,14 @@ export function KnowledgeBaseEditor({
     refusalField: "source",
     body: (
       <>
-        {asset ? (
-          <KeyValueList layout="stacked">
-            <KeyValue label={t("knowledge.holdsLabel")}>{t("knowledge.holdsTables")}</KeyValue>
-          </KeyValueList>
-        ) : (
-          <KnowledgeSourceChoice
-            source={source}
-            owner={frame.owner}
-            form={form}
-            canWrite={canWrite}
-            uploadDescription={uploadDescription}
-            update={update}
-          />
-        )}
+        <KnowledgeSourceChoice
+          source={source}
+          owner={frame.owner}
+          form={form}
+          canWrite={canWrite}
+          uploadDescription={uploadDescription}
+          update={update}
+        />
         {documents ? (
           asset === undefined && form.sources.length > 0 ? (
             sourcesSection
@@ -334,6 +353,44 @@ export function KnowledgeBaseEditor({
       </>
     )
   };
+  // The tables of an existing one, in plain words: the main content of its page. What refuses
+  // its source is said here, where the tables are.
+  const tablesSection: AssetSection = {
+    id: "source",
+    label: t("knowledge.tables"),
+    description: t("knowledge.tablesDescription"),
+    count: form.tables.length,
+    refusalField: "source",
+    body: (
+      <>
+        <TableChoice
+          source={source}
+          store={form.dataStore || undefined}
+          tables={form.tables}
+          disabled={!canWrite}
+          onChange={(tables) => update({ tables })}
+        />
+        <FieldRefusals messages={refusalsOf(outcome, "source")} />
+      </>
+    )
+  };
+  // The Data Store an existing one reads is chosen once and waits under Settings.
+  const dataStoreSection: AssetSection = {
+    id: "data-store",
+    label: t("knowledge.dataStore"),
+    description: t("knowledge.dataStoreDescription"),
+    body: (
+      <DataStoreChoice
+        source={source}
+        owner={frame.owner}
+        value={form.dataStore}
+        disabled={!canWrite}
+        onChange={(dataStore) =>
+          update({ dataStore, tables: dataStore === form.dataStore ? form.tables : [] })
+        }
+      />
+    )
+  };
   // Before its first publish the synced sources of one of documents stand as a section of
   // their own; once it is published they are the first rows of its documents.
   const sourcesSections: AssetSection[] =
@@ -349,7 +406,7 @@ export function KnowledgeBaseEditor({
           }
         ]
       : [];
-  // What only a published one has: its documents, or the check of its tables and a query.
+  // What only a published one has: its documents, or a question about its tables to try.
   const documentsSections: AssetSection[] =
     live && documents
       ? [
@@ -385,21 +442,76 @@ export function KnowledgeBaseEditor({
             body: <KnowledgeTestSearch source={source} knowledgeBase={asset.name} />
           }
         ]
-      : [
-          statusSection(asset.name, published),
+      : [];
+  // A question in plain words, for the chat beside the page, where the page has one.
+  const { askInChat } = source;
+  const askSections: AssetSection[] =
+    live && !documents && askInChat
+      ? [
           {
             id: "test",
-            label: t("knowledge.testTitle"),
-            description: t("knowledge.testDescription"),
+            label: t("knowledge.askTitle"),
+            body: <KnowledgeAsk ask={askInChat} agents={agents} />
+          }
+        ]
+      : [];
+  // What only whoever runs it reads, folded once more inside Settings: whether the published
+  // version can read its tables, by their names, and one SQL statement to try.
+  const tablesAdvancedSections: AssetSection[] =
+    live && !documents
+      ? [
+          {
+            id: "advanced",
+            label: t("knowledge.advancedTitle"),
+            bare: true,
             body: (
-              <KnowledgeTestQuery
-                source={source}
-                knowledgeBase={asset.name}
-                firstTable={form.tables[0]?.name}
-              />
+              <Disclosure
+                variant="row"
+                open={advancedOpen}
+                onOpenChange={setAdvancedOpen}
+                data-knowledge-advanced=""
+              >
+                <DisclosureTrigger data-knowledge-advanced-trigger="">
+                  <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+                    <span className="text-title-sm text-foreground">
+                      {t("knowledge.advancedTitle")}
+                    </span>
+                    <span className="text-caption">{t("knowledge.advancedTablesHint")}</span>
+                  </span>
+                </DisclosureTrigger>
+                {/* Kept in the page while folded: the notice at the top goes to its status. */}
+                <DisclosureContent keepMounted>
+                  {[
+                    statusSection(asset.name, published),
+                    {
+                      id: "sql-test",
+                      label: t("knowledge.testTitle"),
+                      description: t("knowledge.testDescription"),
+                      body: (
+                        <KnowledgeTestQuery
+                          source={source}
+                          knowledgeBase={asset.name}
+                          firstTable={form.tables[0]?.name}
+                        />
+                      )
+                    }
+                  ].map((section) => (
+                    <Section
+                      key={section.id}
+                      id={section.id}
+                      layout="stacked"
+                      title={section.label}
+                      description={section.description}
+                    >
+                      {section.body}
+                    </Section>
+                  ))}
+                </DisclosureContent>
+              </Disclosure>
             )
           }
-        ];
+        ]
+      : [];
   const availabilitySections: AssetSection[] = availability
     ? [
         {
@@ -473,13 +585,13 @@ export function KnowledgeBaseEditor({
     : [];
   // A new one is a form to fill in: every section open, in the order it is filled. An existing
   // one shows what it holds and keeps the rest folded under Settings: of documents, all but its
-  // documents; of tables, what is set once, with its tables, its check and its query in view.
+  // documents; of tables, all but its tables and the question to try.
   const sections: AssetSection[] =
     asset === undefined
       ? [aboutSection, sourceSection, ...availabilitySections, ...advancedSections]
       : documents
         ? [...sourcesSections, ...documentsSections]
-        : [sourceSection, ...flowSections, ...checkSections];
+        : [tablesSection, ...askSections];
   const folded: AssetSection[] =
     asset === undefined
       ? []
@@ -493,7 +605,15 @@ export function KnowledgeBaseEditor({
             ...advancedSections,
             ...flowSections
           ]
-        : [aboutSection, ...availabilitySections, ...agentsSections, ...accessSections];
+        : [
+            aboutSection,
+            dataStoreSection,
+            ...availabilitySections,
+            ...agentsSections,
+            ...accessSections,
+            ...flowSections,
+            ...tablesAdvancedSections
+          ];
 
   return (
     <AssetEditorShell
@@ -503,14 +623,16 @@ export function KnowledgeBaseEditor({
       {...(asset === undefined
         ? {}
         : {
-            lead: form.description,
+            // One of tables says what agents do with them; what it holds is said by its tables.
+            lead: documents ? form.description : t("knowledge.tablesLead"),
             settings: {
               label: t("knowledge.settingsTitle"),
               hint: t(documents ? "knowledge.settingsHint" : "knowledge.settingsHintTables"),
-              sections: folded
+              sections: folded,
+              ...(documents ? {} : { open: settingsOpen, onOpenChange: setSettingsOpen })
             },
-            // The page of one of documents is its list and one folded line: no outline.
-            outline: !documents
+            // The page is its list, or its tables and a question, and one folded line: no outline.
+            outline: false
           })}
       {...(addsInMenu
         ? {
@@ -548,6 +670,15 @@ export function KnowledgeBaseEditor({
             <Banner tone="info" className="mb-3" data-knowledge-not-published="">
               {t(documents ? "knowledge.notPublishedDocuments" : "knowledge.notPublished")}
             </Banner>
+          ) : null}
+          {/* What needs a person stands at the top: a table the last check could not read. */}
+          {asset !== undefined && published !== undefined && !documents ? (
+            <KnowledgeTablesAttention
+              source={source}
+              knowledgeBase={asset.name}
+              publishedRevision={published}
+              onShow={showStatus}
+            />
           ) : null}
           {connecting ? (
             <KnowledgeSourceConnectDialog
@@ -648,6 +779,7 @@ function TablesSource({
   canWrite: boolean;
   update(patch: Partial<KnowledgeBaseForm>): void;
 }) {
+  const { t } = useTranslation();
   return (
     <>
       <DataStoreChoice
@@ -660,13 +792,15 @@ function TablesSource({
           update({ dataStore, tables: dataStore === form.dataStore ? form.tables : [] })
         }
       />
-      <TableChoice
-        source={source}
-        store={form.dataStore || undefined}
-        tables={form.tables}
-        disabled={!canWrite}
-        onChange={(tables) => update({ tables })}
-      />
+      <Field label={t("knowledge.tables")} hint={t("knowledge.tablesHint")}>
+        <TableChoice
+          source={source}
+          store={form.dataStore || undefined}
+          tables={form.tables}
+          disabled={!canWrite}
+          onChange={(tables) => update({ tables })}
+        />
+      </Field>
     </>
   );
 }
@@ -730,9 +864,11 @@ function DataStoreChoice({
 }
 
 /**
- * The tables of the chosen store, each with a box that lets agents answer from it and the
- * sentence they read about a row. A described table the store does not have stays listed, with
- * that said, until the box is cleared.
+ * The tables of the chosen store, each by a name a person reads with the table's own name small
+ * under it, a box that lets agents answer from it, and the sentence they read about a row,
+ * which takes the lines it needs. A described table the store does not have stays listed, with
+ * that said, until the box is cleared. No `Field` hands the boxes `required`: a box left clear
+ * is no error.
  */
 function TableChoice({
   source,
@@ -759,49 +895,65 @@ function TableChoice({
   const describe = (name: string, description: string) =>
     onChange(tables.map((table) => (table.name === name ? { ...table, description } : table)));
   return (
-    // Not `required`: a Field hands that to each box in it, and a box left clear is no error.
-    <Field label={t("knowledge.tables")} hint={t("knowledge.tablesHint")}>
-      <ReadState
-        read={read}
-        failedText={t("knowledge.tablesFailed")}
-        refusedText={t("knowledge.tablesFailed")}
-        rows={3}
-      >
-        {(storeTables) => {
-          const rows = knowledgeTableRows(storeTables, tables);
-          return rows.length === 0 ? (
-            <EmptyState layout="inline">{t("knowledge.tablesEmpty")}</EmptyState>
-          ) : (
-            <ul aria-label={t("knowledge.tables")} className="grid gap-3" data-knowledge-tables="">
-              {rows.map((row) => (
-                <li key={row.name} className="grid gap-2" data-knowledge-table={row.name}>
-                  <div className="flex flex-wrap items-center gap-2">
+    <ReadState
+      read={read}
+      failedText={t("knowledge.tablesFailed")}
+      refusedText={t("knowledge.tablesFailed")}
+      rows={3}
+    >
+      {(storeTables) => {
+        const rows = knowledgeTableRows(storeTables, tables);
+        return rows.length === 0 ? (
+          <EmptyState layout="inline">{t("knowledge.tablesEmpty")}</EmptyState>
+        ) : (
+          <ul
+            aria-label={t("knowledge.tables")}
+            className="grid min-w-0 divide-y border-t"
+            data-knowledge-tables=""
+          >
+            {rows.map((row) => {
+              const label = knowledgeTableLabel(row.name);
+              return (
+                <li
+                  key={row.name}
+                  className="grid min-w-0 gap-2 py-3"
+                  data-knowledge-table={row.name}
+                >
+                  <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1">
                     <Checkbox
-                      label={<code className="font-mono text-code">{row.name}</code>}
+                      label={label}
+                      description={<code className="font-mono break-all">{row.name}</code>}
                       checked={row.described !== undefined}
                       disabled={disabled}
                       onCheckedChange={(on) => toggle(row.name, on)}
                     />
                     {row.inStore ? null : (
-                      <Badge tone="warning">{t("knowledge.tableMissing")}</Badge>
+                      <Badge tone="warning" size="sm">
+                        {t("knowledge.tableMissing")}
+                      </Badge>
                     )}
                   </div>
                   {row.described ? (
-                    <Input
-                      aria-label={t("knowledge.tableDescription", { table: row.name })}
-                      placeholder={t("knowledge.tableDescription", { table: row.name })}
-                      value={row.described.description}
-                      required
-                      readOnly={disabled}
-                      onChange={(event) => describe(row.name, event.target.value)}
-                    />
+                    // Under the name, not under the box.
+                    <div className="min-w-0 pl-6">
+                      <Textarea
+                        grows
+                        rows={2}
+                        aria-label={t("knowledge.tableDescription", { table: label })}
+                        placeholder={t("knowledge.tableDescription", { table: label })}
+                        value={row.described.description}
+                        required
+                        readOnly={disabled}
+                        onChange={(event) => describe(row.name, event.target.value)}
+                      />
+                    </div>
                   ) : null}
                 </li>
-              ))}
-            </ul>
-          );
-        }}
-      </ReadState>
-    </Field>
+              );
+            })}
+          </ul>
+        );
+      }}
+    </ReadState>
   );
 }

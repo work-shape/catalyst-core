@@ -1,14 +1,18 @@
-import { Play, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { MessageSquare, Play, RefreshCw } from "lucide-react";
+import { useState, type KeyboardEvent } from "react";
 import {
   Badge,
+  Banner,
   Button,
   EmptyState,
   Field,
   FormNotice,
   InlineError,
+  Input,
   KeyValue,
   KeyValueList,
+  List,
+  ListRow,
   Table,
   TableBody,
   TableCell,
@@ -20,7 +24,7 @@ import {
 import { formatDateTime } from "../../shared/locale-format";
 import { useTranslation } from "../../shared/i18n";
 import { ReadState } from "./data-store-read-state";
-import { KNOWLEDGE_STATUS_VIEWS } from "./knowledge-base-model";
+import { KNOWLEDGE_STATUS_VIEWS, knowledgeTableLabel } from "./knowledge-base-model";
 import { KnowledgeEmbedding } from "./knowledge-base-reindex";
 import type {
   KnowledgeBaseSource,
@@ -111,25 +115,131 @@ function StatusFacts({ state }: { state: KnowledgeBaseState }) {
       ) : state.problem ? (
         <InlineError>{state.problem}</InlineError>
       ) : null}
-      <KeyValueList>
-        {state.checkedAt ? (
+      {state.checkedAt ? (
+        <KeyValueList>
           <KeyValue label={t("knowledge.checkedAt")}>
             {formatDateTime(state.checkedAt, locale)}
           </KeyValue>
-        ) : null}
-        {state.tables.map((table) => (
-          <KeyValue
-            key={table.name}
-            // A long name breaks inside its column instead of running into the badge.
-            label={<code className="font-mono text-code break-all">{table.name}</code>}
-          >
-            <Badge tone={table.readable ? "success" : "warning"}>
-              {t(table.readable ? "knowledge.tableReadable" : "knowledge.tableUnreadable")}
-            </Badge>
-          </KeyValue>
-        ))}
-      </KeyValueList>
+        </KeyValueList>
+      ) : null}
+      {state.tables.length === 0 ? null : (
+        // A row per table: its name as a person reads it, the name itself small under it, and
+        // whether it could be read after both, on a line of its own where they do not fit.
+        <List aria-label={t("knowledge.tables")} className="-mx-2" data-knowledge-table-states="">
+          {state.tables.map((table) => (
+            <ListRow
+              key={table.name}
+              data-knowledge-table-state={table.name}
+              title={knowledgeTableLabel(table.name)}
+              description={<code className="font-mono">{table.name}</code>}
+              descriptionWraps="always"
+              chips={
+                <Badge tone={table.readable ? "success" : "warning"} size="sm">
+                  {t(table.readable ? "knowledge.tableReadable" : "knowledge.tableUnreadable")}
+                </Badge>
+              }
+            />
+          ))}
+        </List>
+      )}
     </>
+  );
+}
+
+/**
+ * What needs a person, at the top of the page of a Knowledge Base of tables: the last check
+ * could not read every table, so agents do not answer from them. It says how many and leads
+ * to the status, which waits folded. Nothing while the check found no problem.
+ */
+export function KnowledgeTablesAttention({
+  source,
+  knowledgeBase,
+  publishedRevision,
+  onShow
+}: {
+  source: KnowledgeBaseSource;
+  knowledgeBase: string;
+  publishedRevision: number;
+  /** Unfolds the status and goes to it. */
+  onShow(): void;
+}) {
+  const { locale, t } = useTranslation();
+  const read = source.useState(knowledgeBase, publishedRevision);
+  if (read.status !== "ready" || read.data.status !== "needs_attention") {
+    return null;
+  }
+  const unreadable = read.data.tables.filter((table) => !table.readable).length;
+  return (
+    <Banner
+      tone="warning"
+      className="mb-3"
+      data-knowledge-attention=""
+      action={
+        <Button type="button" variant="outline" size="sm" onClick={onShow}>
+          {t("knowledge.attentionShow")}
+        </Button>
+      }
+    >
+      {unreadable === 0
+        ? t("knowledge.attentionGeneral")
+        : t(unreadable === 1 ? "knowledge.attentionOne" : "knowledge.attentionMany", {
+            count: new Intl.NumberFormat(locale).format(unreadable)
+          })}
+    </Banner>
+  );
+}
+
+/**
+ * A question in plain words about what the tables hold. It goes to the chat beside the page,
+ * where an agent that has the Knowledge Base answers it: the page itself asks nothing, and the
+ * person sends the question there.
+ */
+export function KnowledgeAsk({
+  ask,
+  agents
+}: {
+  ask(question: string): void;
+  /** The published agents that have it, as far as the reader may see them. */
+  agents: readonly { name: string; title: string }[] | undefined;
+}) {
+  const { locale, t } = useTranslation();
+  const [question, setQuestion] = useState("");
+  const send = () => {
+    if (question.trim() !== "") ask(question.trim());
+  };
+  // The page is one form, which saves the Knowledge Base: Enter here asks and saves nothing.
+  const askOnEnter = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    send();
+  };
+  const names = (agents ?? []).map((agent) => agent.title || agent.name);
+  return (
+    <div className="grid min-w-0 gap-2" data-knowledge-ask="">
+      <div className="flex min-w-0 flex-wrap items-end gap-2">
+        <Field label={t("knowledge.askLabel")} className="min-w-56 flex-1">
+          <Input
+            value={question}
+            placeholder={t("knowledge.askPlaceholder")}
+            onChange={(event) => setQuestion(event.target.value)}
+            onKeyDown={askOnEnter}
+          />
+        </Field>
+        <Button type="button" variant="outline" disabled={question.trim() === ""} onClick={send}>
+          <MessageSquare aria-hidden="true" />
+          {t("knowledge.askRun")}
+        </Button>
+      </div>
+      <p className="text-caption text-muted-foreground" data-knowledge-ask-hint="">
+        {agents === undefined
+          ? t("knowledge.askHint")
+          : names.length === 0
+            ? t("knowledge.askHintNoAgents")
+            : t("knowledge.askHintAgents", {
+                agents: new Intl.ListFormat(locale, { type: "disjunction" }).format(names)
+              })}
+      </p>
+    </div>
   );
 }
 

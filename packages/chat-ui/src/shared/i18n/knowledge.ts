@@ -123,8 +123,29 @@ export const knowledge = defineTranslations({
       "The workflows that process its documents by document type.",
     "knowledge.processedByTitle": "Processed by",
     "knowledge.notPublished":
-      "Not published yet. Publish it to see whether it can read its tables and to try a query.",
-    "knowledge.testTitle": "Test query",
+      "Not published yet. Publish it so agents can answer from its tables and you can try a question.",
+    "knowledge.tablesLead": "Your agents answer questions from these tables.",
+    "knowledge.tablesDescription":
+      "Tick the tables your agents may answer from and say in a sentence what a row of each is. Nothing in the tables is changed.",
+    "knowledge.dataStoreDescription":
+      "Where its tables come from. Another data store has other tables, so what you wrote about these goes.",
+    "knowledge.askTitle": "Try it",
+    "knowledge.askLabel": "Ask something that is in the tables",
+    "knowledge.askPlaceholder": "Your question in your own words",
+    "knowledge.askRun": "Ask in chat",
+    "knowledge.askHint":
+      "The question opens in the chat beside this page. Send it to an agent that has this knowledge base.",
+    "knowledge.askHintAgents":
+      "The question opens in the chat beside this page. Send it to an agent that has this knowledge base: {agents}.",
+    "knowledge.askHintNoAgents":
+      "No agent you can see has this knowledge base yet. Give it to an agent first, then the agent answers from the tables.",
+    "knowledge.attentionOne": "1 table cannot be read. Agents do not answer from it.",
+    "knowledge.attentionMany": "{count} tables cannot be read. Agents do not answer from them.",
+    "knowledge.attentionGeneral":
+      "The tables cannot be read right now. Agents do not answer from them.",
+    "knowledge.attentionShow": "Show status",
+    "knowledge.advancedTablesHint": "Status and SQL test",
+    "knowledge.testTitle": "SQL test",
     "knowledge.testDescription":
       "Ask the published version with one read-only SQL statement, as an agent does. Nothing is changed.",
     "knowledge.testSql": "SQL",
@@ -194,7 +215,6 @@ export const knowledge = defineTranslations({
     "knowledge.fromWebDescription":
       "Public pages of its hosts, kept up to date automatically. You name the addresses next.",
     "knowledge.fromNotConnected": "Not connected yet: {types}.",
-    "knowledge.holdsLabel": "What it answers from",
     "knowledge.holdsDocuments": "Documents",
     "knowledge.holdsDocumentsDescription":
       "Files you add: {formats}. Agents search them for words.",
@@ -202,7 +222,7 @@ export const knowledge = defineTranslations({
       "Files you add: {formats}. Agents search them by meaning and for words.",
     "knowledge.holdsTables": "Knowledge from your data",
     "knowledge.holdsTablesDescription":
-      "It describes tables of a data store. Agents read their rows with SQL.",
+      "The tables of a data store. Agents look up in them what a question needs.",
     "knowledge.sourceDocumentsDescription":
       "It keeps its documents in a store of its own and searches them for words. You add files under Documents, and folders through a synced source.",
     "knowledge.sourceDocumentsDescriptionSemantic":
@@ -343,7 +363,7 @@ export const knowledge = defineTranslations({
     "knowledge.addConnect": "Connect a folder",
     "knowledge.settingsTitle": "Settings",
     "knowledge.settingsHint": "Name, availability and more",
-    "knowledge.settingsHintTables": "Name, availability and more"
+    "knowledge.settingsHintTables": "Name, data store, availability and more"
   },
   de: {
     "knowledge.purpose":
@@ -470,8 +490,31 @@ export const knowledge = defineTranslations({
       "Die Workflows, die ihre Dokumente nach Dokumenttyp verarbeiten.",
     "knowledge.processedByTitle": "Verarbeitet von",
     "knowledge.notPublished":
-      "Noch nicht veröffentlicht. Veröffentliche sie, um zu sehen, ob sie ihre Tabellen lesen kann, und um eine Abfrage zu testen.",
-    "knowledge.testTitle": "Testabfrage",
+      "Noch nicht veröffentlicht. Veröffentliche sie, damit Agenten aus ihren Tabellen antworten und du eine Frage ausprobieren kannst.",
+    "knowledge.tablesLead": "Deine Agenten beantworten Fragen aus diesen Tabellen.",
+    "knowledge.tablesDescription":
+      "Kreuze an, woraus deine Agenten antworten dürfen, und sag in einem Satz, was eine Zeile ist. An den Tabellen wird nichts geändert.",
+    "knowledge.dataStoreDescription":
+      "Woher ihre Tabellen kommen. Ein anderer Datenspeicher hat andere Tabellen: Was du zu diesen geschrieben hast, entfällt dann.",
+    "knowledge.askTitle": "Ausprobieren",
+    "knowledge.askLabel": "Frag etwas, das in den Tabellen steht",
+    "knowledge.askPlaceholder": "Deine Frage in eigenen Worten",
+    "knowledge.askRun": "Im Chat fragen",
+    "knowledge.askHint":
+      "Die Frage steht dann im Chat neben dieser Seite. Schick sie an einen Agenten, der diese Wissensbasis hat.",
+    "knowledge.askHintAgents":
+      "Die Frage steht dann im Chat neben dieser Seite. Schick sie an einen Agenten, der diese Wissensbasis hat: {agents}.",
+    "knowledge.askHintNoAgents":
+      "Noch hat kein Agent, den du sehen kannst, diese Wissensbasis. Gib sie zuerst einem Agenten, dann antwortet er aus den Tabellen.",
+    "knowledge.attentionOne":
+      "1 Tabelle kann nicht gelesen werden. Agenten antworten daraus nicht.",
+    "knowledge.attentionMany":
+      "{count} Tabellen können nicht gelesen werden. Agenten antworten daraus nicht.",
+    "knowledge.attentionGeneral":
+      "Die Tabellen können gerade nicht gelesen werden. Agenten antworten daraus nicht.",
+    "knowledge.attentionShow": "Status ansehen",
+    "knowledge.advancedTablesHint": "Status und SQL-Test",
+    "knowledge.testTitle": "SQL-Test",
     "knowledge.testDescription":
       "Frag die veröffentlichte Version mit einer lesenden SQL-Anweisung, so wie ein Agent. Es wird nichts geändert.",
     "knowledge.testSql": "SQL",
@@ -542,7 +585,6 @@ export const knowledge = defineTranslations({
     "knowledge.fromWebDescription":
       "Öffentliche Seiten ihrer Hosts, automatisch aktuell gehalten. Die Adressen nennst du als Nächstes.",
     "knowledge.fromNotConnected": "Noch nicht verbunden: {types}.",
-    "knowledge.holdsLabel": "Woraus sie antwortet",
     "knowledge.holdsDocuments": "Dokumente",
     "knowledge.holdsDocumentsDescription":
       "Dateien, die du hinzufügst: {formats}. Agenten durchsuchen sie nach Wörtern.",
@@ -550,7 +592,7 @@ export const knowledge = defineTranslations({
       "Dateien, die du hinzufügst: {formats}. Agenten durchsuchen sie nach Bedeutung und nach Wörtern.",
     "knowledge.holdsTables": "Wissen aus deinen Daten",
     "knowledge.holdsTablesDescription":
-      "Sie beschreibt Tabellen eines Datenspeichers. Agenten lesen deren Zeilen mit SQL.",
+      "Die Tabellen eines Datenspeichers. Agenten schlagen darin nach, was eine Frage braucht.",
     "knowledge.sourceDocumentsDescription":
       "Sie hält ihre Dokumente in einem eigenen Speicher und durchsucht sie nach Wörtern. Dateien fügst du unter Dokumente hinzu, Ordner über eine synchronisierte Quelle.",
     "knowledge.sourceDocumentsDescriptionSemantic":
@@ -695,6 +737,6 @@ export const knowledge = defineTranslations({
     "knowledge.addConnect": "Ordner verbinden",
     "knowledge.settingsTitle": "Einstellungen",
     "knowledge.settingsHint": "Name, Verfügbarkeit und mehr",
-    "knowledge.settingsHintTables": "Name, Verfügbarkeit und mehr"
+    "knowledge.settingsHintTables": "Name, Datenspeicher, Verfügbarkeit und mehr"
   }
 });

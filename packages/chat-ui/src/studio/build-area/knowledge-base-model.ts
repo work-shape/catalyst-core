@@ -229,6 +229,17 @@ export function knowledgeTableRows(
   ];
 }
 
+/**
+ * A table's name as a person reads it: its words apart, each with a capital, so
+ * `open_invoices` reads "Open Invoices". The name itself stands small beside it.
+ */
+export function knowledgeTableLabel(name: string): string {
+  const words = name.split(/[_\-\s]+/u).filter((word) => word !== "");
+  return words.length === 0
+    ? name
+    : words.map((word) => word.charAt(0).toLocaleUpperCase() + word.slice(1)).join(" ");
+}
+
 /** How a state is shown: its badge. */
 export const KNOWLEDGE_STATUS_VIEWS: Record<
   KnowledgeBaseState["status"],
