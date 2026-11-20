@@ -52737,6 +52737,9 @@
                       },
                       "prompt": {
                         "type": "string"
+                      },
+                      "icon": {
+                        "type": "string"
                       }
                     },
                     "required": [
@@ -52916,6 +52919,9 @@
                         "type": "string"
                       },
                       "prompt": {
+                        "type": "string"
+                      },
+                      "icon": {
                         "type": "string"
                       }
                     },
@@ -54161,6 +54167,9 @@
                         "type": "string"
                       },
                       "prompt": {
+                        "type": "string"
+                      },
+                      "icon": {
                         "type": "string"
                       }
                     },
@@ -61874,6 +61883,9 @@
                         "type": "string"
                       },
                       "prompt": {
+                        "type": "string"
+                      },
+                      "icon": {
                         "type": "string"
                       }
                     },

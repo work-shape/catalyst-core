@@ -10,7 +10,9 @@ import {
   SKILL_RESOURCE_MEDIA_TYPES,
   SKILL_STARTERS_MAX,
   SKILL_SUMMARY_MAX_LENGTH,
+  STARTER_ICON_NAMES,
   formatSkillMarkdown,
+  isStarterIconName,
   parseSkillMarkdown,
   skillResourceMediaTypeForPath,
   type AgentConfig,
@@ -20,7 +22,8 @@ import {
   type SkillOrigin,
   type SkillResourceConfig,
   type SkillResourceMediaType,
-  type SkillStarterConfig
+  type SkillStarterConfig,
+  type StarterIconName
 } from "@work-shape/catalyst-asset-schemas";
 import type { LocalizationConfig, LocalizedStringConfig } from "./localization";
 import type { ProviderRegion } from "./providers";
@@ -273,7 +276,9 @@ export {
   SKILL_RESOURCE_MEDIA_TYPES,
   SKILL_STARTERS_MAX,
   SKILL_SUMMARY_MAX_LENGTH,
+  STARTER_ICON_NAMES,
   formatSkillMarkdown,
+  isStarterIconName,
   parseSkillMarkdown,
   skillResourceMediaTypeForPath,
   type AgentConfig,
@@ -283,7 +288,8 @@ export {
   type SkillOrigin,
   type SkillResourceConfig,
   type SkillResourceMediaType,
-  type SkillStarterConfig
+  type SkillStarterConfig,
+  type StarterIconName
 };
 
 export type { LocalizationConfig, LocalizedStringConfig };
