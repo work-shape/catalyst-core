@@ -144,6 +144,16 @@ interface BuildDraftFrame {
   /** The reader may publish the asset: for an agent, its draft. */
   canPublish?: boolean;
   /**
+   * The publish of the saved draft, as the head's button starts it: it asks before it publishes
+   * and shows what the publish changes. Present where the draft is ahead of what is published
+   * and the reader may publish it, for a page that offers the publish beside what waits for it.
+   */
+  publish?: {
+    open(): void;
+    /** The page holds changes that are not saved: they are saved first. */
+    unsaved: boolean;
+  };
+  /**
    * A save of the asset asks for the publish right: an agent's writes its one shared draft, and
    * a team's or the instance's skill goes live or waits for an approval (SKILL-LIVE-1).
    */

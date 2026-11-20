@@ -185,7 +185,19 @@ export const knowledgeSources = defineTranslations({
     "knowledgeSources.wordsFiles": "files",
     "knowledgeSources.wordsPages": "pages",
     "knowledgeSources.wordsNightly": "every night",
-    "knowledgeSources.wordsRegularly": "regularly"
+    "knowledgeSources.wordsRegularly": "regularly",
+    "knowledgeSources.liveRunning": "{state} …",
+    "knowledgeSources.liveRunningProgress": "{state} … ({done} of {total})",
+    "knowledgeSources.liveLast": "Last synced {elapsed} ago",
+    "knowledgeSources.liveLastFailed": "Last sync failed {elapsed} ago",
+    "knowledgeSources.liveLastOnly": "{last}.",
+    "knowledgeSources.liveNextIn": "{last}, next sync in {remaining}.",
+    "knowledgeSources.liveNextDue": "{last}, next sync is due.",
+    "knowledgeSources.liveNextFull": "{last}, next sync {full}.",
+    "knowledgeSources.draftFolders": "Not active yet: the changed folders apply once published.",
+    "knowledgeSources.draftAddresses":
+      "Not active yet: the changed addresses apply once published.",
+    "knowledgeSources.draftSettings": "Not active yet: the changed settings apply once published."
   },
   de: {
     "knowledgeSources.title": "Synchronisierte Quellen",
@@ -380,6 +392,21 @@ export const knowledgeSources = defineTranslations({
     "knowledgeSources.wordsFiles": "Dateien",
     "knowledgeSources.wordsPages": "Seiten",
     "knowledgeSources.wordsNightly": "nachts",
-    "knowledgeSources.wordsRegularly": "regelmäßig"
+    "knowledgeSources.wordsRegularly": "regelmäßig",
+    "knowledgeSources.liveRunning": "{state} …",
+    "knowledgeSources.liveRunningProgress": "{state} … ({done} von {total})",
+    "knowledgeSources.liveLast": "Zuletzt synchronisiert vor {elapsed}",
+    "knowledgeSources.liveLastFailed": "Letzter Versuch fehlgeschlagen vor {elapsed}",
+    // The short units end in a full stop of their own: "vor 5 Min.".
+    "knowledgeSources.liveLastOnly": "{last}",
+    "knowledgeSources.liveNextIn": "{last}, nächster Abgleich in {remaining}",
+    "knowledgeSources.liveNextDue": "{last}, nächster Abgleich steht an.",
+    "knowledgeSources.liveNextFull": "{last}, nächster Abgleich {full}.",
+    "knowledgeSources.draftFolders":
+      "Noch nicht aktiv: die geänderten Ordner gelten nach dem Veröffentlichen.",
+    "knowledgeSources.draftAddresses":
+      "Noch nicht aktiv: die geänderten Adressen gelten nach dem Veröffentlichen.",
+    "knowledgeSources.draftSettings":
+      "Noch nicht aktiv: die geänderten Einstellungen gelten nach dem Veröffentlichen."
   }
 });
