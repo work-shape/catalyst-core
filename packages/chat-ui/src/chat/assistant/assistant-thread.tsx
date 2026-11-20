@@ -678,7 +678,7 @@ export function ThreadStartBlock({
   start,
   onStarterChosen
 }: {
-  initialPrompts: Array<{ title: string; prompt: string }>;
+  initialPrompts: Array<{ title: string; prompt: string; icon?: string }>;
   starters: NonNullable<SafeConfig["agents"][number]["starters"]>;
   /** What the conversation is for: an asset, or a new one of a kind. */
   start?: ConversationStart;
@@ -706,13 +706,18 @@ export function ThreadStartBlock({
       </div>
     );
   }
+  // More than four stand as short cards, so their icons are a size smaller.
+  const iconSize = initialPrompts.length + starters.length > 4 ? "md" : "lg";
   return (
     <div className="grid flex-[3] basis-0 content-start gap-5 pb-8 pt-2">
-      {/* The requests the agent's author wrote, then what its skills offer to begin with: four
+      {/* The requests the agent's author wrote, then what its skills offer to begin with: twelve
           at most, which the server keeps. Choosing one fills the composer and sends nothing, so
           the person reads and completes the request first. */}
       {starters.length > 0 || initialPrompts.length > 0 ? (
-        <StarterList label={t("chatStarters")}>
+        <StarterList
+          label={t("chatStarters")}
+          more={{ show: t("chatStartersMore"), hide: t("chatStartersFewer") }}
+        >
           {/* The request itself is the hint of the author's own, unless it only repeats the title. */}
           {initialPrompts.map((initialPrompt) => (
             <ThreadPrimitive.Suggestion
@@ -721,7 +726,7 @@ export function ThreadStartBlock({
               asChild
             >
               <Starter
-                icon={<SkillIcon icon="prompt" size="lg" />}
+                icon={<SkillIcon icon={initialPrompt.icon ?? "prompt"} size={iconSize} />}
                 title={initialPrompt.title}
                 hint={
                   initialPrompt.prompt.trim() === initialPrompt.title.trim()
@@ -739,7 +744,7 @@ export function ThreadStartBlock({
               asChild
             >
               <Starter
-                icon={<SkillIcon icon={starter.icon} size="lg" />}
+                icon={<SkillIcon icon={starter.icon} size={iconSize} />}
                 title={starter.title}
                 hint={starter.hint}
                 onClick={onStarterChosen}

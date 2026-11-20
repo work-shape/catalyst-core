@@ -1,4 +1,9 @@
-import { AGENT_AVAILABILITY_MODES, localeCodes } from "@work-shape/catalyst-core";
+import {
+  AGENT_AVAILABILITY_MODES,
+  isStarterIconName,
+  localeCodes,
+  type StarterIconName
+} from "@work-shape/catalyst-core";
 import { withCompanionTools, withImpliedTools } from "./instance-tools";
 
 export interface LocalizedPair<Value = string> {
@@ -9,6 +14,8 @@ export interface LocalizedPair<Value = string> {
 interface AgentInitialPromptForm {
   title: LocalizedPair;
   prompt: LocalizedPair;
+  /** The icon the author chose. The key is absent where the starter shows the usual icon. */
+  icon?: StarterIconName;
 }
 
 export interface AgentFormState {
@@ -173,10 +180,11 @@ export function agentConfigToForm(config: Record<string, unknown>): AgentFormSta
     skillNames: stringArray(config.skillNames),
     knowledgeBases: stringArray(config.knowledgeBases),
     initialPrompts: initialPrompts.map((prompt) => {
-      const record = (prompt ?? {}) as { title?: unknown; prompt?: unknown };
+      const record = (prompt ?? {}) as { title?: unknown; prompt?: unknown; icon?: unknown };
       return {
         title: localizedToPair(record.title),
-        prompt: localizedToPair(record.prompt)
+        prompt: localizedToPair(record.prompt),
+        ...(isStarterIconName(record.icon) ? { icon: record.icon } : {})
       };
     }),
     shippedNewer: Array.isArray(config.shippedNewer) ? stringArray(config.shippedNewer) : undefined
@@ -266,7 +274,8 @@ export function agentFormToConfig(
       .filter((prompt) => hasLocalizedContent(prompt.title) || hasLocalizedContent(prompt.prompt))
       .map((prompt) => ({
         title: pairToLocalized(prompt.title) ?? "",
-        prompt: pairToLocalized(prompt.prompt) ?? ""
+        prompt: pairToLocalized(prompt.prompt) ?? "",
+        ...(prompt.icon === undefined ? {} : { icon: prompt.icon })
       })),
     ...(form.shippedNewer ? { shippedNewer: form.shippedNewer } : {})
   };
