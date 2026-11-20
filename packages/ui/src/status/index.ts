@@ -29,7 +29,13 @@ export {
   type ConnectionIconSize
 } from "./connection-icon";
 export { CountBadge, type CountBadgeProps, type CountBadgeTone } from "./count-badge";
-export { IconTile, type IconTileProps, type IconTileSize } from "./icon-tile";
+export {
+  IconTile,
+  iconTints,
+  type IconTileProps,
+  type IconTileSize,
+  type IconTint
+} from "./icon-tile";
 export {
   IconRegistryProvider,
   RegistryIcon,
@@ -40,7 +46,15 @@ export {
   type IconRegistry,
   type RegistryIconProps
 } from "./registry-icon";
-export { starterIconNames, starterIcons, type StarterIconKey } from "./starter-icons";
+export {
+  StarterIcon,
+  starterIconFamilies,
+  starterIconNames,
+  type StarterIconFamily,
+  type StarterIconKey,
+  type StarterIconProps,
+  type StarterIconSize
+} from "./starter-icons";
 export {
   KnowsHowTo,
   SkillIcon,

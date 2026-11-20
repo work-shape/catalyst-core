@@ -15,6 +15,7 @@ import {
   SkillIcon,
   Spinner,
   Starter,
+  StarterIcon,
   StarterList
 } from "@work-shape/catalyst-ui";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
@@ -726,7 +727,14 @@ export function ThreadStartBlock({
               asChild
             >
               <Starter
-                icon={<SkillIcon icon={initialPrompt.icon ?? "prompt"} size={iconSize} />}
+                icon={
+                  // Without an icon of its own, the request shows the icon it always had.
+                  initialPrompt.icon === undefined ? (
+                    <SkillIcon icon="prompt" size={iconSize} />
+                  ) : (
+                    <StarterIcon icon={initialPrompt.icon} size={iconSize === "lg" ? "md" : "sm"} />
+                  )
+                }
                 title={initialPrompt.title}
                 hint={
                   initialPrompt.prompt.trim() === initialPrompt.title.trim()

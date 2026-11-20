@@ -65,20 +65,20 @@ export interface StarterListProps {
   label: string;
   children: ReactNode;
   /**
-   * The words of the button that shows the starters after the first six, and of the one that
+   * The words of the button that shows the starters after the first nine, and of the one that
    * hides them again: "More" and "Fewer". Without them a long list shows whole.
    */
   more?: { show: string; hide: string };
   className?: string;
 }
 
-/** How many starters a long list shows before "More": two rows of three, three rows of two. */
-const FOLDED_STARTERS = 6;
+/** How many starters a long list shows before "More": three rows of three where it is wide. */
+const FOLDED_STARTERS = 9;
 
 /**
  * Starters side by side. Up to four stand in two columns, one column where the room is narrow,
  * each with its hint. More than four stand as short cards without hints, in two columns and
- * three where the room is wide; with `more`, the first six show and a quiet button shows the
+ * three where the room is wide; with `more`, the first nine show and a quiet button shows the
  * rest. The list's own width decides the columns, not the window's: in a dock beside a page it
  * keeps the narrow layout at any window. Every starter of a list stands as high as the highest,
  * so one without a hint or an icon looks like the others.

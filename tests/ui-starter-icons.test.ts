@@ -4,11 +4,11 @@ import { describe, expect, it } from "vitest";
 import { STARTER_ICON_NAMES } from "@work-shape/catalyst-asset-schemas";
 import {
   IconPicker,
-  SkillIcon,
   Starter,
+  StarterIcon,
   StarterList,
   UiRoot,
-  genericIcons,
+  starterIconFamilies,
   starterIconNames,
   uiLabelsEn
 } from "@work-shape/catalyst-ui";
@@ -17,19 +17,33 @@ const render = (node: ReactElement) =>
   renderToStaticMarkup(createElement(UiRoot, { labels: uiLabelsEn, mode: "light" }, node));
 
 describe("starter icons", () => {
+  const icon = (props: Parameters<typeof StarterIcon>[0]) =>
+    renderToStaticMarkup(createElement(StarterIcon, props));
+
   it("draws every icon an agent may store, and offers no other", () => {
     expect([...starterIconNames].sort()).toEqual([...STARTER_ICON_NAMES].sort());
+    expect(starterIconFamilies.flatMap(({ names }) => names)).toEqual(starterIconNames);
     for (const name of STARTER_ICON_NAMES) {
-      expect(genericIcons[name], name).toBeDefined();
+      expect(icon({ icon: name }), name).toContain(`data-starter-icon="${name}"`);
     }
   });
 
-  it("stands a chosen icon on the tile in ink, like the icon of an author's request", () => {
-    const markup = renderToStaticMarkup(createElement(SkillIcon, { icon: "calendar", size: "lg" }));
+  it("gives an icon the hue of its family, one hue per family", () => {
+    const hueOf = (name: string) =>
+      /bg-tint-([a-z]+)\/12 text-tint-\1/u.exec(icon({ icon: name }))?.[1];
+    const hues = starterIconFamilies.map(({ names }) => [...new Set(names.map(hueOf))]);
 
-    expect(markup).toContain('data-skill-icon="calendar"');
-    expect(markup).toContain("data-skill-icon-tile");
-    expect(markup).toContain("text-foreground");
+    expect(hues).toEqual([["blue"], ["green"], ["amber"], ["violet"], ["teal"], ["rose"]]);
+  });
+
+  it("shows the speech bubble on the neutral tile without an icon and for a name nobody draws", () => {
+    for (const markup of [icon({}), icon({ icon: "rocket" })]) {
+      expect(markup).toContain('data-starter-icon="default"');
+      expect(markup).toContain("lucide-message-square-text");
+      expect(markup).toContain("bg-secondary");
+      expect(markup).not.toContain("tint-");
+      expect(markup).toMatch(/^<span aria-hidden="true"/u);
+    }
   });
 });
 
@@ -68,16 +82,18 @@ describe("StarterList", () => {
     expect(markup).not.toContain("More");
   });
 
-  it("shows the first six of a longer list and a button for the rest", () => {
-    const markup = list(9, { show: "More", hide: "Fewer" });
+  it("shows nine whole, and the first nine of a longer list with a button for the rest", () => {
+    expect(list(9, { show: "More", hide: "Fewer" })).toContain("Title 9");
+    expect(list(9, { show: "More", hide: "Fewer" })).not.toContain("More");
+    const markup = list(12, { show: "More", hide: "Fewer" });
 
-    expect(markup).toContain("Title 6");
-    expect(markup).not.toContain("Title 7");
+    expect(markup).toContain("Title 9");
+    expect(markup).not.toContain("Title 10");
     expect(markup).toMatch(/<button[^>]*aria-expanded="false"[^>]*>More<\/button>/u);
   });
 
   it("shows a long list whole where the caller gives no words for the fold", () => {
-    expect(list(9)).toContain("Title 9");
+    expect(list(12)).toContain("Title 12");
   });
 });
 
@@ -87,18 +103,29 @@ describe("IconPicker", () => {
       render(
         createElement(IconPicker, {
           label: "Icon of prompt 1",
-          options: [{ name: "calendar", label: "Calendar" }],
+          groups: [
+            {
+              label: "Planning",
+              options: [
+                {
+                  name: "calendar",
+                  label: "Calendar",
+                  icon: createElement(StarterIcon, { icon: "calendar", size: "sm" })
+                }
+              ]
+            }
+          ],
           value,
-          defaultIcon: "prompt",
+          defaultIcon: createElement(StarterIcon, { size: "sm" }),
           defaultLabel: "Default",
           onChange: () => undefined
         })
       );
 
     expect(picker()).toContain('aria-label="Icon of prompt 1: Default"');
-    expect(picker()).toContain("lucide-message-square-text");
+    expect(picker()).toContain('data-starter-icon="default"');
     expect(picker("calendar")).toContain('aria-label="Icon of prompt 1: Calendar"');
-    expect(picker("calendar")).toContain("lucide-calendar");
+    expect(picker("calendar")).toContain('data-starter-icon="calendar"');
     // A name the picker does not offer shows as the default.
     expect(picker("rocket")).toContain('aria-label="Icon of prompt 1: Default"');
   });

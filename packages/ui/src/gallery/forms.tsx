@@ -17,7 +17,7 @@ import { SaveBar } from "../forms/save-bar";
 import { Select } from "../forms/select";
 import { SettingsList, SettingsRow } from "../forms/settings-row";
 import { Switch } from "../forms/switch";
-import { starterIconNames } from "../status/starter-icons";
+import { StarterIcon, starterIconFamilies } from "../status/starter-icons";
 import { Page } from "../structure/page";
 import { versionedTextEntry } from "./draft";
 import { Samples, type GalleryGroup } from "./entry";
@@ -25,7 +25,14 @@ import type { GalleryText } from "./text";
 
 const rowAgents = ["rowAgent", "rowWorkflow", "rowKnowledge"] as const;
 
-const iconPickerOptions = starterIconNames.map((name) => ({ name, label: name }));
+const iconPickerGroups = starterIconFamilies.map(({ family, names }) => ({
+  label: family,
+  options: names.map((name) => ({
+    name,
+    label: name,
+    icon: <StarterIcon icon={name} size="sm" />
+  }))
+}));
 
 /** An icon picker with nothing chosen, one with an icon chosen, and one that is disabled. */
 function IconPickerSamples({ text }: { text: GalleryText }) {
@@ -43,9 +50,9 @@ function IconPickerSamples({ text }: { text: GalleryText }) {
         <IconPicker
           key={index}
           label={text.iconPickerLabel}
-          options={iconPickerOptions}
+          groups={iconPickerGroups}
           value={value}
-          defaultIcon="prompt"
+          defaultIcon={<StarterIcon size="sm" />}
           defaultLabel={text.iconPickerDefault}
           disabled={disabled}
           onChange={onChange}

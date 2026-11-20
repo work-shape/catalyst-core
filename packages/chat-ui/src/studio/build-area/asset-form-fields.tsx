@@ -9,9 +9,11 @@ import {
   FormNotice,
   IconButton,
   IconPicker,
+  StarterIcon,
   Input,
   TextVersionSwitch,
   VersionedText,
+  starterIconFamilies,
   starterIconNames,
   type TextVersion
 } from "@work-shape/catalyst-ui";
@@ -231,9 +233,13 @@ export function InitialPromptsEditor({
         return next === undefined ? entry : { ...entry, icon: next };
       })
     );
-  const iconOptions = starterIconNames.map((name) => ({
-    name,
-    label: t(`starterIcon.${name}`)
+  const iconGroups = starterIconFamilies.map(({ family, names }) => ({
+    label: t(`starterIconFamily.${family}`),
+    options: names.map((name) => ({
+      name,
+      label: t(`starterIcon.${name}`),
+      icon: <StarterIcon icon={name} size="sm" />
+    }))
   }));
 
   return (
@@ -248,9 +254,9 @@ export function InitialPromptsEditor({
           icon={
             <IconPicker
               label={t("configPromptIcon", { number: index + 1 })}
-              options={iconOptions}
+              groups={iconGroups}
               value={prompt.icon}
-              defaultIcon="prompt"
+              defaultIcon={<StarterIcon size="sm" />}
               defaultLabel={t("configPromptIconDefault")}
               disabled={disabled}
               onChange={(icon) => setIcon(index, icon)}

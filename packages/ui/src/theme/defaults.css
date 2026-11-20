@@ -56,6 +56,12 @@
   --file-slides: #d2571c;
   --file-pdf: #c8322b;
   --file-foreground: #ffffff;
+  --tint-blue: #2f67c7;
+  --tint-green: #23804f;
+  --tint-amber: #a8650c;
+  --tint-violet: #7350cf;
+  --tint-teal: #117f86;
+  --tint-rose: #c0396c;
   --border: #e1e0dc;
   --input: color-mix(in srgb, #1c1c1b 12%, #e1e0dc);
   --input-strong: color-mix(in srgb, #5e5d5a 70%, transparent);
@@ -130,6 +136,12 @@
   --file-slides: #dc6328;
   --file-pdf: #d6453d;
   --file-foreground: #ffffff;
+  --tint-blue: #7eaaf2;
+  --tint-green: #62c690;
+  --tint-amber: #e8aa4e;
+  --tint-violet: #ac98f3;
+  --tint-teal: #52c8ce;
+  --tint-rose: #f088ae;
   --border: #2d2d30;
   --input: color-mix(in srgb, #ececeb 12%, #2d2d30);
   --input-strong: color-mix(in srgb, #a9aaac 70%, transparent);
