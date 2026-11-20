@@ -112,11 +112,15 @@ export function sourceLiveLine(
     if (status.confirmation !== undefined) return undefined;
     const counts = sourceItemCounts(status.items);
     const label = t(sourceStateView(status).label);
-    if (counts.found === 0) return t("knowledgeSources.liveRunning", { state: label });
+    // A count says something only while items still wait: a changes sync of a source that is
+    // through would read "8 of 8" the whole time.
+    const done = counts.searchable + counts.failed;
+    if (counts.found === 0 || done >= counts.found)
+      return t("knowledgeSources.liveRunning", { state: label });
     const number = new Intl.NumberFormat(locale);
     return t("knowledgeSources.liveRunningProgress", {
       state: label,
-      done: number.format(counts.searchable + counts.failed),
+      done: number.format(done),
       total: number.format(counts.found)
     });
   }

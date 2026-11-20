@@ -450,6 +450,11 @@ describe("what a published source does right now, in the line of its card", () =
     expect(line(render("de", { status: { sources: [listing] } }))?.text).toContain(
       "Erstimport läuft …<"
     );
+    // A changes sync of a source that is through gives no count: it would read "46 of 46".
+    const through = { ...idle, running: { ...initialSync, mode: "changes" as const } };
+    expect(line(render("de", { status: { sources: [through] } }))?.text).toContain(
+      "Synchronisiert gerade …<"
+    );
   });
 
   it("says when it last synced and when it syncs next, one interval after the last start", () => {
