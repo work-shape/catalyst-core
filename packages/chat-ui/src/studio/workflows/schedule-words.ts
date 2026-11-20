@@ -1,4 +1,4 @@
-import { isScheduleZone, scheduleZoneWords } from "@work-shape/catalyst-ui";
+import { isScheduleZone, scheduleZoneWords, type ScheduleValue } from "@work-shape/catalyst-ui";
 import type { TranslationContextValue, TranslationKey } from "../../shared/i18n";
 import { uiLabelsFor } from "../../shared/ui-labels";
 import type { InstanceTimeZone } from "./workflow-model";
@@ -34,7 +34,8 @@ const SCHEDULE_KEYS: Readonly<
 
 /**
  * A cron expression in words, or nothing where it is none of the forms read here. As a
- * sentence it reads Monday to Friday too, which the schedule field writes.
+ * sentence it reads what the schedule field writes besides: every hour, Monday to Friday, and
+ * several days of a week.
  */
 export function scheduleInWords(
   cron: string,
@@ -47,6 +48,16 @@ export function scheduleInWords(
     return undefined;
   }
   const [minute = "", hour = "", day = "", month = "", weekday = ""] = fields;
+  if (
+    as === "sentence" &&
+    NUMBER.test(minute) &&
+    Number(minute) <= 59 &&
+    [hour, day, month, weekday].every((field) => field === "*")
+  ) {
+    return Number(minute) === 0
+      ? t("workflows.when.hourly")
+      : t("workflows.when.hourlyPast", { minute: Number(minute) });
+  }
   if (!NUMBER.test(minute) || !NUMBER.test(hour) || (month !== "*" && !NUMBER.test(month))) {
     return undefined;
   }
@@ -73,6 +84,23 @@ export function scheduleInWords(
   }
   if (as === "sentence" && day === "*" && weekday === "1-5") {
     return t("workflows.when.weekdays", { time });
+  }
+  if (as === "sentence" && day === "*" && /^[0-7](,[0-7])+$/u.test(weekday)) {
+    // Several days of the week, Monday first: "every Monday and Wednesday".
+    const days = [...new Set(weekday.split(",").map((entry) => Number(entry) % 7 || 7))].sort(
+      (a, b) => a - b
+    );
+    const names = days.map((entry) =>
+      // 4 January 2026 is a Sunday; the field's day 7.
+      new Date(Date.UTC(2026, 0, 4 + (entry % 7))).toLocaleDateString(locale, {
+        weekday: "long",
+        timeZone: "UTC"
+      })
+    );
+    return t("workflows.when.weekly", {
+      weekday: new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(names),
+      time
+    });
   }
   if (day === "*" && NUMBER.test(weekday) && Number(weekday) <= 7) {
     // 4 January 2026 is a Sunday, which cron counts as 0 and as 7.
@@ -172,4 +200,59 @@ export function withZone(
   { t, locale }: Pick<TranslationContextValue, "locale" | "t">
 ): string {
   return t("workflows.schedule.zone", { schedule: words, zone: zoneInWords(zone, locale) });
+}
+
+/**
+ * The schedule on its button, in one line: "Daily at 02:00". Days of a week are named short,
+ * and a schedule that is no whole one yet asks for one.
+ */
+export function scheduleValueWords(
+  form: ScheduleValue,
+  { locale, t }: Pick<TranslationContextValue, "locale" | "t">
+): string {
+  if (form.kind === "hour") {
+    return t("knowledgeSources.whenHour", { minute: String(form.minute).padStart(2, "0") });
+  }
+  const [hour = 0, minute = 0] = form.time.split(":").map(Number);
+  if (form.time === "" || Number.isNaN(hour) || Number.isNaN(minute)) {
+    return t("knowledgeSources.whenChoose");
+  }
+  // A clock time has no day: any day in UTC gives the same words.
+  const time = new Date(Date.UTC(2026, 0, 1, hour, minute)).toLocaleTimeString(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC"
+  });
+  switch (form.kind) {
+    case "day":
+      return t("knowledgeSources.whenDay", { time });
+    case "weekday":
+      return t("knowledgeSources.whenWeekday", { time });
+    case "month":
+      return t("knowledgeSources.whenMonth", { day: form.day, time });
+    case "week":
+      if (form.days.length === 0) return t("knowledgeSources.whenChoose");
+      if (form.days.length === 1) {
+        // One day is named in full: "Every Monday at 08:00".
+        return t("knowledgeSources.whenWeekOne", {
+          day: new Date(Date.UTC(2026, 0, 4 + (form.days[0] ?? 1))).toLocaleDateString(locale, {
+            weekday: "long",
+            timeZone: "UTC"
+          }),
+          time
+        });
+      }
+      return t("knowledgeSources.whenWeek", {
+        // 5 January 2026 is a Monday, the field's day 1.
+        days: new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(
+          form.days.map((day) =>
+            new Date(Date.UTC(2026, 0, 4 + day)).toLocaleDateString(locale, {
+              weekday: "short",
+              timeZone: "UTC"
+            })
+          )
+        ),
+        time
+      });
+  }
 }

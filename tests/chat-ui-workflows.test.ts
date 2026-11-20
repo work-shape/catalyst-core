@@ -443,10 +443,17 @@ describe("the page of a Workflow", () => {
       workflow?: typeof workflow;
       problem?: "missing" | "unavailable" | "failed";
       runsAvailable?: boolean;
-      lastRun?: { id: string; status: "failed" | "done" };
+      lastRun?: {
+        id: string;
+        status: "failed" | "done" | "limit_reached";
+        failedItemCount: number;
+        failedDescendantCount: number;
+      };
+      liveSteps?: (typeof workflow)["steps"];
     } = {}
   ) =>
     createElement(WorkflowPageView, {
+      ...(input.liveSteps === undefined ? {} : { liveSteps: input.liveSteps }),
       ...(input.lastRun === undefined ? {} : { lastRun: input.lastRun }),
       workspaceId: "cw_1",
       workflowId: "notify-clients",
@@ -498,6 +505,17 @@ describe("the page of a Workflow", () => {
     expect(when([{ kind: "schedule", cron: "30 7 * * 1-5" }])).toBe(
       "Läuft montags bis freitags um 07:30"
     );
+    // Several days of a week and every hour are said too.
+    expect(when([{ kind: "schedule", cron: "0 8 * * 1,3" }])).toBe(
+      "Läuft jeden Montag und Mittwoch um 08:00"
+    );
+    expect(when([{ kind: "schedule", cron: "0 8 * * 3,1" }], "en")).toBe(
+      "Runs every Monday and Wednesday at 08:00 AM"
+    );
+    expect(when([{ kind: "schedule", cron: "0 * * * *" }])).toBe(de("workflows.when.hourly"));
+    expect(when([{ kind: "schedule", cron: "15 * * * *" }])).toBe(
+      "Läuft jede Stunde, 15 Minuten nach der vollen Stunde"
+    );
     expect(when([{ kind: "schedule", cron: "*/5 * * * *" }])).toBe("Läuft nach Zeitplan");
     // Every way that starts it without a person is said; a start by hand beside one is not.
     expect(when([{ kind: "manual" }, { kind: "platform_event" }, { kind: "webhook" }])).toBe(
@@ -511,20 +529,73 @@ describe("the page of a Workflow", () => {
     expect(markup).not.toContain("Runs as");
   });
 
+  it("says when the published revision runs, not the draft the reader is shown", () => {
+    const monday = { kind: "schedule", cron: "0 8 * * 1", timeZone: "Europe/Berlin" };
+    const config = (triggers: readonly Record<string, unknown>[]) => ({
+      ...definition,
+      steps: [{ ...definition.steps[0], triggers }, ...definition.steps.slice(1)]
+    });
+    const shown = (
+      pointers: { draftRevision?: number; publishedRevision?: number },
+      liveSteps?: (typeof workflow)["steps"]
+    ) =>
+      /data-workflow-when=""[^>]*>([^<]*)</u.exec(
+        render(
+          page({
+            workflow: toWorkflow(
+              {
+                name: "notify-clients",
+                config: config([monday]),
+                publishedRevision: pointers.publishedRevision
+              },
+              { mayStart: true },
+              pointers
+            ),
+            ...(liveSteps === undefined ? {} : { liveSteps })
+          }),
+          "de"
+        )
+      )?.[1];
+    // The draft is the published revision: its schedule is the one that runs.
+    expect(shown({ draftRevision: 3, publishedRevision: 3 })).toBe(
+      "Läuft jeden Montag um 08:00 (Ortszeit Berlin)"
+    );
+    // The draft differs: the line waits for the published revision and says that one.
+    expect(shown({ draftRevision: 4, publishedRevision: 3 })).toBeUndefined();
+    const live = toWorkflow(
+      { name: "notify-clients", config: config([{ kind: "manual" }]), publishedRevision: 3 },
+      { mayStart: true }
+    ).steps;
+    expect(shown({ draftRevision: 4, publishedRevision: 3 }, live)).toBe(
+      de("workflows.schedule.manualOnly")
+    );
+    // Never published: it runs in no way yet.
+    expect(shown({ draftRevision: 1 })).toBe(
+      "Sobald veröffentlicht: Läuft jeden Montag um 08:00 (Ortszeit Berlin)"
+    );
+  });
+
   it("says at the top that the last run failed, with the way to it", () => {
-    const failed = render(page({ lastRun: { id: "wr_9", status: "failed" } }));
+    const run = (status: "failed" | "done" | "limit_reached", failedItemCount = 0) => ({
+      id: "wr_9",
+      status,
+      failedItemCount,
+      failedDescendantCount: 0
+    });
+    // A run that stopped at a limit, and one that ended done over failed items, are said too.
+    expect(render(page({ lastRun: run("limit_reached") }))).toContain(t("workflows.lastRunLimit"));
+    expect(render(page({ lastRun: run("done", 2) }))).toContain(t("workflows.lastRunPartly"));
+    const failed = render(page({ lastRun: run("failed") }));
     expect(failed).toContain(t("workflows.lastRunFailed"));
     expect(failed).toContain('href="/w/cw_1/workflows/notify-clients/runs/wr_9"');
     expect(failed.indexOf("data-last-run-failed")).toBeLessThan(
       failed.indexOf('data-testid="workflow-canvas"')
     );
     // A run that ended well says nothing, and nothing is said where the instance runs none.
-    expect(render(page({ lastRun: { id: "wr_9", status: "done" } }))).not.toContain(
+    expect(render(page({ lastRun: run("done") }))).not.toContain("data-last-run-failed");
+    expect(render(page({ lastRun: run("failed"), runsAvailable: false }))).not.toContain(
       "data-last-run-failed"
     );
-    expect(
-      render(page({ lastRun: { id: "wr_9", status: "failed" }, runsAvailable: false }))
-    ).not.toContain("data-last-run-failed");
   });
 
   it("offers neither a start nor the runs where the instance runs no Workflow", () => {

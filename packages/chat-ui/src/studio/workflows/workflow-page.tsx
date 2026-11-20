@@ -5,9 +5,10 @@ import { useStartRun } from "./start-run";
 import { WorkflowCanvas } from "./workflow-canvas";
 import {
   useRunsAvailable,
+  useLiveSteps,
   useWorkflow,
   useWorkflowNames,
-  useWorkflowRuns,
+  useNewestRuns,
   type WorkflowRead,
   type WorkflowReadProblem
 } from "./workflow-data";
@@ -23,7 +24,7 @@ import { useWorkflowEditing, type WorkflowEditing } from "./workflow-editing";
 import { WorkflowHead } from "./workflow-head";
 import { useTestRun } from "./test-run";
 import { useStepPins, type StepPinControl } from "./step-pin";
-import { editOffered, runsReadable, startOffered } from "./workflow-model";
+import { doneWithFailedRuns, editOffered, runsReadable, startOffered } from "./workflow-model";
 import type {
   WorkflowRunView,
   WorkflowStartIssue,
@@ -65,15 +66,17 @@ export function WorkflowPage({ workflow, opened }: { workflow: string; opened?: 
   const names = useWorkflowNames(workspaceId, before);
   const runsAvailable = useRunsAvailable();
   const readsRuns = host !== undefined && runsReadable(host.rights, read.workflow);
-  // The newest runs, for the one line the page says about them: that the last one failed.
-  const recent = useWorkflowRuns(
+  const liveSteps = useLiveSteps(shownId, read.workflow);
+  // The newest runs, read once, for the one line the page says about them: that the last one
+  // did not end well. A test run of the draft is the tester's own matter, not the Workflow's
+  // state, so the last run that is no test speaks. Behind as many test runs as are read here it
+  // is not found, and the page then says nothing: the list of runs still shows it.
+  const recent = useNewestRuns(
     shownId,
     RECENT_RUNS,
-    undefined,
     runsAvailable && read.workflow !== undefined && readsRuns
   );
-  // A test run of the draft is the tester's own matter, not the Workflow's state.
-  const lastRun = recent.rows?.find((run) => !run.test);
+  const lastRun = recent?.find((run) => !run.test);
   const start = useStartRun({
     workflow: shownId,
     name: read.workflow?.name,
@@ -108,6 +111,7 @@ export function WorkflowPage({ workflow, opened }: { workflow: string; opened?: 
         trail={before.map((id, depth) => ({ id, name: names[depth], route: routeAt(depth) }))}
         runsAvailable={runsAvailable}
         runsReadable={readsRuns}
+        liveSteps={liveSteps}
         {...(lastRun === undefined ? {} : { lastRun })}
         edit={edit}
         editing={editing}
@@ -146,6 +150,7 @@ export function WorkflowPageView({
   trail = [],
   runsAvailable,
   runsReadable: readsRuns = true,
+  liveSteps,
   lastRun,
   edit,
   editing,
@@ -165,8 +170,10 @@ export function WorkflowPageView({
   runsAvailable: boolean;
   /** The reader may read the Workflow's runs: its Runs tab stands. Starting it is apart. */
   runsReadable?: boolean;
+  /** The published revision's steps, where the draft shown differs from it. */
+  liveSteps?: readonly WorkflowStepView[] | undefined;
   /** The Workflow's last run that is no test, where the reader may read its runs. */
-  lastRun?: Pick<WorkflowRunView, "id" | "status">;
+  lastRun?: Pick<WorkflowRunView, "id" | "status" | "failedItemCount" | "failedDescendantCount">;
   /** "Edit with the agent", for a reader who may write the Workflow. */
   edit?: WorkflowEdit;
   /** Editing by hand in a step's Settings, for a reader who may write the Workflow. */
@@ -193,6 +200,18 @@ export function WorkflowPageView({
     workflow.refusedFor.length > 0 &&
     startOffered({ ...workflow, refusedFor: [] });
   const shown = read;
+  // How the last run ended, where a person should look at it: it failed, it stopped at a limit,
+  // or it ended done and left failed items or runs behind.
+  const lastRunSaid: TranslationKey | undefined =
+    lastRun === undefined
+      ? undefined
+      : lastRun.status === "failed"
+        ? "workflows.lastRunFailed"
+        : lastRun.status === "limit_reached"
+          ? "workflows.lastRunLimit"
+          : doneWithFailedRuns(lastRun)
+            ? "workflows.lastRunPartly"
+            : undefined;
   if (shown.problem === "missing") {
     // No head: a title that waits for a record that never comes would stand there for good.
     // A frame of its own, so the sentence takes the focus as the title of a page does.
@@ -221,6 +240,7 @@ export function WorkflowPageView({
     <WorkflowsFrame label={workflow?.name ?? t("workflows.title")} testId="workflow-page" fill>
       <WorkflowHead
         workspaceId={workspaceId}
+        liveSteps={liveSteps}
         workflowId={workflowId}
         workflow={workflow}
         tab="workflow"
@@ -261,12 +281,12 @@ export function WorkflowPageView({
           <NotRunnableBanner issues={workflow.refusedFor} />
         </div>
       )}
-      {lastRun?.status !== "failed" || !runsAvailable || !readsRuns ? null : (
+      {lastRun === undefined || lastRunSaid === undefined || !runsAvailable || !readsRuns ? null : (
         <div className="shrink-0 border-b px-(--layout-gutter) py-2">
           <Banner
-            tone="danger"
+            tone={lastRun.status === "failed" ? "danger" : "warning"}
             layout="inline"
-            data-last-run-failed=""
+            data-last-run-failed={lastRun.status}
             action={
               <Button asChild size="sm" variant="outline">
                 <a
@@ -285,7 +305,7 @@ export function WorkflowPageView({
               </Button>
             }
           >
-            {t("workflows.lastRunFailed")}
+            {t(lastRunSaid)}
           </Banner>
         </div>
       )}

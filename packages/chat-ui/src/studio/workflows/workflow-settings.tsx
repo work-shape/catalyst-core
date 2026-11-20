@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 import {
   Banner,
   Button,
@@ -8,6 +9,11 @@ import {
   DisclosureTrigger,
   Field,
   FieldListEditor,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  SettingsList,
+  SettingsRow,
   Input,
   KeyValue,
   KeyValueList,
@@ -25,7 +31,7 @@ import { instanceUrl } from "../../admin/control-plane/personal-api-keys-model";
 import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { cronSchedule, scheduleCron } from "./schedule-cron";
-import { scheduleInWords, withZone } from "./schedule-words";
+import { scheduleInWords, scheduleValueWords, withZone } from "./schedule-words";
 import { fieldsSchema, schemaFields, withKeys } from "./schema-fields";
 import { useStartRun } from "./start-run";
 import { WorkflowAppCallers } from "./workflow-app-callers";
@@ -33,6 +39,7 @@ import { sameValue, WORKFLOW_FIELDS, type WorkflowManifest } from "./step-edits"
 import { fieldListState, leftField } from "./step-settings-parts";
 import {
   useRunsAvailable,
+  useLiveSteps,
   useWorkflow,
   useWorkflowWebhook,
   type WorkflowReadProblem
@@ -47,7 +54,7 @@ import {
 import { useWorkflowEditing, type WorkflowEditing } from "./workflow-editing";
 import { WorkflowHead } from "./workflow-head";
 import { editOffered, runsReadable, startOffered, workflowRightsOn } from "./workflow-model";
-import type { WorkflowCallerView, WorkflowView } from "./workflow-views";
+import type { WorkflowCallerView, WorkflowStepView, WorkflowView } from "./workflow-views";
 import { WorkflowsFrame, routeLink, type OpenRoute } from "./workflows-frame";
 import { useWorkflowsHost } from "./workflows-host";
 
@@ -176,6 +183,7 @@ export function WorkflowSettingsPage({ workflow }: { workflow: string }) {
   const workspaceId = host?.workspace?.id;
   const read = useWorkflow(workspaceId, workflow);
   const runsAvailable = useRunsAvailable();
+  const liveSteps = useLiveSteps(workflow, read.workflow);
   const start = useStartRun({
     workflow,
     name: read.workflow?.name,
@@ -200,6 +208,7 @@ export function WorkflowSettingsPage({ workflow }: { workflow: string }) {
           read.problem === undefined ? undefined : { problem: read.problem, retry: read.retry }
         }
         runsAvailable={runsAvailable}
+        liveSteps={liveSteps}
         readsRuns={runsReadable(host.rights, read.workflow)}
         edit={edit}
         editing={editing}
@@ -221,6 +230,7 @@ export function WorkflowSettingsPageView({
   problem,
   runsAvailable,
   readsRuns,
+  liveSteps,
   edit,
   editing,
   draft,
@@ -231,6 +241,8 @@ export function WorkflowSettingsPageView({
   workflowId: string;
   workflow: WorkflowView | undefined;
   problem?: { problem: WorkflowReadProblem; retry(): void };
+  /** The published revision's steps, where the draft shown differs from it. */
+  liveSteps?: readonly WorkflowStepView[] | undefined;
   runsAvailable: boolean;
   readsRuns: boolean;
   edit?: WorkflowEdit;
@@ -250,6 +262,7 @@ export function WorkflowSettingsPageView({
     >
       <WorkflowHead
         workspaceId={workspaceId}
+        liveSteps={liveSteps}
         workflowId={workflowId}
         workflow={workflow}
         tab="settings"
@@ -390,17 +403,27 @@ export function WorkflowSettingsForm({
         {t("workflows.settings.changeWithAgent")}
       </Button>
     );
-  const switchRow = (kind: string, label: string, hint?: string) => (
-    <Field layout="inline" label={label} {...(hint === undefined ? {} : { hint })}>
-      <Switch
-        checked={has(kind)}
-        disabled={readOnly || triggerId === "" || (has(kind) && lastOn(kind))}
-        onCheckedChange={(on) =>
-          kind === "schedule" ? turnSchedule(on) : setTriggers(switched(triggers, kind, on))
-        }
-      />
-    </Field>
+  const startSwitch = (kind: string) => (
+    <Switch
+      checked={has(kind)}
+      disabled={readOnly || triggerId === "" || (has(kind) && lastOn(kind))}
+      onCheckedChange={(on) =>
+        kind === "schedule" ? turnSchedule(on) : setTriggers(switched(triggers, kind, on))
+      }
+    />
   );
+  // One way to start in one row: what it is, one line about it, and its switch at the end.
+  const switchRow = (kind: string, label: string, hint: ReactNode) => (
+    <SettingsRow label={label} description={hint}>
+      {startSwitch(kind)}
+    </SettingsRow>
+  );
+  const startsId = useId();
+  const startsMoreId = useId();
+  // The schedule the fields hold, where they hold it: its button reads as the schedule does.
+  const scheduleForm = schedule !== undefined && read !== undefined ? shown?.value : undefined;
+  const scheduleIncomplete =
+    !readOnly && scheduleForm !== undefined && scheduleCron(scheduleForm) === undefined;
   const issues = editing === undefined ? [] : [...editing.issues.other];
   if (editing?.error !== undefined) issues.push(editing.error);
   const webhook = useWorkflowWebhook(workflow.id, has("webhook"));
@@ -460,57 +483,93 @@ export function WorkflowSettingsForm({
         </Field>
       </section>
 
-      <section className="grid gap-4" data-workflow-starts="">
+      <section className="grid gap-3" data-workflow-starts="">
         <div className="grid gap-1">
-          <h2 className="text-title-sm">{t("workflows.workflowSettings.starts")}</h2>
+          <h2 id={startsId} className="text-title-sm">
+            {t("workflows.workflowSettings.starts")}
+          </h2>
           <p className="text-caption text-muted-foreground">
             {t("workflows.workflowSettings.startsHint")}
           </p>
         </div>
-        {switchRow("schedule", t("workflows.workflowSettings.onSchedule"))}
-        {schedule === undefined ? null : shown !== undefined && read !== undefined ? (
-          <ScheduleField
-            label={t("workflows.workflowSettings.schedule")}
-            value={shown.value}
-            readOnly={readOnly}
-            error={
-              !readOnly && scheduleCron(shown.value) === undefined
-                ? t("workflows.workflowSettings.scheduleIncomplete")
-                : undefined
+        <SettingsList aria-labelledby={startsId} className="border-y">
+          <SettingsRow
+            label={t("workflows.workflowSettings.onSchedule")}
+            description={
+              schedule !== undefined && scheduleForm === undefined ? (
+                // A schedule the fields cannot hold is said in words and stays with the agent.
+                <span data-schedule-unread="">
+                  {scheduleWords(cron, text(schedule.timeZone), translation)}
+                  {readOnly ? null : ` · ${t("workflows.workflowSettings.scheduleAgent")}`}
+                </span>
+              ) : (
+                t("workflows.workflowSettings.onScheduleHint")
+              )
             }
-            onChange={writeSchedule}
-          />
-        ) : (
-          <div className="grid gap-2" data-schedule-unread="">
-            <p className="text-body">{scheduleWords(cron, text(schedule.timeZone), translation)}</p>
-            {readOnly ? null : (
-              <p className="text-caption text-muted-foreground">
-                {t("workflows.workflowSettings.scheduleAgent")}
-              </p>
-            )}
-            {changeWithAgent}
-          </div>
-        )}
-        {switchRow("manual", t("workflows.workflowSettings.byHand"))}
-        {switchRow(
-          "platform_event",
-          t("workflows.workflowSettings.onSync"),
-          t("workflows.workflowSettings.onSyncHint")
-        )}
-        {event === undefined ? null : (
-          <Field
-            label={t("workflows.workflowSettings.onSyncKnowledgeBase")}
-            hint={t("workflows.workflowSettings.onSyncKnowledgeBaseHint")}
-            optional
+            error={
+              scheduleIncomplete ? t("workflows.workflowSettings.scheduleIncomplete") : undefined
+            }
           >
-            <Input
-              value={eventKnowledgeBase}
-              readOnly={readOnly}
-              data-event-knowledge-base=""
-              onChange={(change) => writeEventFilter(change.target.value.trim())}
-            />
-          </Field>
-        )}
+            {schedule === undefined ? null : scheduleForm === undefined ? (
+              changeWithAgent
+            ) : (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    aria-label={t("workflows.workflowSettings.scheduleWhenIs", {
+                      when: scheduleValueWords(scheduleForm, translation)
+                    })}
+                    data-workflow-schedule-when=""
+                  >
+                    {scheduleValueWords(scheduleForm, translation)}
+                    <ChevronDown aria-hidden="true" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="end"
+                  size="md"
+                  aria-label={t("workflows.workflowSettings.schedule")}
+                >
+                  <ScheduleField
+                    label={t("workflows.workflowSettings.schedule")}
+                    labelHidden
+                    value={scheduleForm}
+                    readOnly={readOnly}
+                    // What is missing is said once, in the row under its label.
+                    onChange={writeSchedule}
+                  />
+                </PopoverContent>
+              </Popover>
+            )}
+            {startSwitch("schedule")}
+          </SettingsRow>
+          {switchRow(
+            "manual",
+            t("workflows.workflowSettings.byHand"),
+            t("workflows.workflowSettings.byHandHint")
+          )}
+          {switchRow(
+            "platform_event",
+            t("workflows.workflowSettings.onSync"),
+            t("workflows.workflowSettings.onSyncHint")
+          )}
+          {event === undefined ? null : (
+            <SettingsRow
+              label={t("workflows.workflowSettings.onSyncKnowledgeBase")}
+              description={t("workflows.workflowSettings.onSyncKnowledgeBaseHint")}
+            >
+              <Input
+                className="w-60 max-w-full"
+                value={eventKnowledgeBase}
+                readOnly={readOnly}
+                data-event-knowledge-base=""
+                onChange={(change) => writeEventFilter(change.target.value.trim())}
+              />
+            </SettingsRow>
+          )}
+        </SettingsList>
         <WorkflowAppCallers
           all
           callers={workflow.appCallers}
@@ -533,41 +592,48 @@ export function WorkflowSettingsForm({
         onOpenChange={(open) => setAdvanced({ open, needed: needsAdvanced })}
         data-workflow-advanced=""
       >
-        <DisclosureTrigger data-workflow-advanced-trigger="">
-          <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
-            <span className="text-title-sm text-foreground">
-              {t("workflows.workflowSettings.advanced")}
+        {/* A heading of its own level: what it folds stands under it, not under the part above. */}
+        <h2>
+          <DisclosureTrigger data-workflow-advanced-trigger="">
+            <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+              <span className="text-title-sm text-foreground">
+                {t("workflows.workflowSettings.advanced")}
+              </span>
+              <span className="text-caption">{t("workflows.workflowSettings.advancedHint")}</span>
             </span>
-            <span className="text-caption">{t("workflows.workflowSettings.advancedHint")}</span>
-          </span>
-        </DisclosureTrigger>
+          </DisclosureTrigger>
+        </h2>
         {/* Kept in the page while folded: its switches are part of the one Save. */}
         <DisclosureContent keepMounted>
           <div className="grid gap-8 pt-3 pb-2">
-            <section className="grid gap-4" data-workflow-starts-more="">
-              <h3 className="text-body font-medium">
+            <section className="grid gap-3" data-workflow-starts-more="">
+              <h3 id={startsMoreId} className="text-body font-medium">
                 {t("workflows.workflowSettings.startsMore")}
               </h3>
-              {switchRow(
-                "parent",
-                t("workflows.workflowSettings.byParent"),
-                t("workflows.workflowSettings.byParentHint")
-              )}
-              <WorkflowCallers
-                workspaceId={workspaceId}
-                callers={workflow.callers}
-                onOpenRoute={onOpenRoute}
-              />
-              {switchRow(
-                "outside",
-                t("workflows.workflowSettings.byOutside"),
-                t("workflows.workflowSettings.byOutsideHint")
-              )}
-              {switchRow(
-                "webhook",
-                t("workflows.workflowSettings.byWebhook"),
-                t("workflows.workflowSettings.byWebhookHint")
-              )}
+              <SettingsList aria-labelledby={startsMoreId} className="border-y">
+                {switchRow(
+                  "parent",
+                  t("workflows.workflowSettings.byParent"),
+                  <>
+                    {t("workflows.workflowSettings.byParentHint")}
+                    <WorkflowCallers
+                      workspaceId={workspaceId}
+                      callers={workflow.callers}
+                      onOpenRoute={onOpenRoute}
+                    />
+                  </>
+                )}
+                {switchRow(
+                  "outside",
+                  t("workflows.workflowSettings.byOutside"),
+                  t("workflows.workflowSettings.byOutsideHint")
+                )}
+                {switchRow(
+                  "webhook",
+                  t("workflows.workflowSettings.byWebhook"),
+                  t("workflows.workflowSettings.byWebhookHint")
+                )}
+              </SettingsList>
               {has("webhook") && webhook !== undefined ? (
                 <WorkflowWebhook
                   workflow={workflow}
@@ -578,6 +644,9 @@ export function WorkflowSettingsForm({
             </section>
 
             <section className="grid gap-3" data-workflow-facts="">
+              <h3 className="text-body font-medium">
+                {t("workflows.workflowSettings.runAndAccess")}
+              </h3>
               <KeyValueList layout="stacked">
                 <KeyValue label={t("workflows.workflowSettings.result")}>
                   {resultWords(manifest.outputs, t)}
@@ -726,7 +795,7 @@ function WorkflowCallers({
   const { t } = useTranslation();
   if (callers === undefined || callers.length === 0) return null;
   return (
-    <p className="text-caption text-muted-foreground" data-workflow-callers="">
+    <span className="block" data-workflow-callers="">
       {t("workflows.workflowSettings.calledBy")}{" "}
       {callers.map((caller, index) => (
         <span key={`${caller.workspaceId ?? ""}/${caller.id}`}>
@@ -746,7 +815,7 @@ function WorkflowCallers({
           </TextLink>
         </span>
       ))}
-    </p>
+    </span>
   );
 }
 

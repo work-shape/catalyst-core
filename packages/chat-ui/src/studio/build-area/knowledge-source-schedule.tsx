@@ -15,7 +15,7 @@ import {
 } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { cronSchedule, scheduleCron } from "../workflows/schedule-cron";
-import { scheduleInWords } from "../workflows/schedule-words";
+import { scheduleInWords, scheduleValueWords } from "../workflows/schedule-words";
 import type { KnowledgeChoice, KnowledgeSourceStatus } from "./knowledge-base-source";
 import {
   FULL_SYNC_DEFAULT,
@@ -259,11 +259,11 @@ export function KnowledgeSourceSchedule({
                   variant="outline"
                   size="sm"
                   aria-label={t("knowledgeSources.syncFullWhenIs", {
-                    when: fullWords(fullForm, translation)
+                    when: scheduleValueWords(fullForm, translation)
                   })}
                   data-knowledge-source-sync-when=""
                 >
-                  {fullWords(fullForm, translation)}
+                  {scheduleValueWords(fullForm, translation)}
                   <ChevronDown aria-hidden="true" />
                 </Button>
               </PopoverTrigger>
@@ -300,49 +300,4 @@ export function KnowledgeSourceSchedule({
       ) : null}
     </SettingsList>
   );
-}
-
-/**
- * The schedule on its button, in one line: "Daily at 02:00". Days of a week are named short,
- * and a schedule that is no whole one yet asks for one.
- */
-function fullWords(
-  form: ScheduleValue,
-  { locale, t }: Pick<TranslationContextValue, "locale" | "t">
-): string {
-  if (form.kind === "hour") {
-    return t("knowledgeSources.whenHour", { minute: String(form.minute).padStart(2, "0") });
-  }
-  const [hour = 0, minute = 0] = form.time.split(":").map(Number);
-  if (form.time === "" || Number.isNaN(hour) || Number.isNaN(minute)) {
-    return t("knowledgeSources.whenChoose");
-  }
-  // A clock time has no day: any day in UTC gives the same words.
-  const time = new Date(Date.UTC(2026, 0, 1, hour, minute)).toLocaleTimeString(locale, {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "UTC"
-  });
-  switch (form.kind) {
-    case "day":
-      return t("knowledgeSources.whenDay", { time });
-    case "weekday":
-      return t("knowledgeSources.whenWeekday", { time });
-    case "month":
-      return t("knowledgeSources.whenMonth", { day: form.day, time });
-    case "week":
-      if (form.days.length === 0) return t("knowledgeSources.whenChoose");
-      return t("knowledgeSources.whenWeek", {
-        // 5 January 2026 is a Monday, the field's day 1.
-        days: new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(
-          form.days.map((day) =>
-            new Date(Date.UTC(2026, 0, 4 + day)).toLocaleDateString(locale, {
-              weekday: "short",
-              timeZone: "UTC"
-            })
-          )
-        ),
-        time
-      });
-  }
 }

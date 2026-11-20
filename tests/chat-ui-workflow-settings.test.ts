@@ -253,12 +253,22 @@ describe("the Settings tab of a Workflow (WF-EDIT-5)", () => {
     const saves: { config: Config; expected: number }[] = [];
     const container = await mount(sourceOf(manifestWith([{ kind: "manual" }]), saves));
     await act(async () => labelled(container, t("workflows.workflowSettings.onSchedule")).click());
+    // The schedule is one button that reads as the schedule does, and opens its fields.
     await settled(() =>
-      expect(container.querySelector('[data-slot="schedule-field"]')).not.toBeNull()
+      expect(container.querySelector("[data-workflow-schedule-when]")).not.toBeNull()
     );
-    const schedule = required(container.querySelector('[data-slot="schedule-field"]'));
+    const when = () =>
+      required(container.querySelector<HTMLButtonElement>("[data-workflow-schedule-when]"));
+    expect(when().textContent).toBe("Weekdays at 09:00 AM");
+    expect(container.querySelector('[data-slot="schedule-field"]')).toBeNull();
+    await act(async () => when().click());
+    await settled(() =>
+      expect(document.body.querySelector('[data-slot="schedule-field"]')).not.toBeNull()
+    );
+    const schedule = required(document.body.querySelector('[data-slot="schedule-field"]'));
     // A new schedule is every weekday in the instance's zone; the time is set here.
     await type(input(schedule, uiLabelsEn.scheduleTime), "07:30");
+    await settled(() => expect(when().textContent).toBe("Weekdays at 07:30 AM"));
     await settled(() => expect(save(container).disabled).toBe(false));
     await act(async () => save(container).click());
     await settled(() => expect(saves).toHaveLength(1));
@@ -277,7 +287,7 @@ describe("the Settings tab of a Workflow (WF-EDIT-5)", () => {
       missed: "all"
     };
     const container = await mount(sourceOf(manifestWith([yearly]), saves));
-    expect(container.querySelector('[data-slot="schedule-field"]')).toBeNull();
+    expect(container.querySelector("[data-workflow-schedule-when]")).toBeNull();
     // The zone is said as the schedule field says it, never by its id.
     expect(required(container.querySelector("[data-schedule-unread]")).textContent).toContain(
       "Every year on January 1, 09:00 AM (Berlin time)"
@@ -394,6 +404,45 @@ describe("the Settings tab of a Workflow (WF-EDIT-5)", () => {
     );
     await act(async () => trigger.click());
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    // Its line is a heading of the page's second level, so its parts stand under it.
+    expect(trigger.closest("h2")).not.toBeNull();
+    expect([...advanced.querySelectorAll("h3")].map((heading) => heading.textContent)).toEqual([
+      t("workflows.workflowSettings.startsMore"),
+      t("workflows.workflowSettings.runAndAccess")
+    ]);
+  });
+
+  it("sets each way to start in one row, the switch beside its text", async () => {
+    const container = await mount(
+      sourceOf(
+        manifestWith([
+          { kind: "schedule", cron: "0 8 * * 1", timeZone: "Europe/Berlin" },
+          { kind: "manual" }
+        ]),
+        []
+      )
+    );
+    const starts = required(container.querySelector("[data-workflow-starts]"));
+    const rows = [...starts.querySelectorAll('[data-slot="settings-row"]')];
+    expect(rows.map((row) => row.querySelector("label")?.textContent)).toEqual([
+      t("workflows.workflowSettings.onSchedule"),
+      t("workflows.workflowSettings.byHand"),
+      t("workflows.workflowSettings.onSync")
+    ]);
+    for (const row of rows) expect(row.querySelector('[role="switch"]')).not.toBeNull();
+    // The schedule's row holds its button, named for what it sets.
+    const when = required(rows[0]?.querySelector("[data-workflow-schedule-when]"));
+    expect(when.textContent).toBe("Every Monday at 08:00 AM");
+    expect(when.getAttribute("aria-label")).toBe("When: Every Monday at 08:00 AM");
+    expect(
+      [...container.querySelectorAll('[data-workflow-starts-more] [data-slot="settings-row"]')].map(
+        (row) => row.querySelector("label")?.textContent
+      )
+    ).toEqual([
+      t("workflows.workflowSettings.byParent"),
+      t("workflows.workflowSettings.byOutside"),
+      t("workflows.workflowSettings.byWebhook")
+    ]);
   });
 
   it("opens Advanced by itself where something in it needs a person", async () => {
