@@ -199,6 +199,8 @@ export {
 export {
   documentsStillIndexing,
   knowledgeStateStillChanging,
+  sourceNextSyncAt,
+  sourcesReadAgainIn,
   sourcesStillSyncing
 } from "./knowledge-base-source";
 export type {
@@ -223,7 +225,13 @@ export {
   type KnowledgeSourceForm,
   type KnowledgeSourceSchedule
 } from "./knowledge-sources-model";
-export { sourceFailureText, sourceItemCounts, sourceStateView } from "./knowledge-source-status";
+export {
+  sourceDraftChange,
+  sourceFailureText,
+  sourceItemCounts,
+  sourceLiveLine,
+  sourceStateView
+} from "./knowledge-source-status";
 export { KnowledgeSourcesSection } from "./knowledge-base-sources";
 export { ReindexStatement } from "./knowledge-base-reindex";
 export { KnowledgeSourceChoice } from "./knowledge-base-source-choice";
