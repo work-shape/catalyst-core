@@ -207,3 +207,52 @@ test("a tool added without a release is listed under the own tools, which the ra
     });
   }
 });
+
+test("a reader whose only right in Studio is on tools opens Fähigkeiten, with its rail item", async ({
+  page,
+  browser
+}) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await signIn(page, builder);
+  const me = await page.request.get(`${apiBaseUrl}/api/v1/me`);
+  expect(me.ok()).toBe(true);
+  const { id: readerId }: { id: string } = await me.json();
+  const rootContext = await browser.newContext({ baseURL: test.info().project.use.baseURL });
+  const root = await rootContext.newPage();
+  await signIn(root, superadmin);
+  const granted = await requestWithOrigin(
+    root,
+    "post",
+    `${apiBaseUrl}/api/v1/instance/access/grants`,
+    {
+      data: {
+        holderKind: "user",
+        holderId: readerId,
+        action: "tool.read",
+        effect: "allow",
+        scopeKind: "instance"
+      }
+    }
+  );
+  expect(granted.ok(), await granted.text()).toBe(true);
+  const grant: { id: string } = await granted.json();
+  try {
+    await page.goto("/build");
+    await expect(page).toHaveURL(/\/build\/capabilities$/u);
+    await expect(page.getByRole("heading", { name: "Fähigkeiten" })).toBeVisible();
+    const rail = page.getByRole("navigation", { name: "Arten im Studio" });
+    await expect(rail.getByText("Fähigkeiten", { exact: true })).toBeVisible();
+    // The own tools are there for this reader: the release's, and how one is added.
+    await expect(page.locator('[data-capabilities] [data-capability-package="own"]')).toContainText(
+      "Eigene Werkzeuge"
+    );
+  } finally {
+    await requestWithOrigin(
+      root,
+      "delete",
+      `${apiBaseUrl}/api/v1/instance/access/grants/${grant.id}`
+    );
+    await rootContext.close();
+  }
+});

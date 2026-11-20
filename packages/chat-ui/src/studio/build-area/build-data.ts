@@ -57,6 +57,11 @@ export const BUILD_SEARCH_DELAY_MS = 250;
 export interface BuildListFilter {
   /** Names and ids that contain this text. */
   text: string;
+  /**
+   * Every owner the reader is offered, whatever owner Studio is set to: for a page that lists
+   * a kind and has no owner control, such as the own tools on "Fähigkeiten".
+   */
+  everyOwner?: true;
 }
 
 /** One kind's list as far as the reader has asked for it. */
@@ -367,7 +372,9 @@ export function useBuildSource(): BuildSource {
       // A list of every owner asks for them all in one page: each row names its owner. A kind
       // with one owner, and a reader offered one, is listed as before.
       const every =
-        listsEveryOwner && scopedKinds.has(kind) && buildScopes(rights).length > 1
+        (listsEveryOwner || filter.everyOwner === true) &&
+        scopedKinds.has(kind) &&
+        buildScopes(rights).length > 1
           ? { owners: buildOwnersValue(rights) }
           : undefined;
       const owner: { workspaceId?: string; owners?: string } = every ?? inScope(kind);
