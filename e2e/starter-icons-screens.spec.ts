@@ -9,6 +9,8 @@ import { expect, test } from "./test";
 // that carry icons, with nine at 1280 and at phone width, and the Agent page with the icon
 // picker of a starter open, in German, light and dark. It runs only with STARTER_ICON_SHOTS=1
 // and writes to test-results/starter-icons (STARTER_ICON_SHOTS_DIR names another directory).
+// With STARTER_ICON_SHOTS_PLAIN=1 it takes only the chat with four starters and writes no icon,
+// which is the picture of a release from before starters took icons.
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
 
