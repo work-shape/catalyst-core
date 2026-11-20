@@ -7,6 +7,22 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.45 — 2026-11-20
+
+### Added
+
+- `web_download` saves one file from a public address, such as a PDF, an image, a CSV or a workbook, into the conversation's execution workspace, where the agent reads and analyses it with the workspace tools. It takes `web_fetch`'s address checks and is off unless `webAccess.enabled`, `webAccess.download.enabled` and `executionWorkspaces.enabled` are all set. `webAccess.download` bounds it: `maxBytes` (25 MiB by default, at most 100 MiB; a larger file is refused, not cut), `timeoutMs` (60 seconds, at most 300), `maxRedirects` (5) and `contentTypes`, the declared media types it takes. The audit records the host, the media type and the size only. After a call on a personal connection it leaves the conversation with the other web tools.
+- A starter an agent's author writes takes an icon. On the Agent page, each starter has a small button that opens the 43 starter icons, grouped by family, and "Default"; `initialPrompts[].icon` holds the name, and a write with a name outside the list is refused. An icon stands on a tile in the colour of its family: blue for documents, green for money, amber for buildings, violet for people, teal for planning, rose for ideas. The author picks only the icon. A starter without one keeps the icon it had.
+- The empty chat shows up to 12 starters for an agent, where it showed 4. Up to four stand as before. More than four stand as short cards without the line under the title, in two columns and in three where the chat is wide; after the first nine, "More" shows the rest. An agent whose own prompts and skills offer more than four starters now shows them.
+- No database schema changes: an agent's config is stored as JSON.
+
+### Fixed
+
+- "Continue privately" after a build refused in a conversation others in the workspace read: the start page it opens says that the conversation is private, and it keeps the agent that was refused, also after the refused conversation was reloaded. Before, the start page looked like any new chat of the shared workspace and offered the workspace's default agent.
+- A data Workflow whose trigger waits for a Knowledge Base's sync and whose step reads the same Knowledge Base publishes: the right the two need is granted to the Workflow's account once, where the publish was refused with "The holder already has a grant row for this scope".
+- An overview the agent shows and then asks about in the same run stays in the conversation, above the question, while the question waits and after a reload. A run that ends on a question writes no final answer, so its overview stood only in a closed row of the work history and was gone from sight once the question arrived. Files the run made stand above the question as well. A question that failed, or a data call that answered at once, does not end the run's turn.
+- The row of a step that showed something opens it again with one click in the work history: an overview opens under the row, a side-panel view opens beside the conversation. The row used to open the step's technical details only.
+
 ## 0.8.0-rc.44 — 2026-11-20
 
 ### Changed
