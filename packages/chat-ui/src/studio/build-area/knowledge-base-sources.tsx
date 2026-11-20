@@ -57,7 +57,11 @@ import {
   WEB_SOURCE_CONNECTOR_TYPE,
   type KnowledgeSourceForm
 } from "./knowledge-sources-model";
-import { KnowledgeSourceFolderPicker } from "./knowledge-source-folder-picker";
+import {
+  KnowledgeSourceExcludedFolders,
+  KnowledgeSourceExcludedSuffix,
+  KnowledgeSourceFolderPicker
+} from "./knowledge-source-folder-picker";
 import {
   intervalWords,
   KnowledgeSourceSchedule,
@@ -282,9 +286,10 @@ export function KnowledgeSourcesSection({
           connection={pickingEntry.connection}
           connectionTitle={pickingChoice.title || pickingChoice.name}
           chosen={sourceFolderIds(pickingEntry.folders)}
+          exclude={pickingEntry.exclude}
           onClose={() => setPicking(undefined)}
-          onChoose={(folders) => {
-            change(pickingEntry.id, { folders: folders.join("\n") });
+          onChoose={(folders, exclude) => {
+            change(pickingEntry.id, { folders: folders.join("\n"), exclude });
             setPicking(undefined);
           }}
         />
@@ -471,6 +476,7 @@ function SourceItem({
                       </span>
                     ))
                   : connectionTitle}
+                {named ? <KnowledgeSourceExcludedSuffix exclude={entry.exclude} /> : null}
               </span>
               {view === undefined || view.state === "current" ? null : (
                 <Badge tone={view.tone} dot>
@@ -581,6 +587,11 @@ function SourceItem({
                       ))}
                     </ul>
                   )}
+                  <KnowledgeSourceExcludedFolders
+                    exclude={entry.exclude}
+                    canWrite={canWrite}
+                    onChange={(exclude) => onChange({ exclude })}
+                  />
                   {canWrite ? (
                     <div>
                       <Button
