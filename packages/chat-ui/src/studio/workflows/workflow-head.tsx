@@ -13,7 +13,7 @@ import { CopyIdItem } from "../copy-id-item";
 import { useTranslation } from "../../shared/i18n";
 import { workflowWhen } from "./schedule-words";
 import type { WorkflowDraftBarState, WorkflowEdit } from "./workflow-draft";
-import type { WorkflowView } from "./workflow-views";
+import type { WorkflowStepView, WorkflowView } from "./workflow-views";
 import { workflowRightsOn } from "./workflow-model";
 import { WorkflowRemoveDialog, WorkflowRemoveItem } from "./workflow-remove";
 import { useWorkflowShare } from "./workflow-share";
@@ -32,6 +32,7 @@ export function WorkflowHead({
   workspaceId,
   workflowId,
   workflow,
+  liveSteps,
   tab,
   runsShown,
   canStart,
@@ -45,8 +46,16 @@ export function WorkflowHead({
   workflowId: string;
   /** The Workflow, once its record arrived. */
   workflow:
-    | Pick<WorkflowView, "name" | "description" | "steps" | "allowed" | "ownerWorkspaceId">
+    | Pick<
+        WorkflowView,
+        "name" | "description" | "steps" | "draft" | "allowed" | "ownerWorkspaceId"
+      >
     | undefined;
+  /**
+   * The steps of the published revision, where the Workflow shown is a draft that differs from
+   * it and that revision was read: when it runs is said of what is live.
+   */
+  liveSteps?: readonly WorkflowStepView[] | undefined;
   tab: "workflow" | "runs" | "settings";
   /** The instance runs Workflows and the reader may read this one's runs: its tab stands. */
   runsShown: boolean;
@@ -74,10 +83,28 @@ export function WorkflowHead({
   const address = { collaborationWorkspaceId: workspaceId, workflow: workflowId };
   const publishing = draft?.onPublish !== undefined;
   const does = workflow?.description ?? "";
-  const when =
-    workflow === undefined
+  // When it runs is said of the published revision: that is the one that runs. A reader shown
+  // a draft that differs is told the published schedule, and of a Workflow never published
+  // what it will do once it is.
+  const stored = workflow?.draft;
+  const liveRevision =
+    stored?.publishedRevision !== undefined && stored.publishedRevision !== stored.revision
+      ? stored.publishedRevision
+      : undefined;
+  const running =
+    workflow === undefined ? undefined : liveRevision === undefined ? workflow.steps : liveSteps;
+  const drafted =
+    running === undefined
       ? undefined
-      : workflowWhen(workflow, translation, host?.instanceTimeZone);
+      : workflowWhen({ steps: running }, translation, host?.instanceTimeZone);
+  const when =
+    drafted !== undefined && stored !== undefined && stored.publishedRevision === undefined
+      ? t("workflows.when.oncePublished", { when: drafted })
+      : drafted;
+  const whenClass =
+    does === ""
+      ? "shrink-0 px-(--layout-gutter) pt-3 pb-3 text-body text-muted-foreground"
+      : "shrink-0 px-(--layout-gutter) pt-1 pb-3 text-body text-foreground";
   return (
     <>
       {/* Where a control floats beside the head, the head starts at the top edge. */}
@@ -200,14 +227,7 @@ export function WorkflowHead({
         <PageLead className={when === undefined ? "shrink-0 pb-3" : "shrink-0"}>{does}</PageLead>
       )}
       {when === undefined ? null : (
-        <p
-          data-workflow-when=""
-          className={
-            does === ""
-              ? "shrink-0 px-(--layout-gutter) pt-3 pb-3 text-body text-muted-foreground"
-              : "shrink-0 px-(--layout-gutter) pt-1 pb-3 text-body text-foreground"
-          }
-        >
+        <p data-workflow-when="" className={whenClass}>
           {when}
         </p>
       )}

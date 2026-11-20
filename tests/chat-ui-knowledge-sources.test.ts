@@ -808,7 +808,7 @@ describe("when a source syncs by itself (SRC-SYNC)", () => {
     expect(page).toContain('value="60"');
     expect(page).toContain('value="240"');
     // Weekly on Monday, as the type gives it, where the source sets nothing.
-    expect(page).toMatch(/>Mon at 03:00 AM</u);
+    expect(page).toMatch(/>Every Monday at 03:00 AM</u);
     // Before its first publish the Connection's list says the same.
     const draft = render("en", {
       unpublished: true,

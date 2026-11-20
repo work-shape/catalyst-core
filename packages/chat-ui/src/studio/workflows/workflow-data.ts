@@ -11,6 +11,7 @@ import type {
   WorkflowRunsSource,
   WorkflowStepRunStatusFilter
 } from "./source-shapes";
+import { workflowSteps } from "./workflow-mapping";
 import { useWorkflowsSource } from "./workflow-source";
 import type {
   CallableOperationOption,
@@ -22,6 +23,7 @@ import type {
   WorkflowListItem,
   WorkflowRunView,
   WorkflowStepRunView,
+  WorkflowStepView,
   WorkflowStepTranscriptView,
   WorkflowView,
   WorkflowWebhookView
@@ -232,6 +234,27 @@ export function useWorkflowRuns(
     loadMore: () => void query.fetchNextPage().catch(() => undefined),
     retry: () => void query.refetch().catch(() => undefined)
   };
+}
+
+/**
+ * The newest runs of a Workflow, read once: for a line that says how the last one ended. It is
+ * not read again at an interval, whatever state a run is in; a start or a cancel from this
+ * page reads it anew, as it does every read of runs.
+ */
+export function useNewestRuns(
+  workflow: string,
+  limit: number,
+  enabled: boolean
+): readonly WorkflowRunView[] | undefined {
+  const { runs } = useWorkflowsSource();
+  const keys = useWorkflowKeys();
+  const query = useQuery({
+    queryKey: [...keys.runs, "newest", workflow, limit],
+    queryFn: ({ signal }) => runsOf(runs).listRuns(workflow, { limit, cursor: undefined }, signal),
+    enabled: enabled && runs !== undefined,
+    retry: retryUnlessGone
+  });
+  return query.data?.items;
 }
 
 /** One run as its page follows it. */
@@ -662,6 +685,28 @@ export function useWorkflowRevision(
     retry: retryUnlessGone
   });
   return query.data;
+}
+
+/**
+ * The steps of the published revision of a Workflow whose draft the reader is shown and which
+ * differs from it. Nothing where the steps shown are the published ones, where it was never
+ * published, and until the revision arrived.
+ */
+export function useLiveSteps(
+  workflowId: string,
+  workflow: Pick<WorkflowView, "draft"> | undefined
+): readonly WorkflowStepView[] | undefined {
+  const draft = workflow?.draft;
+  const live = useWorkflowRevision(
+    workflowId,
+    draft?.publishedRevision !== undefined && draft.publishedRevision !== draft.revision
+      ? draft.publishedRevision
+      : undefined
+  );
+  return useMemo(
+    () => (live === undefined ? undefined : workflowSteps(live.manifest, live.stepFacts)),
+    [live]
+  );
 }
 
 /** What a person does to a draft by hand: asks what the instance would refuse, and saves. */

@@ -5,6 +5,7 @@ import { RunsList } from "./runs-list";
 import { useStartRun } from "./start-run";
 import {
   useRunsAvailable,
+  useLiveSteps,
   useWorkflow,
   useWorkflowRuns,
   type WorkflowReadProblem,
@@ -12,7 +13,7 @@ import {
 } from "./workflow-data";
 import { WorkflowHead } from "./workflow-head";
 import { runsReadable, startOffered } from "./workflow-model";
-import type { WorkflowView } from "./workflow-views";
+import type { WorkflowStepView, WorkflowView } from "./workflow-views";
 import { WorkflowsFrame, type OpenRoute } from "./workflows-frame";
 import { useWorkflowsHost } from "./workflows-host";
 
@@ -37,6 +38,7 @@ export function WorkflowRunsPage({ workflow }: { workflow: string }) {
     read.workflow !== undefined && readsRuns
   );
   const runsAvailable = useRunsAvailable();
+  const liveSteps = useLiveSteps(workflow, read.workflow);
   const start = useStartRun({
     workflow,
     name: read.workflow?.name,
@@ -60,6 +62,7 @@ export function WorkflowRunsPage({ workflow }: { workflow: string }) {
         readsRuns={read.workflow === undefined || readsRuns}
         runs={runs}
         runsAvailable={runsAvailable}
+        liveSteps={liveSteps}
         keyFilter={{ value: keyFilter, onChange: setKeyFilter }}
         now={now}
         onStart={start.open}
@@ -77,6 +80,7 @@ export function WorkflowRunsPageView({
   workflow,
   definition,
   readsRuns = true,
+  liveSteps,
   runs,
   runsAvailable,
   keyFilter,
@@ -92,6 +96,8 @@ export function WorkflowRunsPageView({
   definition?: { problem: WorkflowReadProblem; retry(): void };
   /** The reader may read the Workflow's runs. Starting it is apart. */
   readsRuns?: boolean;
+  /** The published revision's steps, where the draft shown differs from it. */
+  liveSteps?: readonly WorkflowStepView[] | undefined;
   runs: WorkflowRunList;
   /** The instance runs Workflows. Without that there is nothing to list. */
   runsAvailable: boolean;
@@ -120,6 +126,7 @@ export function WorkflowRunsPageView({
     <WorkflowsFrame label={title} testId="workflow-runs-page" fill>
       <WorkflowHead
         workspaceId={workspaceId}
+        liveSteps={liveSteps}
         workflowId={workflowId}
         workflow={workflow}
         tab="runs"
