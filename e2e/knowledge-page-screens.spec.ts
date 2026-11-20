@@ -12,8 +12,8 @@ import { expect, takeTurn, test } from "./test";
 // lead line, the line that counts its documents, the list and the folded Settings, in German,
 // light and dark, at 1280. Then the same page as one whose documents come from a synced folder:
 // its head with the main action, the source's card folded and with Adjust open. Last, the page
-// of one that answers from the tables of a Data Store. It runs only with KB_PAGE_SHOTS=1 and
-// writes to test-results/kb-page.
+// of one that answers from the tables of a Data Store, and the folder chooser of a synced source
+// with a folder left out. It runs only with KB_PAGE_SHOTS=1 and writes to test-results/kb-page.
 // The suite's instance runs without the module `knowledge`, so a second API runs it with the
 // module on, on the same database, as knowledge-upload.spec.ts does.
 const host = process.env.E2E_HOST ?? "127.0.0.1";
@@ -79,6 +79,27 @@ const SYNCED = {
   folderPath: "Projekte / Haus A"
 } as const;
 
+/** The folders the chooser's pictures walk, by the id of the folder asked for; `""` is the top. */
+const PICKER_FOLDERS: Record<string, unknown> = {
+  "": {
+    folder: { id: "0", name: "Alle Dateien", path: "/" },
+    folders: [
+      { id: "10", name: "Projekte" },
+      { id: "20", name: "Verträge" },
+      { id: "30", name: "Vorlagen" }
+    ]
+  },
+  "10": {
+    folder: { id: "10", name: "Projekte", path: "/Projekte" },
+    folders: [
+      { id: "11", name: "Archiv" },
+      { id: "12", name: "Haus A" },
+      { id: "13", name: "Haus B" },
+      { id: "14", name: "Haus C" }
+    ]
+  }
+};
+
 /** An asset and a list of assets as far as the pictures change them. */
 const assetSchema = z.looseObject({ config: z.looseObject({}) });
 const assetListSchema = z.looseObject({ items: z.array(z.looseObject({})) });
@@ -139,6 +160,121 @@ async function picture(
     fullPage: true,
     animations: "disabled"
   });
+}
+
+/**
+ * Makes the page of `name` one whose documents come from a synced folder. Only what the instance
+ * answers is changed: the definition names a source, a Connection that lets a person choose
+ * folders is listed, and the source is up to date.
+ */
+async function asSynced(
+  page: Page,
+  name: string,
+  documents: number,
+  folders: readonly string[] = [SYNCED.folderId]
+): Promise<void> {
+  await page.route(`${apiBaseUrl}/api/v1/assets/knowledge_base/${name}`, async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const response = await route.fetch({
+      url: route.request().url().replace(apiBaseUrl, knowledgeApiUrl)
+    });
+    const body = assetSchema.parse(await response.json());
+    await route.fulfill({
+      response,
+      json: {
+        ...body,
+        config: {
+          ...body.config,
+          sources: [
+            {
+              id: SYNCED.source,
+              connection: SYNCED.connection,
+              folders
+            }
+          ]
+        }
+      }
+    });
+  });
+  const connectionList = (url: URL) =>
+    url.origin === new URL(apiBaseUrl).origin && url.pathname === "/api/v1/assets/connection";
+  await page.route(connectionList, async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const url = new URL(route.request().url());
+    const response = await route.fetch({
+      url: route.request().url().replace(apiBaseUrl, knowledgeApiUrl)
+    });
+    const body = assetListSchema.parse(await response.json());
+    // Once, with the instance's own: the list is asked per owner.
+    const listed = url.searchParams.has("workspaceId")
+      ? []
+      : [
+          {
+            id: `connection:${SYNCED.connection}`,
+            kind: "connection",
+            name: SYNCED.connection,
+            title: SYNCED.connectionTitle,
+            scope: { kind: "instance" },
+            revision: 1,
+            publishedRevision: 1,
+            attributes: {
+              connectorType: "test_folders",
+              documentSource: true,
+              browsesFolders: true,
+              enabled: true
+            },
+            updatedAt: "2026-11-18T09:00:00.000Z"
+          }
+        ];
+    await route.fulfill({ response, json: { ...body, items: [...listed, ...body.items] } });
+  });
+  await page.route(`${apiBaseUrl}/api/v1/knowledge-bases/${name}/sources`, (route) =>
+    route.fulfill({
+      json: {
+        sources: [
+          {
+            id: SYNCED.source,
+            connection: SYNCED.connection,
+            kind: "connector",
+            items: {
+              discovered: 0,
+              fetched: 0,
+              indexed: documents,
+              failed: 0,
+              withdrawn: 0
+            },
+            failures: [],
+            last: {
+              syncRunId: "sync-1",
+              source: SYNCED.source,
+              mode: "changes",
+              state: "done",
+              counts: {
+                discovered: documents,
+                added: 0,
+                changed: 0,
+                moved: 0,
+                withdrawn: 0,
+                failed: 0,
+                skipped: 0
+              },
+              bytesFetched: 0,
+              startedAt: "2026-11-18T09:14:00.000Z",
+              endedAt: "2026-11-18T09:15:00.000Z"
+            },
+            schedule: {
+              changes: 15,
+              full: "0 2 * * *",
+              defaultChanges: 15,
+              defaultFull: "0 2 * * *",
+              minChanges: 5
+            },
+            lastChangeAt: "2026-11-18T09:15:00.000Z"
+          }
+        ]
+      }
+    })
+  );
 }
 
 test.describe("pictures of the page of a Knowledge Base of documents", () => {
@@ -315,61 +451,7 @@ test.describe("pictures of the page of a Knowledge Base of documents", () => {
       // The same page as one whose documents all come from a synced folder. Only what the
       // instance answers is changed: the definition names a source, a Connection that lets a
       // person choose folders is listed, the source is up to date, and each document is its.
-      await page.route(`${apiBaseUrl}/api/v1/assets/knowledge_base/${name}`, async (route) => {
-        if (route.request().method() !== "GET") return route.fallback();
-        const response = await route.fetch({
-          url: route.request().url().replace(apiBaseUrl, knowledgeApiUrl)
-        });
-        const body = assetSchema.parse(await response.json());
-        await route.fulfill({
-          response,
-          json: {
-            ...body,
-            config: {
-              ...body.config,
-              sources: [
-                {
-                  id: SYNCED.source,
-                  connection: SYNCED.connection,
-                  folders: [SYNCED.folderId]
-                }
-              ]
-            }
-          }
-        });
-      });
-      const connectionList = (url: URL) =>
-        url.origin === new URL(apiBaseUrl).origin && url.pathname === "/api/v1/assets/connection";
-      await page.route(connectionList, async (route) => {
-        if (route.request().method() !== "GET") return route.fallback();
-        const url = new URL(route.request().url());
-        const response = await route.fetch({
-          url: route.request().url().replace(apiBaseUrl, knowledgeApiUrl)
-        });
-        const body = assetListSchema.parse(await response.json());
-        // Once, with the instance's own: the list is asked per owner.
-        const listed = url.searchParams.has("workspaceId")
-          ? []
-          : [
-              {
-                id: `connection:${SYNCED.connection}`,
-                kind: "connection",
-                name: SYNCED.connection,
-                title: SYNCED.connectionTitle,
-                scope: { kind: "instance" },
-                revision: 1,
-                publishedRevision: 1,
-                attributes: {
-                  connectorType: "test_folders",
-                  documentSource: true,
-                  browsesFolders: true,
-                  enabled: true
-                },
-                updatedAt: "2026-11-18T09:00:00.000Z"
-              }
-            ];
-        await route.fulfill({ response, json: { ...body, items: [...listed, ...body.items] } });
-      });
+      await asSynced(page, name, FILES.length);
       await page.route(
         `${apiBaseUrl}/api/v1/connections/${SYNCED.connection}/source-folders*`,
         (route) =>
@@ -379,53 +461,6 @@ test.describe("pictures of the page of a Knowledge Base of documents", () => {
               folders: []
             }
           })
-      );
-      await page.route(`${apiBaseUrl}/api/v1/knowledge-bases/${name}/sources`, (route) =>
-        route.fulfill({
-          json: {
-            sources: [
-              {
-                id: SYNCED.source,
-                connection: SYNCED.connection,
-                kind: "connector",
-                items: {
-                  discovered: 0,
-                  fetched: 0,
-                  indexed: FILES.length,
-                  failed: 0,
-                  withdrawn: 0
-                },
-                failures: [],
-                last: {
-                  syncRunId: "sync-1",
-                  source: SYNCED.source,
-                  mode: "changes",
-                  state: "done",
-                  counts: {
-                    discovered: FILES.length,
-                    added: 0,
-                    changed: 0,
-                    moved: 0,
-                    withdrawn: 0,
-                    failed: 0,
-                    skipped: 0
-                  },
-                  bytesFetched: 0,
-                  startedAt: "2026-11-18T09:14:00.000Z",
-                  endedAt: "2026-11-18T09:15:00.000Z"
-                },
-                schedule: {
-                  changes: 15,
-                  full: "0 2 * * *",
-                  defaultChanges: 15,
-                  defaultFull: "0 2 * * *",
-                  minChanges: 5
-                },
-                lastChangeAt: "2026-11-18T09:15:00.000Z"
-              }
-            ]
-          }
-        })
       );
       await page.route(`${apiBaseUrl}/api/v1/knowledge-bases/${name}/documents*`, async (route) => {
         if (route.request().method() !== "GET") return route.fallback();
@@ -484,6 +519,134 @@ test.describe("pictures of the page of a Knowledge Base of documents", () => {
           await picture(page, "synced-de-light-adjust-time");
           await page.keyboard.press("Escape");
         }
+      }
+    } finally {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      if ((await page.request.get(assetUrl)).ok()) {
+        await requestWithOrigin(page, "post", `${assetUrl}/delete`, {
+          data: { expectedRevision: await assetRevision(page, assetUrl) }
+        });
+      }
+    }
+  });
+
+  // The folder chooser of a synced source: a folder chosen with everything below it, one folder
+  // below it left out, and what the chooser and the source's card then say, light and dark.
+  test("de: the folder chooser with a folder left out below a chosen one", async ({ page }) => {
+    test.setTimeout(240000);
+    const name = `e2e-screens-folders-${randomUUID().slice(0, 8)}`;
+    const assetUrl = `${knowledgeApiUrl}/api/v1/assets/knowledge_base/${name}`;
+    await mkdir(SHOTS, { recursive: true });
+    await signIn(page, apiBaseUrl);
+    await signIn(page, knowledgeApiUrl);
+    const created = await requestWithOrigin(page, "put", assetUrl, {
+      data: {
+        expectedRevision: null,
+        config: {
+          name,
+          title: TITLE,
+          description: "Die Unterlagen aller Projekte, wie sie im Ordner Projekte liegen.",
+          methods: ["keyword"]
+        }
+      }
+    });
+    expect(created.ok(), await created.text()).toBe(true);
+    try {
+      const published = await requestWithOrigin(page, "post", `${assetUrl}/publish`, {
+        data: { revision: 1 }
+      });
+      expect(published.ok(), await published.text()).toBe(true);
+      await expect
+        .poll(
+          async () =>
+            (
+              await page.request.get(`${knowledgeApiUrl}/api/v1/knowledge-bases/${name}/documents`)
+            ).status(),
+          { timeout: 90000 }
+        )
+        .toBe(200);
+      await page.route(`${apiBaseUrl}/**`, (route) =>
+        route.continue({ url: route.request().url().replace(apiBaseUrl, knowledgeApiUrl) })
+      );
+      await asSynced(page, name, 0, ["10"]);
+      await page.route(
+        `${apiBaseUrl}/api/v1/connections/${SYNCED.connection}/source-folders*`,
+        (route) => {
+          const parent = new URL(route.request().url()).searchParams.get("parent") ?? "";
+          const folder = PICKER_FOLDERS[parent];
+          return folder === undefined
+            ? route.fulfill({ status: 404, json: {} })
+            : route.fulfill({ json: folder });
+        }
+      );
+
+      for (const theme of ["light", "dark"] as const) {
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await page.emulateMedia({ colorScheme: theme });
+        await page.goto(`/build/knowledge-bases/${name}`);
+        await page.evaluate((chosen) => {
+          window.localStorage.setItem("vivd-catalyst:locale", "de");
+          window.localStorage.setItem("vivd-catalyst:theme", chosen);
+        }, theme);
+        await page.reload();
+        await expect(page.getByRole("heading", { name: TITLE, level: 1 })).toBeVisible();
+        const card = page.locator(`[data-knowledge-source="${SYNCED.source}"]`);
+        await expect(card).toContainText("/Projekte");
+        await card.locator("[data-knowledge-source-adjust]").click();
+        await card.locator("[data-knowledge-source-pick]").click();
+        const chooser = page.getByRole("dialog");
+        const row = (id: string) => chooser.locator(`[data-knowledge-folder="${id}"]`);
+        const summary = chooser.locator("[data-knowledge-folders-summary]");
+
+        // The chosen folder is read whole: its box is ticked, and so is each folder below it.
+        await expect(row("10")).toHaveAttribute("data-knowledge-folder-state", "all");
+        await expect(row("20")).toHaveAttribute("data-knowledge-folder-state", "none");
+        await expect(summary).toHaveText("Projekte und alles darunter");
+        await row("10").locator("[data-knowledge-folder-open]").click();
+        await expect(row("11")).toHaveAttribute("data-knowledge-folder-state", "all");
+
+        // One folder below it is left out. The folder above then reads as chosen in part.
+        await row("11").getByRole("checkbox").click();
+        await expect(row("11")).toHaveAttribute("data-knowledge-folder-state", "none");
+        await expect(row("11")).toContainText("ausgelassen");
+        await expect(chooser.locator("[data-knowledge-folder-here]")).toHaveAttribute(
+          "aria-checked",
+          "mixed"
+        );
+        await expect(summary).toHaveText("Projekte und alles darunter, ohne Archiv");
+        await expect(chooser.locator("[data-knowledge-folders-count]")).toHaveText(
+          "1 Ordner · 1 ausgelassen"
+        );
+        await chooser.screenshot({
+          path: resolve(SHOTS, `kb-folder-picker-de-${theme}-left-out.png`),
+          animations: "disabled"
+        });
+        await chooser.getByRole("button", { name: SYNCED.connectionTitle }).click();
+        await expect(row("10")).toHaveAttribute("data-knowledge-folder-state", "some");
+        await expect(row("10").getByRole("checkbox")).toHaveAttribute("aria-checked", "mixed");
+        await expect(row("10")).toContainText("ohne Archiv");
+        await chooser.screenshot({
+          path: resolve(SHOTS, `kb-folder-picker-de-${theme}-partly.png`),
+          animations: "disabled"
+        });
+
+        // The source keeps the folder as its boundary and leaves the one out by a pattern.
+        await chooser.locator("[data-knowledge-folders-apply]").click();
+        await expect(chooser).toHaveCount(0);
+        await expect(card).toContainText("/Projekte, ohne Archiv");
+        await expect(
+          card.locator('[data-knowledge-source-excluded-folder="Archiv"]')
+        ).toBeVisible();
+        await page.setViewportSize({ width: 1280, height: 1600 });
+        await card.screenshot({
+          path: resolve(SHOTS, `kb-folder-picker-de-${theme}-card.png`),
+          animations: "disabled"
+        });
+        await card.locator("[data-knowledge-source-advanced] button").first().click();
+        await expect(card.locator('[data-knowledge-source-field="folders"]')).toHaveValue("10");
+        await expect(card.locator('[data-knowledge-source-field="exclude"]')).toHaveValue(
+          "Archiv/**"
+        );
       }
     } finally {
       await page.unrouteAll({ behavior: "ignoreErrors" });
