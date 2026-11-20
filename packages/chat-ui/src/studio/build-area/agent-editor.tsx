@@ -11,9 +11,6 @@ import {
   Button,
   changedPlaces,
   ConfirmDialog,
-  Disclosure,
-  DisclosureContent,
-  DisclosureTrigger,
   DropdownMenuItem,
   Field,
   FormNotice,
@@ -297,24 +294,6 @@ export function AgentEditor({
   // Which version each text the draft changes shows: the draft to edit, what is live, or the
   // changed lines. The page never grows: each shows in the field's own box.
   const [views, setViews] = useState<Partial<Record<DraftAgentField, TextVersion>>>({});
-  // Settings stay folded while nothing in them needs a person. They start open on a model the
-  // instance cannot run, which is chosen there, and on a draft that changes a field in them,
-  // which would else show no change on the page.
-  const [settingsOpen, setSettingsOpen] = useState(
-    () =>
-      (frame.asset?.unavailableModels ?? []).length > 0 ||
-      proposed.fields.some((field) => FOLDED_FIELDS.has(field))
-  );
-  // The same for what the draft changes under "Advanced" there.
-  const [advancedOpen, setAdvancedOpen] = useState(() => {
-    if (held === null || live === undefined) return false;
-    const draft = state.baseline;
-    return (
-      proposed.fields.includes("maxSteps") ||
-      live.fastMode !== draft.fastMode ||
-      live.useModelFallback !== draft.useModelFallback
-    );
-  });
   const versionsOf = <Field extends DraftAgentField & keyof AgentFormState>(
     field: Field
   ): FieldVersions<AgentFormState[Field]> | undefined =>
@@ -381,11 +360,6 @@ export function AgentEditor({
             )
           );
           const first = proposed.fields[0];
-          // A field under Settings is unfolded before the page goes to it.
-          if (proposed.fields.some((field) => FOLDED_FIELDS.has(field))) setSettingsOpen(true);
-          if (proposed.fields.includes("maxSteps") || proposed.fields.includes("model")) {
-            setAdvancedOpen(true);
-          }
           window.requestAnimationFrame(() => {
             document
               .querySelector(`[data-draft-group="${first ?? ""}"]`)
@@ -509,291 +483,326 @@ export function AgentEditor({
   // What the agent's read reported unavailable, as far as the last save left it named.
   const unavailable = savedAgentUnavailable(frame.asset, state.baseline);
 
-  const aboutSection: AssetSection = {
-    id: "overview",
-    label: t("build.sectionAbout"),
-    description: t("configIdentityDescription"),
-    body: (
-      <>
-        {shipped.around(
-          "displayName",
-          proposed.around(
+  const sections: AssetSection[] = [
+    {
+      id: "overview",
+      label: t("build.sectionOverview"),
+      description: t("configIdentityDescription"),
+      body: (
+        <>
+          {shipped.around(
             "displayName",
-            <LocalizedField
-              label={t("configDisplayName")}
-              required
-              readOnly={!canEdit("displayName")}
-              value={form.displayName}
-              versions={versionsOf("displayName")}
-              note={localizedLine("displayName")}
-              onChange={(displayName) => update({ displayName })}
-            />
-          )
-        )}
-        {shipped.around(
-          "description",
-          proposed.around(
-            "description",
-            <LocalizedField
-              label={t("configDescription")}
-              readOnly={!canEdit("description")}
-              value={form.description}
-              versions={versionsOf("description")}
-              note={localizedLine("description")}
-              onChange={(description) => update({ description })}
-            />
-          )
-        )}
-        {shipped.around(
-          "welcomeMessage",
-          proposed.around(
-            "welcomeMessage",
-            <LocalizedField
-              label={t("configWelcomeMessage")}
-              readOnly={!canEdit("welcomeMessage")}
-              value={form.welcomeMessage}
-              versions={versionsOf("welcomeMessage")}
-              note={localizedLine("welcomeMessage")}
-              onChange={(welcomeMessage) => update({ welcomeMessage })}
-            />
-          )
-        )}
-        {proposed.around(
-          "welcomeSubtitle",
-          <LocalizedField
-            label={t("configWelcomeSubtitle")}
-            readOnly={!canEdit("welcomeSubtitle")}
-            value={form.welcomeSubtitle}
-            versions={versionsOf("welcomeSubtitle")}
-            note={
-              proposed.changes("welcomeSubtitle")
-                ? lineOf(
-                    pairPlaces((live ?? state.baseline).welcomeSubtitle, form.welcomeSubtitle),
-                    false
-                  )
-                : undefined
-            }
-            onChange={(welcomeSubtitle) => update({ welcomeSubtitle })}
-          />
-        )}
-      </>
-    )
-  };
-  const instructionsSection: AssetSection = {
-    id: "instructions",
-    label: t("configInstructions"),
-    body: (
-      <>
-        {shipped.around(
-          "instructions",
-          proposed.around(
-            "instructions",
-            <div className="grid gap-2">
-              <Field
-                label={instructionsLabel}
-                // One line under the text: how it differs from live and from what the
-                // platform ships, or what it is while it differs from neither.
-                hint={
-                  textLine("instructions") ??
-                  t(
-                    shipped.shipped
-                      ? "agentDraft.platformInstructionsHint"
-                      : "configSystemPromptHint"
-                  )
-                }
-                required={canEdit("instructions")}
-                labelEnd={
-                  proposed.changes("instructions") ? (
-                    <TextVersionSwitch
-                      label={instructionsLabel}
-                      value={views.instructions ?? "draft"}
-                      onValueChange={(view) =>
-                        setViews((before) => ({ ...before, instructions: view }))
-                      }
-                    />
-                  ) : undefined
-                }
-              >
-                <VersionedText
-                  label={instructionsLabel}
-                  view={
-                    proposed.changes("instructions") ? (views.instructions ?? "draft") : "draft"
-                  }
-                  live={(live ?? state.baseline).instructions}
-                  draft={form.instructions}
-                  mono
-                >
-                  <Textarea
-                    variant="code"
-                    className={shipped.shipped ? "min-h-40" : "min-h-72"}
-                    value={form.instructions}
-                    readOnly={!canEdit("instructions") || platformTextLocked}
-                    onChange={(event) => update({ instructions: event.target.value })}
-                  />
-                </VersionedText>
-              </Field>
-              {platformTextLocked && canEdit("instructions") ? (
-                <div>
-                  <Button
-                    variant="link"
-                    size="sm"
-                    data-platform-text-edit=""
-                    onClick={() => setPlatformTextOpen(true)}
-                  >
-                    {t("agentDraft.platformInstructionsEdit")}
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-          )
-        )}
-        {shipped.shipped || form.additionalInstructions.trim()
-          ? proposed.around(
-              "additionalInstructions",
-              <Field
-                label={t("agentDraft.additionalInstructions")}
-                hint={
-                  textLine("additionalInstructions") ?? t("agentDraft.additionalInstructionsHint")
-                }
-                labelEnd={
-                  proposed.changes("additionalInstructions") ? (
-                    <TextVersionSwitch
-                      label={t("agentDraft.additionalInstructions")}
-                      value={views.additionalInstructions ?? "draft"}
-                      onValueChange={(view) =>
-                        setViews((before) => ({ ...before, additionalInstructions: view }))
-                      }
-                    />
-                  ) : undefined
-                }
-              >
-                <VersionedText
-                  label={t("agentDraft.additionalInstructions")}
-                  view={
-                    proposed.changes("additionalInstructions")
-                      ? (views.additionalInstructions ?? "draft")
-                      : "draft"
-                  }
-                  live={(live ?? state.baseline).additionalInstructions}
-                  draft={form.additionalInstructions}
-                  mono
-                >
-                  <Textarea
-                    variant="code"
-                    className="min-h-40"
-                    data-additional-instructions=""
-                    value={form.additionalInstructions}
-                    readOnly={!canEdit("instructions")}
-                    onChange={(event) => update({ additionalInstructions: event.target.value })}
-                  />
-                </VersionedText>
-              </Field>
+            proposed.around(
+              "displayName",
+              <LocalizedField
+                label={t("configDisplayName")}
+                required
+                readOnly={!canEdit("displayName")}
+                value={form.displayName}
+                versions={versionsOf("displayName")}
+                note={localizedLine("displayName")}
+                onChange={(displayName) => update({ displayName })}
+              />
             )
-          : null}
-        {/* What the platform adds comes after the agent's own text, folded. */}
-        <PlatformInstructions
-          instructions={references?.platformInstructions}
-          toolNames={state.baseline.toolNames}
-        />
-      </>
-    )
-  };
-  const modelSections: AssetSection[] = showModels
-    ? [
-        {
-          id: "model",
-          label: t("build.sectionModel"),
-          description: t("configModelsHint"),
-          refusalField: "model" as const,
-          body: (
-            <>
-              <AgentModels
-                form={form}
-                modelBindings={modelBindings}
-                reasoningEfforts={references?.reasoningEfforts ?? []}
-                editable={canChooseModels}
-                setByModelManagers={canWrite && !canChooseModels}
-                onSelectDefault={(modelBindingId) =>
-                  setForm((value) =>
-                    selectAgentModelBinding(value, modelBindingId, {
-                      fastModeModelBindingIds,
-                      modelBindingIds
-                    })
-                  )
-                }
-                onSetUserSelectable={(modelBindingId, userSelectable) =>
-                  setForm((value) =>
-                    setAgentModelUserSelectable(
-                      value,
-                      modelBindingId,
-                      userSelectable,
-                      modelBindingIds
+          )}
+          {shipped.around(
+            "description",
+            proposed.around(
+              "description",
+              <LocalizedField
+                label={t("configDescription")}
+                readOnly={!canEdit("description")}
+                value={form.description}
+                versions={versionsOf("description")}
+                note={localizedLine("description")}
+                onChange={(description) => update({ description })}
+              />
+            )
+          )}
+          {shipped.around(
+            "welcomeMessage",
+            proposed.around(
+              "welcomeMessage",
+              <LocalizedField
+                label={t("configWelcomeMessage")}
+                readOnly={!canEdit("welcomeMessage")}
+                value={form.welcomeMessage}
+                versions={versionsOf("welcomeMessage")}
+                note={localizedLine("welcomeMessage")}
+                onChange={(welcomeMessage) => update({ welcomeMessage })}
+              />
+            )
+          )}
+          {proposed.around(
+            "welcomeSubtitle",
+            <LocalizedField
+              label={t("configWelcomeSubtitle")}
+              readOnly={!canEdit("welcomeSubtitle")}
+              value={form.welcomeSubtitle}
+              versions={versionsOf("welcomeSubtitle")}
+              note={
+                proposed.changes("welcomeSubtitle")
+                  ? lineOf(
+                      pairPlaces((live ?? state.baseline).welcomeSubtitle, form.welcomeSubtitle),
+                      false
                     )
-                  )
-                }
-                onSetReasoningEffort={(modelBindingId, reasoningEffort) =>
-                  setForm((value) =>
-                    setAgentModelReasoningEffort(value, modelBindingId, reasoningEffort)
-                  )
-                }
-              />
-              {proposed.around("model", null)}
-              <FieldRefusals messages={refusalsOf(outcome, "model")} />
-            </>
-          )
-        }
-      ]
-    : [];
-  const skillsSection: AssetSection = {
-    id: "skills",
-    label: t("configSkills"),
-    count: form.skillNames.length || undefined,
-    refusalField: "skills",
-    body: (
-      <>
-        <AgentSkills
-          choice={skillChoice}
-          value={form.skillNames}
-          editable={canEdit("skillNames")}
-          onChange={(skillNames) => update({ skillNames })}
-        />
-        {shipped.note("skillNames")}
-        {proposed.around("skillNames", null)}
-        <FieldRefusals messages={refusalsOf(outcome, "skills")} />
-      </>
-    )
-  };
-  const knowledgeSections: AssetSection[] = knowledgeChoice
-    ? [
-        {
-          id: "knowledge",
-          label: t("knowledge.agentSection"),
-          description: t("knowledge.agentSectionDescription"),
-          count: form.knowledgeBases.length || undefined,
-          refusalField: "knowledge" as const,
-          body: (
-            <>
-              <AgentKnowledge
-                choice={knowledgeChoice}
-                value={form.knowledgeBases}
-                editable={canEdit("knowledgeBases")}
-                onChange={(knowledgeBases) => update({ knowledgeBases })}
-              />
-              {proposed.around("knowledgeBases", null)}
-              <FieldRefusals messages={refusalsOf(outcome, "knowledge")} />
-            </>
-          )
-        }
-      ]
-    : [];
-  const dataSections: AssetSection[] =
-    dataStoreChoice || heldDataStores(form.toolNames).length > 0
+                  : undefined
+              }
+              onChange={(welcomeSubtitle) => update({ welcomeSubtitle })}
+            />
+          )}
+        </>
+      )
+    },
+    {
+      id: "instructions",
+      label: t("configInstructions"),
+      body: (
+        <>
+          <PlatformInstructions
+            instructions={references?.platformInstructions}
+            toolNames={state.baseline.toolNames}
+          />
+          {shipped.around(
+            "instructions",
+            proposed.around(
+              "instructions",
+              <div className="grid gap-2">
+                <Field
+                  label={instructionsLabel}
+                  // One line under the text: how it differs from live and from what the
+                  // platform ships, or what it is while it differs from neither.
+                  hint={
+                    textLine("instructions") ??
+                    t(
+                      shipped.shipped
+                        ? "agentDraft.platformInstructionsHint"
+                        : "configSystemPromptHint"
+                    )
+                  }
+                  required={canEdit("instructions")}
+                  labelEnd={
+                    proposed.changes("instructions") ? (
+                      <TextVersionSwitch
+                        label={instructionsLabel}
+                        value={views.instructions ?? "draft"}
+                        onValueChange={(view) =>
+                          setViews((before) => ({ ...before, instructions: view }))
+                        }
+                      />
+                    ) : undefined
+                  }
+                >
+                  <VersionedText
+                    label={instructionsLabel}
+                    view={
+                      proposed.changes("instructions") ? (views.instructions ?? "draft") : "draft"
+                    }
+                    live={(live ?? state.baseline).instructions}
+                    draft={form.instructions}
+                    mono
+                  >
+                    <Textarea
+                      variant="code"
+                      className={shipped.shipped ? "min-h-40" : "min-h-72"}
+                      value={form.instructions}
+                      readOnly={!canEdit("instructions") || platformTextLocked}
+                      onChange={(event) => update({ instructions: event.target.value })}
+                    />
+                  </VersionedText>
+                </Field>
+                {platformTextLocked && canEdit("instructions") ? (
+                  <div>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      data-platform-text-edit=""
+                      onClick={() => setPlatformTextOpen(true)}
+                    >
+                      {t("agentDraft.platformInstructionsEdit")}
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            )
+          )}
+          {shipped.shipped || form.additionalInstructions.trim()
+            ? proposed.around(
+                "additionalInstructions",
+                <Field
+                  label={t("agentDraft.additionalInstructions")}
+                  hint={
+                    textLine("additionalInstructions") ?? t("agentDraft.additionalInstructionsHint")
+                  }
+                  labelEnd={
+                    proposed.changes("additionalInstructions") ? (
+                      <TextVersionSwitch
+                        label={t("agentDraft.additionalInstructions")}
+                        value={views.additionalInstructions ?? "draft"}
+                        onValueChange={(view) =>
+                          setViews((before) => ({ ...before, additionalInstructions: view }))
+                        }
+                      />
+                    ) : undefined
+                  }
+                >
+                  <VersionedText
+                    label={t("agentDraft.additionalInstructions")}
+                    view={
+                      proposed.changes("additionalInstructions")
+                        ? (views.additionalInstructions ?? "draft")
+                        : "draft"
+                    }
+                    live={(live ?? state.baseline).additionalInstructions}
+                    draft={form.additionalInstructions}
+                    mono
+                  >
+                    <Textarea
+                      variant="code"
+                      className="min-h-40"
+                      data-additional-instructions=""
+                      value={form.additionalInstructions}
+                      readOnly={!canEdit("instructions")}
+                      onChange={(event) => update({ additionalInstructions: event.target.value })}
+                    />
+                  </VersionedText>
+                </Field>
+              )
+            : null}
+          {proposed.around(
+            "maxSteps",
+            showMaxSteps ? (
+              <Field label={t("configMaxSteps")} hint={t("configMaxStepsHint")}>
+                <Input
+                  type="number"
+                  min={1}
+                  value={form.maxSteps}
+                  readOnly={!canEditMaxSteps}
+                  onChange={(event) => update({ maxSteps: event.target.value })}
+                />
+              </Field>
+            ) : null
+          )}
+        </>
+      )
+    },
+    ...(showModels
+      ? [
+          {
+            id: "model",
+            label: t("build.sectionModel"),
+            description: t("configModelsHint"),
+            refusalField: "model" as const,
+            body: (
+              <>
+                <AgentModels
+                  form={form}
+                  modelBindings={modelBindings}
+                  reasoningEfforts={references?.reasoningEfforts ?? []}
+                  editable={canChooseModels}
+                  setByModelManagers={canWrite && !canChooseModels}
+                  onSelectDefault={(modelBindingId) =>
+                    setForm((value) =>
+                      selectAgentModelBinding(value, modelBindingId, {
+                        fastModeModelBindingIds,
+                        modelBindingIds
+                      })
+                    )
+                  }
+                  onSetUserSelectable={(modelBindingId, userSelectable) =>
+                    setForm((value) =>
+                      setAgentModelUserSelectable(
+                        value,
+                        modelBindingId,
+                        userSelectable,
+                        modelBindingIds
+                      )
+                    )
+                  }
+                  onSetReasoningEffort={(modelBindingId, reasoningEffort) =>
+                    setForm((value) =>
+                      setAgentModelReasoningEffort(value, modelBindingId, reasoningEffort)
+                    )
+                  }
+                />
+                {showFastMode ? (
+                  <Field layout="inline" label={t("configFastMode")} hint={t("configFastModeHint")}>
+                    <Switch
+                      checked={form.fastMode}
+                      disabled={!canEditModel}
+                      onCheckedChange={(fastMode) => update({ fastMode })}
+                    />
+                  </Field>
+                ) : null}
+                {showModelFallback ? (
+                  <Field
+                    layout="inline"
+                    label={t("configModelFallback")}
+                    hint={t("configModelFallbackHint")}
+                  >
+                    <Switch
+                      checked={form.useModelFallback}
+                      disabled={!canEditModel}
+                      onCheckedChange={(useModelFallback) => update({ useModelFallback })}
+                    />
+                  </Field>
+                ) : null}
+                {proposed.around("model", null)}
+                <FieldRefusals messages={refusalsOf(outcome, "model")} />
+              </>
+            )
+          }
+        ]
+      : []),
+    {
+      id: "skills",
+      label: t("configSkills"),
+      count: form.skillNames.length,
+      refusalField: "skills",
+      body: (
+        <>
+          <AgentSkills
+            choice={skillChoice}
+            value={form.skillNames}
+            editable={canEdit("skillNames")}
+            onChange={(skillNames) => update({ skillNames })}
+          />
+          {shipped.note("skillNames")}
+          {proposed.around("skillNames", null)}
+          <FieldRefusals messages={refusalsOf(outcome, "skills")} />
+        </>
+      )
+    },
+    ...(knowledgeChoice
+      ? [
+          {
+            id: "knowledge",
+            label: t("knowledge.agentSection"),
+            description: t("knowledge.agentSectionDescription"),
+            count: form.knowledgeBases.length,
+            refusalField: "knowledge" as const,
+            body: (
+              <>
+                <AgentKnowledge
+                  choice={knowledgeChoice}
+                  value={form.knowledgeBases}
+                  editable={canEdit("knowledgeBases")}
+                  onChange={(knowledgeBases) => update({ knowledgeBases })}
+                />
+                {proposed.around("knowledgeBases", null)}
+                <FieldRefusals messages={refusalsOf(outcome, "knowledge")} />
+              </>
+            )
+          }
+        ]
+      : []),
+    ...(dataStoreChoice || heldDataStores(form.toolNames).length > 0
       ? [
           {
             id: "data",
             label: t("dataStores.agentSection"),
             description: t("dataStores.agentSectionDescription"),
-            count: heldDataStores(form.toolNames).length || undefined,
+            count: heldDataStores(form.toolNames).length,
             body: (
               <AgentDataStores
                 choice={dataStoreChoice ?? NO_DATA_STORES}
@@ -804,232 +813,120 @@ export function AgentEditor({
             )
           }
         ]
-      : [];
-  const toolsSection: AssetSection = {
-    id: "tools",
-    label: t("configTools"),
-    // The tools that are on: what the rows add up to, and the Apps' tools after them.
-    count:
-      heldToolCount(
-        toolPackages({
-          references,
-          selected: form.toolNames,
-          skillNames: form.skillNames,
-          locale,
-          connections: connectionTools.read,
-          unavailable: unavailable?.unavailableTools?.map((tool) => tool.name) ?? [],
-          isOtherSource: isOutsideTools
-        })
-      ) + form.toolNames.filter(isAppToolName).length || undefined,
-    refusalField: "tools",
-    description: t("configToolsDescription"),
-    // A row per package, per own tool of this instance and per Connection; then the Apps.
-    body: (
-      <>
-        <ToolPackagesSection
-          references={references}
-          loading={referencesLoading}
-          selected={form.toolNames}
-          skillNames={form.skillNames}
-          connectionTools={connectionTools}
-          unavailable={unavailable?.unavailableTools ?? []}
-          isOtherSource={isOutsideTools}
-          disabled={!canEdit("toolNames")}
-          onChange={(toolNames) => update({ toolNames })}
-        />
-        <AppToolsGroup
-          read={appTools}
-          selected={form.toolNames}
-          disabled={!canEdit("toolNames")}
-          onChange={(toolNames) => update({ toolNames })}
-        />
-        <OwnServersRow
-          checked={form.ownServers}
-          disabled={!canEdit("toolNames")}
-          onChange={(ownServers) => update({ ownServers })}
-        />
-        {shipped.note("toolNames")}
-        {proposed.around("toolNames", null)}
-        <FieldRefusals messages={refusalsOf(outcome, "tools")} />
-      </>
-    )
-  };
-  const promptsSection: AssetSection = {
-    id: "prompts",
-    label: t("configStarterPrompts"),
-    description: t("configStarterPromptsDescription"),
-    count: form.initialPrompts.length || undefined,
-    body: (
-      <>
-        <InitialPromptsEditor
-          prompts={form.initialPrompts}
-          disabled={!canEdit("initialPrompts")}
-          onChange={(initialPrompts) => update({ initialPrompts })}
-        />
-        {shipped.note("initialPrompts")}
-        {proposed.around("initialPrompts", null)}
-      </>
-    )
-  };
-  const availabilitySections: AssetSection[] = availability
-    ? [
-        {
-          id: AVAILABILITY_SECTION_ID,
-          label: t("configAvailability"),
-          description: t("configAvailabilityDescription"),
-          refusalField: "availability" as const,
-          body: (
-            <AvailabilityFields
-              edit={availabilityEdit}
-              defaults={availabilityDefaults(
-                state.baseline.name,
-                isDefault,
-                availability.workspaces,
-                t,
-                locale
-              )}
-              fixedReason={availability.fixedReason}
-              disabled={saving}
-              workspaces={availability.workspaces}
-              workspacesError={availability.workspacesError}
-              hiddenHint={t("configAvailabilityHiddenHint")}
-              dependencies={availability.dependencies}
-              refusals={refusalsOf(outcome, "availability")}
-            />
-          )
-        }
-      ]
-    : [];
-  const useSections: AssetSection[] = agentUse
-    ? [
-        {
-          id: "agent-use",
-          label: t("configAgentUse"),
-          description: t("configAgentUseDescription"),
-          refusalField: "agentUse" as const,
-          body: (
-            <AgentUseFields
-              edit={useEdit}
-              disabled={saving}
-              refusals={refusalsOf(outcome, "agentUse")}
-            />
-          )
-        }
-      ]
-    : [];
-  // What the engine does with the agent, which few people set: folded once more.
-  const advancedSections: AssetSection[] =
-    showMaxSteps || (showModels && (showFastMode || showModelFallback))
+      : []),
+    {
+      id: "tools",
+      label: t("configTools"),
+      // The tools that are on: what the rows add up to, and the Apps' tools after them.
+      count:
+        heldToolCount(
+          toolPackages({
+            references,
+            selected: form.toolNames,
+            skillNames: form.skillNames,
+            locale,
+            connections: connectionTools.read,
+            unavailable: unavailable?.unavailableTools?.map((tool) => tool.name) ?? [],
+            isOtherSource: isOutsideTools
+          })
+        ) + form.toolNames.filter(isAppToolName).length,
+      refusalField: "tools",
+      description: t("configToolsDescription"),
+      // A row per package, per own tool of this instance and per Connection; then the Apps.
+      body: (
+        <>
+          <ToolPackagesSection
+            references={references}
+            loading={referencesLoading}
+            selected={form.toolNames}
+            skillNames={form.skillNames}
+            connectionTools={connectionTools}
+            unavailable={unavailable?.unavailableTools ?? []}
+            isOtherSource={isOutsideTools}
+            disabled={!canEdit("toolNames")}
+            onChange={(toolNames) => update({ toolNames })}
+          />
+          <AppToolsGroup
+            read={appTools}
+            selected={form.toolNames}
+            disabled={!canEdit("toolNames")}
+            onChange={(toolNames) => update({ toolNames })}
+          />
+          <OwnServersRow
+            checked={form.ownServers}
+            disabled={!canEdit("toolNames")}
+            onChange={(ownServers) => update({ ownServers })}
+          />
+          {shipped.note("toolNames")}
+          {proposed.around("toolNames", null)}
+          <FieldRefusals messages={refusalsOf(outcome, "tools")} />
+        </>
+      )
+    },
+    {
+      id: "prompts",
+      label: t("configStarterPrompts"),
+      description: t("configStarterPromptsDescription"),
+      count: form.initialPrompts.length,
+      body: (
+        <>
+          <InitialPromptsEditor
+            prompts={form.initialPrompts}
+            disabled={!canEdit("initialPrompts")}
+            onChange={(initialPrompts) => update({ initialPrompts })}
+          />
+          {shipped.note("initialPrompts")}
+          {proposed.around("initialPrompts", null)}
+        </>
+      )
+    },
+    ...(availability
       ? [
           {
-            id: "advanced",
-            label: t("build.agentAdvanced"),
-            bare: true,
+            id: AVAILABILITY_SECTION_ID,
+            label: t("configAvailability"),
+            description: t("configAvailabilityDescription"),
+            refusalField: "availability" as const,
             body: (
-              <Disclosure
-                open={advancedOpen}
-                onOpenChange={setAdvancedOpen}
-                data-agent-advanced=""
-                // A field the browser refuses in here is shown, then named again.
-                onInvalidCapture={(event) => {
-                  if (advancedOpen) return;
-                  setAdvancedOpen(true);
-                  const form = event.currentTarget.closest("form");
-                  window.requestAnimationFrame(() => form?.reportValidity());
-                }}
-              >
-                <DisclosureTrigger data-agent-advanced-trigger="">
-                  {t("build.agentAdvanced")}
-                </DisclosureTrigger>
-                <DisclosureContent keepMounted>
-                  <div className="grid gap-4 pt-3">
-                    {proposed.around(
-                      "maxSteps",
-                      showMaxSteps ? (
-                        <Field label={t("configMaxSteps")} hint={t("configMaxStepsHint")}>
-                          <Input
-                            type="number"
-                            min={1}
-                            value={form.maxSteps}
-                            readOnly={!canEditMaxSteps}
-                            onChange={(event) => update({ maxSteps: event.target.value })}
-                          />
-                        </Field>
-                      ) : null
-                    )}
-                    {showModels && showFastMode ? (
-                      <Field
-                        layout="inline"
-                        label={t("configFastMode")}
-                        hint={t("configFastModeHint")}
-                      >
-                        <Switch
-                          checked={form.fastMode}
-                          disabled={!canEditModel}
-                          onCheckedChange={(fastMode) => update({ fastMode })}
-                        />
-                      </Field>
-                    ) : null}
-                    {showModels && showModelFallback ? (
-                      <Field
-                        layout="inline"
-                        label={t("configModelFallback")}
-                        hint={t("configModelFallbackHint")}
-                      >
-                        <Switch
-                          checked={form.useModelFallback}
-                          disabled={!canEditModel}
-                          onCheckedChange={(useModelFallback) => update({ useModelFallback })}
-                        />
-                      </Field>
-                    ) : null}
-                  </div>
-                </DisclosureContent>
-              </Disclosure>
+              <AvailabilityFields
+                edit={availabilityEdit}
+                defaults={availabilityDefaults(
+                  state.baseline.name,
+                  isDefault,
+                  availability.workspaces,
+                  t,
+                  locale
+                )}
+                fixedReason={availability.fixedReason}
+                disabled={saving}
+                workspaces={availability.workspaces}
+                workspacesError={availability.workspacesError}
+                hiddenHint={t("configAvailabilityHiddenHint")}
+                dependencies={availability.dependencies}
+                refusals={refusalsOf(outcome, "availability")}
+              />
             )
           }
         ]
-      : [];
-  // What shapes the agent stands on the page: what it is told, what it knows and what it can
-  // do. What is set once waits under Settings. A new agent is named first.
-  const isNew = frame.asset === undefined;
-  const sections: AssetSection[] = [
-    ...(isNew ? [aboutSection] : []),
-    instructionsSection,
-    ...knowledgeSections,
-    ...dataSections,
-    skillsSection,
-    toolsSection,
-    promptsSection
+      : []),
+    ...(agentUse
+      ? [
+          {
+            id: "agent-use",
+            label: t("configAgentUse"),
+            description: t("configAgentUseDescription"),
+            refusalField: "agentUse" as const,
+            body: (
+              <AgentUseFields
+                edit={useEdit}
+                disabled={saving}
+                refusals={refusalsOf(outcome, "agentUse")}
+              />
+            )
+          }
+        ]
+      : [])
   ];
-  const folded: AssetSection[] = [
-    ...(isNew ? [] : [aboutSection]),
-    ...modelSections,
-    ...availabilitySections,
-    ...useSections,
-    ...advancedSections
-  ];
-  // The line beside "Settings" names what is in them for this reader, and no more.
-  const settingsNames = [
-    !isNew && t("build.agentSettingsName"),
-    modelSections.length > 0 && t("build.agentSettingsModel"),
-    availabilitySections.length > 0 && t("build.agentSettingsAvailability")
-  ].filter((name) => name !== false);
-  const settingsHint =
-    settingsNames.length === 0
-      ? undefined
-      : folded.length > settingsNames.length || !isNew
-        ? t("build.agentSettingsHint", { items: sentenceCase(settingsNames.join(", ")) })
-        : sentenceCase(settingsNames.join(", "));
-  // While Publish or Discard is on its way nothing is typed: either reads the page again.
-  const whileIdle = (section: AssetSection): AssetSection => ({
-    ...section,
-    body: (
-      <fieldset disabled={busy !== undefined} className="contents">
-        {section.body}
-      </fieldset>
-    )
-  });
 
   const discardable = draft !== undefined && held !== null && !frame.saveBlocked;
   const page = (
@@ -1156,22 +1053,15 @@ export function AgentEditor({
             ]
           : [])
       ]}
-      {...(isNew
-        ? {}
-        : {
-            lead:
-              form.description[locale].trim() ||
-              form.description[locale === "de" ? "en" : "de"].trim() ||
-              t("build.agentLeadFallback")
-          })}
-      sections={sections.map(whileIdle)}
-      settings={{
-        label: t("build.agentSettings"),
-        ...(settingsHint === undefined ? {} : { hint: settingsHint }),
-        sections: folded.map(whileIdle),
-        open: settingsOpen,
-        onOpenChange: setSettingsOpen
-      }}
+      sections={sections.map((section) => ({
+        ...section,
+        // While Publish or Discard is on its way nothing is typed: either reads the page again.
+        body: (
+          <fieldset disabled={busy !== undefined} className="contents">
+            {section.body}
+          </fieldset>
+        )
+      }))}
       missingTranslations={agentMissingTranslations(form)}
       control={{
         changes: changedFields + (availabilityChanged ? 1 : 0) + (useEdit.changed ? 1 : 0),
@@ -1299,19 +1189,7 @@ export function AgentEditor({
   );
 }
 
-/** A line of words with its first letter in upper case. */
-const sentenceCase = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
-
-/** The fields of an existing agent that wait under Settings. */
-const FOLDED_FIELDS: ReadonlySet<DraftAgentField> = new Set([
-  "displayName",
-  "description",
-  "welcomeMessage",
-  "welcomeSubtitle",
-  "model",
-  "maxSteps"
-]);
-
+/** What the page is handed while nobody asked the instance for the tools of Connections. */
 /** Tools other sections show: an App's actions, and a Data Store's row tools under Data. */
 function isOutsideTools(name: string): boolean {
   return isAppToolName(name) || isAgentDataStoreToolName(name);
@@ -1320,7 +1198,6 @@ function isOutsideTools(name: string): boolean {
 /** The Data section of an agent that holds stores where the instance offers none. */
 const NO_DATA_STORES: DataStoreChoice = { options: [], onSearch: () => undefined };
 
-/** What the page is handed while nobody asked the instance for the tools of Connections. */
 const NO_CONNECTION_TOOLS: ConnectionToolChoice = { read: { status: "unknown" } };
 /** The same for the actions of Apps. */
 const NO_APP_TOOLS: AppToolsRead = { status: "unknown" };
