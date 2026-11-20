@@ -8,7 +8,9 @@ import { expect, test } from "./test";
 
 // Studio's "Fähigkeiten" page (TOOLS-2; navigation-and-layout.md, section 4.3, check 35): an
 // instance admin sees a module that is off, marked so; a builder without the admin role does not;
-// and each package lists the agents that use it as links that open their pages.
+// and each package lists the agents that use it as links that open their pages. The group
+// "Eigene Werkzeuge" is the one place Studio lists a tool added without a release (TOOL-1): the
+// rail has no item for them, and the address of their former list opens this page.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const shotsDir = process.env.E2E_SHOTS_DIR;
@@ -66,7 +68,8 @@ test("an instance admin sees a module that is off, and an agent link opens its p
   page
 }) => {
   test.setTimeout(90_000);
-  await page.setViewportSize({ width: 1280, height: 900 });
+  // Tall enough for the folded-out group in the pictures.
+  await page.setViewportSize({ width: 1280, height: 1200 });
   await signIn(page, admin);
   const packages = await packagesOf(page);
   const off = packages.filter((item) => !item.enabled);
@@ -148,5 +151,59 @@ test("a builder without the admin role sees no module that is off", async ({ pag
       `${apiBaseUrl}/api/v1/instance/access/grants/${grant.id}`
     );
     await rootContext.close();
+  }
+});
+
+test("a tool added without a release is listed under the own tools, which the rail has no item for", async ({
+  page
+}) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await signIn(page, admin);
+  const name = `open_items_${randomUUID().slice(0, 8)}`;
+  const toolPath = `${apiBaseUrl}/api/v1/assets/tool/${name}`;
+  const put = await requestWithOrigin(page, "put", toolPath, {
+    data: {
+      expectedRevision: null,
+      config: {
+        name,
+        type: "result",
+        title: { en: "Open items", de: "Offene Posten" },
+        summary: {
+          en: "Lists a customer's open items.",
+          de: "Listet die offenen Posten eines Kunden."
+        },
+        description: "Call with the customer's open items.",
+        input: { type: "object" },
+        result: { kind: "generic.table", title: "Open items" }
+      }
+    }
+  });
+  expect(put.ok(), await put.text()).toBe(true);
+  const { revision }: { revision: number } = await put.json();
+  try {
+    // The address of the former list opens Fähigkeiten.
+    await page.goto("/build/tools");
+    await expect(page).toHaveURL(/\/build\/capabilities$/u);
+    await expect(page.getByRole("heading", { name: "Fähigkeiten" })).toBeVisible();
+    const rail = page.getByRole("navigation", { name: "Arten im Studio" });
+    await expect(rail.getByText("Fähigkeiten", { exact: true })).toBeVisible();
+    await expect(rail.getByText("Werkzeuge", { exact: true })).toHaveCount(0);
+
+    const own = page.locator('[data-capabilities] [data-capability-package="own"]');
+    await expect(own).toContainText("Eigene Werkzeuge");
+    await own.getByRole("button").first().click();
+    const tool = own.locator(`[data-capability-tool-asset="${name}"]`);
+    await expect(tool).toContainText("Offene Posten");
+    await expect(tool).toContainText("Listet die offenen Posten eines Kunden.");
+    await expect(tool).toContainText("generic.table");
+    await expect(own.locator("[data-capability-tool-assets]")).toContainText(
+      "berechnet etwas oder ruft eine Verbindung auf"
+    );
+    await shoot(page, "own-tools", "own");
+  } finally {
+    await requestWithOrigin(page, "post", `${toolPath}/delete`, {
+      data: { expectedRevision: revision }
+    });
   }
 });

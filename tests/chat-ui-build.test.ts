@@ -367,6 +367,8 @@ describe("Studio frame", () => {
     expect(both).toContain('<option value="agents">Agents</option>');
     expect(both).toContain('<option value="skills" selected="">Skills</option>');
     expect(both).toContain('<option value="capabilities">Capabilities</option>');
+    // The own tools are listed on Capabilities and have no item of their own.
+    expect(both).not.toContain('<option value="tools"');
     expect(one).toContain('<option value="agents" selected="">Agents</option>');
     expect(one).not.toContain('<option value="skills"');
     expect(one).toContain('<option value="capabilities">Capabilities</option>');

@@ -1,5 +1,5 @@
 import type { CapabilityPackage } from "@work-shape/catalyst-api-contract";
-import type { ActorAccess } from "@work-shape/catalyst-core";
+import { TOOL_OPERATION_PREFIX, type ActorAccess } from "@work-shape/catalyst-core";
 import { readableAgents, type ReadableAgent } from "../assets/readable-agents";
 import { configAssetReferences } from "../config-assets/config-asset-service";
 import type { ChatServerOptions } from "../types";
@@ -75,11 +75,22 @@ export async function readCapabilities(
         skillsOfModule(state.name)
       )
     );
-  const own = packageOf(
-    { kind: "own", enabled: true },
-    offered.filter((tool) => tool.module === undefined && ownTool(tool)),
-    []
-  );
+  // The instance's own tools: those its release brings, which are listed here, and its tool
+  // assets (`tool.<name>.call`), which Studio lists beside them from the assets. An agent that
+  // lists either uses the package, so it is there for a tool asset alone.
+  const ownTools = offered.filter((tool) => tool.module === undefined && ownTool(tool));
+  const ownToolNames = new Set(ownTools.map((tool) => tool.name));
+  const ownAgents = agents
+    .filter((agent) =>
+      agent.toolNames.some(
+        (name) => ownToolNames.has(name) || name.startsWith(TOOL_OPERATION_PREFIX)
+      )
+    )
+    .map((agent) => ({ name: agent.name, title: agent.title }));
+  const own: CapabilityPackage[] =
+    ownTools.length + ownAgents.length === 0
+      ? []
+      : [{ kind: "own", enabled: true, tools: ownTools, skills: [], agents: ownAgents }];
   return { packages: [...general, ...modules, ...own] };
 }
 
