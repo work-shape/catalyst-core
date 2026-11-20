@@ -58,17 +58,17 @@ export function createWebConnectorType(options: WebConnectorOptions = {}): Conne
     form: {
       title: { en: "Web pages", de: "Webseiten" },
       description: {
-        en: "Public pages of the hosts you list, kept current in a Knowledge Base.",
-        de: "Öffentliche Seiten der Hosts, die du nennst, aktuell gehalten in einer Wissensbasis."
+        en: "Reads public websites you name and keeps them current in a Knowledge Base.",
+        de: "Liest öffentliche Websites, die du angibst, und hält sie in einer Wissensbasis aktuell."
       },
       authScheme: "none",
       fields: [
         {
           setting: "hosts",
-          label: { en: "Hosts", de: "Hosts" },
+          label: { en: "Websites", de: "Websites" },
           help: {
-            en: "The hosts it may read, separated by spaces, such as example.com docs.example.com",
-            de: "Die Hosts, die gelesen werden dürfen, durch Leerzeichen getrennt, etwa example.com docs.example.com"
+            en: "One or more addresses, separated by spaces, such as example.com docs.example.com",
+            de: "Eine oder mehrere Adressen, durch Leerzeichen getrennt, etwa example.com docs.example.com"
           }
         }
       ]
