@@ -41,6 +41,22 @@ export class DeterministicModelProvider {
     const toolMessages = request.messages
       .slice(lastUserIndex + 1)
       .filter((message) => message.role === "tool");
+    // A message of several `/tool` lines is a run of several steps: each step makes the call of
+    // the next line, after the call of the line before has its answer.
+    const commands = toolCommandLines(
+      modelContentText(request.messages[lastUserIndex]?.content ?? "").trim()
+    );
+    const nextCommand = toolMessages.length > 0 ? commands[toolMessages.length] : undefined;
+    const nextCall = nextCommand ? parseToolCommand(nextCommand, request.tools) : undefined;
+    if (nextCall) {
+      return {
+        text: `I will run ${nextCall.toolName} with the provided input.`,
+        toolCalls: [nextCall],
+        sources: [],
+        citations: [],
+        usage: noReportedUsage()
+      };
+    }
     if (toolMessages.length > 0) {
       return {
         text: `Tool work completed:\n\n${toolMessages.map((message) => modelContentText(message.content)).join("\n\n")}`,
@@ -156,6 +172,12 @@ function noReportedUsage() {
     source: "not_reported" as const,
     webSearchCallCount: 0
   };
+}
+
+/** The `/tool` commands of a message, one per line that starts with one. */
+function toolCommandLines(content: string): string[] {
+  if (!content.startsWith("/tool ")) return [];
+  return content.split(/\n(?=\/tool\s)/u);
 }
 
 function parseToolCommand(content: string, tools: ModelTool[]): ModelToolCall | undefined {

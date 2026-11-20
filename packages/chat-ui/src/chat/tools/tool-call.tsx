@@ -327,7 +327,9 @@ export function ToolCallPart({
     );
   }
 
-  if (hasDisplay && displayPresentation === "full") {
+  // In the work history the row of a call that showed something opens it again with one click:
+  // beside the conversation for a side-panel display, under the row for any other.
+  if (hasDisplay) {
     if (displayMode === "side_panel" && displayPanel.available) {
       return (
         <SidePanelToolCall
@@ -339,6 +341,24 @@ export function ToolCallPart({
           statusLabel={statusLabel}
           artifacts={surfacedArtifacts}
           toolCallId={toolCallId}
+          toolTitle={toolDisplay.title}
+          subject={subject}
+          toolName={toolName}
+          result={result}
+        />
+      );
+    }
+
+    if (displayPresentation === "summary") {
+      return (
+        <CompactToolCall
+          actionLabel={actionLabel}
+          detailSections={detailSections}
+          display={renderedDisplay ?? builtInDisplay}
+          state={state}
+          statusLabel={statusLabel}
+          summary={summary}
+          surfacedArtifacts={surfacedArtifacts}
           toolTitle={toolDisplay.title}
           subject={subject}
           toolName={toolName}
