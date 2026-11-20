@@ -1433,9 +1433,9 @@ export function useWorkspaceChatModel({
       cancelSelectedRun,
       continuePrivately: async (prompt: string) => {
         try {
-          // The request goes on with the agent that was refused, not the start page's own.
-          if (activeAgentName !== undefined) setNewConversationAgentName(activeAgentName);
           continuePrivatelyWith(prompt);
+          // The request goes on with the open conversation's agent, not the start page's own.
+          if (activeAgentName !== undefined) setNewConversationAgentName(activeAgentName);
         } catch {
           setNotice(createTranslationContext(activeLocale).t("conversationPrivateStartFailed"));
         }

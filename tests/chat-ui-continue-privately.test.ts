@@ -139,12 +139,8 @@ async function show(
 
 describe("the private line above the composer", () => {
   it("tells the person who went on privately that only they see the conversation", async () => {
-    expect(await show("de", "continued")).toBe(
-      "Privat: Nur du siehst diese Unterhaltung, deshalb kann der Agent hier bauen."
-    );
-    expect(await show("en", "continued")).toBe(
-      "Private: only you see this conversation, so the agent can build here."
-    );
+    expect(await show("de", "continued")).toBe("Privat: Nur du siehst diese Unterhaltung.");
+    expect(await show("en", "continued")).toBe("Private: only you see this conversation.");
     expect(await show("en", "workspace")).toBe(
       "New conversations in this workspace are private to you."
     );

@@ -108,7 +108,7 @@ test("a build refused in a shared conversation goes on privately with the reques
   await expect(page).toHaveURL((url) => url.pathname.replace(/\/$/u, "") === `/w/${workspaceId}`);
   await expect(composerOf(page)).toHaveValue(request);
   await expect(page.getByTestId("new-conversation-private-hint")).toHaveText(
-    "Private: only you see this conversation, so the agent can build here."
+    "Private: only you see this conversation."
   );
   await expect(startPageAgent(page)).toHaveAccessibleName(`Select agent: ${BUILDER}`);
 
