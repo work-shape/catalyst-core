@@ -16,6 +16,11 @@ interface BuildKindBase {
   path: string;
   /** The kind in the plural: the rail item and the list's title. */
   label: TranslationKey;
+  /**
+   * What the kind is for, in one plain sentence a person who never built one understands: the
+   * line under its name on Studio's overview.
+   */
+  overviewText: TranslationKey;
   /** Names the list's search field. */
   searchLabel: TranslationKey;
   /** What the list says under its title, with rows and without: such as where the kind comes from. */

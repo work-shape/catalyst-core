@@ -19,6 +19,7 @@ export const skillKind: BuildAssetKind = {
   kind: "skill",
   path: "skills",
   label: "build.kindSkills",
+  overviewText: "build.purposeSkills",
   searchLabel: "build.skillsSearch",
   newLabel: "configNewSkill",
   titleLabel: "configTitle",

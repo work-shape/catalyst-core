@@ -2,6 +2,7 @@ import { defineTranslations } from "./translation-area";
 
 export const guardrails = defineTranslations({
   en: {
+    "guardrails.purpose": "Guardrails check what an agent is about to do and stop it when needed.",
     "guardrails.kind": "Guardrails",
     "guardrails.description":
       "Guardrails that come with the system setup always apply; further ones are written with the CLI and enforce once published. An admin for all workspaces switches the guardrail the platform ships here.",
@@ -132,6 +133,8 @@ export const guardrails = defineTranslations({
     "guardrails.blockedChange": "The guardrail “{name}” stopped this change."
   },
   de: {
+    "guardrails.purpose":
+      "Leitplanken prüfen, was ein Agent tun will, und halten es an, wenn nötig.",
     "guardrails.kind": "Leitplanken",
     "guardrails.description":
       "Die Leitplanken aus der Einrichtung des Systems gelten immer; weitere werden mit der CLI geschrieben und gelten, sobald sie veröffentlicht sind. Die Leitplanke der Plattform schaltet ein Admin für alle Arbeitsbereiche hier um.",

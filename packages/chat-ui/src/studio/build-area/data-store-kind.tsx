@@ -139,6 +139,7 @@ export function dataStoreKindOn(useSource: () => DataStoreSource): BuildListedKi
     kind: "data_store",
     path: DATA_STORES_BUILD_PATH,
     label: "dataStores.kind",
+    overviewText: "dataStores.purpose",
     description: "dataStores.description",
     searchLabel: "dataStores.search",
     emptyText: "dataStores.emptyReadOnly",

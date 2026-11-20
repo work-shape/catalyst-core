@@ -63,6 +63,7 @@ export const guardrailKind: BuildListedKind = {
   kind: "guardrail",
   path: GUARDRAILS_BUILD_PATH,
   label: "guardrails.kind",
+  overviewText: "guardrails.purpose",
   description: "guardrails.description",
   searchLabel: "guardrails.search",
   emptyText: "guardrails.empty",
