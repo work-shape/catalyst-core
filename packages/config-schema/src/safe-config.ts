@@ -1,4 +1,4 @@
-import { OPERATION_EFFECTS } from "@work-shape/catalyst-asset-schemas";
+import { OPERATION_EFFECTS, isStarterIconName } from "@work-shape/catalyst-asset-schemas";
 import {
   AGENT_STARTERS_MAX,
   agentBuildsAssets,
@@ -164,8 +164,8 @@ export function createSafeConfigView(
         locale,
         config.localization.defaultLocale
       ),
-      // The author's prompts and the skills' starters share the start page's four places,
-      // the author's prompts first.
+      // The author's prompts and the skills' starters share the start page's places, the
+      // author's prompts first.
       initialPrompts: agent.initialPrompts.slice(0, AGENT_STARTERS_MAX).map((initialPrompt) => ({
         title: resolveLocalizedString(
           initialPrompt.title,
@@ -176,7 +176,9 @@ export function createSafeConfigView(
           initialPrompt.prompt,
           locale,
           config.localization.defaultLocale
-        )
+        ),
+        // A name a later release no longer draws is left out, so the usual icon shows.
+        ...(isStarterIconName(initialPrompt.icon) ? { icon: initialPrompt.icon } : {})
       })),
       starters: agentStarters(
         agent,

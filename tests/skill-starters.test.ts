@@ -28,7 +28,7 @@ function startersOf(input: {
   toolNames?: string[];
   skills: ReturnType<typeof skill>[];
   locale?: string;
-  initialPrompts?: { title: string; prompt: string }[];
+  initialPrompts?: { title: string; prompt: string; icon?: string }[];
 }) {
   return agentOf(input)?.starters;
 }
@@ -38,7 +38,7 @@ function agentOf(input: {
   toolNames?: string[];
   skills: ReturnType<typeof skill>[];
   locale?: string;
-  initialPrompts?: { title: string; prompt: string }[];
+  initialPrompts?: { title: string; prompt: string; icon?: string }[];
 }) {
   const config = parseClientInstanceConfig({
     version: 1,
@@ -107,40 +107,80 @@ describe("skill starters", () => {
     expect(titles(["workspace.write_file"])).toEqual(["Explain a formula"]);
   });
 
-  it("shows at most four, the skills in the order the agent names them", () => {
-    const skills = [
-      skill("c", [starter("C1"), starter("C2")]),
-      skill("a", [starter("A1"), starter("A2")]),
-      skill("b", [starter("B1"), starter("B2")])
-    ];
+  it("shows at most twelve, the skills in the order the agent names them", () => {
+    const names = ["a", "b", "c", "d", "e", "f", "g"];
+    const skills = [...names]
+      .reverse()
+      .map((name) => skill(name, [starter(`${name}1`), starter(`${name}2`)]));
 
-    expect(
-      startersOf({ skillNames: ["a", "b", "c"], skills })?.map((entry) => entry.title)
-    ).toEqual(["A1", "A2", "B1", "B2"]);
+    expect(startersOf({ skillNames: names, skills })?.map((entry) => entry.title)).toEqual(
+      names.slice(0, 6).flatMap((name) => [`${name}1`, `${name}2`])
+    );
   });
 
-  it("shows four in all with the author's prompts, the author's prompts first", () => {
-    const skills = [
-      skill("a", [starter("A1"), starter("A2")]),
-      skill("b", [starter("B1"), starter("B2")])
-    ];
+  it("shows twelve in all with the author's prompts, the author's prompts first", () => {
+    const names = ["a", "b", "c", "d", "e", "f"];
+    const skills = names.map((name) => skill(name, [starter(`${name}1`), starter(`${name}2`)]));
     const prompts = (count: number) =>
       Array.from({ length: count }, (_, index) => ({
         title: `P${index + 1}`,
         prompt: `Prompt ${index + 1}.`
       }));
     const shown = (count: number) => {
-      const agent = agentOf({ skillNames: ["a", "b"], skills, initialPrompts: prompts(count) });
+      const agent = agentOf({ skillNames: names, skills, initialPrompts: prompts(count) });
       return [
         ...(agent?.initialPrompts ?? []).map((entry) => entry.title),
         ...(agent?.starters ?? []).map((entry) => entry.title)
       ];
     };
+    const own = (count: number) => prompts(count).map((entry) => entry.title);
 
-    expect(shown(0)).toEqual(["A1", "A2", "B1", "B2"]);
-    expect(shown(1)).toEqual(["P1", "A1", "A2", "B1"]);
-    expect(shown(3)).toEqual(["P1", "P2", "P3", "A1"]);
-    expect(shown(5)).toEqual(["P1", "P2", "P3", "P4"]);
+    expect(shown(0)).toHaveLength(12);
+    expect(shown(1)).toEqual([
+      "P1",
+      "a1",
+      "a2",
+      "b1",
+      "b2",
+      "c1",
+      "c2",
+      "d1",
+      "d2",
+      "e1",
+      "e2",
+      "f1"
+    ]);
+    expect(shown(11)).toEqual([...own(11), "a1"]);
+    expect(shown(13)).toEqual(own(12));
+  });
+
+  it("gives an author's prompt the icon the author chose, and none where none is chosen", () => {
+    const agent = agentOf({
+      skillNames: [],
+      skills: [],
+      initialPrompts: [
+        { title: "Plan", prompt: "Plan the week.", icon: "calendar" },
+        { title: "Ask", prompt: "Ask." }
+      ]
+    });
+
+    expect(agent?.initialPrompts).toEqual([
+      { title: "Plan", prompt: "Plan the week.", icon: "calendar" },
+      { title: "Ask", prompt: "Ask." }
+    ]);
+  });
+
+  it("refuses an agent whose prompt names an icon outside the starter icons", () => {
+    const parsed = agentConfigSchema.safeParse({
+      name: "agent",
+      displayName: "Agent",
+      instructions: "Help.",
+      initialPrompts: [{ title: "Plan", prompt: "Plan the week.", icon: "rocket" }]
+    });
+
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues[0]?.path).toEqual(["initialPrompts", 0, "icon"]);
+    expect(parsed.error?.issues[0]?.message).toBe("A starter's icon is one of the starter icons");
   });
 
   it("carries the skill's icon for a platform skill only", () => {
