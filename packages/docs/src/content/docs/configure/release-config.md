@@ -420,8 +420,17 @@ toolNames:
   - support.lookup_ticket
 skillNames:
   - support_review
-initialPrompts: []
+initialPrompts:
+  - title:
+      en: Plan the week
+      de: Woche planen
+    prompt:
+      en: "Plan my week from these appointments:"
+      de: "Plane meine Woche aus diesen Terminen:"
+    icon: calendar
 ```
+
+Each entry of `initialPrompts` is a suggestion on the empty chat: `title` and `prompt` are one text or one text per language (`en`, `de`). `icon` is optional and takes one of these names: `file-text`, `file-signature`, `clipboard-list`, `list-checks`, `pencil`, `book-open`, `message-square`, `mail`, `calendar`, `search`, `lightbulb`, `sparkles`, `users`, `home`, `building`, `landmark`, `key`, `scale`, `banknote`, `receipt`, `calculator`, `chart`, `ruler`, `globe`. Any other name is refused when the agent is written. A suggestion without an `icon` shows the usual one. On the Agent page, the button beside each suggestion's number picks the icon. The chat shows the first twelve suggestions of an agent.
 
 Each skill file starts with YAML frontmatter:
 
