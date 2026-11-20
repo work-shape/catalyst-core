@@ -6,8 +6,9 @@ import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
 // Pictures of an agent's starters, for a person to look at: the empty chat with four starters
-// that carry icons, with nine at 1280 and at phone width, and the Agent page with the icon
-// picker of a starter open, in German, light and dark. It runs only with STARTER_ICON_SHOTS=1
+// that carry icons, with nine and with twelve (folded, and whole after "Mehr") at 1280 and at
+// phone width, and the Agent page with the icon picker of a starter open, in German, light and
+// dark. It runs only with STARTER_ICON_SHOTS=1
 // and writes to test-results/starter-icons (STARTER_ICON_SHOTS_DIR names another directory).
 // With STARTER_ICON_SHOTS_PLAIN=1 it takes only the chat with four starters and writes no icon,
 // which is the picture of a release from before starters took icons.
@@ -23,9 +24,12 @@ const STARTERS = [
   ["Ideen sammeln", "Sammle zehn Ideen zu diesem Thema:", "lightbulb"],
   ["Besprechung vorbereiten", "Bereite eine Tagesordnung für diese Besprechung vor:", "users"],
   ["Rechnung nachrechnen", "Rechne diese Aufstellung nach und nenne Abweichungen:", "calculator"],
-  ["Quelle finden", "Finde eine verlässliche Quelle für diese Aussage:", "search"],
-  ["Protokoll schreiben", "Schreib aus diesen Notizen ein Protokoll:", "clipboard-list"],
-  ["Text überarbeiten", "Überarbeite diesen Text, kürzer und klarer:", "pencil"]
+  ["Vertrag prüfen", "Prüfe diesen Vertrag auf fehlende Angaben:", "file-signature"],
+  ["Anfahrt beschreiben", "Beschreibe den Weg zu dieser Adresse:", "map-pin"],
+  ["Text überarbeiten", "Überarbeite diesen Text, kürzer und klarer:", "pencil"],
+  ["Angebote vergleichen", "Vergleiche diese beiden Angebote:", "percent"],
+  ["Ziel festlegen", "Hilf mir, ein Ziel für dieses Quartal festzulegen:", "target"],
+  ["Quelle finden", "Finde eine verlässliche Quelle für diese Aussage:", "search"]
 ] as const;
 
 const agentPath = (name: string) => `${apiBaseUrl}/api/v1/assets/agent/${name}`;
@@ -108,7 +112,7 @@ const shot = (page: Page, label: string) =>
 test.describe("pictures of an agent's starters", () => {
   test.skip(process.env.STARTER_ICON_SHOTS !== "1", "Runs only with STARTER_ICON_SHOTS=1.");
 
-  test("de: four and nine starters, at phone width, and the icon picker", async ({
+  test("de: four, nine and twelve starters, at phone width, and the icon picker", async ({
     page,
     instanceAgentsChange: _instanceAgentsChange
   }) => {
@@ -116,47 +120,59 @@ test.describe("pictures of an agent's starters", () => {
     const tag = randomUUID().slice(0, 8);
     const four = { name: `shots_four_${tag}`, title: `Büroassistenz ${tag.slice(0, 4)}` };
     const nine = { name: `shots_nine_${tag}`, title: `Büroassistenz neun ${tag.slice(0, 4)}` };
+    const twelve = { name: `shots_twelve_${tag}`, title: `Büroassistenz zwölf ${tag.slice(0, 4)}` };
     const wide = { width: 1280, height: 900 };
     const phone = { width: 390, height: 844 };
     await mkdir(SHOTS, { recursive: true });
     await signIn(page);
     await putAgent(page, four.name, four.title, 4);
     await putAgent(page, nine.name, nine.title, 9);
+    await putAgent(page, twelve.name, twelve.title, 12);
     try {
       for (const theme of ["light", "dark"] as const) {
         await emptyChat(page, four.title, theme, wide);
         await shot(page, `chat-4-${theme}`);
         if (process.env.STARTER_ICON_SHOTS_PLAIN === "1") continue;
 
-        await emptyChat(page, nine.title, theme, wide);
-        await shot(page, `chat-9-${theme}`);
-        await page.getByRole("button", { name: "Mehr", exact: true }).click();
-        await expect(page.getByRole("button", { name: /Text überarbeiten/u })).toBeVisible();
-        await shot(page, `chat-9-${theme}-more`);
+        for (const [label, size] of [
+          ["", wide],
+          ["-phone", phone]
+        ] as const) {
+          // Nine show whole.
+          await emptyChat(page, nine.title, theme, size);
+          await expect(page.getByRole("button", { name: /Text überarbeiten/u })).toBeVisible();
+          await expect(page.getByRole("button", { name: "Mehr", exact: true })).toHaveCount(0);
+          await shot(page, `chat-9${label}-${theme}`);
 
-        await emptyChat(page, nine.title, theme, phone);
-        await shot(page, `chat-9-phone-${theme}`);
-        await page.getByRole("button", { name: "Mehr", exact: true }).click();
-        await expect(page.getByRole("button", { name: /Text überarbeiten/u })).toBeVisible();
-        await shot(page, `chat-9-phone-${theme}-more`);
+          // Twelve show nine, and the rest after "Mehr".
+          await emptyChat(page, twelve.title, theme, size);
+          await expect(page.getByRole("button", { name: /Angebote vergleichen/u })).toHaveCount(0);
+          await shot(page, `chat-12${label}-${theme}`);
+          await page.getByRole("button", { name: "Mehr", exact: true }).click();
+          await expect(page.getByRole("button", { name: /Quelle finden/u })).toBeVisible();
+          await page.mouse.move(0, 0);
+          await shot(page, `chat-12${label}-${theme}-more`);
+        }
 
-        await open(page, `/build/agents/${four.name}`, theme, wide);
-        const picker = page.getByRole("button", { name: /^Symbol von Vorschlag 2:/u });
+        // Tall enough for the whole picker under its button.
+        await open(page, `/build/agents/${four.name}`, theme, { width: 1280, height: 1200 });
+        const picker = page.getByRole("button", { name: /^Symbol von Vorschlag 1:/u });
         await picker.scrollIntoViewIfNeeded();
-        await expect(picker).toHaveAccessibleName("Symbol von Vorschlag 2: E-Mail");
+        await expect(picker).toHaveAccessibleName("Symbol von Vorschlag 1: Kalender");
         await picker.click();
-        await expect(page.locator('[data-icon-option="mail"]')).toHaveAttribute(
+        await expect(page.locator('[data-icon-option="calendar"]')).toHaveAttribute(
           "aria-pressed",
           "true"
         );
         await shot(page, `agent-page-icon-picker-${theme}`);
         // Choosing another icon closes the grid and the button shows it.
-        await page.locator('[data-icon-option="calendar"]').click();
-        await expect(picker).toHaveAccessibleName("Symbol von Vorschlag 2: Kalender");
+        await page.locator('[data-icon-option="mail"]').click();
+        await expect(picker).toHaveAccessibleName("Symbol von Vorschlag 1: E-Mail");
       }
     } finally {
       await deleteAgent(page, four.name);
       await deleteAgent(page, nine.name);
+      await deleteAgent(page, twelve.name);
     }
   });
 });
