@@ -90,18 +90,41 @@ async function downloadIntoWorkspace(
   if (namedPath?.status === "failed") return namedPath.result;
   const workspace = await deps.workspaces.resolveWorkspaceHandle(context);
   if (!workspace) return failed("handler_failed", "Workspace tools require an active tool request");
+  const listFiles = () =>
+    deps.store.executionWorkspaces.listWorkspaceFiles({
+      clientInstanceId: context.clientInstanceId,
+      workspaceId: workspace.handle.id
+    });
+
+  // The file may take at most the room the workspace has left, so a file that cannot be kept is
+  // not read: a larger declared size is refused unread, a longer body is cut off and refused.
+  const before = await listFiles();
+  const otherBytes = before
+    .filter((existing) => existing.path !== namedPath?.value)
+    .reduce((total, existing) => total + existing.byteSize, 0);
+  const roomBytes = deps.limits.maxWorkspaceBytes - otherBytes;
+  if (roomBytes < 1) {
+    const full = checkWorkspaceRoom(deps, before, namedPath?.value ?? "", 1);
+    if (full.status === "failed") return full.result;
+  }
 
   let file;
   try {
     file = await deps.webDownload.download(
-      { url: input.url },
+      { url: input.url, maxBytes: roomBytes },
       { deadline: context.deadline, signal: context.signal }
     );
   } catch (error) {
     if (error instanceof WebFetchFailure) {
+      const noRoom = error.metadata.reason === "too_large" && error.metadata.maxBytes === roomBytes;
       return {
         status: error.resultStatus,
-        error: { code: error.code, message: error.message },
+        error: {
+          code: error.code,
+          message: noRoom
+            ? `The file is larger than the ${roomBytes} bytes the workspace has room for (maxWorkspaceBytes), so nothing was saved. Remove files that are no longer needed with workspace.exec, then call again.`
+            : error.message
+        },
         auditSummary: {
           action: WEB_DOWNLOAD_TOOL_NAME,
           ...hostSubject(error.subject),
@@ -112,20 +135,22 @@ async function downloadIntoWorkspace(
     throw error;
   }
 
+  const files = await listFiles();
+  // A name the server or the address gives never replaces a file, such as an imported
+  // attachment of the same name: it gets the next free name. A path the agent named does.
   const target =
     namedPath ??
     resolveTextFilePath(
-      withExtension(
-        workspacePathFromFilename(file.filename ?? filenameOf(file.finalUrl), "download"),
-        file.mediaType
+      freePath(
+        files,
+        withExtension(
+          workspacePathFromFilename(file.filename ?? filenameOf(file.finalUrl), "download"),
+          file.mediaType
+        )
       ),
       deps.limits
     );
   if (target.status === "failed") return target.result;
-  const files = await deps.store.executionWorkspaces.listWorkspaceFiles({
-    clientInstanceId: context.clientInstanceId,
-    workspaceId: workspace.handle.id
-  });
   const fits = checkPathFitsWorkspace(files, target.value);
   if (fits.status === "failed") return fits.result;
   const room = checkWorkspaceRoom(deps, files, target.value, file.bytes.byteLength);
@@ -135,7 +160,8 @@ async function downloadIntoWorkspace(
     workspace,
     path: target.value,
     bytes: file.bytes,
-    existing: files.find((existing) => existing.path === target.value),
+    // A replaced file keeps nothing of what it was, such as the upload it came from.
+    existing: undefined,
     mimeType: file.mediaType
   });
   const host = hostOf(file.finalUrl);
@@ -237,6 +263,21 @@ const EXTENSIONS: Readonly<Record<string, string>> = {
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx"
 };
+
+/** `path`, or the first of `name-1.ext`, `name-2.ext` ... that no file or folder takes. */
+function freePath(files: readonly { path: string }[], path: string): string {
+  const taken = (candidate: string) =>
+    files.some((file) => file.path === candidate || file.path.startsWith(`${candidate}/`));
+  if (!taken(path)) return path;
+  const name = path.split("/").at(-1) ?? path;
+  const dot = name.lastIndexOf(".");
+  const extension = dot > 0 ? name.slice(dot) : "";
+  const stem = path.slice(0, path.length - extension.length);
+  for (let next = 1; ; next += 1) {
+    const candidate = `${stem}-${next}${extension}`;
+    if (!taken(candidate)) return candidate;
+  }
+}
 
 /** A name with no extension gets the one of its media type, so the helpers recognise it. */
 function withExtension(path: string, mediaType: string): string {

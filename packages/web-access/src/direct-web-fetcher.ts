@@ -197,6 +197,8 @@ export interface WebDownloadRuntimeConfig {
 
 export interface WebDownloadInput {
   url: string;
+  /** A lower limit for this call than `maxBytes`, such as the room a workspace has left. */
+  maxBytes?: number;
 }
 
 export interface WebDownloadResult {
@@ -235,7 +237,7 @@ export class DirectWebDownloader {
     input: WebDownloadInput,
     context: Pick<ToolRuntimeContext, "deadline" | "signal"> = {}
   ): Promise<WebDownloadResult> {
-    const { maxBytes } = this.config;
+    const maxBytes = Math.max(0, Math.min(this.config.maxBytes, input.maxBytes ?? Infinity));
     const allowsMediaType = (type: string) => mediaTypeAllowed(this.config.contentTypes, type);
     const { url, response, mediaType, redirectCount } = await retrieveWebResponse(
       {
@@ -256,7 +258,7 @@ export class DirectWebDownloader {
     );
     if (response.truncatedByBytes || declaresMoreThan(response.headers, maxBytes)) {
       throw new WebFetchFailure({
-        message: `The file is larger than the limit of ${maxBytes} bytes (webAccess.download.maxBytes), so nothing was saved`,
+        message: `The file is larger than the limit of ${maxBytes} bytes, so nothing was saved`,
         code: "validation_failed",
         subject: url.toString(),
         metadata: {
@@ -576,7 +578,9 @@ export function nodeWebFetchHttpRequest(
     const req = request(requestOptions, (response) => {
       const status = response.statusCode ?? 0;
       if (isRedirectStatus(status)) {
-        response.resume();
+        // Only the Location header matters: the body is not drained, however long it is.
+        response.on("error", () => undefined);
+        response.destroy();
         resolve({
           status,
           statusText: response.statusMessage,

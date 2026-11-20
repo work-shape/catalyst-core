@@ -321,6 +321,68 @@ describe("web_download in the workspace", () => {
     expect(JSON.stringify(withCredentials.auditSummary)).not.toMatch(/pa55word|user|private/u);
   });
 
+  it("never replaces an imported attachment of the same name", async () => {
+    const attachment = Buffer.from("%PDF-1.7 the person's own report");
+    const { downloader: webDownload } = downloader({
+      "/files/report.pdf": {
+        headers: {
+          "content-type": "application/pdf",
+          "content-disposition": 'attachment; filename="report.pdf"'
+        },
+        body: PDF
+      }
+    });
+    const harness = await createWorkspaceHarness({
+      webDownload,
+      sourceFiles: { file_report: { filename: "report.pdf", bytes: attachment } }
+    });
+    const imported = await harness.runTool("workspace.import_files", {
+      files: [{ fileId: "file_report" }]
+    });
+    if (imported.status !== "success") throw new Error(JSON.stringify(imported));
+    expect(JSON.stringify(imported.output)).toContain("inputs/report.pdf");
+
+    for (const expected of ["inputs/report-1.pdf", "inputs/report-2.pdf"]) {
+      const result = await harness.runTool(WEB_DOWNLOAD_TOOL_NAME, {
+        url: "https://files.example.com/files/report.pdf"
+      });
+      if (result.status !== "success") throw new Error(JSON.stringify(result));
+      expect(jsonObject(result.output)).toMatchObject({ path: expected });
+    }
+    const workspace = await harness.store.executionWorkspaces.getExecutionWorkspaceForConversation({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id
+    });
+    if (!workspace) throw new Error("No workspace");
+    const files = await harness.store.executionWorkspaces.listWorkspaceFiles({
+      clientInstanceId: harness.clientInstanceId,
+      workspaceId: workspace.id
+    });
+    const original = files.find((file) => file.path === "inputs/report.pdf");
+    expect(Buffer.from(harness.objectStore.bytes(original?.objectKey ?? ""))).toEqual(attachment);
+    const downloaded = files.find((file) => file.path === "inputs/report-1.pdf");
+    expect(downloaded?.metadata).toEqual({ source: "web_download" });
+  });
+
+  it("does not read a file the workspace has no room for", async () => {
+    const { downloader: webDownload, bodiesRead } = downloader({
+      "/r.pdf": {
+        headers: { "content-type": "application/pdf", "content-length": String(PDF.byteLength) },
+        body: PDF
+      }
+    });
+    const harness = await createWorkspaceHarness({
+      webDownload,
+      limits: { maxWorkspaceBytes: 8 }
+    });
+    const result = await harness.runTool(WEB_DOWNLOAD_TOOL_NAME, {
+      url: "https://files.example.com/r.pdf"
+    });
+    if (result.status !== "failed") throw new Error("Expected a refusal");
+    expect(result.error.message).toContain("the 8 bytes the workspace has room for");
+    expect(bodiesRead).toEqual([]);
+  });
+
   it("refuses a file that would overfill the workspace and writes nothing", async () => {
     const { downloader: webDownload } = downloader({
       "/r.pdf": { headers: { "content-type": "application/pdf" }, body: PDF }
