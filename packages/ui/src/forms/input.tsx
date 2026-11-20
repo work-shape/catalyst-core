@@ -83,6 +83,12 @@ export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElemen
    * none of its own, and it grows to the composer's cap and scrolls from there.
    */
   variant?: TextareaVariant;
+  /**
+   * The field is as tall as its text, from one line: for a sentence that may run to two or
+   * three lines, which a one-line field would cut. Where the browser cannot size a field by
+   * its content, it keeps the height of its `rows`.
+   */
+  grows?: boolean;
   invalid?: boolean;
 }
 
@@ -90,6 +96,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   {
     className,
     variant = "plain",
+    grows = false,
     invalid,
     id,
     required,
@@ -108,6 +115,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
           ? "mt-0.5 max-h-(--layout-composer-max) min-h-8.5 min-w-0 resize-none bg-transparent px-2 pt-1 pb-1.5 text-sm leading-6 outline-none placeholder:text-muted-foreground"
           : ["flex min-h-16 px-3 py-2 placeholder:text-muted-foreground", fieldFrameClassName],
         variant === "code" && "font-mono text-code",
+        grows && variant !== "composer" && "field-sizing-content min-h-control-md resize-none",
         className
       )}
       {...props}
