@@ -65,6 +65,30 @@ export async function createPrivateConversationWith(input: {
   return conversation;
 }
 
+/**
+ * What the start page says of who reads the conversation its first send makes: the person
+ * alone because they went on privately after a refused build (E3), the person alone because
+ * the shared workspace starts conversations private, or nothing. A chat started in a project
+ * takes the project's audience, and one in the dock its workspace's.
+ */
+export function newConversationPrivacy(input: {
+  conversationOpen: boolean;
+  projectStart: boolean;
+  docked: boolean;
+  startsPrivate: boolean;
+  workspace: { kind: string; defaultConversationVisibility?: string | null } | undefined;
+}): NewConversationPrivacy | undefined {
+  if (input.conversationOpen || input.projectStart) return undefined;
+  if (input.startsPrivate && !input.docked) return "continued";
+  return input.workspace?.kind === "shared" &&
+    input.workspace.defaultConversationVisibility === "private"
+    ? "workspace"
+    : undefined;
+}
+
+/** Why the conversation a start page makes is the person's alone. */
+export type NewConversationPrivacy = "continued" | "workspace";
+
 interface WorkspaceConversationActionsInput {
   client: ApiClient;
   activeLocale: LocaleCode;

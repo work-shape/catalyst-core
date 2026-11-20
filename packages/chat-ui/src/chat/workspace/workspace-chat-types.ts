@@ -37,6 +37,7 @@ import { type WorkspaceDock } from "./use-workspace-dock";
 import type { WorkspaceView } from "./workspace-rail";
 import type { PlatformFailure } from "../platform-report/platform-report";
 import type { RunContinueOffer, TurnSender } from "./workspace-chat-state";
+import type { NewConversationPrivacy } from "./workspace-conversation-actions";
 
 export interface WorkspaceChatModelInput {
   administration: ChatShellAdministration | undefined;
@@ -265,8 +266,11 @@ export interface SelectedChatModel {
   /** `config.agents` is the active workspace's list rather than the instance view. */
   agentsWorkspaceScoped: boolean;
   collaborationWorkspaceId: string | undefined;
-  /** No conversation yet, and the Shared Workspace would start one as private. */
-  newConversationPrivate: boolean;
+  /**
+   * No conversation yet, and the one the first send makes is the person's alone: because they
+   * went on privately after a refused build, or because the Shared Workspace starts them so.
+   */
+  newConversationPrivate: NewConversationPrivacy | undefined;
   /** The quiet note at 80 percent of the person's own spend limit, until they dismiss it. */
   usageNote?: { text: string; dismiss(): void };
   /** The sentence of a spend limit that stops the person here, shown above the composer. */

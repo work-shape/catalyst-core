@@ -72,6 +72,8 @@ export const assistant = defineTranslations({
     loadingConversation: "Loading conversation",
     messagePlaceholder: "Message",
     newConversationPrivateHint: "New conversations in this workspace are private to you.",
+    newConversationContinuedPrivateHint:
+      "Private: only you see this conversation, so the agent can build here.",
     scrollToBottom: "Scroll to bottom",
     selectModel: "Select model",
     modelPickerModel: "Model",
@@ -197,6 +199,8 @@ export const assistant = defineTranslations({
     messagePlaceholder: "Nachricht",
     newConversationPrivateHint:
       "Neue Unterhaltungen in diesem Arbeitsbereich sind nur für dich sichtbar.",
+    newConversationContinuedPrivateHint:
+      "Privat: Nur du siehst diese Unterhaltung, deshalb kann der Agent hier bauen.",
     scrollToBottom: "Zum Ende scrollen",
     selectModel: "Modell auswählen",
     modelPickerModel: "Modell",

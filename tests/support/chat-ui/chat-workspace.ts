@@ -39,7 +39,10 @@ export {
   openConversationAbout
 } from "../../../packages/chat-ui/src/chat/workspace/open-conversation-about";
 export { UserMenu } from "../../../packages/chat-ui/src/chat/workspace/user-menu";
-export { createPrivateConversationWith } from "../../../packages/chat-ui/src/chat/workspace/workspace-conversation-actions";
+export {
+  createPrivateConversationWith,
+  newConversationPrivacy
+} from "../../../packages/chat-ui/src/chat/workspace/workspace-conversation-actions";
 export {
   activeAgentNameFor,
   composerAgentFor,

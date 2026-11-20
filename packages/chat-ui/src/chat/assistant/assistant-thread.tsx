@@ -18,6 +18,7 @@ import {
   StarterList
 } from "@work-shape/catalyst-ui";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
+import type { NewConversationPrivacy } from "../workspace/workspace-conversation-actions";
 import {
   agentChipDisplayFor,
   AgentSelector,
@@ -158,7 +159,8 @@ export function AssistantThread({
    * for it: the composer says so and offers a new conversation (MODEL-REGION-3).
    */
   onNewConversationForPersonalData?: () => void;
-  newConversationPrivate?: boolean;
+  /** The conversation the first send makes is the person's alone, and why. */
+  newConversationPrivate?: NewConversationPrivacy | undefined;
   /** What the open conversation is about, where it is about an asset. */
   subjectLine?: ReactNode;
   /**
@@ -437,7 +439,13 @@ export function AssistantThread({
                     data-testid="new-conversation-private-hint"
                   >
                     <Lock size={12} className="shrink-0" aria-hidden="true" />
-                    <span>{t("newConversationPrivateHint")}</span>
+                    <span>
+                      {t(
+                        newConversationPrivate === "continued"
+                          ? "newConversationContinuedPrivateHint"
+                          : "newConversationPrivateHint"
+                      )}
+                    </span>
                   </p>
                 ) : null}
                 <ProjectInstructionsNotice running={conversationRunning ?? false} />
