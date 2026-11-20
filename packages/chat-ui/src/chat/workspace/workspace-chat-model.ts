@@ -116,7 +116,10 @@ import {
 import { isConversationGone } from "../conversation/conversation-gone";
 import { platformFailureOfRunError } from "../platform-report/platform-report";
 import type { WorkspaceChatModel, WorkspaceChatModelInput } from "./workspace-chat-types";
-import { createWorkspaceConversationActions } from "./workspace-conversation-actions";
+import {
+  createWorkspaceConversationActions,
+  newConversationPrivacy
+} from "./workspace-conversation-actions";
 import { useWorkspaceDraft, useWorkspaceDraftController } from "./workspace-drafts";
 import { workspaceSendBlock } from "./workspace-send-block";
 import {
@@ -1323,13 +1326,13 @@ export function useWorkspaceChatModel({
       collaborationWorkspaceId: activeCollaborationWorkspaceId,
       usageNote: usageLimitReason === undefined ? usageNote : undefined,
       ...(usageLimitReason === undefined ? {} : { usageLimit: usageLimitReason }),
-      newConversationPrivate:
-        !selectedConversationId &&
-        // A chat started in a project takes the project's audience.
-        startProjectId === undefined &&
-        collaborationWorkspace.activeCollaborationWorkspace?.kind === "shared" &&
-        collaborationWorkspace.activeCollaborationWorkspace.defaultConversationVisibility ===
-          "private",
+      newConversationPrivate: newConversationPrivacy({
+        conversationOpen: selectedConversationId !== undefined,
+        projectStart: startProjectId !== undefined,
+        docked,
+        startsPrivate,
+        workspace: collaborationWorkspace.activeCollaborationWorkspace
+      }),
       selectedConversationId,
       selectedConversationRetainedUntil: selectedThread?.conversation.retainedUntil,
       selectedConversationSubject: selectedThread?.conversation.subject,
@@ -1431,6 +1434,8 @@ export function useWorkspaceChatModel({
       continuePrivately: async (prompt: string) => {
         try {
           continuePrivatelyWith(prompt);
+          // The request goes on with the open conversation's agent, not the start page's own.
+          if (activeAgentName !== undefined) setNewConversationAgentName(activeAgentName);
         } catch {
           setNotice(createTranslationContext(activeLocale).t("conversationPrivateStartFailed"));
         }
