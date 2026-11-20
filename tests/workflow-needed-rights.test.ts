@@ -240,10 +240,10 @@ describe("the rights a Workflow's account needs", () => {
   });
 
   it("names a right once that a trigger names by its asset's name and a step by its id", async () => {
-    const definition = manifest([
+    const base = manifest([
       step("pending", "knowledge.handbook.pending", { limit: { value: 10 } })
     ]);
-    definition.steps[0] = {
+    const start: WorkflowStep = {
       id: "start",
       name: "Start",
       type: "trigger",
@@ -256,6 +256,7 @@ describe("the rights a Workflow's account needs", () => {
         }
       ]
     };
+    const definition: WorkflowManifest = { ...base, steps: [start, ...base.steps.slice(1)] };
     const pending: OperationDefinition = {
       name: "knowledge.handbook.pending",
       effect: "reading",
