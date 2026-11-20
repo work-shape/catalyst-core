@@ -143,6 +143,9 @@ export const knowledge = defineTranslations({
     "knowledge.attentionMany": "{count} tables cannot be read. Agents do not answer from them.",
     "knowledge.attentionGeneral":
       "The tables cannot be read right now. Agents do not answer from them.",
+    "knowledge.attentionUnchecked":
+      "Not checked yet whether agents can read the tables. Check it under Status.",
+    "knowledge.tableStates": "Status of the tables",
     "knowledge.attentionShow": "Show status",
     "knowledge.advancedTablesHint": "Status and SQL test",
     "knowledge.testTitle": "SQL test",
@@ -512,6 +515,9 @@ export const knowledge = defineTranslations({
       "{count} Tabellen können nicht gelesen werden. Agenten antworten daraus nicht.",
     "knowledge.attentionGeneral":
       "Die Tabellen können gerade nicht gelesen werden. Agenten antworten daraus nicht.",
+    "knowledge.attentionUnchecked":
+      "Noch nicht geprüft, ob Agenten die Tabellen lesen können. Prüf es unter Status.",
+    "knowledge.tableStates": "Status der Tabellen",
     "knowledge.attentionShow": "Status ansehen",
     "knowledge.advancedTablesHint": "Status und SQL-Test",
     "knowledge.testTitle": "SQL-Test",

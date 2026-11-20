@@ -33,6 +33,7 @@ import { FieldRefusals } from "./asset-form-fields";
 import { countChangedFields } from "./asset-form-model";
 import type { BuildAssetEditorProps } from "./build-asset-kind";
 import { refusalsOf, type BuildWriteOutcome } from "./build-refusals";
+import { scrollToSection } from "./build-scroll";
 import { DataFlowList, useWorkflowPage } from "./data-flows";
 import { hasDataFlows, type DataFlowRole } from "./data-flows-model";
 import { ReadState } from "./data-store-read-state";
@@ -133,6 +134,11 @@ export function KnowledgeBaseEditor({
         ? saved
         : { ok: false, conflict: false, refusals: [{ field: "availability", message: refused }] };
     setSaving(false);
+    // A refusal of the source may be of the Data Store, which is chosen under Settings: they
+    // open, so the picker that mends it shows with the refusal beside it.
+    if (asset !== undefined && !documents && refusalsOf(answer, "source").length > 0) {
+      setSettingsOpen(true);
+    }
     state.setOutcome(answer);
     return answer;
   };
@@ -148,8 +154,13 @@ export function KnowledgeBaseEditor({
   const showStatus = () => {
     setSettingsOpen(true);
     setAdvancedOpen(true);
+    // Once both folds show: only the page's content is moved, to under its pinned head, and
+    // the focus goes to the heading of the status.
     window.requestAnimationFrame(() => {
-      document.getElementById("status")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      scrollToSection(document.body, "status");
+      const heading = document.querySelector<HTMLElement>("#status h2");
+      heading?.setAttribute("tabindex", "-1");
+      heading?.focus({ preventScroll: true });
     });
   };
   // A definition that names no methods searches by meaning and by words, as the instance reads it.
@@ -380,15 +391,19 @@ export function KnowledgeBaseEditor({
     label: t("knowledge.dataStore"),
     description: t("knowledge.dataStoreDescription"),
     body: (
-      <DataStoreChoice
-        source={source}
-        owner={frame.owner}
-        value={form.dataStore}
-        disabled={!canWrite}
-        onChange={(dataStore) =>
-          update({ dataStore, tables: dataStore === form.dataStore ? form.tables : [] })
-        }
-      />
+      <>
+        <DataStoreChoice
+          source={source}
+          owner={frame.owner}
+          value={form.dataStore}
+          disabled={!canWrite}
+          onChange={(dataStore) =>
+            update({ dataStore, tables: dataStore === form.dataStore ? form.tables : [] })
+          }
+        />
+        {/* A refusal of the source does not say whether it is of the store or of a table. */}
+        <FieldRefusals messages={refusalsOf(outcome, "source")} />
+      </>
     )
   };
   // Before its first publish the synced sources of one of documents stand as a section of
@@ -939,7 +954,10 @@ function TableChoice({
                       <Textarea
                         grows
                         rows={2}
-                        aria-label={t("knowledge.tableDescription", { table: label })}
+                        // Two tables may read alike: the table's own name tells them apart.
+                        aria-label={t("knowledge.tableDescription", {
+                          table: `${label} (${row.name})`
+                        })}
                         placeholder={t("knowledge.tableDescription", { table: label })}
                         value={row.described.description}
                         required

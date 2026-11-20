@@ -301,7 +301,10 @@ describe("Knowledge Bases in Build", () => {
     expect(main).toMatch(/<label[^>]*>Open Invoices<\/label>/u);
     expect(main).toContain(">open_invoices</code>");
     // The sentence about a row takes the lines it needs.
-    expect(main).toMatch(/<textarea[^>]*aria-label="What a row of Open Invoices is"/u);
+    // Its name for a screen reader holds the table's own name, which two tables never share.
+    expect(main).toMatch(
+      /<textarea[^>]*aria-label="What a row of Open Invoices \(open_invoices\) is"/u
+    );
     expect(main).not.toMatch(/<input[^>]*aria-label="What a row of/u);
     // The test in plain words comes first; nothing of SQL, the status or the store before the fold.
     expect(main).toContain("Ask something that is in the tables");
@@ -351,6 +354,18 @@ describe("Knowledge Bases in Build", () => {
       })
     );
     expect(unreachable).toContain("The tables cannot be read right now.");
+    // A published one never checked says so at the top, with the same way to the status.
+    const unchecked = mainOf(
+      render(knowledgeBase({ revision: 2, publishedRevision: 2 }), {
+        state: { ...ok, status: "unchecked" }
+      })
+    );
+    expect(unchecked).toContain("data-knowledge-attention");
+    expect(unchecked).toContain("Not checked yet whether agents can read the tables.");
+    expect(unchecked).toContain("Show status");
+    // The list of the states is not named as the list of the tables is.
+    expect(page).toMatch(/<ul[^>]*aria-label="Status of the tables"/u);
+    expect(page.split('aria-label="Tables"').length - 1).toBe(1);
   });
 
   it("offers the question only where the page has a chat, and names the agents that have it", () => {
