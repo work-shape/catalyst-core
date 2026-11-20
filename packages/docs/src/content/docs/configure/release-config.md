@@ -296,6 +296,32 @@ webAccess:
   search runs without the tool, and saving that agent is refused with "the model of this agent
   cannot search the web". There is no search provider run by the platform.
 - `webAccess.fetch` enables the `web_fetch` tool and bounds what one fetch may read.
+- `webAccess.download` enables the `web_download` tool: an agent saves one file from a public
+  address into its conversation's execution workspace and works on it there with the workspace
+  tools. It needs `executionWorkspaces.enabled` as well; without workspaces the tool is not
+  offered. It takes the same address checks as `web_fetch` (no localhost, private networks,
+  cloud metadata hosts, credentials in the address or compressed encodings), and adds:
+
+  ```yaml
+  webAccess:
+    enabled: true
+    download:
+      enabled: true
+      maxBytes: 26214400 # 25 MiB, the default; at most 100 MiB
+      timeoutMs: 60000
+      maxRedirects: 5
+      contentTypes: # the response's declared media type; type/subtype, type/* or */*
+        - application/pdf
+        - image/*
+        - text/csv
+  ```
+
+  A file above `maxBytes` is refused, not cut. Without `contentTypes` the default list takes
+  PDF, images, CSV, plain text, Markdown, JSON, XML, RTF, the Office and OpenDocument formats,
+  ZIP and `application/octet-stream`. The file stays in the workspace until the agent promotes a
+  result; the audit records the host, the media type and the size, never the address's path or
+  query, the file's name or its contents. After a call on a personal connection the tool leaves
+  the conversation like `web_fetch`.
 
 `webAccess.search.mode` and `webAccess.search.managedProvider` were removed. A config that
 still sets either is refused at startup with one message naming every such key; delete them.

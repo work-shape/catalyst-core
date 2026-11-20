@@ -58,6 +58,10 @@ export interface WebFetchHttpRequestInput {
   address: WebFetchResolvedAddress;
   maxBytes: number;
   signal: AbortSignal;
+  /** The Accept header. Without it, `web_fetch`'s preference for pages. */
+  accept?: string;
+  /** Whether to read the body of a final response. Without it, `web_fetch`'s rule. */
+  readsBody?: (status: number, headers: IncomingHttpHeaders) => boolean;
 }
 
 export interface WebFetchHttpResponse {
@@ -133,233 +137,391 @@ export class DirectWebFetcher {
     input: WebFetchInput,
     context: Pick<ToolRuntimeContext, "deadline" | "signal"> = {}
   ): Promise<WebFetchResult> {
-    const requestedUrl = input.url;
-    const operationAbort = createOperationAbort({
-      timeoutMs: this.config.timeoutMs,
-      deadline: context.deadline,
-      signal: context.signal
+    const { url, response, mediaType, contentType, redirectCount } = await retrieveWebResponse(
+      {
+        toolName: WEB_FETCH_TOOL_NAME,
+        url: input.url,
+        timeoutMs: this.config.timeoutMs,
+        maxRedirects: this.config.maxRedirects,
+        maxBytes: this.config.maxResponseBytes,
+        resolver: this.resolver,
+        request: this.request,
+        accept: WEB_FETCH_ACCEPT,
+        allowsMediaType: (type) => allowedContentTypes.has(type)
+      },
+      context
+    );
+    const extracted = extractWebPageText({
+      contentType: mediaType,
+      body: Buffer.from(response.body).toString("utf8")
     });
-    let currentUrl = requestedUrl;
-    let redirectCount = 0;
+    const maxCharacters = Math.min(
+      input.maxCharacters ?? this.config.maxTextCharacters,
+      this.config.maxTextCharacters
+    );
+    const text = extracted.text.slice(0, maxCharacters);
+    const truncated = response.truncatedByBytes || extracted.text.length > text.length;
+    const finalUrl = url.toString();
+    const contentHash = createHash("sha256").update(`${finalUrl}\n${text}`).digest("hex");
+    const source: WebSourceMetadata = {
+      id: `web_${contentHash.slice(0, 16)}`,
+      url: finalUrl,
+      ...(extracted.title ? { title: extracted.title } : {}),
+      provider: "direct",
+      retrievedAt: this.now().toISOString(),
+      contentHash
+    };
 
-    try {
-      for (;;) {
-        throwIfOperationAborted(operationAbort, currentUrl, redirectCount);
-        const target = await this.validateTarget(
-          currentUrl,
-          requestedUrl,
-          redirectCount,
-          operationAbort
-        );
-        throwIfOperationAborted(operationAbort, target.url.toString(), redirectCount);
-        const response = await this.requestTarget(
-          target.url,
-          target.addresses,
-          operationAbort.signal,
-          requestedUrl,
+    return {
+      finalUrl,
+      ...(extracted.title ? { title: extracted.title } : {}),
+      contentType: contentType || mediaType,
+      bytes: response.bytesRead,
+      text,
+      truncated,
+      source,
+      redirectCount
+    };
+  }
+}
+
+export const WEB_DOWNLOAD_TOOL_NAME = "web_download";
+
+export interface WebDownloadRuntimeConfig {
+  timeoutMs: number;
+  maxBytes: number;
+  maxRedirects: number;
+  /** Media types a response may declare: `type/subtype`, `type/*` or `*\/*`. */
+  contentTypes: readonly string[];
+}
+
+export interface WebDownloadInput {
+  url: string;
+}
+
+export interface WebDownloadResult {
+  finalUrl: string;
+  /** The media type the response declared, without its parameters, such as `application/pdf`. */
+  mediaType: string;
+  bytes: Uint8Array;
+  /** The name the response gave in Content-Disposition, if any. Never trusted as a path. */
+  filename?: string;
+  redirectCount: number;
+}
+
+export interface DirectWebDownloaderOptions {
+  config: WebDownloadRuntimeConfig;
+  resolver?: WebFetchAddressResolver;
+  request?: WebFetchHttpRequest;
+}
+
+/**
+ * Reads one whole file from a public address on `web_fetch`'s path: the same address checks
+ * before every hop, the same redirect and timeout handling, no compressed encodings. A file
+ * above `maxBytes` is refused, not cut, and its body is not read when the server says its size.
+ */
+export class DirectWebDownloader {
+  private readonly config: WebDownloadRuntimeConfig;
+  private readonly resolver?: WebFetchAddressResolver;
+  private readonly request: WebFetchHttpRequest;
+
+  constructor(options: DirectWebDownloaderOptions) {
+    this.config = options.config;
+    this.resolver = options.resolver;
+    this.request = options.request ?? nodeWebFetchHttpRequest;
+  }
+
+  async download(
+    input: WebDownloadInput,
+    context: Pick<ToolRuntimeContext, "deadline" | "signal"> = {}
+  ): Promise<WebDownloadResult> {
+    const { maxBytes } = this.config;
+    const allowsMediaType = (type: string) => mediaTypeAllowed(this.config.contentTypes, type);
+    const { url, response, mediaType, redirectCount } = await retrieveWebResponse(
+      {
+        toolName: WEB_DOWNLOAD_TOOL_NAME,
+        url: input.url,
+        timeoutMs: this.config.timeoutMs,
+        maxRedirects: this.config.maxRedirects,
+        maxBytes,
+        resolver: this.resolver,
+        request: this.request,
+        accept: "*/*",
+        allowsMediaType,
+        readsBody: (status, headers) =>
+          shouldReadResponseBody(status, headers, allowsMediaType) &&
+          !declaresMoreThan(headers, maxBytes)
+      },
+      context
+    );
+    if (response.truncatedByBytes || declaresMoreThan(response.headers, maxBytes)) {
+      throw new WebFetchFailure({
+        message: `The file is larger than the limit of ${maxBytes} bytes (webAccess.download.maxBytes), so nothing was saved`,
+        code: "validation_failed",
+        subject: url.toString(),
+        metadata: {
+          status: "failed",
+          reason: "too_large",
+          httpStatus: response.status,
+          contentType: mediaType,
+          maxBytes,
           redirectCount
-        );
-
-        if (isRedirectStatus(response.status)) {
-          const location = getHeader(response.headers, "location");
-          if (!location) {
-            throw new WebFetchFailure({
-              message: `Redirect response from '${target.url.toString()}' did not include a Location header`,
-              code: "handler_failed",
-              subject: target.url.toString(),
-              metadata: {
-                status: "failed",
-                reason: "missing_redirect_location",
-                httpStatus: response.status,
-                redirectCount
-              }
-            });
-          }
-          if (redirectCount >= this.config.maxRedirects) {
-            throw new WebFetchFailure({
-              message: `web_fetch exceeded redirect limit of ${this.config.maxRedirects}`,
-              code: "handler_failed",
-              subject: target.url.toString(),
-              metadata: {
-                status: "failed",
-                reason: "redirect_limit_exceeded",
-                httpStatus: response.status,
-                redirectCount
-              }
-            });
-          }
-
-          currentUrl = resolveRedirectUrl(location, target.url, requestedUrl, redirectCount);
-          redirectCount += 1;
-          continue;
         }
+      });
+    }
+    const filename = contentDispositionFilename(getHeader(response.headers, "content-disposition"));
+    return {
+      finalUrl: url.toString(),
+      mediaType,
+      bytes: response.body,
+      ...(filename ? { filename } : {}),
+      redirectCount
+    };
+  }
+}
 
-        const contentType = getHeader(response.headers, "content-type") ?? "";
-        const mediaType = parseMediaType(contentType);
-        if (response.status < 200 || response.status >= 300) {
+/** Whether a media type is one of `patterns`: exact, `type/*` or `*\/*`. */
+export function mediaTypeAllowed(patterns: readonly string[], mediaType: string): boolean {
+  const type = mediaType.trim().toLowerCase();
+  const slash = type.indexOf("/");
+  if (slash <= 0) {
+    return false;
+  }
+  const family = `${type.slice(0, slash)}/*`;
+  return patterns.some((pattern) => {
+    const wanted = pattern.trim().toLowerCase();
+    return wanted === "*/*" || wanted === type || wanted === family;
+  });
+}
+
+const WEB_FETCH_ACCEPT = "text/html,text/plain,application/xhtml+xml;q=0.9,*/*;q=0.1";
+
+interface RetrieveWebResponseInput {
+  toolName: string;
+  url: string;
+  timeoutMs: number;
+  maxRedirects: number;
+  maxBytes: number;
+  resolver?: WebFetchAddressResolver;
+  request: WebFetchHttpRequest;
+  accept: string;
+  allowsMediaType(mediaType: string): boolean;
+  readsBody?: WebFetchHttpRequestInput["readsBody"];
+}
+
+interface RetrievedWebResponse {
+  url: URL;
+  response: WebFetchHttpResponse;
+  contentType: string;
+  mediaType: string;
+  redirectCount: number;
+}
+
+/**
+ * The one path both web tools take to a response: every address, the first and each redirect,
+ * is checked before it is reached; a 2xx response with an identity encoding and an allowed media
+ * type comes back, anything else is a `WebFetchFailure`.
+ */
+async function retrieveWebResponse(
+  input: RetrieveWebResponseInput,
+  context: Pick<ToolRuntimeContext, "deadline" | "signal">
+): Promise<RetrievedWebResponse> {
+  const { toolName } = input;
+  const requestedUrl = input.url;
+  const operationAbort = createOperationAbort({
+    toolName,
+    timeoutMs: input.timeoutMs,
+    deadline: context.deadline,
+    signal: context.signal
+  });
+  let currentUrl = requestedUrl;
+  let redirectCount = 0;
+
+  try {
+    for (;;) {
+      throwIfOperationAborted(operationAbort, toolName, currentUrl, redirectCount);
+      const target = await validateTarget(input, currentUrl, redirectCount, operationAbort);
+      throwIfOperationAborted(operationAbort, toolName, target.url.toString(), redirectCount);
+      const response = await requestTarget(
+        input,
+        target.url,
+        target.addresses,
+        operationAbort.signal,
+        redirectCount
+      );
+
+      if (isRedirectStatus(response.status)) {
+        const location = getHeader(response.headers, "location");
+        if (!location) {
           throw new WebFetchFailure({
-            message: `web_fetch received HTTP ${response.status}`,
+            message: `Redirect response from '${target.url.toString()}' did not include a Location header`,
             code: "handler_failed",
             subject: target.url.toString(),
             metadata: {
               status: "failed",
-              reason: "http_error",
+              reason: "missing_redirect_location",
               httpStatus: response.status,
-              ...(contentType ? { contentType } : {}),
-              bytes: response.bytesRead,
               redirectCount
             }
           });
         }
-        const contentEncoding = getHeader(response.headers, "content-encoding")
-          ?.trim()
-          .toLowerCase();
-        if (contentEncoding && contentEncoding !== "identity") {
+        if (redirectCount >= input.maxRedirects) {
           throw new WebFetchFailure({
-            message: `Content encoding '${contentEncoding}' is not allowed for web_fetch`,
-            code: "validation_failed",
+            message: `${toolName} exceeded redirect limit of ${input.maxRedirects}`,
+            code: "handler_failed",
             subject: target.url.toString(),
             metadata: {
               status: "failed",
-              reason: "unsupported_content_encoding",
+              reason: "redirect_limit_exceeded",
               httpStatus: response.status,
-              contentEncoding,
-              bytes: response.bytesRead,
-              redirectCount
-            }
-          });
-        }
-        if (!mediaType || !allowedContentTypes.has(mediaType)) {
-          throw new WebFetchFailure({
-            message: contentType
-              ? `Content type '${contentType}' is not allowed for web_fetch`
-              : "Response did not include an allowed content type",
-            code: "validation_failed",
-            subject: target.url.toString(),
-            metadata: {
-              status: "failed",
-              reason: "unsupported_content_type",
-              httpStatus: response.status,
-              ...(contentType ? { contentType } : {}),
-              bytes: response.bytesRead,
               redirectCount
             }
           });
         }
 
-        const extracted = extractWebPageText({
-          contentType: mediaType,
-          body: Buffer.from(response.body).toString("utf8")
-        });
-        const maxCharacters = Math.min(
-          input.maxCharacters ?? this.config.maxTextCharacters,
-          this.config.maxTextCharacters
-        );
-        const text = extracted.text.slice(0, maxCharacters);
-        const truncated = response.truncatedByBytes || extracted.text.length > text.length;
-        const finalUrl = target.url.toString();
-        const contentHash = createHash("sha256").update(`${finalUrl}\n${text}`).digest("hex");
-        const source: WebSourceMetadata = {
-          id: `web_${contentHash.slice(0, 16)}`,
-          url: finalUrl,
-          ...(extracted.title ? { title: extracted.title } : {}),
-          provider: "direct",
-          retrievedAt: this.now().toISOString(),
-          contentHash
-        };
-
-        return {
-          finalUrl,
-          ...(extracted.title ? { title: extracted.title } : {}),
-          contentType: contentType || mediaType,
-          bytes: response.bytesRead,
-          text,
-          truncated,
-          source,
-          redirectCount
-        };
+        currentUrl = resolveRedirectUrl(location, target.url, requestedUrl, redirectCount);
+        redirectCount += 1;
+        continue;
       }
-    } catch (error) {
-      if (error instanceof WebFetchFailure) {
-        throw error;
-      }
-      throw mapWebFetchError(error, {
-        abortStatus: operationAbort.status(),
-        subject: currentUrl,
-        redirectCount
-      });
-    } finally {
-      operationAbort.cleanup();
-    }
-  }
 
-  private async validateTarget(
-    url: string,
-    requestedUrl: string,
-    redirectCount: number,
-    operationAbort: OperationAbort
-  ): Promise<Awaited<ReturnType<typeof validateWebFetchUrl>>> {
-    try {
-      return await raceWithOperationAbort(
-        validateWebFetchUrl(url, { resolver: this.resolver }),
-        operationAbort,
-        url,
-        redirectCount
-      );
-    } catch (error) {
-      if (error instanceof WebFetchSafetyError) {
+      const contentType = getHeader(response.headers, "content-type") ?? "";
+      const mediaType = parseMediaType(contentType);
+      if (response.status < 200 || response.status >= 300) {
         throw new WebFetchFailure({
-          message: error.message,
-          code: "validation_failed",
-          subject: url,
+          message: `${toolName} received HTTP ${response.status}`,
+          code: "handler_failed",
+          subject: target.url.toString(),
           metadata: {
             status: "failed",
-            reason: "blocked_url",
-            requestedUrl,
+            reason: "http_error",
+            httpStatus: response.status,
+            ...(contentType ? { contentType } : {}),
+            bytes: response.bytesRead,
             redirectCount
           }
         });
       }
+      const contentEncoding = getHeader(response.headers, "content-encoding")?.trim().toLowerCase();
+      if (contentEncoding && contentEncoding !== "identity") {
+        throw new WebFetchFailure({
+          message: `Content encoding '${contentEncoding}' is not allowed for ${toolName}`,
+          code: "validation_failed",
+          subject: target.url.toString(),
+          metadata: {
+            status: "failed",
+            reason: "unsupported_content_encoding",
+            httpStatus: response.status,
+            contentEncoding,
+            bytes: response.bytesRead,
+            redirectCount
+          }
+        });
+      }
+      if (!mediaType || !input.allowsMediaType(mediaType)) {
+        throw new WebFetchFailure({
+          message: contentType
+            ? `Content type '${contentType}' is not allowed for ${toolName}`
+            : "Response did not include an allowed content type",
+          code: "validation_failed",
+          subject: target.url.toString(),
+          metadata: {
+            status: "failed",
+            reason: "unsupported_content_type",
+            httpStatus: response.status,
+            ...(contentType ? { contentType } : {}),
+            bytes: response.bytesRead,
+            redirectCount
+          }
+        });
+      }
+
+      return { url: target.url, response, contentType, mediaType, redirectCount };
+    }
+  } catch (error) {
+    if (error instanceof WebFetchFailure) {
       throw error;
     }
-  }
-
-  private async requestTarget(
-    url: URL,
-    addresses: WebFetchResolvedAddress[],
-    signal: AbortSignal,
-    requestedUrl: string,
-    redirectCount: number
-  ): Promise<WebFetchHttpResponse> {
-    let lastError: unknown;
-    for (const address of addresses) {
-      try {
-        return await this.request({
-          url,
-          address,
-          maxBytes: this.config.maxResponseBytes,
-          signal
-        });
-      } catch (error) {
-        if (signal.aborted) {
-          throw error;
-        }
-        lastError = error;
-      }
-    }
-
-    throw new WebFetchFailure({
-      message: lastError instanceof Error ? lastError.message : "web_fetch network request failed",
-      code: "handler_failed",
-      subject: url.toString(),
-      metadata: {
-        status: "failed",
-        reason: "network_error",
-        requestedUrl,
-        redirectCount
-      }
+    throw mapWebFetchError(error, {
+      toolName,
+      abortStatus: operationAbort.status(),
+      subject: currentUrl,
+      redirectCount
     });
+  } finally {
+    operationAbort.cleanup();
   }
+}
+
+async function validateTarget(
+  input: RetrieveWebResponseInput,
+  url: string,
+  redirectCount: number,
+  operationAbort: OperationAbort
+): Promise<Awaited<ReturnType<typeof validateWebFetchUrl>>> {
+  try {
+    return await raceWithOperationAbort(
+      validateWebFetchUrl(url, { resolver: input.resolver }),
+      operationAbort,
+      input.toolName,
+      url,
+      redirectCount
+    );
+  } catch (error) {
+    if (error instanceof WebFetchSafetyError) {
+      throw new WebFetchFailure({
+        message: error.message,
+        code: "validation_failed",
+        subject: url,
+        metadata: {
+          status: "failed",
+          reason: "blocked_url",
+          requestedUrl: input.url,
+          redirectCount
+        }
+      });
+    }
+    throw error;
+  }
+}
+
+async function requestTarget(
+  input: RetrieveWebResponseInput,
+  url: URL,
+  addresses: WebFetchResolvedAddress[],
+  signal: AbortSignal,
+  redirectCount: number
+): Promise<WebFetchHttpResponse> {
+  let lastError: unknown;
+  for (const address of addresses) {
+    try {
+      return await input.request({
+        url,
+        address,
+        maxBytes: input.maxBytes,
+        signal,
+        accept: input.accept,
+        ...(input.readsBody ? { readsBody: input.readsBody } : {})
+      });
+    } catch (error) {
+      if (signal.aborted) {
+        throw error;
+      }
+      lastError = error;
+    }
+  }
+
+  throw new WebFetchFailure({
+    message:
+      lastError instanceof Error ? lastError.message : `${input.toolName} network request failed`,
+    code: "handler_failed",
+    subject: url.toString(),
+    metadata: {
+      status: "failed",
+      reason: "network_error",
+      requestedUrl: input.url,
+      redirectCount
+    }
+  });
 }
 
 export function nodeWebFetchHttpRequest(
@@ -371,7 +533,7 @@ export function nodeWebFetchHttpRequest(
     const hostname = normalizeHostname(input.url.hostname);
     const port = input.url.port ? Number.parseInt(input.url.port, 10) : isHttps ? 443 : 80;
     const headers: Record<string, string> = {
-      Accept: "text/html,text/plain,application/xhtml+xml;q=0.9,*/*;q=0.1",
+      Accept: input.accept ?? WEB_FETCH_ACCEPT,
       "Accept-Encoding": "identity",
       Host: input.url.host,
       "User-Agent": "VivdCatalystWebFetch/0.1"
@@ -425,7 +587,11 @@ export function nodeWebFetchHttpRequest(
         });
         return;
       }
-      if (!shouldReadResponseBody(status, response.headers)) {
+      const readsBody =
+        input.readsBody ??
+        ((bodyStatus: number, headers: IncomingHttpHeaders) =>
+          shouldReadResponseBody(bodyStatus, headers, (type) => allowedContentTypes.has(type)));
+      if (!readsBody(status, response.headers)) {
         response.on("error", () => undefined);
         response.destroy();
         resolve({
@@ -495,6 +661,7 @@ interface OperationAbort {
 }
 
 function createOperationAbort(input: {
+  toolName: string;
   timeoutMs: number;
   deadline?: Date;
   signal?: AbortSignal;
@@ -527,7 +694,7 @@ function createOperationAbort(input: {
   const timeoutDelay = timeoutAt - now;
   const timeout = Number.isFinite(timeoutDelay)
     ? setTimeout(
-        () => abort("timed_out", new Error("web_fetch timed out")),
+        () => abort("timed_out", new Error(`${input.toolName} timed out`)),
         Math.max(0, timeoutDelay)
       )
     : undefined;
@@ -548,6 +715,7 @@ function createOperationAbort(input: {
 
 function throwIfOperationAborted(
   operationAbort: OperationAbort,
+  toolName: string,
   subject: string,
   redirectCount: number
 ): void {
@@ -556,7 +724,7 @@ function throwIfOperationAborted(
     return;
   }
   throw new WebFetchFailure({
-    message: abortStatus === "timed_out" ? "web_fetch timed out" : "web_fetch was cancelled",
+    message: abortStatus === "timed_out" ? `${toolName} timed out` : `${toolName} was cancelled`,
     resultStatus: abortStatus,
     code: abortStatus === "timed_out" ? "timed_out" : "cancelled",
     subject,
@@ -570,17 +738,18 @@ function throwIfOperationAborted(
 function raceWithOperationAbort<T>(
   promise: Promise<T>,
   operationAbort: OperationAbort,
+  toolName: string,
   subject: string,
   redirectCount: number
 ): Promise<T> {
   if (operationAbort.signal.aborted) {
-    throwIfOperationAborted(operationAbort, subject, redirectCount);
+    throwIfOperationAborted(operationAbort, toolName, subject, redirectCount);
   }
 
   return new Promise((resolve, reject) => {
     const onAbort = () => {
       try {
-        throwIfOperationAborted(operationAbort, subject, redirectCount);
+        throwIfOperationAborted(operationAbort, toolName, subject, redirectCount);
       } catch (error) {
         reject(error);
       }
@@ -602,6 +771,7 @@ function raceWithOperationAbort<T>(
 function mapWebFetchError(
   error: unknown,
   input: {
+    toolName: string;
     abortStatus?: "cancelled" | "timed_out";
     subject: string;
     redirectCount: number;
@@ -610,7 +780,9 @@ function mapWebFetchError(
   if (input.abortStatus) {
     return new WebFetchFailure({
       message:
-        input.abortStatus === "timed_out" ? "web_fetch timed out" : "web_fetch was cancelled",
+        input.abortStatus === "timed_out"
+          ? `${input.toolName} timed out`
+          : `${input.toolName} was cancelled`,
       resultStatus: input.abortStatus,
       code: input.abortStatus === "timed_out" ? "timed_out" : "cancelled",
       subject: input.subject,
@@ -621,7 +793,7 @@ function mapWebFetchError(
     });
   }
   return new WebFetchFailure({
-    message: error instanceof Error ? error.message : "web_fetch failed",
+    message: error instanceof Error ? error.message : `${input.toolName} failed`,
     code: "handler_failed",
     subject: input.subject,
     metadata: {
@@ -663,7 +835,11 @@ function parseMediaType(contentType: string): string | undefined {
   return contentType.split(";")[0]?.trim().toLowerCase() || undefined;
 }
 
-function shouldReadResponseBody(status: number, headers: IncomingHttpHeaders): boolean {
+function shouldReadResponseBody(
+  status: number,
+  headers: IncomingHttpHeaders,
+  allowsMediaType: (mediaType: string) => boolean
+): boolean {
   if (status < 200 || status >= 300) {
     return false;
   }
@@ -672,7 +848,41 @@ function shouldReadResponseBody(status: number, headers: IncomingHttpHeaders): b
     return false;
   }
   const mediaType = parseMediaType(getHeader(headers, "content-type") ?? "");
-  return Boolean(mediaType && allowedContentTypes.has(mediaType));
+  return Boolean(mediaType && allowsMediaType(mediaType));
+}
+
+/** Whether the response says in Content-Length that its body has more than `maxBytes`. */
+function declaresMoreThan(headers: IncomingHttpHeaders, maxBytes: number): boolean {
+  const declared = getHeader(headers, "content-length")?.trim();
+  if (!declared || !/^\d+$/u.test(declared)) {
+    return false;
+  }
+  return Number(declared) > maxBytes;
+}
+
+/**
+ * The file name of a Content-Disposition header: `filename*` (RFC 5987) first, then
+ * `filename`. Only the last path segment is kept; the caller makes it a safe workspace name.
+ */
+export function contentDispositionFilename(header: string | undefined): string | undefined {
+  if (!header) {
+    return undefined;
+  }
+  const extended = /filename\*\s*=\s*([^']*)'[^']*'([^;]+)/iu.exec(header);
+  let name: string | undefined;
+  if (extended?.[2]) {
+    try {
+      name = decodeURIComponent(extended[2].trim().replace(/^"|"$/gu, ""));
+    } catch {
+      name = undefined;
+    }
+  }
+  if (!name) {
+    const plain = /filename\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([^;]+))/iu.exec(header);
+    name = (plain?.[1]?.replace(/\\(.)/gu, "$1") ?? plain?.[2])?.trim();
+  }
+  const lastSegment = name?.split(/[\\/]/u).at(-1)?.trim();
+  return lastSegment || undefined;
 }
 
 function getHeader(headers: IncomingHttpHeaders, name: string): string | undefined {

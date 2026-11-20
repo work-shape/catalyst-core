@@ -182,7 +182,7 @@ describe("the tools the agent page is told of", () => {
     const config = createTestConfig({
       executionWorkspaces: { enabled: true },
       workspaceObjectRoot,
-      webAccess: { enabled: true, fetch: { enabled: true } }
+      webAccess: { enabled: true, fetch: { enabled: true }, download: { enabled: true } }
     });
     config.administration.agentConfiguration.agentSkillChanges.enabled = true;
     config.modules.apps = { enabled: true };
@@ -209,6 +209,7 @@ describe("the tools the agent page is told of", () => {
           "workspace.exec",
           "structured_data.publish",
           "web_fetch",
+          "web_download",
           "read_skill",
           "propose_skill_change",
           "platform.assets.put",

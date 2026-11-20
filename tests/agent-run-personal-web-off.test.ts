@@ -24,6 +24,7 @@ import {
 } from "@work-shape/catalyst-model-provider";
 import { ToolRegistry, createDecidedToolCallRunner } from "@work-shape/catalyst-tool-execution";
 import { createAuditingEventEmitter } from "@work-shape/catalyst-server";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { createWebFetchTool, DirectWebFetcher } from "@work-shape/catalyst-web-access";
 import {
   createRecordingGovernance,
@@ -48,14 +49,21 @@ const webAccess: WebAccessConfig = {
     maxResponseBytes: 1024,
     maxTextCharacters: 1024,
     maxRedirects: 0
+  },
+  download: {
+    enabled: false,
+    timeoutMs: 1000,
+    maxBytes: 1024,
+    maxRedirects: 0,
+    contentTypes: ["application/pdf"]
   }
 };
 const call = (toolName: string, toolCallId = toolName): ModelToolCall => ({
   toolName,
   toolCallId,
-  input: toolName === "web_fetch" ? { url: "https://example.test/?private=mail" } : {}
+  input: toolName.startsWith("web_") ? { url: "https://example.test/?private=mail" } : {}
 });
-const allTools = ["web_fetch", PERSONAL, SHARED, "web_search"];
+const allTools = ["web_fetch", "web_download", PERSONAL, SHARED, "web_search"];
 const privateTools = [PERSONAL, SHARED];
 
 describe("CS-9c personal data switches web tools off", () => {
@@ -97,8 +105,20 @@ describe("CS-9c personal data switches web tools off", () => {
     });
     const fetcher = new DirectWebFetcher({ config: webAccess.fetch });
     const fetch = vi.spyOn(fetcher, "fetch").mockRejectedValue(new Error("Unexpected fetch"));
+    // web_download leaves with web_fetch: it reaches the web too, and an address carries data.
+    const download = vi.fn(() => toolSuccess({}));
     const registry = new ToolRegistry({
-      tools: [createWebFetchTool({ config: webAccess.fetch, fetcher })]
+      tools: [
+        createWebFetchTool({ config: webAccess.fetch, fetcher }),
+        defineTool({
+          name: "web_download",
+          effect: "changing",
+          permission: { mode: "allow" },
+          description: "Download a file into the workspace.",
+          inputSchema: z.object({ url: z.string() }),
+          execute: download
+        })
+      ]
     });
     const webRunner = createTestToolRunner({ registry, getAgentToolNames: () => allTools });
     let personalResult: ToolExecutionResult = { status: "success", output: { mail: "private" } };
@@ -331,6 +351,7 @@ describe("CS-9c personal data switches web tools off", () => {
       run,
       mark,
       fetch,
+      download,
       runTool,
       runDecidedTool,
       pauseFetch() {
@@ -396,6 +417,17 @@ describe("CS-9c personal data switches web tools off", () => {
       );
     }
   );
+
+  it("refuses a scripted web_download after a personal call without downloading", async () => {
+    const f = await fixture();
+    const result = await f.run([[call(PERSONAL)], [call("web_download")], []]);
+    expect(f.download).not.toHaveBeenCalled();
+    expect(f.runTool.mock.calls.map(([request]) => request.toolName)).toEqual([PERSONAL]);
+    expect(result.events.find((event) => event.type === "tool_call_failed")).toMatchObject({
+      toolName: "web_download",
+      result: { status: "failed", error: { code: "not_allowed", message: REFUSAL } }
+    });
+  });
 
   it("refuses web_fetch from the first step of a marked conversation", async () => {
     const f = await fixture();

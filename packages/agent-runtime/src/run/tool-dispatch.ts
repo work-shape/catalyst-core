@@ -1,4 +1,4 @@
-import { WEB_FETCH_TOOL_NAME } from "@work-shape/catalyst-web-access";
+import { WEB_DOWNLOAD_TOOL_NAME, WEB_FETCH_TOOL_NAME } from "@work-shape/catalyst-web-access";
 import {
   ASK_QUESTION_TOOL_NAME,
   DATA_STORE_USE_TOOL_NAME,
@@ -205,7 +205,7 @@ export class ToolDispatch {
     state: RunState,
     input: StartAgentRunInput
   ): Promise<ToolExecutionError | undefined> {
-    return toolName === WEB_FETCH_TOOL_NAME &&
+    return (toolName === WEB_FETCH_TOOL_NAME || toolName === WEB_DOWNLOAD_TOOL_NAME) &&
       (await this.modelInput.webAccessOff(runId, state, input))
       ? {
           code: "not_allowed",
