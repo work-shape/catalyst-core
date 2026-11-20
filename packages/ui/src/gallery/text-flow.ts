@@ -40,6 +40,8 @@ export interface FlowGalleryText {
   flowHandleStates: string;
   iconsGeneric: string;
   iconsFallback: string;
+  iconTileTints: string;
+  starterIconDefault: string;
   iconsFamilies: string;
   iconsFileTypes: string;
   iconsFileSizes: string;
@@ -160,6 +162,8 @@ export const flowGalleryText: Record<"en" | "de", FlowGalleryText> = {
     iconsGeneric: "The generic icons",
     iconsFileTypes: "The file types, and the neutral page for a type without an icon",
     iconsFileSizes: "As large as in a chip, in a list row and on a starter",
+    iconTileTints: "Tinted: one hue per kind, never a state",
+    starterIconDefault: "No icon chosen: the neutral speech bubble; and the small size",
     iconsFallback: "An unknown key shows its fallback, a registered one its own icon",
     flowControlsFull: "With the search field and tidy",
     flowControlsNarrow: "Under 600 px: zoom and fit",
@@ -280,6 +284,8 @@ export const flowGalleryText: Record<"en" | "de", FlowGalleryText> = {
     iconsGeneric: "Die generischen Symbole",
     iconsFileTypes: "Die Dateitypen und die neutrale Seite für einen Typ ohne eigenes Symbol",
     iconsFileSizes: "So groß wie in einem Chip, in einer Listenzeile und auf einem Einstieg",
+    iconTileTints: "Getönt: ein Farbton je Art, nie ein Zustand",
+    starterIconDefault: "Kein Symbol gewählt: die neutrale Sprechblase; und die kleine Größe",
     iconsFallback:
       "Ein unbekannter Schlüssel zeigt seinen Ersatz, ein registrierter sein eigenes Symbol",
     flowControlsFull: "Mit Suchfeld und Aufräumen",

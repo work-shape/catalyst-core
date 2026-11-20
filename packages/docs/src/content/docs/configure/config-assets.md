@@ -161,7 +161,7 @@ starters:
 - `title` and the optional `hint` are one line of at most 60 characters each. `prompt` is the text that fills the composer when the starter is chosen. Nothing is sent until the person sends it. Each of the three is one text or one text per language (`en`, `de`).
 - `tools` is optional. A starter shows only for an agent that holds every tool it names, so it never offers what the agent cannot do.
 - The chat shows at most twelve suggestions for an agent. The agent's own `initialPrompts` come first, and the skills' starters fill the places left, the skills in the order the agent lists them. An agent with twelve prompts of its own shows no skill starters.
-- Up to four suggestions look the same in one list: an icon, the title, and the prompt or hint as the line under it. More than four stand as short cards with the icon and the title only, in two columns and in three where the chat is wide. After the first six, **More** (German: **Mehr**) shows the rest.
+- Up to four suggestions look the same in one list: an icon, the title, and the prompt or hint as the line under it. More than four stand as short cards with the icon and the title only, in two columns and in three where the chat is wide. After the first nine, **More** (German: **Mehr**) shows the rest.
 - One of the agent's own `initialPrompts` may name an `icon`. See [the agent file](/configure/release-config/) for the names.
 
 The server URL can come from a named `catalyst.yaml` instance or directly from `--instance https://catalyst.example.com`. The CLI signs in one of two ways:

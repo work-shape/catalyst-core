@@ -99,6 +99,12 @@ export const THEME_TOKEN_NAMES = [
   "--file-slides",
   "--file-pdf",
   "--file-foreground",
+  "--tint-blue",
+  "--tint-green",
+  "--tint-amber",
+  "--tint-violet",
+  "--tint-teal",
+  "--tint-rose",
   "--border",
   "--input",
   "--input-strong",
@@ -138,6 +144,13 @@ interface ModeConstants {
    * page, the sidebar and a raised surface of the base theme. The last is not the destructive red.
    */
   levels: LevelColors;
+  /**
+   * Six hues for a tinted tile, which tells kinds of one thing apart, such as the families of
+   * the starter icons. The hue is the icon's colour, and the tile's fill is the hue at 12% over
+   * the surface. Each holds 3:1 against the page, the sidebar and a raised surface of the base
+   * theme. They are fixed: no instance theme tints them, and none of them says a state.
+   */
+  tints: { blue: string; green: string; amber: string; violet: string; teal: string; rose: string };
   /** The page colours of the file-type icons. They are fixed: no instance theme tints them. */
   files: { sheet: string; document: string; slides: string; pdf: string; foreground: string };
   shadowControl: string;
@@ -161,6 +174,14 @@ const MODE_CONSTANTS: Record<ThemeMode, ModeConstants> = {
       pdf: "#c8322b",
       foreground: "#ffffff"
     },
+    tints: {
+      blue: "#2f67c7",
+      green: "#23804f",
+      amber: "#a8650c",
+      violet: "#7350cf",
+      teal: "#117f86",
+      rose: "#c0396c"
+    },
     shadowControl: "inset 0 1px 0 rgb(255 255 255 / 0.4), 0 1px 2px rgb(0 0 0 / 0.05)",
     shadowRaised: "0 1px 2px rgb(0 0 0 / 0.04), 0 2px 12px rgb(0 0 0 / 0.06)",
     shadowOverlay: "0 1px 3px rgb(0 0 0 / 0.06), 0 8px 24px rgb(0 0 0 / 0.10)",
@@ -181,6 +202,14 @@ const MODE_CONSTANTS: Record<ThemeMode, ModeConstants> = {
       slides: "#dc6328",
       pdf: "#d6453d",
       foreground: "#ffffff"
+    },
+    tints: {
+      blue: "#7eaaf2",
+      green: "#62c690",
+      amber: "#e8aa4e",
+      violet: "#ac98f3",
+      teal: "#52c8ce",
+      rose: "#f088ae"
     },
     shadowControl: "inset 0 1px 0 rgb(255 255 255 / 0.07), 0 1px 2px rgb(0 0 0 / 0.3)",
     shadowRaised: "0 1px 2px rgb(0 0 0 / 0.4)",
@@ -266,6 +295,12 @@ export function createThemeTokens(inputs: ThemeInputs, mode: ThemeMode): ThemeTo
     "--file-slides": constants.files.slides,
     "--file-pdf": constants.files.pdf,
     "--file-foreground": constants.files.foreground,
+    "--tint-blue": constants.tints.blue,
+    "--tint-green": constants.tints.green,
+    "--tint-amber": constants.tints.amber,
+    "--tint-violet": constants.tints.violet,
+    "--tint-teal": constants.tints.teal,
+    "--tint-rose": constants.tints.rose,
     "--border": borderColor,
     "--input": mix(textColor, 12, borderColor),
     "--input-strong": over(mutedTextColor, 70),

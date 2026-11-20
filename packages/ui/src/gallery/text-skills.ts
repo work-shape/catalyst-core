@@ -87,7 +87,7 @@ export const skillsGalleryText: Record<"en" | "de", SkillsGalleryText> = {
     starterPdfHint: "Into a table",
     starterGuide: "Ask how this platform works",
     starterGuideHint: "Agents, skills and Connections",
-    starterMany: "More than four: short cards, the first six, then More",
+    starterMany: "More than four: short cards, the first nine, then More",
     starterManyTitles: [
       "Draft a letter",
       "Summarise a document",
@@ -97,7 +97,10 @@ export const skillsGalleryText: Record<"en" | "de", SkillsGalleryText> = {
       "Find a source",
       "Prepare a meeting",
       "Collect ideas",
-      "Write up the minutes"
+      "Write up the minutes",
+      "Compare two offers",
+      "Set a goal",
+      "Explain a term"
     ],
     starterMore: "More",
     starterFewer: "Fewer",
@@ -153,7 +156,7 @@ export const skillsGalleryText: Record<"en" | "de", SkillsGalleryText> = {
     starterPdfHint: "In eine Tabelle",
     starterGuide: "Fragen, wie die Plattform funktioniert",
     starterGuideHint: "Agenten, Skills und Connections",
-    starterMany: "Mehr als vier: kurze Karten, die ersten sechs, dann Mehr",
+    starterMany: "Mehr als vier: kurze Karten, die ersten neun, dann Mehr",
     starterManyTitles: [
       "Brief entwerfen",
       "Dokument zusammenfassen",
@@ -163,7 +166,10 @@ export const skillsGalleryText: Record<"en" | "de", SkillsGalleryText> = {
       "Quelle finden",
       "Besprechung vorbereiten",
       "Ideen sammeln",
-      "Protokoll schreiben"
+      "Protokoll schreiben",
+      "Zwei Angebote vergleichen",
+      "Ziel festlegen",
+      "Begriff erklären"
     ],
     starterMore: "Mehr",
     starterFewer: "Weniger",
