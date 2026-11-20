@@ -26,21 +26,28 @@ export interface SettingsRowProps extends Omit<HTMLAttributes<HTMLDivElement>, "
   /** What is wrong with the value. It takes the description's place and is announced. */
   error?: ReactNode;
   /**
+   * A Switch before the label, so it sits with its text however wide the row is. The label
+   * names it; a control at the far end then names itself.
+   */
+  leading?: ReactNode;
+  /**
    * The control at the far end of the row: a Switch, a Select, a button. The first library
    * control takes the label; a second one beside it names itself.
    */
-  children: ReactNode;
+  children?: ReactNode;
 }
 
 /**
  * One setting in one row: its label and one line about it at the start, its control at the far
  * end, on the same line, so the two read as one. Where the row is too narrow for both, the
- * control goes under the text.
+ * control goes under the text. A Switch can stand before the label instead (`leading`), where
+ * the row is wide and the label short.
  */
 export function SettingsRow({
   label,
   description,
   error,
+  leading,
   className,
   children,
   ...props
@@ -68,21 +75,31 @@ export function SettingsRow({
         )}
         {...props}
       >
-        <div className="grid min-w-48 flex-1 gap-0.5">
-          <label htmlFor={id} className="text-label">
-            {label}
-          </label>
-          {hasError ? (
-            <p id={messageId} role="alert" className="text-caption text-destructive">
-              {error}
-            </p>
-          ) : hasMessage ? (
-            <p id={messageId} className="text-caption text-muted-foreground">
-              {description}
-            </p>
+        <div className="flex min-w-48 flex-1 items-start gap-3">
+          {isShown(leading) ? (
+            // Level with the label's line, however many lines the text under it takes.
+            <div data-slot="settings-row-leading" className="flex h-5 shrink-0 items-center">
+              {leading}
+            </div>
           ) : null}
+          <div className="grid min-w-0 flex-1 gap-0.5">
+            <label htmlFor={id} className="text-label">
+              {label}
+            </label>
+            {hasError ? (
+              <p id={messageId} role="alert" className="text-caption text-destructive">
+                {error}
+              </p>
+            ) : hasMessage ? (
+              <p id={messageId} className="text-caption text-muted-foreground">
+                {description}
+              </p>
+            ) : null}
+          </div>
         </div>
-        <div className="flex min-w-0 shrink-0 items-center gap-3">{children}</div>
+        {isShown(children) ? (
+          <div className="flex min-w-0 shrink-0 items-center gap-3">{children}</div>
+        ) : null}
       </div>
     </FieldControlContext>
   );
