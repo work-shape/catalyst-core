@@ -62,7 +62,6 @@ export const agentKind: BuildAssetKind = {
   kind: AGENT_ASSET_KIND,
   path: AGENTS_BUILD_PATH,
   label: "build.kindAgents",
-  overviewText: "build.purposeAgents",
   searchLabel: "build.agentsSearch",
   newLabel: "configNewAgent",
   titleLabel: "configDisplayName",

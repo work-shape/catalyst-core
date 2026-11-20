@@ -1,4 +1,4 @@
-import { FolderInput, LayoutList, Plus, Search, SearchX, Terminal, Trash2 } from "lucide-react";
+import { FolderInput, Plus, Search, SearchX, Terminal, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import {
   Avatar,
@@ -49,7 +49,6 @@ import { BuildCreateDialog, emptyAssetStart } from "./build-create-dialog";
 import {
   clearBuildCreateDialogRequest,
   clearBuildStartRequest,
-  requestBuildCreateDialog,
   requestedBuildStart,
   useBuildCreateDialogRequest
 } from "./build-create-request";
@@ -73,7 +72,6 @@ import { AssetPlaceLine, AssetPlacesProvider, assetPlace } from "./asset-place";
 import { scrollPageToTop } from "./build-scroll";
 import { BUILT_WITH_AGENT, BuildListEmpty } from "./build-list-empty";
 import { BuildWithAgentDialog } from "../build-with-agent-dialog";
-import { BUILD_OVERVIEW_ID, BuildOverview, KindMark } from "./build-overview";
 import { CAPABILITIES_BUILD_PATH, CapabilitiesPage } from "./capabilities-page";
 
 /** The commands the CLI entry names, in the order a person runs them. */
@@ -85,10 +83,10 @@ type ListView = BuildListFilter;
 const firstListView: ListView = { text: "" };
 
 /**
- * The Build area: an overview of the kinds, one list per kind and one page per asset, each with
- * an address. The frame owns the kind rail, the list with search and pages, the dialog that
- * starts an asset, the way back, History, the delete, the answer to a conflict and every state;
- * what a kind is comes from its registry entry, and what the instance holds from `source`.
+ * The Build area: one list per kind and one page per asset, each with an address. The frame
+ * owns the kind rail, the list with search and pages, the dialog that starts an asset, the way
+ * back, History, the delete, the answer to a conflict and every state; what a kind is comes
+ * from its registry entry, and what the instance holds from `source`.
  */
 export function BuildFrame(props: {
   source: BuildSource;
@@ -118,10 +116,6 @@ function BuildFrameBody({
   const place = onCapabilities ? undefined : resolveBuildPlace(kinds, location);
   const placePath = place?.kind.entry.path;
   const corrected = place?.corrected ?? false;
-  // Studio's own address shows the overview, and so does one that names a kind the reader has
-  // no item for: that address is corrected to Studio's own.
-  const onOverview = !onCapabilities && place === undefined && kinds.length > 0;
-  const strayAddress = onOverview && location.kindPath !== undefined;
   // The chat builds where Studio is set: a conversation it starts here is made in that owner,
   // and the empty dock names it.
   const offeredScope = place === undefined ? undefined : source.scopeOf?.(place.kind.entry.kind);
@@ -196,11 +190,6 @@ function BuildFrameBody({
       openRef.current({ kindPath: placePath }, { replace: true });
     }
   }, [corrected, placePath]);
-  useEffect(() => {
-    if (strayAddress) {
-      openRef.current({}, { replace: true });
-    }
-  }, [strayAddress]);
 
   // An editor with unsaved changes is not left without a question. The question is one promise:
   // the back button, the router and a second attempt while it is open all wait for one answer.
@@ -259,8 +248,7 @@ function BuildFrameBody({
   // An asset page tells when its heading stands: it is read after the frame rendered.
   const [shownCount, setShownCount] = useState(0);
   const pageShown = useCallback(() => setShownCount((count) => count + 1), []);
-  // The overview has a key of its own: from one of its rows the focus moves to the list's heading.
-  const focusKey = creating ? "new" : onOverview ? "overview" : (place?.name ?? "");
+  const focusKey = creating ? "new" : (place?.name ?? "");
   const focusedKey = useRef(focusKey);
   useEffect(() => {
     if (focusedKey.current === focusKey) {
@@ -284,24 +272,13 @@ function BuildFrameBody({
     />
   ) : null;
 
-  // "Übersicht" first, then the kinds, and below them "Fähigkeiten", which shows what the
-  // kinds' agents can be given.
+  // The kinds, and below them "Fähigkeiten", which shows what the kinds' agents can be given.
   const rail = (value: string) =>
     kinds.length === 0 ? undefined : (
       <SubRail
         title={t("nav.build")}
         label={t("build.kinds")}
         groups={[
-          {
-            id: "overview",
-            items: [
-              {
-                id: BUILD_OVERVIEW_ID,
-                label: t("build.overview"),
-                icon: <LayoutList aria-hidden="true" />
-              }
-            ]
-          },
           {
             id: "kinds",
             items: kinds.map((kind) => ({
@@ -322,7 +299,7 @@ function BuildFrameBody({
           }
         ]}
         value={value}
-        onValueChange={(id) => open(id === BUILD_OVERVIEW_ID ? {} : { kindPath: id })}
+        onValueChange={(kindPath) => open({ kindPath })}
       />
     );
 
@@ -331,26 +308,6 @@ function BuildFrameBody({
       <Page ref={pageRef} subRail={rail(CAPABILITIES_BUILD_PATH)}>
         {loadError}
         <CapabilitiesPage />
-      </Page>
-    );
-  }
-
-  if (onOverview) {
-    return (
-      <Page ref={pageRef} subRail={rail(BUILD_OVERVIEW_ID)}>
-        <BuildOverview
-          source={source}
-          kinds={kinds}
-          loadError={loadError}
-          hrefOf={(kindPath) => href({ kindPath })}
-          onOpen={(kindPath) => open({ kindPath })}
-          onNew={(kindPath) => {
-            // The kind's list starts it, as its own New button does: its dialog, its empty
-            // page or the agent.
-            requestBuildCreateDialog(kindPath);
-            open({ kindPath });
-          }}
-        />
       </Page>
     );
   }
@@ -1091,5 +1048,12 @@ function RowMark({ entry, title }: { entry: BuildKind; title: string }) {
   if (entry.avatar) {
     return <Avatar kind={entry.avatar} name={title} />;
   }
-  return <KindMark entry={entry} />;
+  return (
+    <span
+      aria-hidden="true"
+      className="grid size-8 place-items-center rounded-md bg-muted text-muted-foreground"
+    >
+      <RegistryIcon name={entry.icon} className="size-4" />
+    </span>
+  );
 }

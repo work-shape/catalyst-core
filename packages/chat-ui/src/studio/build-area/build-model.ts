@@ -30,22 +30,22 @@ export interface BuildPlace {
 }
 
 /**
- * Resolves an address to a kind's list or one of its assets. `/build` names no kind and an
- * address may name one the reader has no item for: both answer nothing, and the frame shows the
- * overview, regardless of the previous visit (ACCEPT-1c). A kind that only lists has no asset
- * page: the address of one of its assets opens its list.
+ * Resolves an address. `/build` and an address with a kind the reader has no item for open the
+ * first kind the reader has, Agents for most, regardless of the previous visit (ACCEPT-1c). A
+ * kind that only lists has no asset page: the address of one of its assets opens its list.
  */
 export function resolveBuildPlace(
   kinds: readonly VisibleBuildKind[],
   location: BuildLocation
 ): BuildPlace | undefined {
   const named = kinds.find((kind) => kind.entry.path === location.kindPath);
-  if (!named) {
-    return undefined;
+  if (named) {
+    return opensAssets(named.entry) || location.name === undefined
+      ? { kind: named, name: location.name, corrected: false }
+      : { kind: named, name: undefined, corrected: true };
   }
-  return opensAssets(named.entry) || location.name === undefined
-    ? { kind: named, name: location.name, corrected: false }
-    : { kind: named, name: undefined, corrected: true };
+  const fallback = kinds[0];
+  return fallback ? { kind: fallback, name: undefined, corrected: true } : undefined;
 }
 
 const MINUTE_MS = 60_000;

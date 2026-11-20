@@ -125,7 +125,6 @@ export function knowledgeBaseKindOn(useSource: () => KnowledgeBaseSource): Build
     kind: "knowledge_base",
     path: KNOWLEDGE_BASES_BUILD_PATH,
     label: "knowledge.kind",
-    overviewText: "knowledge.purpose",
     description: "knowledge.description",
     searchLabel: "knowledge.search",
     newLabel: "knowledge.new",
