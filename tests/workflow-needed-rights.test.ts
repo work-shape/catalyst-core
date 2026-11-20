@@ -240,7 +240,9 @@ describe("the rights a Workflow's account needs", () => {
   });
 
   it("names a right once that a trigger names by its asset's name and a step by its id", async () => {
-    const definition = manifest([step("pending", "knowledge.handbook.pending", { limit: { value: 10 } })]);
+    const definition = manifest([
+      step("pending", "knowledge.handbook.pending", { limit: { value: 10 } })
+    ]);
     definition.steps[0] = {
       id: "start",
       name: "Start",
@@ -295,6 +297,8 @@ describe("the rights a Workflow's account needs", () => {
     );
     expect(
       rights.map(({ action, asset, steps, neededFor }) => [action, asset.assetId, steps, neededFor])
-    ).toEqual([["knowledge_base.read", "knowledge_base-handbook", ["start", "pending"], "publish"]]);
+    ).toEqual([
+      ["knowledge_base.read", "knowledge_base-handbook", ["start", "pending"], "publish"]
+    ]);
   });
 });
