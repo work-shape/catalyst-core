@@ -11,8 +11,9 @@ import { expect, takeTurn, test } from "./test";
 // Pictures of the page of a published Knowledge Base of documents, for a person to look at: its
 // lead line, the line that counts its documents, the list and the folded Settings, in German,
 // light and dark, at 1280. Then the same page as one whose documents come from a synced folder:
-// its head with the main action, the source's card folded and with Adjust open. It runs only
-// with KB_PAGE_SHOTS=1 and writes to test-results/kb-page.
+// its head with the main action, the source's card folded and with Adjust open. Last, the page
+// of one that answers from the tables of a Data Store. It runs only with KB_PAGE_SHOTS=1 and
+// writes to test-results/kb-page.
 // The suite's instance runs without the module `knowledge`, so a second API runs it with the
 // module on, on the same database, as knowledge-upload.spec.ts does.
 const host = process.env.E2E_HOST ?? "127.0.0.1";
@@ -32,8 +33,42 @@ const listSchema = z.looseObject({
   documents: z.array(z.looseObject({ fileName: z.string() }))
 });
 
+/** The state of a Knowledge Base of tables as far as the pictures change it. */
+const stateSchema = z.looseObject({
+  tables: z.array(z.looseObject({ name: z.string(), readable: z.boolean() }))
+});
+
 const SHOTS = resolve("test-results/kb-page");
 const TITLE = "Teamhandbuch";
+const TABLES_TITLE = "Projektübersicht";
+
+/** The Data Store the Knowledge Base of tables reads: three tables, two of them described. */
+const storeFiles = (store: string) => [
+  { path: "store.yaml", text: `id: ${store}\nname: Projektdaten\n` },
+  {
+    path: "migrations/0001_init.sql",
+    text: [
+      "create table projekte (",
+      "  nummer text primary key,",
+      "  name text not null,",
+      "  ort text not null,",
+      "  fertigstellung date",
+      ");",
+      "create table einheiten (",
+      "  nummer text primary key,",
+      "  projekt text not null references projekte (nummer),",
+      "  flaeche numeric not null,",
+      "  stand text not null",
+      ");",
+      "create table einheiten_auswertung (",
+      "  projekt text primary key references projekte (nummer),",
+      "  einheiten bigint not null,",
+      "  frei bigint not null",
+      ");",
+      ""
+    ].join("\n")
+  }
+];
 
 /** The synced folder the second set of pictures shows: a source, its Connection and its folder. */
 const SYNCED = {
@@ -84,8 +119,12 @@ async function view(page: Page, name: string, theme: "light" | "dark"): Promise<
  * The whole page in one picture. The content scrolls inside the page, not the window, so the
  * window is made as tall as the content first.
  */
-async function picture(page: Page, label: string): Promise<void> {
-  const extra = await page.locator("[data-knowledge-documents]").evaluate((element) => {
+async function picture(
+  page: Page,
+  label: string,
+  content = "[data-knowledge-documents]"
+): Promise<void> {
+  const extra = await page.locator(content).evaluate((element) => {
     for (let parent = element.parentElement; parent; parent = parent.parentElement) {
       const overflowY = getComputedStyle(parent).overflowY;
       if (overflowY === "auto" || overflowY === "scroll") {
@@ -452,6 +491,136 @@ test.describe("pictures of the page of a Knowledge Base of documents", () => {
         await requestWithOrigin(page, "post", `${assetUrl}/delete`, {
           data: { expectedRevision: await assetRevision(page, assetUrl) }
         });
+      }
+    }
+  });
+
+  // The page of a published Knowledge Base that answers from the tables of a Data Store: its
+  // lead line, its tables, the test and the folded Settings, then with everything unfolded.
+  test("de: a Knowledge Base of tables, light and dark, and with Settings unfolded", async ({
+    page
+  }) => {
+    test.setTimeout(240000);
+    const tag = randomUUID().slice(0, 8);
+    const name = `e2e-screens-tables-${tag}`;
+    const store = `e2e-screens-store-${tag}`;
+    const assetUrl = `${knowledgeApiUrl}/api/v1/assets/knowledge_base/${name}`;
+    const storeUrl = `${knowledgeApiUrl}/api/v1/assets/data_store/${store}`;
+    await mkdir(SHOTS, { recursive: true });
+    await signIn(page, apiBaseUrl);
+    await signIn(page, knowledgeApiUrl);
+    try {
+      const stored = await requestWithOrigin(page, "put", storeUrl, {
+        data: { expectedRevision: null, files: storeFiles(store) }
+      });
+      expect(stored.ok(), await stored.text()).toBe(true);
+      const storePublished = await requestWithOrigin(page, "post", `${storeUrl}/publish`, {
+        data: { revision: 1 }
+      });
+      expect(storePublished.ok(), await storePublished.text()).toBe(true);
+      await expect
+        .poll(
+          async () =>
+            (
+              await page.request.get(`${knowledgeApiUrl}/api/v1/data-stores/${store}/describe`)
+            ).status(),
+          { timeout: 60000 }
+        )
+        .toBe(200);
+      const created = await requestWithOrigin(page, "put", assetUrl, {
+        data: {
+          expectedRevision: null,
+          config: {
+            name,
+            title: TABLES_TITLE,
+            description: "Alle Bauprojekte mit ihren Einheiten und wie viele davon noch frei sind.",
+            methods: ["structured"],
+            backend: { dataStore: store },
+            tables: [
+              {
+                name: "projekte",
+                description:
+                  "Eine Zeile je Bauprojekt mit Nummer, Name, Ort und dem geplanten Tag der Fertigstellung."
+              },
+              {
+                name: "einheiten_auswertung",
+                description:
+                  "Eine Zeile je Projekt: wie viele Einheiten es hat und wie viele davon noch frei sind."
+              }
+            ]
+          }
+        }
+      });
+      expect(created.ok(), await created.text()).toBe(true);
+      const published = await requestWithOrigin(page, "post", `${assetUrl}/publish`, {
+        data: { revision: 1 }
+      });
+      expect(published.ok(), await published.text()).toBe(true);
+      // The interface talks to the API with the module on.
+      await page.route(`${apiBaseUrl}/**`, (route) =>
+        route.continue({ url: route.request().url().replace(apiBaseUrl, knowledgeApiUrl) })
+      );
+      const tables = "[data-knowledge-tables]";
+      const viewTables = async (theme: "light" | "dark") => {
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await page.emulateMedia({ colorScheme: theme });
+        await page.goto(`/build/knowledge-bases/${name}`);
+        await page.evaluate((chosen) => {
+          window.localStorage.setItem("vivd-catalyst:locale", "de");
+          window.localStorage.setItem("vivd-catalyst:theme", chosen);
+        }, theme);
+        await page.reload();
+        await expect(page.getByRole("heading", { name: TABLES_TITLE, level: 1 })).toBeVisible();
+        await expect(page.locator("[data-knowledge-table]")).toHaveCount(3);
+        await expect(page.locator("[data-knowledge-state]")).toHaveCount(1);
+      };
+      for (const theme of ["light", "dark"] as const) {
+        await viewTables(theme);
+        await picture(page, `tables-de-${theme}`, tables);
+      }
+      await viewTables("light");
+      await openKnowledgeSettings(page);
+      // What only whoever runs it reads is folded once more.
+      const advanced = page.locator("[data-knowledge-advanced-trigger]");
+      if ((await advanced.count()) > 0) {
+        await advanced.click();
+        await expect(advanced).toHaveAttribute("aria-expanded", "true");
+      }
+      await picture(page, "tables-de-light-settings", tables);
+
+      // The same page after a check that could not read one table: what needs a person stands
+      // at the top. Only the answered state is changed.
+      await page.route(`${apiBaseUrl}/api/v1/knowledge-bases/${name}`, async (route) => {
+        if (route.request().method() !== "GET") return route.fallback();
+        const response = await route.fetch({
+          url: route.request().url().replace(apiBaseUrl, knowledgeApiUrl)
+        });
+        const body = stateSchema.parse(await response.json());
+        await route.fulfill({
+          response,
+          json: {
+            ...body,
+            status: "needs_attention",
+            tables: body.tables.map((table) =>
+              table.name === "projekte" ? table : { ...table, readable: false }
+            )
+          }
+        });
+      });
+      await viewTables("light");
+      await expect(page.locator("[data-knowledge-attention]")).toBeVisible();
+      await picture(page, "tables-de-light-attention", tables);
+      await page.locator("[data-knowledge-attention] button").click();
+      await expect(page.locator("[data-knowledge-table-state]").first()).toBeVisible();
+      await picture(page, "tables-de-light-attention-status", tables);
+    } finally {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      for (const url of [assetUrl, storeUrl]) {
+        if ((await page.request.get(url)).ok()) {
+          await requestWithOrigin(page, "post", `${url}/delete`, {
+            data: { expectedRevision: await assetRevision(page, url) }
+          });
+        }
       }
     }
   });
