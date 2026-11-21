@@ -107,18 +107,21 @@ describe("skill starters", () => {
     expect(titles(["workspace.write_file"])).toEqual(["Explain a formula"]);
   });
 
-  it("shows at most twelve, the skills in the order the agent names them", () => {
+  it("shows at most nine, the skills in the order the agent names them", () => {
     const names = ["a", "b", "c", "d", "e", "f", "g"];
     const skills = [...names]
       .reverse()
       .map((name) => skill(name, [starter(`${name}1`), starter(`${name}2`)]));
 
     expect(startersOf({ skillNames: names, skills })?.map((entry) => entry.title)).toEqual(
-      names.slice(0, 6).flatMap((name) => [`${name}1`, `${name}2`])
+      names
+        .slice(0, 5)
+        .flatMap((name) => [`${name}1`, `${name}2`])
+        .slice(0, 9)
     );
   });
 
-  it("shows twelve in all with the author's prompts, the author's prompts first", () => {
+  it("fills up to nine with the skills' starters, and up to twelve with the author's alone", () => {
     const names = ["a", "b", "c", "d", "e", "f"];
     const skills = names.map((name) => skill(name, [starter(`${name}1`), starter(`${name}2`)]));
     const prompts = (count: number) =>
@@ -135,22 +138,12 @@ describe("skill starters", () => {
     };
     const own = (count: number) => prompts(count).map((entry) => entry.title);
 
-    expect(shown(0)).toHaveLength(12);
-    expect(shown(1)).toEqual([
-      "P1",
-      "a1",
-      "a2",
-      "b1",
-      "b2",
-      "c1",
-      "c2",
-      "d1",
-      "d2",
-      "e1",
-      "e2",
-      "f1"
-    ]);
-    expect(shown(11)).toEqual([...own(11), "a1"]);
+    expect(shown(0)).toHaveLength(9);
+    expect(shown(1)).toEqual(["P1", "a1", "a2", "b1", "b2", "c1", "c2", "d1", "d2"]);
+    expect(shown(8)).toEqual([...own(8), "a1"]);
+    // Nine of the author's own: none of the skills' starters waits under "More".
+    expect(shown(9)).toEqual(own(9));
+    expect(shown(11)).toEqual(own(11));
     expect(shown(13)).toEqual(own(12));
   });
 
