@@ -16,6 +16,7 @@ import type { KnowledgeBaseSource } from "./knowledge-base-source";
 import {
   canToggle,
   excludedFolders,
+  excludeToStore,
   folderPathSegments,
   folderState,
   selectionSummary,
@@ -23,6 +24,7 @@ import {
   withExcludedFolders,
   withFolderNames,
   withFolderPath,
+  withFolderUnread,
   type FolderSelection,
   type FolderState,
   type PlacedFolder
@@ -115,12 +117,14 @@ function ChosenFolderRead({
   source,
   connection,
   folder,
-  onRead
+  onRead,
+  onUnread
 }: {
   source: Pick<KnowledgeBaseSource, "useSourceFolders">;
   connection: string;
   folder: string;
   onRead(folder: string, path: string, names: readonly string[], complete: boolean): void;
+  onUnread(folder: string): void;
 }) {
   const read = source.useSourceFolders?.(connection, folder, true);
   const listing = read?.status === "ready" ? read.data : undefined;
@@ -137,6 +141,10 @@ function ChosenFolderRead({
       );
     }
   }, [folder, path, folders, complete, onRead]);
+  const unread = read === undefined || read.status === "failed" || read.status === "refused";
+  useEffect(() => {
+    if (unread) onUnread(folder);
+  }, [folder, unread, onUnread]);
   return null;
 }
 
@@ -178,6 +186,9 @@ export function KnowledgeSourceFolderPicker({
         )
       )
   );
+  const [markUnread] = useState(
+    () => (folder: string) => setSelection((current) => withFolderUnread(current, folder))
+  );
   const rowsId = useId();
   const here = trail[trail.length - 1] ?? { id: undefined, name: connectionTitle };
   const read = source.useSourceFolders?.(connection, here.id, true);
@@ -213,10 +224,7 @@ export function KnowledgeSourceFolderPicker({
             data-knowledge-folders-apply=""
             disabled={selection.chosen.size === 0}
             onClick={() =>
-              onChoose(
-                [...selection.chosen.keys()],
-                withExcludedFolders(exclude, selection.excluded)
-              )
+              onChoose([...selection.chosen.keys()], excludeToStore(exclude, selection))
             }
           >
             {t("knowledgeSources.pickApply")}
@@ -232,6 +240,7 @@ export function KnowledgeSourceFolderPicker({
             connection={connection}
             folder={folder}
             onRead={place}
+            onUnread={markUnread}
           />
         ))}
         <Breadcrumb

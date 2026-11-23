@@ -27,8 +27,10 @@ export interface FolderSelection {
   excluded: readonly string[];
   /** The rules this chooser wrote, by their folded text: the chosen folders they lie below. */
   owned?: ReadonlyMap<string, ReadonlySet<string>>;
-  /** The folded names directly in a chosen folder, once read; `complete` when all are. */
-  listed?: ReadonlyMap<string, { names: ReadonlySet<string>; complete: boolean }>;
+  /** The names directly in a chosen folder once read, folded to as listed; `complete` if all. */
+  listed?: ReadonlyMap<string, { names: ReadonlyMap<string, string>; complete: boolean }>;
+  /** Chosen folders whose read failed: their path will not come. */
+  unread?: ReadonlySet<string>;
 }
 
 /** How one folder stands in a selection. */
@@ -137,10 +139,14 @@ const below = (rule: string, folder: string) =>
  */
 function ruleUnder(selection: FolderSelection, id: string, rule: string): boolean | undefined {
   const key = fold(rule);
-  if (selection.owned?.get(key)?.has(id)) return true;
+  const owners = selection.owned?.get(key);
+  if (owners?.has(id)) return true;
+  const [first = key, ...rest] = key.split("/");
+  // A longer rule written below another folder: a like first name here does not place it.
+  if (owners !== undefined && rest.length > 0) return undefined;
   const listed = selection.listed?.get(id);
   if (listed === undefined) return undefined;
-  if (listed.names.has(key.split("/")[0] ?? key)) return true;
+  if (listed.names.has(first)) return true;
   return listed.complete ? false : undefined;
 }
 
@@ -237,10 +243,16 @@ function chooseAbove(
   selection: FolderSelection,
   folder: PlacedFolder
 ): FolderSelection | undefined {
+  // A chosen folder still being placed may lie below this one, with rules to write again.
+  const placing = [...selection.chosen].some(
+    ([id, chosenPath]) => chosenPath === undefined && !selection.unread?.has(id)
+  );
+  if (placing && selection.excluded.length > 0) return undefined;
   const path = normal(folder.path);
   const chosen = new Map(selection.chosen);
   const dropped = new Set<string>();
   const moved: string[] = [];
+  const rewritten = new Set<string>();
   for (const [id, chosenPath] of selection.chosen) {
     if (chosenPath === undefined) continue;
     const inner = normal(chosenPath);
@@ -252,10 +264,20 @@ function chooseAbove(
       const segments = [...inner.slice(path.length), ...rule.split("/")];
       if (!canLeaveOut(segments)) return undefined;
       moved.push(segments.join("/"));
+      rewritten.add(fold(rule));
     }
   }
+  const staying = [...chosen.keys()];
   chosen.set(folder.id, folder.path);
-  const { excluded, owned } = released(selection, dropped);
+  const { excluded: kept, owned } = released(selection, dropped);
+  // A rule written again goes in its old form, which would name another folder from up here,
+  // unless a folder that stays may still hold it.
+  const excluded = kept.filter((rule) => {
+    if (!rewritten.has(fold(rule))) return true;
+    if (staying.some((id) => ruleUnder(selection, id, rule) !== false)) return true;
+    owned.delete(fold(rule));
+    return false;
+  });
   for (const rule of moved) {
     if (excluded.some((other) => fold(other) === fold(rule) || below(rule, other))) continue;
     excluded.push(rule);
@@ -340,18 +362,47 @@ export function withFolderNames(
   names: readonly string[],
   complete: boolean
 ): FolderSelection {
-  const folded = new Set(names.map(fold));
+  const folded = new Map(names.map((name) => [fold(name), name.normalize("NFC")]));
   const known = selection.listed?.get(id);
   if (
     known?.complete === complete &&
     known.names.size === folded.size &&
-    [...folded].every((name) => known.names.has(name))
+    [...folded].every(([key, name]) => known.names.get(key) === name)
   ) {
     return selection;
   }
   const listed = new Map(selection.listed);
   listed.set(id, { names: folded, complete });
   return { ...selection, listed };
+}
+
+/** The selection knowing that a chosen folder's read failed. */
+export function withFolderUnread(selection: FolderSelection, id: string): FolderSelection {
+  if (selection.unread?.has(id)) return selection;
+  return { ...selection, unread: new Set([...(selection.unread ?? []), id]) };
+}
+
+/**
+ * The `exclude` a selection stores. The sync compares a pattern as written, so where a chosen
+ * folder lists a left-out folder in another case, that spelling is written beside the rule.
+ */
+export function excludeToStore(exclude: string, selection: FolderSelection): string {
+  const text = withExcludedFolders(exclude, selection.excluded);
+  const written = new Set(patternLines(text).flatMap((line) => folderOfPattern(line) ?? []));
+  const added: string[] = [];
+  for (const rule of selection.excluded) {
+    const [first = rule, ...rest] = rule.split("/");
+    for (const id of selection.chosen.keys()) {
+      const spelled = selection.listed?.get(id)?.names.get(fold(first));
+      if (spelled === undefined) continue;
+      const segments = [spelled, ...rest];
+      const folder = segments.join("/");
+      if (written.has(folder) || !canLeaveOut(segments)) continue;
+      written.add(folder);
+      added.push(`${folder}/**`);
+    }
+  }
+  return [...(text === "" ? [] : [text]), ...added].join("\n");
 }
 
 /** What a selection reads as: the chosen folders by name, and the folders left out below them. */

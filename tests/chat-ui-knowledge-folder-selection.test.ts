@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   canToggle,
   excludedFolders,
+  excludeToStore,
   folderState,
   selectionSummary,
   toggleFolder,
   withExcludedFolders,
   withFolderNames,
   withFolderPath,
+  withFolderUnread,
   type FolderSelection
 } from "@work-shape/catalyst-chat-ui/build-area";
 
@@ -270,5 +272,60 @@ describe("folder names in another case", () => {
       false
     );
     expect(selection.excluded).toEqual(["Archiv"]);
+  });
+});
+
+describe("a saved rule when a folder above its chosen one is ticked", () => {
+  const year = { id: "31", path: ["Kunden", "2024"] };
+  const customers = { id: "30", path: ["Kunden"] };
+
+  it("moves it, so a folder of that name higher up is not left out", () => {
+    const saved = withFolderNames(
+      { chosen: new Map([["31", year.path]]), excluded: ["Archiv"] },
+      "31",
+      ["Archiv"],
+      true
+    );
+    expect(toggleFolder(saved, customers, true).excluded).toEqual(["2024/Archiv"]);
+  });
+
+  it("waits for the path of a chosen folder, unless its read failed", () => {
+    const placing: FolderSelection = { chosen: new Map([["31", undefined]]), excluded: ["Archiv"] };
+    expect(canToggle(placing, customers)).toBe(false);
+    expect(toggleFolder(placing, customers, true)).toBe(placing);
+    expect(canToggle(withFolderUnread(placing, "31"), customers)).toBe(true);
+  });
+});
+
+describe("a longer rule and the chosen folders", () => {
+  it("shows the partial state only on the folder it was written below", () => {
+    const a = { id: "40", path: ["A"] };
+    const c = { id: "50", path: ["C"] };
+    const start = toggleFolder(toggleFolder(none, a, true), c, true);
+    const read = withFolderNames(
+      withFolderNames(start, "40", ["2019"], true),
+      "50",
+      ["2019"],
+      true
+    );
+    const left = toggleFolder(read, { id: "41", path: ["A", "2019", "Old"] }, false);
+    expect(folderState(left, a)).toEqual({ state: "in", without: ["2019/Old"] });
+    expect(folderState(left, c)).toEqual({ state: "in", without: [] });
+  });
+});
+
+describe("the exclude a selection stores", () => {
+  it("writes the spelling a chosen folder lists beside a rule in another case", () => {
+    const selection = withFolderNames(
+      { chosen: new Map([["10", ["Projekte"]]]), excluded: ["archiv"] },
+      "10",
+      ["Archiv"],
+      true
+    );
+    const stored = excludeToStore("archiv/**\n**/*.tmp", selection);
+    expect(stored).toBe("archiv/**\n**/*.tmp\nArchiv/**");
+    // Stored again it stays the same, and it reads as one folder.
+    expect(excludeToStore(stored, selection)).toBe(stored);
+    expect(excludedFolders(stored)).toEqual(["archiv"]);
   });
 });
