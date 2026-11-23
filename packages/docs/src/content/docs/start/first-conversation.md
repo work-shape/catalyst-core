@@ -17,6 +17,12 @@ HEIC, HEIF, TIFF, BMP and AVIF images receive a view the agent can see automatic
 
 If the agent offers more than one model, the chat shows a picker with **Model** ("Modell") and **Reasoning** ("Denkaufwand"). More reasoning takes longer and uses more of your quota.
 
+## Text to use elsewhere
+
+When you ask for a text you will paste somewhere else, such as a message, a mail or a clause, the agent puts it in a box of its own inside the answer. The button beside it, **Copy** ("Kopieren"), copies exactly that text, without the rest of the answer. Ask for a file if you need one, for example a mail with attachments.
+
+For people who write agents: the agent writes such a text as a fenced block with the language `copy`, and a few words after `copy` name it, as in ` ```copy Reply to the supplier `. The platform's rules tell every agent to do so; nothing inside the block is read as Markdown.
+
 ## Find it again
 
 **Recent** ("Zuletzt") in the main rail lists your conversations, and **Search** ("Suchen") finds them. A conversation may be deleted after a while, as your organisation set it; the chat then says "Will be deleted automatically on …" ("Wird am … automatisch gelöscht").

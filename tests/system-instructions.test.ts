@@ -45,6 +45,17 @@ describe("system instructions", () => {
       "never name it as the one to fix a platform or infrastructure failure"
     );
   });
+  it("puts a text the person will paste elsewhere in a copy block of the answer, not in a file", () => {
+    expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain(
+      "Text the person will paste elsewhere, such as a message, a mail or a clause, goes in your answer in a fenced block with the language copy (```copy)"
+    );
+    expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain(
+      "one block per text, with nothing but that text inside it"
+    );
+    expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain(
+      "Create no file and no view for it unless they ask for one."
+    );
+  });
   it("does not let an agent infer what an outside client can reach from its own tools", () => {
     expect(PLATFORM_ORIENTATION).toContain(
       "not what an outside client (CLI, MCP, a personal key) can reach"

@@ -1,6 +1,7 @@
 export {
   MarkdownArtifact,
-  MarkdownLinkPolicyProvider
+  MarkdownLinkPolicyProvider,
+  MarkdownText
 } from "../../../packages/chat-ui/src/chat/markdown/markdown-text";
 export {
   PageLinksProvider,

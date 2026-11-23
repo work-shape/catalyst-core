@@ -1,5 +1,6 @@
 import { harden } from "rehype-harden";
 import { defaultRehypePlugins, type StreamdownProps } from "streamdown";
+import { copyFences } from "./copy-fence";
 
 type RehypePlugins = NonNullable<StreamdownProps["rehypePlugins"]>;
 
@@ -42,6 +43,7 @@ export interface MarkdownPageLinks {
  * Raw HTML is parsed and sanitized as Streamdown does by default. Then no image loads, neither
  * remote, nor relative, nor `data:`, and a link to a host outside the policy becomes text that
  * shows its address. With `pageLinks`, an allowed link to a page of the app becomes its element.
+ * A `copy` fence becomes its element, which holds the fence's text and nothing to load.
  * `rehype-harden` runs last as a second line; it finds nothing left to block.
  */
 export function markdownRehypePlugins(
@@ -55,6 +57,7 @@ export function markdownRehypePlugins(
   return [
     ...parsing,
     [restrictRemoteContent, { policy, labels, pageLinks }],
+    copyFences,
     [
       harden,
       {

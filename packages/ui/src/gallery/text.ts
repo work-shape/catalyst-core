@@ -1,4 +1,5 @@
 import { chartGalleryText, type ChartGalleryText } from "./text-chart";
+import { copyTextGalleryText, type CopyTextGalleryText } from "./text-copy-text";
 import { draftGalleryText, type DraftGalleryText } from "./text-draft";
 import { flowGalleryText, type FlowGalleryText } from "./text-flow";
 import { layoutGalleryText, type LayoutGalleryText } from "./text-layout";
@@ -26,6 +27,7 @@ export interface GalleryText
     QrCodeGalleryText,
     StepsGalleryText,
     TypedTextGalleryText,
+    CopyTextGalleryText,
     SkillsGalleryText,
     FlowGalleryText,
     MailGalleryText,
@@ -579,6 +581,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     ...qrCodeGalleryText.en,
     ...stepsGalleryText.en,
     ...typedTextGalleryText.en,
+    ...copyTextGalleryText.en,
     ...skillsGalleryText.en,
     ...flowGalleryText.en,
     ...mailGalleryText.en,
@@ -886,6 +889,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     ...qrCodeGalleryText.de,
     ...stepsGalleryText.de,
     ...typedTextGalleryText.de,
+    ...copyTextGalleryText.de,
     ...skillsGalleryText.de,
     ...flowGalleryText.de,
     ...mailGalleryText.de,
