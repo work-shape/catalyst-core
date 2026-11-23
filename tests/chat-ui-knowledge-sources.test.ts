@@ -861,6 +861,7 @@ describe("folders chosen by name (KB-FOLDERS-1)", () => {
           connection: "handbook-folders",
           connectionTitle: "Box Objekte",
           chosen: ["202"],
+          exclude: "Archiv/**",
           onClose: () => undefined,
           onChoose: () => undefined
         })
@@ -870,8 +871,22 @@ describe("folders chosen by name (KB-FOLDERS-1)", () => {
     expect(page).toContain("Box Objekte");
     expect(page).toContain('data-knowledge-folder="201"');
     expect(page).toContain("Verträge öffnen");
-    expect(page).toContain("1 gewählt");
+    // How many folders are chosen and how many left out below them.
+    expect(page).toContain("1 Ordner · 1 ausgelassen");
     expect(page).toContain("Diese Ordner übernehmen");
+  });
+
+  it("names the folders a source leaves out after its folders, each to read again", () => {
+    const page = render("de", {
+      connections: browsing,
+      sources: [{ ...handbookSource, exclude: "Archiv/**\n**/*.tmp\n2019/Alt/**" }]
+    });
+    expect(page).toContain("/Objekte/100</span>, ohne Archiv, 2019/Alt");
+    expect(page).toContain('data-knowledge-source-excluded-folder="Archiv"');
+    expect(page).toContain('data-knowledge-source-excluded-folder="2019/Alt"');
+    expect(page).toContain("Archiv wieder lesen");
+    // A pattern that names no single folder stays under Advanced settings alone.
+    expect(page).not.toContain('data-knowledge-source-excluded-folder="**');
   });
 
   it("asks a new Knowledge Base where its knowledge comes from, a connected source among them", () => {

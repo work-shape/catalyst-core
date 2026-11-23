@@ -237,6 +237,19 @@ export { ReindexStatement } from "./knowledge-base-reindex";
 export { KnowledgeSourceChoice } from "./knowledge-base-source-choice";
 export { KnowledgeSourceFolderPicker } from "./knowledge-source-folder-picker";
 export {
+  canToggle,
+  excludedFolders,
+  excludeToStore,
+  folderState,
+  selectionSummary,
+  toggleFolder,
+  withExcludedFolders,
+  withFolderNames,
+  withFolderPath,
+  withFolderUnread,
+  type FolderSelection
+} from "./knowledge-source-folder-selection";
+export {
   PublishQuestionLines,
   publishQuestionHolds,
   type PublishProcessing,
