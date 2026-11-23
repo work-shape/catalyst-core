@@ -35,6 +35,7 @@ import { levelMeterGalleryEntry } from "./level-meter";
 import { timelineGalleryEntry } from "./timeline";
 import { qrCodeGalleryEntry } from "./qr-code";
 import { stepsGalleryEntry } from "./steps";
+import { copyTextGalleryEntry } from "./copy-text";
 import { typedTextGalleryEntry } from "./typed-text";
 import type { GalleryText } from "./text";
 
@@ -663,6 +664,7 @@ export const dataGallery: GalleryGroup = {
         </Samples>
       )
     },
+    copyTextGalleryEntry,
     typedTextGalleryEntry,
     stepsGalleryEntry,
     levelMeterGalleryEntry,

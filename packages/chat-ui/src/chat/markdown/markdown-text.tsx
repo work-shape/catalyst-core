@@ -12,6 +12,7 @@ import {
 } from "streamdown";
 import { CODE_THEMES, codeHighlighter } from "../../shared/code-highlight";
 import { useTranslation } from "../../shared/i18n";
+import { COPY_FENCE_TAG, CopyFence } from "./copy-fence";
 import {
   markdownRehypePlugins,
   type MarkdownLinkPolicy,
@@ -22,8 +23,14 @@ import { PAGE_LINK_TAG, PageLink, pageLinkPath, usePageLinks } from "./page-link
 
 const plugins = { code: codeHighlighter, mermaid };
 // A table draws its own frame and copy menu; a link to a page of the app opens it in place.
-// Streamdown's components are typed by HTML's tags; the page link is an element of its own.
-const components = { table: MarkdownTable, [PAGE_LINK_TAG]: PageLink } as StreamdownComponents;
+// A `copy` fence is a text to take elsewhere and draws as one, not as a code block.
+// Streamdown's components are typed by HTML's tags; the page link and the text to copy are
+// elements of their own.
+const components = {
+  table: MarkdownTable,
+  [PAGE_LINK_TAG]: PageLink,
+  [COPY_FENCE_TAG]: CopyFence
+} as StreamdownComponents;
 const controls: ControlsConfig = {
   code: { copy: true, download: false },
   table: false,

@@ -35,6 +35,7 @@ import {
 } from "./assistant-source-part";
 import { useTranslation } from "../../shared/i18n";
 import { modelDisplayLabel } from "../../shared/model-label";
+import { CopyFenceWritingProvider } from "../markdown/copy-fence";
 import { MarkdownText } from "../markdown/markdown-text";
 import { DataPart, ToolCallFoldLabel, ToolCallPart } from "../tools/tool-call";
 import { ToolGroupContent, ToolGroupRoot, ToolGroupTrigger } from "./assistant-tool-group";
@@ -249,45 +250,47 @@ function AssistantMessage({
         </div>
       ) : null}
       <div className="min-w-0 rounded-md px-1 pb-1 pt-5 text-sm leading-6">
-        {completedWorkSummary ? (
-          <>
-            <AssistantWorkGroup
-              count={completedWorkStepCount}
-              summary
-              durationMs={runDurationMs}
-              autoCollapse={autoCollapseCompletedWorkSummary}
-              stopped={stoppedByGuardrail(messageParts, completedWorkIndices)}
-            >
-              <AssistantWorkTimeline
-                items={completedWorkTimelineItems}
-                partComponents={completedWorkPartComponents}
-              />
-            </AssistantWorkGroup>
-            {visibleFinalPartIndices
-              .filter((index) => !isKnowledgeCitationPart(messageParts[index]))
-              .map((index) => (
-                <MessagePrimitive.PartByIndex
-                  key={`part-${index}`}
-                  index={index}
-                  components={assistantPartComponents}
+        <CopyFenceWritingProvider value={messageRunning}>
+          {completedWorkSummary ? (
+            <>
+              <AssistantWorkGroup
+                count={completedWorkStepCount}
+                summary
+                durationMs={runDurationMs}
+                autoCollapse={autoCollapseCompletedWorkSummary}
+                stopped={stoppedByGuardrail(messageParts, completedWorkIndices)}
+              >
+                <AssistantWorkTimeline
+                  items={completedWorkTimelineItems}
+                  partComponents={completedWorkPartComponents}
                 />
-              ))}
-          </>
-        ) : (
-          <MessagePrimitive.GroupedParts groupBy={groupBy}>
-            {({ part, children }) =>
-              renderAssistantGroupedPart({
-                part,
-                children,
-                autoPreviewSurfaces,
-                assistantPartComponents,
-                messageParts
-              })
-            }
-          </MessagePrimitive.GroupedParts>
-        )}
-        <AssistantKnowledgeSources citations={knowledgeCitations} />
-        <MessageError />
+              </AssistantWorkGroup>
+              {visibleFinalPartIndices
+                .filter((index) => !isKnowledgeCitationPart(messageParts[index]))
+                .map((index) => (
+                  <MessagePrimitive.PartByIndex
+                    key={`part-${index}`}
+                    index={index}
+                    components={assistantPartComponents}
+                  />
+                ))}
+            </>
+          ) : (
+            <MessagePrimitive.GroupedParts groupBy={groupBy}>
+              {({ part, children }) =>
+                renderAssistantGroupedPart({
+                  part,
+                  children,
+                  autoPreviewSurfaces,
+                  assistantPartComponents,
+                  messageParts
+                })
+              }
+            </MessagePrimitive.GroupedParts>
+          )}
+          <AssistantKnowledgeSources citations={knowledgeCitations} />
+          <MessageError />
+        </CopyFenceWritingProvider>
       </div>
       {modelFallback && !messageRunning ? (
         <p className="px-1 text-caption text-muted-foreground" data-testid="model-fallback-line">

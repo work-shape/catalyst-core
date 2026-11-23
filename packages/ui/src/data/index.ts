@@ -13,6 +13,7 @@ export { ChangeList, type ChangeListItem, type ChangeListProps } from "./change-
 export { CodeBlock, type CodeBlockProps, type CodeToken } from "./code-block";
 export { CodeFile, type CodeFileProps } from "./code-file";
 export { CommandLine, type CommandLineProps } from "./command-line";
+export { CopyText, type CopyTextProps } from "./copy-text";
 export {
   buildFileTree,
   FileTree,
