@@ -610,6 +610,8 @@ test.describe("pictures of the page of a Knowledge Base of documents", () => {
         shown.draftAhead = false;
       }
     } finally {
+      // The page still holds the draft's revision, which only the routes answer: it leaves first.
+      await page.goto("/");
       await page.unrouteAll({ behavior: "ignoreErrors" });
       if ((await page.request.get(assetUrl)).ok()) {
         await requestWithOrigin(page, "post", `${assetUrl}/delete`, {
@@ -698,6 +700,7 @@ test.describe("pictures of the page of a Knowledge Base of documents", () => {
         await row("11").getByRole("checkbox").click();
         await expect(row("11")).toHaveAttribute("data-knowledge-folder-state", "none");
         await expect(row("11")).toContainText("ausgelassen");
+        await expect(row("11").getByRole("checkbox")).toHaveAccessibleDescription("ausgelassen");
         await expect(chooser.locator("[data-knowledge-folder-here]")).toHaveAttribute(
           "aria-checked",
           "mixed"
