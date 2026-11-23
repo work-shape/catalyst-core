@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  canToggle,
   excludedFolders,
   folderState,
   selectionSummary,
   toggleFolder,
   withExcludedFolders,
+  withFolderNames,
   withFolderPath,
   type FolderSelection
 } from "@work-shape/catalyst-chat-ui/build-area";
@@ -89,9 +91,25 @@ describe("a folder's box in the chooser", () => {
 
   it("drops the folders left out with the last chosen folder", () => {
     const partly = toggleFolder(toggleFolder(none, projects, true), archive, false);
-    expect(toggleFolder(partly, projects, false)).toEqual({ chosen: new Map(), excluded: [] });
-    const two = toggleFolder(partly, contracts, true);
-    expect(toggleFolder(two, projects, false).excluded).toEqual(["Archiv"]);
+    const emptied = toggleFolder(partly, projects, false);
+    expect(chosen(emptied)).toEqual([]);
+    expect(emptied.excluded).toEqual([]);
+  });
+
+  it("drops what it left out below a parent when that parent goes, and only that", () => {
+    const two = toggleFolder(
+      toggleFolder(toggleFolder(none, projects, true), archive, false),
+      contracts,
+      true
+    );
+    const left = toggleFolder(two, projects, false);
+    expect(chosen(left)).toEqual(["20"]);
+    expect(left.excluded).toEqual([]);
+    // A parent that stays and holds a folder of that path keeps the rule, as the chooser said.
+    const both = withFolderNames(two, "20", ["Archiv"], true);
+    const kept = toggleFolder(both, projects, false);
+    expect(kept.excluded).toEqual(["Archiv"]);
+    expect(toggleFolder(kept, contracts, false).excluded).toEqual([]);
   });
 
   it("places a folder chosen before once its path is read", () => {
@@ -106,5 +124,151 @@ describe("a folder's box in the chooser", () => {
     const selection = toggleFolder(none, projects, true);
     const starred = { id: "15", path: ["Projekte", "Was?"] };
     expect(toggleFolder(selection, starred, false).excluded).toEqual([]);
+  });
+});
+
+describe("rules the chooser did not write", () => {
+  const saved = (rules: string[]): FolderSelection => ({
+    chosen: new Map([["10", ["Projekte"]]]),
+    excluded: rules
+  });
+
+  it("keeps them when a parent goes or is ticked whole", () => {
+    expect(toggleFolder(saved(["Handarbeit"]), projects, false).excluded).toEqual(["Handarbeit"]);
+    const known = withFolderNames(saved(["Handarbeit"]), "10", ["Handarbeit"], true);
+    expect(folderState(known, projects)).toEqual({ state: "in", without: ["Handarbeit"] });
+    // The parent cannot be made whole by removing them, so the click takes it out instead.
+    const out = toggleFolder(known, projects, true);
+    expect(chosen(out)).toEqual([]);
+    expect(out.excluded).toEqual(["Handarbeit"]);
+  });
+
+  it("clears only its own below a parent ticked whole", () => {
+    const known = withFolderNames(saved(["Handarbeit"]), "10", ["Handarbeit", "Archiv"], true);
+    const mixed = toggleFolder(known, archive, false);
+    expect(mixed.excluded).toEqual(["Handarbeit", "Archiv"]);
+    expect(toggleFolder(mixed, projects, true).excluded).toEqual(["Handarbeit"]);
+  });
+
+  it("removes one when its own folder is ticked, as the person asked for that folder", () => {
+    expect(toggleFolder(saved(["Archiv"]), archive, true).excluded).toEqual([]);
+  });
+
+  it("leaves them in the stored text, whatever else changes", () => {
+    const text = "Handarbeit/**\n/Alt/2019/**\nHandarbeit/**\n**/*.tmp";
+    expect(withExcludedFolders(text, ["Handarbeit", "Alt/2019", "Neu"])).toBe(`${text}\nNeu/**`);
+  });
+});
+
+describe("ticking a folder above a chosen one", () => {
+  const inner = () =>
+    toggleFolder(
+      toggleFolder(none, houseA, true),
+      { id: "14", path: ["Projekte", "Haus A", "Alt"] },
+      false
+    );
+
+  it("writes what was left out again from the new folder", () => {
+    const selection = inner();
+    expect(selection.excluded).toEqual(["Alt"]);
+    const parent = toggleFolder(selection, projects, true);
+    expect(chosen(parent)).toEqual(["10"]);
+    expect(parent.excluded).toEqual(["Haus A/Alt"]);
+    expect(folderState(parent, houseA)).toEqual({
+      state: "in",
+      under: "Projekte",
+      without: ["Alt"]
+    });
+  });
+
+  it("drops a rule that does not fall under the folder it replaces", () => {
+    const selection = withFolderNames(
+      { chosen: new Map([["13", houseA.path]]), excluded: ["Fremd"] },
+      "13",
+      ["Plaene"],
+      true
+    );
+    expect(toggleFolder(selection, projects, true).excluded).toEqual(["Fremd"]);
+  });
+
+  it("keeps a rule of another chosen folder as it is", () => {
+    const other = toggleFolder(inner(), contracts, true);
+    const parent = toggleFolder(withFolderNames(other, "20", ["Alt"], true), projects, true);
+    expect(parent.excluded).toEqual(["Alt", "Haus A/Alt"]);
+  });
+
+  it("does not take a folder whose rule a pattern could not write", () => {
+    const starred = { id: "16", path: ["Projekte", "Was?"] };
+    const selection = withFolderNames(
+      { chosen: new Map([["16", starred.path]]), excluded: ["Alt"] },
+      "16",
+      ["Alt"],
+      true
+    );
+    expect(canToggle(selection, projects)).toBe(false);
+    expect(toggleFolder(selection, projects, true)).toBe(selection);
+  });
+});
+
+describe("the partial state of a chosen folder", () => {
+  it("shows only on the chosen folder a rule falls under", () => {
+    const two = toggleFolder(
+      toggleFolder(toggleFolder(none, projects, true), archive, false),
+      contracts,
+      true
+    );
+    expect(folderState(two, projects)).toEqual({ state: "in", without: ["Archiv"] });
+    expect(folderState(two, contracts)).toEqual({ state: "in", without: [] });
+  });
+
+  it("places a saved rule by what the folder holds, and says nothing while that is unknown", () => {
+    const saved: FolderSelection = {
+      chosen: new Map([
+        ["10", projects.path],
+        ["20", contracts.path]
+      ]),
+      excluded: ["Archiv"]
+    };
+    expect(folderState(saved, projects)).toEqual({ state: "in", without: [] });
+    const read = withFolderNames(
+      withFolderNames(saved, "10", ["Archiv", "Haus A"], true),
+      "20",
+      ["Muster"],
+      true
+    );
+    expect(folderState(read, projects)).toEqual({ state: "in", without: ["Archiv"] });
+    expect(folderState(read, contracts)).toEqual({ state: "in", without: [] });
+  });
+});
+
+describe("folder names in another case", () => {
+  const lower = { id: "11", path: ["projekte", "ARCHIV"] };
+
+  it("places a folder below a chosen one whatever the case of its path", () => {
+    const selection = toggleFolder(none, projects, true);
+    expect(folderState(selection, lower).state).toBe("in");
+  });
+
+  it("reads a rule in another case as the same folder, and adds no second one", () => {
+    const selection: FolderSelection = {
+      chosen: new Map([["10", ["Projekte"]]]),
+      excluded: ["archiv"]
+    };
+    expect(folderState(selection, archive)).toEqual({ state: "out", under: "Projekte" });
+    expect(folderState(selection, old)).toEqual({ state: "outAbove", with: "archiv" });
+    expect(toggleFolder(selection, archive, true).excluded).toEqual([]);
+    expect(excludedFolders("Archiv/**\narchiv/**")).toEqual(["Archiv"]);
+    // Reading it again takes every spelling of the rule.
+    expect(withExcludedFolders("Archiv/**\narchiv/**\n**/*.tmp", [])).toBe("**/*.tmp");
+    expect(withExcludedFolders("archiv/**", ["Archiv"])).toBe("archiv/**");
+  });
+
+  it("writes a new rule in the case the source lists the folder", () => {
+    const selection = toggleFolder(
+      toggleFolder(none, { ...projects, path: ["projekte"] }, true),
+      archive,
+      false
+    );
+    expect(selection.excluded).toEqual(["Archiv"]);
   });
 });

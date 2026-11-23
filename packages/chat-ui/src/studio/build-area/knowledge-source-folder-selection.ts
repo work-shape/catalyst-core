@@ -3,6 +3,12 @@
 // `exclude` pattern of the source that names exactly it, `Archive/**`: the sync reads the pattern
 // on the path below a chosen folder, so a folder left out is left out below every chosen folder
 // that holds one of that path. Every other pattern of `exclude` stays as it was typed.
+//
+// Which rules are the chooser's: those it wrote while it is open. A rule it found may be typed by
+// hand and cannot be told from one it wrote earlier, so it goes only when the person ticks
+// exactly its folder. Keeping one leaves a folder out; dropping one could read a folder someone
+// kept out. Folder names are compared without case, as Dropbox treats them; the sync compares a
+// pattern as written, so a new rule is written in the case the source lists the folder.
 
 /** The longest pattern the definition takes. */
 const PATTERN_MAX_CHARS = 500;
@@ -19,6 +25,10 @@ export interface FolderSelection {
   chosen: ReadonlyMap<string, readonly string[] | undefined>;
   /** The folders left out, each by its path below a chosen folder: `Archive`, `2019/Old`. */
   excluded: readonly string[];
+  /** The rules this chooser wrote, by their folded text: the chosen folders they lie below. */
+  owned?: ReadonlyMap<string, ReadonlySet<string>>;
+  /** The folded names directly in a chosen folder, once read; `complete` when all are. */
+  listed?: ReadonlyMap<string, { names: ReadonlySet<string>; complete: boolean }>;
 }
 
 /** How one folder stands in a selection. */
@@ -56,6 +66,9 @@ function folderOfPattern(pattern: string): string | undefined {
   return folder.join("/");
 }
 
+/** A name or a path as folders are told apart: the same whatever its case or composition. */
+const fold = (text: string) => text.normalize("NFC").toLowerCase();
+
 function patternLines(text: string): string[] {
   return text
     .split("\n")
@@ -63,32 +76,31 @@ function patternLines(text: string): string[] {
     .filter((pattern) => pattern !== "");
 }
 
-/** The folders a source's `exclude` leaves out by name, in order, each once. */
+/** The folders a source's `exclude` leaves out by name, in order, each once whatever its case. */
 export function excludedFolders(exclude: string): string[] {
-  return [
-    ...new Set(
-      patternLines(exclude).flatMap((pattern) => {
-        const folder = folderOfPattern(pattern);
-        return folder === undefined ? [] : [folder];
-      })
-    )
-  ];
+  const seen = new Set<string>();
+  return patternLines(exclude).flatMap((pattern) => {
+    const folder = folderOfPattern(pattern);
+    if (folder === undefined || seen.has(fold(folder))) return [];
+    seen.add(fold(folder));
+    return [folder];
+  });
 }
 
-/** `exclude` with exactly `folders` left out by name; its other patterns stay where they are. */
+/** `exclude` with exactly `folders` left out by name; every other pattern stays where it is. */
 export function withExcludedFolders(exclude: string, folders: readonly string[]): string {
-  const wanted = new Set(folders);
-  const kept = new Set<string>();
+  const wanted = new Set(folders.map(fold));
+  const present = new Set<string>();
   const lines = patternLines(exclude).filter((pattern) => {
     const folder = folderOfPattern(pattern);
     if (folder === undefined) return true;
-    if (!wanted.has(folder) || kept.has(folder)) return false;
-    kept.add(folder);
+    if (!wanted.has(fold(folder))) return false;
+    present.add(fold(folder));
     return true;
   });
   return [
     ...lines,
-    ...folders.filter((folder) => !kept.has(folder)).map((folder) => `${folder}/**`)
+    ...folders.filter((folder) => !present.has(fold(folder))).map((folder) => `${folder}/**`)
   ].join("\n");
 }
 
@@ -114,8 +126,50 @@ function canLeaveOut(relative: readonly string[]): boolean {
 
 const normal = (path: readonly string[]) => path.map((name) => name.normalize("NFC"));
 const startsWith = (path: readonly string[], prefix: readonly string[]) =>
-  prefix.length <= path.length && prefix.every((name, index) => path[index] === name);
-const below = (rule: string, folder: string) => folder === "" || rule.startsWith(`${folder}/`);
+  prefix.length <= path.length &&
+  prefix.every((name, index) => fold(path[index] ?? "") === fold(name));
+const below = (rule: string, folder: string) =>
+  folder === "" || fold(rule).startsWith(`${fold(folder)}/`);
+
+/**
+ * Whether a rule falls under a chosen folder: it was written there, or the folder holds the
+ * rule's first name. Undefined while what the folder holds is not known.
+ */
+function ruleUnder(selection: FolderSelection, id: string, rule: string): boolean | undefined {
+  const key = fold(rule);
+  if (selection.owned?.get(key)?.has(id)) return true;
+  const listed = selection.listed?.get(id);
+  if (listed === undefined) return undefined;
+  if (listed.names.has(key.split("/")[0] ?? key)) return true;
+  return listed.complete ? false : undefined;
+}
+
+/**
+ * The rules once chosen folders go. A rule only they held goes with them, unless a folder that
+ * stays is known to hold its path: the pattern leaves that one out too, and the chooser said so.
+ */
+function released(
+  selection: FolderSelection,
+  ids: ReadonlySet<string>
+): { excluded: string[]; owned: Map<string, ReadonlySet<string>> } {
+  const staying = [...selection.chosen.keys()].filter((id) => !ids.has(id));
+  const owned = new Map(selection.owned);
+  const excluded = selection.excluded.filter((rule) => {
+    const key = fold(rule);
+    const owners = owned.get(key);
+    if (owners === undefined) return true;
+    const left = [...owners].filter((id) => !ids.has(id));
+    const holders =
+      left.length > 0 ? left : staying.filter((id) => ruleUnder(selection, id, rule) === true);
+    if (holders.length === 0) {
+      owned.delete(key);
+      return false;
+    }
+    owned.set(key, new Set(holders));
+    return true;
+  });
+  return { excluded, owned };
+}
 
 /** The chosen folder furthest up that `folder` lies below, where one does. */
 function chosenAbove(
@@ -143,20 +197,28 @@ export function folderState(selection: FolderSelection, folder: PlacedFolder): F
   if (above !== undefined && !own) {
     const relative = path.slice(above.path.length).join("/");
     const under = lastName(above.path, above.id);
-    if (selection.excluded.includes(relative)) return { state: "out", under };
-    const withAbove = selection.excluded.find((rule) => relative.startsWith(`${rule}/`));
+    if (selection.excluded.some((rule) => fold(rule) === fold(relative))) {
+      return { state: "out", under };
+    }
+    const withAbove = selection.excluded.find((rule) => below(relative, rule));
     if (withAbove !== undefined) {
       return { state: "outAbove", with: withAbove.split("/").at(-1) ?? withAbove };
     }
+    const depth = relative.split("/").length;
     return {
       state: "in",
       under,
       without: selection.excluded
         .filter((rule) => below(rule, relative))
-        .map((rule) => rule.slice(relative.length + 1))
+        .map((rule) => rule.split("/").slice(depth).join("/"))
     };
   }
-  if (own) return { state: "in", without: selection.excluded };
+  if (own) {
+    return {
+      state: "in",
+      without: selection.excluded.filter((rule) => ruleUnder(selection, folder.id, rule) === true)
+    };
+  }
   let count = 0;
   for (const [id, chosenPath] of selection.chosen) {
     if (id === folder.id || chosenPath === undefined) continue;
@@ -164,6 +226,42 @@ export function folderState(selection: FolderSelection, folder: PlacedFolder): F
     if (inner.length > path.length && startsWith(inner, path)) count += 1;
   }
   return { state: "none", below: count };
+}
+
+/**
+ * The selection once a folder above chosen ones is ticked: they go, and what was left out below
+ * them is written again from the new folder, so it stays out. Undefined where a pattern cannot
+ * write that path.
+ */
+function chooseAbove(
+  selection: FolderSelection,
+  folder: PlacedFolder
+): FolderSelection | undefined {
+  const path = normal(folder.path);
+  const chosen = new Map(selection.chosen);
+  const dropped = new Set<string>();
+  const moved: string[] = [];
+  for (const [id, chosenPath] of selection.chosen) {
+    if (chosenPath === undefined) continue;
+    const inner = normal(chosenPath);
+    if (inner.length <= path.length || !startsWith(inner, path)) continue;
+    chosen.delete(id);
+    dropped.add(id);
+    for (const rule of selection.excluded) {
+      if (ruleUnder(selection, id, rule) === false) continue;
+      const segments = [...inner.slice(path.length), ...rule.split("/")];
+      if (!canLeaveOut(segments)) return undefined;
+      moved.push(segments.join("/"));
+    }
+  }
+  chosen.set(folder.id, folder.path);
+  const { excluded, owned } = released(selection, dropped);
+  for (const rule of moved) {
+    if (excluded.some((other) => fold(other) === fold(rule) || below(rule, other))) continue;
+    excluded.push(rule);
+    owned.set(fold(rule), new Set([folder.id]));
+  }
+  return { ...selection, chosen, excluded, owned };
 }
 
 /** The selection once `folder` is ticked or unticked. */
@@ -176,40 +274,49 @@ export function toggleFolder(
   const path = normal(folder.path);
   const above = chosenAbove(selection, folder);
   const relative = above === undefined ? "" : path.slice(above.path.length).join("/");
-  const chosen = new Map(selection.chosen);
+  const base = above?.id ?? folder.id;
+  // The rules a tick on this folder may clear: those the chooser wrote below it.
+  const ownBelow = (rule: string) =>
+    selection.owned?.get(fold(rule))?.has(base) === true && below(rule, relative);
   if (on) {
     if (state.state === "outAbove") return selection;
-    if (state.state === "none") {
-      // What lies below it is read with it now.
-      for (const [id, chosenPath] of chosen) {
-        if (chosenPath === undefined) continue;
-        const inner = normal(chosenPath);
-        if (inner.length > path.length && startsWith(inner, path)) chosen.delete(id);
+    if (state.state === "none") return chooseAbove(selection, folder) ?? selection;
+    if (state.state === "in" && state.without.length === 0) return selection;
+    const excluded = selection.excluded.filter(
+      (rule) => (relative === "" || fold(rule) !== fold(relative)) && !ownBelow(rule)
+    );
+    if (excluded.length < selection.excluded.length) {
+      const owned = new Map(selection.owned);
+      for (const rule of selection.excluded) {
+        if (!excluded.includes(rule)) owned.delete(fold(rule));
       }
-      chosen.set(folder.id, folder.path);
-      return { chosen, excluded: selection.excluded };
+      return { ...selection, excluded, owned };
     }
-    // Read whole again: its own pattern goes, and each below it.
-    return {
-      chosen,
-      excluded: selection.excluded.filter((rule) => rule !== relative && !below(rule, relative))
-    };
+    // Only rules it did not write hold the box in part, so the click takes the folder out.
   }
   if (state.state !== "in") return selection;
+  const chosen = new Map(selection.chosen);
   chosen.delete(folder.id);
   if (above === undefined) {
-    // Nothing chosen is left for the folders left out to lie below.
-    return { chosen, excluded: chosen.size === 0 ? [] : selection.excluded };
+    return { ...selection, chosen, ...released(selection, new Set([folder.id])) };
   }
-  if (!canLeaveOut(path.slice(above.path.length))) return { chosen, excluded: selection.excluded };
-  return {
-    chosen,
-    excluded: [...selection.excluded.filter((rule) => !below(rule, relative)), relative]
-  };
+  if (!canLeaveOut(path.slice(above.path.length))) return { ...selection, chosen };
+  const owned = new Map(selection.owned);
+  const excluded = selection.excluded.filter((rule) => {
+    if (!ownBelow(rule)) return true;
+    owned.delete(fold(rule));
+    return false;
+  });
+  owned.set(fold(relative), new Set([above.id]));
+  return { ...selection, chosen, excluded: [...excluded, relative], owned };
 }
 
-/** Whether unticking `folder` can be said by the source: a chosen one always, one below by a pattern. */
-export function canUntick(selection: FolderSelection, folder: PlacedFolder): boolean {
+/** Whether the folder's box can change: what a click would do can be said by the source. */
+export function canToggle(selection: FolderSelection, folder: PlacedFolder): boolean {
+  const state = folderState(selection, folder);
+  if (state.state === "outAbove") return false;
+  if (state.state === "none") return chooseAbove(selection, folder) !== undefined;
+  if (state.state === "out") return true;
   const above = chosenAbove(selection, folder);
   return above === undefined || canLeaveOut(normal(folder.path).slice(above.path.length));
 }
@@ -223,7 +330,28 @@ export function withFolderPath(
   if (!selection.chosen.has(id) || selection.chosen.get(id) !== undefined) return selection;
   const chosen = new Map(selection.chosen);
   chosen.set(id, path);
-  return { chosen, excluded: selection.excluded };
+  return { ...selection, chosen };
+}
+
+/** The selection knowing which folders lie directly in a chosen one. */
+export function withFolderNames(
+  selection: FolderSelection,
+  id: string,
+  names: readonly string[],
+  complete: boolean
+): FolderSelection {
+  const folded = new Set(names.map(fold));
+  const known = selection.listed?.get(id);
+  if (
+    known?.complete === complete &&
+    known.names.size === folded.size &&
+    [...folded].every((name) => known.names.has(name))
+  ) {
+    return selection;
+  }
+  const listed = new Map(selection.listed);
+  listed.set(id, { names: folded, complete });
+  return { ...selection, listed };
 }
 
 /** What a selection reads as: the chosen folders by name, and the folders left out below them. */

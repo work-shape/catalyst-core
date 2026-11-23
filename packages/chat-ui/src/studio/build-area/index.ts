@@ -237,11 +237,13 @@ export { ReindexStatement } from "./knowledge-base-reindex";
 export { KnowledgeSourceChoice } from "./knowledge-base-source-choice";
 export { KnowledgeSourceFolderPicker } from "./knowledge-source-folder-picker";
 export {
+  canToggle,
   excludedFolders,
   folderState,
   selectionSummary,
   toggleFolder,
   withExcludedFolders,
+  withFolderNames,
   withFolderPath,
   type FolderSelection
 } from "./knowledge-source-folder-selection";

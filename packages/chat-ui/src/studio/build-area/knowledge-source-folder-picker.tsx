@@ -1,5 +1,5 @@
 import { ChevronRight, Folder, FolderMinus, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import {
   Breadcrumb,
   Button,
@@ -14,13 +14,14 @@ import {
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import type { KnowledgeBaseSource } from "./knowledge-base-source";
 import {
-  canUntick,
+  canToggle,
   excludedFolders,
   folderPathSegments,
   folderState,
   selectionSummary,
   toggleFolder,
   withExcludedFolders,
+  withFolderNames,
   withFolderPath,
   type FolderSelection,
   type FolderState,
@@ -109,23 +110,33 @@ function stateLine(t: Translate, state: FolderState): string | undefined {
   }
 }
 
-/** Reads the path of a folder chosen before, which the selection places it by. */
-function ChosenFolderPath({
+/** Reads where a chosen folder lies and what is directly in it, which the selection needs. */
+function ChosenFolderRead({
   source,
   connection,
   folder,
-  onPath
+  onRead
 }: {
-  source: KnowledgeBaseSource;
+  source: Pick<KnowledgeBaseSource, "useSourceFolders">;
   connection: string;
   folder: string;
-  onPath(folder: string, path: string): void;
+  onRead(folder: string, path: string, names: readonly string[], complete: boolean): void;
 }) {
   const read = source.useSourceFolders?.(connection, folder, true);
-  const path = read?.status === "ready" ? read.data.folder.path : undefined;
+  const listing = read?.status === "ready" ? read.data : undefined;
+  const path = listing?.folder.path;
+  const folders = listing?.folders;
+  const complete = listing !== undefined && listing.more === undefined;
   useEffect(() => {
-    if (path !== undefined) onPath(folder, path);
-  }, [folder, path, onPath]);
+    if (path !== undefined && folders !== undefined) {
+      onRead(
+        folder,
+        path,
+        folders.map((entry) => entry.name),
+        complete
+      );
+    }
+  }, [folder, path, folders, complete, onRead]);
   return null;
 }
 
@@ -138,7 +149,7 @@ export function KnowledgeSourceFolderPicker({
   onClose,
   onChoose
 }: {
-  source: KnowledgeBaseSource;
+  source: Pick<KnowledgeBaseSource, "useSourceFolders">;
   connection: string;
   /** The Connection as people read it: the name of the top. */
   connectionTitle: string;
@@ -156,11 +167,18 @@ export function KnowledgeSourceFolderPicker({
     chosen: new Map(initial.map((id) => [id, undefined])),
     excluded: excludedFolders(exclude)
   }));
-  const [unplaced] = useState(() => [...initial]);
   const [place] = useState(
-    () => (folder: string, path: string) =>
-      setSelection((current) => withFolderPath(current, folder, folderPathSegments(path)))
+    () => (folder: string, path: string, names: readonly string[], complete: boolean) =>
+      setSelection((current) =>
+        withFolderNames(
+          withFolderPath(current, folder, folderPathSegments(path)),
+          folder,
+          names,
+          complete
+        )
+      )
   );
+  const rowsId = useId();
   const here = trail[trail.length - 1] ?? { id: undefined, name: connectionTitle };
   const read = source.useSourceFolders?.(connection, here.id, true);
   const listing = read?.status === "ready" ? read.data : undefined;
@@ -207,13 +225,13 @@ export function KnowledgeSourceFolderPicker({
       }
     >
       <div className="grid min-w-0 gap-3" data-knowledge-folder-picker="">
-        {unplaced.map((folder) => (
-          <ChosenFolderPath
+        {[...selection.chosen.keys()].map((folder) => (
+          <ChosenFolderRead
             key={folder}
             source={source}
             connection={connection}
             folder={folder}
-            onPath={place}
+            onRead={place}
           />
         ))}
         <Breadcrumb
@@ -230,10 +248,7 @@ export function KnowledgeSourceFolderPicker({
             label={t("knowledgeSources.pickHere", { name: here.name })}
             description={stateLine(t, hereState)}
             checked={boxOf(hereState)}
-            disabled={
-              hereState.state === "outAbove" ||
-              (boxOf(hereState) === true && !canUntick(selection, hereFolder))
-            }
+            disabled={!canToggle(selection, hereFolder)}
             onCheckedChange={(on) => toggle(hereFolder, on)}
           />
         ) : null}
@@ -248,11 +263,12 @@ export function KnowledgeSourceFolderPicker({
             aria-label={t("knowledgeSources.pickList", { name: here.name })}
             className="grid max-h-80 min-w-0 overflow-y-auto rounded-md border"
           >
-            {read.data.folders.map((folder) => {
+            {read.data.folders.map((folder, index) => {
               const placed = { id: folder.id, path: [...herePath, folder.name] };
               const state = folderState(selection, placed);
               const box = boxOf(state);
               const line = stateLine(t, state);
+              const lineId = `${rowsId}-${index}`;
               return (
                 <li
                   key={folder.id}
@@ -264,10 +280,9 @@ export function KnowledgeSourceFolderPicker({
                 >
                   <Checkbox
                     aria-label={t("knowledgeSources.pickChoose", { name: folder.name })}
+                    aria-describedby={line === undefined ? undefined : lineId}
                     checked={box}
-                    disabled={
-                      state.state === "outAbove" || (box === true && !canUntick(selection, placed))
-                    }
+                    disabled={!canToggle(selection, placed)}
                     onCheckedChange={(on) => toggle(placed, on)}
                   />
                   <button
@@ -287,7 +302,10 @@ export function KnowledgeSourceFolderPicker({
                     >
                       {folder.name}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-right text-caption text-muted-foreground">
+                    <span
+                      id={line === undefined ? undefined : lineId}
+                      className="min-w-0 flex-1 truncate text-right text-caption text-muted-foreground"
+                    >
                       {line}
                     </span>
                     <ChevronRight
