@@ -15,9 +15,11 @@ import {
   SkillIcon,
   Spinner,
   Starter,
+  StarterIcon,
   StarterList
 } from "@work-shape/catalyst-ui";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
+import type { NewConversationPrivacy } from "../workspace/workspace-conversation-actions";
 import {
   agentChipDisplayFor,
   AgentSelector,
@@ -158,7 +160,8 @@ export function AssistantThread({
    * for it: the composer says so and offers a new conversation (MODEL-REGION-3).
    */
   onNewConversationForPersonalData?: () => void;
-  newConversationPrivate?: boolean;
+  /** The conversation the first send makes is the person's alone, and why. */
+  newConversationPrivate?: NewConversationPrivacy | undefined;
   /** What the open conversation is about, where it is about an asset. */
   subjectLine?: ReactNode;
   /**
@@ -437,7 +440,13 @@ export function AssistantThread({
                     data-testid="new-conversation-private-hint"
                   >
                     <Lock size={12} className="shrink-0" aria-hidden="true" />
-                    <span>{t("newConversationPrivateHint")}</span>
+                    <span>
+                      {t(
+                        newConversationPrivate === "continued"
+                          ? "newConversationContinuedPrivateHint"
+                          : "newConversationPrivateHint"
+                      )}
+                    </span>
                   </p>
                 ) : null}
                 <ProjectInstructionsNotice running={conversationRunning ?? false} />
@@ -678,7 +687,7 @@ export function ThreadStartBlock({
   start,
   onStarterChosen
 }: {
-  initialPrompts: Array<{ title: string; prompt: string }>;
+  initialPrompts: Array<{ title: string; prompt: string; icon?: string }>;
   starters: NonNullable<SafeConfig["agents"][number]["starters"]>;
   /** What the conversation is for: an asset, or a new one of a kind. */
   start?: ConversationStart;
@@ -706,13 +715,18 @@ export function ThreadStartBlock({
       </div>
     );
   }
+  // More than four stand as short cards, so their icons are a size smaller.
+  const iconSize = initialPrompts.length + starters.length > 4 ? "md" : "lg";
   return (
     <div className="grid flex-[3] basis-0 content-start gap-5 pb-8 pt-2">
-      {/* The requests the agent's author wrote, then what its skills offer to begin with: four
+      {/* The requests the agent's author wrote, then what its skills offer to begin with: twelve
           at most, which the server keeps. Choosing one fills the composer and sends nothing, so
           the person reads and completes the request first. */}
       {starters.length > 0 || initialPrompts.length > 0 ? (
-        <StarterList label={t("chatStarters")}>
+        <StarterList
+          label={t("chatStarters")}
+          more={{ show: t("chatStartersMore"), hide: t("chatStartersFewer") }}
+        >
           {/* The request itself is the hint of the author's own, unless it only repeats the title. */}
           {initialPrompts.map((initialPrompt) => (
             <ThreadPrimitive.Suggestion
@@ -721,7 +735,14 @@ export function ThreadStartBlock({
               asChild
             >
               <Starter
-                icon={<SkillIcon icon="prompt" size="lg" />}
+                icon={
+                  // Without an icon of its own, the request shows the icon it always had.
+                  initialPrompt.icon === undefined ? (
+                    <SkillIcon icon="prompt" size={iconSize} />
+                  ) : (
+                    <StarterIcon icon={initialPrompt.icon} size={iconSize === "lg" ? "md" : "sm"} />
+                  )
+                }
                 title={initialPrompt.title}
                 hint={
                   initialPrompt.prompt.trim() === initialPrompt.title.trim()
@@ -739,7 +760,7 @@ export function ThreadStartBlock({
               asChild
             >
               <Starter
-                icon={<SkillIcon icon={starter.icon} size="lg" />}
+                icon={<SkillIcon icon={starter.icon} size={iconSize} />}
                 title={starter.title}
                 hint={starter.hint}
                 onClick={onStarterChosen}

@@ -140,10 +140,10 @@ export function ConnectionPage({
   // Where agents may use a Connection of everyone, beside where it sits (SCOPE-WORDS). Where
   // none may, the chip leads a reader who may change that to "Available in".
   const audience = assetAudience("connection", asset, useKnownWorkspaces(), t, locale);
-  // A Connection made here and not yet read waits for its first discovery. A REST API has none:
-  // its page reads the Connection again for a while after a write.
-  // A type with a form of its own, such as a document source, discovers nothing, and its
-  // settings are not the address and key this page edits: they show as they are.
+  // A Connection made here and not yet read waits for its first discovery. Only an MCP server
+  // names its tools: any other Connection is read again once after a write, and waits for nothing.
+  // A type with a form of its own has settings that are not the address and key this page
+  // edits: they show as they are.
   const { connectorType } = asset.config;
   const offer = (source.useConnectorTypes?.(source.mayTest(asset)) ?? []).find(
     (type) => type.type === connectorType
@@ -151,7 +151,7 @@ export function ConnectionPage({
   // A Connection on the managed client set up from an earlier entry version is updated first.
   const entries = source.useCatalogueEntries?.(source.mayTest(asset));
   const update = editing && entries ? catalogueUpdateOf(asset.config, entries) : undefined;
-  const discovers = connectorType !== "http_api" && offer === undefined;
+  const discovers = connectorType === "mcp";
   const formEdits = offer === undefined;
   const { config } = asset;
   const enabled = config.enabled !== false;
@@ -184,7 +184,14 @@ export function ConnectionPage({
   const asked = () => setWait(discoveryWaitFrom(detail, Date.now()));
   // A write of a personal Connection asks for no discovery: its tools are read on its owner's
   // request alone. The page reads it again once.
-  const written = () => setWait(discoveryWaitFrom(detail, Date.now(), !personal && enabled));
+  const written = () =>
+    setWait(discoveryWaitFrom(detail, Date.now(), discovers && !personal && enabled));
+  // A type with no tools to give, such as a document source, says nothing about tools.
+  const hasTools =
+    discovers ||
+    connectorType === "http_api" ||
+    (offer?.operations.length ?? 0) > 0 ||
+    (detail?.operations.length ?? 0) > 0;
   const runtime = config.origin !== "release";
   const title = textOf(config, "displayName") ?? asset.name;
   const headHealth = detail ? recordedHealth(detail) : undefined;
@@ -304,7 +311,7 @@ export function ConnectionPage({
   const typeTools = editing && offer ? typeToolsToApprove(offer, asset.config) : [];
   // What agents may do with the Connection, and the way to more of it.
   const main: PageSection[] =
-    read.status === "failed"
+    read.status === "failed" || !hasTools
       ? []
       : [
           {

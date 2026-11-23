@@ -1,4 +1,4 @@
-import { WEB_FETCH_TOOL_NAME } from "@work-shape/catalyst-web-access";
+import { WEB_DOWNLOAD_TOOL_NAME, WEB_FETCH_TOOL_NAME } from "@work-shape/catalyst-web-access";
 import {
   AppError,
   defaultReasoningEffortForAgentBinding,
@@ -346,7 +346,10 @@ export class ModelInput {
     // tools between requests; native search must never be offered with personal data.
     const requestTools = (await this.webAccessOff(runId, state, input))
       ? tools.filter(
-          (tool) => tool.name !== WEB_SEARCH_MODEL_TOOL_NAME && tool.name !== WEB_FETCH_TOOL_NAME
+          (tool) =>
+            tool.name !== WEB_SEARCH_MODEL_TOOL_NAME &&
+            tool.name !== WEB_FETCH_TOOL_NAME &&
+            tool.name !== WEB_DOWNLOAD_TOOL_NAME
         )
       : tools;
     const withinImageBudget = applyModelInputImageBudget(messages);

@@ -31,6 +31,7 @@ export * from "./data-stores";
 export * from "./data-tool-names";
 export * from "./data-tools";
 export * from "./document-source";
+export * from "./document-source-patterns";
 export * from "./draft-calls";
 export * from "./errors";
 export * from "./events";

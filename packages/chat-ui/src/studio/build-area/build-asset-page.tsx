@@ -685,6 +685,10 @@ function LoadedAssetPage({
   const draftAhead = hasDraft && stored.revision !== stored.publishedRevision;
   const canPublish =
     draftAhead && conflict === undefined && mayOnAsset(source.rights, "publish", stored);
+  const openPublish = () => {
+    ask();
+    setPublishOpen(true);
+  };
   // The agent's draft revision the page shows, which a restore names: an agent has one draft,
   // and an earlier revision becomes its content. A skill a team or the instance owns has none,
   // and its save asks for `skill.publish`; `shared` says so to its form (SKILL-LIVE-1).
@@ -884,6 +888,7 @@ function LoadedAssetPage({
         draft={{
           shared: sharedDraft,
           canPublish: !shipped && mayOnAsset(source.rights, "publish", stored),
+          ...(canPublish ? { publish: { open: openPublish, unsaved } } : {}),
           onRead: (revision) => {
             agentDraftRead.current = revision;
           },
@@ -911,10 +916,7 @@ function LoadedAssetPage({
                 data-build-publish=""
                 disabled={unsaved}
                 title={unsaved ? t("build.publishSaveFirst") : undefined}
-                onClick={() => {
-                  ask();
-                  setPublishOpen(true);
-                }}
+                onClick={openPublish}
               >
                 <Send aria-hidden="true" />
                 {t("build.publish")}

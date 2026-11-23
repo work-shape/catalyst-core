@@ -213,5 +213,26 @@ export async function resolveWorkflowNeededRights(
       if (asset.scope.kind === "workspace") right.asset.workspaceId = asset.scope.workspaceId;
     }
   }
-  return rights;
+  return onceByAsset(rights);
+}
+
+/**
+ * The rights with each right on one asset once. A right named by its asset's name, such as a
+ * trigger's filter, and the same right of an operation, which names the asset by its id, are
+ * one right once the name is resolved: the publish writes one grant for it.
+ */
+function onceByAsset(rights: WorkflowNeededRight[]): WorkflowNeededRight[] {
+  const found = new Map<string, WorkflowNeededRight>();
+  for (const right of rights) {
+    const { action, asset } = right;
+    const key = `${action}\u0000${asset.kind}\u0000${asset.assetId === undefined ? `name:${asset.name}` : `id:${asset.assetId}`}`;
+    const known = found.get(key);
+    if (!known) {
+      found.set(key, right);
+      continue;
+    }
+    for (const step of right.steps) if (!known.steps.includes(step)) known.steps.push(step);
+    if (right.neededFor === "publish") known.neededFor = "publish";
+  }
+  return [...found.values()];
 }

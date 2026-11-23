@@ -1,5 +1,7 @@
 import type { AgentRunProjection, DraftAttachment, Message } from "@work-shape/catalyst-api-client";
 import {
+  ASK_QUESTION_TOOL_NAME,
+  DATA_STORE_USE_TOOL_NAME,
   isJsonObject,
   unknownToJsonValue,
   type JsonObject,
@@ -31,9 +33,46 @@ import {
   type PersistedToolResult
 } from "./assistant-message-compat";
 import type { AssistantUiActiveRun, AssistantUiMessageMetadata } from "./assistant-ui-types";
+import { toolAnswer } from "../conversation/subject-run";
+import { readAskedQuestion } from "../questions/question";
 
 interface UiMessagePartProjectionOptions {
   includeSyntheticWebSearchTool?: boolean;
+  /**
+   * The run this message ends, where it ends one without being its final answer: the message of
+   * a call that waits for the person. Its run's displays and files stand with it.
+   */
+  endsRunId?: string;
+}
+
+/**
+ * A call that waits for the person, by what it answered: a question asked (ASK-1), or a Data
+ * Store that waits for the person's click (STORE-USE-1). A step that makes one ends the run's
+ * turn, and the run writes no final answer. A refused call and a store added at once do not.
+ */
+export function waitsForPerson(toolName: string, result: unknown): boolean {
+  if (toolName === ASK_QUESTION_TOOL_NAME) return readAskedQuestion(result) !== undefined;
+  if (toolName === DATA_STORE_USE_TOOL_NAME) return toolAnswer(result)?.awaitsPerson === true;
+  return false;
+}
+
+/**
+ * Puts a part of what the run brought, such as its displays, where the answer shows it: at its
+ * end, or above the call that ended the run's turn to wait for the person, so a question stands
+ * under what it asks about.
+ */
+function placeRunResultPart(parts: UIMessage["parts"], part: UIMessage["parts"][number]): void {
+  const last = parts.findLastIndex((candidate) => candidate.type === "dynamic-tool");
+  const lastCall = parts[last];
+  if (
+    lastCall?.type === "dynamic-tool" &&
+    lastCall.state === "output-available" &&
+    waitsForPerson(lastCall.toolName, lastCall.output)
+  ) {
+    parts.splice(last, 0, part);
+  } else {
+    parts.push(part);
+  }
 }
 
 export function toAttachmentFilePart(
@@ -444,7 +483,7 @@ export function toUiMessageParts(
       !toolCalls.some((toolCall) => toolCall.toolName === "web_search")
   });
   appendAssistantKnowledgeSourceParts(parts, message);
-  const finalRunId = readCompatibleAssistantFinalRunId(message);
+  const finalRunId = options.endsRunId ?? readCompatibleAssistantFinalRunId(message);
   appendWorkspacePromotedSurfacesPart(
     parts,
     finalRunId ? (surfacedSurfacesByRunId.get(finalRunId) ?? []) : []
@@ -472,10 +511,11 @@ export function appendWorkspacePromotedSurfacesPart(
   if (uniqueSurfaces.length === 0) {
     return;
   }
-  parts.push({
+  const part = {
     type: WORKSPACE_PROMOTED_SURFACES_DATA_TYPE,
     data: createWorkspacePromotedSurfacesData(uniqueSurfaces)
-  } as UIMessage["parts"][number]);
+  } as UIMessage["parts"][number];
+  placeRunResultPart(parts, part);
 }
 
 export function appendWorkspacePromotedArtifactsPart(
@@ -486,7 +526,7 @@ export function appendWorkspacePromotedArtifactsPart(
   if (uniqueArtifacts.length === 0) {
     return;
   }
-  parts.push({
+  placeRunResultPart(parts, {
     type: WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE,
     data: createWorkspacePromotedArtifactsData(uniqueArtifacts)
   } as UIMessage["parts"][number]);

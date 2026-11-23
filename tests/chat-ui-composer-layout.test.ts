@@ -573,6 +573,17 @@ describe("starters on the empty chat", () => {
     );
   });
 
+  it("shows the icon the author chose on a tile of its family's hue", () => {
+    const markup = startPage({
+      starters: [],
+      initialPrompts: [{ title: "Plan the week", prompt: "Plan the week", icon: "calendar" }]
+    });
+
+    expect(startersOf(markup)).toContain('data-starter-icon="calendar"');
+    expect(startersOf(markup)).toContain("bg-tint-teal/12");
+    expect(startersOf(markup)).not.toContain("data-skill-icon");
+  });
+
   it("shows the agent's own prompts as starters before the skills' ones, in one style", () => {
     const markup = startPage({
       starters,

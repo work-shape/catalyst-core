@@ -24,6 +24,7 @@ import type { MoreRead, PagedItems } from "./paged-items";
 import { useAvailabilityChoice, type AvailabilityFrame } from "./asset-availability";
 import type { AvailabilityChoice } from "./asset-availability-fields";
 import type { ConnectorTypeOffer } from "./connection-typed-model";
+import { knowledgeSourcesFromConfig, type KnowledgeSourceForm } from "./knowledge-sources-model";
 
 type Translate = TranslationContextValue["t"];
 
@@ -62,6 +63,44 @@ export function sourcesStillSyncing(sources: KnowledgeSources): boolean {
   return sources.sources.some(
     (source) => source.running !== undefined || source.last === undefined
   );
+}
+
+const MINUTE_MS = 60_000;
+/**
+ * How long after a source's next sync is expected its state is read once more: the instance
+ * looks every minute for what is due.
+ */
+const NEXT_SYNC_READ_MARGIN_MS = 75_000;
+
+/**
+ * When a source that fetches changes by itself is expected to sync next: one interval after its
+ * last sync started. The instance gives each source its own minute, which the read does not
+ * name, so after a sync a person started this is late by up to one interval. Absent for a
+ * source that fetches no changes by itself, and for one that never synced.
+ */
+export function sourceNextSyncAt(
+  status: Pick<KnowledgeSourceStatus, "last" | "schedule">
+): Date | undefined {
+  const changes = status.schedule?.changes;
+  if (typeof changes !== "number" || status.last === undefined) return undefined;
+  return new Date(new Date(status.last.startedAt).getTime() + changes * MINUTE_MS);
+}
+
+/**
+ * In how many milliseconds the sources are read once more while none of them syncs: shortly
+ * after the first of them is expected to sync by itself, so the page sees that sync start.
+ * Absent once that time has passed: the page then reads nothing again by itself.
+ */
+export function sourcesReadAgainIn(sources: KnowledgeSources, now: Date): number | undefined {
+  const waits = sources.sources
+    .filter((source) => !("workflowId" in source) && source.running === undefined)
+    .flatMap((source) => {
+      const next = sourceNextSyncAt(source);
+      const wait =
+        next === undefined ? 0 : next.getTime() + NEXT_SYNC_READ_MARGIN_MS - now.getTime();
+      return wait > NEXT_SYNC_READ_MARGIN_MS ? [wait] : [];
+    });
+  return waits.length > 0 ? Math.min(...waits) : undefined;
 }
 
 /** One document of a Knowledge Base that keeps documents, as `knowledge_bases.list_documents` answers it. */
@@ -339,13 +378,24 @@ export interface KnowledgeBaseSource {
   ): KnowledgeRead<KnowledgeSourceFolders>;
   /**
    * A hook: the state of each synced source of the published revision, read again every few
-   * seconds while one syncs, and anew once another revision is published. Without a published
-   * revision it reads nothing and stays loading.
+   * seconds while one syncs, once more shortly after one is expected to sync by itself, and anew
+   * once another revision is published. Without a published revision it reads nothing and stays
+   * loading.
    */
   useSources?(
     knowledgeBase: string,
     publishedRevision: number | undefined
   ): KnowledgeRead<KnowledgeSources>;
+  /**
+   * A hook: the synced sources as the published revision of the Knowledge Base of `owner` names
+   * them, for a page whose draft is ahead of it: what syncs now, beside what the draft sets. It
+   * reads nothing without a revision.
+   */
+  usePublishedSources?(
+    knowledgeBase: string,
+    owner: string | undefined,
+    publishedRevision: number | undefined
+  ): KnowledgeRead<KnowledgeSourceForm[]>;
   /** Syncs the changes of one source now; a sync that runs already is joined. */
   syncSource?(knowledgeBase: string, source: string): Promise<KnowledgeCall<unknown>>;
   /**
@@ -644,7 +694,29 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
       useRead(
         key("sources", knowledgeBase, publishedRevision ?? ""),
         (signal) => client.knowledge_bases.sources({ params: { knowledgeBase }, signal }),
-        { enabled: publishedRevision !== undefined, pollWhile: sourcesStillSyncing }
+        {
+          enabled: publishedRevision !== undefined,
+          pollWhile: sourcesStillSyncing,
+          readAgainIn: (sources) => sourcesReadAgainIn(sources, new Date())
+        }
+      ),
+    usePublishedSources: (knowledgeBase, owner, publishedRevision) =>
+      useRead(
+        key("published-sources", knowledgeBase, owner ?? "", publishedRevision ?? ""),
+        async (signal) =>
+          knowledgeSourcesFromConfig(
+            (
+              await client.assets.get({
+                params: { kind: "knowledge_base", name: knowledgeBase },
+                query: {
+                  ...(owner === undefined ? {} : { workspaceId: owner }),
+                  revision: "published"
+                },
+                signal
+              })
+            ).config.sources
+          ),
+        { enabled: publishedRevision !== undefined }
       ),
     syncSource: (knowledgeBase, source) =>
       called(t, async () => {
@@ -914,17 +986,22 @@ function useRead<Answer>(
     enabled?: boolean;
     /** Reads again every `DOCUMENTS_POLL_MS` while what was read says so. */
     pollWhile?: (answer: Answer) => boolean;
+    /** While it is not polled: reads once more in as many milliseconds, where it names any. */
+    readAgainIn?: (answer: Answer) => number | undefined;
   } = {}
 ): KnowledgeRead<Answer> {
   const { t } = useTranslation();
-  const { pollWhile } = options;
+  const { pollWhile, readAgainIn } = options;
   const query = useQuery({
     queryKey,
     queryFn: ({ signal }) => read(signal),
     retry: false,
     enabled: options.enabled ?? true,
-    refetchInterval: ({ state }) =>
-      pollWhile && state.data !== undefined && pollWhile(state.data) ? DOCUMENTS_POLL_MS : false
+    refetchInterval: ({ state }) => {
+      if (state.data === undefined) return false;
+      if (pollWhile?.(state.data)) return DOCUMENTS_POLL_MS;
+      return readAgainIn?.(state.data) ?? false;
+    }
   });
   return readStateOf(t, query.data, query);
 }

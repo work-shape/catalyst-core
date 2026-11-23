@@ -34,6 +34,12 @@ export interface SkillsGalleryText {
   starterPdfHint: string;
   starterGuide: string;
   starterGuideHint: string;
+  starterMany: string;
+  starterManyTitles: readonly string[];
+  starterMore: string;
+  starterFewer: string;
+  iconPickerLabel: string;
+  iconPickerDefault: string;
   choiceQuestion: string;
   choiceRecommended: string;
   choiceOnlyMe: string;
@@ -81,6 +87,25 @@ export const skillsGalleryText: Record<"en" | "de", SkillsGalleryText> = {
     starterPdfHint: "Into a table",
     starterGuide: "Ask how this platform works",
     starterGuideHint: "Agents, skills and Connections",
+    starterMany: "More than four: short cards, the first nine, then More",
+    starterManyTitles: [
+      "Draft a letter",
+      "Summarise a document",
+      "Plan the week",
+      "Answer an e-mail",
+      "Check a calculation",
+      "Find a source",
+      "Prepare a meeting",
+      "Collect ideas",
+      "Write up the minutes",
+      "Compare two offers",
+      "Set a goal",
+      "Explain a term"
+    ],
+    starterMore: "More",
+    starterFewer: "Fewer",
+    iconPickerLabel: "Icon",
+    iconPickerDefault: "Default",
     choiceQuestion: "Who should be able to use the overview?",
     choiceRecommended: "Recommended",
     choiceOnlyMe: "Only me",
@@ -131,6 +156,25 @@ export const skillsGalleryText: Record<"en" | "de", SkillsGalleryText> = {
     starterPdfHint: "In eine Tabelle",
     starterGuide: "Fragen, wie die Plattform funktioniert",
     starterGuideHint: "Agenten, Skills und Connections",
+    starterMany: "Mehr als vier: kurze Karten, die ersten neun, dann Mehr",
+    starterManyTitles: [
+      "Brief entwerfen",
+      "Dokument zusammenfassen",
+      "Woche planen",
+      "E-Mail beantworten",
+      "Rechnung prüfen",
+      "Quelle finden",
+      "Besprechung vorbereiten",
+      "Ideen sammeln",
+      "Protokoll schreiben",
+      "Zwei Angebote vergleichen",
+      "Ziel festlegen",
+      "Begriff erklären"
+    ],
+    starterMore: "Mehr",
+    starterFewer: "Weniger",
+    iconPickerLabel: "Symbol",
+    iconPickerDefault: "Standard",
     choiceQuestion: "Wer soll die Übersicht nutzen können?",
     choiceRecommended: "Empfohlen",
     choiceOnlyMe: "Nur ich",

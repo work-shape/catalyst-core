@@ -47,7 +47,7 @@ import {
 import { KnowledgeDocuments, useKnowledgeIntake } from "./knowledge-base-documents";
 import { KnowledgeSourceChoice } from "./knowledge-base-source-choice";
 import { KnowledgeSourceConnectDialog, KnowledgeSourcesSection } from "./knowledge-base-sources";
-import { newKnowledgeSource } from "./knowledge-sources-model";
+import { knowledgeSourcesFromConfig, newKnowledgeSource } from "./knowledge-sources-model";
 import { KnowledgeTestSearch } from "./knowledge-base-test-search";
 import {
   knowledgeBaseFormToConfig,
@@ -257,6 +257,19 @@ export function KnowledgeBaseEditor({
   const sourceRows = live && documents;
   // A new one names its synced source with where its knowledge comes from; an existing one
   // connects more through Add documents.
+  // The published revision is the one that syncs. Where the saved draft is ahead of it, its
+  // sources are read beside the draft's; otherwise the asset as loaded names them.
+  const draftAhead = asset !== undefined && asset.revision !== published;
+  const publishedSources = source.usePublishedSources?.(
+    asset?.name ?? "",
+    frame.owner,
+    draftAhead && documents ? published : undefined
+  );
+  const liveSources = !draftAhead
+    ? knowledgeSourcesFromConfig(asset?.config.sources)
+    : publishedSources?.status === "ready"
+      ? publishedSources.data
+      : undefined;
   const sourcesSection = (
     <>
       <KnowledgeSourcesSection
@@ -271,6 +284,8 @@ export function KnowledgeBaseEditor({
         workflowPage={workflowPage}
         adding={asset !== undefined && !sourceRows}
         layout={sourceRows ? "rows" : "cards"}
+        live={liveSources}
+        publish={frame.draft?.publish}
         onChange={(sources) => update({ sources })}
       />
       {sourceRows && refusalsOf(outcome, "sources").length > 0 ? (

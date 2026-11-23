@@ -18,7 +18,7 @@ export interface PinnedRequest {
   grant: EgressGrant;
   method: "GET" | "POST" | "DELETE";
   headers: Record<string, string>;
-  body: string | undefined;
+  body: string | Uint8Array | undefined;
   agent: ConnectorAgent;
   /** Ends the request, and the answer while it is read. */
   signal: AbortSignal;

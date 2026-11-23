@@ -7,6 +7,7 @@ import {
   Plug,
   RefreshCw,
   RotateCcw,
+  Send,
   Trash2,
   X
 } from "lucide-react";
@@ -39,6 +40,7 @@ import {
   List,
   Picker,
   PickerButton,
+  Spinner,
   Textarea
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
@@ -50,7 +52,13 @@ import type {
   KnowledgeSourceFailureCode,
   KnowledgeSourceStatus
 } from "./knowledge-base-source";
-import { sourceFailureText, sourceItemCounts, sourceStateView } from "./knowledge-source-status";
+import {
+  sourceDraftChange,
+  sourceFailureText,
+  sourceItemCounts,
+  sourceLiveLine,
+  sourceStateView
+} from "./knowledge-source-status";
 import {
   newKnowledgeSource,
   sourceFolderIds,
@@ -84,7 +92,10 @@ import { formatEmbeddingCost, formatStoreBytes } from "./knowledge-cost";
 // through a Connection whose type is a document source. The list is part of the draft: a source
 // added, narrowed or removed takes effect at publish, where the question names who finds what.
 // Once published, each shows how far its sync is, why items failed, and for who may change the
-// Knowledge Base, Sync now and Try again.
+// Knowledge Base, Sync now and Try again. Its card says in one line what the published source
+// does right now: the sync that runs and how far it is, or when it last synced and when it syncs
+// next. Where the draft sets a source otherwise than the published revision, which is the one
+// that syncs, the card says the change is not active yet, with Publish for who may.
 // A Workflow that calls `ingest` is a source of its own (KBW-1): it is never authored in the
 // draft, so it is listed from the published state alone, with its Workflow, its last run and
 // how fresh that makes it. Its Workflow's runs decide what it holds, so it has no Sync now and
@@ -100,6 +111,21 @@ export const ReleasedSourcesContext = createContext<ReadonlySet<string>>(new Set
 /** The search of the Connection chooser before the reader types. */
 const NO_SEARCH = "";
 
+/** How often a card says anew how long ago its source synced and when it syncs next. */
+const LIVE_CLOCK_MS = 30_000;
+
+/** The time, counted again every half minute while `ticking`. Nothing is read for it. */
+function useLiveClock(ticking: boolean): Date {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    if (!ticking) return undefined;
+    setNow(new Date());
+    const interval = window.setInterval(() => setNow(new Date()), LIVE_CLOCK_MS);
+    return () => window.clearInterval(interval);
+  }, [ticking]);
+  return now;
+}
+
 export function KnowledgeSourcesSection({
   source,
   knowledgeBase,
@@ -112,6 +138,8 @@ export function KnowledgeSourcesSection({
   workflowPage,
   adding = true,
   layout = "cards",
+  live,
+  publish,
   onChange
 }: {
   source: KnowledgeBaseSource;
@@ -138,6 +166,16 @@ export function KnowledgeSourcesSection({
    * rows of the list they stand in, and shows nothing where none is listed.
    */
   layout?: "cards" | "rows";
+  /**
+   * The sources as the published revision names them, which is the one that syncs. A source the
+   * draft sets otherwise says its change is not active yet. Absent until they are known.
+   */
+  live?: readonly KnowledgeSourceForm[];
+  /**
+   * The page's publish of the saved draft, for a reader who may publish it: offered beside a
+   * change that is not active yet.
+   */
+  publish?: { open(): void; unsaved: boolean };
   onChange(sources: KnowledgeSourceForm[]): void;
 }) {
   const { t } = useTranslation();
@@ -155,6 +193,7 @@ export function KnowledgeSourcesSection({
           (entry): entry is KnowledgeSourceStatus => "id" in entry && entry.id === id
         )
       : undefined;
+  const now = useLiveClock(status?.status === "ready");
   const fedByWorkflows =
     status?.status === "ready" && knowledgeBase !== undefined && published !== undefined
       ? status.data.sources.filter((entry): entry is WorkflowSourceStatus => "workflowId" in entry)
@@ -240,6 +279,13 @@ export function KnowledgeSourcesSection({
                   ? undefined
                   : statusOf(entry.id)
               }
+              now={now}
+              draftChange={
+                knowledgeBase === undefined || published === undefined
+                  ? undefined
+                  : sourceDraftChange(entry, live)
+              }
+              publish={publish}
               startsOpen={knowledgeBase === undefined || !opened.has(entry.id)}
               choice={choiceOf(entry.connection)}
               defaults={scheduleDefaults(statusOf(entry.id)?.schedule, choiceOf(entry.connection))}
@@ -328,6 +374,9 @@ function SourceItem({
   canWrite,
   rows,
   status,
+  now,
+  draftChange,
+  publish,
   startsOpen,
   onPick,
   onChange,
@@ -340,6 +389,12 @@ function SourceItem({
   rows: boolean;
   /** How its sync stands, once published and read. */
   status: KnowledgeSourceStatus | undefined;
+  /** The time its line counts from. */
+  now: Date;
+  /** What of it the draft changed and the published revision, which syncs, does not hold yet. */
+  draftChange: ReturnType<typeof sourceDraftChange>;
+  /** The page's publish, for a reader who may publish the draft. */
+  publish: { open(): void; unsaved: boolean } | undefined;
   /** Unfolded from the start: a source the page did not open with, or of a new Knowledge Base. */
   startsOpen: boolean;
   /** The Connection as the list names it, once read. */
@@ -369,6 +424,10 @@ function SourceItem({
   const released = useContext(ReleasedSourcesContext).has(entry.id);
   const unfolded = open ?? (startsOpen || needsPerson);
   const view = status === undefined ? undefined : sourceStateView(status);
+  // What the published source does right now. The line names a sync that runs, so the badge
+  // beside the name says only what the line does not.
+  const liveLine = status === undefined ? undefined : sourceLiveLine(status, now, translation);
+  const runs = status?.running !== undefined && liveLine !== undefined;
   const connectionTitle = choice?.title || entry.connection;
   const titleId = useId();
   const named = browses && folders.length > 0;
@@ -478,7 +537,7 @@ function SourceItem({
                   : connectionTitle}
                 {named ? <KnowledgeSourceExcludedSuffix exclude={entry.exclude} /> : null}
               </span>
-              {view === undefined || view.state === "current" ? null : (
+              {view === undefined || view.state === "current" || runs ? null : (
                 <Badge tone={view.tone} dot>
                   {t(view.label)}
                 </Badge>
@@ -493,6 +552,15 @@ function SourceItem({
             </div>
             {facts === "" ? null : (
               <span className="text-caption text-muted-foreground">{facts}</span>
+            )}
+            {liveLine === undefined ? null : (
+              <p
+                className="flex min-w-0 items-center gap-1.5 text-caption text-foreground"
+                data-knowledge-source-live={runs ? "running" : "idle"}
+              >
+                {runs ? <Spinner size="xs" aria-hidden="true" /> : null}
+                <span className="min-w-0">{liveLine}</span>
+              </p>
             )}
             <p className="text-caption text-muted-foreground" data-knowledge-source-sentence="">
               {sourceScheduleSentence(entry.schedule, defaults, web, translation)}
@@ -513,6 +581,35 @@ function SourceItem({
             )}
           </DisclosureTrigger>
         </div>
+        {draftChange === undefined ? null : (
+          <Banner
+            tone="warning"
+            className="mt-3"
+            data-knowledge-source-draft={draftChange}
+            action={
+              publish ? (
+                <Button
+                  size="sm"
+                  disabled={publish.unsaved}
+                  title={publish.unsaved ? t("build.publishSaveFirst") : undefined}
+                  data-knowledge-source-publish=""
+                  onClick={publish.open}
+                >
+                  <Send aria-hidden="true" />
+                  {t("build.publish")}
+                </Button>
+              ) : undefined
+            }
+          >
+            {t(
+              draftChange === "folders"
+                ? "knowledgeSources.draftFolders"
+                : draftChange === "addresses"
+                  ? "knowledgeSources.draftAddresses"
+                  : "knowledgeSources.draftSettings"
+            )}
+          </Banner>
+        )}
         {/* Kept in the page while folded: its fields are part of the form. */}
         <DisclosureContent keepMounted>
           <div className="grid min-w-0 gap-3 pt-3">

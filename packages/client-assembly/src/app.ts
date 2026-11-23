@@ -66,7 +66,10 @@ import {
   createDataSourceTools,
   createDataSourceRegistry
 } from "@work-shape/catalyst-postgres-connector";
-import { createWebFetchToolDefinitions } from "@work-shape/catalyst-web-access";
+import {
+  createWebFetchToolDefinitions,
+  DirectWebDownloader
+} from "@work-shape/catalyst-web-access";
 import {
   createBuiltInToolDefinitions,
   createConsoleWorkspaceCommandTelemetry,
@@ -125,7 +128,7 @@ import {
   createInstanceInfrastructure,
   createWorkspacesStore
 } from "./infrastructure";
-import { createKnowledgeFiles } from "./knowledge-files";
+import { createConnectionConversationFiles, createKnowledgeFiles } from "./knowledge-files";
 import { createInfrastructureWorkflow } from "./infrastructure";
 import { createInProcessAgentRunWorker, type AgentRunWorkerPlacement } from "./agent-run-jobs";
 import { createInstancePages, createInstanceWorkspaceOpen } from "./pages";
@@ -538,6 +541,9 @@ export async function createClientInstanceExecutionAssembly(
     ...(workspaceSourceAttachment ? [workspaceSourceAttachment] : []),
     ...capabilityAttachmentHandlers
   ]);
+  connections?.bindConversationFiles(
+    createConnectionConversationFiles({ clientInstanceId, stores: store, attachments })
+  );
   const workspaceManagedObjectReader = workspaceObjectStore
     ? createExecutionWorkspaceManagedObjectReader({
         clientInstanceId,
@@ -723,6 +729,10 @@ export async function createClientInstanceExecutionAssembly(
         limits: config.executionWorkspaces.command,
         projectFolder: projectFiles,
         ...(htmlPdfService ? { htmlPdf: htmlPdfService } : {}),
+        // web_download: off unless the instance switches on web access and its download.
+        ...(config.webAccess.enabled && config.webAccess.download.enabled
+          ? { webDownload: new DirectWebDownloader({ config: config.webAccess.download }) }
+          : {}),
         // The skills an agent run may read, which its commands mount read-only at /skills.
         skills: { assetSource, conversationOffer, conversations: store.conversations },
         sourceFileReader: attachments

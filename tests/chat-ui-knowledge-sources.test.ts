@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   BuildNavigationProvider,
   KnowledgeSourceChoice,
@@ -12,6 +12,9 @@ import {
   newKnowledgeSource,
   newSourceId,
   publishQuestionHolds,
+  sourceDraftChange,
+  sourceNextSyncAt,
+  sourcesReadAgainIn,
   sourceStateView,
   syncsByItself,
   type KnowledgeBaseSource,
@@ -133,7 +136,9 @@ function render(
     sourceTypes,
     inBuild = false,
     workflows,
-    canPublish
+    canPublish,
+    live,
+    publish
   }: {
     canWrite?: boolean;
     /** No revision is published yet. */
@@ -157,6 +162,10 @@ function render(
     workflows?: readonly { id: string; name: string; title: string }[];
     /** The reader may publish the Knowledge Base. */
     canPublish?: boolean;
+    /** The sources as the published revision names them. */
+    live?: readonly KnowledgeSourceForm[];
+    /** The page's publish of the saved draft. */
+    publish?: { open(): void; unsaved: boolean };
   } = {}
 ): string {
   const section = createElement(KnowledgeSourcesSection, {
@@ -168,6 +177,8 @@ function render(
     canWrite,
     ...(workflows ? { workflows } : {}),
     ...(canPublish === undefined ? {} : { canPublish }),
+    ...(live === undefined ? {} : { live }),
+    ...(publish === undefined ? {} : { publish }),
     onChange: () => undefined
   });
   return renderToStaticMarkup(
@@ -390,6 +401,196 @@ describe("the state of a synced source", () => {
     expect(unknown).not.toContain("data-knowledge-source-connect");
     // With a Connection to choose, the chooser stands as before.
     expect(render("en", { sources: [], sourceTypes: ["Box"] })).toContain("Add source");
+  });
+});
+
+describe("what a published source does right now, in the line of its card", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+  const at = (time: string) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(time));
+  };
+  const line = (page: string) =>
+    /data-knowledge-source-live="(?<state>[^"]*)"[^>]*>(?<text>.*?)<\/p>/su.exec(page)?.groups;
+  const lastSync = {
+    syncRunId: "sync_0",
+    source: "handbook-folders",
+    mode: "changes" as const,
+    state: "done" as const,
+    counts: { discovered: 0, added: 0, changed: 0, moved: 0, withdrawn: 0, failed: 0, skipped: 0 },
+    bytesFetched: 0,
+    startedAt: "2026-10-21T08:00:00.000Z",
+    endedAt: "2026-10-21T08:00:20.000Z"
+  };
+  const every15 = { changes: 15, full: "0 2 * * *", defaultChanges: 15, defaultFull: "0 2 * * *" };
+  const idle: KnowledgeSourceStatus = {
+    id: "handbook-folders",
+    connection: "handbook-folders",
+    items: { discovered: 0, fetched: 0, indexed: 46, failed: 0, withdrawn: 0 },
+    failures: [],
+    last: lastSync,
+    schedule: every15
+  };
+
+  it("names the sync that runs with how many of its items are through, and no badge beside it", () => {
+    const page = render("de", {
+      status: { sources: [{ ...running, running: { ...initialSync, mode: "changes" } }] }
+    });
+    expect(line(page)?.state).toBe("running");
+    // Searchable and failed of the items it found: 40 + 2 of 46.
+    expect(line(page)?.text).toContain("Synchronisiert gerade … (42 von 46)");
+    expect(page.split("Synchronisiert gerade").length - 1).toBe(2);
+    expect(line(render("en"))?.text).toContain("Initial import running … (42 of 46)");
+    const listing = {
+      ...running,
+      items: { ...running.items, discovered: 0, fetched: 0, indexed: 0, failed: 0 }
+    };
+    expect(line(render("de", { status: { sources: [listing] } }))?.text).toContain(
+      "Erstimport läuft …<"
+    );
+    // A changes sync of a source that is through gives no count: it would read "46 of 46".
+    const through = { ...idle, running: { ...initialSync, mode: "changes" as const } };
+    expect(line(render("de", { status: { sources: [through] } }))?.text).toContain(
+      "Synchronisiert gerade …<"
+    );
+  });
+
+  it("says when it last synced and when it syncs next, one interval after the last start", () => {
+    at("2026-10-21T08:05:00.000Z");
+    const page = render("de", { status: { sources: [idle] } });
+    expect(line(page)?.state).toBe("idle");
+    expect(line(page)?.text).toContain(
+      "Zuletzt synchronisiert vor 4 Min., nächster Abgleich in 10 Min."
+    );
+    expect(line(render("en", { status: { sources: [idle] } }))?.text).toContain(
+      "Last synced 4 min ago, next sync in 10 min."
+    );
+    expect(sourceNextSyncAt(idle)?.toISOString()).toBe("2026-10-21T08:15:00.000Z");
+  });
+
+  it("says the next sync is due once its time has come, and names a last sync that failed", () => {
+    at("2026-10-21T08:14:30.000Z");
+    expect(line(render("de", { status: { sources: [idle] } }))?.text).toContain(
+      "nächster Abgleich steht an."
+    );
+    const failed = {
+      ...idle,
+      last: {
+        ...lastSync,
+        state: "failed" as const,
+        failureCode: "knowledge_source_unreachable" as const
+      }
+    };
+    expect(line(render("de", { status: { sources: [failed] } }))?.text).toContain(
+      "Letzter Versuch fehlgeschlagen vor 14 Min., nächster Abgleich steht an."
+    );
+  });
+
+  it("names the full sync where it fetches no changes by itself, and only the last where it syncs by hand", () => {
+    at("2026-10-21T08:05:00.000Z");
+    const fullOnly = { ...idle, schedule: { ...every15, changes: "off" as const } };
+    expect(sourceNextSyncAt(fullOnly)).toBeUndefined();
+    expect(line(render("en", { status: { sources: [fullOnly] } }))?.text).toMatch(
+      /Last synced 4 min ago, next sync [a-z].*02:00|2:00/u
+    );
+    const off = { ...idle, schedule: { ...every15, changes: "off" as const, full: "off" } };
+    expect(line(render("de", { status: { sources: [off] } }))?.text).toContain(
+      "Zuletzt synchronisiert vor 4 Min.<"
+    );
+  });
+
+  it("says nothing where the badge says it all: never synced, or waiting for a person", () => {
+    const { last: _last, ...never } = idle;
+    expect(line(render("de", { status: { sources: [never] } }))).toBeUndefined();
+    const waiting = {
+      ...running,
+      confirmation: {
+        syncRunId: "sync_1",
+        items: 12_000,
+        bytes: 1_000,
+        stop: 10_000,
+        storeBytes: 1
+      }
+    };
+    const page = render("de", { status: { sources: [waiting] } });
+    expect(line(page)).toBeUndefined();
+    expect(page).toContain("Wartet auf Bestätigung");
+  });
+
+  it("is read once more shortly after the next sync is expected, and not again once that has passed", () => {
+    const before = new Date("2026-10-21T08:05:00.000Z");
+    // 10 minutes to the next sync, and a margin for the instance to start it.
+    expect(sourcesReadAgainIn({ sources: [idle] }, before)).toBe(10 * 60_000 + 75_000);
+    expect(
+      sourcesReadAgainIn({ sources: [idle] }, new Date("2026-10-21T08:15:10.000Z"))
+    ).toBeUndefined();
+    expect(sourcesReadAgainIn({ sources: [running] }, before)).toBeUndefined();
+    const off = { ...idle, schedule: { ...every15, changes: "off" as const } };
+    expect(sourcesReadAgainIn({ sources: [off] }, before)).toBeUndefined();
+  });
+});
+
+describe("a source the draft changed and the published revision does not hold yet", () => {
+  const moved: KnowledgeSourceForm = { ...handbookSource, folders: "100\n200" };
+  const publishButton = (page: string) =>
+    /<button[^>]*data-knowledge-source-publish=""[^>]*>/u.exec(page)?.[0];
+
+  it("tells folders, addresses and other settings apart, and nothing where both hold the same", () => {
+    expect(sourceDraftChange(handbookSource, [handbookSource])).toBeUndefined();
+    expect(
+      sourceDraftChange(handbookSource, [{ ...handbookSource, folders: " 100 " }])
+    ).toBeUndefined();
+    expect(sourceDraftChange(moved, [handbookSource])).toBe("folders");
+    expect(sourceDraftChange({ ...handbookSource, include: "*.pdf" }, [handbookSource])).toBe(
+      "settings"
+    );
+    expect(
+      sourceDraftChange({ ...handbookSource, schedule: { changes: 30 } }, [handbookSource])
+    ).toBe("settings");
+    const web: KnowledgeSourceForm = { ...handbookSource, web: true, pages: "https://a.example" };
+    expect(sourceDraftChange({ ...web, pages: "https://b.example" }, [web])).toBe("addresses");
+    // One the published revision does not have says it syncs once published, not this.
+    expect(sourceDraftChange(moved, [])).toBeUndefined();
+    expect(sourceDraftChange(moved, undefined)).toBeUndefined();
+  });
+
+  it("says the changed folders are not active yet, with Publish for who may publish", () => {
+    const page = render("de", {
+      sources: [moved],
+      live: [handbookSource],
+      publish: { open: () => undefined, unsaved: false }
+    });
+    expect(page).toContain('data-knowledge-source-draft="folders"');
+    expect(page).toContain(
+      "Noch nicht aktiv: die geänderten Ordner gelten nach dem Veröffentlichen."
+    );
+    expect(publishButton(page)).toBeDefined();
+    expect(publishButton(page)).not.toContain(' disabled=""');
+    expect(page).toContain("Veröffentlichen</button>");
+    // The line of the card goes on about the published source.
+    expect(page).toContain("Erstimport läuft … (42 von 46)");
+    expect(render("en", { sources: [moved], live: [handbookSource] })).toContain(
+      "Not active yet: the changed folders apply once published."
+    );
+  });
+
+  it("gives a reader who may not publish the note alone, and holds Publish while changes are unsaved", () => {
+    const note = render("de", { sources: [moved], live: [handbookSource] });
+    expect(note).toContain("Noch nicht aktiv");
+    expect(note).not.toContain("data-knowledge-source-publish");
+    const unsaved = render("de", {
+      sources: [moved],
+      live: [handbookSource],
+      publish: { open: () => undefined, unsaved: true }
+    });
+    expect(publishButton(unsaved)).toContain(' disabled=""');
+    expect(publishButton(unsaved)).toContain("Speichere zuerst deine Änderungen");
+    expect(render("de", { live: [handbookSource] })).not.toContain("Noch nicht aktiv");
+    expect(
+      render("de", { sources: [moved], live: [handbookSource], unpublished: true })
+    ).not.toContain("Noch nicht aktiv");
   });
 });
 

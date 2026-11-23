@@ -41,6 +41,13 @@ const webAccess: WebAccessConfig = {
     maxResponseBytes: 1024,
     maxTextCharacters: 1024,
     maxRedirects: 0
+  },
+  download: {
+    enabled: false,
+    timeoutMs: 1000,
+    maxBytes: 1024,
+    maxRedirects: 0,
+    contentTypes: ["application/pdf"]
   }
 };
 const toolRegistry = {

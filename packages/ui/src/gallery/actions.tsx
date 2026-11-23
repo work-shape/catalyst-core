@@ -11,9 +11,25 @@ import { Starter, StarterList } from "../actions/starter";
 import { Choice, ChoiceList } from "../actions/choice";
 import { Badge } from "../status/badge";
 import { SkillIcon } from "../status/skill-icon";
+import { StarterIcon } from "../status/starter-icons";
 import { TargetBadge } from "../status/target-badge";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
+
+const manyStarterIcons = [
+  "pencil",
+  "file-text",
+  "calendar",
+  "mail",
+  "calculator",
+  "search",
+  "users",
+  "lightbulb",
+  "clipboard-list",
+  "scale",
+  "target",
+  "book-open"
+];
 
 const liveOnceStates: readonly RunLiveOnceState[] = ["off", "busy", "on"];
 
@@ -216,7 +232,7 @@ export const actionsGallery: GalleryGroup = {
       name: "Starter",
       components: ["Starter", "StarterList"],
       render: (text) => (
-        <div className="max-w-2xl" data-gallery-sample="starters">
+        <div className="grid max-w-2xl gap-6" data-gallery-sample="starters">
           <StarterList label={text.starterListLabel}>
             <Starter
               icon={<SkillIcon icon="spreadsheet" size="lg" />}
@@ -234,6 +250,8 @@ export const actionsGallery: GalleryGroup = {
               hint={text.starterGuideHint}
             />
             <Starter icon={<SkillIcon size="lg" />} title={text.starterPlain} />
+            <Starter icon={<StarterIcon icon="calendar" />} title={text.starterManyTitles[2]} />
+            <Starter icon={<StarterIcon />} title={text.starterManyTitles[7]} />
             <Starter
               icon={<SkillIcon icon="pdf" size="lg" />}
               title={text.starterPdf}
@@ -241,6 +259,20 @@ export const actionsGallery: GalleryGroup = {
               disabled
             />
           </StarterList>
+          <Samples label={text.starterMany}>
+            <StarterList
+              label={text.starterListLabel}
+              more={{ show: text.starterMore, hide: text.starterFewer }}
+            >
+              {text.starterManyTitles.map((title, index) => (
+                <Starter
+                  key={title}
+                  icon={<StarterIcon icon={manyStarterIcons[index]} size="sm" />}
+                  title={title}
+                />
+              ))}
+            </StarterList>
+          </Samples>
         </div>
       )
     },

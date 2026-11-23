@@ -13,6 +13,7 @@ import {
   connectionCallsArePersonal,
   connectionCallFailure,
   connectionCallReasonOf,
+  CONNECTION_INPUT_FILE_MAX_BYTES,
   isAppError,
   operationDenialError,
   personContextHeaderOf,
@@ -20,6 +21,7 @@ import {
   type ConnectionHealth,
   type ConnectionOperationEffect,
   type ConnectorContext,
+  type ConnectorInputFile,
   type ConnectorOperationDescriptor,
   type ConnectorTypeDefinition,
   type JsonValue,
@@ -538,6 +540,53 @@ async function checkOutput(
   if (issues === "uncompilable" || issues.length > 0) throw connectionCallError("output_invalid");
 }
 
+/**
+ * Opens the conversation files the input names by the operation's marked fields, before anything
+ * outside is contacted. Only a release's static catalog marks a field, and only an agent's call
+ * in a conversation has a file to name. A file the caller may not open there answers as one
+ * that does not exist. The reader holds the size bound, whatever the record of the file says.
+ */
+async function openInputFiles(
+  deps: ConnectionOperationSourceDeps,
+  found: Callable,
+  input: JsonValue,
+  context: ConnectionCallContext
+): Promise<Record<string, ConnectorInputFile> | undefined> {
+  const fields = found.type.catalog ? (found.descriptor.conversationFileFields ?? []) : [];
+  if (fields.length === 0) return undefined;
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    throw connectionCallError("input_invalid");
+  }
+  const { origin, actor } = context;
+  if (origin?.kind !== "agent" || actor === undefined || deps.conversationFiles === undefined) {
+    throw connectionCallError("input_file_unavailable");
+  }
+  const files: Record<string, ConnectorInputFile> = {};
+  for (const field of fields) {
+    const fileId = Object.hasOwn(input, field) ? input[field] : undefined;
+    if (typeof fileId !== "string") throw connectionCallError("input_invalid");
+    const file = await deps.conversationFiles.open(actor, {
+      conversationId: origin.conversationId,
+      fileId
+    });
+    if (file === undefined) throw connectionCallError("input_file_unavailable");
+    if (file.byteSize > CONNECTION_INPUT_FILE_MAX_BYTES) {
+      throw connectionCallError("input_file_too_large");
+    }
+    files[field] = {
+      byteSize: file.byteSize,
+      read: async () => {
+        const bytes = await file.read();
+        if (bytes.byteLength > CONNECTION_INPUT_FILE_MAX_BYTES) {
+          throw connectionCallError("input_file_too_large");
+        }
+        return bytes;
+      }
+    };
+  }
+  return files;
+}
+
 /** The Connection and the operation of a call as the source resolved them. */
 export interface ConnectionCallTarget {
   connectionName: string;
@@ -914,6 +963,11 @@ async function call(
       });
       await current(sourceLease, aborted.promise, deadline.signal);
     }
+    const inputFiles = await current(
+      openInputFiles(deps, found, jsonInput, context),
+      aborted.promise,
+      deadline.signal
+    );
     const key = idempotencyKeyOf(found, target, context.idempotencyKey);
     named.keyed = key.idempotencyKey !== undefined;
     let result: JsonValue;
@@ -971,6 +1025,7 @@ async function call(
       secret = connectorContext.credentialFor(connectorContext.target)?.secret;
       const executing = type.execute(target.operationName, jsonInput, {
         ...connectorContext,
+        ...(inputFiles === undefined ? {} : { inputFiles }),
         ...(context.runtime.pageAddress ? { pageAddress: context.runtime.pageAddress } : {}),
         ...(context.runtime.previousPageAddress
           ? { previousPageAddress: context.runtime.previousPageAddress }

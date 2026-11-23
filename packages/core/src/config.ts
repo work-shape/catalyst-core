@@ -8,9 +8,12 @@ import {
   SKILL_ORIGINS,
   SKILL_NAME_PATTERN,
   SKILL_RESOURCE_MEDIA_TYPES,
+  SKILL_STARTERS_FILL,
   SKILL_STARTERS_MAX,
   SKILL_SUMMARY_MAX_LENGTH,
+  STARTER_ICON_NAMES,
   formatSkillMarkdown,
+  isStarterIconName,
   parseSkillMarkdown,
   skillResourceMediaTypeForPath,
   type AgentConfig,
@@ -20,7 +23,8 @@ import {
   type SkillOrigin,
   type SkillResourceConfig,
   type SkillResourceMediaType,
-  type SkillStarterConfig
+  type SkillStarterConfig,
+  type StarterIconName
 } from "@work-shape/catalyst-asset-schemas";
 import type { LocalizationConfig, LocalizedStringConfig } from "./localization";
 import type { ProviderRegion } from "./providers";
@@ -271,9 +275,12 @@ export {
   SKILL_ORIGINS,
   SKILL_NAME_PATTERN,
   SKILL_RESOURCE_MEDIA_TYPES,
+  SKILL_STARTERS_FILL,
   SKILL_STARTERS_MAX,
   SKILL_SUMMARY_MAX_LENGTH,
+  STARTER_ICON_NAMES,
   formatSkillMarkdown,
+  isStarterIconName,
   parseSkillMarkdown,
   skillResourceMediaTypeForPath,
   type AgentConfig,
@@ -283,7 +290,8 @@ export {
   type SkillOrigin,
   type SkillResourceConfig,
   type SkillResourceMediaType,
-  type SkillStarterConfig
+  type SkillStarterConfig,
+  type StarterIconName
 };
 
 export type { LocalizationConfig, LocalizedStringConfig };
@@ -376,6 +384,48 @@ export interface WebAccessFetchConfig {
   maxRedirects: number;
 }
 
+/**
+ * `web_download`: an agent brings one file from a public address into its conversation's
+ * execution workspace, through the same address checks as `web_fetch`. Off by default.
+ */
+export interface WebAccessDownloadConfig {
+  enabled: boolean;
+  timeoutMs: number;
+  /** A larger file is refused, not cut: a partial PDF or workbook is no file to analyse. */
+  maxBytes: number;
+  maxRedirects: number;
+  /** Media types a response may declare: `type/subtype`, `type/*` or `*\/*`. */
+  contentTypes: string[];
+}
+
+/**
+ * What `web_download` takes by default: documents, tables, images, archives and the generic
+ * binary type many servers send for a file.
+ */
+export const WEB_DOWNLOAD_DEFAULT_CONTENT_TYPES: readonly string[] = [
+  "application/pdf",
+  "image/*",
+  "text/csv",
+  "text/plain",
+  "text/tab-separated-values",
+  "text/markdown",
+  "application/json",
+  "application/xml",
+  "text/xml",
+  "application/rtf",
+  "application/msword",
+  "application/vnd.ms-excel",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.oasis.opendocument.text",
+  "application/vnd.oasis.opendocument.spreadsheet",
+  "application/vnd.oasis.opendocument.presentation",
+  "application/zip",
+  "application/octet-stream"
+];
+
 /** The instance switch for web search. Whether a model can search is its adapter's to declare. */
 export interface WebAccessSearchConfig {
   enabled: boolean;
@@ -385,6 +435,7 @@ export interface WebAccessConfig {
   enabled: boolean;
   search: WebAccessSearchConfig;
   fetch: WebAccessFetchConfig;
+  download: WebAccessDownloadConfig;
 }
 
 export interface ExecutionWorkspaceCommandConfig {

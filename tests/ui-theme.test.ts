@@ -209,6 +209,34 @@ describe("UI theme contrast", () => {
   );
 });
 
+describe("UI theme tint colours", () => {
+  const tints = ["blue", "green", "amber", "violet", "teal", "rose"] as const;
+
+  it.each(modes)(
+    "keeps every tint of the %s default theme at 3:1 on page, sidebar, raised surface and its own tile",
+    (mode) => {
+      const tokens = createThemeTokens(schemaInputs[mode], mode);
+      const ratios: Record<string, number> = {};
+      for (const surfaceToken of ["--background", "--sidebar", "--popover"] as const) {
+        const surface = flatten(parseColor(tokens[surfaceToken]), undefined);
+        for (const tint of tints) {
+          const hue = requireHex(tokens[`--tint-${tint}`]);
+          const tile = {
+            r: surface.r + (hue.r - surface.r) * 0.12,
+            g: surface.g + (hue.g - surface.g) * 0.12,
+            b: surface.b + (hue.b - surface.b) * 0.12
+          };
+          ratios[`${tint} on ${surfaceToken}`] = contrastRatio(hue, surface);
+          ratios[`${tint} on its tile on ${surfaceToken}`] = contrastRatio(hue, tile);
+        }
+      }
+
+      expect(Object.keys(ratios)).toHaveLength(36);
+      expect(Object.entries(ratios).filter(([, ratio]) => ratio < 3)).toEqual([]);
+    }
+  );
+});
+
 describe("UI theme level colours", () => {
   const levels = [1, 2, 3, 4, 5, 6] as const;
 

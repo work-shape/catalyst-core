@@ -25,7 +25,8 @@ import {
   RegistryIcon,
   type IconFamily
 } from "../status/registry-icon";
-import { IconTile } from "../status/icon-tile";
+import { IconTile, iconTints } from "../status/icon-tile";
+import { StarterIcon, starterIconFamilies } from "../status/starter-icons";
 import { ConnectionIcon, type ConnectionIconSize } from "../status/connection-icon";
 import { ServiceMark, type ServiceMarkSize } from "../status/service-mark";
 import { KnowsHowTo, SkillIcon, type SkillIconSize } from "../status/skill-icon";
@@ -422,6 +423,13 @@ export const statusGallery: GalleryGroup = {
               <RegistryIcon name="repeat" />
             </IconTile>
           </Samples>
+          <Samples label={text.iconTileTints}>
+            {iconTints.map((tint) => (
+              <IconTile key={tint} tint={tint} data-gallery-sample={`icon-tile-${tint}`}>
+                <RegistryIcon name="files" />
+              </IconTile>
+            ))}
+          </Samples>
           <Samples label={text.iconsFallback}>
             <IconRegistryProvider icons={{ ledger: genericIcons.files }}>
               {[
@@ -435,6 +443,33 @@ export const statusGallery: GalleryGroup = {
                 </span>
               ))}
             </IconRegistryProvider>
+          </Samples>
+        </>
+      )
+    },
+    {
+      name: "StarterIcon",
+      components: ["StarterIcon"],
+      render: (text) => (
+        <>
+          {starterIconFamilies.map(({ family, names }) => (
+            <Samples key={family} label={family}>
+              {names.map((name) => (
+                <span
+                  key={name}
+                  data-gallery-sample={`starter-icon-${name}`}
+                  className={iconSample}
+                >
+                  <StarterIcon icon={name} />
+                  {name}
+                </span>
+              ))}
+            </Samples>
+          ))}
+          <Samples label={text.starterIconDefault}>
+            <StarterIcon />
+            <StarterIcon size="sm" />
+            <StarterIcon icon="calendar" size="sm" />
           </Samples>
         </>
       )

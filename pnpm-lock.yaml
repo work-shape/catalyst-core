@@ -1127,6 +1127,9 @@ importers:
       '@work-shape/catalyst-tool-sdk':
         specifier: workspace:*
         version: link:../tool-sdk
+      '@work-shape/catalyst-web-access':
+        specifier: workspace:*
+        version: link:../web-access
       xlsx:
         specifier: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
         version: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz

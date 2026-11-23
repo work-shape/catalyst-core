@@ -42,6 +42,15 @@ When web fetching is enabled, tool calls also use the following budgets from `we
 | Response bytes read and text returned from a fetch | 1 MiB response; 20,000 text characters; configured maxima 5 MiB and 200,000 characters | Web content loaded in runs | `webAccess.fetch.maxResponseBytes`, `maxTextCharacters`. | Returned content is shortened and marked `truncated`.                           |
 | Redirects in one fetch                             | 5; configured maximum 10                                                               | Web fetches in runs        | `webAccess.fetch.maxRedirects`.                          | Too many redirects returns a `handler_failed` result naming the redirect limit. |
 
+When web downloads are enabled, `web_download` uses the budgets of `webAccess.download` on the same checked path, enforced in the same file. The file also counts against the conversation's `maxWorkspaceBytes`.
+
+| What it bounds                    | Default                                 | Grows with                   | Knob and source                       | What a person sees at the limit                                                                     |
+| --------------------------------- | --------------------------------------- | ---------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| One download's time               | 60 seconds; configured maximum 300      | Web downloads in runs        | `webAccess.download.timeoutMs`.       | The tool returns a `timed_out` failure and writes nothing.                                          |
+| Bytes of one downloaded file      | 25 MiB; configured maximum 100 MiB      | Files downloaded in runs     | `webAccess.download.maxBytes`.        | The file is refused, not cut, and nothing is written. A declared larger size is refused unread.     |
+| Media types a download may have   | Documents, tables, images, archives and `application/octet-stream` | Files downloaded in runs | `webAccess.download.contentTypes`. | Another type is refused before its body is read.                                                    |
+| Redirects in one download         | 5; configured maximum 10                | Web downloads in runs        | `webAccess.download.maxRedirects`.    | Too many redirects returns a `handler_failed` result naming the redirect limit.                     |
+
 ## Workflow datasets
 
 Dataset ceilings are operator settings under `workflows.datasets`, rather than fixed customer limits. `rows` defaults to 5,000,000; `bytes` to 2 GiB per dataset; `rowBytes` to 256 KiB; `runBytes` to 10 GiB owned by a run at once; and `instanceBytes` to 50 GiB. EW-LIM's `limits.datasetBytes` may lower the per-dataset ceiling. A producer that reaches one fails with `dataset_limit` and the setting's name; other runs continue.

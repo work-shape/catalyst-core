@@ -72,6 +72,12 @@
   --color-file-slides: var(--file-slides);
   --color-file-pdf: var(--file-pdf);
   --color-file-foreground: var(--file-foreground);
+  --color-tint-blue: var(--tint-blue);
+  --color-tint-green: var(--tint-green);
+  --color-tint-amber: var(--tint-amber);
+  --color-tint-violet: var(--tint-violet);
+  --color-tint-teal: var(--tint-teal);
+  --color-tint-rose: var(--tint-rose);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-input-strong: var(--input-strong);

@@ -11,7 +11,9 @@ import { expect, takeTurn, test } from "./test";
 // Pictures of the page of a published Knowledge Base of documents, for a person to look at: its
 // lead line, the line that counts its documents, the list and the folded Settings, in German,
 // light and dark, at 1280. Then the same page as one whose documents come from a synced folder:
-// its head with the main action, the source's card folded and with Adjust open. Last, the page
+// its head with the main action, the source's card folded and with Adjust open, and the card in
+// each state of its one line: synced a few minutes ago with the next sync named, syncing with
+// its progress, and with folders the draft changed that are not active yet. Last, the page
 // of one that answers from the tables of a Data Store, and the folder chooser of a synced source
 // with a folder left out. It runs only with KB_PAGE_SHOTS=1 and writes to test-results/kb-page.
 // The suite's instance runs without the module `knowledge`, so a second API runs it with the
@@ -76,7 +78,10 @@ const SYNCED = {
   connection: "projektablage",
   connectionTitle: "Projektablage",
   folderId: "100",
-  folderPath: "Projekte / Haus A"
+  folderPath: "Projekte / Haus A",
+  /** A folder the draft adds, which the published revision does not sync yet. */
+  addedFolderId: "200",
+  addedFolderPath: "Projekte / Haus B"
 } as const;
 
 /** The folders the chooser's pictures walk, by the id of the folder asked for; `""` is the top. */
@@ -101,7 +106,7 @@ const PICKER_FOLDERS: Record<string, unknown> = {
 };
 
 /** An asset and a list of assets as far as the pictures change them. */
-const assetSchema = z.looseObject({ config: z.looseObject({}) });
+const assetSchema = z.looseObject({ revision: z.number(), config: z.looseObject({}) });
 const assetListSchema = z.looseObject({ items: z.array(z.looseObject({})) });
 
 const FILES = [
@@ -171,25 +176,35 @@ async function asSynced(
   page: Page,
   name: string,
   documents: number,
-  folders: readonly string[] = [SYNCED.folderId]
+  folders: readonly string[] = [SYNCED.folderId],
+  shown: { syncing: boolean; draftAhead: boolean } = { syncing: false, draftAhead: false }
 ): Promise<void> {
-  await page.route(`${apiBaseUrl}/api/v1/assets/knowledge_base/${name}`, async (route) => {
+  const assetRead = (url: URL) =>
+    url.origin === new URL(apiBaseUrl).origin &&
+    url.pathname === `/api/v1/assets/knowledge_base/${name}`;
+  await page.route(assetRead, async (route) => {
     if (route.request().method() !== "GET") return route.fallback();
+    const url = new URL(route.request().url());
+    // The draft is one revision ahead, and only it names the added folder. The instance
+    // holds no such revision, so a read that names it by number is answered from the asset.
+    const draft = shown.draftAhead && url.searchParams.get("revision") !== "published";
+    if (draft) url.searchParams.delete("revision");
     const response = await route.fetch({
-      url: route.request().url().replace(apiBaseUrl, knowledgeApiUrl)
+      url: url.toString().replace(apiBaseUrl, knowledgeApiUrl)
     });
     const body = assetSchema.parse(await response.json());
     await route.fulfill({
       response,
       json: {
         ...body,
+        ...(draft ? { revision: body.revision + 1, draftRevision: body.revision + 1 } : {}),
         config: {
           ...body.config,
           sources: [
             {
               id: SYNCED.source,
               connection: SYNCED.connection,
-              folders
+              folders: draft ? [...folders, SYNCED.addedFolderId] : folders
             }
           ]
         }
@@ -228,6 +243,8 @@ async function asSynced(
         ];
     await route.fulfill({ response, json: { ...body, items: [...listed, ...body.items] } });
   });
+  // The last sync started a little over five minutes ago, so the next is ten minutes off.
+  const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
   await page.route(`${apiBaseUrl}/api/v1/knowledge-bases/${name}/sources`, (route) =>
     route.fulfill({
       json: {
@@ -236,14 +253,26 @@ async function asSynced(
             id: SYNCED.source,
             connection: SYNCED.connection,
             kind: "connector",
-            items: {
-              discovered: 0,
-              fetched: 0,
-              indexed: documents,
-              failed: 0,
-              withdrawn: 0
-            },
+            items: shown.syncing
+              ? {
+                  discovered: 2,
+                  fetched: 1,
+                  indexed: documents - 3,
+                  failed: 0,
+                  withdrawn: 0
+                }
+              : { discovered: 0, fetched: 0, indexed: documents, failed: 0, withdrawn: 0 },
             failures: [],
+            ...(shown.syncing
+              ? {
+                  running: {
+                    syncRunId: "sync-2",
+                    mode: "changes",
+                    startedAt: ago(40_000),
+                    itemsPerMinute: 6
+                  }
+                }
+              : {}),
             last: {
               syncRunId: "sync-1",
               source: SYNCED.source,
@@ -259,8 +288,8 @@ async function asSynced(
                 skipped: 0
               },
               bytesFetched: 0,
-              startedAt: "2026-11-18T09:14:00.000Z",
-              endedAt: "2026-11-18T09:15:00.000Z"
+              startedAt: ago(4 * 60_000 + 30_000),
+              endedAt: ago(4 * 60_000 + 10_000)
             },
             schedule: {
               changes: 15,
@@ -269,7 +298,7 @@ async function asSynced(
               defaultFull: "0 2 * * *",
               minChanges: 5
             },
-            lastChangeAt: "2026-11-18T09:15:00.000Z"
+            lastChangeAt: ago(4 * 60_000 + 10_000)
           }
         ]
       }
@@ -451,16 +480,24 @@ test.describe("pictures of the page of a Knowledge Base of documents", () => {
       // The same page as one whose documents all come from a synced folder. Only what the
       // instance answers is changed: the definition names a source, a Connection that lets a
       // person choose folders is listed, the source is up to date, and each document is its.
-      await asSynced(page, name, FILES.length);
+      // What the pictures of the source's card change: whether its sync runs, and whether the
+      // saved draft names one folder more than the published revision.
+      const shown = { syncing: false, draftAhead: false };
+      await asSynced(page, name, FILES.length, [SYNCED.folderId], shown);
       await page.route(
         `${apiBaseUrl}/api/v1/connections/${SYNCED.connection}/source-folders*`,
-        (route) =>
-          route.fulfill({
+        (route) => {
+          const added =
+            new URL(route.request().url()).searchParams.get("parent") === SYNCED.addedFolderId;
+          return route.fulfill({
             json: {
-              folder: { id: SYNCED.folderId, name: "Haus A", path: SYNCED.folderPath },
+              folder: added
+                ? { id: SYNCED.addedFolderId, name: "Haus B", path: SYNCED.addedFolderPath }
+                : { id: SYNCED.folderId, name: "Haus A", path: SYNCED.folderPath },
               folders: []
             }
-          })
+          });
+        }
       );
       await page.route(`${apiBaseUrl}/api/v1/knowledge-bases/${name}/documents*`, async (route) => {
         if (route.request().method() !== "GET") return route.fallback();
@@ -481,6 +518,17 @@ test.describe("pictures of the page of a Knowledge Base of documents", () => {
         await view(page, name, theme);
         const card = page.locator(`[data-knowledge-source="${SYNCED.source}"]`);
         await expect(card).toContainText(SYNCED.folderPath);
+        // The one line of the card: when the published source last synced and when it syncs next.
+        const live = card.locator("[data-knowledge-source-live]");
+        await expect(live).toHaveAttribute("data-knowledge-source-live", "idle");
+        await expect(live).toHaveText(
+          "Zuletzt synchronisiert vor 4 Min., nächster Abgleich in 10 Min."
+        );
+        await expect(card.locator("[data-knowledge-source-draft]")).toHaveCount(0);
+        await card.screenshot({
+          path: resolve(SHOTS, `kb-page-synced-de-${theme}-card-idle.png`),
+          animations: "disabled"
+        });
         await picture(page, `synced-de-${theme}`);
         if (theme === "light") {
           // The head of the page with its main action, and the card as it stands folded.
@@ -519,6 +567,47 @@ test.describe("pictures of the page of a Knowledge Base of documents", () => {
           await picture(page, "synced-de-light-adjust-time");
           await page.keyboard.press("Escape");
         }
+
+        // While its sync runs, the line counts the items that are through, and is read again.
+        shown.syncing = true;
+        await view(page, name, theme);
+        await expect(live).toHaveAttribute("data-knowledge-source-live", "running");
+        await expect(live).toHaveText(
+          `Synchronisiert gerade … (${FILES.length - 3} von ${FILES.length})`
+        );
+        await card.screenshot({
+          path: resolve(SHOTS, `kb-page-synced-de-${theme}-card-syncing.png`),
+          animations: "disabled"
+        });
+        // Once the sync has ended, the next read says so, and the card stops reading.
+        shown.syncing = false;
+        await expect(live).toHaveAttribute("data-knowledge-source-live", "idle", {
+          timeout: 15000
+        });
+
+        // The saved draft names one folder more than the published revision, which still syncs
+        // the one: the card says the change is not active yet, and offers the page's publish.
+        shown.draftAhead = true;
+        await view(page, name, theme);
+        const note = card.locator("[data-knowledge-source-draft]");
+        await expect(note).toHaveAttribute("data-knowledge-source-draft", "folders");
+        await expect(note).toContainText(
+          "Noch nicht aktiv: die geänderten Ordner gelten nach dem Veröffentlichen."
+        );
+        await expect(card).toContainText(SYNCED.addedFolderPath);
+        await expect(live).toHaveAttribute("data-knowledge-source-live", "idle");
+        await card.screenshot({
+          path: resolve(SHOTS, `kb-page-synced-de-${theme}-card-draft.png`),
+          animations: "disabled"
+        });
+        await picture(page, `synced-de-${theme}-draft`);
+        // Its button opens the page's own publish, which asks before anything goes live.
+        await note.locator("[data-knowledge-source-publish]").click();
+        const publish = page.getByRole("dialog");
+        await expect(publish).toContainText(`${TITLE} veröffentlichen`);
+        await page.keyboard.press("Escape");
+        await expect(publish).toHaveCount(0);
+        shown.draftAhead = false;
       }
     } finally {
       await page.unrouteAll({ behavior: "ignoreErrors" });

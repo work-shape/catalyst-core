@@ -1817,6 +1817,46 @@ describe("OpenAI-compatible model provider", () => {
     });
   });
 
+  it("lets the deterministic provider make one call per step for a message of several", async () => {
+    // A run of several steps for the e2e checks: each `/tool` line is the call of one step.
+    const complete = (
+      messages: Parameters<DeterministicModelProvider["complete"]>[0]["messages"]
+    ) =>
+      new DeterministicModelProvider("local").complete({
+        providerId: "local",
+        model: "deterministic-local",
+        messages,
+        tools: [
+          { name: "notes.record", description: "Records a note" },
+          { name: "notes.ask", description: "Asks" }
+        ]
+      });
+    const user = {
+      role: "user" as const,
+      content: '/tool notes.record {"text":"one"}\n/tool notes.ask {"question":"Why?"}'
+    };
+    const first = await complete([user]);
+    expect(first.toolCalls).toMatchObject([{ toolName: "notes.record", input: { text: "one" } }]);
+
+    const afterFirst = [
+      user,
+      { role: "assistant" as const, content: first.text, toolCalls: first.toolCalls },
+      { role: "tool" as const, content: "recorded one", toolCallId: "call-1" }
+    ];
+    const second = await complete(afterFirst);
+    expect(second.toolCalls).toMatchObject([
+      { toolName: "notes.ask", input: { question: "Why?" } }
+    ]);
+
+    const done = await complete([
+      ...afterFirst,
+      { role: "assistant" as const, content: second.text, toolCalls: second.toolCalls },
+      { role: "tool" as const, content: "asked", toolCallId: "call-2" }
+    ]);
+    expect(done.toolCalls).toEqual([]);
+    expect(done.text).toBe("Tool work completed:\n\nrecorded one\n\nasked");
+  });
+
   it("lets the deterministic provider call a tool again in a later turn", async () => {
     // Fails without the rule for the turn: a tool result anywhere in the conversation made the
     // provider answer it again, so a conversation could run one tool only.

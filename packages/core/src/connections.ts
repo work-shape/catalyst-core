@@ -45,6 +45,7 @@ import type {
   DocumentSourceSchedule
 } from "./document-source";
 import { AppError } from "./errors";
+import type { AuthenticatedIdentity } from "./identity";
 import { createPlatformId, type ClientInstanceId } from "./ids";
 import type { JsonObject, JsonValue } from "./json";
 import type { LocalizedStringConfig } from "./localization";
@@ -272,6 +273,34 @@ export interface ConnectorOperationDescriptor {
   outputSchema?: JsonObject;
   /** What the type or the outside system proposes. The Connection's accepted list decides. */
   proposedEffect: ConnectionOperationEffect;
+  /**
+   * Top-level string fields of the input that name a file of the calling conversation by its
+   * fileId. The platform checks the caller may open it there and hands the type a bounded reader
+   * (`ConnectorContext.inputFiles`); the bytes never enter the input, a run or an audit row. It
+   * stands beside the schema, and only a release's static catalog is read for it, so a schema an
+   * outside system wrote can never claim a person's file.
+   */
+  conversationFileFields?: string[];
+}
+
+/** The largest conversation file one Connection call is handed (25 MiB). */
+export const CONNECTION_INPUT_FILE_MAX_BYTES = 25 * 1024 * 1024;
+
+/** A conversation file a call may read. `read` never answers more than the bound above. */
+export interface ConnectorInputFile {
+  readonly byteSize: number;
+  read(): Promise<Uint8Array>;
+}
+
+/**
+ * Opens a file of a conversation for one Connection call, as `actor` may open it now. Nothing
+ * where it does not exist or the actor may not open it, which a caller answers alike.
+ */
+export interface ConnectionConversationFiles {
+  open(
+    actor: AuthenticatedIdentity,
+    ref: { conversationId: string; fileId: string }
+  ): Promise<ConnectorInputFile | undefined>;
 }
 
 /** The bounds of one Connector type. A refusal names the bound that was reached. */
@@ -762,6 +791,11 @@ export interface ConnectorContext {
    */
   personContext?: { header: string; value: string };
   idempotencyKey?: { header: string; value: string };
+  /**
+   * The conversation files of this call, by the input field that names each
+   * (`conversationFileFields`). Already checked against the caller and the size bound.
+   */
+  inputFiles?: Readonly<Record<string, ConnectorInputFile>>;
   /** Ends when the call is cancelled or its deadline passes. */
   signal: AbortSignal;
 }
@@ -942,6 +976,17 @@ interface ConnectorTypeBase {
    * of the type's typed settings; the value is never a setting.
    */
   credentialHeaderName?(settings: JsonObject): string | undefined;
+  /**
+   * Further origins of the same outside system that take the Connection's credential, such as
+   * a separate content host. Fixed by the type's code and never read from a setting. Each still
+   * passes the egress check, and a test credential is never sent to one.
+   */
+  credentialTargets?(settings: JsonObject): readonly EgressTarget[];
+  /**
+   * Why a Connection with these settings may not accept this operation of the type's catalog,
+   * such as a changing operation on a read-only sign-in. Every save of a Connection asks it.
+   */
+  operationRefusal?(operation: string, settings: JsonObject): string | undefined;
   /**
    * The type sends `idempotencyKey` of its context with a call. Only an operation of such a
    * type is called again under the key of an interrupted call.
@@ -1339,6 +1384,13 @@ export function findConnectorTypeIssues(
         message: `Connector type '${type.type}' answers what only its caller may read, so an operation accepts only the exposure '${PRIVATE_RESULTS_EXPOSURE}', not '${refused}'`,
         path: ["operations", index, "exposure"]
       });
+    });
+  }
+  if (settings.success && type.operationRefusal) {
+    const accepted = settings.data;
+    connection.operations.forEach((operation, index) => {
+      const message = type.operationRefusal?.(operation.name, accepted);
+      if (message !== undefined) issues.push({ message, path: ["operations", index, "name"] });
     });
   }
   return [...issues, ...declarationIssues(type, connection.operations)];

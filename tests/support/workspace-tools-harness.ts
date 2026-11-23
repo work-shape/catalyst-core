@@ -20,7 +20,8 @@ import {
   createWorkspaceToolDefinitions,
   ToolRegistry,
   WorkspaceCommandService,
-  type WorkspaceCommandTelemetry
+  type WorkspaceCommandTelemetry,
+  type WorkspaceWebDownloader
 } from "@work-shape/catalyst-tool-execution";
 
 interface WorkspaceHarnessInput {
@@ -39,6 +40,8 @@ interface WorkspaceHarnessInput {
   withAuditRecorder?: boolean;
   /** The renderer of HTML to PDF; without it `workspace.html_to_pdf` is not offered. */
   htmlPdf?: HtmlPdfService;
+  /** The downloader of public files; without it `web_download` is not offered. */
+  webDownload?: WorkspaceWebDownloader;
   sourceFiles?: Record<
     string,
     {
@@ -107,6 +110,7 @@ export async function createWorkspaceHarness(input: WorkspaceHarnessInput = {}) 
     ...(auditRecorder ? { auditRecorder } : {}),
     ...(input.telemetry ? { telemetry: input.telemetry } : {}),
     ...(input.htmlPdf ? { htmlPdf: input.htmlPdf } : {}),
+    ...(input.webDownload ? { webDownload: input.webDownload } : {}),
     limits: input.limits,
     ...(input.execResultWaitMs === null ? {} : { execResultWaitMs: input.execResultWaitMs ?? 0 }),
     execResultPollIntervalMs: input.execResultPollIntervalMs,

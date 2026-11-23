@@ -1,6 +1,7 @@
-import { OPERATION_EFFECTS } from "@work-shape/catalyst-asset-schemas";
+import { OPERATION_EFFECTS, isStarterIconName } from "@work-shape/catalyst-asset-schemas";
 import {
   AGENT_STARTERS_MAX,
+  SKILL_STARTERS_FILL,
   agentBuildsAssets,
   authorReasoningEffort,
   defaultReasoningEffortForAgentBinding,
@@ -164,8 +165,8 @@ export function createSafeConfigView(
         locale,
         config.localization.defaultLocale
       ),
-      // The author's prompts and the skills' starters share the start page's four places,
-      // the author's prompts first.
+      // The author's prompts and the skills' starters share the start page's places, the
+      // author's prompts first; the skills fill only the places shown before "More".
       initialPrompts: agent.initialPrompts.slice(0, AGENT_STARTERS_MAX).map((initialPrompt) => ({
         title: resolveLocalizedString(
           initialPrompt.title,
@@ -176,14 +177,16 @@ export function createSafeConfigView(
           initialPrompt.prompt,
           locale,
           config.localization.defaultLocale
-        )
+        ),
+        // A name a later release no longer draws is left out, so the usual icon shows.
+        ...(isStarterIconName(initialPrompt.icon) ? { icon: initialPrompt.icon } : {})
       })),
       starters: agentStarters(
         agent,
         assets.skills,
         locale,
         config.localization.defaultLocale
-      ).slice(0, Math.max(0, AGENT_STARTERS_MAX - agent.initialPrompts.length)),
+      ).slice(0, Math.max(0, SKILL_STARTERS_FILL - agent.initialPrompts.length)),
       connections: agentConnections(agent, options.connections ?? [])
     })),
     ui
@@ -212,7 +215,7 @@ function agentConnections(agent: AgentConfig, connections: readonly SafeConfigCo
 
 /**
  * The starters the empty chat offers for an agent: those of its skills, the skills in the
- * order the agent names them, at most `AGENT_STARTERS_MAX`. The author's own prompts take
+ * order the agent names them, at most `SKILL_STARTERS_FILL`. The author's own prompts take
  * places of these first. A starter that names a tool the
  * agent does not hold is left out, so none offers what the agent cannot do. A starter carries
  * its skill's icon only where the skill ships with the platform; every other skill's starter
@@ -240,7 +243,7 @@ function agentStarters(
           ...(icon === undefined ? {} : { icon })
         }));
     })
-    .slice(0, AGENT_STARTERS_MAX);
+    .slice(0, SKILL_STARTERS_FILL);
 }
 
 /**
