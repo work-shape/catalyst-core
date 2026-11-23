@@ -111,7 +111,7 @@ function fenceIsOpen(pre: FenceNode, source: string | undefined): boolean {
   }
   // Inside a quote or a list item the closing line carries their markers before the fence.
   const closing = /^[\s>]*(`{3,}|~{3,})[ \t]*$/u.exec(lines.at(-1) ?? "")?.[1];
-  return !(closing?.[0] === opening[0] && closing.length >= opening.length);
+  return !(closing !== undefined && closing[0] === opening[0] && closing.length >= opening.length);
 }
 
 const WritingContext = createContext(false);
