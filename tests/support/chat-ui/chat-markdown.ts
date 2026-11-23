@@ -1,3 +1,4 @@
+export { CopyFenceWritingProvider } from "../../../packages/chat-ui/src/chat/markdown/copy-fence";
 export {
   MarkdownArtifact,
   MarkdownLinkPolicyProvider,

@@ -17,11 +17,10 @@ const bodyOf = (markup: string) =>
 describe("CopyText", () => {
   const text = "Guten Tag Frau Okafor,\n\n  vielen Dank für das Angebot.\n";
 
-  it("shows the text in the body font, wrapped, with every line break kept", () => {
+  it("shows the text in the font around it, wrapped, with every line break kept", () => {
     const body = bodyOf(render({ text }));
 
     expect(body?.[2]).toBe(text);
-    expect(body?.[1]).toContain("font-sans");
     expect(body?.[1]).toContain("whitespace-pre-wrap");
     expect(body?.[1]).toContain("wrap-anywhere");
     expect(body?.[1]).not.toContain("font-mono");

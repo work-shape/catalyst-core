@@ -6,7 +6,12 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 import { TranslationProvider } from "./chat-ui-render-harness";
-import { MarkdownArtifact, MarkdownLinkPolicyProvider, MarkdownText } from "./support/chat-ui";
+import {
+  CopyFenceWritingProvider,
+  MarkdownArtifact,
+  MarkdownLinkPolicyProvider,
+  MarkdownText
+} from "./support/chat-ui";
 
 // A fence with the language `copy` holds a text the reader takes elsewhere. It draws as the
 // library's CopyText, and its button copies exactly what stands between the fence lines.
@@ -64,9 +69,11 @@ describe("a copy fence in chat Markdown", () => {
       root.render(
         frame(
           createElement(
-            TextMessagePartProvider,
-            { text, isRunning: running },
-            createElement(MarkdownText)
+            CopyFenceWritingProvider,
+            { value: running },
+            // The app's text part is not "running" while a reply is written: other parts
+            // follow it. The reply's own state is what says so.
+            createElement(TextMessagePartProvider, { text }, createElement(MarkdownText))
           )
         )
       );
@@ -156,6 +163,25 @@ describe("a copy fence in chat Markdown", () => {
     );
     expect(body()).toBe("Hello **Ms Okafor**,\nthanks.");
     expect(await copy()).toBe("Hello **Ms Okafor**,\nthanks.");
+  });
+
+  it("waits for the closing line also inside a quote, a list and a longer fence", async () => {
+    await renderReply("> ```copy\n> Hello", true);
+    expect(body()).toBe("Hello");
+    expect(button()).toBeNull();
+    await renderReply("> ```copy\n> Hello\n> ```", true);
+    expect(button()).not.toBeNull();
+
+    await renderReply("- Draft:\n\n  ```copy\n  Hello", true);
+    expect(button()).toBeNull();
+    await renderReply("- Draft:\n\n  ```copy\n  Hello\n  ```", true);
+    expect(button()).not.toBeNull();
+
+    // A shorter fence inside does not close the longer one.
+    await renderReply("````copy\nRun:\n```sh\nnpm test\n```", true);
+    expect(button()).toBeNull();
+    await renderReply("````copy\nRun:\n```sh\nnpm test\n```\n````", true);
+    expect(await copy()).toBe("Run:\n```sh\nnpm test\n```");
   });
 
   it("copies a text whose fence never closed once the reply has ended", async () => {

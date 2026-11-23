@@ -19,7 +19,7 @@ export interface CopyTextProps extends Omit<HTMLAttributes<HTMLDivElement>, "chi
 
 /**
  * A text somebody takes elsewhere: a message, a clause, a summary for a colleague. It reads as
- * text, not as code: in the body font, a long line broken inside the box, each line break
+ * text, not as code: in the font of the text around it, a long line broken inside the box, each line break
  * kept. One button copies exactly the text.
  */
 export function CopyText({ className, text, label, pending = false, ...props }: CopyTextProps) {
@@ -45,7 +45,7 @@ export function CopyText({ className, text, label, pending = false, ...props }: 
         )}
         <div
           data-slot="copy-text-body"
-          className="font-sans text-body leading-6 wrap-anywhere whitespace-pre-wrap text-card-foreground"
+          className="text-body leading-6 wrap-anywhere whitespace-pre-wrap text-card-foreground"
         >
           {text}
         </div>
