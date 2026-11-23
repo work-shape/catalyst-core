@@ -7,6 +7,21 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.47 — 2026-11-23
+
+### Added
+
+- **Chat:** a text the person will paste elsewhere, such as a message, a mail or a clause, shows in a box of its own with a button that copies exactly that text. An agent writes it as a fenced block with the language `copy`; words after `copy` name the text. It reads as text, not code, and the button waits until a reply still being written has closed the block. The platform's rules tell every agent to use it instead of a file or a view. **`CopyText`** in the UI library draws it.
+- **Connections:** a connector operation can take a file of the conversation. The platform checks that the caller may open it and hands the connector a reader bounded to 25 MiB; the bytes stay out of the model, the input, Operation Runs and audit. A connector type can name a further credential host and refuse an operation for a Connection's settings.
+
+### Changed
+
+- The folder chooser of a synced Knowledge Base source shows how each folder stands: read whole, read in part, or not read. It counts the folders chosen and says in one line what the source reads, such as "Projekte und alles darunter, ohne Archiv".
+- A folder below a chosen one can be unticked. The source keeps the chosen folder as its boundary, so a folder added there later is read, and leaves the unticked one out by an `exclude` pattern that names it (`Archiv/**`). The source's card lists the folders left out after its folders, each with a button to read it again. A pattern is read on the path below every chosen folder, so a folder left out is left out below each of them.
+- The chooser changes only the rules it wrote while open. A pattern that was already there stays unless the person ticks exactly its folder. Ticking a folder above a chosen one writes what was left out again from the new folder, and removing a chosen folder takes the rules written for it along. Folder names are matched without regard to case.
+- **Chat:** a starter written on an agent shows its icon and title alone. Its full request no longer repeats underneath as a subtitle.
+- **Chat:** an agent with its own starters shows only those. Its skills' starters appear only for an agent that has none.
+
 ## 0.8.0-rc.46 — 2026-11-23
 
 ### Fixed
