@@ -53,7 +53,11 @@ const REASONS: ConnectionCallReason[] = [
   "schema_pattern_too_long",
   "folder_not_found",
   "message_not_found",
-  "cursor_expired"
+  "cursor_expired",
+  "item_not_found",
+  "input_file_unavailable",
+  "input_file_too_large",
+  "target_exists"
 ];
 
 /** What a caller can do next, as each sentence has to say it. */

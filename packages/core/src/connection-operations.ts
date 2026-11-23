@@ -123,7 +123,10 @@ export function connectionExposureRefusal(
 }
 
 /** One tool as the last discovery read it. Untrusted data. */
-export interface ConnectionCatalogEntry extends ConnectorOperationDescriptor {
+export interface ConnectionCatalogEntry extends Omit<
+  ConnectorOperationDescriptor,
+  "conversationFileFields"
+> {
   /**
    * sha256, hex, over the canonical JSON of name, description, inputSchema, outputSchema and
    * proposedEffect.
@@ -220,7 +223,15 @@ export const CONNECTION_CALL_REASONS = {
   /** A message the call names is outside the Connection's folders, or no longer there. */
   message_not_found: "NOT_FOUND",
   /** A paging cursor of an earlier call no longer fits the folder: start again without it. */
-  cursor_expired: "CONFLICT"
+  cursor_expired: "CONFLICT",
+  /** A file or folder the call names is outside the Connection's boundary, or is gone. */
+  item_not_found: "NOT_FOUND",
+  /** The conversation file the input names is not one the caller may open in this conversation. */
+  input_file_unavailable: "NOT_FOUND",
+  /** The conversation file the input names is over `CONNECTION_INPUT_FILE_MAX_BYTES`. */
+  input_file_too_large: "VALIDATION_FAILED",
+  /** Something else already has the name the call would write. Nothing was changed. */
+  target_exists: "CONFLICT"
 } as const satisfies Record<string, AppErrorCode>;
 
 export type ConnectionCallReason = keyof typeof CONNECTION_CALL_REASONS;
@@ -281,7 +292,11 @@ const CONNECTION_CALL_MESSAGES: Record<ConnectionCallReason, string> = {
     "a regular expression of the operation's schema is longer than the platform takes",
   folder_not_found: "the folder is not one of the Connection's folders or is not on the server",
   message_not_found: "the message is not in the Connection's folders or is gone",
-  cursor_expired: "the cursor no longer fits the folder"
+  cursor_expired: "the cursor no longer fits the folder",
+  item_not_found: "the item is outside the Connection's boundary or is gone",
+  input_file_unavailable: "the file is not available to this call in this conversation",
+  input_file_too_large: "the file is larger than a Connection call takes",
+  target_exists: "something else already has this name; nothing was changed"
 };
 
 /**
@@ -414,7 +429,15 @@ const CONNECTION_CALL_SENTENCES: Record<
   message_not_found: (c) =>
     `${c} cannot find this message: it is outside the connection's folders, or it was moved or deleted. Trying again will not help; a new search finds the messages there now.`,
   cursor_expired: (c) =>
-    `The page of results from ${c} cannot be continued because the folder changed on the server. Trying again with it will not help; a new search without it starts over.`
+    `The page of results from ${c} cannot be continued because the folder changed on the server. Trying again with it will not help; a new search without it starts over.`,
+  item_not_found: (c) =>
+    `${c} cannot reach this file or folder: it is outside the folders the connection may use, or it is gone. Trying again will not help. An administrator can check the folders under ${WHERE}.`,
+  input_file_unavailable: (c) =>
+    `${c} did not run this action because the file is not one that can be used from this conversation. Only a file attached to this conversation can be used. Nothing was sent, and trying again will not help.`,
+  input_file_too_large: (c) =>
+    `${c} did not run this action because the file is larger than the 25 MiB an action takes. Nothing was sent, and trying again will not help.`,
+  target_exists: (c) =>
+    `${c} did not write the file because a different item already has this name there. Nothing was changed, and trying again will not help. Choose another name, or ask the person what to do.`
 };
 
 /** The display name as one word group of a sentence: one line, no control character, bounded. */

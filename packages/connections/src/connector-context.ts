@@ -443,7 +443,14 @@ export async function openConnectorContext(
     target,
     checkEgress: (further) => egress.check(further),
     credentialFor(checked: EgressGrant) {
-      if (!isSameEgressOrigin(checked, target) || checked.address !== target.address) {
+      const ownTarget = isSameEgressOrigin(checked, target) && checked.address === target.address;
+      // A further origin the type's code names. A test credential stays on its own address.
+      const typeTarget =
+        test === undefined &&
+        (type.credentialTargets?.(settings.data) ?? []).some((named) =>
+          isSameEgressOrigin(checked, named)
+        );
+      if (!ownTarget && !typeTarget) {
         throw new AppError(
           "FORBIDDEN",
           `${EGRESS_DENIED}: a credential is sent to the origin it was configured for only`,

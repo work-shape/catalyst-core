@@ -38,6 +38,7 @@ import {
   type ClientInstanceId,
   type ConnectionCredentialResolver,
   type ConnectionSignInEnding,
+  type ConnectionConversationFiles,
   type ConnectorTypeDefinition,
   type ConnectorTypeRegistry,
   type DataToolSource,
@@ -99,6 +100,11 @@ export interface InstanceConnections {
   readonly ownServerTools: OwnServerTools;
   /** What the Connection routes of the API read and test through. */
   readonly management: NonNullable<ChatServerOptions["connections"]>;
+  /**
+   * Hands the operations the conversation files they may take. The attachment services are
+   * built after the Connections; until this is called, no operation opens a file.
+   */
+  bindConversationFiles(files: ConnectionConversationFiles): void;
 }
 
 /**
@@ -322,6 +328,7 @@ async function buildInstanceConnections(
         managedClients
       })
     : undefined;
+  let boundFiles: ConnectionConversationFiles | undefined;
   const operations = {
     clientInstanceId,
     stores,
@@ -331,7 +338,10 @@ async function buildInstanceConnections(
     logger,
     personalModelRegions: getPersonalModelRegions(config),
     managedClients,
-    ownServers
+    ownServers,
+    conversationFiles: {
+      open: (actor, ref) => boundFiles?.open(actor, ref) ?? Promise.resolve(undefined)
+    } satisfies ConnectionConversationFiles
   };
   const slots = new ConnectionCallSlots();
   const openDocumentSource = createDocumentSourceOpener(operations, slots);
@@ -343,6 +353,9 @@ async function buildInstanceConnections(
     ...(credentials ? { credentials } : {}),
     ...(signInEnding ? { signInEnding } : {}),
     reconnectNotice: createConnectionReconnectNoticeHandler(notices),
+    bindConversationFiles(files) {
+      boundFiles = files;
+    },
     ownServers,
     operationSource: createConnectionOperationSource(operations, slots),
     toolSource: createConnectionToolSource(operations),
