@@ -31,7 +31,8 @@ afterEach(async () => {
 async function openPage(
   asset: BuildAsset,
   detail: () => Partial<ConnectionDetail>,
-  mine: { name: string; state: string }[] = []
+  mine: { name: string; state: string }[] = [],
+  opened: (page: HTMLElement) => Element | null = section
 ) {
   const calls: string[] = [];
   const detailPath = apiOperations["connections.get"].path.replace(":name", asset.name);
@@ -61,7 +62,7 @@ async function openPage(
     [],
     { user: settingsUser({ roles: ["user", "admin"] }) }
   );
-  await vi.waitFor(() => expect(section(page)).not.toBeNull(), WAIT);
+  await vi.waitFor(() => expect(opened(page)).not.toBeNull(), WAIT);
   return { page, calls };
 }
 
@@ -156,5 +157,61 @@ describe("Reading the tools again", () => {
       WAIT
     );
     expect(section(page)?.textContent).not.toContain(WAITING);
+  });
+});
+
+describe("A Connection whose type reads no tools", () => {
+  it("says nothing about tools and reads the Connection no more than a write asks", async () => {
+    // A document source: it signs in, syncs documents and has no tools to read.
+    const asset = connectionAsset("files", {
+      origin: "runtime",
+      connectorType: "document_source",
+      authScheme: "oauth"
+    });
+    let reads = 0;
+    const { page } = await openPage(
+      asset,
+      () => {
+        reads += 1;
+        return { operations: [], oauth: OAUTH };
+      },
+      [],
+      (opened) => opened.querySelector("[data-connection-about-edit]")
+    );
+    await vi.waitFor(() => expect(reads).toBeGreaterThan(0), WAIT);
+    await vi.waitFor(() => expect(page.querySelector("#sign-in")).not.toBeNull(), WAIT);
+    expect(section(page)).toBeNull();
+    expect(page.querySelector("#operations")).toBeNull();
+    expect(page.textContent).not.toContain(WAITING);
+
+    // A write reads it again once; nothing is on its way, so nothing is polled for.
+    await act(async () =>
+      page.querySelector<HTMLButtonElement>("[data-connection-about-edit]")?.click()
+    );
+    const title = page.querySelector<HTMLInputElement>(
+      '[data-connection-about-form] [data-connection-field="title"]'
+    );
+    await act(async () => {
+      if (title) {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+          title,
+          "Team files"
+        );
+        title.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    });
+    const before = reads;
+    await act(async () =>
+      page.querySelector<HTMLFormElement>("[data-connection-about-form]")?.requestSubmit()
+    );
+    await vi.waitFor(
+      () => expect(page.querySelector("[data-connection-about-form]")).toBeNull(),
+      WAIT
+    );
+    await vi.waitFor(() => expect(reads).toBe(before + 1), WAIT);
+    // Longer than the two seconds between the reads of a page that waits.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 2_500)));
+    expect(reads).toBe(before + 1);
+    expect(section(page)).toBeNull();
   });
 });
