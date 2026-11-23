@@ -128,7 +128,7 @@ import {
   createInstanceInfrastructure,
   createWorkspacesStore
 } from "./infrastructure";
-import { createKnowledgeFiles } from "./knowledge-files";
+import { createConnectionConversationFiles, createKnowledgeFiles } from "./knowledge-files";
 import { createInfrastructureWorkflow } from "./infrastructure";
 import { createInProcessAgentRunWorker, type AgentRunWorkerPlacement } from "./agent-run-jobs";
 import { createInstancePages, createInstanceWorkspaceOpen } from "./pages";
@@ -541,6 +541,9 @@ export async function createClientInstanceExecutionAssembly(
     ...(workspaceSourceAttachment ? [workspaceSourceAttachment] : []),
     ...capabilityAttachmentHandlers
   ]);
+  connections?.bindConversationFiles(
+    createConnectionConversationFiles({ clientInstanceId, stores: store, attachments })
+  );
   const workspaceManagedObjectReader = workspaceObjectStore
     ? createExecutionWorkspaceManagedObjectReader({
         clientInstanceId,

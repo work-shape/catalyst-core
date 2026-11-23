@@ -5,6 +5,7 @@ import {
   type ConfigAssetRecord,
   type ConnectionCatalog,
   type ConnectionConfig,
+  type ConnectionConversationFiles,
   type ConnectionCredentialResolver,
   type ConnectionStateRecord,
   type ConnectorTypeDefinition,
@@ -53,6 +54,8 @@ export interface ConnectionOperationSourceDeps {
    * default (off).
    */
   ownServers?: Pick<OwnServersSettings, "enabled">;
+  /** Opens a conversation's file for an operation that takes one. Left out, none is opened. */
+  conversationFiles?: ConnectionConversationFiles;
 }
 
 /** One stored Connection as a reader of this package sees it. */

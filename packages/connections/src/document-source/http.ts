@@ -19,6 +19,8 @@ export interface SourceHttpRequest {
   method: PinnedRequest["method"];
   headers: Record<string, string>;
   body?: string;
+  /** A binary request body, such as a file to upload. It takes the place of `body`. */
+  bytes?: Uint8Array;
   signal: AbortSignal;
 }
 export type SourceHttpTransport = (input: SourceHttpRequest) => Promise<SourceHttpResponse>;
@@ -29,7 +31,7 @@ export const sourceHttpTransport: SourceHttpTransport = async (input) => {
   try {
     const response = await sendPinnedRequest({
       ...input,
-      body: input.body,
+      body: input.bytes ?? input.body,
       agent,
       headers: { ...input.headers, host: hostHeaderOf(input.grant) }
     });
