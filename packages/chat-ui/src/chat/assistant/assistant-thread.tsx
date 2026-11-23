@@ -727,7 +727,8 @@ export function ThreadStartBlock({
           label={t("chatStarters")}
           more={{ show: t("chatStartersMore"), hide: t("chatStartersFewer") }}
         >
-          {/* The request itself is the hint of the author's own, unless it only repeats the title. */}
+          {/* The author's own requests show their title alone: the request is what choosing one
+              puts in the composer, not a line to read beforehand. */}
           {initialPrompts.map((initialPrompt) => (
             <ThreadPrimitive.Suggestion
               key={`${initialPrompt.title}:${initialPrompt.prompt}`}
@@ -744,11 +745,6 @@ export function ThreadStartBlock({
                   )
                 }
                 title={initialPrompt.title}
-                hint={
-                  initialPrompt.prompt.trim() === initialPrompt.title.trim()
-                    ? undefined
-                    : initialPrompt.prompt
-                }
                 onClick={onStarterChosen}
               />
             </ThreadPrimitive.Suggestion>

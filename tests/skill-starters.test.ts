@@ -121,7 +121,7 @@ describe("skill starters", () => {
     );
   });
 
-  it("fills up to nine with the skills' starters, and up to twelve with the author's alone", () => {
+  it("shows the skills' starters only for an agent without prompts of its own", () => {
     const names = ["a", "b", "c", "d", "e", "f"];
     const skills = names.map((name) => skill(name, [starter(`${name}1`), starter(`${name}2`)]));
     const prompts = (count: number) =>
@@ -138,11 +138,9 @@ describe("skill starters", () => {
     };
     const own = (count: number) => prompts(count).map((entry) => entry.title);
 
-    expect(shown(0)).toHaveLength(9);
-    expect(shown(1)).toEqual(["P1", "a1", "a2", "b1", "b2", "c1", "c2", "d1", "d2"]);
-    expect(shown(8)).toEqual([...own(8), "a1"]);
-    // Nine of the author's own: none of the skills' starters waits under "More".
-    expect(shown(9)).toEqual(own(9));
+    expect(shown(0)).toEqual(["a1", "a2", "b1", "b2", "c1", "c2", "d1", "d2", "e1"]);
+    expect(shown(1)).toEqual(own(1));
+    expect(shown(6)).toEqual(own(6));
     expect(shown(11)).toEqual(own(11));
     expect(shown(13)).toEqual(own(12));
   });

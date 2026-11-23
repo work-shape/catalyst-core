@@ -584,6 +584,20 @@ describe("starters on the empty chat", () => {
     expect(startersOf(markup)).not.toContain("data-skill-icon");
   });
 
+  it("shows an author's prompt by its title alone, without the request as a subtitle", () => {
+    const group = startersOf(
+      startPage({
+        starters: [],
+        initialPrompts: [
+          { title: "Check the files", prompt: "Please check the submitted files.", icon: "files" }
+        ]
+      })
+    );
+
+    expect(group).toContain("Check the files");
+    expect(group).not.toContain("Please check the submitted files.");
+  });
+
   it("shows the agent's own prompts as starters before the skills' ones, in one style", () => {
     const markup = startPage({
       starters,
@@ -607,8 +621,8 @@ describe("starters on the empty chat", () => {
       cards.map(([, , content]) => /data-skill-icon="([^"]*)"/u.exec(content ?? "")?.[1])
     ).toEqual(["prompt", "prompt", "generic", "generic"]);
     expect(cards.every(([, , content]) => content?.includes("data-skill-icon-tile"))).toBe(true);
-    // The request stands under its title, unless it only repeats it.
-    expect(cards[0]?.[2]).toContain("What is the weather in Berlin today?");
+    // The request is what choosing the card fills in, so it does not stand under its title.
+    expect(cards[0]?.[2]).not.toContain("What is the weather in Berlin today?");
     expect(cards[1]?.[2]).not.toContain("text-caption");
     // No suggestion stands outside the list.
     expect(markup.match(/<button /gu)).toHaveLength(4);

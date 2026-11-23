@@ -165,8 +165,8 @@ export function createSafeConfigView(
         locale,
         config.localization.defaultLocale
       ),
-      // The author's prompts and the skills' starters share the start page's places, the
-      // author's prompts first; the skills fill only the places shown before "More".
+      // An author who writes prompts has chosen what the start page offers; the skills'
+      // starters show only for an agent without any.
       initialPrompts: agent.initialPrompts.slice(0, AGENT_STARTERS_MAX).map((initialPrompt) => ({
         title: resolveLocalizedString(
           initialPrompt.title,
@@ -181,12 +181,10 @@ export function createSafeConfigView(
         // A name a later release no longer draws is left out, so the usual icon shows.
         ...(isStarterIconName(initialPrompt.icon) ? { icon: initialPrompt.icon } : {})
       })),
-      starters: agentStarters(
-        agent,
-        assets.skills,
-        locale,
-        config.localization.defaultLocale
-      ).slice(0, Math.max(0, SKILL_STARTERS_FILL - agent.initialPrompts.length)),
+      starters:
+        agent.initialPrompts.length > 0
+          ? []
+          : agentStarters(agent, assets.skills, locale, config.localization.defaultLocale),
       connections: agentConnections(agent, options.connections ?? [])
     })),
     ui
@@ -215,8 +213,7 @@ function agentConnections(agent: AgentConfig, connections: readonly SafeConfigCo
 
 /**
  * The starters the empty chat offers for an agent: those of its skills, the skills in the
- * order the agent names them, at most `SKILL_STARTERS_FILL`. The author's own prompts take
- * places of these first. A starter that names a tool the
+ * order the agent names them, at most `SKILL_STARTERS_FILL`. A starter that names a tool the
  * agent does not hold is left out, so none offers what the agent cannot do. A starter carries
  * its skill's icon only where the skill ships with the platform; every other skill's starter
  * shows the generic skill icon.
