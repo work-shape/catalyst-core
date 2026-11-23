@@ -7,6 +7,14 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.46 — 2026-11-23
+
+### Fixed
+
+- **Studio:** The page of a Connection without tool discovery, such as a document source, no longer waits or polls for tools and shows no tools sections.
+- The skills' starters fill an agent's empty chat only up to the nine it shows before "More", the author's prompts counted. An agent whose author wrote nine starters shows those nine with no "More" under them.
+- **Studio:** "Fähigkeiten" follows the other entries of the rail without an extra gap.
+
 ## 0.8.0-rc.45 — 2026-11-20
 
 ### Added
