@@ -5,11 +5,11 @@ packages:
 # One zod for every package and every dependency. Two versions make schemas of one package
 # fail the types of another, and a caret range lets a new package resolve the newer one.
 overrides:
-  zod: 4.4.3
+  zod: 4.6.7
   "@fastify/busboy@^3": 3.2.2
-  seroval@^1: 1.6.9
+  seroval@^1: 1.6.11
   find-my-way@^9: 9.7.0
-  fast-uri@^3: 3.1.8
+  fast-uri@^3: 3.1.9
   # Drizzle's legacy loader uses transform only; the patched esbuild line removes its dev-server CORS issue.
   esbuild@^0.18: 0.25.0
   # tsup still requests 0.27; the Windows dev-server fix starts at 0.28.1.

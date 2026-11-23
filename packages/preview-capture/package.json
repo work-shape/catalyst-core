@@ -50,7 +50,7 @@
   "dependencies": {
     "playwright": "1.64.1",
     "sharp": "0.35.5",
-    "zod": "4.4.3",
+    "zod": "4.6.7",
     "@work-shape/catalyst-asset-schemas": "workspace:*",
     "pino": "10.3.1",
     "@work-shape/catalyst-core": "workspace:*"

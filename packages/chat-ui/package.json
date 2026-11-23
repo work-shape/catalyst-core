@@ -108,7 +108,7 @@
     "ai": "6.0.224",
     "echarts": "6.1.0",
     "exceljs": "4.4.0",
-    "fast-xml-parser": "5.10.1",
+    "fast-xml-parser": "5.12.1",
     "jszip": "3.10.1",
     "lucide-react": "^1.17.0",
     "rehype-harden": "1.1.8",

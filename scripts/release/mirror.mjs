@@ -100,7 +100,7 @@ export function mirror(source, destination) {
   );
   writeFileSync(
     join(destination, "pnpm-workspace.yaml"),
-    'packages:\n  - "packages/*"\noverrides:\n  zod: 4.4.3\n'
+    'packages:\n  - "packages/*"\noverrides:\n  zod: 4.6.7\n  esbuild@^0.27: 0.28.1\n'
   );
   // Seed pnpm with only the reachable public graph, preserving core's exact resolutions.
   const lock = publicLockfile(readFileSync(join(source, "pnpm-lock.yaml"), "utf8"));

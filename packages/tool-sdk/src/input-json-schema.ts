@@ -1,5 +1,11 @@
 import { z } from "zod";
-import type { JsonObject, JsonValue } from "@work-shape/catalyst-core";
+import {
+  JSON_SCHEMA_DATA_KEYWORDS,
+  JSON_SCHEMA_MAP_KEYWORDS,
+  isCheckFormat,
+  type JsonObject,
+  type JsonValue
+} from "@work-shape/catalyst-core";
 
 /**
  * The JSON Schema a model is shown for a Zod schema, as `defineTool` derives it. A tool whose
@@ -20,9 +26,6 @@ export function deriveInputJsonSchema(schema: z.ZodType<unknown>): JsonObject {
  * like), or data (`default`, `enum`, `const`, `examples`), which is kept as it is written.
  */
 type SchemaPart = "schema" | "map" | "data";
-
-const SCHEMA_MAP_KEYS = new Set(["properties", "patternProperties", "$defs", "definitions"]);
-const SCHEMA_DATA_KEYS = new Set(["default", "enum", "const", "examples"]);
 
 function sanitizeJsonSchemaValue(
   value: unknown,
@@ -51,12 +54,15 @@ function sanitizeJsonSchemaValue(
  * Keywords of a derived schema that cost the model tokens on every call and tell it nothing it
  * needs, since the Zod schema still checks every call: a `pattern` beside a `format` (an
  * e-mail's long regex), the bounds of a safe integer, a minimum of one, a length no model
- * writes, and property names that are strings, as every JSON object's are.
+ * writes, and property names that are strings, as every JSON object's are. The name of a Zod
+ * string check in `format` goes too, and its `pattern` stays because it states the check.
  */
 function isModelNoise(key: string, value: unknown, parent: Record<string, unknown>): boolean {
   switch (key) {
+    case "format":
+      return isCheckFormat(value);
     case "pattern":
-      return "format" in parent;
+      return "format" in parent && !isCheckFormat(parent.format);
     case "maximum":
     case "minimum":
       return value === Number.MAX_SAFE_INTEGER || value === Number.MIN_SAFE_INTEGER;
@@ -89,9 +95,9 @@ function sanitizeJsonSchemaObject(
         ? "data"
         : part === "map"
           ? "schema"
-          : SCHEMA_MAP_KEYS.has(key)
+          : JSON_SCHEMA_MAP_KEYWORDS.has(key)
             ? "map"
-            : SCHEMA_DATA_KEYS.has(key)
+            : JSON_SCHEMA_DATA_KEYWORDS.has(key)
               ? "data"
               : "schema";
     const sanitizedValue = sanitizeJsonSchemaValue(value, childPart);
