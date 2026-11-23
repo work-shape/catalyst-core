@@ -288,28 +288,21 @@ function BuildFrameBody({
     />
   ) : null;
 
-  // The kinds, and below them "Fähigkeiten", which shows what the kinds' agents can be given.
+  // The kinds, and last among them "Fähigkeiten", which shows what the kinds' agents can be given.
   const rail = (value: string) =>
     kinds.length === 0 && !showsToolAssets ? undefined : (
       <SubRail
         title={t("nav.build")}
         label={t("build.kinds")}
         groups={[
-          ...(kinds.length === 0
-            ? []
-            : [
-                {
-                  id: "kinds",
-                  items: kinds.map((kind) => ({
-                    id: kind.entry.path,
-                    label: t(kind.entry.label),
-                    icon: <RegistryIcon name={kind.entry.icon} />
-                  }))
-                }
-              ]),
           {
-            id: "capabilities",
+            id: "kinds",
             items: [
+              ...kinds.map((kind) => ({
+                id: kind.entry.path,
+                label: t(kind.entry.label),
+                icon: <RegistryIcon name={kind.entry.icon} />
+              })),
               {
                 id: CAPABILITIES_BUILD_PATH,
                 label: t("capabilities.title"),
