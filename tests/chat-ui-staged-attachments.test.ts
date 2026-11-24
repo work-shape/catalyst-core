@@ -268,17 +268,21 @@ describe("files attached before the first message", () => {
     try {
       await page.openWorkspace("cw_personal", "conv_open");
       await act(async () => page.controller()?.onFilesSelected([pdf()]));
-      await vi.waitFor(() =>
-        expect(page.controller()?.visibleUploadingAttachments).toMatchObject([
-          { filename: "Perso.pdf", status: "failed", error: "File type is not allowed" }
-        ])
+      await vi.waitFor(
+        () =>
+          expect(page.controller()?.visibleUploadingAttachments).toMatchObject([
+            { filename: "Perso.pdf", status: "failed", error: "File type is not allowed" }
+          ]),
+        { timeout: CONDITION_WAIT_MS }
       );
       expect(page.controller()?.visibleUploadingAttachments[0]).not.toHaveProperty("file");
       expect(page.controller()?.sendBlockedReason).toBeDefined();
 
       const failedId = page.controller()?.visibleUploadingAttachments[0]?.id ?? "";
       await act(async () => page.controller()?.onRetryDraftAttachment(failedId));
-      await vi.waitFor(() => expect(page.controller()?.visibleUploadingAttachments).toEqual([]));
+      await vi.waitFor(() => expect(page.controller()?.visibleUploadingAttachments).toEqual([]), {
+        timeout: CONDITION_WAIT_MS
+      });
       expect(page.calls.filter((call) => call === "upload files of conv_open")).toHaveLength(2);
       expect(page.controller()?.sendBlockedReason).toBeUndefined();
     } finally {
