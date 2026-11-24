@@ -103,6 +103,7 @@ export type {
 export { ConversationRetentionWorkflow } from "./deletion/retention";
 export { createChatServerJobs } from "./jobs";
 export { noticeReachedInstanceLimit } from "./usage/instance-limit-notice";
+export { agentRowNames } from "./usage/usage-report-service";
 export { setOwnOperationSetting } from "./users/operation-settings-service";
 export { createOperationCalls };
 export {

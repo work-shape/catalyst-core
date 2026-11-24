@@ -1,7 +1,7 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { asCollaborationWorkspaceId } from "@work-shape/catalyst-core";
 import type { Route } from "../http/route";
-import { requirePathParam } from "../routes/request-context";
+import { requirePathParam, resolveRequestLocale } from "../routes/request-context";
 import type { ChatServerOptions } from "../types";
 import {
   readUsageBreakdown,
@@ -20,8 +20,11 @@ import {
 export function registerUsageReportRoutes(route: Route, options: ChatServerOptions): void {
   const deps = usageReportDeps(options);
 
-  route(apiOperations["usage.breakdown.get"], ({ query, access }) =>
-    readUsageBreakdown(deps, query, access)
+  route(apiOperations["usage.breakdown.get"], ({ query, access, request }) =>
+    readUsageBreakdown(deps, query, access, {
+      shown: resolveRequestLocale(options, request),
+      fallback: options.config.localization.defaultLocale
+    })
   );
 
   route(apiOperations["usage.users.list"], ({ user, context, query }) =>
