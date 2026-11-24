@@ -26,7 +26,6 @@ export interface SpecPageErrors {
   readonly errors: readonly AllowedPageError[];
 }
 
-export const REQUEST_FAILED = /^Failed to load resource: net::ERR_(?:CONNECTION_)?FAILED$/u;
 export const requestAnswered = (status: number) =>
   new RegExp(`^Failed to load resource: the server responded with a status of ${status} `, "u");
 

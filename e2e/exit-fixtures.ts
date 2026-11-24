@@ -9,7 +9,7 @@ import { apiOrigin } from "./view-fixtures";
 // the browser's own lines about what it refused, and the ways a person clicks a link.
 
 /** How long a refused move is given to reach the other host after all. */
-export const SETTLE_MS = 1_000;
+const SETTLE_MS = 1_000;
 
 export const refusedByShell =
   /^Framing '[^']*' violates the following Content Security Policy directive: "frame-src 'none'"\./u;

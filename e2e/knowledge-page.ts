@@ -23,17 +23,3 @@ export async function chooseAddDocuments(page: Page, way: "files" | "folder"): P
   await expect(opened).toBeVisible();
   if ((await item.count()) > 0) await item.click();
 }
-
-/**
- * Whether Add documents offers connecting a folder: the instance has a Connection that syncs
- * folders, or the reader can make one. That is read after the page shows, so it is waited for.
- */
-export async function offersFolder(page: Page): Promise<boolean> {
-  const add = page.locator("[data-knowledge-add]");
-  try {
-    await expect(add).toHaveAttribute("aria-haspopup", "menu", { timeout: 5000 });
-    return true;
-  } catch {
-    return false;
-  }
-}

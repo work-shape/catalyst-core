@@ -21,7 +21,7 @@ const databaseUrl =
 const clientInstanceId = "demo-e2e";
 const filesRoot = resolve(".tmp/e2e/files");
 
-export const pageFrameTitle = "Page under test";
+const pageFrameTitle = "Page under test";
 
 const contentTypes: Record<string, string> = {
   html: "text/html; charset=utf-8",
@@ -146,7 +146,7 @@ export async function openPage(
 }
 
 /** Shows the address of a Page in a frame over the page the tab is on. */
-export async function framePage(page: Page, address: string): Promise<FrameLocator> {
+async function framePage(page: Page, address: string): Promise<FrameLocator> {
   await page.evaluate(
     ({ address: source, title }) => {
       const frame = document.createElement("iframe");
@@ -187,6 +187,6 @@ export async function expectPageRan(page: Page): Promise<void> {
 }
 
 /** The frame of the Page: the one frame inside the shell the instance answered with. */
-export function pageFrame(page: Page): FrameLocator {
+function pageFrame(page: Page): FrameLocator {
   return page.frameLocator(`iframe[title="${pageFrameTitle}"]`).frameLocator("iframe");
 }
