@@ -19,7 +19,9 @@ import {
   type ActorAccess,
   type AuditRecorder,
   type AuthenticatedUser,
+  type AgentConfig,
   type ClientInstanceId,
+  type ConfigAssetRecord,
   type LocaleCode,
   type CollaborationWorkspaceId,
   type PlatformStores,
@@ -222,6 +224,23 @@ async function agentRowsScope(
   return found?.kind === "shared" ? { workspaceId: found.id } : undefined;
 }
 
+/** What the names of a Breakdown by agent are read from: the agents and the Workflows. */
+export interface AgentRowNameSources {
+  clientInstanceId: ClientInstanceId;
+  configAssets: {
+    source: {
+      getSnapshot(): Promise<{ agents: readonly Pick<AgentConfig, "name" | "displayName">[] }>;
+    };
+    store: {
+      getConfigAsset(input: {
+        clientInstanceId: ClientInstanceId;
+        kind: typeof WORKFLOW_ASSET_KIND;
+        name: string;
+      }): Promise<Pick<ConfigAssetRecord, "status" | "config" | "publishedConfig"> | undefined>;
+    };
+  };
+}
+
 /** The language a reader is shown names in, and the instance's own where a name has none. */
 export interface UsageNameLocale {
   shown: LocaleCode;
@@ -234,7 +253,7 @@ export interface UsageNameLocale {
  * A row whose agent or Workflow is gone keeps its key.
  */
 export async function agentRowNames(
-  deps: Pick<UsageReportDeps, "clientInstanceId" | "configAssets">,
+  deps: AgentRowNameSources,
   rows: readonly { key: string }[],
   locale: UsageNameLocale
 ): Promise<Map<string, string>> {

@@ -3,27 +3,24 @@ import { asClientInstanceId } from "@work-shape/catalyst-core";
 import { agentRowNames } from "@work-shape/catalyst-server";
 
 const workflow = {
-  status: "active",
+  status: "active" as const,
   config: { title: "Draft title" },
   publishedConfig: { title: "Price lists" }
 };
 
-const deps = {
+const deps: Parameters<typeof agentRowNames>[0] = {
   clientInstanceId: asClientInstanceId("usage-names"),
   configAssets: {
     source: {
       getSnapshot: async () => ({
-        version: 1,
-        agents: [{ name: "assistant", displayName: { en: "Ada", de: "Ada (de)" } }],
-        skills: []
+        agents: [{ name: "assistant", displayName: { en: "Ada", de: "Ada (de)" } }]
       })
     },
     store: {
-      getConfigAsset: async ({ name }: { name: string }) =>
-        name === "price-lists" ? workflow : undefined
+      getConfigAsset: async ({ name }) => (name === "price-lists" ? workflow : undefined)
     }
   }
-} as unknown as Parameters<typeof agentRowNames>[0];
+};
 
 describe("the names of a Breakdown by agent", () => {
   it("names an agent by its display name and a Workflow step by its Workflow, whatever workspace the reader is in", async () => {
