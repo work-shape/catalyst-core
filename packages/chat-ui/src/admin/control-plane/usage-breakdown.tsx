@@ -148,7 +148,7 @@ function usageBreakdownLabel(
       if (row.key === breakdown.personalWorkspacesKey) return t("usageReports.personalWorkspaces");
       return row.name ?? t("usageReports.deletedWorkspace");
     case "agent":
-      return usageAgentLabel(row.key, t, agentLabel);
+      return row.name ?? usageAgentLabel(row.key, t, agentLabel);
     case "origin": {
       const label = ORIGIN_LABELS[row.key];
       return label ? t(label) : row.key;

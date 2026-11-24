@@ -6,6 +6,7 @@ import {
   USAGE_BREAKDOWN_DIMENSIONS,
   USAGE_COST_STATUSES,
   USAGE_ORIGINS,
+  USAGE_PURPOSE_AGENT_KEY_PREFIX,
   USAGE_SPEND_LIMIT_LEVELS
 } from "@work-shape/catalyst-asset-schemas";
 import type {
@@ -474,7 +475,13 @@ export interface RecentModelUsage {
   byAttribution: ModelUsageAttributionGroup[];
 }
 
-export { PERSONAL_AGENTS_KEY, PERSONAL_WORKSPACES_KEY, USAGE_BREAKDOWN_DIMENSIONS, USAGE_ORIGINS };
+export {
+  PERSONAL_AGENTS_KEY,
+  PERSONAL_WORKSPACES_KEY,
+  USAGE_BREAKDOWN_DIMENSIONS,
+  USAGE_ORIGINS,
+  USAGE_PURPOSE_AGENT_KEY_PREFIX
+};
 export type UsageBreakdownDimension = (typeof USAGE_BREAKDOWN_DIMENSIONS)[number];
 export type UsageOrigin = (typeof USAGE_ORIGINS)[number];
 

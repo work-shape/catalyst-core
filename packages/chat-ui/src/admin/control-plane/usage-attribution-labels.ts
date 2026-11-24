@@ -1,5 +1,5 @@
 import type { UsageSummary } from "@work-shape/catalyst-api-client";
-import { PERSONAL_AGENTS_KEY } from "@work-shape/catalyst-core";
+import { PERSONAL_AGENTS_KEY, USAGE_PURPOSE_AGENT_KEY_PREFIX } from "@work-shape/catalyst-core";
 import type { TranslationContextValue, TranslationKey } from "../../shared/i18n";
 
 const PURPOSE_LABELS: Record<string, TranslationKey> = {
@@ -41,6 +41,10 @@ export function usageAgentLabel(
   agentLabel: (agentName: string) => string | undefined
 ): string {
   if (agentName === PERSONAL_AGENTS_KEY) return t("usageReports.personalAgents");
+  if (agentName.startsWith(USAGE_PURPOSE_AGENT_KEY_PREFIX)) {
+    const purpose = PURPOSE_LABELS[agentName.slice(USAGE_PURPOSE_AGENT_KEY_PREFIX.length)];
+    if (purpose) return t(purpose);
+  }
   return agentLabel(agentName) ?? agentName;
 }
 

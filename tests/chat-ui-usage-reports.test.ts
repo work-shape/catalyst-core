@@ -232,6 +232,18 @@ describe("the Breakdown", () => {
     );
   });
 
+  it("by agent, names each row as people know it: the server's name, or what an agentless call was for", () => {
+    const markup = renderByAgent({
+      ...byAgent,
+      rows: [
+        { key: "assistant", name: "Ada", ...window(2, 800_000) },
+        { key: ":purpose:knowledge_page_reading", ...window(3, 1_200_000) }
+      ]
+    });
+    expect(markup).toContain(">Ada<");
+    expect(markup).toContain(">Knowledge base page reading<");
+  });
+
   it("writes the table as one CSV file a spreadsheet sums and runs nothing of", () => {
     const shown: UsageBreakdown = {
       ...breakdown,

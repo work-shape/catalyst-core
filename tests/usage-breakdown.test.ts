@@ -201,10 +201,11 @@ describe("usage breakdown", () => {
       ["system", 1],
       ["workflow", 1]
     ]);
-    // A Workflow's agent step names its agent.
+    // A Workflow's agent step names its agent; a call no agent made, what it was made for.
     expect((await breakdown(clientInstanceId, "agent")).map((row) => row.key)).toEqual([
-      "",
       "digest_writer",
+      ":purpose:conversation_title",
+      ":purpose:knowledge_embedding",
       "quoter",
       "reader",
       "writer"
@@ -216,7 +217,8 @@ describe("usage breakdown", () => {
         row.modelCallCount
       ])
     ).toEqual([
-      ["", 2],
+      [":purpose:conversation_title", 1],
+      [":purpose:knowledge_embedding", 1],
       ["quoter", 1],
       ["writer", 2]
     ]);

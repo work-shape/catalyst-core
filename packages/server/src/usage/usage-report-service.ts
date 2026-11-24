@@ -11,13 +11,18 @@ import {
   PERSONAL_AGENTS_KEY,
   PERSONAL_WORKSPACES_KEY,
   USAGE_BREAKDOWN_DIMENSIONS,
+  WORKFLOW_AGENT_NAME_PREFIX,
+  WORKFLOW_ASSET_KIND,
   asCollaborationWorkspaceId,
   auditActorFromIdentity,
   getSubjectUserId,
   type ActorAccess,
   type AuditRecorder,
   type AuthenticatedUser,
+  type AgentConfig,
   type ClientInstanceId,
+  type ConfigAssetRecord,
+  type LocaleCode,
   type CollaborationWorkspaceId,
   type PlatformStores,
   type UsageBreakdownFilter
@@ -28,6 +33,7 @@ import type {
   UsageWorkspaceLabeler
 } from "@work-shape/catalyst-usage-governance";
 import { authorizeReviewer } from "../feedback/feedback-service";
+import { resolveLocalizedString } from "@work-shape/catalyst-config-schema";
 import type { ChatServerOptions } from "../types";
 import { offeredAgents } from "../workspaces/agent-availability";
 import { requireWorkspaceAccess } from "../workspaces/workspace-access";
@@ -218,11 +224,81 @@ async function agentRowsScope(
   return found?.kind === "shared" ? { workspaceId: found.id } : undefined;
 }
 
+/** What the names of a Breakdown by agent are read from: the agents and the Workflows. */
+export interface AgentRowNameSources {
+  clientInstanceId: ClientInstanceId;
+  configAssets: {
+    source: {
+      getSnapshot(): Promise<{ agents: readonly Pick<AgentConfig, "name" | "displayName">[] }>;
+    };
+    store: {
+      getConfigAsset(input: {
+        clientInstanceId: ClientInstanceId;
+        kind: typeof WORKFLOW_ASSET_KIND;
+        name: string;
+      }): Promise<Pick<ConfigAssetRecord, "status" | "config" | "publishedConfig"> | undefined>;
+    };
+  };
+}
+
+/** The language a reader is shown names in, and the instance's own where a name has none. */
+export interface UsageNameLocale {
+  shown: LocaleCode;
+  fallback: LocaleCode;
+}
+
+/**
+ * The names people know the agents of a Breakdown by agent as, whatever workspace the reader is
+ * in: an agent's display name, and a Workflow step's run as its Workflow's title and its step.
+ * A row whose agent or Workflow is gone keeps its key.
+ */
+export async function agentRowNames(
+  deps: AgentRowNameSources,
+  rows: readonly { key: string }[],
+  locale: UsageNameLocale
+): Promise<Map<string, string>> {
+  const assets = await deps.configAssets.source.getSnapshot();
+  const displayNames = new Map(
+    assets.agents.map((agent) => [
+      agent.name,
+      resolveLocalizedString(agent.displayName, locale.shown, locale.fallback)
+    ])
+  );
+  const titles = new Map<string, string | undefined>();
+  const names = new Map<string, string>();
+  for (const { key } of rows) {
+    const displayName = displayNames.get(key);
+    if (displayName) {
+      names.set(key, displayName);
+      continue;
+    }
+    if (!key.startsWith(WORKFLOW_AGENT_NAME_PREFIX)) continue;
+    const rest = key.slice(WORKFLOW_AGENT_NAME_PREFIX.length);
+    const dot = rest.lastIndexOf(".");
+    if (dot <= 0) continue;
+    const workflow = rest.slice(0, dot);
+    if (!titles.has(workflow)) {
+      const asset = await deps.configAssets.store.getConfigAsset({
+        clientInstanceId: deps.clientInstanceId,
+        kind: WORKFLOW_ASSET_KIND,
+        name: workflow
+      });
+      const config =
+        asset?.status === "active" ? (asset.publishedConfig ?? asset.config) : undefined;
+      titles.set(workflow, typeof config?.title === "string" ? config.title : undefined);
+    }
+    const title = titles.get(workflow);
+    if (title) names.set(key, `${title} · ${rest.slice(dot + 1)}`);
+  }
+  return names;
+}
+
 /** Settings > Instance > Usage, Breakdown: the period by one dimension, shared workspaces named. */
 export async function readUsageBreakdown(
   deps: UsageReportDeps,
   query: UsageBreakdownQuery,
-  access: ActorAccess
+  access: ActorAccess,
+  locale?: UsageNameLocale
 ): Promise<UsageBreakdown> {
   const [breakdown, shared, agentScope] = await Promise.all([
     deps.usageGovernance.summarizeBreakdown({
@@ -239,6 +315,9 @@ export async function readUsageBreakdown(
     agentRowsScope(deps, query)
   ]);
   const names = new Map(shared.map((workspace) => [workspace.id as string, workspace.name]));
+  if (query.groupBy === "agent" && locale !== undefined)
+    for (const [key, name] of await agentRowNames(deps, breakdown.rows, locale))
+      names.set(key, name);
   const rows = breakdown.rows.map((row) => {
     const name = names.get(row.key);
     return name === undefined ? row : { ...row, name };

@@ -3,6 +3,7 @@ import {
   KNOWLEDGE_INGESTION_PURPOSES,
   PERSON_OWN_PURPOSES,
   USAGE_BREAKDOWN_DIMENSIONS,
+  USAGE_PURPOSE_AGENT_KEY_PREFIX,
   type ModelUsageEventStore,
   type ModelUsageTotals,
   type UsageActivityCounts,
@@ -42,7 +43,11 @@ end`;
 /** The value of each dimension on a row of the daily sums. */
 const DIMENSION: Record<UsageBreakdownDimension | "day" | "all", SQL> = {
   workspace: drizzleSql`workspace_key`,
-  agent: drizzleSql`agent_name`,
+  // A call no agent made is grouped by what it was made for, such as reading a Knowledge Base.
+  agent: drizzleSql`case
+    when agent_name <> '' or purpose = '' then agent_name
+    else ${USAGE_PURPOSE_AGENT_KEY_PREFIX} || purpose
+  end`,
   app: drizzleSql`app_name`,
   workflow: drizzleSql`workflow_name`,
   model: drizzleSql`model`,
