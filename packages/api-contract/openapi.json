@@ -52827,6 +52827,27 @@
                       "tools"
                     ]
                   }
+                },
+                "knowledgeBases": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "title"
+                    ]
+                  }
                 }
               },
               "required": [
@@ -53008,6 +53029,27 @@
                       "name",
                       "title",
                       "tools"
+                    ]
+                  }
+                },
+                "knowledgeBases": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "title"
                     ]
                   }
                 }
@@ -54256,6 +54298,27 @@
                       "name",
                       "title",
                       "tools"
+                    ]
+                  }
+                },
+                "knowledgeBases": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "title"
                     ]
                   }
                 }
@@ -61972,6 +62035,27 @@
                       "name",
                       "title",
                       "tools"
+                    ]
+                  }
+                },
+                "knowledgeBases": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "title"
                     ]
                   }
                 }

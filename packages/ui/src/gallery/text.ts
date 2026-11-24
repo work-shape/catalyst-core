@@ -79,6 +79,9 @@ export interface GalleryText
   chooseFolder: string;
   moreActions: string;
   chipPages: string;
+  chipKnowledge: string;
+  chipKnowledgeAbout: string;
+  chipShowMore: string;
   name: string;
   namePlaceholder: string;
   rename: string;
@@ -347,6 +350,9 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     chooseFolder: "Choose folder",
     moreActions: "More actions",
     chipPages: "p. 7, 79",
+    chipKnowledge: "Knowledge",
+    chipKnowledgeAbout: "Every product, its options and its prices, as sales tells them.",
+    chipShowMore: "Show more",
     name: "Name",
     namePlaceholder: "Support assistant",
     rename: "Rename",
@@ -654,6 +660,9 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     chooseFolder: "Ordner auswählen",
     moreActions: "Weitere Aktionen",
     chipPages: "S. 7, 79",
+    chipKnowledge: "Wissen",
+    chipKnowledgeAbout: "Alle Produkte, ihre Optionen und Preise, wie der Vertrieb sie nennt.",
+    chipShowMore: "Mehr anzeigen",
     name: "Name",
     namePlaceholder: "Support-Assistent",
     rename: "Umbenennen",

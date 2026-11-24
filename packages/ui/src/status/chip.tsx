@@ -1,16 +1,21 @@
 import { Building2, Lock, UserRound, X } from "lucide-react";
 import {
+  Children,
   forwardRef,
   useId,
+  useState,
   type ButtonHTMLAttributes,
   type MouseEventHandler,
   type ReactNode
 } from "react";
 import { cn } from "../cn";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../overlays/tooltip";
 import { useUiLabels } from "../ui-root";
 import { Avatar, type AvatarAccent } from "./avatar";
 
 export type ChipSize = "sm" | "md";
+/** `quiet` is a label that stands back: a soft fill without a border, in muted ink. */
+export type ChipTone = "default" | "quiet";
 
 // A leading avatar fills the pill's height less a hair, so the chip sets its size.
 const chipSizes: Record<ChipSize, string> = {
@@ -33,6 +38,22 @@ export interface ChipProps {
    */
   trailing?: ReactNode;
   size?: ChipSize;
+  /**
+   * `quiet` for a label beside something louder, such as what an agent knows next to the
+   * requests a person can begin with: it reads as a fact, not as something to press.
+   */
+  tone?: ChipTone;
+  /**
+   * One or two sentences about the object, shown as a tooltip on hover and on keyboard focus.
+   * A chip that is neither a link nor a button becomes a stop of the tab order for it and
+   * keeps the look of a label.
+   */
+  description?: ReactNode;
+  /**
+   * The chip's name for assistive technology where the label alone does not say what the
+   * object is, such as "Knowledge: Handbook" for a chip that shows a book and "Handbook".
+   */
+  accessibleLabel?: string;
   /** Says that the object cannot be changed here. It shows a lock and is read out. */
   lockLabel?: string;
   /** Shows a remove button after the label. */
@@ -91,6 +112,9 @@ export function Chip({
   detail,
   trailing,
   size = "md",
+  tone = "default",
+  description,
+  accessibleLabel,
   lockLabel,
   onRemove,
   href,
@@ -125,30 +149,71 @@ export function Chip({
     </>
   );
 
+  const described = description !== undefined && description !== null && description !== "";
+  const element =
+    href !== undefined ? (
+      <a
+        href={href}
+        aria-label={accessibleLabel}
+        className={cn(bodyClassName, interactiveClassName)}
+        onClick={onClick}
+      >
+        {body}
+      </a>
+    ) : onClick ? (
+      <button
+        type="button"
+        aria-label={accessibleLabel}
+        className={cn(bodyClassName, interactiveClassName)}
+        aria-pressed={pressed}
+        onClick={onClick}
+      >
+        {body}
+      </button>
+    ) : described ? (
+      // A label with more to say: focus opens its description, and nothing else happens.
+      <button
+        type="button"
+        aria-label={accessibleLabel}
+        className={cn(bodyClassName, "cursor-default focus-visible:focus-ring")}
+      >
+        {body}
+      </button>
+    ) : (
+      <span className={bodyClassName}>
+        {accessibleLabel === undefined ? (
+          body
+        ) : (
+          <>
+            <span className="sr-only">{accessibleLabel}</span>
+            <span aria-hidden="true" className="contents">
+              {body}
+            </span>
+          </>
+        )}
+      </span>
+    );
+
   return (
     <span
+      data-tone={tone === "quiet" ? "quiet" : undefined}
       className={cn(
-        "inline-flex max-w-full shrink-0 items-center rounded-full border text-caption whitespace-nowrap text-foreground",
+        "inline-flex max-w-full shrink-0 items-center rounded-full border text-caption whitespace-nowrap",
+        tone === "quiet"
+          ? "border-transparent bg-secondary text-muted-foreground"
+          : "text-foreground",
         chipSizes[size],
         pressed && "border-primary-border bg-primary-soft text-primary-soft-foreground",
         className
       )}
     >
-      {href !== undefined ? (
-        <a href={href} className={cn(bodyClassName, interactiveClassName)} onClick={onClick}>
-          {body}
-        </a>
-      ) : onClick ? (
-        <button
-          type="button"
-          className={cn(bodyClassName, interactiveClassName)}
-          aria-pressed={pressed}
-          onClick={onClick}
-        >
-          {body}
-        </button>
+      {described ? (
+        <Tooltip>
+          <TooltipTrigger asChild>{element}</TooltipTrigger>
+          <TooltipContent className="whitespace-normal">{description}</TooltipContent>
+        </Tooltip>
       ) : (
-        <span className={bodyClassName}>{body}</span>
+        element
       )}
       {trailing}
       {onRemove ? (
@@ -157,6 +222,63 @@ export function Chip({
         </ChipAction>
       ) : null}
     </span>
+  );
+}
+
+export interface ChipListProps {
+  /** What the chips are, for assistive technology: "Knowledge". */
+  label: string;
+  children: ReactNode;
+  /** How many chips show before the rest folds into one "+3" chip. Without it all show. */
+  max?: number;
+  /** What the "+3" chip does, read out in place of the number: "Show 3 more". */
+  moreLabel?(hidden: number): string;
+  size?: ChipSize;
+  tone?: ChipTone;
+  className?: string;
+}
+
+/**
+ * Chips side by side as one list that wraps onto more lines. With `max`, a longer list shows
+ * that many and one chip with the number of the rest, which shows them all when chosen; a
+ * list one over the limit shows whole, as "+1" would take the room of the chip it hides.
+ */
+export function ChipList({
+  label,
+  children,
+  max,
+  moreLabel,
+  size = "md",
+  tone = "default",
+  className
+}: ChipListProps) {
+  const chips = Children.toArray(children);
+  const [unfolded, setUnfolded] = useState(false);
+  const folds = max !== undefined && chips.length > max + 1 && !unfolded;
+  const hidden = folds ? chips.length - max : 0;
+  if (chips.length === 0) {
+    return null;
+  }
+  return (
+    <ul aria-label={label} className={cn("flex min-w-0 flex-wrap items-center gap-1.5", className)}>
+      {(folds ? chips.slice(0, max) : chips).map((chip, index) => (
+        <li key={index} className="flex min-w-0 max-w-full">
+          {chip}
+        </li>
+      ))}
+      {folds ? (
+        <li className="flex">
+          <Chip
+            size={size}
+            tone={tone}
+            accessibleLabel={moreLabel?.(hidden)}
+            onClick={() => setUnfolded(true)}
+          >
+            +{hidden}
+          </Chip>
+        </li>
+      ) : null}
+    </ul>
   );
 }
 

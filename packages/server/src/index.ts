@@ -29,6 +29,7 @@ export type {
   RouteRegistration
 } from "./http/route";
 export { resolveDefaultAgentName } from "./workspaces/agent-availability";
+export { agentKnowledgeBases } from "./knowledge/agent-knowledge-bases";
 export {
   createWorkflowLiveCheck,
   requireWorkflowRunAs,

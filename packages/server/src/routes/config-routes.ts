@@ -10,6 +10,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { agentWriter, getWorkspaceAssetSnapshot } from "../workspaces/agent-availability";
 import { agentConnections } from "../connections/agent-connections";
+import { agentKnowledgeBases } from "../knowledge/agent-knowledge-bases";
 import type { Route } from "../http/route";
 import { resolveRequestLocale } from "./request-context";
 import type { ChatServerOptions } from "../types";
@@ -59,6 +60,7 @@ export function registerConfigRoutes(route: Route, options: ChatServerOptions): 
       reasoningEffortsOfBinding: (bindingId) =>
         options.modelGateway.capabilities({ bindingId }).reasoningEfforts,
       connections: await agentConnections(options),
+      knowledgeBases: await agentKnowledgeBases(options, access),
       mayWriteAgent: agentWriter({ user, access }, assets)
     });
     return {

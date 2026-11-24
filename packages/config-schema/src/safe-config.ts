@@ -50,7 +50,22 @@ export interface SafeConfigViewOptions extends ConfigLocaleInput {
    * what a writer is.
    */
   mayWriteAgent?: (agentName: string) => boolean;
+  /**
+   * The Knowledge Bases the reader may read. Each agent is told those of them it answers
+   * from. Left out, no agent names a Knowledge Base.
+   */
+  knowledgeBases?: readonly SafeConfigKnowledgeBase[];
 }
+
+/** One Knowledge Base as the empty chat names it: what the agent can answer from. */
+export interface SafeConfigKnowledgeBase {
+  name: string;
+  title: string;
+  description?: string;
+}
+
+/** How long the description of a Knowledge Base is on the empty chat: a hint, not the text. */
+const KNOWLEDGE_BASE_DESCRIPTION_MAX_CHARS = 240;
 
 /** One Connection as a conversation names it: what a tool call touched, and its icon. */
 export interface SafeConfigConnection {
@@ -185,7 +200,8 @@ export function createSafeConfigView(
         agent.initialPrompts.length > 0
           ? []
           : agentStarters(agent, assets.skills, locale, config.localization.defaultLocale),
-      connections: agentConnections(agent, options.connections ?? [])
+      connections: agentConnections(agent, options.connections ?? []),
+      knowledgeBases: agentKnowledgeBases(agent, options.knowledgeBases ?? [])
     })),
     ui
   };
@@ -208,6 +224,35 @@ function agentConnections(agent: AgentConfig, connections: readonly SafeConfigCo
             tools: held
           }
         ];
+  });
+}
+
+/**
+ * The Knowledge Bases an agent answers from, in the order the agent names them: the id, the
+ * name people read and a short description. One the reader was not given is left out.
+ */
+function agentKnowledgeBases(
+  agent: AgentConfig,
+  knowledgeBases: readonly SafeConfigKnowledgeBase[]
+) {
+  return (agent.knowledgeBases ?? []).flatMap((name) => {
+    const knowledgeBase = knowledgeBases.find((candidate) => candidate.name === name);
+    if (knowledgeBase === undefined) return [];
+    const description = knowledgeBase.description?.trim() ?? "";
+    return [
+      {
+        name,
+        title: knowledgeBase.title,
+        ...(description === ""
+          ? {}
+          : {
+              description:
+                description.length > KNOWLEDGE_BASE_DESCRIPTION_MAX_CHARS
+                  ? `${description.slice(0, KNOWLEDGE_BASE_DESCRIPTION_MAX_CHARS - 1).trimEnd()}…`
+                  : description
+            })
+      }
+    ];
   });
 }
 

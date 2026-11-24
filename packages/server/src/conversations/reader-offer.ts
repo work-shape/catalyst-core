@@ -6,6 +6,7 @@ import type {
   LocaleCode
 } from "@work-shape/catalyst-core";
 import { agentConnections } from "../connections/agent-connections";
+import { agentKnowledgeBases } from "../knowledge/agent-knowledge-bases";
 import type { ChatServerOptions } from "../types";
 import { agentWriter, getWorkspaceAssetSnapshot } from "../workspaces/agent-availability";
 import { requireConversationReach, workspaceOfConversation } from "./conversation-access";
@@ -38,6 +39,8 @@ export async function conversationReaderOffer(
       reasoningEffortsOfBinding: (bindingId: string) =>
         options.modelGateway.capabilities({ bindingId }).reasoningEfforts,
       connections: await agentConnections(options),
+      // An outside reader reaches the workspace through the chat alone: no more names than that.
+      knowledgeBases: outside ? [] : await agentKnowledgeBases(options, caller.access),
       mayWriteAgent: agentWriter(caller, assets)
     }
   );

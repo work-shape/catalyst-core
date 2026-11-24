@@ -17,10 +17,13 @@ export { ChangeTag, type ChangeKind, type ChangeTagProps } from "./change-tag";
 export {
   Chip,
   ChipAction,
+  ChipList,
   ScopeChip,
   type ChipActionProps,
+  type ChipListProps,
   type ChipProps,
   type ChipSize,
+  type ChipTone,
   type ScopeChipProps
 } from "./chip";
 export {
