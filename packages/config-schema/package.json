@@ -41,8 +41,8 @@
   "dependencies": {
     "@work-shape/catalyst-asset-schemas": "workspace:*",
     "@work-shape/catalyst-core": "workspace:*",
-    "re2js": "~2.8.6",
-    "zod": "4.4.3"
+    "re2js": "~2.8.8",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/node": "^24.13.1",

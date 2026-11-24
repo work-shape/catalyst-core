@@ -113,15 +113,15 @@ range test checks their starting versions against core's lock):
 
 | Dependency                                    | Range               | Reason                                                                                             |
 | --------------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------------- |
-| better-auth                                   | 1.6.22              | 1.7.10 calls Zod APIs absent from core's 4.4.3; its @better-auth/* dependencies are already exact. |
-| zod                                           | 4.4.3 (retained)    | Schema identity and validation must agree across packages and auth.                                |
+| better-auth                                   | 1.7.27              | Needs Zod 4.5.4 or newer; 1.7.10 fails at sign-in on Zod 4.4.3. Its @better-auth/* dependencies are already exact. |
+| zod                                           | 4.6.7               | Schema identity and validation must agree across packages and auth.                                |
 | drizzle-orm                                   | 0.45.2              | Pre-1.0 ORM and auth adapter contracts move in patch releases.                                     |
 | react, react-dom                              | ^19.2.7 (peers)     | The host owns the renderer and hooks; UI packages build and test with dev dependencies at 19.2.7.  |
 | fastify                                       | 5.12.7              | Request/auth boundary and emitted server types must match the tested security patch.               |
 | @fastify/cors, @fastify/multipart             | 11.2.0, 9.4.0       | Credentialed origins and upload parsing sit on the HTTP/data boundary.                             |
 | postgres                                      | ~3.4.9              | DB protocol, transactions and value conversion must stay on the tested minor.                      |
 | js-yaml                                       | ~4.3.2              | Parses release and asset configuration before validation.                                          |
-| re2js                                         | ~2.8.6              | Compiles guardrail validation patterns.                                                            |
+| re2js                                         | ~2.8.8              | Compiles guardrail validation patterns.                                                            |
 | ajv                                           | ~8.20.0             | Validates connector inputs and outputs at the data boundary.                                       |
 | @tanstack/react-query, @tanstack/react-router | ~5.101.0, ~1.170.16 | Cache and route transitions carry signed-in UI state.                                              |
 | @assistant-ui/react, core, store, tap         | 0.14.26, 0.2.20, 0.2.19, 0.9.3 | react 0.14.29 with tap 0.9.23 loops on the workspace start page (tap's `useSyncExternalStore`). |

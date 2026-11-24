@@ -12,7 +12,8 @@ import {
   type ModelProviderConfig,
   type ModelTokenUsage,
   type ReasoningEffortConfig,
-  type SystemModelAttribution
+  type SystemModelAttribution,
+  withoutCheckFormats
 } from "@work-shape/catalyst-core";
 import { deadlinePassed, limitModelCall, stopOf, type ModelCallLimit } from "./model-call-limit";
 import {
@@ -298,8 +299,15 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     const request: ModelAdapterRequest = {
       model: target.model,
       messages: call.messages,
-      tools: call.tools,
-      output: call.output,
+      tools: call.tools.map((tool) =>
+        isModelFunctionTool(tool) && tool.inputJsonSchema
+          ? { ...tool, inputJsonSchema: withoutCheckFormats(tool.inputJsonSchema) }
+          : tool
+      ),
+      output: call.output && {
+        ...call.output,
+        jsonSchema: withoutCheckFormats(call.output.jsonSchema)
+      },
       maxOutputTokens: call.maxOutputTokens,
       reasoningEffort: call.reasoningEffort,
       fastTier: call.fastTier,

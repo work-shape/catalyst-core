@@ -284,7 +284,12 @@ function scalarAsZod(definition: z.infer<typeof scalarParameter>): z.ZodType {
     case "string": {
       if (definition.enum) return z.enum(definition.enum);
       if (definition.format === "date") return z.iso.date();
-      if (definition.format === "date-time") return z.iso.datetime({ offset: true, local: true });
+      // Zod 4.5 requires seconds by default; an action keeps taking a moment to the minute.
+      if (definition.format === "date-time")
+        return z.union([
+          z.iso.datetime({ offset: true, local: true }),
+          z.iso.datetime({ offset: true, local: true, precision: -1 })
+        ]);
       let text = z.string();
       if (definition.minLength !== undefined) text = text.min(definition.minLength);
       if (definition.maxLength !== undefined) text = text.max(definition.maxLength);

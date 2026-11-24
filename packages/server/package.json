@@ -54,7 +54,7 @@
     "@work-shape/catalyst-usage-governance": "workspace:*",
     "ai": "6.0.224",
     "fastify": "5.12.7",
-    "zod": "4.4.3"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/node": "^24.13.1",

@@ -162,13 +162,9 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
           "additionalProperties": false
         },
         "exitCode": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
+          "type": [
+            "number",
+            "null"
           ]
         },
         "stdoutPreview": {
@@ -178,13 +174,9 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
           "type": "string"
         },
         "durationMs": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
+          "type": [
+            "number",
+            "null"
           ]
         },
         "changedFiles": {
