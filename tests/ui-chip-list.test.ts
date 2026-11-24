@@ -60,27 +60,18 @@ describe("a quiet Chip", () => {
 });
 
 describe("ChipList", () => {
-  it("is a named list, and nothing without chips", () => {
+  it("is a named list on one line, and nothing without chips", () => {
     const markup = render(list({}, 2));
     expect(markup).toContain('<ul aria-label="Knowledge"');
+    expect(markup).toContain("flex-nowrap");
+    expect(markup).not.toContain("flex-wrap");
     expect(markup.match(/<li/gu)).toHaveLength(2);
     expect(render(list({}, 0))).not.toContain("<ul");
   });
 
-  it("folds what is over the limit into one chip that says how many", () => {
-    const markup = render(
-      list({ max: 3, tone: "quiet", moreLabel: (hidden) => `Show ${String(hidden)} more` }, 6)
-    );
-    expect(markup).toContain("Chip 3");
-    expect(markup).not.toContain("Chip 4");
-    expect(markup).toContain('aria-label="Show 3 more"');
-    expect(markup).toContain("+3");
-  });
-
-  it("shows a list one over the limit whole, and every chip without a limit", () => {
-    const oneOver = render(list({ max: 3 }, 4));
-    expect(oneOver).toContain("Chip 4");
-    expect(oneOver).not.toContain("+1");
-    expect(render(list({}, 12))).toContain("Chip 12");
+  it("shows every chip before it has measured its room", () => {
+    const markup = render(list({ tone: "quiet" }, 12));
+    expect(markup).toContain("Chip 12");
+    expect(markup).not.toContain("+");
   });
 });

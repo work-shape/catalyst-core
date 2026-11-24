@@ -679,9 +679,6 @@ export function ThreadWelcomeHeading({
   );
 }
 
-/** How many Knowledge Bases the start page names before the rest folds into "+3". */
-const KNOWLEDGE_TAGS_SHOWN = 6;
-
 /**
  * What the start page offers under the composer: the agent's Knowledge Bases as quiet labels, the starters, then the agent's own prompts,
  * all in one list of the same cards. A conversation about an asset, or about a new one, offers
@@ -729,11 +726,11 @@ export function ThreadStartBlock({
   return (
     <div className="grid flex-[3] basis-0 content-start gap-5 pb-8 pt-2">
       {/* What the agent answers from, as labels that stand back behind the requests below:
-          they send nothing, and each says on hover or focus what it holds. */}
+          they send nothing, and each says on hover or focus what it holds. They keep to one
+          line at any width; those without room stand behind "+3". */}
       <ChipList
         label={t("chatKnowledge")}
         tone="quiet"
-        max={KNOWLEDGE_TAGS_SHOWN}
         moreLabel={(count) => t("chatKnowledgeMore", { count })}
         className="justify-center"
       >

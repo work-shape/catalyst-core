@@ -3,12 +3,15 @@ import {
   Children,
   forwardRef,
   useId,
+  useLayoutEffect,
+  useRef,
   useState,
   type ButtonHTMLAttributes,
   type MouseEventHandler,
   type ReactNode
 } from "react";
 import { cn } from "../cn";
+import { Popover, PopoverContent, PopoverTrigger } from "../overlays/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../overlays/tooltip";
 import { useUiLabels } from "../ui-root";
 import { Avatar, type AvatarAccent } from "./avatar";
@@ -229,56 +232,178 @@ export interface ChipListProps {
   /** What the chips are, for assistive technology: "Knowledge". */
   label: string;
   children: ReactNode;
-  /** How many chips show before the rest folds into one "+3" chip. Without it all show. */
-  max?: number;
-  /** What the "+3" chip does, read out in place of the number: "Show 3 more". */
+  /** What the "+3" chip opens, read out in place of the number: "Show 3 more". */
   moreLabel?(hidden: number): string;
   size?: ChipSize;
   tone?: ChipTone;
   className?: string;
 }
 
+/** The room between two chips of a list, in pixels: `gap-1.5`. */
+const CHIP_LIST_GAP = 6;
+
 /**
- * Chips side by side as one list that wraps onto more lines. With `max`, a longer list shows
- * that many and one chip with the number of the rest, which shows them all when chosen; a
- * list one over the limit shows whole, as "+1" would take the room of the chip it hides.
+ * How many chips of the given widths stand on one line of the room there is, when those that
+ * do not are told by one chip of the width `more` at the end. All of them where they fit
+ * without it, and never fewer than one: the first then shortens with an ellipsis.
+ */
+function chipsThatFit(widths: readonly number[], room: number, more: number): number {
+  const gaps = (count: number) => Math.max(count - 1, 0) * CHIP_LIST_GAP;
+  const sum = (count: number) =>
+    widths.slice(0, count).reduce((total, width) => total + Math.ceil(width), 0);
+  // A list that is not laid out, such as one in a hidden panel, has no room to measure.
+  if (room <= 0 || sum(widths.length) + gaps(widths.length) <= room) {
+    return widths.length;
+  }
+  for (let count = widths.length - 1; count > 1; count -= 1) {
+    if (sum(count) + gaps(count + 1) + Math.ceil(more) <= room) {
+      return count;
+    }
+  }
+  return Math.min(widths.length, 1);
+}
+
+const moreChipClassName = (size: ChipSize, tone: ChipTone) =>
+  cn(
+    "inline-flex shrink-0 items-center rounded-full border px-2 text-caption whitespace-nowrap data-[state=open]:bg-state-hover",
+    tone === "quiet" ? "border-transparent bg-secondary text-muted-foreground" : "text-foreground",
+    chipSizes[size],
+    interactiveClassName
+  );
+
+/**
+ * Chips side by side on one line that never wraps. The list measures its room and shows as
+ * many chips as fit; the rest stand behind one chip with their number, "+3", which opens a
+ * small list of them on a click and on keyboard focus. It measures again when its width or
+ * its chips change, so it holds at any width down to a phone's. A single chip wider than the
+ * room shortens with an ellipsis.
  */
 export function ChipList({
   label,
   children,
-  max,
   moreLabel,
   size = "md",
   tone = "default",
   className
 }: ChipListProps) {
   const chips = Children.toArray(children);
-  const [unfolded, setUnfolded] = useState(false);
-  const folds = max !== undefined && chips.length > max + 1 && !unfolded;
-  const hidden = folds ? chips.length - max : 0;
+  const rowRef = useRef<HTMLUListElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
+  const restRef = useRef<HTMLUListElement>(null);
+  // The server and the first frame show every chip; the measure follows before the paint.
+  const [mounted, setMounted] = useState(false);
+  const [fit, setFit] = useState(chips.length);
+  const [open, setOpen] = useState(false);
+  // Focus that returns to "+3" as its list closes does not open it again.
+  const returningFocus = useRef(false);
+  useLayoutEffect(() => setMounted(true), []);
+  useLayoutEffect(() => {
+    const row = rowRef.current;
+    const measure = measureRef.current;
+    if (!row || !measure) {
+      return;
+    }
+    const fitChips = () => {
+      const widths = Array.from(measure.children, (child) => child.getBoundingClientRect().width);
+      const more = widths.pop() ?? 0;
+      setFit(chipsThatFit(widths, row.clientWidth, more));
+    };
+    fitChips();
+    const observer = new ResizeObserver(fitChips);
+    observer.observe(row);
+    observer.observe(measure);
+    return () => observer.disconnect();
+  }, [mounted, chips.length]);
+
   if (chips.length === 0) {
     return null;
   }
+  const shown = Math.min(fit, chips.length);
+  const hidden = chips.length - shown;
   return (
-    <ul aria-label={label} className={cn("flex min-w-0 flex-wrap items-center gap-1.5", className)}>
-      {(folds ? chips.slice(0, max) : chips).map((chip, index) => (
-        <li key={index} className="flex min-w-0 max-w-full">
-          {chip}
-        </li>
-      ))}
-      {folds ? (
-        <li className="flex">
-          <Chip
-            size={size}
-            tone={tone}
-            accessibleLabel={moreLabel?.(hidden)}
-            onClick={() => setUnfolded(true)}
+    <div className="w-full min-w-0">
+      <ul
+        ref={rowRef}
+        aria-label={label}
+        className={cn(
+          "flex w-full min-w-0 flex-nowrap items-center gap-1.5",
+          !mounted && "overflow-hidden",
+          className
+        )}
+      >
+        {chips.slice(0, shown).map((chip, index) => (
+          <li
+            key={index}
+            className={cn("flex", hidden > 0 && shown === 1 ? "min-w-0" : "shrink-0")}
           >
-            +{hidden}
-          </Chip>
-        </li>
+            {chip}
+          </li>
+        ))}
+        {hidden === 0 ? null : (
+          <li className="flex shrink-0">
+            <Popover open={open} onOpenChange={setOpen}>
+              <PopoverTrigger
+                aria-label={moreLabel?.(hidden)}
+                className={moreChipClassName(size, tone)}
+                onFocus={(event) => {
+                  if (returningFocus.current) {
+                    returningFocus.current = false;
+                  } else if (event.currentTarget.matches(":focus-visible")) {
+                    setOpen(true);
+                  }
+                }}
+              >
+                +{hidden}
+              </PopoverTrigger>
+              <PopoverContent
+                size="fit"
+                align="end"
+                className="max-w-72 p-2"
+                // Focus goes to the list, not to its first chip, whose description would open
+                // over the line at once.
+                onOpenAutoFocus={(event) => {
+                  event.preventDefault();
+                  restRef.current?.focus();
+                }}
+                onCloseAutoFocus={() => {
+                  returningFocus.current = true;
+                }}
+              >
+                <ul
+                  ref={restRef}
+                  tabIndex={-1}
+                  aria-label={moreLabel?.(hidden)}
+                  className="grid justify-items-start gap-1.5 outline-none"
+                >
+                  {chips.slice(shown).map((chip, index) => (
+                    <li key={index} className="flex max-w-full min-w-0">
+                      {chip}
+                    </li>
+                  ))}
+                </ul>
+              </PopoverContent>
+            </Popover>
+          </li>
+        )}
+      </ul>
+      {mounted ? (
+        // Every chip and the widest "+N" at their own width, out of sight: what the fit reads.
+        <div
+          aria-hidden="true"
+          inert
+          className="pointer-events-none invisible relative h-0 overflow-hidden"
+        >
+          <div ref={measureRef} className="flex w-max gap-1.5">
+            {chips.map((chip, index) => (
+              <span key={index} className="flex shrink-0">
+                {chip}
+              </span>
+            ))}
+            <span className={moreChipClassName(size, tone)}>+{chips.length}</span>
+          </div>
+        </div>
       ) : null}
-    </ul>
+    </div>
   );
 }
 

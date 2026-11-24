@@ -70,19 +70,18 @@ describe("the Knowledge Bases on the empty chat", () => {
     expect(markup.match(/<button type="button" aria-label="Knowledge: /gu)).toHaveLength(1);
   });
 
-  it("folds many into one chip that says how many more there are", () => {
+  it("keeps the labels on one line", () => {
     const many = Array.from({ length: 9 }, (_, index) => ({
       name: `kb-${String(index + 1)}`,
       title: `Knowledge Base ${String(index + 1)}`
     }));
     const markup = startBlock({ knowledgeBases: many });
-    expect(markup).toContain("Knowledge Base 6");
-    expect(markup).not.toContain("Knowledge Base 7");
-    expect(markup).toContain("+3");
-    expect(markup).toContain('aria-label="Show 3 more Knowledge Bases"');
-    expect(startBlock({ knowledgeBases: many }, "de")).toContain(
-      'aria-label="3 weitere Wissensbasen anzeigen"'
+    const list = markup.slice(
+      markup.indexOf('<ul aria-label="Knowledge"'),
+      markup.indexOf("</ul>")
     );
+    expect(list).toContain("flex-nowrap");
+    expect(list).not.toContain("flex-wrap");
   });
 
   it("shows nothing for an agent without Knowledge Bases, or in a chat about an asset", () => {

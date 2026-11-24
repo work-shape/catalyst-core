@@ -315,30 +315,27 @@ export const statusGallery: GalleryGroup = {
           ))}
           <RemovableChips text={text} />
           <Samples label="quiet">
-            <ChipList
-              label={text.chipKnowledge}
-              tone="quiet"
-              max={3}
-              moreLabel={() => text.chipShowMore}
-            >
-              {[
-                text.rowKnowledge,
-                text.workspaceMarketing,
-                text.workspaceFinance,
-                text.workspaceLegal,
-                text.groupEditors
-              ].map((title) => (
-                <Chip
-                  key={title}
-                  tone="quiet"
-                  leading={<Library aria-hidden="true" />}
-                  description={text.chipKnowledgeAbout}
-                  accessibleLabel={`${text.chipKnowledge}: ${title}`}
-                >
-                  {title}
-                </Chip>
-              ))}
-            </ChipList>
+            <div className="w-72">
+              <ChipList label={text.chipKnowledge} tone="quiet" moreLabel={() => text.chipShowMore}>
+                {[
+                  text.rowKnowledge,
+                  text.workspaceMarketing,
+                  text.workspaceFinance,
+                  text.workspaceLegal,
+                  text.groupEditors
+                ].map((title) => (
+                  <Chip
+                    key={title}
+                    tone="quiet"
+                    leading={<Library aria-hidden="true" />}
+                    description={text.chipKnowledgeAbout}
+                    accessibleLabel={`${text.chipKnowledge}: ${title}`}
+                  >
+                    {title}
+                  </Chip>
+                ))}
+              </ChipList>
+            </div>
           </Samples>
           <Samples label="ScopeChip">
             <ScopeChip scope="instance" name={text.instanceName} />
