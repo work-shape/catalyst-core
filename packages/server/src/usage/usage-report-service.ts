@@ -264,7 +264,8 @@ export async function agentRowNames(
         kind: WORKFLOW_ASSET_KIND,
         name: workflow
       });
-      const config = asset?.status === "active" ? (asset.publishedConfig ?? asset.config) : undefined;
+      const config =
+        asset?.status === "active" ? (asset.publishedConfig ?? asset.config) : undefined;
       titles.set(workflow, typeof config?.title === "string" ? config.title : undefined);
     }
     const title = titles.get(workflow);
