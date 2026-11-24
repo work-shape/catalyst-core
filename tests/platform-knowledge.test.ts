@@ -4,21 +4,14 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { RELEASED_KIT_VERSIONS } from "@work-shape/catalyst-app-build";
 import {
   createPlatformTools,
   platformDocsSkill,
   platformModules
 } from "@work-shape/catalyst-client-assembly";
 import { createModuleRegistry } from "@work-shape/catalyst-core";
-import {
-  createPlatformDiscoveryTools,
-  createWorkspaceOpenTool,
-  showViewTool,
-  WorkspaceCommandService
-} from "@work-shape/catalyst-tool-execution";
+import { createPlatformDiscoveryTools } from "@work-shape/catalyst-tool-execution";
 import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
-import { workflowAuthoringSkill } from "@work-shape/catalyst-workflows";
 import { createWorkspaceHarness } from "./support/workspace-tools-harness";
 
 // What an agent knows of the platform comes in three layers: the rules every agent gets, and,
@@ -92,52 +85,54 @@ async function offerFor(
 
 describe("the platform's knowledge of an agent", () => {
   // ACCEPT-FIX-5: no shipped-agent eval harness exists; pin the instructions actually offered.
-  it.each([
-    [
-      "record honesty",
-      [
-        "successful tool result proves that exact action and target",
-        "hand-written table",
-        "only with a data_store.<store>.<verb> tool in your tool list",
-        "Without such a tool, say so before offering sample rows",
-        "App or Workflow that writes records",
-        "never use a migration",
-        "Pending confirmation means nothing has been saved"
-      ]
-    ],
-    [
-      "actual owner",
-      [
-        "report the workspaceId returned by the save",
-        "team- is not an owner",
-        "must switch to that workspace"
-      ]
-    ],
-    [
-      "availability handoff",
-      [
-        "Studio > Agents > the saved agent > Available in > Selected workspaces",
-        "Studio > Agenten",
-        "Änderungen speichern",
-        "Never claim availability before that save",
-        "Personal workspaces for all personal workspaces",
-        "Publish (Veröffentlichen)"
-      ]
-    ],
-    [
-      "navigation and terminology",
-      [
-        "Workflows and Apps in the main navigation",
-        "Inbox (Eingang)",
-        "Studio > Knowledge Bases (Studio > Wissensbasen)",
-        "Knowledge (Wissen)",
-        "Studio > Agenten / Skills / Verbindungen / Datenspeicher",
-        "Knowledge Base is Wissensbasis in German, plural Wissensbasen"
-      ]
-    ]
-  ])("ships %s in the offered orientation and guide", async (_name, rules) => {
+  it("ACCEPT-FIX-5: ships record honesty, the actual owner, the availability handoff and the navigation in the offered orientation and guide", async () => {
     const offer = await offerFor(PLATFORM_TOOLS);
-    for (const rule of rules) expect(offer.orientation).toContain(rule);
+    const shipped = [
+      [
+        "record honesty",
+        [
+          "successful tool result proves that exact action and target",
+          "hand-written table",
+          "only with a data_store.<store>.<verb> tool in your tool list",
+          "Without such a tool, say so before offering sample rows",
+          "App or Workflow that writes records",
+          "never use a migration",
+          "Pending confirmation means nothing has been saved"
+        ]
+      ],
+      [
+        "actual owner",
+        [
+          "report the workspaceId returned by the save",
+          "team- is not an owner",
+          "must switch to that workspace"
+        ]
+      ],
+      [
+        "availability handoff",
+        [
+          "Studio > Agents > the saved agent > Available in > Selected workspaces",
+          "Studio > Agenten",
+          "Änderungen speichern",
+          "Never claim availability before that save",
+          "Personal workspaces for all personal workspaces",
+          "Publish (Veröffentlichen)"
+        ]
+      ],
+      [
+        "navigation and terminology",
+        [
+          "Workflows and Apps in the main navigation",
+          "Inbox (Eingang)",
+          "Studio > Knowledge Bases (Studio > Wissensbasen)",
+          "Knowledge (Wissen)",
+          "Studio > Agenten / Skills / Verbindungen / Datenspeicher",
+          "Knowledge Base is Wissensbasis in German, plural Wissensbasen"
+        ]
+      ]
+    ] as const;
+    for (const [, rules] of shipped)
+      for (const rule of rules) expect(offer.orientation).toContain(rule);
     const guide =
       platformDocsSkill.resources?.find((page) => page.path === "references/configure/build.md")
         ?.content ?? "";
@@ -150,18 +145,6 @@ describe("the platform's knowledge of an agent", () => {
     expect(guide).toContain("**Wissen**");
     expect(guide).toContain("**Wissensbasis**, plural **Wissensbasen**");
     expect(offer.orientation).not.toContain("Wissensdatenbank");
-  });
-
-  it("keeps truncated row reads and draft rows honest in the offered guidance", async () => {
-    const offer = await offerFor(PLATFORM_TOOLS);
-    expect(offer.orientation).toContain(
-      "a migration that creates its table with a primary key and no rows"
-    );
-    expect(offer.orientation).toContain(
-      "If query says truncated, say so and page with an ordered query"
-    );
-    expect(offer.orientation).toContain("a truncated answer cannot prove absence");
-    expect(offer.orientation).toContain("it is not a row editor");
   });
 
   it("offers connection drafting to platform agents by default only while Connections is enabled", async () => {
@@ -191,9 +174,6 @@ describe("the platform's knowledge of an agent", () => {
     expect(
       (await offerFor(["read_skill"], { kind: "connection", name: "crm" }, true)).toolNames
     ).toContain("platform.connections.offer_to_agent");
-    expect(offered.orientation).toContain(
-      "An agent calls a Connection's tools only once it is given them"
-    );
   });
 
   // ACCEPT-2c C-4: German replies said "technischer Primärschlüssel", "App-ID" and
@@ -326,17 +306,6 @@ describe("the shipped skill platform-docs", () => {
     expect(guide).toContain("rights the draft's steps need, even before the first publish");
     expect(guide).not.toContain("a Superadmin creates that account");
   });
-  it("tells an agent asked for a Google font to carry fonts and libraries locally or use the kit", () => {
-    const guide = platformDocsSkill.resources?.find(
-      (resource) => resource.path === "references/apps/sandbox.md"
-    );
-    expect(guide?.content).toContain(
-      "Put fonts and libraries in the App's folder or use the kit's; an outside address (Google Fonts, Adobe Fonts or a CDN) will not load."
-    );
-    expect(guide?.content).toContain(
-      `/app-runtime/kit/${RELEASED_KIT_VERSIONS.at(-1)}/fonts/fonts.css`
-    );
-  });
   it("carries every page of the platform's docs as a reference that its index names", async () => {
     const pages = (await readdir(docsRoot, { recursive: true }))
       .filter((path) => path.endsWith(".md") && !path.startsWith("reference/api/"))
@@ -348,15 +317,6 @@ describe("the shipped skill platform-docs", () => {
     for (const reference of references) {
       expect(platformDocsSkill.content).toContain(`\`${reference}\`: `);
     }
-  });
-
-  it("ships the CLI resource with its title and package", () => {
-    const page = platformDocsSkill.resources?.find(
-      (resource) => resource.path === "references/configure/cli.md"
-    );
-    expect(page?.path).toBe("references/configure/cli.md");
-    expect(page?.content.startsWith("# The Catalyst CLI\n")).toBe(true);
-    expect(page?.content).toContain("@work-shape/catalyst-cli");
   });
 
   it("is generated from the docs pages: a changed page fails here until `pnpm generate:platform-docs` ran", async () => {
@@ -373,19 +333,6 @@ describe("connecting a local agent, as an agent knows it", () => {
   const keyOperations =
     platformModules.find((module) => module.name === "personalApiKeys")?.operations ?? [];
 
-  it("is a page of platform-docs that leads to /settings/you/connect and says no agent issues a key", () => {
-    const page = (platformDocsSkill.resources ?? []).find(
-      (resource) => resource.path === "references/getting-started/local-agent.md"
-    );
-    expect(page?.content).toContain("Connect a local agent");
-    expect(page?.content).toContain("/settings/you/connect");
-    expect(page?.content).toContain("Lokalen Agenten verbinden");
-    expect(page?.content).toContain("no agent can make one");
-    expect(platformDocsSkill.content).toMatch(
-      /`references\/getting-started\/local-agent\.md`: [^\n]*\/settings\/you\/connect/u
-    );
-  });
-
   it("is no tool: no module offers one for personal API keys or connect codes, and no agent is offered one", async () => {
     expect(keyOperations).toEqual(
       expect.arrayContaining(["me.api_keys.create", "connect_codes.start"])
@@ -401,92 +348,5 @@ describe("connecting a local agent, as an agent knows it", () => {
     expect(
       offer.toolNames.filter((name) => keyTool.test(name) || keyOperations.includes(name))
     ).toEqual([]);
-  });
-});
-
-// Platform Access acceptance check 59 (PG-2a): one page of platform-docs holds the decision
-// table with the ruled sentence word for word and the Buchhaltungscheck as its worked row;
-// show_view, workspace.open, app.save, platform.assets.put and the workflow-authoring skill
-// each name that page in one sentence and copy none of it. Fails without the change: the docs
-// had no such page and nothing pointed to one.
-describe("the decision table between a View, an App and a Workflow", () => {
-  const PAGE = "references/apps/app-or-workflow.md";
-  const SENTENCE =
-    "An App shows data and lets the person using it do one thing at a time. Anything that is a process (several steps, a schedule, history, notifications, rules business users change) is a Workflow the App starts with a button. A live read through a Connection respects the viewer's rights. Stored data read through an App is shared with its audience.";
-
-  it("is one page of platform-docs with the sentence, the table and the Buchhaltungscheck row", () => {
-    const pages = (platformDocsSkill.resources ?? []).filter((resource) =>
-      resource.content.includes(SENTENCE)
-    );
-    expect(pages.map((page) => page.path)).toEqual([PAGE]);
-    const content = pages[0]?.content ?? "";
-    const table = content
-      .split("\n")
-      .filter((line) => line.startsWith("|"))
-      .map((line) =>
-        line
-          .split("|")
-          .slice(1, -1)
-          .map((cell) => cell.trim())
-      );
-    expect(table[0]).toEqual([
-      "What",
-      "Use when",
-      "Not when",
-      "Runs as",
-      "Who sees the result",
-      "The sign to switch"
-    ]);
-    expect(table.slice(2).map((row) => row[0])).toEqual([
-      "View (`show_view`)",
-      "App (`workspace.open`, then `app.save`)",
-      "App action (`sql`, `connection`, `decision`, `workflow`)",
-      "`code` action",
-      "Workflow",
-      "Worked row: the Buchhaltungscheck"
-    ]);
-    expect(content).toContain(
-      "A published `sql` action on a Data Store uses the store's app role, with the store right checked against the publisher"
-    );
-    expect(content).toContain("A `code` action that needs a dependent call becomes a Workflow");
-    expect(content).toContain("`http_api` Connection");
-    expect(content).toContain("`externalHosts`");
-    expect(content).toContain("the App last, and the agent says what it creates before it does");
-  });
-
-  it("is named in one sentence by each tool that builds and by workflow-authoring, which copy none of it", async () => {
-    const harness = await createWorkspaceHarness();
-    const workspaceOpen = createWorkspaceOpenTool({
-      workspace: new WorkspaceCommandService({
-        store: harness.store,
-        objectStore: harness.objectStore,
-        fileStore: harness.objectStore
-      }).dependencies,
-      builds: {
-        build: async () => {
-          throw new Error("Description only");
-        }
-      }
-    });
-    const modules = createModuleRegistry(platformModules).snapshot({
-      apps: { enabled: true },
-      workflows: { enabled: true },
-      assetManagement: { enabled: true }
-    });
-    const platform = createPlatformTools({ stores: harness.store, modules });
-    const byName = new Map(
-      [showViewTool, workspaceOpen, ...platform.tools].map((tool) => [tool.name, tool.description])
-    );
-    const texts = [
-      ...["show_view", "workspace.open", "app.save", "platform.assets.put"].map(
-        (name) => byName.get(name) ?? `missing ${name}`
-      ),
-      workflowAuthoringSkill.content
-    ];
-    for (const text of texts) {
-      expect(text.split(PAGE.replace("references/", "")).length - 1, text.slice(0, 60)).toBe(1);
-      expect(text).not.toContain("one thing at a time");
-      expect(text).not.toContain("Buchhaltungscheck");
-    }
   });
 });

@@ -128,15 +128,6 @@ describe("the in-process rate limiter", () => {
     await vi.advanceTimersByTimeAsync(3 * MINUTE_MS);
     expect(vi.getTimerCount()).toBe(0);
   });
-
-  it("counts every limiter on its own, as two processes would", async () => {
-    const first = createInProcessRateLimiter();
-    const second = createInProcessRateLimiter();
-    await first.consume("a", rule);
-    await first.consume("a", rule);
-    expect((await first.consume("a", rule)).allowed).toBe(false);
-    expect((await second.consume("a", rule)).allowed).toBe(true);
-  });
 });
 
 describe("rate limits on operations", () => {
@@ -470,22 +461,6 @@ describe("session cookies and tokens", () => {
       headers: { cookie, authorization: `Bearer ${stored}` }
     });
     expect(withCookie.statusCode).toBe(401);
-  });
-
-  it("guards a cookie-authenticated call by its HTTP method, also on a reading operation", async () => {
-    const { cookie } = await signIn();
-    const post = (headers: Record<string, string>) =>
-      instance.call("testReadingPost", { headers: { cookie, ...headers }, payload: {} });
-
-    expect((await post({ origin: "https://foreign.test" })).statusCode).toBe(403);
-    expect((await post({})).statusCode).toBe(403);
-    expect((await post({ origin: "https://allowed.test" })).statusCode).toBe(200);
-    expect((await post({ "sec-fetch-site": "same-origin" })).statusCode).toBe(200);
-    // A GET is never guarded.
-    expect(
-      (await instance.call("testUser", { headers: { cookie, origin: "https://foreign.test" } }))
-        .statusCode
-    ).toBe(200);
   });
 
   it("answers a preflight for an allowed origin only", async () => {

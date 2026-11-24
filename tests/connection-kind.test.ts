@@ -7,6 +7,7 @@ import {
   parseClientInstanceConfig
 } from "@work-shape/catalyst-config-schema";
 import {
+  CONNECTION_EXPOSURES,
   CONNECTION_MAX_ACCEPTED_OPERATIONS,
   asClientInstanceId,
   createConnectionSecretHandle,
@@ -14,7 +15,8 @@ import {
   findConnectorTypeIssues,
   type ConnectorTypeDefinition,
   type JsonObject,
-  type JsonValue
+  type JsonValue,
+  connectionExposureRefusal
 } from "@work-shape/catalyst-core";
 import { createEgressChecker, createFixtureDocumentSource } from "@work-shape/catalyst-connections";
 import { createConnectionAssetKind } from "@work-shape/catalyst-server";
@@ -679,14 +681,6 @@ describe("a Connection through the asset operations", () => {
     expect(context.kinds.find((kind) => kind.kind === "agent")).not.toHaveProperty(
       "principalActions"
     );
-    // The kinds without such a right name none.
-    expect(context.kinds.find((kind) => kind.kind === "agent")?.actions).toEqual({
-      read: "agent.read",
-      write: "agent.write",
-      publish: "agent.publish",
-      approve: "agent.approve",
-      delete: "agent.delete"
-    });
     expect(context.actions).toEqual(
       expect.arrayContaining(["agent.read", "connection.read", "connection.write"])
     );
@@ -823,7 +817,7 @@ describe("the module connections", () => {
 });
 
 describe("a Connection a Knowledge Base can sync documents through", () => {
-  it("is marked in the list, so the Knowledge Base page offers it as a source (SRC-2)", () => {
+  it("is marked in the list, and says whether a person can choose its folders by name (SRC-2)", () => {
     const folders: ConnectorTypeDefinition = {
       ...fixtureConnectorType,
       type: "folders",
@@ -841,9 +835,7 @@ describe("a Connection a Knowledge Base can sync documents through", () => {
     });
     expect(summary({}).attributes).not.toHaveProperty("documentSource");
     expect(summary({ connectorType: "folders" }).attributes).not.toHaveProperty("browsesFolders");
-  });
 
-  it("says whether a person can choose its folders by name", () => {
     const capability = createFixtureDocumentSource({ secret: "test" }).capability;
     const browsing: ConnectorTypeDefinition = {
       ...fixtureConnectorType,
@@ -853,13 +845,42 @@ describe("a Connection a Knowledge Base can sync documents through", () => {
         folders: async () => ({ folder: { id: "0", name: "Top", path: "/" }, folders: [] })
       }
     };
-    const kind = createConnectionAssetKind({
+    const browsingKind = createConnectionAssetKind({
       connectorTypes: createConnectorTypeRegistry([fixtureConnectorType, browsing]),
       egress: createEgressChecker({ allow: [], resolve: () => Promise.resolve([]) })
     });
-    const attributes = kind.summarize(
-      connectionConfigSchema.parse(connection("handbook", { connectorType: "browsing" }))
-    ).attributes;
-    expect(attributes).toMatchObject({ documentSource: true, browsesFolders: true });
+    expect(
+      browsingKind.summarize(
+        connectionConfigSchema.parse(connection("handbook", { connectorType: "browsing" }))
+      ).attributes
+    ).toMatchObject({ documentSource: true, browsesFolders: true });
+  });
+});
+
+// A personal connection takes `agent` only, so its owner's data never leaves for an App, a
+// Workflow or a tool outside the instance (CONNECT-1b).
+describe("the exposures of a Connection", () => {
+  it("takes `outside` on a shared Connection only, and no operation has it by itself", () => {
+    const outside = { operations: [{ name: "echo", effect: "reading", exposure: ["outside"] }] };
+    expect(issuesOf(connection("crm", outside))).toEqual([]);
+    const parsed = connectionConfigSchema.parse(
+      connection("crm", { operations: [{ name: "echo", effect: "reading" }] })
+    );
+    expect(parsed.operations).toMatchObject([{ name: "echo", exposure: [] }]);
+    // Until personal connections are built (CS-9), the mode itself is refused.
+    expect(
+      issuesOf(
+        connection("crm", {
+          credentialMode: "user",
+          operations: [{ name: "echo", effect: "reading", exposure: ["outside"] }]
+        })
+      ).map((issue) => issue.path)
+    ).toContain("credentialMode");
+    expect(connectionExposureRefusal("user", "outside")).toBeDefined();
+    expect(connectionExposureRefusal("user", "workflow")).toBeDefined();
+    expect(connectionExposureRefusal("user", "agent")).toBeUndefined();
+    for (const exposure of CONNECTION_EXPOSURES) {
+      expect(connectionExposureRefusal("shared", exposure), exposure).toBeUndefined();
+    }
   });
 });

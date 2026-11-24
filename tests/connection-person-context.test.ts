@@ -246,11 +246,10 @@ async function save(
 }
 
 describe("person context on a shared Connection, with Postgres and real HTTP", () => {
-  it.each(["header", "bridge"] as const)(
-    "refuses adding %s to a Connection with the other already set until APP-16",
-    async (adding) => {
-      const w = await world();
-      const name = "app-context-guard";
+  it("refuses adding a header or bridge exposure to a Connection with the other already set until APP-16", async () => {
+    const w = await world();
+    for (const adding of ["header", "bridge"] as const) {
+      const name = `app-context-guard-${adding}`;
       const params = { kind: "connection", name };
       const original = releaseConnectionConfigSchema.parse(w.config.connections[connection]);
       const config = {
@@ -295,9 +294,9 @@ describe("person context on a shared Connection, with Postgres and real HTTP", (
         ...params
       });
       expect(stored).toMatchObject({ revision: 1, config });
-      expect(w.outside.requests).toHaveLength(0);
     }
-  );
+    expect(w.outside.requests).toHaveLength(0);
+  });
 
   it("stops startup on release config that sets person context and App exposure", async () => {
     await expect(world(["agent", "bridge"])).rejects.toThrow(

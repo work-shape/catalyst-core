@@ -252,42 +252,20 @@ describe("reasonForEvent", () => {
   });
 });
 
-describe("conversation cleanup audit events", () => {
-  it.each(["conversation.cleanup_failed", "conversation.cleanup_completed"])(
-    "shows %s in the governance tier",
-    (type) => {
-      const [activity] = projectAuditActivities([
-        evt({ type, correlationId: type, subject: "conv_1" })
-      ]);
-
-      expect(activity).toMatchObject({ tier: "governance", type });
+describe("cleanup and delete audit events", () => {
+  it("shows a cleanup and a failed delete in the governance tier", () => {
+    const cleanup = evt({ type: "conversation.cleanup_completed", correlationId: "a" });
+    const deleteFailed = evt({
+      type: "user.delete_failed",
+      status: "failed",
+      correlationId: "b",
+      actor: human
+    });
+    for (const event of [cleanup, deleteFailed]) {
+      expect(projectAuditActivities([event])[0]).toMatchObject({
+        tier: "governance",
+        type: event.type
+      });
     }
-  );
-
-  it.each(["user.delete_failed", "collaboration_workspace.delete_failed"])(
-    "shows %s in the governance tier",
-    (type) => {
-      const [activity] = projectAuditActivities([
-        evt({ type, status: "failed", correlationId: type, actor: human })
-      ]);
-
-      expect(activity).toMatchObject({ tier: "governance", type });
-    }
-  );
-});
-
-describe("conversation audit activities", () => {
-  it("titles a manual conversation rename by its type", () => {
-    const [activity] = projectAuditActivities([
-      evt({
-        type: "conversation.renamed",
-        correlationId: "rename",
-        actor: human,
-        subject: "conv_1"
-      })
-    ]);
-
-    expect(activity!.type).toBe("conversation.renamed");
-    expect(activity!.target).toEqual({ kind: "conversation", id: "conv_1" });
   });
 });

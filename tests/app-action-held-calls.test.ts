@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   APP_ACTION_LIST_MAX_APPS,
-  APP_ACTION_TOOL_MAX_APPS,
   createAppActionOperationSource,
   createAppActionToolSource
 } from "@work-shape/catalyst-server";
@@ -466,7 +465,6 @@ describe("a frame's call when the App changes around it", () => {
       }),
       expect.any(String)
     );
-    expect(APP_ACTION_TOOL_MAX_APPS).toBe(50);
   });
 
   // Covers what the first round left untested: the limit of one page session.

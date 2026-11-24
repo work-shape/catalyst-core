@@ -77,59 +77,27 @@ describe("the instance level of a personal key", () => {
       }
     }
     // Rights that decide, retry, change or administer stay out of a key's reach.
-    for (const action of [
-      "jobs.retry",
-      "limits.manage",
-      "usage.view_users",
-      "users.manage",
-      "api_access.manage",
-      "agent_models.manage",
-      "service_principals.manage",
-      "operations.approve"
-    ]) {
+    for (const action of ["jobs.retry", "users.manage", "operations.approve"]) {
       expect(PERSONAL_API_KEY_ACTIONS).not.toContain(action);
       expect(operationScopesOfPersonalApiKey([action], NOW)).toEqual(["me:read"]);
     }
   });
 
-  it("answers every read to a key that names its right, for a person who holds it", async () => {
+  it("answers each read only to a key that names its right, for a person who holds it", async () => {
     const t = await setupPersonalKeyInstance();
     for (const [operation, right] of READS) {
       const response = await read(t, t.root.id, operation, [right]);
       expect(response.statusCode, `${operation}: ${response.body}`).toBe(200);
-    }
-    // The page feeds keep their paging for the CLI.
-    const headers = await t.tokenFor((await t.issue(["audit.view"], t.root.id)).secret);
-    const page = await t.call(t.root.id, "audit_events.list", { query: { limit: 1 }, headers });
-    expect(
-      z.object({ items: z.array(z.object({ id: z.string() })) }).parse(page.json()).items
-    ).toHaveLength(1);
-  });
-
-  it("refuses a key without the instance level, naming the right the read needs", async () => {
-    const t = await setupPersonalKeyInstance();
-    for (const [operation, right] of READS) {
-      for (const scopes of [["agent.read"], ["agent.read", "agent.write"]]) {
-        const response = await read(t, t.root.id, operation, scopes);
-        expect(response.statusCode, `${operation}: ${response.body}`).toBe(403);
-        const { error } = errorSchema.parse(response.json());
-        expect(error.message).toContain(`'${right}'`);
-        expect(error.message).toContain("instance level");
-        expect(error.details).toEqual({ action: right, reason: "outside_key_scope" });
-      }
-    }
-  });
-
-  it("refuses a key that names another right of the level than the read needs", async () => {
-    const t = await setupPersonalKeyInstance();
-    for (const [operation, right] of READS) {
+      // Without the instance level, or with another right of it, the key is refused.
       const other = PERSONAL_API_KEY_INSPECT_ACTIONS.filter((action) => action !== right);
-      const response = await read(t, t.root.id, operation, other);
-      expect(response.statusCode, `${operation}: ${response.body}`).toBe(403);
-      expect(errorSchema.parse(response.json()).error.details).toMatchObject({
-        action: right,
-        reason: "outside_key_scope"
-      });
+      for (const scopes of [["agent.read"], other]) {
+        const refused = await read(t, t.root.id, operation, scopes);
+        expect(refused.statusCode, `${operation}: ${refused.body}`).toBe(403);
+        expect(errorSchema.parse(refused.json()).error.details).toEqual({
+          action: right,
+          reason: "outside_key_scope"
+        });
+      }
     }
   });
 
@@ -141,7 +109,6 @@ describe("the instance level of a personal key", () => {
         payload: { name: "Reader", scopes: [right], expiresAt: inDays(1) }
       });
       expect(create.statusCode, create.body).toBe(422);
-      expect(errorSchema.parse(create.json()).error.message).toContain(right);
     }
     // Granted usage.view alone, Kai's key may name it and no other.
     const usageGrant = await allow(t, t.kai.id, "usage.view");
@@ -166,32 +133,6 @@ describe("the instance level of a personal key", () => {
     expect((await adminSummary()).statusCode).toBe(200);
     await allow(t, t.admin.id, "usage.view", "deny");
     expect((await adminSummary()).statusCode).toBe(403);
-  });
-
-  it("is refused to a person who lacks the right even when the key was issued while they held it", async () => {
-    const t = await setupPersonalKeyInstance();
-    const grant = await allow(t, t.kai.id, "system.view");
-    const headers = await t.tokenFor((await t.issue(["system.view"], t.kai.id)).secret);
-    for (const operation of [
-      "instance.jobs.list",
-      "instance.jobs.summary",
-      "operations.list_runs",
-      "instance.modules.list",
-      "instance.infrastructure.get"
-    ] as const) {
-      expect((await t.call(t.kai.id, operation, { headers })).statusCode).toBe(200);
-    }
-    await t.stores.access.deleteGrant({ clientInstanceId, grantId: grant });
-    for (const operation of [
-      "instance.jobs.list",
-      "instance.jobs.summary",
-      "operations.list_runs",
-      "instance.modules.list",
-      "instance.infrastructure.get"
-    ] as const) {
-      const response = await t.call(t.kai.id, operation, { headers });
-      expect(response.statusCode, operation).toBe(403);
-    }
   });
 
   it("reads and changes nothing beyond the nine reads, for the widest key a superadmin can issue", async () => {

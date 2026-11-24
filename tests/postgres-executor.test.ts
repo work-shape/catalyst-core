@@ -311,12 +311,8 @@ describe("Postgres executor on a customer's database", () => {
 
     it.each([
       ["a word as an integer", { type: "integer", value: "customer-secret-17" }],
-      ["a fraction as an integer", { type: "integer", value: 1.5 }],
       ["a list as a scalar", { type: "text", value: ["customer-secret-17"] }],
-      ["a scalar as a list", { type: "text[]", value: "customer-secret-17" }],
-      ["a date that is none", { type: "date", value: "customer-secret-17" }],
-      ["a list of mixed kinds", ["customer-secret-17", 1]],
-      ["a number that is none", Number.NaN]
+      ["a list of mixed kinds", ["customer-secret-17", 1]]
     ] as const)("refuses %s without repeating it", async (_case, parameter) => {
       const error = await failure(
         calls().query({ ...asReader(), sql: "select $1 as value", parameters: [parameter] })

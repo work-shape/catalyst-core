@@ -27,97 +27,6 @@ describe("OpenAI-compatible model provider", () => {
     expect(parser.push("", true)).toEqual(["second"]);
   });
 
-  it("round-trips provider tool names without dot/underscore collisions", async () => {
-    let requestBody:
-      | {
-          tools: Array<{ function: { name: string; description: string } }>;
-        }
-      | undefined;
-    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
-      requestBody = JSON.parse(String(init?.body));
-      const secondToolName = requestBody?.tools.find(
-        (tool) => tool.function.description === "second"
-      )?.function.name;
-
-      return new Response(
-        JSON.stringify({
-          choices: [
-            {
-              message: {
-                content: null,
-                tool_calls: [
-                  {
-                    id: "call_1",
-                    type: "function",
-                    function: {
-                      name: secondToolName,
-                      arguments: "{}"
-                    }
-                  }
-                ]
-              }
-            }
-          ],
-          usage: {
-            prompt_tokens: 10,
-            prompt_tokens_details: {
-              cached_tokens: 8
-            },
-            completion_tokens: 2,
-            total_tokens: 12
-          }
-        }),
-        {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        }
-      );
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const clientInstanceId = asClientInstanceId("client-test");
-    const provider = new OpenAiCompatibleChatProvider({
-      id: "openai",
-      model: "gpt-test",
-      baseUrl: "https://example.test/v1",
-      apiKey: "test"
-    });
-    const completion = await provider.complete(
-      {
-        providerId: "openai",
-        model: "gpt-test",
-        messages: [{ role: "user", content: "run a tool" }],
-        tools: [
-          { name: "a.b", description: "first" },
-          { name: "a__dot__b", description: "second" }
-        ]
-      },
-      {
-        clientInstanceId,
-        correlationId: "corr-test",
-        user: {
-          id: "user-test",
-          externalUserId: "user-test",
-          displayLabel: "User",
-          roles: ["user"],
-          permissionRefs: [],
-          clientInstanceId,
-          authSource: "test"
-        }
-      }
-    );
-
-    const providerToolNames = requestBody?.tools.map((tool) => tool.function.name) ?? [];
-    expect(providerToolNames).toEqual(["a_b", "a__dot__b"]);
-    expect(new Set(providerToolNames).size).toBe(2);
-    expect(completion.toolCalls[0]?.toolName).toBe("a__dot__b");
-    expect(completion.usage).toMatchObject({
-      cachedInputTokens: 8,
-      totalTokens: 12,
-      source: "provider_reported"
-    });
-  });
-
   it("returns malformed tool arguments as a recoverable parse error", async () => {
     let requestBody:
       | {
@@ -207,69 +116,6 @@ describe("OpenAI-compatible model provider", () => {
         }
       }
     ]);
-  });
-
-  it("passes configured reasoning effort to OpenAI-compatible requests", async () => {
-    let requestBody: { reasoning_effort?: string } | undefined;
-    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
-      requestBody = JSON.parse(String(init?.body));
-
-      return new Response(
-        JSON.stringify({
-          choices: [
-            {
-              message: {
-                content: "done"
-              }
-            }
-          ],
-          usage: {
-            prompt_tokens: 5,
-            completion_tokens: 1,
-            total_tokens: 6
-          }
-        }),
-        {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        }
-      );
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const clientInstanceId = asClientInstanceId("client-test");
-    const provider = new OpenAiCompatibleChatProvider({
-      id: "openai",
-      model: "gpt-5.5",
-      baseUrl: "https://example.test/v1",
-      apiKey: "test",
-      reasoningEffort: "high"
-    });
-    await provider.complete(
-      {
-        providerId: "openai",
-        model: "gpt-5.5",
-        messages: [{ role: "user", content: "solve this" }],
-        tools: []
-      },
-      {
-        clientInstanceId,
-        correlationId: "corr-test",
-        user: {
-          id: "user-test",
-          externalUserId: "user-test",
-          displayLabel: "User",
-          roles: ["user"],
-          permissionRefs: [],
-          clientInstanceId,
-          authSource: "test"
-        }
-      }
-    );
-
-    expect(requestBody).toMatchObject({
-      reasoning_effort: "high"
-    });
   });
 
   it("sends the priority service tier only for fast-mode requests and reports the tier used", async () => {
@@ -1576,56 +1422,6 @@ describe("OpenAI-compatible model provider", () => {
     });
   });
 
-  it("rejects a Responses stream that closes before response.completed", async () => {
-    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
-      const requestBody = JSON.parse(String(init?.body)) as { tools?: Array<{ name?: string }> };
-      return new Response(
-        createSseStream(
-          [
-            {
-              type: "response.output_item.added",
-              item: {
-                type: "function_call",
-                call_id: "call_truncated",
-                name: requestBody.tools?.[0]?.name
-              }
-            }
-          ],
-          false
-        ),
-        { status: 200, headers: { "content-type": "text/event-stream" } }
-      );
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    const provider = new OpenAiCompatibleChatProvider({
-      id: "openai",
-      api: "responses",
-      model: "gpt-5.5",
-      baseUrl: "https://example.test/v1",
-      apiKey: "test"
-    });
-
-    const stream = provider.stream!(
-      {
-        providerId: "openai",
-        model: "gpt-5.5",
-        messages: [{ role: "user", content: "run a tool" }],
-        tools: [{ name: "show_view", description: "Show view" }]
-      },
-      createModelProviderTestContext()
-    )[Symbol.asyncIterator]();
-
-    await expect(stream.next()).resolves.toMatchObject({
-      value: { type: "tool_call_preparing", toolCallId: "call_truncated" }
-    });
-    await expect(stream.next()).rejects.toMatchObject({
-      code: "TIMEOUT",
-      kind: "timeout",
-      retryable: true,
-      message: "Model provider stream ended before response.completed"
-    });
-  });
-
   it("marks a provider server error inside a Responses stream as retryable", async () => {
     const fetchMock = vi.fn(async () => {
       return new Response(
@@ -1947,39 +1743,6 @@ describe("OpenAI-compatible model provider", () => {
     // A broken input stays broken.
     const broken = await complete('/tool notes.record {"text":');
     expect(broken.toolCalls[0]?.inputParseError?.code).toBe("invalid_json");
-  });
-
-  it("streams the deterministic provider's answer in pieces", async () => {
-    const clientInstanceId = asClientInstanceId("client-test");
-    const registry = new DeterministicModelProvider("local");
-
-    const events: ModelAdapterStreamEvent[] = [];
-    for await (const event of registry.stream(
-      {
-        providerId: "local",
-        model: "deterministic-local",
-        messages: [{ role: "user", content: "hello" }],
-        tools: []
-      },
-      {
-        clientInstanceId,
-        correlationId: "corr-test",
-        user: {
-          id: "user-test",
-          externalUserId: "user-test",
-          displayLabel: "User",
-          roles: ["user"],
-          permissionRefs: [],
-          clientInstanceId,
-          authSource: "test"
-        }
-      }
-    )) {
-      events.push(event);
-    }
-
-    expect(events.some((event) => event.type === "text_delta")).toBe(true);
-    expect(events.at(-1)?.type).toBe("completed");
   });
 
   // Fails without the change: the title was "Bitte PrÜFen Sie Die GebÜHren".

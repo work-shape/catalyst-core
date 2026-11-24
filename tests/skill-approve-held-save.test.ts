@@ -49,7 +49,7 @@ async function setup() {
 }
 
 describe("skill.approve on one skill and a held save of it", () => {
-  it("names its holder before and after the save is held", async () => {
+  it("names its holder, and lists and decides that skill's held save for them, and no other skill's", async () => {
     const { t, hold } = await setup();
     const page = (name: string) =>
       t.expectOk(t.kai.id, "assets.get", {
@@ -62,16 +62,11 @@ describe("skill.approve on one skill and a held save of it", () => {
     expect(
       saveApproval.parse((await page("kai-travel")).json()).saveApproval.approverNames
     ).not.toContain(t.lena.displayLabel);
-    const requestId = await hold("kai-leave");
+    const onLeave = await hold("kai-leave");
     const item = (
-      await t.expectOk(t.kai.id, "approval_requests.get", { params: { requestId } })
+      await t.expectOk(t.kai.id, "approval_requests.get", { params: { requestId: onLeave } })
     ).json();
     expect(item.preview.approverNames).toEqual(expect.arrayContaining([t.lena.displayLabel]));
-  });
-
-  it("lists and decides that skill's held save for its holder, and no other skill's", async () => {
-    const { t, hold } = await setup();
-    const onLeave = await hold("kai-leave");
     const onTravel = await hold("kai-travel");
     expect(
       listed.parse((await t.expectOk(t.lena.id, "approval_requests.list")).json()).items

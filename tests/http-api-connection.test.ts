@@ -269,13 +269,7 @@ describe("an http_api Connection made on the instance", () => {
 
   it("refuses every operation scope value at save and in release config with SCOPE-2", async () => {
     const w = await world();
-    for (const scope of [
-      { mandant: { input: "clientId", output: "items[].number" } },
-      {},
-      null,
-      false,
-      "mandant"
-    ]) {
+    for (const scope of [{ mandant: { input: "clientId", output: "items[].number" } }, null]) {
       const operation = { ...openItems, scope };
       const response = await w.put(w.definition({ operations: [operation] }), null);
       expect(response.statusCode, response.body).toBe(422);

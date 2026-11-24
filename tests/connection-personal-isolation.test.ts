@@ -711,42 +711,38 @@ describe("personal Connection context isolation", () => {
     ).toBe("denied");
   });
 
-  it.each(["show_view", "test.custom_view"])(
-    "stores %s HTML displays as static after the mark",
-    async (name) => {
-      const p = await prepare();
-      const calls = await world.calls();
-      registerToolOperations(calls.registry, [{ ...createShowViewTool(), name }], {
-        clientInstanceId,
-        personalConversation: calls.deps.policy.personalConversation
-      });
-      const input = {
-        html: "<p>private text</p><script>window.leak = true</script>",
-        mode: "inline"
-      };
-      const before = await call(p, { operation: name, input });
-      expect(before.result).toMatchObject({ status: "done", display: { kind: "html.rendered" } });
-      await call(p);
-      const after = await call(p, { operation: name, input });
-      expect(after.result).toMatchObject({
+  it("stores HTML displays as static after the mark", async () => {
+    const name = "test.custom_view";
+    const p = await prepare();
+    const calls = await world.calls();
+    registerToolOperations(calls.registry, [{ ...createShowViewTool(), name }], {
+      clientInstanceId,
+      personalConversation: calls.deps.policy.personalConversation
+    });
+    const input = {
+      html: "<p>private text</p><script>window.leak = true</script>",
+      mode: "inline"
+    };
+    const before = await call(p, { operation: name, input });
+    expect(before.result).toMatchObject({ status: "done", display: { kind: "html.rendered" } });
+    await call(p);
+    const after = await call(p, { operation: name, input });
+    expect(after.result).toMatchObject({
+      status: "done",
+      display: { kind: "private_hydrated_view" }
+    });
+    expect(before.result).toMatchObject({ display: { kind: "html.rendered" } });
+    const reads = vi.spyOn(world.worker.stores.conversations, "getConversation");
+    for (const root of ["unreadable", "missing", "non-chat"] as const) {
+      if (root === "unreadable") reads.mockRejectedValue(new Error("unreadable mark"));
+      else
+        reads.mockResolvedValue(root === "missing" ? undefined : { ...p.root, kind: "run_thread" });
+      expect((await call(p, { operation: name, input })).result).toMatchObject({
         status: "done",
         display: { kind: "private_hydrated_view" }
       });
-      expect(before.result).toMatchObject({ display: { kind: "html.rendered" } });
-      const reads = vi.spyOn(world.worker.stores.conversations, "getConversation");
-      for (const root of ["unreadable", "missing", "non-chat"] as const) {
-        if (root === "unreadable") reads.mockRejectedValue(new Error("unreadable mark"));
-        else
-          reads.mockResolvedValue(
-            root === "missing" ? undefined : { ...p.root, kind: "run_thread" }
-          );
-        expect((await call(p, { operation: name, input })).result).toMatchObject({
-          status: "done",
-          display: { kind: "private_hydrated_view" }
-        });
-      }
     }
-  );
+  });
 
   it("preserves other display kinds in a marked conversation", async () => {
     const p = await prepare();

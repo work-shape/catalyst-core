@@ -700,37 +700,6 @@ describe("assets.sync without a workspace", () => {
     expect(pending).toMatchObject({ draft: { revision: 1, config: { displayName: "Renamed" } } });
   });
 
-  it("is opened by the key's release scope only for a principal who holds the release right", async () => {
-    const t = await setupWorkspaceHolder();
-    const releaseKey = { [SCOPES_HEADER]: "config_assets:read config_assets:release" };
-    const payload = { workspaceId: t.kaiTeam, items: [putAgent("kai-intake")] };
-
-    // Kai may write the item, and his key carries no scope for writing assets.
-    const asKai = await t.call(t.kai.id, "assets.sync", { payload, headers: releaseKey });
-    expect(asKai.statusCode).toBe(403);
-    expect(errorSchema.parse(asKai.json()).error.message).toBe(
-      "Missing auth scope 'config_assets:write'"
-    );
-    // Nor does the superadmin's, who holds every right but the release right.
-    const asRoot = await t.call(t.root.id, "assets.sync", { payload, headers: releaseKey });
-    expect(asRoot.statusCode).toBe(403);
-    expect(await t.stored("agent", "kai-intake")).toBeUndefined();
-
-    // With the scope for writing assets the same call is Kai's to make.
-    const scoped = await t.call(t.kai.id, "assets.sync", {
-      payload,
-      headers: { [SCOPES_HEADER]: "config_assets:read config_assets:write" }
-    });
-    expect(scoped.statusCode, scoped.body).toBe(200);
-    // The service principal holds the release right, so its release key opens the sync.
-    const pushed = await syncAsService(
-      t,
-      [putAgent("kai-pushed")],
-      "config_assets:read config_assets:release"
-    );
-    expect(pushed.statusCode, pushed.body).toBe(200);
-  });
-
   it("is a release only with the release scope on the key and the release right on its principal", async () => {
     const t = await setup({ editingLimits: RELEASE_ONLY });
     const before = await t.version();

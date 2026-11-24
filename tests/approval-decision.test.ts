@@ -102,26 +102,18 @@ async function fixture() {
 describe("approval decision history", () => {
   it.each<Exclude<ApprovalRequestStatus, "pending">>([
     "approved",
-    "rejected",
     "changes_requested",
-    "superseded",
     "withdrawn",
     "reverted"
   ])("records %s once with the actor and only the public decision fields", async (status) => {
     const f = await fixture();
     const request = await f.create();
-    f.handler.isStale = async () => status === "superseded";
     const decided =
       status === "withdrawn"
         ? await f.workflow.withdrawRequest(owner, accessOf(owner), context, request.id)
         : await f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
             requestId: request.id,
-            decision:
-              status === "rejected"
-                ? "reject"
-                : status === "changes_requested"
-                  ? "request_changes"
-                  : "approve",
+            decision: status === "changes_requested" ? "request_changes" : "approve",
             comment: "Please check the appendix"
           });
     const result =

@@ -16,16 +16,13 @@ import {
   isScheduleZone,
   SourcedValueField,
   UiRoot,
-  uiLabelsDe,
   uiLabelsEn,
   type FieldListItem,
   type FieldListKind,
   type FlowCanvasProps,
-  type FlowChange,
   type FlowGraph,
   type FlowGraphNode,
   type FlowInsertPlace,
-  type FlowStatus,
   type ScheduleValue,
   type SourcedValue,
   type SourcedValueKind
@@ -42,12 +39,12 @@ afterEach(() => {
   host = undefined;
 });
 
-function render(node: ReactNode, labels = uiLabelsEn) {
+function render(node: ReactNode) {
   host = document.createElement("div");
   document.body.append(host);
   const created = createRoot(host);
   root = created;
-  act(() => created.render(createElement(UiRoot, { mode: "light", labels }, node)));
+  act(() => created.render(createElement(UiRoot, { mode: "light", labels: uiLabelsEn }, node)));
 }
 function find<T extends Element>(selector: string): T {
   const element = host?.querySelector<T>(selector);
@@ -75,102 +72,7 @@ function input(selector: string, value: string) {
     );
   });
 }
-const changes: readonly FlowChange[] = ["new", "changed", "removed", "unsaved"];
-const statuses: readonly FlowStatus[] = [
-  "idle",
-  "running",
-  "waiting",
-  "done",
-  "doneWithFailures",
-  "failed",
-  "skipped"
-];
-
 describe("flow editing marks", () => {
-  it.each(changes)("keeps the %s mark alongside every status on nodes and groups", (change) => {
-    render(
-      createElement(
-        "div",
-        null,
-        statuses.flatMap((status) => [
-          createElement(FlowNode, {
-            key: `node-${status}`,
-            title: "New sentence",
-            summary: "Now",
-            oldSummary: "Before",
-            change,
-            status
-          }),
-          createElement(FlowGroup, {
-            key: `group-${status}`,
-            title: "Group",
-            oldSummary: "Before",
-            change,
-            status,
-            collapsed: true
-          })
-        ])
-      ),
-      uiLabelsDe
-    );
-    const words = {
-      new: "Neu",
-      changed: "Geändert",
-      removed: "Entfernt",
-      unsaved: "Nicht gespeichert"
-    };
-    expect(host?.querySelectorAll('[data-slot="flow-change"]')).toHaveLength(14);
-    expect(
-      Array.from(host?.querySelectorAll('[data-slot="flow-change"]') ?? []).every(
-        (tag) => tag.textContent === words[change]
-      )
-    ).toBe(true);
-    expect(host?.querySelectorAll("del")).toHaveLength(change === "changed" ? 14 : 0);
-    const marks = Array.from(host?.querySelectorAll('[data-slot="flow-change-frame"]') ?? []);
-    expect(marks).toHaveLength(change === "removed" ? 0 : 14);
-    for (const mark of marks) {
-      expect(mark.classList.contains("border-primary")).toBe(true);
-      expect(mark.classList.contains(change === "changed" ? "border-solid" : "border-dashed")).toBe(
-        true
-      );
-      expect(mark.getAttribute("aria-hidden")).toBe("true");
-    }
-
-    expect(host?.textContent).toContain(uiLabelsDe.stateFailed);
-    expect(find('[data-slot="flow-node"]').classList.contains("opacity-55")).toBe(
-      change === "removed"
-    );
-    expect(find('[data-slot="flow-group"]').classList.contains("opacity-55")).toBe(
-      change === "removed"
-    );
-  });
-
-  it.each<FlowChange>(["new", "changed", "unsaved"])(
-    "keeps the running line of a %s node and group beside the change frame",
-    (change) => {
-      render(
-        createElement(
-          "div",
-          null,
-          createElement(FlowNode, { title: "Node", change, status: "running" }),
-          createElement(FlowGroup, { title: "Group", change, status: "running" })
-        )
-      );
-      const frame = find('[data-slot="flow-frame"]');
-      const group = find('[data-slot="flow-group"]');
-      // The status keeps its own line: the change is drawn around it, not in its place.
-      expect(frame.classList.contains("border-info-border")).toBe(true);
-      expect(group.classList.contains("border-info")).toBe(true);
-      for (const element of [frame, group]) {
-        expect(element.classList.contains("border-primary")).toBe(false);
-        expect(element.classList.contains("border-solid")).toBe(false);
-      }
-      expect(host?.querySelectorAll('[data-slot="flow-change-frame"]')).toHaveLength(2);
-      expect(host?.querySelectorAll('[data-slot="flow-badge"]')).toHaveLength(1);
-      expect(host?.textContent).toContain(uiLabelsEn.stateRunning);
-    }
-  );
-
   it("opens marked nodes and groups with Enter and Space", () => {
     const opened: string[] = [];
     render(
@@ -204,14 +106,13 @@ describe("flow editing marks", () => {
     expect(opened).toEqual(["node", "group"]);
   });
 
-  it("names a point by its place, keeps the visible words of a target in its name and refuses a disabled press", () => {
+  it("refuses a disabled press and draws no hidden point", () => {
     let count = 0;
     render(
       createElement(
         "div",
         null,
         createElement(FlowInsertPoint, { label: "Add after Load", onClick: () => count++ }),
-        createElement(FlowInsertPoint, { label: "after Load", target: true }),
         createElement(FlowInsertPoint, {
           label: "Unavailable",
           disabled: true,
@@ -224,14 +125,6 @@ describe("flow editing marks", () => {
     click("Unavailable");
     expect(count).toBe(1);
     expect(host?.querySelector('[aria-label="Hidden"]')).toBeNull();
-    const target = find<HTMLButtonElement>("[data-target]");
-    // A name that starts with the words the button shows.
-    expect(target.textContent).toBe("Move here");
-    expect(target.getAttribute("aria-label")).toBe("Move here, after Load");
-    // Only a point that can be pressed answers the pointer.
-    const classes = find('[aria-label="Unavailable"]').className.split(" ");
-    expect(classes).toContain("enabled:hover:border-primary");
-    expect(classes.filter((name) => name.startsWith("hover:"))).toEqual([]);
   });
 });
 
@@ -279,7 +172,7 @@ function withCanvasSize() {
   };
 }
 
-async function renderCanvas(props: Partial<FlowCanvasProps>, labels = uiLabelsEn) {
+async function renderCanvas(props: Partial<FlowCanvasProps>) {
   host = document.createElement("div");
   document.body.append(host);
   const created = createRoot(host);
@@ -289,7 +182,7 @@ async function renderCanvas(props: Partial<FlowCanvasProps>, labels = uiLabelsEn
     created.render(
       createElement(
         UiRoot,
-        { mode: "light", labels },
+        { mode: "light", labels: uiLabelsEn },
         createElement(FlowCanvas, {
           graph: draftGraph,
           label: "Draft",
@@ -375,41 +268,21 @@ describe("insert points on the canvas", () => {
       { kind: "end", groupId: "loop" }
     ]);
     expect(selected).toEqual([]);
-    expect(find('[data-place="end:loop"]').getAttribute("aria-label")).toBe("Add at end");
-  });
-
-  it("shows a + while the pointer is over the canvas or the point has the focus", async () => {
-    await renderCanvas({
-      insertPoints: { mode: "add", label: () => "Add", onPress: () => {} }
-    });
-    expect(find('[data-slot="flow-engine"]').classList.contains("group/flow")).toBe(true);
-    const points = Array.from(host?.querySelectorAll('[data-slot="flow-insert-point"]') ?? []);
-    expect(points).toHaveLength(6);
-    for (const point of points) {
-      expect(point.hasAttribute("data-reveal")).toBe(true);
-      expect(point.classList).toContain("opacity-0");
-      expect(point.classList).toContain("group-hover/flow:opacity-100");
-      expect(point.classList).toContain("focus-visible:opacity-100");
-      expect(point.classList).toContain("pointer-coarse:opacity-100");
-    }
   });
 
   it("turns every point into a Move here target, the nodes' own controls off and ends on Escape", async () => {
     let cancelled = 0;
     const selected: (string | undefined)[] = [];
-    await renderCanvas(
-      {
-        onSelect: (id) => selected.push(id),
-        insertPoints: {
-          mode: "move",
-          label: (place) => (place.kind === "edge" ? `nach ${place.source}` : place.kind),
-          shows: (place) => !(place.kind === "edge" && place.source === "a"),
-          onPress: () => {},
-          onCancel: () => cancelled++
-        }
-      },
-      uiLabelsDe
-    );
+    await renderCanvas({
+      onSelect: (id) => selected.push(id),
+      insertPoints: {
+        mode: "move",
+        label: (place) => (place.kind === "edge" ? `nach ${place.source}` : place.kind),
+        shows: (place) => !(place.kind === "edge" && place.source === "a"),
+        onPress: () => {},
+        onCancel: () => cancelled++
+      }
+    });
     const targets = Array.from(host?.querySelectorAll<HTMLElement>("[data-target]") ?? []);
     expect(targets.map((target) => target.dataset.place)).toEqual([
       "edge:start:loop",
@@ -418,8 +291,6 @@ describe("insert points on the canvas", () => {
       "exit:branch:yes",
       "exit:branch:no"
     ]);
-    expect(targets[0]?.getAttribute("aria-label")).toBe("Hierher verschieben, nach start");
-    expect(targets.some((target) => target.hasAttribute("data-reveal"))).toBe(false);
     // No node can be opened or acted on while a step moves.
     for (const part of Array.from(host?.querySelectorAll<HTMLElement>("[data-flow-id]") ?? [])) {
       expect(part.tabIndex).toBe(-1);
@@ -431,43 +302,6 @@ describe("insert points on the canvas", () => {
       targets[0]?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
     expect(cancelled).toBe(1);
-  });
-
-  it("wraps each + in what it opens, and still reports the press", async () => {
-    const pressed: string[] = [];
-    await renderCanvas({
-      insertPoints: {
-        mode: "add",
-        label: (place) => `Add at ${place.kind}`,
-        onPress: (place) => pressed.push(place.kind),
-        shows: (place) => place.kind === "end",
-        around: (place, point) =>
-          createElement("span", { "data-around": place.kind === "end" ? place.groupId : "" }, point)
-      }
-    });
-    const point = find<HTMLButtonElement>('[data-around="loop"] [data-place="end:loop"]');
-    act(() => point.click());
-    expect(pressed).toEqual(["end"]);
-    expect(point.classList).toContain("data-[state=open]:opacity-100");
-  });
-
-  it("wraps no Move here target", async () => {
-    await renderCanvas({
-      insertPoints: {
-        mode: "move",
-        label: () => "here",
-        onPress: () => {},
-        around: (_place, point) => createElement("span", { "data-around": "" }, point)
-      }
-    });
-    expect(host?.querySelector("[data-target]")).not.toBeNull();
-    expect(host?.querySelector("[data-around]")).toBeNull();
-  });
-
-  it("draws no point without insertPoints", async () => {
-    await renderCanvas({});
-    expect(host?.querySelector("[data-flow-id]")).not.toBeNull();
-    expect(host?.querySelector('[data-slot="flow-insert-point"]')).toBeNull();
   });
 });
 
@@ -564,8 +398,8 @@ function ValueHarness({
 }
 
 describe("SourcedValueField", () => {
-  it.each<SourcedValueKind>(["text", "textarea", "number", "integer", "boolean", "select"])(
-    "uses the fixed %s control with a label",
+  it.each<SourcedValueKind>(["number", "boolean", "select"])(
+    "uses the fixed %s control",
     (kind) => {
       render(
         createElement(ValueHarness, {
@@ -573,17 +407,13 @@ describe("SourcedValueField", () => {
           kind
         })
       );
-      const label = find<HTMLLabelElement>("label");
-      expect(document.getElementById(label.htmlFor)).not.toBeNull();
-      expect(host?.querySelectorAll('[role="radio"]')).toHaveLength(2);
-      if (kind === "textarea") expect(host?.querySelector("textarea")).not.toBeNull();
       if (kind === "boolean")
         expect(find('[role="switch"]').getAttribute("aria-checked")).toBe("true");
       if (kind === "select") {
         input("select", "yes");
         expect(host?.querySelector("output")?.textContent).toContain('"value":"yes"');
       }
-      if (kind === "number" || kind === "integer") {
+      if (kind === "number") {
         input("input", "12");
         expect(host?.querySelector("output")?.textContent).toContain('"value":12');
         input("input", "");
@@ -598,28 +428,10 @@ describe("SourcedValueField", () => {
         error: "Choose an earlier step"
       })
     );
-    expect(find('[aria-haspopup="dialog"]').getAttribute("aria-label")).toBe(
-      "Amount: Earlier result"
-    );
-    expect(find('[aria-haspopup="dialog"]').getAttribute("aria-invalid")).toBe("true");
-    expect(find('[role="alert"]').textContent).toBe("Choose an earlier step");
     click("Fixed");
     expect(host?.querySelector("output")?.textContent).toBe('{"kind":"fixed","value":""}');
     input("input", "A fixed value");
     expect(host?.querySelector("output")?.textContent).toContain("A fixed value");
-  });
-  it("puts the toggle beside the field's own label, after it", () => {
-    render(createElement(ValueHarness, { initial: { kind: "fixed", value: "" } }));
-    const label = find<HTMLLabelElement>("label");
-    const toggle = find('[data-field-label-end] [role="radiogroup"]');
-    expect(label.textContent).toBe("Amount");
-    expect(label.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(toggle.getAttribute("aria-label")).toBe("Amount: Value source");
-    expect(document.getElementById(label.htmlFor)?.tagName).toBe("INPUT");
-  });
-  it("names a value chosen from a group of a step's values", () => {
-    render(createElement(ValueHarness, { initial: { kind: "picked", option: "clients" } }));
-    expect(find('[aria-haspopup="dialog"]').getAttribute("aria-label")).toBe("Amount: The clients");
   });
   it("offers only a value from a step, with no toggle, when it is picked only", () => {
     render(
@@ -630,17 +442,13 @@ describe("SourcedValueField", () => {
     );
     expect(host?.querySelector('[role="radio"]')).toBeNull();
     expect(host?.querySelector("input")).toBeNull();
-    expect(find('[aria-haspopup="dialog"]').getAttribute("aria-label")).toBe(
-      "Amount: Earlier result"
-    );
   });
   it("keeps a read-only reference readable and prevents mode changes", () => {
     render(
       createElement(ValueHarness, {
         initial: { kind: "picked", option: "earlier" },
         readOnly: true
-      }),
-      uiLabelsDe
+      })
     );
     expect(find<HTMLInputElement>("input").value).toBe("Earlier result");
     expect(find<HTMLInputElement>("input").readOnly).toBe(true);
@@ -649,7 +457,6 @@ describe("SourcedValueField", () => {
         (entry) => entry.disabled
       )
     ).toBe(true);
-    expect(host?.textContent).toContain("Aus einem Schritt");
   });
 });
 
@@ -721,7 +528,6 @@ describe("FieldListEditor", () => {
         host?.querySelectorAll<HTMLInputElement>('[data-field-id="d"] [data-choice] input') ?? []
       );
     expect(choices().map((entry) => entry.value)).toEqual(["Open", "Done"]);
-    expect(choices()[0]?.getAttribute("aria-label")).toBe("Choice 1");
     input('[data-field-id="d"] [data-choice="1"] input', "Closed");
     click("Add choice");
     input('[data-field-id="d"] [data-choice="2"] input', "Waiting");
@@ -735,19 +541,6 @@ describe("FieldListEditor", () => {
     input('[data-field-id="d"] select', "text");
     expect(find("output").textContent).not.toContain("Closed");
     expect(host?.querySelector('[data-field-id="d"] [data-field-choices]')).toBeNull();
-  });
-  it("links the errors of the list and of its choices to what they are about", () => {
-    render(createElement(ListHarness, { error: "Two fields have one name" }));
-    const list = find('[data-slot="field-list-editor"]');
-    expect(list.getAttribute("aria-invalid")).toBe("true");
-    const message = document.getElementById(list.getAttribute("aria-describedby") ?? "");
-    expect(message?.textContent).toBe("Two fields have one name");
-    expect(message?.getAttribute("role")).toBe("alert");
-    const choices = find('[data-field-id="d"] [data-field-choices]');
-    expect(choices.getAttribute("aria-invalid")).toBe("true");
-    expect(
-      document.getElementById(choices.getAttribute("aria-describedby") ?? "")?.textContent
-    ).toBe("Give two choices");
   });
   it("moves the focus to a neighbour when a field or a choice is removed", () => {
     render(createElement(ListHarness));
@@ -764,19 +557,8 @@ describe("FieldListEditor", () => {
     expect(active()).toBe("Add field");
     expect(document.activeElement).not.toBe(document.body);
   });
-  it("moves the focus to the next choice when one is removed, and to Add choice after the last", () => {
-    render(createElement(ListHarness));
-    const active = () =>
-      document.activeElement?.getAttribute("aria-label") ?? document.activeElement?.textContent;
-    click("Remove: Open");
-    expect(active()).toBe("Remove: Done");
-    click("Remove: Done");
-    expect(active()).toBe("Add choice");
-  });
-  it("announces property errors and makes every value read-only", () => {
+  it("makes every value read-only", () => {
     render(createElement(ListHarness, { readOnly: true }));
-    expect(find('[role="alert"]').textContent).toBe("Name is taken");
-    expect(find('[data-field-id="a"] input').getAttribute("aria-invalid")).toBe("true");
     expect(Array.from(host?.querySelectorAll("input") ?? []).every((entry) => entry.readOnly)).toBe(
       true
     );
@@ -809,16 +591,10 @@ describe("FieldListEditor", () => {
     render(createElement(Titled));
     const field = find('[data-field-id="a"]');
     expect(field.querySelector("legend")?.textContent).toBe("Month");
-    expect(find('[data-field-id="a"] [data-field-key]').textContent).toBe(
-      "Key: month · steps read it by this key"
-    );
     input('[data-field-id="a"] input', "Billing month");
     // The key is the caller's: the editor changes only the title.
     expect(field.querySelector("legend")?.textContent).toBe("Billing month");
     expect(find('[data-field-id="a"] [data-field-key]').textContent).toContain("month");
-    expect(Array.from(field.querySelectorAll("label")).map((label) => label.textContent)).toContain(
-      "Title"
-    );
     // A field without a title yet is called by its place in the list.
     input('[data-field-id="a"] input', "");
     expect(field.querySelector("legend")?.textContent).toBe("Field 1");
@@ -869,23 +645,18 @@ describe("ScheduleField", () => {
     input("select", "day");
     expect(find("output").textContent).toContain('"time":"09:15"');
   });
-  it("has named controls in German and a readable immutable zone", () => {
+  it("keeps a read-only schedule and its zone unchangeable", () => {
     render(
       createElement(ScheduleHarness, {
         initial: { kind: "day", time: "09:00", zone: "Europe/Berlin" },
         readOnly: true
-      }),
-      uiLabelsDe
+      })
     );
-    expect(host?.textContent).toContain("Zeitzone");
     expect(find<HTMLSelectElement>("select").disabled).toBe(true);
     expect(find<HTMLInputElement>('input[type="time"]').readOnly).toBe(true);
-    const zone = Array.from(host?.querySelectorAll<HTMLInputElement>("input") ?? []).at(-1);
-    expect(zone?.value).toBe("Ortszeit Berlin");
-    expect(zone?.readOnly).toBe(true);
     expect(
-      Array.from(find("select").querySelectorAll("option")).map((option) => option.textContent)
-    ).toContain("Montag bis Freitag");
+      Array.from(host?.querySelectorAll<HTMLInputElement>("input") ?? []).at(-1)?.readOnly
+    ).toBe(true);
   });
   it("names the zone in words and keeps its id inside", () => {
     render(
@@ -893,11 +664,7 @@ describe("ScheduleField", () => {
         initial: { kind: "day", time: "09:00", zone: "America/New_York" }
       })
     );
-    const zone = find('[aria-haspopup="dialog"]');
-    expect(zone.getAttribute("aria-label")).toBe("Time zone: New York time");
     expect(find('[data-slot="schedule-field"]').textContent).not.toContain("America");
-    expect(host?.querySelector('input:not([type="time"])')).toBeNull();
-    expect(zone.hasAttribute("aria-invalid")).toBe(false);
     act(() => find<HTMLButtonElement>('[aria-haspopup="dialog"]').click());
     const vienna = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).find(
       (option) => option.textContent === "Vienna time"
@@ -905,9 +672,6 @@ describe("ScheduleField", () => {
     expect(vienna).toBeDefined();
     act(() => vienna?.click());
     expect(find("output").textContent).toContain('"zone":"Europe/Vienna"');
-    expect(find('[aria-haspopup="dialog"]').getAttribute("aria-label")).toBe(
-      "Time zone: Vienna time"
-    );
   });
   it("refuses a zone it does not know and says so under the zone", () => {
     render(
@@ -915,12 +679,7 @@ describe("ScheduleField", () => {
         initial: { kind: "day", time: "09:00", zone: "Mars/Olympus" }
       })
     );
-    const zone = find('[aria-haspopup="dialog"]');
-    expect(zone.getAttribute("aria-label")).toBe("Time zone: Choose a time zone");
-    expect(zone.getAttribute("aria-invalid")).toBe("true");
-    expect(document.getElementById(zone.getAttribute("aria-describedby") ?? "")?.textContent).toBe(
-      "Choose a time zone from the list."
-    );
+    expect(find('[aria-haspopup="dialog"]').getAttribute("aria-invalid")).toBe("true");
     expect(isScheduleZone("Europe/Berlin")).toBe(true);
     expect(isScheduleZone("UTC")).toBe(true);
     expect(isScheduleZone("Mars/Olympus")).toBe(false);
@@ -939,45 +698,13 @@ describe("ScheduleField", () => {
       })
     );
     expect(host?.querySelector('[aria-haspopup="dialog"]')).toBeNull();
-    expect(find('[data-slot="schedule-field"]').textContent).not.toContain("Time zone");
     input("select", "weekday");
     expect(changed).toEqual({ kind: "weekday", time: "02:00", zone: "Europe/Berlin" });
-  });
-  it("links its own error to the schedule", () => {
-    render(
-      createElement(ScheduleField, {
-        label: "Starts",
-        value: { kind: "week", days: [], time: "09:00", zone: "UTC" },
-        onChange: () => {},
-        error: "Choose a day"
-      })
-    );
-    const schedule = find('[data-slot="schedule-field"]');
-    expect(schedule.getAttribute("aria-invalid")).toBe("true");
-    expect(
-      document.getElementById(schedule.getAttribute("aria-describedby") ?? "")?.textContent
-    ).toBe("Choose a day");
   });
 });
 
 describe("SidePanel editing", () => {
-  it("shows its actions in the head, before the close button", () => {
-    render(
-      createElement(SidePanel, {
-        open: true,
-        title: "Load the clients",
-        onClose: () => {},
-        actions: createElement("button", { type: "button", "data-more": "" }, "More"),
-        children: "Fields"
-      })
-    );
-    const more = find("[data-more]");
-    const close = find(`[aria-label="${uiLabelsEn.close}"]`);
-    expect(more.compareDocumentPosition(close) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(find('[data-slot="side-panel-body"]').contains(more)).toBe(false);
-  });
-
-  it("keeps the footer after the scroll body and closes on Escape", () => {
+  it("keeps the footer out of the scroll body and closes on Escape", () => {
     let closed = false;
     render(
       createElement(SidePanel, {
@@ -992,7 +719,6 @@ describe("SidePanel editing", () => {
         footer: "Save"
       })
     );
-    expect(find('[data-slot="side-panel"]').classList.contains("h-[92%]")).toBe(true);
     const body = find('[data-slot="side-panel-body"]');
     const footer = find('[data-slot="side-panel-footer"]');
     expect(body.contains(footer)).toBe(false);

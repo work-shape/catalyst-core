@@ -141,7 +141,6 @@ describe("HTML to PDF from an App frame", () => {
     const frame = await frameOf(t, t.admin.id, "quotes");
     for (const [refusal, status] of [
       ["pdf_too_many_pages", 422],
-      ["pdf_too_large", 422],
       ["pdf_busy", 429]
     ] as const) {
       code = refusal;

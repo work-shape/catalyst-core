@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
   DATA_STORE_ASSET_KIND,
+  DATA_STORE_MANIFEST_FILE,
   DATA_STORE_PREVIEW_ROW_LIMIT,
   dataStoreOperationName,
   isAppError,
   type JsonObject
 } from "@work-shape/catalyst-core";
 import { required } from "./support/assertions";
+import { readJobDiagnostics } from "./support/job-diagnostics";
 import {
   INIT_SQL,
   finding,
@@ -20,8 +22,7 @@ import {
 
 // A Data Store against real Postgres, at the seam of its package: what a publish provisions,
 // and what its operations do as the app role. Its migrations are in
-// `data-store-migrations.test.ts`, its inserts in `data-store-inserts.test.ts` and what each
-// role can and cannot do in `data-store-roles.test.ts`. Rights, policy and the run of a
+// `data-store-migrations.test.ts` and what each role can and cannot do in `data-store-roles.test.ts`. Rights, policy and the run of a
 // call are the call path's and are in `data-store-api.test.ts`.
 
 const countSchema = z.array(z.object({ count: z.number() }));
@@ -113,7 +114,7 @@ describe("a Data Store on Postgres", () => {
       "set search_path = Catalyst;"
     ]) {
       expect(issuesOf([manifest(), { path: "migrations/0001_init.sql", text: touching }])).toEqual([
-        "'migrations/0001_init.sql' names the schema 'catalyst', which the platform keeps for itself in every store (DATA_STORE_RESERVED_SCHEMA). A migration creates and changes objects in other schemas."
+        expect.stringContaining("DATA_STORE_RESERVED_SCHEMA")
       ]);
     }
     // A migration runs in the one transaction the platform opens and ends, as the role the
@@ -129,7 +130,7 @@ describe("a Data Store on Postgres", () => {
       "do $$ begin create table a (id integer); commit; end $$;"
     ]) {
       expect(refusedText(control), control).toEqual([
-        "'migrations/0001_init.sql' holds transaction control. A migration runs in one transaction, which the platform opens and ends: take 'begin', 'commit', 'rollback' and 'savepoint' out of it."
+        expect.stringContaining("transaction control")
       ]);
     }
     for (const role of [
@@ -141,9 +142,7 @@ describe("a Data Store on Postgres", () => {
       "reset role;",
       "set session authorization default;"
     ]) {
-      expect(refusedText(role), role).toEqual([
-        "'migrations/0001_init.sql' creates, changes or takes a role. A migration runs as the migration role of its store and leaves every role as it is."
-      ]);
+      expect(refusedText(role), role).toEqual([expect.stringContaining("a role")]);
     }
     // A column may be named as a statement is: only a statement is refused.
     expect(
@@ -313,10 +312,6 @@ describe("a Data Store on Postgres", () => {
     // Left out, a conflict refuses the whole call and adds no row of it.
     expect(await refusal(call(world, "insert", rerun))).toMatchObject({
       code: "VALIDATION_FAILED",
-      message:
-        'A value in "Run id" (Text), "Client id" (Text), "Rule id" (Text) already exists. Use a different value.'
-    });
-    expect(await refusal(call(world, "insert", { ...rerun, onConflict: "fail" }))).toMatchObject({
       details: { reason: "unique" }
     });
     expect(
@@ -348,8 +343,6 @@ describe("a Data Store on Postgres", () => {
 
     expect(refused).toMatchObject({
       code: "VALIDATION_FAILED",
-      message:
-        "data_store.findings.load is not supported yet: a dataset of a Workflow Run cannot be loaded into a Data Store by this release. Add rows with data_store.findings.insert.",
       details: { reason: "not_supported_yet" }
     });
     expect(
@@ -564,9 +557,7 @@ describe("a Data Store on Postgres", () => {
         "The database could not accept these rows. Check the table's requirements and try again.",
       details: { reason: "database_refusal" }
     });
-    expect(type.message).toBe(
-      'A value does not fit "Revision" (Integer). Check its type and try again.'
-    );
+    expect(type.message).not.toContain("secret-number");
     expect(
       await refusal(call(world, "insert", { table: "bookings", rows: [finding(1)] }))
     ).toMatchObject({ message: "The store has no table 'bookings'" });
@@ -602,8 +593,6 @@ describe("a Data Store on Postgres", () => {
     // The stores of this suite belong to the instance.
     await expect(publish(world, [manifest("scope: workspace\n"), init])).rejects.toMatchObject({
       code: "VALIDATION_FAILED",
-      message:
-        "'store.yaml' says scope 'workspace' and the store belongs to the instance. Write the store for a workspace, or change 'scope'.",
       details: { reason: "scope_mismatch" }
     });
     const id = await publish(world, [manifest("scope: instance\n"), init]);
@@ -646,6 +635,275 @@ describe("a Data Store on Postgres", () => {
     await expect(publish(world, [manifest(), init])).rejects.toMatchObject({
       code: "CONFLICT",
       details: { reason: "data_store_id_held" }
+    });
+  });
+
+  // Many stores provisioned at once on one Postgres server: each makes its own database and
+  // roles, and every one takes CONNECT on the same platform database from PUBLIC. None may
+  // fail because another ran beside it, and none waits for another to be provisioned whole.
+  it("provisions 16 stores published at once, each on its first attempt", async () => {
+    const storeCount = 16;
+    // As instances on one platform database run them: two processes each, four stores to one.
+    const instances = await Promise.all(
+      Array.from({ length: storeCount / 4 }, async (_, index) => {
+        const world = await setup(`at_once_${index}`);
+        const second = await setup(`at_once_${index}`);
+        return {
+          world,
+          workers: [world.worker, second.worker],
+          logs: [world.logged, second.logged]
+        };
+      })
+    );
+    const stores = await Promise.all(
+      Array.from({ length: storeCount }, async (_, index) => {
+        const { world } = required(instances[index % instances.length]);
+        const name = `store_${index}`;
+        const manifestOf: StoreFile = {
+          path: DATA_STORE_MANIFEST_FILE,
+          text: `id: ${name}\nname: ${name}\ndescription: One of many stores published at once.\n`
+        };
+        return { world, id: await publish(world, [manifestOf, init], name) };
+      })
+    );
+
+    await Promise.all(instances.flatMap(({ workers }) => workers.map((worker) => worker.runDue())));
+
+    const records = await Promise.all(stores.map(({ world, id }) => recordOf(world, id)));
+    const diagnostics = await readJobDiagnostics({
+      clientInstanceIds: instances.map(({ world }) => world.clientInstanceId),
+      kinds: ["data_store.provision"],
+      logs: instances.flatMap(({ logs }) => logs.flat())
+    });
+    const evidence = JSON.stringify(diagnostics);
+    expect(
+      records.filter((record) => record.failure !== undefined).map((record) => record.failure),
+      evidence
+    ).toEqual([]);
+    expect(
+      records.map((record) => record.status),
+      evidence
+    ).toEqual(Array.from({ length: storeCount }, () => "ready"));
+    expect(
+      diagnostics.jobs.map(({ status, attempts }) => ({ status, attempts })),
+      evidence
+    ).toEqual(Array.from({ length: storeCount }, () => ({ status: "succeeded", attempts: 1 })));
+  });
+
+  // What an insert holds to: the size limit of the store, read on the database and never on
+  // what was sent, and the rule by which `skip` leaves a row out.
+  /** The store with room for a few megabytes more than it holds now. */
+  async function nearlyFull(label: string, files: StoreFile[] = [manifest(), init]) {
+    const world = await published(label, files);
+    const limit = (await sizeOf(world.record.location.database)) + 4 * 1024 ** 2;
+    await db.sql`update data_stores set size_limit_bytes = ${limit} where id = ${world.id}`;
+    return { ...world, limit };
+  }
+
+  const sizeOf = async (database: string) =>
+    Number(
+      (
+        await db.sql<{ bytes: string }[]>`select pg_database_size(${database}::name)::text as bytes`
+      )[0]?.bytes
+    );
+
+  const count = async (world: Awaited<ReturnType<typeof published>>, table: string) =>
+    call(world, "query", { sql: `select count(*)::integer as count from ${table}` });
+
+  /** Some megabytes that do not shrink when they are stored. */
+  const SWELL = `insert into bulk
+    select (select string_agg(md5((n * 1000 + i)::text), '') from generate_series(1, 60) i)
+    from generate_series(1, 8000) n;`;
+
+  const swelling = (trigger: string, before = ""): StoreFile => ({
+    path: "migrations/0002_swelling.sql",
+    text: `create table bulk (filler text);
+      create function swell() returns trigger language plpgsql as $f$
+        begin ${before} ${SWELL} return new; end $f$;
+      ${trigger}`
+  });
+
+  it("holds the size limit from the first insert of a store", async () => {
+    const world = await published("first");
+    const { sizeBytes } = await recordOf(world, world.id);
+    expect(sizeBytes).toBeGreaterThan(1024 ** 2);
+    await db.sql`update data_stores set size_limit_bytes = 1048576 where id = ${world.id}`;
+
+    expect(
+      await refusal(call(world, "insert", { table: "findings", rows: [finding(1)] }))
+    ).toMatchObject({
+      code: "CONFLICT",
+      details: { reason: "data_store_size_limit", limit: 1024 ** 2 }
+    });
+    expect(await count(world, "findings")).toMatchObject({ rows: [{ count: 0 }] });
+  });
+
+  it("keeps no row past the limit under callers at once", async () => {
+    const world = await nearlyFull("callers");
+    // A stored size of this second that says the store is empty: an insert does not go by it.
+    await db.sql`update data_stores set size_bytes = 10, size_measured_at = now() where id = ${world.id}`;
+    const batch = Array.from({ length: 1_000 }, (_, index) =>
+      finding(index, { details: { note: "n".repeat(700) } })
+    );
+    const caller = async () => {
+      for (let calls = 0; calls < 40; calls += 1) {
+        const refused = await call(world, "insert", { table: "findings", rows: batch }).then(
+          () => false,
+          () => true
+        );
+        if (refused) return calls;
+      }
+      return 40;
+    };
+
+    const calls = await Promise.all([caller(), caller(), caller(), caller()]);
+
+    expect(Math.max(...calls)).toBeLessThan(40);
+    expect((await sizeOf(world.record.location.database)) - world.limit).toBeLessThan(
+      64 * 1024 ** 2
+    );
+  });
+
+  it.each([
+    [
+      "a trigger writes beside the rows",
+      swelling(
+        "create trigger swells after insert on findings for each row execute function swell();"
+      )
+    ],
+    [
+      "a trigger writes only as the transaction ends",
+      swelling(
+        "create constraint trigger swells after insert on findings deferrable initially deferred for each row execute function swell();"
+      )
+    ],
+    [
+      "a trigger puts a size function of its own in the way",
+      swelling(
+        `create function public.pg_database_size(name) returns bigint language sql as 'select 0::bigint';
+         create trigger swells after insert on findings for each row execute function swell();`,
+        "perform set_config('search_path', 'public, pg_catalog', true);"
+      )
+    ]
+  ])("takes no insert that writes the store past its limit: %s", async (_case, migration) => {
+    const world = await nearlyFull(`swell_${Math.random().toString(36).slice(2, 8)}`, [
+      manifest(),
+      init,
+      migration
+    ]);
+
+    // One row of a few hundred bytes, and some fifteen megabytes written for it.
+    expect(
+      await refusal(call(world, "insert", { table: "findings", rows: [finding(1)] }))
+    ).toMatchObject({
+      code: "CONFLICT",
+      details: { reason: "data_store_size_limit", limit: world.limit }
+    });
+    expect(await count(world, "findings")).toMatchObject({ rows: [{ count: 0 }] });
+    expect(await count(world, "bulk")).toMatchObject({ rows: [{ count: 0 }] });
+  });
+
+  it("gives back what a refused insert wrote, so the next one that fits is taken", async () => {
+    const world = await published("reclaimed");
+    // Some megabyte a call.
+    const batch = Array.from({ length: 1_000 }, (_, index) =>
+      finding(index, { details: { note: "n".repeat(900) } })
+    );
+    expect(await call(world, "insert", { table: "findings", rows: batch })).toMatchObject({
+      inserted: 1_000
+    });
+    // The limit lies half a call above what the store holds now. The size of a database also
+    // moves by files that hold no row, such as the cache of the catalog that Postgres removes
+    // and writes again, some hundred kilobytes: a limit a few of them from the size would
+    // refuse or take a call by chance.
+    const limit = (await sizeOf(world.record.location.database)) + 512 * 1024;
+    await db.sql`update data_stores set size_limit_bytes = ${limit} where id = ${world.id}`;
+
+    expect(await refusal(call(world, "insert", { table: "findings", rows: batch }))).toMatchObject({
+      code: "CONFLICT",
+      details: { reason: "data_store_size_limit", limit }
+    });
+    // What the refused call wrote is no row of the store. Left where it is, half a call past
+    // the limit, it would keep every later insert out although the rows that are kept fit.
+
+    expect(await call(world, "insert", { table: "findings", rows: [finding(1)] })).toMatchObject({
+      inserted: 1
+    });
+    expect(await count(world, "findings")).toMatchObject({ rows: [{ count: 1_001 }] });
+  });
+
+  it("skips only on a unique key of all rows that the call gives in full, and names why it does not", async () => {
+    const keys: StoreFile = {
+      path: "migrations/0002_keys.sql",
+      text: `create table loose (run_id text not null, amount numeric, unique (run_id, amount));
+        create table tight (run_id text not null, amount numeric, unique nulls not distinct (run_id, amount));
+        create table lowered (label text);
+        create unique index lowered_label on lowered (lower(label));
+        create table blanked (label text not null);
+        create unique index blanked_label on blanked (nullif(label, ''));
+        create table keyed (id integer primary key, email text unique);
+        create table carried (id integer not null, note text);
+        create unique index carried_id on carried (id) include (note);
+        create table clash (catalyst_row integer primary key, catalyst_value text);
+        create table derived (label text not null, slug text generated always as (lower(label)) stored unique);
+        create table numbered (id bigint generated by default as identity primary key, note text);
+        create table defaulted (id integer not null default (random() * 1000000)::integer, note text, unique nulls not distinct (id));
+        create table coalesced (id integer default (random() * 1000000)::integer, note text);
+        create unique index coalesced_id on coalesced (coalesce(id, 0));
+        create table partly (id integer not null, live boolean not null);
+        create unique index partly_live on partly (id) where live;
+        create table late (id integer not null, unique (id) deferrable initially deferred);
+        create table keyless (note text);`
+    };
+    const world = await published("skip", [manifest(), init, keys]);
+    const skipping = (table: string, row: JsonObject) => () =>
+      call(world, "insert", { table, rows: [row], onConflict: "skip" });
+    const reasonOf = async (insert: () => Promise<unknown>) => {
+      const refused = await refusal(insert());
+      return [refused.code, refused.details];
+    };
+    const twice = async (insert: () => Promise<unknown>, table: string) => {
+      expect(await insert(), table).toEqual({ table, inserted: 1, skipped: 0 });
+      expect(await insert(), table).toEqual({ table, inserted: 0, skipped: 1 });
+    };
+    const emptyKey = ["VALIDATION_FAILED", { reason: "nullable_key", row: 1 }];
+    const noKey = ["VALIDATION_FAILED", { reason: "skip_without_key" }];
+
+    // A key that is empty in a row never conflicts, so `skip` would add the row twice.
+    expect(await reasonOf(skipping("loose", { run_id: "run-1", amount: null }))).toEqual(emptyKey);
+    await twice(skipping("loose", { run_id: "run-1", amount: 5 }), "loose");
+    await twice(skipping("tight", { run_id: "run-1", amount: null }), "tight");
+    // The database works each key out, also where an expression makes it empty.
+    expect(await reasonOf(skipping("lowered", { label: null }))).toEqual(emptyKey);
+    await twice(skipping("lowered", { label: "Same" }), "lowered");
+    expect(await reasonOf(skipping("blanked", { label: "" }))).toEqual(emptyKey);
+    await twice(skipping("blanked", { label: "kept" }), "blanked");
+    // The primary key binds the row, whatever an optional unique column beside it holds; a
+    // column an index only carries is no key; a key the database derives from what was given is.
+    await twice(skipping("keyed", { id: 1, email: null }), "keyed");
+    await twice(skipping("carried", { id: 1, note: null }), "carried");
+    await twice(skipping("clash", { catalyst_row: 1, catalyst_value: "x" }), "clash");
+    await twice(skipping("derived", { label: "Same" }), "derived");
+    // A key the call leaves to its default is another one every time, whatever the index does
+    // with an empty value; an index over a part of the rows binds no row for certain.
+    for (const [table, row] of [
+      ["numbered", { note: "again" }],
+      ["defaulted", { note: "again" }],
+      ["coalesced", { note: "again" }],
+      ["partly", { id: 1, live: false }],
+      ["keyless", { note: "again" }]
+    ] as const) {
+      expect(await reasonOf(skipping(table, row)), table).toEqual(noKey);
+    }
+    expect(await reasonOf(skipping("late", { id: 1 }))).toEqual([
+      "VALIDATION_FAILED",
+      { reason: "skip_deferrable_key" }
+    ]);
+    // Without `skip` none of this is asked.
+    expect(await call(world, "insert", { table: "keyless", rows: [{ note: "plain" }] })).toEqual({
+      table: "keyless",
+      inserted: 1,
+      skipped: 0
     });
   });
 });

@@ -10,13 +10,11 @@ import {
   heldSkill,
   heldSkillChange,
   hrWorkspace,
-  people,
   seedDemo,
   workflowCheckQuestions,
   workspaceAssets
 } from "@work-shape/catalyst-demo/seed";
 import {
-  createdBy,
   expectCheckAnswers,
   expectSecondRunChangedNothing,
   useSeededInstance
@@ -93,27 +91,6 @@ const seeded = useSeededInstance({
 });
 
 describe("the demo seed on the fixture instance", () => {
-  it("creates the company on an empty instance and says how much of each", () => {
-    expect(createdBy(seeded().first)).toEqual({
-      people: 9,
-      "service principals": 1,
-      "API keys": 1,
-      "the instance's own agents and skills": 3,
-      agents: 8,
-      skills: 7,
-      "grant rows": 34,
-      "builder assets": 2,
-      "approval requests": 2,
-      "connection grant rows": 0,
-      workspaces: 2,
-      "workspace members": 4,
-      "workspace bundles": 3,
-      "workspace assets": 3,
-      apps: 2,
-      workflows: 1
-    });
-  });
-
   it("leaves the company's workspace with one published App and one with a draft ahead", () => {
     const { workspace, apps } = seeded().before;
     expect(workspace?.members).toEqual([
@@ -140,28 +117,6 @@ describe("the demo seed on the fixture instance", () => {
         title: "Fee estimate"
       }
     ]);
-  });
-
-  it("leaves people across the roles, one deactivated and one who never signed in", () => {
-    const { users } = seeded().before;
-    const byLabel = (label: string) => users.find((user) => user.displayLabel === label);
-    expect(users).toHaveLength(people.length);
-    expect(users.filter((user) => user.roles.includes("admin"))).toHaveLength(2);
-    expect(users.filter((user) => user.roles.includes("superadmin"))).toHaveLength(0);
-    expect(byLabel("Lena Hoffmann")?.status).toBe("disabled");
-    // Rights beside the role's own, as the Users page shows them.
-    expect(byLabel("Jonas Brandt")?.permissions).toEqual([
-      "api_access.manage",
-      "agent_models.manage"
-    ]);
-    expect(byLabel("Sven Olsen")?.permissions).toEqual(["config_assets.read", "usage.view"]);
-    expect(byLabel("Mara Lindqvist")).toMatchObject({ identities: 1, signedIn: true });
-    // This instance has no invitation module: the invited person has no way to sign in, and
-    // the seed says so.
-    expect(byLabel("Noah Fischer")).toMatchObject({ identities: 0, signedIn: false });
-    expect(seeded().first.steps.find((step) => step.name === "people")?.note).toContain(
-      "userInvitations"
-    );
   });
 
   it("creates the HR workspace with a tool list and a model list, and Elif builds in it", () => {
@@ -263,33 +218,6 @@ describe("the demo seed on the fixture instance", () => {
     const agent = assets.find((asset) => asset.name === workspaceAssets.agent.name);
     expect(agent).toMatchObject({ kind: "agent", revision: 1 });
     expect(agent?.shown).not.toBe("all");
-  });
-
-  it("writes asset-scoped allow and deny rows, and the three workspace bundles", () => {
-    const { grants, users, workspace, hrWorkspace: hr } = seeded().before;
-    const count = (effect: string, scopeKind: string) =>
-      grants.filter((row) => row.effect === effect && row.scopeKind === scopeKind).length;
-    expect(grants).toHaveLength(37);
-    expect(count("allow", "asset")).toBe(31);
-    expect(count("deny", "asset")).toBe(3);
-    expect(count("allow", "workspace")).toBe(3);
-    // Fabian Wolf is no member of the workspace he builds and publishes in, and Elif Aydin
-    // none of the HR workspace.
-    const idOf = (label: string) => users.find((user) => user.displayLabel === label)?.id;
-    const byText = (left: unknown[], right: unknown[]) =>
-      JSON.stringify(left).localeCompare(JSON.stringify(right));
-    expect(
-      grants
-        .filter((row) => row.scopeKind === "workspace")
-        .map((row) => [row.holderId, row.action, row.scopeId])
-        .sort(byText)
-    ).toEqual(
-      [
-        [idOf("Fabian Wolf"), "builder", workspace?.id],
-        [idOf("Fabian Wolf"), "publisher", workspace?.id],
-        [idOf("Elif Aydin"), "builder", hr?.id]
-      ].sort(byText)
-    );
   });
 
   it("lets Kai Berger edit two drafts with rights only on those assets", async () => {

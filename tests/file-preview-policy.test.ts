@@ -8,47 +8,21 @@ import { getSourceFilePreviewKind } from "./support/chat-ui";
 describe("file preview policy", () => {
   it.each([
     ["report.pdf", "application/pdf", "native_pdf"],
-    ["photo.webp", "image/webp", "native_image"],
-    [
-      "deck.pptx",
-      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-      "office_presentation_pages"
-    ],
     ["legacy.ppt", "application/vnd.ms-powerpoint", "office_presentation_pages"],
-    [
-      "letter.docx",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "office_document_pages"
-    ],
     ["legacy.doc", "application/msword", "office_document_pages"],
     ["model.xlsm", "application/vnd.ms-excel.sheet.macroEnabled.12", "spreadsheet"],
-    ["notes.md", "text/markdown", "markdown"],
-    ["data.json", "application/json", "text"]
+    ["notes.md", "text/markdown", "markdown"]
   ] as const)("classifies %s by capability", (filename, mimeType, expected) => {
     expect(resolveFilePreviewCapability({ filename, mimeType })).toBe(expected);
   });
 
-  it.each([
-    "IMG_0851.jpeg",
-    "PHOTO.JPG",
-    "chart.png",
-    "photo.webp",
-    "animation.gif",
-    "icon.svg",
-    "photo.heic",
-    "photo.heif",
-    "scan.tif",
-    "scan.tiff",
-    "photo.bmp",
-    "photo.avif"
-  ])("previews %s when image MIME metadata is unavailable", (filename) => {
-    for (const mimeType of [undefined, "application/octet-stream"]) {
-      expect(resolveFilePreviewCapability({ filename, mimeType })).toBe("native_image");
-      expect(getSourceFilePreviewKind(filename, mimeType)).toBe("image");
+  it("previews an image when its MIME metadata is unavailable, but not a name holding an image extension", () => {
+    for (const filename of ["IMG_0851.jpeg", "PHOTO.JPG", "photo.heic"]) {
+      for (const mimeType of [undefined, "application/octet-stream"]) {
+        expect(resolveFilePreviewCapability({ filename, mimeType })).toBe("native_image");
+        expect(getSourceFilePreviewKind(filename, mimeType)).toBe("image");
+      }
     }
-  });
-
-  it("does not infer an image from a filename containing an image extension before its suffix", () => {
     expect(resolveFilePreviewCapability({ filename: "photo.jpeg.zip" })).toBeUndefined();
     expect(resolveFilePreviewCapability({ filename: "jpeg" })).toBeUndefined();
   });

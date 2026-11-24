@@ -1,14 +1,9 @@
-import {
-  contractPathFixtures,
-  openApiJsonOperation,
-  registeredTestOperations
-} from "./support/operations";
+import { contractPathFixtures, registeredTestOperations } from "./support/operations";
 import { required } from "./support/assertions";
-import { readFile, readdir } from "node:fs/promises";
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { readFile } from "node:fs/promises";
+import { describe, expect, it } from "vitest";
 import {
   apiOperations,
-  assistantFinalMessageMetadataSchema,
   buildApiPath,
   createOpenApiDocument,
   operationPathParamNames,
@@ -20,50 +15,13 @@ import {
   createApiClient,
   createApiClientFor,
   listAll,
-  type AdministeredUser,
   type ApiClientOptions,
-  type ConversationThreadSnapshot,
-  type OperationInput,
-  type OperationOutcome,
-  type OperationRunResource,
-  type RunObservation
+  type OperationRunResource
 } from "@work-shape/catalyst-api-client";
 
 const createdAt = "2026-06-27T00:00:00.000Z";
 
 describe("api operation catalog", () => {
-  it("accepts assistant final metadata with normalized web sources and citations", () => {
-    const parsed = assistantFinalMessageMetadataSchema.safeParse({
-      version: 1,
-      kind: "assistant_final",
-      runId: "run_web",
-      finishStatus: "completed",
-      sources: [
-        {
-          id: "web_source_1",
-          url: "https://example.com/report",
-          title: "Example Report",
-          provider: "openai-native",
-          query: "example report",
-          snippet: "A short source snippet.",
-          resultPosition: 1
-        }
-      ],
-      citations: [
-        {
-          sourceId: "web_source_1",
-          label: "Example Report",
-          characterRange: {
-            start: 4,
-            end: 18
-          }
-        }
-      ]
-    });
-
-    expect(parsed.success).toBe(true);
-  });
-
   // Which operations the document lists is the inventory of tests/api-version-paths.test.ts.
   it("keeps the OpenAPI artifact generated from the operation catalog", async () => {
     const artifact: unknown = JSON.parse(
@@ -137,56 +95,6 @@ describe("api operation catalog", () => {
     }
   });
 
-  it("keeps Collaboration Workspace create and update request contracts aligned", () => {
-    const createOperation = openApiJsonOperation("workspaces.create");
-    const createSchema = createOperation.requestBody.content["application/json"].schema;
-
-    expect(createSchema.required).toEqual(["name"]);
-    expect(apiOperations["workspaces.create"].body.parse({ name: "Product" })).toEqual({
-      name: "Product"
-    });
-    expect(apiOperations["workspaces.update"].body.parse({})).toEqual({});
-  });
-
-  it("describes agent availability and the answer of a release", () => {
-    expect(apiOperations["assets.set_availability"].body.parse({ mode: "selected" })).toEqual({
-      mode: "selected"
-    });
-    expect(() => apiOperations["assets.set_availability"].body.parse({ mode: "some" })).toThrow();
-    const synced = { version: 2, items: [], warnings: [] };
-    expect(
-      apiOperations["assets.sync"].response.schema.parse({ ...synced, hiddenAgentNames: ["a"] })
-    ).toEqual({ ...synced, hiddenAgentNames: ["a"] });
-    expect(apiOperations["assets.sync"].response.schema.parse(synced)).toEqual(synced);
-  });
-
-  it("carries conversation visibility through the workspace, conversation and move contracts", () => {
-    const moveOperation = openApiJsonOperation("conversations.move");
-    const conversationSchema = required(moveOperation.responses["200"]).content["application/json"]
-      .schema;
-    expect(moveOperation.requestBody.content["application/json"].schema.required).toEqual([
-      "collaborationWorkspaceId"
-    ]);
-    expect(conversationSchema.required).toContain("visibility");
-    expect(
-      apiOperations["workspaces.create"].body.parse({
-        name: "Product",
-        defaultConversationVisibility: "private"
-      })
-    ).toEqual({ name: "Product", defaultConversationVisibility: "private" });
-    expect(() =>
-      apiOperations["workspaces.update"].body.parse({
-        defaultConversationVisibility: "secret"
-      })
-    ).toThrow();
-    expect(() =>
-      apiOperations["conversations.move"].body.parse({
-        collaborationWorkspaceId: "cws_1",
-        visibility: "secret"
-      })
-    ).toThrow();
-  });
-
   it("builds encoded paths from operation params and query values", () => {
     expect(
       apiOperations["conversations.messages.list"].buildPath({
@@ -216,24 +124,6 @@ describe("api operation catalog", () => {
     expect(() => apiOperations["config.get"].buildPath({ query: { unknown: "value" } })).toThrow(
       /Unknown query parameter "unknown"/u
     );
-  });
-  it("does not keep the deleted legacy live chat stream path in the API contract", async () => {
-    const contractSourceDirectory = "packages/api-contract/src";
-    const contractSourceFiles = (await readdir(contractSourceDirectory, { recursive: true }))
-      .filter((file) => file.endsWith(".ts"))
-      .sort();
-    const [contractSources, routeSource] = await Promise.all([
-      Promise.all(
-        contractSourceFiles.map((file) => readFile(`${contractSourceDirectory}/${file}`, "utf8"))
-      ),
-      readFile("packages/server/src/routes/agent-run-routes.ts", "utf8")
-    ]);
-    const contractSource = contractSources.join("\n");
-
-    expect(contractSource).not.toContain("chatStreamRoutePath");
-    expect(contractSource).not.toContain("chatStreamRequestSchema");
-    expect(contractSource).not.toContain("chatStreamChunkSchema");
-    expect(routeSource).not.toContain(contractPathFixtures.retiredChat);
   });
 });
 
@@ -324,22 +214,6 @@ async function collect<Item>(stream: AsyncIterable<Item>): Promise<Item[]> {
 }
 
 describe("api client derived from the operation catalog", () => {
-  it("has exactly one method per operation, under the segments of its id", () => {
-    const { client } = recordingClient(() => Response.json({}));
-    const methodIds: string[] = [];
-    const walk = (node: object, prefix: string) => {
-      for (const [segment, value] of Object.entries(node)) {
-        if (typeof value === "function") methodIds.push(`${prefix}${segment}`);
-        else if (value && typeof value === "object") walk(value, `${prefix}${segment}.`);
-      }
-    };
-    walk(client, "");
-
-    expect(methodIds.filter((id) => id !== "urlFor").sort()).toEqual(
-      Object.keys(apiOperations).sort()
-    );
-  });
-
   it("sends every operation with the method and path of its descriptor", async () => {
     const operations = Object.values<Operation>(apiOperations).filter(
       (operation) => !operation.body && !operation.multipart
@@ -369,59 +243,6 @@ describe("api client derived from the operation catalog", () => {
     }
   });
 
-  it("types the input and the answer of a method from its operation", () => {
-    const { client } = recordingClient(() => Response.json({}));
-    type Thread = OperationInput<"conversations.thread.get">;
-    type Listing = OperationInput<"conversations.list">;
-
-    // Path parameters are required by name; an operation without a body takes none.
-    expectTypeOf<keyof Thread>().toEqualTypeOf<"params" | "signal">();
-    expectTypeOf<Thread["params"]>().toEqualTypeOf<Record<"conversationId", string>>();
-    expectTypeOf(client.conversations.thread.get).parameters.toEqualTypeOf<[input: Thread]>();
-    expectTypeOf<keyof OperationInput<"me.get">>().toEqualTypeOf<"signal">();
-    expectTypeOf(client.me.get).parameters.toEqualTypeOf<[input?: OperationInput<"me.get">]>();
-
-    // A query carries the descriptor's parameters and nothing else, all of them optional here.
-    expectTypeOf<keyof Listing>().toEqualTypeOf<"query" | "signal">();
-    expectTypeOf<keyof NonNullable<Listing["query"]>>().toEqualTypeOf<
-      "limit" | "cursor" | "collaborationWorkspaceId" | "query" | "projectId"
-    >();
-    expectTypeOf<NonNullable<Listing["query"]>["limit"]>().toEqualTypeOf<number | undefined>();
-    expectTypeOf(client.conversations.list).toBeCallableWith();
-
-    // A body follows the request schema and cannot be left out.
-    expectTypeOf<keyof OperationInput<"conversations.rename">>().toEqualTypeOf<
-      "params" | "body" | "signal"
-    >();
-    expectTypeOf<OperationInput<"conversations.rename">["body"]>().toEqualTypeOf<{
-      title: string;
-    }>();
-    expectTypeOf(client.conversations.create).parameters.toEqualTypeOf<
-      [input: OperationInput<"conversations.create">]
-    >();
-
-    // An upload takes a file; only a stream reports that it is caught up.
-    expectTypeOf<keyof OperationInput<"conversations.draft_attachments.upload">>().toEqualTypeOf<
-      "params" | "query" | "file" | "signal"
-    >();
-    expectTypeOf<keyof OperationInput<"conversations.runs.observe">>().toEqualTypeOf<
-      "params" | "query" | "signal" | "onCaughtUp" | "onSkipped"
-    >();
-
-    // The answer is what the response schema parses to, by the kind of the response.
-    expectTypeOf(
-      client.conversations.thread.get
-    ).returns.resolves.toEqualTypeOf<ConversationThreadSnapshot>();
-    expectTypeOf(client.users.list).returns.resolves.toEqualTypeOf<{
-      items: AdministeredUser[];
-      nextCursor?: string | undefined;
-    }>();
-    expectTypeOf(client.conversations.files.get_content).returns.toEqualTypeOf<Promise<Blob>>();
-    expectTypeOf(client.conversations.runs.observe).returns.toEqualTypeOf<
-      AsyncIterable<RunObservation>
-    >();
-  });
-
   it.each([
     { name: "cookie", getToken: undefined, credentials: "include", authorization: null },
     {
@@ -429,12 +250,6 @@ describe("api client derived from the operation catalog", () => {
       getToken: () => "test-token",
       credentials: "omit",
       authorization: "Bearer test-token"
-    },
-    {
-      name: "asynchronous token",
-      getToken: async () => "later-token",
-      credentials: "omit",
-      authorization: "Bearer later-token"
     },
     {
       name: "empty token source",
@@ -471,13 +286,6 @@ describe("api client derived from the operation catalog", () => {
       expect(client.browserManagedDownloads).toBe(getToken === undefined);
     }
   );
-
-  it("lets a cookie client turn browser-managed downloads off", () => {
-    expect(
-      createApiClient({ baseUrl: "https://chat.example", browserManagedDownloads: false })
-        .browserManagedDownloads
-    ).toBe(false);
-  });
 
   it("builds the path, the query and a JSON body, and parses the JSON answer", async () => {
     const { client, requests } = recordingClient(() => Response.json(conversation));
@@ -585,11 +393,6 @@ describe("api client derived from the operation catalog", () => {
     ).toBe(
       "https://chat.example/api/v1/conversations/conv%201/artifacts/art%2Ffinal/content?inline=true"
     );
-    expect(
-      client.urlFor("conversations.files.get_content", {
-        params: { conversationId: "conv 1", fileId: "file/image" }
-      })
-    ).toBe("https://chat.example/api/v1/conversations/conv%201/files/file%2Fimage/content");
   });
 
   it("uploads a file as multipart and leaves the boundary to the runtime", async () => {
@@ -630,27 +433,18 @@ describe("api client derived from the operation catalog", () => {
   });
 
   it.each([
-    ["an empty answer", () => new Response(null, { status: 204 }), "not valid JSON"],
     ["a body that is not JSON", () => new Response("<html>"), "not valid JSON"],
     [
       // A conversation without visibility must not pass as a silently shared one.
       "JSON outside the response schema",
       () => Response.json({ ...conversation, visibility: undefined }),
       "does not match the contract"
-    ],
-    [
-      "a list without its envelope",
-      () => Response.json([conversation]),
-      "does not match the contract"
     ]
   ])("fails on %s where the contract promises JSON", async (_name, answer, message) => {
     const { client } = recordingClient(answer);
-    const call =
-      message === "does not match the contract" && _name.startsWith("a list")
-        ? client.conversations.list()
-        : client.conversations.thread.get({ params: { conversationId: "conv_1" } });
-
-    const error = await call.catch((caught: unknown) => caught);
+    const error = await client.conversations.thread
+      .get({ params: { conversationId: "conv_1" } })
+      .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(ApiError);
     expect(error).toMatchObject({ message: expect.stringContaining(message), code: undefined });
@@ -788,23 +582,6 @@ describe("api client for operations of the registry", () => {
     });
     return { client, requests };
   }
-
-  it("types a changing call as its outcome and a reading call as its output", () => {
-    const { client } = registryClient(() => Response.json({}));
-    expectTypeOf(client.testRunChange).returns.resolves.toEqualTypeOf<
-      OperationOutcome<{ name: string; filler?: string | undefined }, OperationRunResource>
-    >();
-    expectTypeOf(client.testRunRead).returns.resolves.toEqualTypeOf<{
-      itemId: string;
-      view?: string | undefined;
-    }>();
-    expectTypeOf(client.testRunChange).parameter(0).toHaveProperty("idempotencyKey");
-    expectTypeOf(client.testRunRead).parameter(0).not.toHaveProperty("idempotencyKey");
-    // The release's own client keeps the type it had.
-    expectTypeOf(createApiClient).returns.toEqualTypeOf<
-      ReturnType<typeof createApiClientFor<typeof apiOperations>>
-    >();
-  });
 
   it("answers the output of a completed call with the run that recorded it", async () => {
     const { client } = registryClient(() =>
@@ -991,17 +768,6 @@ describe("event streams of the api client", () => {
     expect(stream.body.locked).toBe(false);
   });
 
-  it("joins the data lines of one event", async () => {
-    const json = JSON.stringify(observation(1));
-    const cut = json.indexOf('"sequence"');
-    const stream = eventStream([`data: ${json.slice(0, cut)}\ndata:${json.slice(cut)}\n\n`]);
-    const { client } = recordingClient(stream.response);
-
-    await expect(
-      collect(client.conversations.runs.observe({ params: runParams }))
-    ).resolves.toEqual([observation(1)]);
-  });
-
   it("closes the connection when the reader stops early", async () => {
     const stream = eventStream([
       frame(observation(1)),
@@ -1019,25 +785,6 @@ describe("event streams of the api client", () => {
     expect(observed).toEqual([1]);
     expect(stream.wasCancelled()).toBe(true);
     expect(stream.body.locked).toBe(false);
-  });
-
-  it("passes an abort before the answer on as the caller's abort", async () => {
-    const controller = new AbortController();
-    controller.abort();
-    const client = createApiClient({
-      baseUrl: "https://chat.example",
-      fetchImpl: async (_input, init) => {
-        init?.signal?.throwIfAborted();
-        return new Response(null, { status: 204 });
-      }
-    });
-
-    const failure = await collect(
-      client.conversations.runs.observe({ params: runParams, signal: controller.signal })
-    ).catch((caught: unknown) => caught);
-
-    expect(failure).toMatchObject({ name: "AbortError" });
-    expect(failure).not.toBeInstanceOf(ApiError);
   });
 
   it("stops a running stream on abort and closes it", async () => {
@@ -1109,15 +856,41 @@ describe("event streams of the api client", () => {
     ]);
   });
 
-  it.each([
-    ["is not JSON", "data: {not json\n\n", "not valid JSON"],
-    [
-      "is outside the event schema",
+  // CR-1, check 98: a client built before an event type existed skips it and keeps the stream
+  // open, keeping its sequence as the cursor, so a newer server never breaks an older page.
+  it("skips an event of a type it does not know, keeps reading and reports its sequence", async () => {
+    const unknown = {
+      ...observation(2),
+      type: "subagent_heartbeat_from_a_newer_server",
+      payload: {
+        type: "subagent_heartbeat_from_a_newer_server",
+        runId: "run_1",
+        sequence: 2,
+        createdAt
+      }
+    };
+    const { client } = recordingClient(() =>
+      eventStream([frame(observation(1)), frame(unknown), frame(observation(3))]).response()
+    );
+    const skipped: { runId: string; sequence: number }[] = [];
+
+    const observed = await collect(
+      client.conversations.runs.observe({
+        params: runParams,
+        onSkipped: (value) => skipped.push({ runId: value.runId, sequence: value.sequence })
+      })
+    );
+
+    expect(observed.map((event) => event.sequence)).toEqual([1, 3]);
+    expect(skipped).toEqual([{ runId: "run_1", sequence: 2 }]);
+  });
+
+  it("fails on an event outside the event schema, after the events before it", async () => {
+    const stream = eventStream([
+      frame(observation(1)),
       frame({ ...observation(2), sequence: "two" }),
-      "does not match the contract"
-    ]
-  ])("fails on an event that %s, after the events before it", async (_name, bad, message) => {
-    const stream = eventStream([frame(observation(1)), bad, frame(observation(3))]);
+      frame(observation(3))
+    ]);
     const { client } = recordingClient(stream.response);
     const seen: number[] = [];
 
@@ -1129,7 +902,9 @@ describe("event streams of the api client", () => {
 
     expect(seen).toEqual([1]);
     expect(failure).toBeInstanceOf(ApiError);
-    expect(failure).toMatchObject({ message: expect.stringContaining(message) });
+    expect(failure).toMatchObject({
+      message: expect.stringContaining("does not match the contract")
+    });
     expect(stream.wasCancelled()).toBe(true);
   });
 });

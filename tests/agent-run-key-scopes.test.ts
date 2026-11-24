@@ -150,12 +150,11 @@ describe("personal key scopes on the Agent Run worker", () => {
     return { world, actor, accept, execute };
   }
 
-  it.each(reads)(
-    "refuses %s when the starter key has no Data Store read scope",
-    async (verb, input) => {
-      const t = await setup();
+  it("refuses every Data Store read under a key without a Data Store read scope, not under its owner's own rights", async () => {
+    const t = await setup();
+    for (const [verb, input] of reads) {
       const events = await t.execute(await t.accept(verb, input));
-      expect(events).toContainEqual(
+      expect(events, verb).toContainEqual(
         expect.objectContaining({
           type: "tool_call_failed",
           result: expect.objectContaining({
@@ -166,7 +165,16 @@ describe("personal key scopes on the Agent Run worker", () => {
       );
       expect(JSON.stringify(events)).not.toContain(finding.client_id);
     }
-  );
+    const {
+      keyScopes: _keyScopes,
+      scopes: _scopes,
+      delegatedActor: _delegatedActor,
+      ...person
+    } = t.actor;
+    const events = await t.execute(await t.accept(...reads[0], person));
+    expect(events).toContainEqual(expect.objectContaining({ type: "tool_call_completed" }));
+    expect(JSON.stringify(events)).toContain(finding.client_id);
+  });
 
   it("keeps the key's asset-read access on successive calls without lending row or write access", async () => {
     const t = await setup(["data_store.read"]);
@@ -204,19 +212,6 @@ describe("personal key scopes on the Agent Run worker", () => {
     const events = await t.execute(await t.accept("platform.assets.get", {}));
     expect(events).toContainEqual(expect.objectContaining({ type: "tool_call_failed" }));
     expect(JSON.stringify(events)).not.toContain(finding.client_id);
-  });
-
-  it("leaves a signed-in person's own rights intact", async () => {
-    const t = await setup();
-    const {
-      keyScopes: _keyScopes,
-      scopes: _scopes,
-      delegatedActor: _delegatedActor,
-      ...person
-    } = t.actor;
-    const events = await t.execute(await t.accept(...reads[0], person));
-    expect(events).toContainEqual(expect.objectContaining({ type: "tool_call_completed" }));
-    expect(JSON.stringify(events)).toContain(finding.client_id);
   });
 
   it.each(["revoked", "expired"])(

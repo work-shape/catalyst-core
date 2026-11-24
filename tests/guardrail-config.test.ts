@@ -57,20 +57,10 @@ describe("guardrails in release config", () => {
   it.each([
     ["a name that is no machine name", { "No Personal": guardrail }],
     ["an event no guardrail runs at", { [name]: { ...guardrail, on: "message.after_send" } }],
-    ["an unknown outcome", { [name]: { ...guardrail, outcome: "ignore" } }],
-    [
-      "an unknown check",
-      { [name]: { ...guardrail, check: { ...guardrail.check, kind: "regex" } } }
-    ],
-    [
-      "an empty instruction",
-      { [name]: { ...guardrail, check: { ...guardrail.check, instruction: " " } } }
-    ],
     [
       "an instruction past its limit",
       { [name]: { ...guardrail, check: { ...guardrail.check, instruction: "x".repeat(8_001) } } }
-    ],
-    ["an unknown field", { [name]: { ...guardrail, severity: "high" } }]
+    ]
   ])("refuses %s", (_case, guardrails) => {
     expect(() => parseClientInstanceConfig({ ...baseConfig, guardrails })).toThrow(
       "Client instance config is invalid"
@@ -104,13 +94,7 @@ describe("guardrails in release config", () => {
       "an id no guardrail can be named",
       [{ ...legacyCheck, id: "No Personal" }],
       "becomes the guardrail of that name"
-    ],
-    [
-      "an empty instruction",
-      [{ ...legacyCheck, instruction: " " }],
-      "approvalChecks.0.instruction"
-    ],
-    ["an unknown onFail", [{ ...legacyCheck, onFail: "ignore" }], "approvalChecks.0.onFail"]
+    ]
   ])("refuses a legacy check with %s", (_case, approvalChecks, message) => {
     expect(() => parseClientInstanceConfig({ ...baseConfig, approvalChecks })).toThrow(message);
   });

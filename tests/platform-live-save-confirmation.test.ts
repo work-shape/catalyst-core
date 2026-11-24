@@ -75,14 +75,14 @@ describe("live first saves from the Build Agent (ACCEPT-FIX-5)", () => {
     return { instance, clientInstanceId, conversation };
   }
 
-  it.each<{
+  const invalidSaves: {
     name: string;
     extra: Record<string, unknown>;
     expected: string;
     status: string;
     creationAllowed?: boolean;
     omitConfig?: boolean;
-  }>([
+  }[] = [
     {
       name: "missing-config",
       extra: {},
@@ -121,53 +121,64 @@ describe("live first saves from the Build Agent (ACCEPT-FIX-5)", () => {
       expected: "invalid",
       status: "failed"
     }
-  ])(
-    "refuses $name before offering Allow",
-    async ({ name, extra, expected, status, creationAllowed = true, omitConfig = false }) => {
-      const t = await fixture([], ["user", "admin"], creationAllowed);
-      const config = {
-        name,
-        displayName: "Protocol writer",
-        instructions: "Write minutes.",
-        toolNames: [],
-        skillNames: [],
-        ...extra
-      };
-      const started = await injectStartConversationRun(
-        t.instance,
-        t.conversation.id,
-        `/tool platform.assets.put ${JSON.stringify({ kind: "agent", name, ...(omitConfig ? {} : { config }) })}`
+  ];
+
+  it("refuses each invalid first save before offering Allow", async () => {
+    const allowed = await fixture([], ["user", "admin"]);
+    for (const row of invalidSaves.filter((save) => save.creationAllowed !== false))
+      await refusedBeforeAllow(allowed, row);
+    await allowed.instance.close();
+    const disabled = await fixture([], ["user", "admin"], false);
+    for (const row of invalidSaves.filter((save) => save.creationAllowed === false))
+      await refusedBeforeAllow(disabled, row);
+  });
+
+  async function refusedBeforeAllow(
+    t: Awaited<ReturnType<typeof fixture>>,
+    { name, extra, expected, status, omitConfig = false }: (typeof invalidSaves)[number]
+  ) {
+    const config = {
+      name,
+      displayName: "Protocol writer",
+      instructions: "Write minutes.",
+      toolNames: [],
+      skillNames: [],
+      ...extra
+    };
+    const started = await injectStartConversationRun(
+      t.instance,
+      t.conversation.id,
+      `/tool platform.assets.put ${JSON.stringify({ kind: "agent", name, ...(omitConfig ? {} : { config }) })}`
+    );
+    const runId = asAgentRunId(started.run.id);
+    await waitUntil(async () => {
+      const run = await t.instance.stores.agentRuns.getAgentRun({
+        clientInstanceId: t.clientInstanceId,
+        runId
+      });
+      return run?.status === "completed" || run?.status === "waiting_for_decision";
+    }, "the invalid save settles before confirmation");
+    const rows = (
+      await t.instance.stores.operationRuns.list({ clientInstanceId: t.clientInstanceId })
+    ).filter((row) => row.origin.kind === "agent" && row.origin.agentRunId === runId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.status).toBe(status);
+    expect(JSON.stringify(rows[0]?.error)).toContain(expected);
+    // The workspace's agent takes its binding without the right; the fallback stays the right's.
+    if (name === "copied-model")
+      expect(rows[0]?.error?.message).toContain(
+        "leave useModelFallback out: the agent then runs the instance's default model"
       );
-      const runId = asAgentRunId(started.run.id);
-      await waitUntil(async () => {
-        const run = await t.instance.stores.agentRuns.getAgentRun({
-          clientInstanceId: t.clientInstanceId,
-          runId
-        });
-        return run?.status === "completed" || run?.status === "waiting_for_decision";
-      }, "the invalid save settles before confirmation");
-      const rows = (
-        await t.instance.stores.operationRuns.list({ clientInstanceId: t.clientInstanceId })
-      ).filter((row) => row.origin.kind === "agent" && row.origin.agentRunId === runId);
-      expect(rows).toHaveLength(1);
-      expect(rows[0]?.status).toBe(status);
-      expect(JSON.stringify(rows[0]?.error)).toContain(expected);
-      // The workspace's agent takes its binding without the right; the fallback stays the right's.
-      if (name === "copied-model")
-        expect(rows[0]?.error?.message).toContain(
-          "leave useModelFallback out: the agent then runs the instance's default model"
-        );
-      if (name === "skill-without-reader") expect(rows[0]?.error?.message).toContain("read_skill");
-      expect(rows.some((row) => row.status === "pending_confirmation")).toBe(false);
-      expect(
-        await t.instance.stores.configAssets.getConfigAsset({
-          clientInstanceId: t.clientInstanceId,
-          kind: "agent",
-          name
-        })
-      ).toBeUndefined();
-    }
-  );
+    if (name === "skill-without-reader") expect(rows[0]?.error?.message).toContain("read_skill");
+    expect(rows.some((row) => row.status === "pending_confirmation")).toBe(false);
+    expect(
+      await t.instance.stores.configAssets.getConfigAsset({
+        clientInstanceId: t.clientInstanceId,
+        kind: "agent",
+        name
+      })
+    ).toBeUndefined();
+  }
 
   it("carries workspace-only skill.write to the agent and reaches live-save confirmation", async () => {
     const t = await fixture([], ["user"]);
@@ -289,10 +300,9 @@ describe("live first saves from the Build Agent (ACCEPT-FIX-5)", () => {
     ).toBeUndefined();
   });
 
-  it.each(["skill", "agent"])(
-    "writes a new %s once after Allow, never before, even under central allow",
-    async (kind) => {
-      const t = await fixture([{ operation: "assets.put", value: "allow" }], ["user", "admin"]);
+  it("writes a new skill and agent once after Allow, never before, even under central allow", async () => {
+    const t = await fixture([{ operation: "assets.put", value: "allow" }], ["user", "admin"]);
+    for (const kind of ["skill", "agent"]) {
       const name = `hr-${kind}`;
       const config =
         kind === "skill"
@@ -386,5 +396,5 @@ describe("live first saves from the Build Agent (ACCEPT-FIX-5)", () => {
           personalWorkspaces: false
         });
     }
-  );
+  });
 });

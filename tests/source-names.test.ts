@@ -39,15 +39,10 @@ describe("names and paths in product source", () => {
     }
   });
 
-  it("contains no operated customer names, including in documentation", async () => {
-    expect((await scanned).customerNames).toEqual([]);
-  });
-
-  it("keeps demo tool names and permissions in the demo client", async () => {
-    expect((await scanned).demoToolNames).toEqual([]);
-  });
-
-  it("contains no personal home paths in package sources or scripts", async () => {
-    expect((await scanned).personalPaths).toEqual([]);
+  it("contains no operated customer names, demo tool names outside the demo client or home paths", async () => {
+    const result = await scanned;
+    expect(result.customerNames).toEqual([]);
+    expect(result.demoToolNames).toEqual([]);
+    expect(result.personalPaths).toEqual([]);
   });
 });

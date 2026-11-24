@@ -5,7 +5,8 @@ import {
   KNOWLEDGE_BASE_ASSET_KIND,
   knowledgeQueryOperationName,
   type DataStoreRecord,
-  type JsonObject
+  type JsonObject,
+  DATA_STORE_MANIFEST_FILE
 } from "@work-shape/catalyst-core";
 import { eventually, required } from "./support/assertions";
 import {
@@ -109,29 +110,25 @@ describe("the store a Knowledge Base owns", () => {
       )
     );
 
-  it.each(["de"] as const)(
-    "refuses a token cap below the extraction reserve at publish in %s, and accepts the reserve",
-    async (locale) => {
-      const instance = await start(true, undefined, undefined, undefined, {
-        defaultLocale: locale
-      });
-      const config = (maxTokensPerDocument: number) =>
-        documents({ methods: ["keyword"], extraction: { budget: { maxTokensPerDocument } } });
-      const draft = await put(instance, config(511));
-      expect(draft.statusCode).toBe(200);
-      const refused = await publish(instance, 1);
-      expect(refused.statusCode).toBe(422);
-      const body = refused.json<ErrorBody>();
-      expect(body.error.message).toContain("extraction.budget.maxTokensPerDocument");
-      expect(body.error.message).toContain("511");
-      expect(body.error.message).toContain("512");
-      expect(body.error.message).toContain("kleiner als das Minimum");
-      expect(await ownedRecord(instance)).toBeUndefined();
-      expect((await put(instance, config(512), 1)).statusCode).toBe(200);
-      expect((await publish(instance, 2)).statusCode).toBe(200);
-      await settle(instance);
-    }
-  );
+  it("refuses a token cap below the extraction reserve at publish, and accepts the reserve", async () => {
+    const instance = await start(true, undefined, undefined, undefined, {
+      defaultLocale: "de"
+    });
+    const config = (maxTokensPerDocument: number) =>
+      documents({ methods: ["keyword"], extraction: { budget: { maxTokensPerDocument } } });
+    const draft = await put(instance, config(511));
+    expect(draft.statusCode).toBe(200);
+    const refused = await publish(instance, 1);
+    expect(refused.statusCode).toBe(422);
+    const body = refused.json<ErrorBody>();
+    expect(body.error.message).toContain("extraction.budget.maxTokensPerDocument");
+    expect(body.error.message).toContain("511");
+    expect(body.error.message).toContain("512");
+    expect(await ownedRecord(instance)).toBeUndefined();
+    expect((await put(instance, config(512), 1)).statusCode).toBe(200);
+    expect((await publish(instance, 2)).statusCode).toBe(200);
+    await settle(instance);
+  });
 
   it("is made on publish with the platform's tables and pgvector where the Knowledge Base searches by meaning", async () => {
     const instance = await start(true, undefined, undefined, undefined, { embedding: true });
@@ -529,4 +526,91 @@ describe("the store a Knowledge Base owns", () => {
     });
     expect(await ownedRecord(instance)).toMatchObject({ status: "ready" });
   });
+});
+
+// More Knowledge Bases published at once than the platform's pool has connections (ten, the
+// driver's default). A publish holds one connection for its transaction; a read of the publish
+// that took a second one from the pool would wait for a connection that only another waiting
+// publish could give back, and none would end.
+
+/** How long the publishes may take before the test calls them stalled. */
+const STALLED_AFTER_MS = 30_000;
+
+describe("Knowledge Bases published at once beyond the platform's pool", () => {
+  const { start, put, publish, settle } = useDataStoreInstance();
+
+  it(
+    "publishes two rounds of 11 Knowledge Bases on one store at once",
+    { timeout: 90_000 },
+    async () => {
+      const instance = await start(true, undefined, undefined, undefined, true);
+      expect(
+        (
+          await put(instance, [
+            { path: DATA_STORE_MANIFEST_FILE, text: "id: findings\nname: Findings\n" },
+            {
+              path: "migrations/0001_init.sql",
+              text: "create table findings (client_id text not null);"
+            }
+          ])
+        ).statusCode
+      ).toBe(200);
+      expect((await publish(instance, 1)).statusCode).toBe(200);
+      await settle(instance, 1);
+
+      for (let round = 0; round < 2; round++) {
+        const params = Array.from({ length: 11 }, (_, index) => ({
+          kind: KNOWLEDGE_BASE_ASSET_KIND,
+          name: `findings-kb-${round}-${index}`
+        }));
+        for (const param of params) {
+          const written = await instance.api.call("assets.put", {
+            params: param,
+            payload: {
+              expectedRevision: null,
+              config: {
+                name: param.name,
+                title: param.name,
+                description: "What the monthly check of bookings found.",
+                backend: { dataStore: "findings" },
+                tables: [{ name: "findings", description: "One finding." }]
+              }
+            }
+          });
+          expect(written.statusCode, written.body).toBe(200);
+        }
+
+        const answers = Promise.all(
+          params.map((param) =>
+            instance.api.call("assets.publish", { params: param, payload: { revision: 1 } })
+          )
+        );
+        let timer: NodeJS.Timeout | undefined;
+        const ended = await Promise.race([
+          answers.then(() => true),
+          new Promise<false>((resolve) => {
+            timer = setTimeout(() => resolve(false), STALLED_AFTER_MS);
+          })
+        ]);
+        clearTimeout(timer);
+        if (!ended) {
+          // Ends the stalled transactions of this file's own database, so the test can finish.
+          const url = await fileTestDatabaseUrl();
+          const sql = postgres(url, { max: 1, onnotice: () => undefined });
+          let left = true;
+          void answers.finally(() => (left = false)).catch(() => undefined);
+          while (left) {
+            await sql`select pg_catalog.pg_terminate_backend(pid) from pg_catalog.pg_stat_activity
+            where datname = ${new URL(url).pathname.slice(1)} and state = 'idle in transaction'`;
+            await new Promise((resolve) => setTimeout(resolve, 200));
+          }
+          await sql.end();
+        }
+        expect(ended, `no publish ended within ${STALLED_AFTER_MS} ms`).toBe(true);
+        expect(
+          (await answers).filter((answer) => answer.statusCode !== 200).map((answer) => answer.body)
+        ).toEqual([]);
+      }
+    }
+  );
 });

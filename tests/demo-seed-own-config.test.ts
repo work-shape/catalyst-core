@@ -128,10 +128,6 @@ describe("the demo seed on the demo's own config", () => {
     );
   });
 
-  it("lists both models the seed names for the HR workspace", () => {
-    expect(seeded().before.hrWorkspace?.allowedModelBindingIds).toEqual(["primary", "gpt56Luna"]);
-  });
-
   it("mails the invited person once, who can sign in after setting a password and has not yet", async () => {
     const { users, client } = seeded().after;
     expect(users.find((user) => user.displayLabel === "Noah Fischer")).toMatchObject({

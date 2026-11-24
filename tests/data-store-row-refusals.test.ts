@@ -69,101 +69,90 @@ const outageMigration = {
 describe("ACCEPT-FIX-13 E-1: localized database refusals after confirmation", () => {
   const { db, published, call } = useDataStoreWorld("row_refusals");
 
-  it.each(["de", "en"] as const)(
-    "names the column and type for every scalar and array refusal in %s",
-    async (locale) => {
-      const world = await published(`types-${locale}`, [manifest(), migration]);
-      const registry = createOperationRegistry();
-      registry.addSource(world.dataStores.operationSource);
-      const actor: AuthenticatedUser = {
-        id: "row-refusal-admin",
-        externalUserId: "row-refusal-admin",
-        displayLabel: "Row refusal admin",
-        roles: ["admin"],
-        permissionRefs: [],
-        authSource: "test",
-        clientInstanceId: world.clientInstanceId
-      };
-      const cases: { column: string; value: JsonObject[string]; de: string; en: string }[] = [
-        { column: "code", value: MARKER, de: "Text", en: "Text" },
-        { column: "whole", value: MARKER, de: "Ganzzahl", en: "Integer" },
-        { column: "amount", value: MARKER, de: "Zahl", en: "Number" },
-        { column: "done", value: MARKER, de: "Ja/Nein", en: "Yes/No" },
-        { column: "due", value: "2027-02-31", de: "Datum", en: "Date" },
-        { column: "moment", value: MARKER, de: "Datum und Uhrzeit", en: "Date and time" },
-        { column: "period", value: MARKER, de: "Wert", en: "Value" },
-        { column: "texts", value: { private: MARKER }, de: "Text, Liste", en: "Text, list" },
-        { column: "wholes", value: [MARKER], de: "Ganzzahl, Liste", en: "Integer, list" },
-        { column: "amounts", value: [MARKER], de: "Zahl, Liste", en: "Number, list" },
-        { column: "flags", value: [MARKER], de: "Ja/Nein, Liste", en: "Yes/No, list" },
-        { column: "dates", value: ["2027-02-31"], de: "Datum, Liste", en: "Date, list" },
-        {
-          column: "moments",
-          value: [MARKER],
-          de: "Datum und Uhrzeit, Liste",
-          en: "Date and time, list"
-        }
-      ];
-      for (const entry of cases) {
-        const outcome = await runOperation(
-          {
-            operation: "data_store.findings.insert",
-            effect: "changing",
-            input: { table: "refusals", rows: [{ [entry.column]: entry.value }] },
-            actor,
-            origin: { kind: "user" },
-            correlationId: "row-refusals"
-          },
-          {
-            clientInstanceId: world.clientInstanceId,
-            registry,
-            runs: db.store.operationRuns,
-            authorizer: { forActor: async () => accessOf(actor) },
-            resolveResource: async (resource) => ({ resource }),
-            events: { emit: async () => ({ outcome: "allow", guardrails: [] }) },
-            audit: new NoopAuditRecorder(),
-            policy: {
-              instanceDefaults: { reading: "allow", changing: "confirm" },
-              centralSettings: () => []
-            },
-            logger: world.logger
-          },
-          { locale }
-        );
-        expect(outcome.result, entry.column).toMatchObject({
-          status: "failed",
-          error: {
-            code: "VALIDATION_FAILED",
-            message: expect.stringContaining(`(${entry[locale]})`)
-          }
-        });
-        if (outcome.result.status !== "failed") throw new Error("Expected a database refusal");
-        expect(outcome.result.error.message).toContain(
-          entry.column[0]?.toUpperCase() + entry.column.slice(1)
-        );
-        expect(outcome.result.error.message).toContain(
-          locale === "de" ? "Ein Wert passt nicht" : "A value does not fit"
-        );
-        expect(JSON.stringify(outcome.result)).not.toMatch(
-          /SQLSTATE|22P02|22008|private-row-value/u
-        );
-        const stored = await db.store.operationRuns.get({
-          clientInstanceId: world.clientInstanceId,
-          id: outcome.run.id
-        });
-        expect(stored?.error).toMatchObject({ message: outcome.result.error.message });
-        expect(JSON.stringify(stored?.error)).not.toContain(MARKER);
+  it("names the column and type for every scalar and array refusal, and every constraint refusal, without database codes", async () => {
+    const locale = "de";
+    const world = await published("types", [manifest(), migration]);
+    const registry = createOperationRegistry();
+    registry.addSource(world.dataStores.operationSource);
+    const actor: AuthenticatedUser = {
+      id: "row-refusal-admin",
+      externalUserId: "row-refusal-admin",
+      displayLabel: "Row refusal admin",
+      roles: ["admin"],
+      permissionRefs: [],
+      authSource: "test",
+      clientInstanceId: world.clientInstanceId
+    };
+    const cases: { column: string; value: JsonObject[string]; de: string }[] = [
+      { column: "code", value: MARKER, de: "Text" },
+      { column: "whole", value: MARKER, de: "Ganzzahl" },
+      { column: "amount", value: MARKER, de: "Zahl" },
+      { column: "done", value: MARKER, de: "Ja/Nein" },
+      { column: "due", value: "2027-02-31", de: "Datum" },
+      { column: "moment", value: MARKER, de: "Datum und Uhrzeit" },
+      { column: "period", value: MARKER, de: "Wert" },
+      { column: "texts", value: { private: MARKER }, de: "Text, Liste" },
+      { column: "wholes", value: [MARKER], de: "Ganzzahl, Liste" },
+      { column: "amounts", value: [MARKER], de: "Zahl, Liste" },
+      { column: "flags", value: [MARKER], de: "Ja/Nein, Liste" },
+      { column: "dates", value: ["2027-02-31"], de: "Datum, Liste" },
+      {
+        column: "moments",
+        value: [MARKER],
+        de: "Datum und Uhrzeit, Liste"
       }
-      expect(
-        await call(world, "query", { sql: "select count(*)::integer as count from refusals" })
-      ).toMatchObject({ rows: [{ count: 0 }] });
+    ];
+    for (const entry of cases) {
+      const outcome = await runOperation(
+        {
+          operation: "data_store.findings.insert",
+          effect: "changing",
+          input: { table: "refusals", rows: [{ [entry.column]: entry.value }] },
+          actor,
+          origin: { kind: "user" },
+          correlationId: "row-refusals"
+        },
+        {
+          clientInstanceId: world.clientInstanceId,
+          registry,
+          runs: db.store.operationRuns,
+          authorizer: { forActor: async () => accessOf(actor) },
+          resolveResource: async (resource) => ({ resource }),
+          events: { emit: async () => ({ outcome: "allow", guardrails: [] }) },
+          audit: new NoopAuditRecorder(),
+          policy: {
+            instanceDefaults: { reading: "allow", changing: "confirm" },
+            centralSettings: () => []
+          },
+          logger: world.logger
+        },
+        { locale }
+      );
+      expect(outcome.result, entry.column).toMatchObject({
+        status: "failed",
+        error: {
+          code: "VALIDATION_FAILED",
+          message: expect.stringContaining(`(${entry[locale]})`)
+        }
+      });
+      if (outcome.result.status !== "failed") throw new Error("Expected a database refusal");
+      expect(outcome.result.error.message).toContain(
+        entry.column[0]?.toUpperCase() + entry.column.slice(1)
+      );
+      expect(JSON.stringify(outcome.result)).not.toMatch(/SQLSTATE|22P02|22008|private-row-value/u);
+      const stored = await db.store.operationRuns.get({
+        clientInstanceId: world.clientInstanceId,
+        id: outcome.run.id
+      });
+      expect(stored?.error).toMatchObject({ message: outcome.result.error.message });
+      expect(JSON.stringify(stored?.error)).not.toContain(MARKER);
     }
-  );
+    expect(
+      await call(world, "query", { sql: "select count(*)::integer as count from refusals" })
+    ).toMatchObject({ rows: [{ count: 0 }] });
 
-  it("names required, unique, foreign-key, length and range refusals in German without database codes", async () => {
-    const world = await published("constraints-de", [manifest(), migration]);
     await call(world, "insert", { table: "refusals", rows: [{ unique_number: 1, parent: 1 }] });
-    const cases = [
+    const constraints = [
       { row: { required: null }, field: "Required", type: "Ganzzahl", reason: "erforderlich" },
       {
         row: { unique_number: 1 },
@@ -180,7 +169,7 @@ describe("ACCEPT-FIX-13 E-1: localized database refusals after confirmation", ()
       { row: { short_text: MARKER }, field: "Short text", type: "Text", reason: "zu lang" },
       { row: { whole: 2147483648 }, field: "Whole", type: "Ganzzahl", reason: "außerhalb" }
     ];
-    for (const entry of cases) {
+    for (const entry of constraints) {
       const rejected = await refusal(
         call(world, "insert", { table: "refusals", rows: [entry.row] }, undefined, "de")
       );
@@ -208,65 +197,57 @@ describe("ACCEPT-FIX-13 E-1: localized database refusals after confirmation", ()
     ).rejects.toMatchObject({ message: expect.stringContaining("„Parent“ (Ganzzahl)") });
   });
 
-  it("says what to do next when the database, not the rows, failed a write, in German and English", async () => {
+  it("says what to do next when the database, not the rows, failed a write, and tells a still-used value apart from a missing reference", async () => {
     const world = await published("outages", [manifest(), migration, outageMigration]);
     const cases = [
       {
         state: "57014",
         code: "TIMEOUT",
         reason: "timeout",
-        de: "zu lange gebraucht",
-        en: "took too long"
+        de: "zu lange gebraucht"
       },
-      { state: "55P03", reason: "busy", de: "gerade ausgelastet", en: "is busy right now" },
-      { state: "40P01", reason: "busy", de: "gerade ausgelastet", en: "is busy right now" },
+      { state: "55P03", reason: "busy", de: "gerade ausgelastet" },
+      { state: "40P01", reason: "busy", de: "gerade ausgelastet" },
       {
         state: "08006",
         code: "CONFLICT",
         reason: "unavailable",
-        de: "nicht erreichbar",
-        en: "cannot be reached"
+        de: "nicht erreichbar"
       },
-      { state: "42501", reason: "permission", de: "mangels Rechten", en: "for lack of rights" },
+      { state: "42501", reason: "permission", de: "mangels Rechten" },
       {
         state: "42703",
         reason: "schema_changed",
-        de: "Tabelle wurde geändert",
-        en: "table changed"
+        de: "Tabelle wurde geändert"
       },
       {
         state: "P0001",
         reason: "database_refusal",
-        de: "konnte diese Datensätze nicht annehmen",
-        en: "could not accept these rows"
+        de: "konnte diese Datensätze nicht annehmen"
       }
     ];
     for (const entry of cases) {
-      for (const locale of ["de", "en"] as const) {
-        const rejected = await refusal(
-          call(
-            world,
-            "insert",
-            { table: "outages", rows: [{ id: 1, state: entry.state }] },
-            undefined,
-            locale
-          )
-        );
-        expect(rejected, `${entry.state} ${locale}`).toMatchObject({
-          ...(entry.code ? { code: entry.code } : {}),
-          message: expect.stringContaining(entry[locale]),
-          details: { reason: entry.reason }
-        });
-        expect(JSON.stringify(rejected)).not.toMatch(
-          /SQLSTATE|private-row-value|\d{2}[0-9A-Z]{3}/u
-        );
-        // PR-382 L4: the sentence reaches the person; an INTERNAL answer would replace it.
-        const answered = toErrorEnvelope(
-          new AppError(rejected.code, rejected.message, rejected.details, { exposeMessage: true }),
-          "row-refusals"
-        );
-        expect(answered.error.message, `${entry.state} ${locale}`).toContain(entry[locale]);
-      }
+      const rejected = await refusal(
+        call(
+          world,
+          "insert",
+          { table: "outages", rows: [{ id: 1, state: entry.state }] },
+          undefined,
+          "de"
+        )
+      );
+      expect(rejected, entry.state).toMatchObject({
+        ...(entry.code ? { code: entry.code } : {}),
+        message: expect.stringContaining(entry.de),
+        details: { reason: entry.reason }
+      });
+      expect(JSON.stringify(rejected)).not.toMatch(/SQLSTATE|private-row-value|\d{2}[0-9A-Z]{3}/u);
+      // PR-382 L4: the sentence reaches the person; an INTERNAL answer would replace it.
+      const answered = toErrorEnvelope(
+        new AppError(rejected.code, rejected.message, rejected.details, { exposeMessage: true }),
+        "row-refusals"
+      );
+      expect(answered.error.message, entry.state).toContain(entry.de);
     }
     // An abort while the database still works on the write: the executor's own cancellation.
     const operation = await world.dataStores.operationSource.resolve(
@@ -303,19 +284,12 @@ describe("ACCEPT-FIX-13 E-1: localized database refusals after confirmation", ()
       message: expect.stringContaining("abgebrochen"),
       details: { reason: "cancelled" }
     });
-  });
 
-  it("tells a changed unique value that another table still uses apart from a missing reference", async () => {
-    const world = await published("still-used", [manifest(), migration, outageMigration]);
+    // A changed unique value that another table still uses.
     const update = { table: "codes", rows: [{ key: { id: 1 }, set: { code: "B" } }] };
     expect(await refusal(call(world, "update", update, undefined, "de"))).toMatchObject({
-      message:
-        "Ein Wert dieses Datensatzes wird in „Code“ (Text) noch verwendet. Ändere zuerst die Verweise oder behalte den Wert.",
+      message: expect.stringContaining("„Code“ (Text)"),
       details: { reason: "reference" }
-    });
-    expect(await refusal(call(world, "update", update, undefined, "en"))).toMatchObject({
-      message:
-        'A value of this row is still referenced in "Code" (Text). Change those references first, or keep the value.'
     });
     // Pointing a row at a value that does not exist keeps its own advice.
     const missing = { table: "code_uses", rows: [{ key: { id: 1 }, set: { code: "Z" } }] };

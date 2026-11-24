@@ -115,19 +115,6 @@ describe("the policy of assets.sync", () => {
     ).toEqual(policyDenied);
     expect(await t.stored("skill", "kai-old")).toMatchObject({ status: "active" });
   });
-
-  it("applies a setting narrowed to a workspace to the batches of that workspace alone", async () => {
-    const settings: CentralPolicySetting[] = [];
-    const { t } = await setup(settings);
-    settings.push({ operation: "assets.*", value: "deny", workspaceId: t.kaiTeam });
-
-    expect(await sync(t, t.kai.id, t.kaiTeam, [putItem("agent", "kai-intake")])).toEqual(
-      policyDenied
-    );
-    expect(await sync(t, t.lena.id, t.lenaTeam, [putItem("agent", "lena-intake")])).toEqual({
-      status: 200
-    });
-  });
 });
 
 describe("the further rights of assets.sync", () => {
@@ -230,6 +217,15 @@ describe("the policy of a call on one asset", () => {
       read("kai-intake", t.kaiTeam),
       t.forbidden("agent.read", "no_grant")
     );
+    // Applies a setting narrowed to a workspace to the batches of that workspace alone.
+    {
+      expect(await sync(t, t.kai.id, t.kaiTeam, [putItem("agent", "kai-intake")])).toEqual(
+        policyDenied
+      );
+      expect(await sync(t, t.lena.id, t.lenaTeam, [putItem("agent", "lena-batch")])).toEqual({
+        status: 200
+      });
+    }
   });
 });
 

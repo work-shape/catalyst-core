@@ -126,7 +126,7 @@ describe("the skills that ship with the platform", () => {
     expect((await read(app, GUIDE)).config.content).toContain("# Workshape Catalyst documentation");
   });
 
-  it("refuses every change and delete of one, and a new skill under its name", async () => {
+  it("refuses every change and delete of one, and a new skill under its name, also of a module that is off", async () => {
     const app = await start(false);
     const guide = await read(app, GUIDE);
     const refusals = [
@@ -170,12 +170,9 @@ describe("the skills that ship with the platform", () => {
     });
     expect(posing.statusCode, posing.body).toBe(422);
     expect(posing.body).toContain("Only a skill that ships with the platform names an origin");
-  });
 
-  it("keeps the name of a skill a module ships for the platform while that module is off", async () => {
     // Before, Workflows off let an instance take `workflow-authoring`, and the start that
     // turned Workflows on stopped on it.
-    const app = await start(false);
     expect(await shippedNames(app)).toEqual([GUIDE]);
     const taken = await app.call("assets.put", {
       params: { kind: "skill", name: AUTHORING },
@@ -587,38 +584,11 @@ describe("the skills that ship with the platform", () => {
   });
 });
 
-// The authoring skill is the first source an agent consults, including on diagnosis.
-it("teaches the App sandbox before sending an agent to the detailed guide", () => {
-  for (const rule of [
-    "allow-scripts allow-forms allow-downloads",
-    "without allow-same-origin",
-    "clipboard: write only, through navigator.clipboard.writeText on a user click",
-    "form-action 'none'",
-    "localStorage",
-    "storage.get/set",
-    "Data Stores",
-    "direct network"
-  ])
-    expect(platformDocsSkill.content).toContain(rule);
+it("names the kit the instance builds by default in every new-App manifest and font URL of the App guide", () => {
   const guide = platformDocsSkill.resources?.find(
     (resource) => resource.path === "references/apps/sandbox.md"
   );
-  for (const rule of [
-    "draft preview",
-    "shares the same per-person state",
-    "250 ms",
-    "A write is lost if the page closes before its batch is saved",
-    "immediate reload",
-    "sessionStorage",
-    "throws `SecurityError`",
-    "localStorage instanceof Storage",
-    "is false"
-  ])
-    expect(guide?.content).toContain(rule);
-  expect(guide?.content).toContain("SecurityError");
-  expect(guide?.content).toContain("event.preventDefault()");
   if (typeof guide?.content !== "string") throw new Error("The App guide must be text");
-  // Every new-App manifest and font URL must name the kit the instance builds by default.
   const versions = [
     ...guide.content.matchAll(/^kit:\s*(\S+)/gmu),
     ...guide.content.matchAll(/\/app-runtime\/kit\/([^/]+)\/fonts/gu)

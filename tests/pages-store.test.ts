@@ -428,9 +428,15 @@ describe("the file sets of a Page", () => {
           createdAt: new Date().toISOString()
         }
       });
-    for (let stored = 1; stored < PAGE_MAX_FILE_SETS; stored += 1) {
-      await add();
-    }
+    // The rows below the last one go in with one statement; the last goes through the store.
+    await db.sql`
+      insert into file_sets (id, client_instance_id, owner_kind, owner_id, number, kit_version,
+        manifest, source_files, built_files, source_file_count, built_file_count, total_bytes,
+        created_at)
+      select 'fs_fill_' || n, ${scope.clientInstanceId}, 'page', ${page.id}, n, '1.0.0',
+        '{}', '[]', '[]', 0, 0, 0, now()
+      from generate_series(2, ${PAGE_MAX_FILE_SETS - 1}) as n`;
+    await add();
     expect(await refusalOf(add())).toMatchObject({
       code: "VALIDATION_FAILED",
       reason: "page_revision_limit",
@@ -449,9 +455,12 @@ describe("the file sets of a Page", () => {
         name,
         createdAt: new Date().toISOString()
       });
-    for (let held = 1; held < CONVERSATION_MAX_PAGES; held += 1) {
-      await ensure(`Page ${held}`);
-    }
+    // "Offer" is the first; all but the last of the others go in with one statement.
+    await db.sql`
+      insert into pages (id, client_instance_id, conversation_id, name, created_at)
+      select 'page_fill_' || n, ${scope.clientInstanceId}, ${conversation.id}, 'Page ' || n, now()
+      from generate_series(1, ${CONVERSATION_MAX_PAGES - 2}) as n`;
+    await ensure(`Page ${CONVERSATION_MAX_PAGES - 1}`);
     expect(await refusalOf(ensure("One too many"))).toMatchObject({
       reason: "page_limit",
       limit: CONVERSATION_MAX_PAGES,
@@ -459,7 +468,7 @@ describe("the file sets of a Page", () => {
     });
     // A name the conversation already has is not a new Page.
     expect((await ensure("Page 1")).name).toBe("Page 1");
-  }, 120_000);
+  });
 
   it("removes the rows and objects of a deleted conversation and of no other", async () => {
     const { fixture, objects, options, save, conversation, author, scope } =

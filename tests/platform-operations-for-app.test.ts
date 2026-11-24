@@ -84,9 +84,7 @@ describe("the operations the agent may name", () => {
       "connection.hidden.echo reading"
     ]);
     expect(await names(t.admin, "workflow")).toEqual(["connection.books.echo reading"]);
-  });
-
-  it("are none of a Connection the person may not use", async () => {
+    // None of a Connection the person may not use.
     expect(await names(t.kai, "app")).toEqual([]);
   });
 

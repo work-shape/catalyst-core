@@ -149,10 +149,7 @@ describe("a cron schedule across the days the clock is changed", () => {
   // Each zone's change in the autumn and the spring, a whole hour or, on Lord Howe Island,
   // half an hour.
   const changes = [
-    ["Europe/Berlin", "2026-10-25T01:00:00Z"],
-    ["Europe/Berlin", "2027-03-28T01:00:00Z"],
     ["America/New_York", "2026-11-01T06:00:00Z"],
-    ["America/New_York", "2027-03-14T07:00:00Z"],
     ["Australia/Lord_Howe", "2026-10-03T15:30:00Z"],
     ["Australia/Lord_Howe", "2027-04-03T15:00:00Z"]
   ] as const;

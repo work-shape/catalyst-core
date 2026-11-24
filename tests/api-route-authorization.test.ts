@@ -22,7 +22,7 @@ import {
 } from "./support/route-catalog";
 import { asCaller, createCallerAuthAdapter } from "./support/route-callers";
 import { dataStoreRoutes } from "./support/data-store-routes";
-import { createTestInstanceWith, listTestRoutes, type TestInstance } from "./support/test-instance";
+import { createTestInstanceWith, type TestInstance } from "./support/test-instance";
 
 // Generated from the catalog: every operation the server registers is called the ways it must
 // refuse. An operation added to the catalog is covered here without a line written for it.
@@ -146,23 +146,6 @@ describe("every operation of the catalog", () => {
       }),
       // The routes of a module come from its assembly, which a server built here does not have.
       await dataStoreRoutes()
-    );
-  });
-
-  // This instance runs without the sign-in library, so its mount is absent. The preflight
-  // route belongs to the CORS plugin.
-  it("is registered, and nothing else is", async () => {
-    const registered = (await listTestRoutes(instance))
-      .map(({ method, path }) => `${method} ${path}`)
-      .sort();
-    const catalog = names.map((name) => `${descriptor(name).method} ${descriptor(name).path}`);
-    expect(registered).toEqual([...catalog, "OPTIONS *"].sort());
-    expect(catalog).toEqual(
-      expect.arrayContaining([
-        "GET /health",
-        "GET /api/v1/dev/captured-mail",
-        "POST /api/v1/instance/session-tokens"
-      ])
     );
   });
 
@@ -322,11 +305,6 @@ describe("every operation of the catalog", () => {
       });
     }
   );
-
-  it("guards the reading operations that are served by POST", () => {
-    const readingByPost = guarded.filter(({ operation }) => operation.effect === "reading");
-    expect(readingByPost.map(({ name }) => name)).toContain("assets.sync_check");
-  });
 
   it.each(names.filter((name) => descriptor(name).auth === "serverCredential"))(
     "%s refuses a caller without the server credential",

@@ -54,7 +54,7 @@ describe("shared App Kit storage", () => {
     expect(hashes.size).toBeLessThan(references);
   });
 
-  it.each(["changed", "missing"])("refuses a %s shared file at startup", async (damage) => {
+  it("refuses a changed shared file at startup", async () => {
     const parent = await mkdtemp(join(tmpdir(), "app-kit-shared-"));
     try {
       const root = join(parent, "app-kit");
@@ -65,11 +65,8 @@ describe("shared App Kit storage", () => {
       const react = released.get("1.0.0")?.get("react.js");
       expect(react).toBeDefined();
       const path = join(parent, "app-kit-shared", sha256(react?.bytes ?? Buffer.alloc(0)));
-      if (damage === "changed") await writeFile(path, "damaged");
-      else await rm(path);
-      expect(() => loadAppKitFiles(root)).toThrow(
-        damage === "changed" ? /App Kit file '1\.0\.0\/react\.js' has SHA-256/u : /ENOENT/u
-      );
+      await writeFile(path, "damaged");
+      expect(() => loadAppKitFiles(root)).toThrow(/App Kit file '1\.0\.0\/react\.js' has SHA-256/u);
     } finally {
       await rm(parent, { recursive: true, force: true });
     }

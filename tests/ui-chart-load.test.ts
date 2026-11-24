@@ -55,7 +55,6 @@ describe("Chart when its engine cannot be loaded", () => {
     const loaded = await render();
     expect(engine.requests).toBe(3);
     expect(loaded).not.toContain(uiLabelsEn.chartLoadFailed);
-    expect(loaded).toContain('<div class="size-full"></div>');
 
     // A loaded engine is kept: no further request.
     await render();

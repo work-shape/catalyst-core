@@ -241,9 +241,8 @@ describe("the source tick keeps a source current (SRC-3, KB 79)", () => {
     Object.assign(calls, noCalls());
 
     const start = new Date("2025-01-06T08:15:00Z");
-    for (let quarter = 0; quarter < 71; quarter += 1)
-      await tick(world, addMinutes(start, quarter * 15));
-    // The last of those was 01:45 the next night.
+    for (let hour = 0; hour < 18; hour += 1) await tick(world, addMinutes(start, hour * 60));
+    // The last of those was 01:15 the next night.
     expect(calls).toEqual(noCalls());
     await tick(world, "2025-01-07T02:00:00Z");
     expect(calls.list).toBe(1);

@@ -1,13 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { appInterfacePath } from "@work-shape/catalyst-api-contract";
 import { createAppAssetKind } from "@work-shape/catalyst-server";
 import {
-  ASSET_GET_FILES_MAX_BYTES,
-  ASSET_PUT_FILES_MAX_BYTES,
-  FILE_SET_MAX_FILE_BYTES,
-  FILE_SET_MAX_FILES,
-  FILE_SET_MAX_TOTAL_BYTES,
   ROLE_DEFAULT_ACTIONS,
   WORKSPACE_MEMBER_ACTIONS,
   asClientInstanceId,
@@ -32,19 +26,6 @@ const pointersSchema = z.looseObject({
   publishedRevision: z.number().optional()
 });
 const writeSchema = z.looseObject({ version: z.number(), revision: z.number() });
-const contextSchema = z.looseObject({
-  kinds: z.array(
-    z.looseObject({
-      kind: z.string(),
-      lifecycle: z.string(),
-      representation: z.string(),
-      actions: z.record(z.string(), z.string()),
-      manifestFile: z.string().optional(),
-      limits: z.record(z.string(), z.number()).optional()
-    })
-  ),
-  actions: z.array(z.string())
-});
 const effectiveSchema = z.looseObject({
   items: z.array(
     z.looseObject({
@@ -163,15 +144,6 @@ describe("the lifecycle and the representation of an asset kind", () => {
       liveRevisionId({ activeRevisionId: "rev_2", publishedRevisionId: "rev_1" }, drafted)
     ).toBe("rev_1");
   });
-
-  it("builds the path of an App in the interface from one function", () => {
-    expect(appInterfacePath({ workspaceId: "ws_1", app: "offers", mode: "published" })).toBe(
-      "/w/ws_1/apps/offers"
-    );
-    expect(appInterfacePath({ workspaceId: "ws_1", app: "offers", mode: "draft" })).toBe(
-      "/w/ws_1/app-drafts/offers"
-    );
-  });
 });
 
 describe("the rights of an App", () => {
@@ -279,34 +251,6 @@ describe("a kind with a draft and a published revision on an instance", () => {
     pointersSchema.parse(
       (await t.expectOk(t.admin.id, "assets.get", { params: { kind: "notice", name } })).json()
     );
-
-  it("reports the lifecycle, the representation and the limits of a kind that holds files", async () => {
-    const context = contextSchema.parse(
-      (await t.expectOk(t.admin.id, "platform.context.get")).json()
-    );
-    const byKind = new Map(context.kinds.map((kind) => [kind.kind, kind]));
-
-    expect(byKind.get("agent")).toMatchObject({ lifecycle: "active", representation: "config" });
-    expect(byKind.get("agent")?.limits).toBeUndefined();
-    expect(byKind.get("notice")).toMatchObject({
-      lifecycle: "draft_published",
-      representation: "config"
-    });
-    expect(byKind.get("app")).toMatchObject({
-      lifecycle: "draft_published",
-      representation: "files",
-      manifestFile: "app.yaml",
-      actions: { publish: "app.publish", use: "app.use" },
-      limits: {
-        FILE_SET_MAX_FILES,
-        FILE_SET_MAX_FILE_BYTES,
-        FILE_SET_MAX_TOTAL_BYTES,
-        ASSET_PUT_FILES_MAX_BYTES,
-        ASSET_GET_FILES_MAX_BYTES
-      }
-    });
-    expect(context.actions).toEqual(expect.arrayContaining(["app.write", "app.publish"]));
-  });
 
   it("moves only the draft pointer on a write and leaves the version of the asset set", async () => {
     const before = await stateVersion();

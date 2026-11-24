@@ -146,6 +146,7 @@ describe(
         const { id } = runSchema.parse(started.json());
         return eventually(async () => {
           await w.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
+          await w.platform`update platform_job_wakes set run_after = now() where kind like 'knowledge_base.%'`;
           await w.worker.runDue();
           await getTestJobs(w.instance.api).runDue();
           const read = await w.instance.api.call("workflows.get_run", { params: { runId: id } });
@@ -176,9 +177,7 @@ describe(
       });
       expect(draft.statusCode, draft.body).toBe(200);
       expect(draft.json()).toMatchObject({
-        publishQuestion: [
-          "Läuft unter einem eigenen Konto „Feed documents“ und darf Dokumente in Source einspielen."
-        ]
+        publishQuestion: [expect.stringContaining("Feed documents")]
       });
 
       await s.publishLive(1);

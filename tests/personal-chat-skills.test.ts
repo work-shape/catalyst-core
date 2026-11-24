@@ -312,45 +312,61 @@ async function chatOf(
 }
 
 describe("a person's skill in their own chats", () => {
-  it("runs no command with personal skills if no mark setter is available", async () => {
+  it("marks the chat before a workspace command reads a personal skill's file, and runs none where it cannot mark or the chat became the team's", async () => {
     const { t, kaiHome } = await setup();
     const skills = runSkills(t);
-    const run = await skills.storedRun(await chatOf(t, t.kai, kaiHome), t.kai);
     expect((await switchOn(t, t.kai.id, KAI_SKILL)).statusCode).toBe(200);
-    const commands = await workspaceCommands(t, skills, false);
-
-    await expect(commands.exec(run, personOf(t.kai))).rejects.toMatchObject({ code: "FORBIDDEN" });
-    expect(commands.started).not.toHaveBeenCalled();
-    expect(
+    const team = await t.sharedWorkspace("Team");
+    const markOf = async (run: AgentRun) =>
       (await t.stores.conversations.getConversation(clientInstanceId, run.conversationId))
-        ?.personalDataAt
-    ).toBeUndefined();
-  });
+        ?.personalDataAt;
 
-  it("marks the chat before a workspace command reads a personal skill's file, then refuses a move to a team", async () => {
-    const { t, kaiHome } = await setup();
-    const skills = runSkills(t);
+    // No mark setter: no command runs with personal skills.
+    const unmarkable = await skills.storedRun(await chatOf(t, t.kai, kaiHome), t.kai);
+    const withoutMark = await workspaceCommands(t, skills, false);
+    await expect(withoutMark.exec(unmarkable, personOf(t.kai))).rejects.toMatchObject({
+      code: "FORBIDDEN"
+    });
+    expect(withoutMark.started).not.toHaveBeenCalled();
+    expect(await markOf(unmarkable)).toBeUndefined();
+
+    // The chat moved to the team after the skill was offered: no command runs.
+    const moved = await skills.storedRun(await chatOf(t, t.kai, kaiHome), t.kai);
+    const afterMove = await workspaceCommands(t, skills);
+    const offerOf = skills.conversationOffer.offerOf.bind(skills.conversationOffer);
+    vi.spyOn(skills.conversationOffer, "offerOf").mockImplementationOnce(async (request) => {
+      const offer = await offerOf(request);
+      expect(offer?.personalSkillNames).toEqual([KAI_SKILL]);
+      await t.stores.conversations.moveConversation({
+        clientInstanceId,
+        conversationId: moved.conversationId,
+        fromCollaborationWorkspaceId: kaiHome,
+        toCollaborationWorkspaceId: team,
+        visibility: "workspace"
+      });
+      return offer;
+    });
+    await expect(afterMove.exec(moved, personOf(t.kai))).rejects.toMatchObject({
+      details: { reason: "personal_connection_context" }
+    });
+    expect(afterMove.started).not.toHaveBeenCalled();
+    expect(await markOf(moved)).toBeUndefined();
+
+    // The owner's own chat: marked before the sandbox can return any of the skill's content.
     const run = await skills.storedRun(await chatOf(t, t.kai, kaiHome), t.kai);
-    expect((await switchOn(t, t.kai.id, KAI_SKILL)).statusCode).toBe(200);
     const commands = await workspaceCommands(t, skills);
-    const conversation = () =>
-      t.stores.conversations.getConversation(clientInstanceId, run.conversationId);
-    expect((await conversation())?.personalDataAt).toBeUndefined();
-    // Observe the mark before the sandbox can return any of the skill's content.
+    expect(await markOf(run)).toBeUndefined();
     let markedBeforeContent: string | undefined;
     commands.started.mockImplementationOnce(async (input) => {
-      markedBeforeContent = (await conversation())?.personalDataAt;
+      markedBeforeContent = await markOf(run);
       return new LocalWorkspaceCommandProcessExecutor().execute(input);
     });
-
     expect(await commands.exec(run, personOf(t.kai))).toMatchObject({
       status: "success",
       output: { status: "completed", exitCode: 0, stdoutPreview: "Kai's private notes." }
     });
     expect(commands.started).toHaveBeenCalledOnce();
     expect(markedBeforeContent).toBeDefined();
-    expect((await conversation())?.personalDataAt).toBeDefined();
-    const team = await t.sharedWorkspace("Team");
     await expect(
       t.stores.conversations.moveConversation({
         clientInstanceId,
@@ -360,37 +376,6 @@ describe("a person's skill in their own chats", () => {
         visibility: "workspace"
       })
     ).rejects.toMatchObject({ details: { reason: "personal_conversation_private" } });
-  });
-
-  it("runs no command if the chat becomes team-visible after the personal skill is offered", async () => {
-    const { t, kaiHome } = await setup();
-    const skills = runSkills(t);
-    const run = await skills.storedRun(await chatOf(t, t.kai, kaiHome), t.kai);
-    expect((await switchOn(t, t.kai.id, KAI_SKILL)).statusCode).toBe(200);
-    const commands = await workspaceCommands(t, skills);
-    const team = await t.sharedWorkspace("Team");
-    const offerOf = skills.conversationOffer.offerOf.bind(skills.conversationOffer);
-    vi.spyOn(skills.conversationOffer, "offerOf").mockImplementationOnce(async (request) => {
-      const offer = await offerOf(request);
-      expect(offer?.personalSkillNames).toEqual([KAI_SKILL]);
-      await t.stores.conversations.moveConversation({
-        clientInstanceId,
-        conversationId: run.conversationId,
-        fromCollaborationWorkspaceId: kaiHome,
-        toCollaborationWorkspaceId: team,
-        visibility: "workspace"
-      });
-      return offer;
-    });
-
-    await expect(commands.exec(run, personOf(t.kai))).rejects.toMatchObject({
-      details: { reason: "personal_connection_context" }
-    });
-    expect(commands.started).not.toHaveBeenCalled();
-    expect(
-      (await t.stores.conversations.getConversation(clientInstanceId, run.conversationId))
-        ?.personalDataAt
-    ).toBeUndefined();
   });
 
   it("is switched by its owner alone, and lists only the person's own skills", async () => {

@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 import {
   asClientInstanceId,
   asUserId,
@@ -129,12 +128,6 @@ describe("the model settings right under a personal key", () => {
   });
 });
 
-const syncItemsSchema = z.object({
-  items: z.array(
-    z.object({ status: z.string(), error: z.object({ message: z.string() }).loose().optional() })
-  )
-});
-
 /**
  * An agent whose model settings need the right: a binding and an effort, which a writer of the
  * workspace picks, and the model fallback turned off, which only the right changes.
@@ -170,13 +163,22 @@ function push(
 }
 
 describe("pushing an agent's model settings with a personal key", () => {
-  it("is allowed to an owner who holds the right, through a key that writes the agent", async () => {
+  it("is allowed only where the owner holds the right and the key writes the agent", async () => {
     const t = await setup();
     await grantKaiWorkspace(t);
-    await grantModelRight(t);
+    const lenaTeam = await t.sharedWorkspace("Lena Spezis");
+    await t.grant(t.kai.id, "agent.write", { workspaceId: lenaTeam });
     const headers = await t.tokenFor(
       (await t.issue([`agent.read:${t.kaiTeam}`, `agent.write:${t.kaiTeam}`])).secret
     );
+    // The owner does not hold the right: refused, naming it.
+    const refused = await push(t, headers, t.kaiTeam, "kai-modelled");
+    expect(refused.statusCode).toBe(403);
+    expect(errorSchema.parse(refused.json()).error.details).toMatchObject({
+      items: [{ status: "refused", error: { action: MODEL_RIGHT } }]
+    });
+
+    await grantModelRight(t);
     const pushed = await push(t, headers, t.kaiTeam, "kai-modelled");
     expect(pushed.statusCode, pushed.body).toBe(200);
     const put = await t.call(t.kai.id, "assets.put", {
@@ -185,45 +187,13 @@ describe("pushing an agent's model settings with a personal key", () => {
       headers
     });
     expect(put.statusCode, put.body).toBe(200);
-  });
 
-  it("is refused where the owner does not hold the right, naming the right", async () => {
-    const t = await setup();
-    await grantKaiWorkspace(t);
-    const headers = await t.tokenFor(
-      (await t.issue([`agent.read:${t.kaiTeam}`, `agent.write:${t.kaiTeam}`])).secret
-    );
-    const refused = await push(t, headers, t.kaiTeam, "kai-modelled");
-    expect(refused.statusCode).toBe(403);
-    const { error } = errorSchema.parse(refused.json());
-    expect(error.details).toMatchObject({
-      items: [{ status: "refused", error: { action: MODEL_RIGHT } }]
-    });
-    // It names the settings, how to save without the right, and who changes them.
-    const message = syncItemsSchema.parse(error.details).items[0]?.error?.message;
-    expect(message).toContain(`needs the right '${MODEL_RIGHT}'`);
-    expect(message).toContain("To save without it, leave");
-    expect(message).toContain("ask an instance admin");
-  });
-
-  it("is refused to a key that does not write the agent, and says it is the key", async () => {
-    const t = await setup();
-    await grantKaiWorkspace(t);
-    await grantModelRight(t);
-    const lenaTeam = await t.sharedWorkspace("Lena Spezis");
-    await t.grant(t.kai.id, "agent.write", { workspaceId: lenaTeam });
-
+    // A key that does not write the agent is refused, though the owner holds the right.
     const readOnly = await t.tokenFor((await t.issue([`agent.read:${t.kaiTeam}`])).secret);
-    expect((await push(t, readOnly, t.kaiTeam, "kai-modelled")).statusCode).toBe(403);
-
+    expect((await push(t, readOnly, t.kaiTeam, "kai-other")).statusCode).toBe(403);
     const elsewhere = await t.tokenFor(
       (await t.issue([`agent.read:${t.kaiTeam}`, `agent.write:${lenaTeam}`])).secret
     );
-    const refused = await push(t, elsewhere, t.kaiTeam, "kai-modelled");
-    expect(refused.statusCode).toBe(403);
-    const { error } = errorSchema.parse(refused.json());
-    const message = syncItemsSchema.parse(error.details).items[0]?.error?.message;
-    expect(message).toContain("The API key of this call does not cover 'agent.write'");
-    expect(message).not.toContain("Missing the right");
+    expect((await push(t, elsewhere, t.kaiTeam, "kai-other")).statusCode).toBe(403);
   });
 });

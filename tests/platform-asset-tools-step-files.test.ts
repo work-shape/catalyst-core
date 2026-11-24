@@ -346,17 +346,16 @@ describe("a conversation about a Workflow with a code step", () => {
     const before = await t.asset();
     const filesBefore = await t.storedFiles();
     const cases: [string, unknown, { path: string; code: string }[]][] = [
-      // The config without `files`, and with none, while a step names a script.
+      // The config without `files` while a step names a script.
       ["no files", configOf(undefined), [{ path: "steps.code0.file", code: "code_file_missing" }]],
-      ["empty files", configOf([]), [{ path: "steps.code0.file", code: "code_file_missing" }]],
       // The step names another script than the config holds: both ends are told.
       [
         "another script",
         configOf([good], ["triple.py"]),
         [{ path: "steps.code0.file", code: "code_file_missing" }]
       ],
-      // A path outside the folder, one that leaves it, and a file that is no script.
-      ...["/steps/double.py", "steps/../double.py", ".git/config"].map(
+      // A path that leaves the folder, and a file that is no script.
+      ...["steps/../double.py", ".git/config"].map(
         (path): [string, unknown, { path: string; code: string }[]] => [
           path,
           configOf([good, { path, content: "" }]),

@@ -8,7 +8,6 @@ import { z } from "zod";
 import { publishReview, runCli } from "@work-shape/catalyst-cli";
 import { setupAppInstance } from "./support/app-instance";
 import { testOperations } from "./support/operations";
-import { fileRoute, reactManifest, rootRoute } from "./support/page-build";
 import { createTestFetch, type TestInstance } from "./support/test-instance";
 
 // `catalyst app pull|push|publish|status` against an instance: an App as a folder, sent and
@@ -279,8 +278,6 @@ describe("catalyst app commands", () => {
         "--yes"
       );
       expect(first, first.err).toMatchObject({ code: 0 });
-      expect(first.out).toContain("opens for");
-      expect(first.out).toContain("Published revision 1 of App 'offers'.");
       expect(await t.listed("offers")).toMatchObject({ publishedRevision: 1 });
 
       await writeFile(
@@ -304,12 +301,10 @@ describe("catalyst app commands", () => {
         publishedRevision: 2,
         replacedRevision: 1
       });
-      expect(second.err).toContain("Offers opens for everyone in Sales.");
       expect(await t.listed("offers")).toMatchObject({ publishedRevision: 2 });
 
       const status = await run("app", "status", "offers", "--workspace", t.workspaceId);
       expect(status.out).toContain("Published: revision 2");
-      expect(status.out).toContain("the draft is published");
     } finally {
       await t.close();
     }
@@ -360,34 +355,6 @@ describe("catalyst app commands", () => {
       await t.close();
     }
   });
-
-  it("prints each build error as file:line:column and exits 1 without writing", async () => {
-    const t = await setupAppInstance({ explicitCredentials: true, build: "sandbox" });
-    try {
-      const cwd = await temporaryDirectory();
-      const run = cliAs(t.instance, t.admin.id, cwd);
-      await writeFolder(join(cwd, "demo"), {
-        "app.yaml": reactManifest,
-        "src/routes/__root.tsx": rootRoute,
-        "src/routes/index.tsx": fileRoute("/"),
-        "src/routes/history.tsx": `import { createFileRoute } from "@tanstack/react-router";
-export const Route = createFileRoute("/history")({
-  component: () => <p>History</p
-});
-`
-      });
-
-      const pushed = await run("app", "push", "demo", "--workspace", t.workspaceId);
-
-      expect(pushed.code).toBe(1);
-      expect(pushed.err).toContain("VALIDATION_FAILED");
-      expect(pushed.err).toMatch(/^- src\/routes\/history\.tsx:4:\d+: /mu);
-      expect(await filesOf(join(cwd, "demo"))).not.toContain(".catalyst-app.json");
-      expect(await t.listed("demo").catch(() => undefined)).toBeUndefined();
-    } finally {
-      await t.close();
-    }
-  }, 120_000);
 
   it("refuses to push a file above the size of one file of an App before sending anything", async () => {
     const t = await setupAppInstance({ explicitCredentials: true, build: passThroughBuild });

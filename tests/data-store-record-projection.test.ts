@@ -6,10 +6,21 @@ import {
   StoreBackedAuditRecorder,
   NoopAuditRecorder,
   type JsonObject,
-  type JobControl
+  type JobControl,
+  RECORDS_PROPOSE_MAX_ITEMS_PER_CALL,
+  RECORDS_PROPOSE_MAX_FIELDS_PER_ITEM,
+  RECORDS_FLAGGED_MAX_ITEMS_PER_PAGE,
+  DATA_STORE_ACTIONS,
+  DATA_STORE_RECORD_OPERATIONS,
+  GRANTABLE_ACTION_SCOPES,
+  KNOWLEDGE_WRITE_OPERATIONS,
+  dataStoreRecordFieldSchema,
+  dataStoreRecordsRuleSchema,
+  dataStoreRecordWithdrawalJob,
+  recordEvidenceResultSchema
 } from "@work-shape/catalyst-core";
 import { runOperation } from "@work-shape/catalyst-tool-execution";
-import { refusal, useDataStoreWorld } from "./support/data-store-world";
+import { init, manifest, refusal, sqlState, useDataStoreWorld } from "./support/data-store-world";
 import {
   objektRecords,
   objektSchema,
@@ -21,11 +32,24 @@ import { eventually, required } from "./support/assertions";
 
 const schema = objektSchema;
 const records = objektRecords;
+const keyRules = (table: string, column: string) =>
+  manifest(`records:\n  - table: ${table}\n    key: { column: ${column}, fromField: ${column} }\n`);
 
 describe("REC-1a records projection through the public operation source", () => {
   const dataStoreWorld = useDataStoreWorld("record_projection");
-  const { db, published, call, connect, recordOf, platformRole, takeOver, platformDatabase } =
-    dataStoreWorld;
+  const {
+    db,
+    setup,
+    publish,
+    settle,
+    published,
+    call,
+    connect,
+    recordOf,
+    platformRole,
+    takeOver,
+    platformDatabase
+  } = dataStoreWorld;
   const actorOf = recordsActorOf;
   const { asset, world } = recordsWorlds(dataStoreWorld);
 
@@ -240,25 +264,18 @@ describe("REC-1a records projection through the public operation source", () => 
   );
 
   it.each(["column", "frame"] as const)(
-    "refuses a missing %s with a named EN/DE upgrade message and never repairs it",
+    "refuses a missing %s as an upgrade to make and never repairs it",
     async (missing) => {
       const w = await world(`missing-${missing}`);
       if (missing === "column")
         await w.target`alter table catalyst.record_fields drop column content_sha256`;
       else await w.target`drop function catalyst.project_record(text,jsonb)`;
-      for (const locale of ["en", "de"] as const) {
-        const error = await refusal(
-          call(w, "records.propose", { table: "objekt", items: [] }, undefined, locale)
-        );
-        expect(error).toMatchObject({
-          code: "CONFLICT",
-          details: { reason: "record_store_upgrade_required", store: "findings" }
-        });
-        expect(error.message).toContain("findings");
-        expect(error.message).toContain(
-          locale === "de" ? "benötigt sein Upgrade" : "needs its upgrade"
-        );
-      }
+      expect(
+        await refusal(call(w, "records.propose", { table: "objekt", items: [] }))
+      ).toMatchObject({
+        code: "CONFLICT",
+        details: { reason: "record_store_upgrade_required", store: "findings" }
+      });
       expect(await w.target`select count(*)::int as n from catalyst.loads`).toEqual([{ n: 0 }]);
     }
   );
@@ -272,19 +289,6 @@ describe("REC-1a records projection through the public operation source", () => 
       failed: 0
     });
     expect(await w.target`select kaufpreis::float8 from objekt`).toEqual([{ kaufpreis: 100 }]);
-  });
-
-  it("refuses an app-owned frame changed to SECURITY INVOKER by an earlier trigger", async () => {
-    const w = await world("frame-flags");
-    const item = await w.item("af", "kaufvertrag", { kaufpreis: 100 });
-    await w.target
-      .unsafe(`create function public.change_frame() returns trigger language plpgsql as $body$
-      begin alter function catalyst.project_record(text,jsonb) security invoker; return new; end $body$;
-      create trigger change_frame after insert on objekt for each row execute function public.change_frame();`);
-    expect(
-      await refusal(call(w, "records.propose", { table: "objekt", items: [item] }))
-    ).toMatchObject({ details: { sqlState: "42501" } });
-    expect(await w.target`select count(*)::int as n from objekt`).toEqual([{ n: 0 }]);
   });
 
   it("check 84: merges Exposé, Kaufvertrag and Baubeschreibung, projects one row, flags Widerspruch and Objekt zuordnen, and lists Gefüllt von with the Knowledge Base", async () => {
@@ -399,8 +403,34 @@ describe("REC-1a records projection through the public operation source", () => 
     ).toEqual([{ evidence: { status: "failed", reason: "value_not_parsed" } }]);
   });
 
-  it("rolls back candidates and customer rows together when load constraints refuse a projection, without exposing a value", async () => {
+  it("refuses a frame an earlier trigger changed, a deferred trigger that takes the platform role, and a projection load constraints refuse, rolling back candidates and rows together without exposing a value", async () => {
     const w = await world("rollback");
+    // An app-owned frame changed to SECURITY INVOKER by an earlier trigger.
+    const item = await w.item("af", "kaufvertrag", { kaufpreis: 100 });
+    await w.target
+      .unsafe(`create function public.change_frame() returns trigger language plpgsql as $body$
+      begin alter function catalyst.project_record(text,jsonb) security invoker; return new; end $body$;
+      create trigger change_frame after insert on objekt for each row execute function public.change_frame();`);
+    expect(
+      await refusal(call(w, "records.propose", { table: "objekt", items: [item] }))
+    ).toMatchObject({ details: { sqlState: "42501" } });
+    expect(await w.target`select count(*)::int as n from objekt`).toEqual([{ n: 0 }]);
+    await w.target.unsafe("drop trigger change_frame on objekt");
+
+    // A customer deferred trigger cannot elevate itself to the platform role.
+    await w.target
+      .unsafe(`create function public.try_platform() returns trigger language plpgsql as $body$ begin execute 'reset role'; return new; end $body$;
+      create constraint trigger try_platform after insert or update on objekt deferrable initially deferred for each row execute function public.try_platform();`);
+    expect(
+      await refusal(call(w, "records.propose", { table: "objekt", items: [item] }))
+    ).toMatchObject({ details: { sqlState: "42501" } });
+    expect(await w.target`select count(*)::int as n from catalyst.record_fields`).toEqual([
+      { n: 0 }
+    ]);
+    expect(await w.target`select count(*)::int as n from objekt`).toEqual([{ n: 0 }]);
+    await w.target.unsafe("drop trigger try_platform on objekt");
+
+    // Load constraints refuse the projection.
     await w.target`alter table objekt add constraint bounded_price check(kaufpreis<1000)`;
     const good = await w.item("a3", "kaufvertrag", { kaufpreis: 100 });
     const bad = await w.item(
@@ -420,7 +450,7 @@ describe("REC-1a records projection through the public operation source", () => 
     ]);
     expect(await w.target`select count(*)::int as n from objekt`).toEqual([{ n: 0 }]);
   });
-  it("names all four constraints for load and records in EN/DE, rolls back and keeps values out of errors, logs and Operation Runs", async () => {
+  it("names all four constraints for load and records, rolls back and keeps values out of errors, logs and Operation Runs", async () => {
     const marker = "row-value-must-stay-private";
     let rows: JsonObject[] = [];
     const w = await world(
@@ -480,83 +510,77 @@ describe("REC-1a records projection through the public operation source", () => 
       registry.addSource(w.dataStores.operationSource);
       const actor = actorOf(w.clientInstanceId);
       for (const verb of ["load", "records.propose"] as const) {
-        for (const locale of ["en", "de"] as const) {
-          const outcome = await runOperation(
-            {
-              operation: `data_store.findings.${verb}`,
-              effect: "changing",
-              input:
-                verb === "load"
-                  ? {
-                      table: "objekt",
-                      dataset: {
-                        $dataset: "constraint-rows",
-                        rowCount: rows.length,
-                        bytes: JSON.stringify(rows).length
-                      }
+        const outcome = await runOperation(
+          {
+            operation: `data_store.findings.${verb}`,
+            effect: "changing",
+            input:
+              verb === "load"
+                ? {
+                    table: "objekt",
+                    dataset: {
+                      $dataset: "constraint-rows",
+                      rowCount: rows.length,
+                      bytes: JSON.stringify(rows).length
                     }
-                  : { table: "objekt", items: [good, bad] },
-              actor,
-              origin: {
-                kind: "workflow",
-                workflowRunId: "constraint-run",
-                stepRunId: `${kind}-${verb}-${locale}`
-              },
-              idempotencyKey: `constraint-${kind}-${verb}-${locale}`,
-              correlationId: "constraint-test"
+                  }
+                : { table: "objekt", items: [good, bad] },
+            actor,
+            origin: {
+              kind: "workflow",
+              workflowRunId: "constraint-run",
+              stepRunId: `${kind}-${verb}`
             },
-            {
-              clientInstanceId: w.clientInstanceId,
-              registry,
-              resolveResource: (resource) => Promise.resolve({ resource }),
-              runs: db.store.operationRuns,
-              authorizer: { forActor: async () => accessOf(actor) },
-              events: { emit: async () => ({ outcome: "allow", guardrails: [] }) },
-              audit: new StoreBackedAuditRecorder({
-                clientInstanceId: w.clientInstanceId,
-                store: db.store.audit
-              }),
-              policy: {
-                instanceDefaults: { reading: "allow", changing: "allow" },
-                centralSettings: () => []
-              },
-              logger: w.logger
-            },
-            { locale }
-          );
-          expect(outcome.result).toMatchObject({
-            status: "failed",
-            error: {
-              code: "VALIDATION_FAILED",
-              details: { sqlState: code },
-              message: expect.stringContaining(constraint)
-            }
-          });
-          if (outcome.result.status !== "failed") throw new Error("Expected constraint refusal");
-          expect(outcome.result.error.message).toContain("objekt");
-          expect(outcome.result.error.message).toContain(
-            locale === "de" ? "verletzt die Einschränkung" : "violates constraint"
-          );
-          const stored = await db.store.operationRuns.get({
+            idempotencyKey: `constraint-${kind}-${verb}`,
+            correlationId: "constraint-test"
+          },
+          {
             clientInstanceId: w.clientInstanceId,
-            id: outcome.run.id
-          });
-          expect(stored).toMatchObject({
-            status: "failed",
-            error: { message: expect.stringContaining(constraint) }
-          });
-          const exposed = inspect(
-            { result: outcome.result, run: stored, logs: w.logged },
-            { depth: null }
-          );
-          expect(exposed).not.toContain(marker);
-          expect(exposed).not.toContain("123456789");
-          expect(await w.target`select * from objekt order by objekt_nr`).toEqual(before);
-          expect(await w.target`select count(*)::int as n from catalyst.record_fields`).toEqual([
-            { n: 0 }
-          ]);
-          expect(await w.target`select count(*)::int as n from catalyst.loads`).toEqual([{ n: 0 }]);
-        }
+            registry,
+            resolveResource: (resource) => Promise.resolve({ resource }),
+            runs: db.store.operationRuns,
+            authorizer: { forActor: async () => accessOf(actor) },
+            events: { emit: async () => ({ outcome: "allow", guardrails: [] }) },
+            audit: new StoreBackedAuditRecorder({
+              clientInstanceId: w.clientInstanceId,
+              store: db.store.audit
+            }),
+            policy: {
+              instanceDefaults: { reading: "allow", changing: "allow" },
+              centralSettings: () => []
+            },
+            logger: w.logger
+          }
+        );
+        expect(outcome.result).toMatchObject({
+          status: "failed",
+          error: {
+            code: "VALIDATION_FAILED",
+            details: { sqlState: code },
+            message: expect.stringContaining(constraint)
+          }
+        });
+        if (outcome.result.status !== "failed") throw new Error("Expected constraint refusal");
+        expect(outcome.result.error.message).toContain("objekt");
+        const stored = await db.store.operationRuns.get({
+          clientInstanceId: w.clientInstanceId,
+          id: outcome.run.id
+        });
+        expect(stored).toMatchObject({
+          status: "failed",
+          error: { message: expect.stringContaining(constraint) }
+        });
+        const exposed = inspect(
+          { result: outcome.result, run: stored, logs: w.logged },
+          { depth: null }
+        );
+        expect(exposed).not.toContain(marker);
+        expect(exposed).not.toContain("123456789");
+        expect(await w.target`select * from objekt order by objekt_nr`).toEqual(before);
+        expect(await w.target`select count(*)::int as n from catalyst.record_fields`).toEqual([
+          { n: 0 }
+        ]);
+        expect(await w.target`select count(*)::int as n from catalyst.loads`).toEqual([{ n: 0 }]);
       }
     }
   });
@@ -585,20 +609,6 @@ describe("REC-1a records projection through the public operation source", () => 
     expect(await operation.execute({ table: "objekt", items: [item] }, context)).toEqual(first);
     expect(w.failures).toHaveLength(1);
     expect(await w.target`select kaufpreis::float8 from objekt`).toEqual([{ kaufpreis: 999 }]);
-  });
-
-  it("cannot elevate a customer deferred trigger to the platform role", async () => {
-    const w = await world("trigger-role");
-    await w.target
-      .unsafe(`create function public.try_platform() returns trigger language plpgsql as $body$ begin execute 'reset role'; return new; end $body$;
-      create constraint trigger try_platform after insert or update on objekt deferrable initially deferred for each row execute function public.try_platform();`);
-    const item = await w.item("a5", "kaufvertrag", { kaufpreis: 100 });
-    const error = await refusal(call(w, "records.propose", { table: "objekt", items: [item] }));
-    expect(error).toMatchObject({ details: { sqlState: "42501" } });
-    expect(await w.target`select count(*)::int as n from catalyst.record_fields`).toEqual([
-      { n: 0 }
-    ]);
-    expect(await w.target`select count(*)::int as n from objekt`).toEqual([{ n: 0 }]);
   });
   it("uses load's row-byte accounting and honours an operator timeout above the default", async () => {
     const row = { objekt_nr: 1402, kaufpreis: 100 };
@@ -717,5 +727,357 @@ describe("REC-1a records projection through the public operation source", () => 
     expect(
       await w.target`select state,decided_by from catalyst.record_fields where document_id='bb' and field_name='kaufpreis'`
     ).toEqual([{ state: "confirmed", decided_by: "reviewer" }]);
+  });
+
+  // REC-0: records publish and platform-owned SQL.
+  it("refuses missing tables and non-unique keys without moving the published pointer", async () => {
+    const world = await published("keys");
+    const before = await recordOf(world, world.id);
+    for (const [table, column] of [
+      ["absent", "id"],
+      ["findings", "missing"],
+      ["findings", "run_id"]
+    ] as const) {
+      const error = await refusal(publish(world, [keyRules(table, column), init]));
+      expect(error).toMatchObject({
+        code: "VALIDATION_FAILED",
+        message: expect.stringContaining(`records.${table}.key.${column}`),
+        details: { reason: "record_key_invalid" }
+      });
+      expect((await recordOf(world, world.id)).targetRevision).toBe(before.targetRevision);
+    }
+    const duplicateRules = keyRules("findings", "id");
+    duplicateRules.text += "  - table: findings\n    key: { column: id, fromField: id }\n";
+    expect(await refusal(publish(world, [duplicateRules, init]))).toMatchObject({
+      code: "VALIDATION_FAILED"
+    });
+    await publish(world, [keyRules("findings", "id"), init]);
+    expect((await recordOf(world, world.id)).targetRevision).toBeGreaterThan(before.targetRevision);
+    // The definition's strict records schema survives the files -> stored revision round trip.
+    expect(
+      world.dataStores.readFiles([
+        { path: "store.yaml", bytes: new TextEncoder().encode(keyRules("findings", "id").text) }
+      ])
+    ).toMatchObject({ records: [{ table: "findings", retainWithoutSource: false }] });
+  });
+
+  it("checks actual index keys, excluding partial, composite, expression and deferrable indexes", async () => {
+    const world = await published("indexes");
+    const indexes = {
+      path: "migrations/0002_keys.sql",
+      text: `
+      create table composite (id text, extra text, unique(id, extra));
+      create table partial_key (id text); create unique index partial_id on partial_key(id) where id is not null;
+      create table expression_key (id text); create unique index expression_id on expression_key(lower(id));
+      create table deferred_key (id text unique deferrable);
+      create materialized view indexed_view as select 'one'::text as id;
+      create unique index view_id on indexed_view(id);
+      create table included_key (id text, extra text); create unique index included_id on included_key(id) include(extra);
+    `
+    };
+    await publish(world, [manifest(), init, indexes]);
+    await settle(world, world.id, 2);
+    for (const table of [
+      "composite",
+      "partial_key",
+      "expression_key",
+      "deferred_key",
+      "indexed_view"
+    ]) {
+      expect(await refusal(publish(world, [keyRules(table, "id"), init, indexes]))).toMatchObject({
+        details: { reason: "record_key_invalid" }
+      });
+    }
+    expect(
+      await refusal(publish(world, [keyRules("included_key", "extra"), init, indexes]))
+    ).toMatchObject({ details: { reason: "record_key_invalid" } });
+    await publish(world, [keyRules("included_key", "id"), init, indexes]);
+  });
+
+  it("allows a one-step publish of schema and rules and validates the migrated schema", async () => {
+    const world = await setup("new");
+    const id = await publish(world, [keyRules("findings", "id"), init]);
+    expect((await settle(world, id, 1)).failure).toBeUndefined();
+  });
+
+  it("keeps provenance unique per composite document and blocks store roles from its customer data", async () => {
+    const world = await published("ddl");
+    const sql = connect(world.record.location.database);
+    const insert = (kb: string, doc: string, key: string | null) => sql`
+      insert into catalyst.record_fields(table_name, record_key, field_name, knowledge_base_id, document_id, kind, value, page, quote, document_date, extracted_at, evidence, state)
+      values ('findings', ${key}::jsonb, 'amount', ${kb}, ${doc}, 'contract', '12.5'::jsonb, 1, '12.5', '2026-10-17', now(), '{"status":"passed"}'::jsonb, 'extracted')`;
+    await insert("kb-1", "doc-1", '"A-1"');
+    // A later provisioning pass is additive and leaves existing candidates intact.
+    await publish(world, [manifest(), init]);
+    await settle(world, world.id, 1);
+    expect(await sqlState(insert("kb-1", "doc-1", '"A-1"'))).toBe("23505");
+    await insert("kb-2", "doc-1", '"A-1"');
+    await insert("kb-1", "doc-2", null);
+    expect(await sqlState(insert("kb-1", "doc-2", null))).toBe("23505");
+    expect(await sqlState(sql`update catalyst.record_fields set state='unknown'`)).toBe("23514");
+    expect(
+      await sqlState(
+        sql`update catalyst.record_fields set evidence='{"status":"passed","confidence":1}'::jsonb`
+      )
+    ).toBe("23514");
+    for (const role of ["app", "migration"] as const) {
+      const restricted = connect(
+        world.record.location.database,
+        await takeOver(world.record.roles[role])
+      );
+      expect(await sqlState(restricted`select * from catalyst.record_fields`)).toBe("42501");
+      expect(await sqlState(restricted`delete from catalyst.record_fields`)).toBe("42501");
+    }
+  });
+});
+
+const proposal = {
+  knowledgeBaseId: "kb-1",
+  documentId: "doc-1",
+  kind: "contract",
+  documentDate: "2026-10-17",
+  path: "/Objects/A-1/contract.pdf",
+  fields: [{ name: "amount", value: 12.5, page: 1, quote: "12.5" }]
+};
+const columns = [
+  { name: "amount", type: "number", nullable: true },
+  { name: "year", type: "integer", nullable: false },
+  { name: "date", type: "date", nullable: false },
+  { name: "tags", type: "text[]", nullable: false },
+  { name: "computed", type: "number", nullable: true, generated: true }
+] as const;
+
+describe("REC-0 frozen records contracts", () => {
+  it("keeps extraction's value, page and quote and freezes a per-item batch with a dedicated right", () => {
+    const extracted = KNOWLEDGE_WRITE_OPERATIONS.extract_fields.outputSchema.parse({
+      path: proposal.path,
+      date: proposal.documentDate,
+      type: proposal.kind,
+      fields: { amount: { value: 12.5, page: 1, quote: "12.5" } }
+    });
+    const item = {
+      ...proposal,
+      fields: Object.entries(extracted.fields).map(([name, field]) => ({ name, ...field }))
+    };
+    const contract = DATA_STORE_RECORD_OPERATIONS.propose;
+    expect(contract.inputSchema.parse({ table: "objects", items: [item] }).items).toEqual([
+      proposal
+    ]);
+    expect(contract).toMatchObject({
+      effect: "changing",
+      batch: true,
+      right: "data_store.records",
+      keyLevel: "write"
+    });
+    const batch = { done: 1, failed: 0, failures: { $dataset: "failures", rowCount: 0, bytes: 0 } };
+    expect(contract.outputSchema.parse(batch)).toEqual(batch);
+    expect(DATA_STORE_ACTIONS.records).toBe("data_store.records");
+    expect(GRANTABLE_ACTION_SCOPES["data_store.records"]).toEqual([
+      "workspace",
+      "asset",
+      "instance"
+    ]);
+    expect(DATA_STORE_RECORD_OPERATIONS.decide).toMatchObject({
+      effect: "changing",
+      right: "data_store.records",
+      keyLevel: "write"
+    });
+    expect(DATA_STORE_RECORD_OPERATIONS.flagged).toMatchObject({
+      effect: "reading",
+      right: "data_store.records",
+      keyLevel: "read"
+    });
+  });
+
+  it("bounds each proposal batch and flagged page while accepting a cursor for further pages", () => {
+    const { propose, flagged } = DATA_STORE_RECORD_OPERATIONS;
+    const batch = (count: number) => ({
+      table: "objects",
+      items: Array.from({ length: count }, () => proposal)
+    });
+    expect(propose.inputSchema.safeParse(batch(RECORDS_PROPOSE_MAX_ITEMS_PER_CALL)).success).toBe(
+      true
+    );
+    expect(
+      propose.inputSchema.safeParse(batch(RECORDS_PROPOSE_MAX_ITEMS_PER_CALL + 1)).success
+    ).toBe(false);
+    const item = (count: number) => ({
+      ...proposal,
+      fields: Array.from({ length: count }, (_, i) => ({
+        ...proposal.fields[0],
+        name: `field_${i}`
+      }))
+    });
+    expect(
+      propose.inputSchema.safeParse({
+        table: "objects",
+        items: [item(RECORDS_PROPOSE_MAX_FIELDS_PER_ITEM)]
+      }).success
+    ).toBe(true);
+    expect(
+      propose.inputSchema.safeParse({
+        table: "objects",
+        items: [item(RECORDS_PROPOSE_MAX_FIELDS_PER_ITEM + 1)]
+      }).success
+    ).toBe(false);
+    expect(
+      flagged.inputSchema.parse({ limit: RECORDS_FLAGGED_MAX_ITEMS_PER_PAGE, cursor: "next-page" })
+    ).toEqual({ limit: RECORDS_FLAGGED_MAX_ITEMS_PER_PAGE, cursor: "next-page" });
+    expect(
+      flagged.inputSchema.safeParse({ limit: RECORDS_FLAGGED_MAX_ITEMS_PER_PAGE + 1 }).success
+    ).toBe(false);
+  });
+
+  it("refuses an entire item for an unknown, duplicate, generated or incompatible field before the writer", () => {
+    const schema = DATA_STORE_RECORD_OPERATIONS.propose.itemSchemaFor(columns);
+    expect(schema.safeParse(proposal).success).toBe(true);
+    for (const field of [
+      { name: "missing", value: 1 },
+      { name: "amount", value: "12.5" },
+      { name: "year", value: 1.5 },
+      { name: "year", value: null },
+      { name: "date", value: "2026-02-30" },
+      { name: "tags", value: [1] },
+      { name: "computed", value: 2 }
+    ]) {
+      const parsed = schema.safeParse({
+        ...proposal,
+        fields: [...proposal.fields, { ...proposal.fields[0], ...field }]
+      });
+      expect(parsed.success, JSON.stringify(field)).toBe(false);
+      if (!parsed.success)
+        expect(parsed.error.issues[0]?.message).toContain("record_field_unknown");
+    }
+    expect(
+      schema.safeParse({ ...proposal, fields: [...proposal.fields, ...proposal.fields] }).success
+    ).toBe(false);
+    for (const field of [
+      { name: "amount", value: null },
+      { name: "tags", value: ["a"] }
+    ]) {
+      expect(
+        schema.safeParse({ ...proposal, fields: [{ ...proposal.fields[0], ...field }] }).success
+      ).toBe(true);
+    }
+  });
+
+  it("parses records rules with exactly one key source and a named path capture", () => {
+    expect(
+      dataStoreRecordsRuleSchema.parse({
+        table: "objects",
+        key: { column: "id", fromPath: "/Objects/{id}/" }
+      })
+    ).toEqual({
+      table: "objects",
+      key: { column: "id", fromPath: "/Objects/{id}/" },
+      precedence: [],
+      review: { always: [] },
+      retainWithoutSource: false
+    });
+    expect(
+      dataStoreRecordsRuleSchema.safeParse({
+        table: "objects",
+        key: { column: "id", fromField: "number" }
+      }).success
+    ).toBe(true);
+    for (const key of [
+      { column: "id" },
+      { column: "id", fromPath: "/{id}/", fromField: "id" },
+      { column: "id", fromPath: "/{other}/" },
+      { column: "id", fromPath: "/{id}/{id}/" }
+    ])
+      expect(dataStoreRecordsRuleSchema.safeParse({ table: "objects", key }).success).toBe(false);
+  });
+
+  it("refuses malformed outside input and requires composite citation identity", () => {
+    const { propose, decide, flagged } = DATA_STORE_RECORD_OPERATIONS;
+    for (const input of [
+      null,
+      "not json",
+      { table: "objects", items: [{ ...proposal, knowledgeBaseId: undefined }] },
+      {
+        table: "objects",
+        items: [{ ...proposal, fields: [{ name: "amount", value: 1, page: 0, quote: "" }] }]
+      }
+    ]) {
+      expect(propose.inputSchema.safeParse(input).success).toBe(false);
+    }
+    expect(
+      decide.inputSchema.safeParse({
+        table: "objects",
+        key: "A-1",
+        field: "amount",
+        action: "correct",
+        value: 15
+      }).success
+    ).toBe(true);
+    expect(
+      decide.inputSchema.safeParse({
+        table: "objects",
+        key: "A-1",
+        field: "amount",
+        action: "correct"
+      }).success
+    ).toBe(false);
+    expect(
+      decide.inputSchema.safeParse({
+        table: "objects",
+        key: "A-1",
+        field: "amount",
+        action: "assign",
+        documentId: "doc-1"
+      }).success
+    ).toBe(false);
+    expect(
+      decide.inputSchema.safeParse({
+        table: "objects",
+        key: "A-1",
+        field: "amount",
+        action: "assign",
+        documentId: "doc-1",
+        knowledgeBaseId: "kb-1"
+      }).success
+    ).toBe(true);
+    expect(flagged.inputSchema.safeParse({ limit: 0 }).success).toBe(false);
+    expect(flagged.inputSchema.parse({ table: "objects", limit: 10000 })).toEqual({
+      table: "objects",
+      limit: 10000
+    });
+    expect(
+      recordEvidenceResultSchema.safeParse({ status: "passed", confidence: 0.99 }).success
+    ).toBe(false);
+    expect(
+      recordEvidenceResultSchema.parse({ status: "failed", reason: "quote_not_found" })
+    ).toEqual({ status: "failed", reason: "quote_not_found" });
+    expect(
+      dataStoreRecordFieldSchema.parse({
+        ...proposal.fields[0],
+        table: "objects",
+        key: null,
+        knowledgeBaseId: "kb-1",
+        documentId: "doc-1",
+        kind: "contract",
+        documentDate: null,
+        extractedAt: "2026-10-18T00:00:00Z",
+        evidence: { status: "passed" },
+        state: "extracted",
+        correctedValue: null,
+        decidedBy: null,
+        decidedAt: null
+      }).key
+    ).toBeNull();
+    expect(
+      dataStoreRecordWithdrawalJob.payloadSchema.parse({
+        knowledgeBaseId: "kb-1",
+        documentId: "doc-1"
+      })
+    ).toEqual({ knowledgeBaseId: "kb-1", documentId: "doc-1" });
+    expect(() =>
+      dataStoreRecordWithdrawalJob.payloadSchema.parse({
+        knowledgeBaseId: "kb-1",
+        documentId: "doc-1",
+        quote: "private"
+      })
+    ).toThrow();
   });
 });

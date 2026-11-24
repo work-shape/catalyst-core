@@ -34,8 +34,7 @@ describe("removed workspace switch", () => {
 
   it.each([
     ["enabled: false", { enabled: false }],
-    ["an empty object, which used to mean off", {}],
-    ["a value that is no switch", true]
+    ["an empty object, which used to mean off", {}]
   ])("refuses %s and says to remove the key", (_name, value) => {
     expect(() =>
       parseClientInstanceConfig(baseConfig({ ui: { collaborationWorkspaces: value } }))

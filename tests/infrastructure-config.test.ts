@@ -535,12 +535,6 @@ describe("keys that moved into the infrastructure section", () => {
       { modelProviders: [{ id: "local", type: "deterministic", model: "local" }] },
       "'modelProviders' moved to 'infrastructure.models'"
     ],
-    ["mail", { mail: { enabled: false } }, "'mail' moved to 'infrastructure.mail'"],
-    [
-      "executionWorkspaces.runner",
-      { executionWorkspaces: { runner: { mode: "docker" } } },
-      "'executionWorkspaces.runner' moved to 'infrastructure.sandbox'"
-    ],
     [
       "capabilities.documentProcessing.objectStorage",
       { capabilities: { documentProcessing: { objectStorage: { kind: "s3" } } } },

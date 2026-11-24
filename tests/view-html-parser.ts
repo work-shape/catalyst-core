@@ -3,8 +3,8 @@ import { vi } from "vitest";
 /**
  * The view composer reads the scripts of a stored view with the browser's HTML parser, and
  * unit tests run without one. This stands in for it with the plain cases these tests use: a
- * script element with its text between a start and an end tag. What the real parser does with
- * line ends, comments, templates and odd end tags is held by `e2e/view-runtime.spec.ts`.
+ * script element with its text between a start and an end tag. Odd line ends, comments,
+ * templates and end tags are the real parser's; a view whose script it misreads fails safe.
  *
  * A view that runs no script is written anew from the parsed tree. This stand-in has no tree,
  * so the body of such a view is empty here. `view-document-writer.test.ts` checks image

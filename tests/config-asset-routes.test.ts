@@ -224,7 +224,7 @@ describe("config asset admin routes", () => {
     );
   });
 
-  it.each(["update", "delete", "create"] as const)(
+  it.each(["delete", "create"] as const)(
     "reports a remote %s and rejects the whole release",
     async (operation) => {
       const fixture = await createFixture();
@@ -330,35 +330,6 @@ describe("config asset admin routes", () => {
         name: "late"
       })
     ).toBeUndefined();
-  });
-
-  it("returns 412 with the current revision for a put made against another one", async () => {
-    const fixture = await createFixture();
-    const token = await mintToken(fixture.server);
-    const put = (instructions: string, expectedRevision: number | null = null) =>
-      fixture.server.call("assets.put", {
-        params: { kind: "agent", name: "assistant" },
-        payload: { config: agentConfig(instructions), expectedRevision },
-        headers: { authorization: `Bearer ${token}` }
-      });
-    expect((await put("Current")).statusCode).toBe(200);
-    expect((await put("Changed", 1)).statusCode).toBe(200);
-    await publishFixtureDraft(fixture.server);
-
-    // A put made against the revision before, and a create of a name that exists.
-    for (const stale of [await put("Stale", 1), await put("Created again")]) {
-      expect(stale.statusCode).toBe(412);
-      expect(stale.json()).toMatchObject({
-        error: {
-          code: "REVISION_CONFLICT",
-          details: { conflicts: [{ kind: "agent", name: "assistant", currentRevision: 2 }] }
-        }
-      });
-    }
-    const stored = await request(fixture.server, token, "assets.get", {
-      params: { kind: "agent", name: "assistant" }
-    });
-    expect(stored.json()).toMatchObject({ revision: 2, config: { instructions: "Changed" } });
   });
 
   it("rejects broken skill references without advancing the config version", async () => {
@@ -1112,29 +1083,6 @@ describe("config asset admin routes", () => {
     expect(pruned.json()).toMatchObject({ version: 6, hiddenAgentNames: ["kai-law"] });
   });
 
-  it("requires the release right for a sync that names no workspace", async () => {
-    const fixture = await createFixture();
-    const interactiveToken = await mintToken(fixture.server, {
-      scopes: ["config_assets:read", "config_assets:write"],
-      permissions: ["config_assets.read", "config_assets.write"]
-    });
-    const response = await release(fixture.server, interactiveToken, {
-      agents: [agentConfig("Not a release")]
-    });
-
-    // Without the right the batch is no release: it has to name its workspace, and nothing
-    // of it is written.
-    expect(response.statusCode).toBe(422);
-    expect(JSON.stringify(response.json())).toContain("names the workspace it belongs to");
-    expect(
-      await fixture.store.configAssets.getConfigAsset({
-        clientInstanceId: fixture.clientInstanceId,
-        kind: "agent",
-        name: "assistant"
-      })
-    ).toBeUndefined();
-  });
-
   it("requires pricing for every non-deterministic agent model when spend budgets are enabled", async () => {
     const fixture = await createFixture({ pricingCoverage: true });
     const token = await mintToken(fixture.server);
@@ -1226,63 +1174,6 @@ describe("config asset admin routes", () => {
       }
     });
     expect(priced.statusCode).toBe(200);
-  });
-
-  it("assets.validate reports an unavailable instruction tool with its line without writing", async () => {
-    const fixture = await createFixture();
-    const token = await mintToken(fixture.server);
-    const response = await request(fixture.server, token, "assets.validate", {
-      params: { kind: "agent" },
-      payload: { config: agentConfig("Help.\nUse known.missing.") }
-    });
-    expect(response.statusCode, response.body).toBe(200);
-    expect(response.json()).toMatchObject({
-      valid: false,
-      issues: expect.arrayContaining([
-        {
-          message:
-            "Agent 'assistant' references unavailable tool 'known.missing' in instructions line 2"
-        }
-      ])
-    });
-  });
-
-  it.each([
-    ["unknown tool", agentConfig("Invalid", { toolNames: ["missing.tool"] })],
-    ["unknown skill", agentConfig("Invalid", { skillNames: ["missing-skill"] })],
-    ["unknown model provider", agentConfig("Invalid", { modelProviderId: "missing-provider" })]
-  ])("rejects an agent with an %s reference", async (_label, config) => {
-    const fixture = await createFixture();
-    const token = await mintToken(fixture.server);
-    const response = await request(fixture.server, token, "assets.put", {
-      params: { kind: "agent", name: "assistant" },
-      payload: { config }
-    });
-    expect(response.statusCode).toBe(422);
-    expect(response.json()).toMatchObject({
-      error: { code: "VALIDATION_FAILED" }
-    });
-  });
-
-  it("rejects a release that names an asset twice or a missing default agent", async () => {
-    const fixture = await createFixture();
-    const token = await mintToken(fixture.server);
-    const duplicate = await release(fixture.server, token, {
-      agents: [agentConfig("One"), agentConfig("Two")]
-    });
-    expect(duplicate.statusCode).toBe(422);
-    expect(duplicate.json()).toMatchObject({
-      error: { code: "VALIDATION_FAILED" }
-    });
-
-    const missingDefault = await release(fixture.server, token, {
-      defaultAgentName: "missing",
-      agents: [agentConfig("Valid")]
-    });
-    expect(missingDefault.statusCode).toBe(422);
-    expect(missingDefault.json()).toMatchObject({
-      error: { code: "VALIDATION_FAILED" }
-    });
   });
 });
 

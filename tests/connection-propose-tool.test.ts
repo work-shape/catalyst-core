@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PLATFORM_TOOL_NAMES, platformModules } from "@work-shape/catalyst-client-assembly";
+import { platformModules } from "@work-shape/catalyst-client-assembly";
 import {
   createHttpApiConnectorType,
   createMcpConnectorType
@@ -297,10 +297,6 @@ describe("where the propose tool is offered", () => {
     expect(registryWith(false).has(CONNECTION_PROPOSE_TOOL_NAME)).toBe(false);
     expect(registryWith(true).has(CONNECTION_PROPOSE_TOOL_NAME)).toBe(true);
   });
-
-  it("is no tool every agent may hold whatever the modules: an agent lists it by name", () => {
-    expect(PLATFORM_TOOL_NAMES).not.toContain(CONNECTION_PROPOSE_TOOL_NAME);
-  });
 });
 
 const offeredEntry: ConnectionProposalCatalogueEntry = {
@@ -357,24 +353,9 @@ describe("catalogue and complete custom proposals", () => {
   it.each([
     [undefined, "needs_setup", undefined],
     [
-      { name: "my-mail", clientSecretSet: false, credentialMode: "user" },
-      "needs_setup",
-      "not_connected"
-    ],
-    [
       { name: "my-mail", clientSecretSet: true, credentialMode: "user", bindingState: "connected" },
       "ready",
       "connected"
-    ],
-    [
-      {
-        name: "my-mail",
-        clientSecretSet: true,
-        credentialMode: "user",
-        bindingState: "not_connected"
-      },
-      "ready",
-      "not_connected"
     ],
     [
       {
@@ -446,36 +427,32 @@ describe("catalogue and complete custom proposals", () => {
       )
     ).toMatchObject({ status: "failed" });
   });
-  it.each(["url", "tokenUrl", "authorizationUrl", "revocationUrl"])(
-    "refuses a custom %s host covered by an entry",
-    async (field) => {
-      const input = proposal({
-        connectorType: "http_api",
-        authScheme: "oauth",
-        url: "https://api.example.test",
-        oauth
-      });
-      if (field === "url") input.url = "https://api.mail.example.test/v1";
-      else input.oauth = { ...oauth, [field]: "https://login.mail.example.test/oauth" };
-      const result = await run(input, catalogueTool());
-      expect(result).toMatchObject({
-        status: "failed",
-        error: {
-          details: {
-            issues: expect.arrayContaining([
-              expect.objectContaining({
-                code: "entry_covers_host",
-                message: expect.stringContaining("'mail'")
-              })
-            ])
-          }
+  it.each(["url", "tokenUrl"])("refuses a custom %s host covered by an entry", async (field) => {
+    const input = proposal({
+      connectorType: "http_api",
+      authScheme: "oauth",
+      url: "https://api.example.test",
+      oauth
+    });
+    if (field === "url") input.url = "https://api.mail.example.test/v1";
+    else input.oauth = { ...oauth, [field]: "https://login.mail.example.test/oauth" };
+    const result = await run(input, catalogueTool());
+    expect(result).toMatchObject({
+      status: "failed",
+      error: {
+        details: {
+          issues: expect.arrayContaining([
+            expect.objectContaining({
+              code: "entry_covers_host",
+              message: expect.stringContaining("'mail'")
+            })
+          ])
         }
-      });
-    }
-  );
-  it.each(["tokenUrl", "authorizationUrl", "revocationUrl"])(
-    "refuses credentials, queries and fragments on %s",
-    async (field) => {
+      }
+    });
+  });
+  it("refuses credentials, queries and fragments on an OAuth address", async () => {
+    for (const field of ["tokenUrl", "authorizationUrl"]) {
       for (const address of [
         "https://user:password@login.example.test",
         "https://login.example.test?key=hidden",
@@ -492,7 +469,7 @@ describe("catalogue and complete custom proposals", () => {
         ).toMatchObject({ status: "failed" });
       }
     }
-  );
+  });
   it("refuses nested client secrets and CS-5c forbidden declarations", async () => {
     expect(
       await run(

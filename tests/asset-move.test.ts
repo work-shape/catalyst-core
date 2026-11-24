@@ -172,22 +172,14 @@ function refusalOf(response: { statusCode: number; json(): unknown }) {
 const toTeam = (workspaceId: string) => ({ kind: "workspace" as const, workspaceId });
 
 describe("assets.move", () => {
-  it("refuses down, sideways and the same place, each with a plain sentence, and moves nothing", async () => {
+  it("refuses down, sideways and the same place, and moves nothing", async () => {
     const { t, mine, team, other } = await places();
     await own(t, mine, "skill", "notes");
     await put(t, t.admin.id, "skill", "team-notes", team);
-    await put(t, t.admin.id, "skill", "everyones");
     const kaiPersonal = toTeam(mine);
     const cases = [
       { user: t.kai.id, name: "notes", from: mine, to: kaiPersonal, reason: "move_same_place" },
       { user: t.admin.id, name: "team-notes", from: team, to: kaiPersonal, reason: "move_down" },
-      {
-        user: t.admin.id,
-        name: "everyones",
-        from: undefined,
-        to: toTeam(team),
-        reason: "move_down"
-      },
       {
         user: t.admin.id,
         name: "team-notes",
@@ -206,17 +198,19 @@ describe("assets.move", () => {
         });
       }
     }
-    const de = await t.call(t.admin.id, "assets.move", {
-      params: { kind: "skill", name: "team-notes" },
-      payload: { workspaceId: team, to: toTeam(other) },
-      headers: { "accept-language": "de" }
-    });
-    expect(errorSchema.parse(de.json()).error.message).toContain("nicht in ein anderes Team");
     expect(await scopeOf(t, "skill", "team-notes")).toEqual({
       kind: "workspace",
       workspaceId: team
     });
     expect(await movedEvents(t)).toEqual([]);
+    // Refuses a team the person is not a member of.
+    {
+      const closed = await t.sharedWorkspace("Closed");
+      await own(t, mine, "skill", "kai-skill");
+      expect(
+        refusalOf(await move(t, t.kai.id, "skill", "kai-skill", mine, toTeam(closed)))
+      ).toMatchObject({ status: 422, reason: "move_not_member" });
+    }
   });
 
   it("moves at once with the right at the target, with what the asset uses (closure)", async () => {
@@ -273,15 +267,6 @@ describe("assets.move", () => {
     // Ids only: no name, title or content of a Personal Workspace's asset in the record.
     expect(JSON.stringify(event)).not.toContain("kai-skill");
     expect(JSON.stringify(event)).not.toContain("Guidance");
-  });
-
-  it("refuses a team the person is not a member of", async () => {
-    const { t, mine } = await places();
-    const closed = await t.sharedWorkspace("Closed");
-    await own(t, mine, "skill", "kai-skill");
-    expect(
-      refusalOf(await move(t, t.kai.id, "skill", "kai-skill", mine, toTeam(closed)))
-    ).toMatchObject({ status: 422, reason: "move_not_member" });
   });
 
   it("lists what breaks and moves it only once the caller accepts that", async () => {
@@ -511,29 +496,26 @@ describe("who may move an asset out of its place", () => {
       workspaceId: mine
     });
     expect(await movedEvents(t)).toEqual([]);
-  });
-
-  it("refuses a person with a grant on another person's personal agent", async () => {
-    const { t, mine, team } = await places();
-    await join(t, t.lena, team);
-    for (const action of ["agent.read", "agent.write", "skill.read", "skill.write"])
-      await t.grant(t.lena.id, action, { workspaceId: team });
-    await own(t, mine, "skill", "kai-skill");
-    await own(t, mine, "agent", "kai-agent", { skillNames: ["kai-skill"] });
-    const agentId = await t.assetId("agent", "kai-agent");
-    for (const action of ["agent.read", "agent.write"])
-      await t.grant(t.lena.id, action, { assetId: agentId });
-    const response = await move(t, t.lena.id, "agent", "kai-agent", mine, toTeam(team));
-    expect(refusalOf(response)).toMatchObject({ status: 403, reason: "move_not_owner" });
-    expect(await scopeOf(t, "skill", "kai-skill")).toEqual({
-      kind: "workspace",
-      workspaceId: mine
-    });
-    const requests = await t.stores.approvals.listApprovalRequests({
-      clientInstanceId,
-      kinds: ["agent_move"]
-    });
-    expect(requests).toEqual([]);
+    // Refuses a person with a grant on another person's personal agent.
+    {
+      await join(t, t.lena, team);
+      for (const action of ["agent.read", "agent.write", "skill.read", "skill.write"])
+        await t.grant(t.lena.id, action, { workspaceId: team });
+      const agentId = await t.assetId("agent", "kai-agent");
+      for (const action of ["agent.read", "agent.write"])
+        await t.grant(t.lena.id, action, { assetId: agentId });
+      const response = await move(t, t.lena.id, "agent", "kai-agent", mine, toTeam(team));
+      expect(refusalOf(response)).toMatchObject({ status: 403, reason: "move_not_owner" });
+      expect(await scopeOf(t, "skill", "kai-skill")).toEqual({
+        kind: "workspace",
+        workspaceId: mine
+      });
+      const requests = await t.stores.approvals.listApprovalRequests({
+        clientInstanceId,
+        kinds: ["agent_move"]
+      });
+      expect(requests).toEqual([]);
+    }
   });
 
   it("refuses a team's asset to a person who may not change everything that goes with it", async () => {

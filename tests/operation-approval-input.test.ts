@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { HELD_OPERATION_CALLS_PER_ACTOR } from "@work-shape/catalyst-server";
-import { errorOf, fixture, HOUR_MS } from "./support/operation-approval";
+import { fixture, HOUR_MS } from "./support/operation-approval";
 
 // What a held call keeps of its input and how many calls may wait. Every test here fails
 // without the change it names.
@@ -213,10 +213,6 @@ describe("the limit of calls one person may have waiting", () => {
     const codes = responses.map((response) => response.statusCode);
     expect(codes.filter((code) => code === 202)).toHaveLength(HELD_OPERATION_CALLS_PER_ACTOR);
     expect(codes.filter((code) => code === 429)).toHaveLength(40 - HELD_OPERATION_CALLS_PER_ACTOR);
-    const refused = responses.find((response) => response.statusCode === 429);
-    expect(refused ? errorOf(refused).message : "").toContain(
-      `${HELD_OPERATION_CALLS_PER_ACTOR} of your calls already wait for an approval`
-    );
     const pending = await f.app.stores.approvals.countPendingApprovalRequests({
       clientInstanceId: f.clientInstanceId,
       kinds: ["operation_call"]

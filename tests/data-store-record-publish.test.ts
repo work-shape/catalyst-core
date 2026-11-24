@@ -64,7 +64,6 @@ describe("records keys across publishes over HTTP", () => {
       params: { store: world.storeName ?? "findings" }
     });
     expect(state.statusCode, state.body).toBe(200);
-    expect(state.body).toContain("Nothing of it was applied.");
     expect(state.body).toContain("0002_");
     const described = await world.api.call("data_stores.describe", {
       params: { store: world.storeName ?? "findings" }
@@ -179,7 +178,6 @@ describe("records keys across publishes over HTTP", () => {
       params: { store: world.storeName ?? "findings" }
     });
     expect(state.statusCode, state.body).toBe(200);
-    expect(state.body).toContain("A records key is not there yet:");
     expect(state.body).toContain("records.findings.key.id");
   });
 

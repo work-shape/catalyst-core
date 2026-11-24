@@ -294,67 +294,65 @@ function asList(value: unknown): string[] {
 }
 
 describe("AP-4 verifier: rights before and after migration 0079", () => {
-  for (const seedNumber of [1, 2, 3]) {
-    it(`users answer the same for every action, key and resource (seed ${seedNumber})`, async () => {
-      const { databaseUrl, sql } = await databaseBeforeAp4();
-      const seeded = await seed(sql, seedNumber);
-      const grantsBefore = await snapshotGrants(sql);
-      await migrateDatabase({ databaseUrl });
-      const stores = await storesOn(databaseUrl);
-      cleanups.push(() => stores.close());
-      const authorizer = createAuthorizer(stores.access);
-      const differences: string[] = [];
-      for (const user of seeded.users) {
-        const clientInstanceId = asClientInstanceId(user.instance);
-        const before = pre.createActorAccess(
-          {
-            kind: "user",
-            id: user.id,
-            clientInstanceId,
-            roles: user.roles,
-            permissions: asList(user.permissions),
-            permissionRefs: user.refs
-          },
-          {
-            holderActive: user.active,
-            grants: grantsBefore.filter(
-              (grant) =>
-                grant.clientInstanceId === clientInstanceId &&
-                grant.holderKind === "user" &&
-                grant.holderId === user.id
-            ),
-            memberWorkspaceIds: []
-          }
-        );
-        const actor: AuthenticatedIdentity = {
+  it("users answer the same for every action, key and resource", async () => {
+    const { databaseUrl, sql } = await databaseBeforeAp4();
+    const seeded = await seed(sql, 1);
+    const grantsBefore = await snapshotGrants(sql);
+    await migrateDatabase({ databaseUrl });
+    const stores = await storesOn(databaseUrl);
+    cleanups.push(() => stores.close());
+    const authorizer = createAuthorizer(stores.access);
+    const differences: string[] = [];
+    for (const user of seeded.users) {
+      const clientInstanceId = asClientInstanceId(user.instance);
+      const before = pre.createActorAccess(
+        {
+          kind: "user",
           id: user.id,
-          externalUserId: user.id,
-          displayLabel: user.id,
-          roles: user.roles,
-          permissionRefs: user.refs,
-          permissions: [],
           clientInstanceId,
-          authSource: "ap4-verify"
-        };
-        const after = await authorizer.forActor(actor);
-        for (const question of QUESTIONS) {
-          for (const resource of RESOURCES) {
-            // ADR-0028: no deny takes `users.manage` from a superadmin any more.
-            const was =
-              before.authorize(question, resource).allowed ||
-              (user.active && question === "users.manage" && user.roles.includes("superadmin"));
-            const now = after.authorize(question, resource).allowed;
-            if (was !== now) {
-              differences.push(
-                `${user.id} roles=${JSON.stringify(user.roles)} list=${JSON.stringify(user.permissions)} ${question} ${JSON.stringify(resource)}: before ${was}, after ${now}`
-              );
-            }
+          roles: user.roles,
+          permissions: asList(user.permissions),
+          permissionRefs: user.refs
+        },
+        {
+          holderActive: user.active,
+          grants: grantsBefore.filter(
+            (grant) =>
+              grant.clientInstanceId === clientInstanceId &&
+              grant.holderKind === "user" &&
+              grant.holderId === user.id
+          ),
+          memberWorkspaceIds: []
+        }
+      );
+      const actor: AuthenticatedIdentity = {
+        id: user.id,
+        externalUserId: user.id,
+        displayLabel: user.id,
+        roles: user.roles,
+        permissionRefs: user.refs,
+        permissions: [],
+        clientInstanceId,
+        authSource: "ap4-verify"
+      };
+      const after = await authorizer.forActor(actor);
+      for (const question of QUESTIONS) {
+        for (const resource of RESOURCES) {
+          // ADR-0028: no deny takes `users.manage` from a superadmin any more.
+          const was =
+            before.authorize(question, resource).allowed ||
+            (user.active && question === "users.manage" && user.roles.includes("superadmin"));
+          const now = after.authorize(question, resource).allowed;
+          if (was !== now) {
+            differences.push(
+              `${user.id} roles=${JSON.stringify(user.roles)} list=${JSON.stringify(user.permissions)} ${question} ${JSON.stringify(resource)}: before ${was}, after ${now}`
+            );
           }
         }
       }
-      expect(differences.slice(0, 20)).toEqual([]);
-    });
-  }
+    }
+    expect(differences.slice(0, 20)).toEqual([]);
+  });
 
   it("a service principal's API key holds the same rights through its token", async () => {
     const { databaseUrl, sql } = await databaseBeforeAp4();

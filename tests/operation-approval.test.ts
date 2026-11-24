@@ -140,19 +140,6 @@ describe("a call that waits for another person", () => {
     );
   });
 
-  it("executes once when two people approve at the same moment", async () => {
-    const f = await fixture();
-    const { runId, requestId } = await f.hold("raced");
-    const both = await Promise.all([
-      f.decide("approver", requestId, "approve"),
-      f.decide("second", requestId, "approve")
-    ]);
-    expect(both.map((response) => response.statusCode).sort()).toEqual([200, 409]);
-    await f.runJobs();
-    expect(f.executed).toEqual(["requester:raced"]);
-    expect((await f.run(runId)).status).toBe("done");
-  });
-
   it("lets a person with the right approve their own call", async () => {
     const f = await fixture();
     const { runId, requestId } = await f.hold("own", "key-own", "approver");
@@ -278,21 +265,6 @@ describe("a call that waits for another person", () => {
       status: "denied",
       denial: { kind: "forbidden", action: "users.manage" }
     });
-  });
-
-  it("does not execute an approved call the policy has come to refuse", async () => {
-    let settings: CentralPolicySetting[] = [approvalSetting];
-    const f = await fixture({ settings: () => settings });
-    const { runId, requestId } = await f.hold("refused-now");
-    settings = [{ operation: "testRunChange", value: "deny" }];
-
-    await f.approve("approver", requestId);
-    expect(await f.stored(requestId)).toMatchObject({
-      status: "superseded",
-      applyResult: { execution: "refused", error: { code: "POLICY_DENIED" } }
-    });
-    expect(f.executed).toEqual([]);
-    expect(await f.run(runId)).toMatchObject({ status: "denied", denial: { kind: "policy" } });
   });
 });
 

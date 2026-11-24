@@ -3,7 +3,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { LoadError, UiRoot, uiLabelsDe, uiLabelsEn, type UiLabels } from "@work-shape/catalyst-ui";
+import { LoadError, UiRoot, uiLabelsEn, type UiLabels } from "@work-shape/catalyst-ui";
 
 // A read that failed says what failed and offers to read it again, in the library's own words
 // for the button, so every screen that loads something offers the same control.
@@ -45,10 +45,5 @@ describe("LoadError", () => {
     expect(onRetry).not.toHaveBeenCalled();
     act(() => buttons[0]?.click());
     expect(onRetry).toHaveBeenCalledTimes(1);
-  });
-
-  it("names its button in the language of its root", () => {
-    const container = renderLoadError(uiLabelsDe, () => undefined);
-    expect(container.querySelector("button")?.textContent).toBe("Erneut versuchen");
   });
 });

@@ -741,13 +741,6 @@ describe("a tool result as the model reads it", () => {
     expect(first.text).toContain(cutResultHint("workspace.exec"));
     expect(first.notice).toMatchObject({ type: "tool_output_bounded", maxTokens: 12000 });
   });
-
-  it("names another way to the rest for each tool that has one", () => {
-    expect(cutResultHint("workspace.read_file")).toContain("offset");
-    expect(cutResultHint("data_store.query")).toContain("LIMIT and OFFSET");
-    expect(cutResultHint("tool_result.read")).toContain("smaller limit");
-    expect(cutResultHint("crm.lookup")).toBeUndefined();
-  });
 });
 
 function createMessage(

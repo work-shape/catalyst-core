@@ -138,19 +138,18 @@ describe("assets.list", () => {
       { params: { kind: "widget" } },
       { status: 422, code: "VALIDATION_FAILED" }
     );
-  });
+    // Finds a title by text that holds a quote or a backslash, which its JSON escapes.
+    {
+      await t.expectOk(t.admin.id, "assets.put", {
+        params: { kind: "agent", name: "kai-quoted" },
+        payload: { config: agent("kai-quoted", { displayName: 'The "Q4" share at C:\\ledger' }) }
+      });
+      const byText = (text: string) =>
+        t.names(t.admin.id, "assets.list", { params: { kind: "agent" }, query: { text } });
 
-  it("finds a title by text that holds a quote or a backslash, which its JSON escapes", async () => {
-    const t = await setup();
-    await t.expectOk(t.admin.id, "assets.put", {
-      params: { kind: "agent", name: "kai-quoted" },
-      payload: { config: agent("kai-quoted", { displayName: 'The "Q4" share at C:\\ledger' }) }
-    });
-    const list = (text: string) =>
-      t.names(t.admin.id, "assets.list", { params: { kind: "agent" }, query: { text } });
-
-    expect(await list('"Q4"')).toEqual(["kai-quoted"]);
-    expect(await list("C:\\ledger")).toEqual(["kai-quoted"]);
+      expect(await byText('"Q4"')).toEqual(["kai-quoted"]);
+      expect(await byText("C:\\ledger")).toEqual(["kai-quoted"]);
+    }
   });
 
   it("reads ten thousand assets through the name index, for a caller who may read few of them", async () => {
@@ -271,23 +270,12 @@ describe("the instance default and the availability of an asset", () => {
       (await t.expectOk(t.admin.id, "assets.list", { params: { kind: "skill" } })).json()
     );
     expect(skills.items).toEqual([{ name: "kai-guide" }]);
-  });
-
-  it("leaves the availability out for an agent that has no stored record", async () => {
-    const t = await setup();
-    await t.put(t.admin.id, "agent", "kai-intake");
-    const assetId = await t.assetId("agent", "kai-intake");
-    await t.grant(t.kai.id, "agent.read", { assetId });
+    // An agent that has no stored availability record carries none.
+    const intakeId = await t.assetId("agent", "kai-intake");
     await withTestSql(async (sql) => {
-      await sql`delete from config_asset_availability where asset_id = ${assetId}`;
+      await sql`delete from config_asset_availability where asset_id = ${intakeId}`;
     });
-
-    const read = readSchema.parse(
-      (
-        await t.expectOk(t.kai.id, "assets.get", { params: { kind: "agent", name: "kai-intake" } })
-      ).json()
-    );
-    expect(read).toEqual({ name: "kai-intake" });
+    expect(await read(t.kai.id, "agent", "kai-intake")).toEqual({ name: "kai-intake" });
   });
 });
 

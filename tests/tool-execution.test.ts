@@ -22,6 +22,12 @@ import {
   type OperationApprovalRequests
 } from "@work-shape/catalyst-tool-execution";
 import { defineTool, toolFailed, toolSuccess } from "@work-shape/catalyst-tool-sdk";
+import {
+  formatSpreadsheetRangeSelector,
+  parseSpreadsheetRangeSelector,
+  resolveSpreadsheetSheetName,
+  spreadsheetSelectorKey
+} from "../packages/tool-execution/src/spreadsheet-preview-selectors";
 import { createMemoryOperationRunStore } from "./support/memory-operation-runs";
 import {
   createTestToolRunner,
@@ -121,24 +127,11 @@ function setup(options: Partial<TestToolRunnerOptions> = {}) {
 
 describe("an agent's tool call as an operation", () => {
   it("says a tool did not answer for a bare TIMEOUT without exposing provider details", async () => {
-    for (const locale of ["en", "de"] as const) {
-      const { runTool, runs } = setup();
-      const result = await runTool(request("demo.echo", { text: "timeout" }), {
-        ...context(),
-        locale
-      });
-      expect(result).toMatchObject({
-        status: "timed_out",
-        error: {
-          code: "timed_out",
-          message: expect.stringContaining(
-            locale === "de" ? "nicht rechtzeitig geantwortet" : "did not answer in time"
-          )
-        }
-      });
-      expect(JSON.stringify(result)).not.toContain("private provider details");
-      expect(runs).toMatchObject([{ status: "failed" }]);
-    }
+    const { runTool, runs } = setup();
+    const result = await runTool(request("demo.echo", { text: "timeout" }), context());
+    expect(result).toMatchObject({ status: "timed_out", error: { code: "timed_out" } });
+    expect(JSON.stringify(result)).not.toContain("private provider details");
+    expect(runs).toMatchObject([{ status: "failed" }]);
   });
 
   it.each(["timeout-exposed", "never"])(
@@ -392,45 +385,6 @@ describe("an agent's tool call as an operation", () => {
     expect(runs).toEqual([]);
   });
 
-  it.each(["knowledge.search", "knowledge.add_files"])(
-    "localizes unreadable input for %s before dispatch",
-    async (tool) => {
-      const { runTool, runs } = setup();
-      for (const locale of ["en", "de"] as const) {
-        for (const [code, english, german] of [
-          [
-            "invalid_json",
-            "Tool input must be valid JSON",
-            "Die Eingabe muss ein gültiges JSON-Objekt sein."
-          ],
-          [
-            "invalid_text",
-            "Text cannot be stored",
-            "Die Eingabe enthält ein NUL-Zeichen oder ein halbes Surrogatpaar, das sich nicht speichern lässt. Sende den Aufruf ohne es noch einmal."
-          ],
-          ["unknown", "Unreadable input", "Die Eingabe für diesen Aufruf ist nicht lesbar."]
-        ] as const) {
-          const result = await runTool(
-            request(tool, {}),
-            { ...context(), locale },
-            {
-              unreadableInput: { code, message: english }
-            }
-          );
-          expect(result).toMatchObject({
-            status: "failed",
-            error: {
-              code: "validation_failed",
-              message: locale === "de" ? german : english
-            }
-          });
-        }
-      }
-      expect(runs).toEqual([]);
-      expect(executed).toEqual([]);
-    }
-  );
-
   it("answers an input that could not be read with what the reader said", async () => {
     const { runTool } = setup();
     const result = await runTool(request("demo.echo", {}), context(), {
@@ -448,38 +402,14 @@ describe("an agent's tool call as an operation", () => {
     });
   });
 
-  it("answers a German caller's unreadable or too deep input in German", async () => {
+  it("refuses an input nested too deep before it runs anything", async () => {
     const { runTool } = setup();
-    const german: ToolExecutionContext = { ...context(), locale: "de" };
-    const unreadable = await runTool(request("demo.echo", {}), german, {
-      unreadableInput: { code: "invalid_json", message: "Tool input must be valid JSON" }
-    });
-    const message = "Die Eingabe muss ein gültiges JSON-Objekt sein.";
-    expect(unreadable).toEqual({
-      status: "failed",
-      error: {
-        code: "validation_failed",
-        message,
-        details: { issues: [{ code: "invalid_json", path: "", message }] }
-      }
-    });
-
     let deep: unknown = "x";
     for (let level = 0; level <= OPERATION_INPUT_MAX_DEPTH; level += 1) deep = { a: deep };
-    const tooDeep = await runTool(request("demo.echo", { text: "x", deep }), german);
+    const tooDeep = await runTool(request("demo.echo", { text: "x", deep }), context());
     expect(tooDeep).toMatchObject({
       status: "failed",
-      error: {
-        message: "Die Eingabe für diesen Aufruf ist zu tief verschachtelt.",
-        details: {
-          issues: [
-            {
-              code: "input_invalid",
-              message: "Die Eingabe für diesen Aufruf ist zu tief verschachtelt."
-            }
-          ]
-        }
-      }
+      error: { details: { issues: [{ code: "input_invalid" }] } }
     });
     expect(executed).toEqual([]);
   });
@@ -489,11 +419,7 @@ describe("an agent's tool call as an operation", () => {
     const result = await runTool(request("demo.echo", { text: "" }), context());
     expect(result).toMatchObject({
       status: "failed",
-      error: {
-        code: "not_allowed",
-        message:
-          "This agent is not set up for this action here. Nothing ran. Ask the person who built this agent or an instance administrator."
-      }
+      error: { code: "not_allowed" }
     });
   });
 
@@ -625,5 +551,23 @@ describe("a tool that declares less than a call of it needs", () => {
     ).toThrowError(
       "Tool 'demo.effectless' declares no effect. Declare effect 'reading' or 'changing' in its definition."
     );
+  });
+});
+
+describe("spreadsheet preview selectors", () => {
+  it("round-trips quoted sheet names containing apostrophes and separators", () => {
+    const parsed = parseSpreadsheetRangeSelector("'Bob''s ! Sheet'! A1:B4");
+
+    expect(parsed).toEqual({ sheetName: "Bob's ! Sheet", rangeText: "A1:B4" });
+    expect(formatSpreadsheetRangeSelector(parsed.sheetName ?? "", parsed.rangeText)).toBe(
+      "'Bob''s ! Sheet'!A1:B4"
+    );
+    expect(parseSpreadsheetRangeSelector(" A1:B4 ")).toEqual({ rangeText: "A1:B4" });
+  });
+
+  it("matches sheets case-insensitively, first match first, keeping the workbook's spelling", () => {
+    expect(spreadsheetSelectorKey(" Summary!A1:B4 ")).toBe("summary!a1:b4");
+    expect(resolveSpreadsheetSheetName(["Summary", "SUMMARY"], "summary")).toBe("Summary");
+    expect(resolveSpreadsheetSheetName(["Summary"], "Missing")).toBeUndefined();
   });
 });

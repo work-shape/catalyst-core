@@ -2,7 +2,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import type { JsonObject } from "@work-shape/catalyst-core";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, getTestExecution } from "./support/test-instance";
 
@@ -78,15 +80,37 @@ describe("the input schema a model is shown for a tool", () => {
       await rm(workspaceObjectRoot, { recursive: true, force: true });
     }
   });
+});
 
-  it("says what is wrong with a root that is a union or carries a combinator", () => {
-    expect(rootIssue({ oneOf: [{ type: "object" }, { type: "object" }] })).toBe(
-      "has 'oneOf' at its root"
-    );
-    expect(rootIssue({ type: "object", properties: {}, anyOf: [{ required: ["a"] }] })).toBe(
-      "has 'anyOf' at its root"
-    );
-    expect(rootIssue({ type: "object" })).toBe("has no 'properties' at its root");
-    expect(rootIssue({ type: "object", properties: {} })).toBeUndefined();
+describe("what a tool must declare for an instance to start", () => {
+  // A changing tool without a mode now uses the instance confirmation default.
+  it("W1-8: rejects a missing effect and starts a changing tool using default confirmation", async () => {
+    const changing = defineTool({
+      name: "demo.modeless",
+      effect: "changing",
+      description: "Changes something and names no permission mode.",
+      inputSchema: z.object({}),
+      execute: () => toolSuccess({})
+    });
+    const start = (tool: typeof changing) =>
+      createTestInstance({
+        config: createTestConfig({
+          tools: [{ name: tool.name, enabled: true }],
+          toolNames: [tool.name]
+        }),
+        env: {},
+        tools: [tool]
+      });
+
+    await expect(
+      start(Object.assign({}, changing, { name: "demo.effectless", effect: undefined }))
+    ).rejects.toMatchObject({
+      code: "VALIDATION_FAILED",
+      details: {
+        issues: [{ message: expect.stringContaining("'demo.effectless' declares no effect") }]
+      }
+    });
+    const app = await start(changing);
+    await app.close();
   });
 });

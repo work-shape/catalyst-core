@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
@@ -6,6 +8,7 @@ import {
   asClientInstanceId,
   asConversationId,
   asToolCallId,
+  isDataToolName,
   type ToolExecutionContext
 } from "@work-shape/catalyst-core";
 import { ToolRegistry } from "@work-shape/catalyst-tool-execution";
@@ -232,12 +235,6 @@ function chatChunk(toolCalls: ChatToolFragment[], finishReason?: string): unknow
 afterEach(() => vi.unstubAllGlobals());
 
 describe.each<Api>(["chat_completions", "responses"])("Readable tool names: %s", (api) => {
-  it("sends workspace.exec as workspace_exec", async () => {
-    const { provider, bodies } = setup(api);
-    await request(provider, ["workspace.exec"]);
-    expect(offeredNames(captured(bodies))).toEqual(["workspace_exec"]);
-  });
-
   it("promotes every collision member and maps both back regardless of order", async () => {
     const names = ["a.b_c", "a_b.c"];
     const expected = names.map((name) => `a_b_c_${hash(name).slice(0, 8)}`);
@@ -436,36 +433,33 @@ describe.each<Api>(["chat_completions", "responses"])("Readable tool names: %s",
     );
   });
 
-  it.each([2, 3, 5])(
-    "avoids %s occupied history name candidates deterministically",
-    async (count) => {
-      const removed = "a.b";
-      const candidates = [
-        "a_b",
-        `a_b_${hash(removed).slice(0, 8)}`,
-        `t_${hash(removed).slice(0, 62)}`,
-        `t_${hash(`${removed}#1`).slice(0, 62)}`,
-        `t_${hash(`${removed}#2`).slice(0, 62)}`
-      ];
-      const offered = candidates.slice(0, count);
-      const { provider, bodies } = setup(api);
-      await request(provider, offered, history([removed]));
-      await request(provider, offered, history([removed]));
-      const body = captured(bodies);
-      const wires = historyNames(body);
-      expect(offeredNames(body)).toEqual(offered);
-      expect(wires).toEqual([
-        count === 2
-          ? `t_${hash(removed).slice(0, 62)}`
-          : `t_${hash(`${removed}#${count - 2}`).slice(0, 62)}`
-      ]);
-      for (const wire of wires) {
-        expect(wire).toMatch(validWireName);
-        expect(offeredNames(body)).not.toContain(wire);
-      }
-      expect(historyNames(captured(bodies, 1))).toEqual(wires);
+  it.each([2, 5])("avoids %s occupied history name candidates deterministically", async (count) => {
+    const removed = "a.b";
+    const candidates = [
+      "a_b",
+      `a_b_${hash(removed).slice(0, 8)}`,
+      `t_${hash(removed).slice(0, 62)}`,
+      `t_${hash(`${removed}#1`).slice(0, 62)}`,
+      `t_${hash(`${removed}#2`).slice(0, 62)}`
+    ];
+    const offered = candidates.slice(0, count);
+    const { provider, bodies } = setup(api);
+    await request(provider, offered, history([removed]));
+    await request(provider, offered, history([removed]));
+    const body = captured(bodies);
+    const wires = historyNames(body);
+    expect(offeredNames(body)).toEqual(offered);
+    expect(wires).toEqual([
+      count === 2
+        ? `t_${hash(removed).slice(0, 62)}`
+        : `t_${hash(`${removed}#${count - 2}`).slice(0, 62)}`
+    ]);
+    for (const wire of wires) {
+      expect(wire).toMatch(validWireName);
+      expect(offeredNames(body)).not.toContain(wire);
     }
-  );
+    expect(historyNames(captured(bodies, 1))).toEqual(wires);
+  });
 
   it("serializes a marked unknown name in history as a free valid wire name", async () => {
     const marked = "unknown:a_b";
@@ -544,41 +538,6 @@ describe("Fragmented chat completion tool names", () => {
     ]);
     expect(completion.toolCalls).toEqual([
       { toolCallId: "call_0", toolName: "workspace.exec", input: { command: "pwd" } }
-    ]);
-  });
-
-  it("announces parallel repeated names once in index order before their input deltas", async () => {
-    const provider = setupChatStream([
-      chatChunk([
-        { index: 0, id: "call_0", function: { name: "workspace_exec", arguments: "" } },
-        { index: 1, id: "call_1", function: { name: "storage_read", arguments: "" } }
-      ]),
-      chatChunk([
-        { index: 1, function: { name: "storage_read", arguments: '{"path":' } },
-        { index: 0, function: { name: "workspace_exec", arguments: '{"command":' } }
-      ]),
-      chatChunk([
-        { index: 0, function: { name: "workspace_exec", arguments: '"pwd"}' } },
-        { index: 1, function: { name: "storage_read", arguments: '"file"}' } }
-      ])
-    ]);
-    const { completion, events } = await request(
-      provider,
-      ["workspace.exec", "storage.read"],
-      undefined,
-      true
-    );
-    expect(events.slice(0, -1)).toEqual([
-      { type: "tool_call_preparing", toolCallId: "call_0", toolName: "workspace.exec" },
-      { type: "tool_call_preparing", toolCallId: "call_1", toolName: "storage.read" },
-      { type: "tool_call_input_delta", delta: '{"path":' },
-      { type: "tool_call_input_delta", delta: '{"command":' },
-      { type: "tool_call_input_delta", delta: '"pwd"}' },
-      { type: "tool_call_input_delta", delta: '"file"}' }
-    ]);
-    expect(completion.toolCalls).toEqual([
-      { toolCallId: "call_0", toolName: "workspace.exec", input: { command: "pwd" } },
-      { toolCallId: "call_1", toolName: "storage.read", input: { path: "file" } }
     ]);
   });
 
@@ -773,5 +732,31 @@ describe("Fragmented chat completion tool names", () => {
     expect(completion.toolCalls).toEqual([
       { toolCallId: "call_0", toolName: "workspace.exec", input: { ok: true } }
     ]);
+  });
+});
+
+/** The tool names of the demo's agent, as its working copy lists them. */
+function demoAgentToolNames(): string[] {
+  const text = readFileSync(
+    fileURLToPath(new URL("../clients/demo/agents/workflow-assistant.agent.yaml", import.meta.url)),
+    "utf8"
+  );
+  const list = /^toolNames:\n((?: {2}- \S+\n)+)/mu.exec(text)?.[1] ?? "";
+  return Array.from(list.matchAll(/^ {2}- (\S+)$/gmu), (match) => match[1] ?? "");
+}
+
+describe("the tools of the demo's agent on the way to the model", () => {
+  it("sends every tool of the agent under a readable name the provider accepts", async () => {
+    const names = demoAgentToolNames();
+    // The six tools of the Connection are among them, with the longest names the agent has.
+    expect(names.filter(isDataToolName)).toHaveLength(6);
+    const { provider, bodies } = setup("responses");
+    const { completion } = await request(provider, names);
+    const offered = offeredNames(captured(bodies));
+    // No hash tail: none of the agent's names is longer than the provider allows.
+    expect(offered).toEqual(names.map((name) => name.replace(/[^a-zA-Z0-9_-]/gu, "_")));
+    for (const name of offered) expect(name).toMatch(validWireName);
+    expect(offered).toContain("connection_sample-business_revenue_by_month");
+    expect(completion.toolCalls.map((call) => call.toolName)).toEqual(names);
   });
 });

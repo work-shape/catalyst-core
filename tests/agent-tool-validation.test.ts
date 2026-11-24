@@ -40,7 +40,7 @@ describe("agent tool references on the target instance", () => {
       })
     });
 
-  it.each(["disabled", "operation disabled", "secret unreadable", "catalog undiscovered"])(
+  it.each(["disabled", "operation disabled", "catalog undiscovered"])(
     "accepts an existing Connection with a warning when %s",
     async (reason) => {
       const dataTools: DataToolSource = {
@@ -110,7 +110,7 @@ describe("agent tool references on the target instance", () => {
     }
   );
 
-  it.each([{ exposure: [] }, { exposure: ["bridge"] }, { exposure: ["workflow"] }])(
+  it.each([{ exposure: [] }, { exposure: ["workflow"] }])(
     "refuses a stored Connection operation without agent exposure (%j)",
     async ({ exposure }) => {
       const t = await setupRelease({

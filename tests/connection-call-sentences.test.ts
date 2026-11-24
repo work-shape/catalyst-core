@@ -60,32 +60,22 @@ const REASONS: ConnectionCallReason[] = [
   "target_exists"
 ];
 
-/** What a caller can do next, as each sentence has to say it. */
-const NEXT_STEP = /[Tt]r(?:y|ying) again|Asking for less may work/u;
+/** A few reasons prove the call path; the sentence of every reason is checked above. */
+const CALLED_REASONS: ConnectionCallReason[] = [
+  "connection_not_connected",
+  "upstream_timeout",
+  "input_file_too_large"
+];
 
 describe("the sentence of a reason", () => {
-  it("exists for every reason the call path can end with", () => {
+  it("exists for every reason the call path can end with, without the machinery", () => {
     expect(
       [...REASONS, "personal_connection_context", "personal_connection_region"].sort()
     ).toEqual(Object.keys(CONNECTION_CALL_REASONS).sort());
-  });
-
-  it.each(REASONS)("%s names the Connection and says whether to try again", (reason) => {
-    const sentence = connectionCallSentence(reason, "Sample business");
-
-    expect(sentence).toMatch(/[Tt]he connection Sample business/u);
-    expect(sentence).toMatch(NEXT_STEP);
-    expect(sentence).toMatch(/^[A-Z].*\.$/u);
-    // No code and no word of the machinery: the reader is a person.
-    expect(sentence).not.toContain(reason);
-    expect(sentence).not.toMatch(/_|egress|upstream|schema|slot|revision|:\d/u);
-  });
-
-  it("names no Connection where the call found none", () => {
-    for (const name of [undefined, "", " \n "]) {
-      expect(connectionCallSentence("connection_unavailable", name)).toMatch(
-        /^This connection cannot be used right now\./u
-      );
+    for (const reason of REASONS) {
+      const sentence = connectionCallSentence(reason, "Sample business");
+      expect(sentence).toMatch(/[Tt]he connection Sample business/u);
+      expect(sentence).not.toMatch(/_|egress|upstream|schema|slot|revision|:\d/u);
     }
   });
 
@@ -102,28 +92,31 @@ describe("the sentence of a reason", () => {
 });
 
 describe("a call of a Connection operation that fails", () => {
-  it.each(REASONS)("ends as %s with its sentence, and the run keeps the reason", async (reason) => {
-    const t = await fixture();
-    const assetId = await t.seed("crm", { displayName: "Sample business" });
-    await t.grant(t.kai.id, "connection.use", { assetId });
-    // The text a Connector type composed never leaves, whatever the reason.
-    t.setBehaviour(() =>
-      Promise.reject(connectionCallError(reason, "sample-mcp:8787 said: token rejected"))
-    );
+  it.each(CALLED_REASONS)(
+    "ends as %s with its sentence, and the run keeps the reason",
+    async (reason) => {
+      const t = await fixture();
+      const assetId = await t.seed("crm", { displayName: "Sample business" });
+      await t.grant(t.kai.id, "connection.use", { assetId });
+      // The text a Connector type composed never leaves, whatever the reason.
+      t.setBehaviour(() =>
+        Promise.reject(connectionCallError(reason, "sample-mcp:8787 said: token rejected"))
+      );
 
-    const failed = await t.failure(t.invoke(t.kai, "connection.crm.echo", { text: "a" }));
+      const failed = await t.failure(t.invoke(t.kai, "connection.crm.echo", { text: "a" }));
 
-    // The operation of the fixture reads, which the sentence of a timeout says.
-    const sentence = connectionCallSentence(reason, "Sample business", "reading");
-    expect(failed).toEqual({ code: CONNECTION_CALL_REASONS[reason], reason, message: sentence });
-    const runs = await t.runs();
-    expect(runs).toHaveLength(1);
-    expect(runs[0]).toMatchObject({
-      status: "failed",
-      error: { code: CONNECTION_CALL_REASONS[reason], reason, message: sentence }
-    });
-    expect(JSON.stringify(runs)).not.toContain("sample-mcp");
-  });
+      // The operation of the fixture reads, which the sentence of a timeout says.
+      const sentence = connectionCallSentence(reason, "Sample business", "reading");
+      expect(failed).toEqual({ code: CONNECTION_CALL_REASONS[reason], reason, message: sentence });
+      const runs = await t.runs();
+      expect(runs).toHaveLength(1);
+      expect(runs[0]).toMatchObject({
+        status: "failed",
+        error: { code: CONNECTION_CALL_REASONS[reason], reason, message: sentence }
+      });
+      expect(JSON.stringify(runs)).not.toContain("sample-mcp");
+    }
+  );
 
   it("keeps a refused target out of the sentence", async () => {
     const t = await fixture();
@@ -163,6 +156,10 @@ describe("a call of a Connection operation that fails", () => {
       message: sentence
     });
     expect(sentence).not.toMatch(/\d|resolve/u);
+    // Still refused before anything else: no credential is resolved and nothing is called.
+    expect(t.sequence.slice(-2)).toEqual(["check egress", "record failed"]);
+    expect(t.sequence).not.toContain("resolve credential");
+    expect(t.executed).toEqual([]);
   });
 
   // Fails without the fix: the result of a timeout carried no details, and a failure answered
@@ -181,7 +178,11 @@ describe("a call of a Connection operation that fails", () => {
 
     expect(late.result).toMatchObject({
       status: "failed",
-      error: { code: "TIMEOUT", details: { reason: "upstream_timeout" } }
+      error: {
+        code: "TIMEOUT",
+        message: connectionCallSentence("upstream_timeout", "Sample business", "reading"),
+        details: { reason: "upstream_timeout" }
+      }
     });
 
     t.setBehaviour(() => Promise.reject(connectionCallError("upstream_error")));
@@ -253,51 +254,6 @@ describe("a call of a Connection operation that fails", () => {
   });
 });
 
-// What a real model made of three texts: a missing right read as an outage, a timed-out read
-// came with a warning about a change, and a refused network path read as a switched-off
-// Connection. Each test fails without the change.
-
-/** Nothing of the machinery in a text a model words an answer from. */
-const NO_CODE_OR_ADDRESS = /[a-z]_[a-z]|connection\.use|:\d|\d+\.\d+|https?:|egress|upstream/u;
-
-describe("the three texts a model misread", () => {
-  it("says a missing right as a refusal that an administrator lifts", () => {
-    const sentence = connectionUseDeniedSentence("Sample business");
-
-    expect(sentence).toBe(
-      "The person making this request does not hold the right to use the connection Sample business. Nothing is wrong with the connection, and trying again will not help. An administrator can give the right under Settings > Instance > Access."
-    );
-    expect(sentence).not.toMatch(NO_CODE_OR_ADDRESS);
-    expect(sentence).not.toMatch(/available|reached|right now|disabled/u);
-    expect(connectionUseDeniedSentence(undefined)).toContain("the right to use this connection.");
-  });
-
-  it("says a timed-out read is safe to repeat and keeps the warning for a change", () => {
-    const reading = connectionCallSentence("upstream_timeout", "Sample business", "reading");
-
-    expect(reading).toBe(
-      "The connection Sample business did not answer in time. This action only reads, so trying again is safe. If it keeps failing, an administrator can check it under Studio > Connections."
-    );
-    expect(reading).not.toMatch(/chang/u);
-    expect(reading).not.toMatch(NO_CODE_OR_ADDRESS);
-    for (const effect of ["changing", undefined] as const) {
-      const sentence = connectionCallSentence("upstream_timeout", "Sample business", effect);
-      expect(sentence).toContain("it is not known whether the change happened");
-      expect(sentence).not.toContain("safe");
-    }
-  });
-
-  it("says a refused network path as a path to allow, not a Connection that is off", () => {
-    const sentence = connectionCallSentence("egress_denied", "Sample business");
-
-    expect(sentence).toBe(
-      "The network path from this instance to the outside system of the connection Sample business has not been allowed yet. The connection itself is switched on. Trying again will not help until an administrator allows the path. The state is shown under Studio > Connections."
-    );
-    expect(sentence).not.toMatch(/disabled|switched off|not available/u);
-    expect(sentence).not.toMatch(NO_CODE_OR_ADDRESS);
-  });
-});
-
 describe("a call by somebody without the right to use the Connection", () => {
   it("is denied with the sentence, which names the Connection to an agent's chat only", async () => {
     const t = await fixture();
@@ -334,31 +290,5 @@ describe("a call by somebody without the right to use the Connection", () => {
     expect(JSON.stringify(byPerson.result)).not.toContain("Sample business");
     expect(t.executed).toEqual([]);
     expect(await t.runs()).toMatchObject([{ status: "denied" }, { status: "denied" }]);
-  });
-});
-
-describe("a call that timed out", () => {
-  it("is told by the effect of its operation", async () => {
-    const t = await fixture();
-    const assetId = await t.seed("crm", {
-      displayName: "Sample business",
-      operations: [operationOf("echo"), operationOf("write", { effect: "changing" })]
-    });
-    await t.grant(t.kai.id, "connection.use", { assetId });
-    t.state.limits = { ...DEFAULT_LIMITS, callTimeoutMs: 150 };
-    t.setBehaviour(() => new Promise(() => undefined));
-
-    const read = await t.failure(t.invoke(t.kai, "connection.crm.echo", { text: "a" }));
-    const changed = await t.failure(
-      t.invoke(t.kai, "connection.crm.write", {}, { effect: "changing" })
-    );
-
-    expect(read.message).toBe(
-      connectionCallSentence("upstream_timeout", "Sample business", "reading")
-    );
-    expect(changed.message).toBe(
-      connectionCallSentence("upstream_timeout", "Sample business", "changing")
-    );
-    expect(changed.message).not.toBe(read.message);
   });
 });

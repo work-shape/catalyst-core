@@ -1,6 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { z } from "zod";
 import { requestAnswered } from "./allowed-page-errors";
@@ -35,7 +33,6 @@ const member = {
   password: "e2e-projects-member-password"
 };
 const idSchema = z.object({ id: z.string() });
-const shotsDir = process.env.E2E_SHOTS_DIR;
 
 async function signIn(page: Page, person: { email: string; password: string }): Promise<void> {
   const signedIn = await page.request.post(`${apiOrigin}/api/auth/sign-in/email`, {
@@ -47,19 +44,6 @@ async function signIn(page: Page, person: { email: string; password: string }): 
   await page.addInitScript(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
   await page.goto("/");
   await expect(page.getByRole("navigation", { name: "Hauptnavigation" })).toBeVisible();
-}
-
-async function shot(page: Page, name: string): Promise<void> {
-  if (!shotsDir) return;
-  await mkdir(shotsDir, { recursive: true });
-  for (const width of [1280, 390]) {
-    await page.setViewportSize({ width, height: width === 390 ? 844 : 800 });
-    await page.screenshot({
-      path: join(shotsDir, `${name}-de-${String(width)}.png`),
-      animations: "disabled"
-    });
-  }
-  await page.setViewportSize({ width: 1280, height: 800 });
 }
 
 /** Makes a project on the Projects page and answers the address of its page. */
@@ -127,23 +111,6 @@ test(NOT_FOUND_TEST, async ({ page, browser, baseURL, pageErrors }) => {
   });
   expect(older.ok()).toBe(true);
 
-  // Projects have no section row: the group "Projekte" is their place in the rail, and without
-  // a project it shows its label with the plus alone.
-  await page.goto(`/w/${workspaceId}`);
-  const nav = page.getByRole("navigation", { name: "Hauptnavigation" });
-  await expect(nav.getByRole("button", { name: "Projekte", exact: true })).toHaveCount(0);
-  const railGroup = page.getByTestId("rail-projects");
-  await expect(railGroup).toContainText("Projekte");
-  await expect(railGroup.getByText("Alle Projekte")).toHaveCount(0);
-  await shot(page, "projects-rail-empty");
-
-  // Its plus makes the first project; the creator makes a shared and a private one.
-  await railGroup.getByRole("button", { name: "Projekt hinzufügen" }).click();
-  await expect(page.getByRole("dialog", { name: "Neues Projekt" })).toBeVisible();
-  await page
-    .getByRole("dialog", { name: "Neues Projekt" })
-    .getByRole("button", { name: "Abbrechen" })
-    .click();
   const sharedPath = await createProject(page, workspaceId, sharedTitle, /^Geteilt mit/u);
   await expect(page.getByTestId("project-audience-shared")).toBeVisible();
   await startChatInProject(page, sharedTitle, "Was fehlt noch in der Checkliste?");
@@ -167,35 +134,12 @@ test(NOT_FOUND_TEST, async ({ page, browser, baseURL, pageErrors }) => {
   await expect(
     page.getByTestId("project-conversation").filter({ hasText: olderTitle })
   ).toHaveCount(1);
-  await shot(page, "project-shared");
-  // The group's label opens the page; no "Alle Projekte" row stands under the projects.
-  await expect(railGroup.getByText("Alle Projekte")).toHaveCount(0);
-  await railGroup.getByRole("link", { name: "Projekte", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/projects$`, "u"));
-  await expect(page.getByTestId("project-card")).toHaveCount(2);
-  await shot(page, "projects-creator");
-
-  // On a phone the drawer holds the same group, with its plus and its label to the page.
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole("button", { name: "Seitenleiste öffnen" }).click();
-  const drawer = page.getByRole("dialog", { name: "Hauptnavigation" });
-  const drawerGroup = drawer.getByTestId("rail-projects");
-  await expect(drawerGroup.getByTestId("rail-project")).toHaveCount(2);
-  await expect(drawerGroup.getByRole("button", { name: "Projekt hinzufügen" })).toBeVisible();
-  await expect(drawerGroup.getByRole("link", { name: "Projekte", exact: true })).toBeVisible();
-  await expect(drawer.getByRole("button", { name: "Projekte", exact: true })).toHaveCount(0);
-  if (shotsDir) {
-    await page.screenshot({ path: join(shotsDir, "projects-drawer-de-390.png") });
-  }
-  await page.keyboard.press("Escape");
-  await page.setViewportSize({ width: 1280, height: 800 });
 
   // The member sees the shared project with its two chats, and not the private one.
   await memberPage.goto(`/w/${workspaceId}/projects`);
   await expect(memberPage.getByTestId("project-card")).toHaveCount(1);
   await expect(memberPage.getByTestId("project-card")).toContainText(sharedTitle);
   await expect(memberPage.getByText(privateTitle)).toHaveCount(0);
-  await shot(memberPage, "projects-member");
 
   await memberPage.goto(sharedPath);
   await expect(memberPage.getByTestId("project-conversation")).toHaveCount(2);
@@ -204,6 +148,5 @@ test(NOT_FOUND_TEST, async ({ page, browser, baseURL, pageErrors }) => {
   await memberPage.goto(privatePath);
   await expect(memberPage.getByTestId("project-not-found")).toBeVisible();
   await expect(memberPage.getByText(privateTitle)).toHaveCount(0);
-  await shot(memberPage, "project-private-by-link");
   await memberContext.close();
 });

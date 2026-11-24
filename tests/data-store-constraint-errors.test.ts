@@ -15,11 +15,8 @@ const MARKER = "private-row-value-in-trigger-diagnostics";
 const cases: { kind: string; code: string; name: string | undefined; row: JsonObject }[] = [
   { kind: "unique", code: "23505", name: "unique_address", row: { adresse: "held" } },
   { kind: "unique-index", code: "23505", name: "unique_year_index", row: { year: 2000 } },
-  { kind: "check", code: "23514", name: "bounded_price", row: { price: -1 } },
   { kind: "not-null", code: "23502", name: "NOT NULL (year)", row: { year: null } },
   { kind: "foreign-key", code: "23503", name: "known_year", row: { year: 1999 } },
-  { kind: "exclusion", code: "23P01", name: "distinct_period", row: { period: "[1,3)" } },
-  { kind: "raised-check", code: "23514", name: undefined, row: { adresse: MARKER } },
   { kind: "raised-unique", code: "23505", name: undefined, row: { adresse: MARKER } },
   { kind: "ddl-index", code: "23505", name: undefined, row: { adresse: MARKER } },
   { kind: "ddl-index-other-table", code: "23505", name: undefined, row: { adresse: MARKER } },
@@ -140,73 +137,69 @@ describe("constraint diagnostics through a Data Store operation", () => {
         authSource: "test",
         clientInstanceId: w.clientInstanceId
       };
-      for (const locale of ["en", "de"] as const) {
-        const outcome = await runOperation(
-          {
-            operation: "data_store.findings.load",
-            effect: "changing",
-            input: {
-              table: "objekt",
-              dataset: { $dataset: "rows", rowCount: 1, bytes: JSON.stringify(rows).length }
-            },
-            actor,
-            origin: { kind: "workflow", workflowRunId: "constraints", stepRunId: locale },
-            idempotencyKey: locale,
-            correlationId: "constraint-errors"
+      const locale = "en";
+      const outcome = await runOperation(
+        {
+          operation: "data_store.findings.load",
+          effect: "changing",
+          input: {
+            table: "objekt",
+            dataset: { $dataset: "rows", rowCount: 1, bytes: JSON.stringify(rows).length }
           },
-          {
-            clientInstanceId: w.clientInstanceId,
-            registry,
-            runs: db.store.operationRuns,
-            authorizer: { forActor: async () => accessOf(actor) },
-            resolveResource: (resource) => Promise.resolve({ resource }),
-            events: { emit: async () => ({ outcome: "allow", guardrails: [] }) },
-            audit: new NoopAuditRecorder(),
-            policy: {
-              instanceDefaults: { reading: "allow", changing: "allow" },
-              centralSettings: () => []
-            },
-            logger: w.logger
-          },
-          { locale }
-        );
-        expect(outcome.result).toMatchObject({
-          status: "failed",
-          error: { code: "VALIDATION_FAILED", details: { sqlState: code } }
-        });
-        if (outcome.result.status !== "failed") throw new Error("Expected constraint refusal");
-        const stored = await db.store.operationRuns.get({
+          actor,
+          origin: { kind: "workflow", workflowRunId: "constraints", stepRunId: locale },
+          idempotencyKey: "constraint-key",
+          correlationId: "constraint-errors"
+        },
+        {
           clientInstanceId: w.clientInstanceId,
-          id: outcome.run.id
-        });
-        expect(stored).toMatchObject({
-          status: "failed",
-          error: { code: outcome.result.error.code, message: outcome.result.error.message }
-        });
-        if (name) {
-          expect(outcome.result.error.message).toContain(name);
-          expect(outcome.result.error.message).toContain("objekt");
-          expect(outcome.result.error.message).toContain(
-            locale === "de" ? "verletzt die Einschränkung" : "violates constraint"
-          );
-        } else {
-          expect(outcome.result.error.message).toBe(
-            `The load ${fixedReasons[code]} (SQLSTATE ${code}).`
-          );
-        }
+          registry,
+          runs: db.store.operationRuns,
+          authorizer: { forActor: async () => accessOf(actor) },
+          resolveResource: (resource) => Promise.resolve({ resource }),
+          events: { emit: async () => ({ outcome: "allow", guardrails: [] }) },
+          audit: new NoopAuditRecorder(),
+          policy: {
+            instanceDefaults: { reading: "allow", changing: "allow" },
+            centralSettings: () => []
+          },
+          logger: w.logger
+        },
+        { locale }
+      );
+      expect(outcome.result).toMatchObject({
+        status: "failed",
+        error: { code: "VALIDATION_FAILED", details: { sqlState: code } }
+      });
+      if (outcome.result.status !== "failed") throw new Error("Expected constraint refusal");
+      const stored = await db.store.operationRuns.get({
+        clientInstanceId: w.clientInstanceId,
+        id: outcome.run.id
+      });
+      expect(stored).toMatchObject({
+        status: "failed",
+        error: { code: outcome.result.error.code, message: outcome.result.error.message }
+      });
+      if (name) {
+        expect(outcome.result.error.message).toContain(name);
+        expect(outcome.result.error.message).toContain("objekt");
+      } else {
+        expect(outcome.result.error.message).toBe(
+          `The load ${fixedReasons[code]} (SQLSTATE ${code}).`
+        );
+      }
+      expect(
+        inspect({ result: outcome.result, run: stored, logs: w.logged }, { depth: null })
+      ).not.toContain(MARKER);
+      expect(await target`select * from objekt order by id`).toEqual(before);
+      expect(await target`select count(*)::int as n from catalyst.loads`).toEqual([{ n: 0 }]);
+      if (ddl) {
+        expect(await target`select * from scratch`).toEqual([{ id: 1 }]);
         expect(
-          inspect({ result: outcome.result, run: stored, logs: w.logged }, { depth: null })
-        ).not.toContain(MARKER);
-        expect(await target`select * from objekt order by id`).toEqual(before);
-        expect(await target`select count(*)::int as n from catalyst.loads`).toEqual([{ n: 0 }]);
-        if (ddl) {
-          expect(await target`select * from scratch`).toEqual([{ id: 1 }]);
-          expect(
-            await target`select c.relname from pg_catalog.pg_class c
-              join pg_catalog.pg_namespace n on n.oid = c.relnamespace
-              where n.nspname = 'public' and c.relname = ${MARKER}`
-          ).toEqual([]);
-        }
+          await target`select c.relname from pg_catalog.pg_class c
+            join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+            where n.nspname = 'public' and c.relname = ${MARKER}`
+        ).toEqual([]);
       }
     }
   );

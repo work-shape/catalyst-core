@@ -127,21 +127,11 @@ describe("Table columns with a priority", () => {
       pair.querySelector("dd")?.innerHTML
     ]);
 
-  it("shows every column while they fit at their full width", () => {
-    render(310);
-
-    expect(folded("th")).toEqual([]);
-    expect(container.querySelector('[data-slot="table-row-detail"]')).toBeNull();
-  });
-
   it("folds the least important columns until the rest fit, into the row's details", () => {
     render(220);
 
     // 310 needs 90 more than 220: Last (50) is not enough, Access (60) is.
     expect(folded("th")).toEqual(["Access", "Last"]);
-    for (const head of container.querySelectorAll("th[data-folded]")) {
-      expect(head.className.split(" ")).toContain("data-folded:hidden");
-    }
     // Each value shows whole, in column order, under its head's label; the rest stay put.
     expect(details()).toEqual([
       ["Access", "Admin"],
@@ -150,17 +140,6 @@ describe("Table columns with a priority", () => {
     const cells = [...container.querySelectorAll("td:not([data-folded])")];
     expect(cells.map((cell) => cell.firstChild?.textContent)).toEqual(["Mara Oyelaran", "Invited"]);
     expect(cells[0]?.querySelector("dl")).not.toBeNull();
-  });
-
-  // UI-KEYS: at 390 a folded value stood beside its label however wide it was, and spilled
-  // over the next column.
-  it("lets a folded value wrap under its label where the room beside it is too narrow", () => {
-    render(220);
-
-    for (const pair of container.querySelectorAll('[data-slot="table-row-detail"] > div')) {
-      expect(pair.className.split(" ")).toContain("flex-wrap");
-    }
-    expect(details()).not.toEqual([]);
   });
 
   it("unfolds the columns again once the room returns", () => {

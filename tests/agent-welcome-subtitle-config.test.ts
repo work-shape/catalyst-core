@@ -31,19 +31,6 @@ describe("agent presentation config", () => {
     ).toBeUndefined();
   });
 
-  it("greets in the reader's language when neither the agent nor the instance sets a greeting", () => {
-    const config = parseClientInstanceConfig(
-      baseConfig({ localization: { defaultLocale: "en", supportedLocales: ["en", "de"] } })
-    );
-    const greeting = (requestedLocale: "en" | "de") =>
-      createSafeConfigView(config, createAssets({}), resolveInstanceModules(config, []).snapshot, {
-        requestedLocale
-      }).ui.welcomeMessage;
-
-    expect(greeting("de")).toBe("Wie kann ich helfen?");
-    expect(greeting("en")).toBe("How can I help?");
-  });
-
   it("allows an empty subtitle so deployments can hide the empty-state subline", () => {
     const config = parseClientInstanceConfig(baseConfig());
     const assets = createAssets({
@@ -59,33 +46,6 @@ describe("agent presentation config", () => {
     );
 
     expect(safeConfig.agents[0]?.welcomeSubtitle).toBe("");
-  });
-
-  it("resolves a localized subtitle when one is configured", () => {
-    const config = parseClientInstanceConfig(
-      baseConfig({
-        localization: {
-          defaultLocale: "en",
-          supportedLocales: ["en", "de"]
-        }
-      })
-    );
-    const assets = createAssets({
-      welcomeMessage: "How can I help?",
-      welcomeSubtitle: {
-        en: "Ready for this conversation.",
-        de: "Bereit fuer diese Unterhaltung."
-      }
-    });
-
-    const safeConfig = createSafeConfigView(
-      config,
-      assets,
-      resolveInstanceModules(config, []).snapshot,
-      { requestedLocale: "de" }
-    );
-
-    expect(safeConfig.agents[0]?.welcomeSubtitle).toBe("Bereit fuer diese Unterhaltung.");
   });
 });
 

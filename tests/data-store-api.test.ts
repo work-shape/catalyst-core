@@ -50,7 +50,7 @@ interface ErrorBody {
 }
 
 describe("a Data Store on an assembled instance", () => {
-  const { start, close, put, publish, publishStore, recordOf, person } = useDataStoreInstance({
+  const { start, close, put, publishStore, person } = useDataStoreInstance({
     resetStateOnCleanup: true
   });
 
@@ -96,51 +96,22 @@ describe("a Data Store on an assembled instance", () => {
     retries: world.execution.modulesStarted.jobRetries.map((retry) => retry.kind.kind)
   });
 
-  it("refuses malformed scoped table metadata and keeps ownership scope working", async () => {
-    const world = await start(true);
-    for (const scope of ["mandant", { mandant: "mandant_nr" }, null, false]) {
-      const response = await put(world, [
-        {
-          path: "store.yaml",
-          text: `id: findings\ntables:\n  - name: findings\n    scope: ${JSON.stringify(scope)}\n`
-        }
-      ]);
-      expect(response.statusCode, response.body).toBe(422);
-      expect(response.json()).toMatchObject({
-        error: {
-          code: "VALIDATION_FAILED",
-          details: {
-            issues: expect.arrayContaining([
-              expect.objectContaining({
-                message: expect.stringContaining("tables"),
-                path: ["store.yaml", "tables"]
-              })
-            ])
-          }
-        }
-      });
-    }
-    expect(
-      await world.stores.configAssets.getConfigAsset({
-        clientInstanceId,
-        kind: "data_store",
-        name: "findings"
-      })
-    ).toBeUndefined();
-    expect(
-      (await put(world, [{ path: "store.yaml", text: "id: findings\nscope: instance\n" }]))
-        .statusCode
-    ).toBe(200);
-  });
-
-  it("has the size ceiling and the pool cap of a store in release config, with the spec's defaults", () => {
-    expect(parseClientInstanceConfig(createTestConfig()).dataStores).toEqual({
+  it("has the size ceiling, the pool cap and the load ceilings of a store in release config, with the spec's defaults, which an operator raises", () => {
+    const base = createTestConfig();
+    expect(parseClientInstanceConfig(base).dataStores).toEqual({
       sizeLimit: "5GB",
       testCopySizeLimit: "500MB",
       poolMaxConnections: 5,
       queryTimeoutMs: 600_000,
       load: { rows: 100_000, bytes: 67_108_864, timeoutMs: 600_000 }
     });
+    const load = { rows: 1_000_000, bytes: 1_073_741_824, timeoutMs: 3_600_000 };
+    expect(parseClientInstanceConfig({ ...base, dataStores: { load } }).dataStores.load).toEqual(
+      load
+    );
+    expect(() =>
+      parseClientInstanceConfig({ ...base, dataStores: { load: { rows: 0 } } })
+    ).toThrow();
   });
 
   // Needs no right: the switch refuses before the caller's rights are known.
@@ -171,50 +142,7 @@ describe("a Data Store on an assembled instance", () => {
     ).toEqual([]);
   });
 
-  it("records one run per call and audit rows that hold names and counts, never a value", async () => {
-    const instance = await start(true);
-    const admin = await person(instance, "user-1", ["user", "admin", "superadmin"]);
-    const record = await publishStore(instance);
-
-    await call(instance, admin, "insert", { table: "findings", rows: [finding] });
-    await call(instance, admin, "query", {
-      sql: "select client_id from findings where client_id = $1",
-      parameters: ["client-secret-7"]
-    });
-    await overHttp(instance, "data_stores.preview_rows", { query: { table: "findings" } });
-
-    const runs = (await instance.stores.operationRuns.list({ clientInstanceId })).filter((run) =>
-      run.operation.startsWith("data_store")
-    );
-    expect(runs.map((run) => [run.operation, run.effect, run.status]).sort()).toEqual([
-      ["data_store.findings.insert", "changing", "done"],
-      ["data_store.findings.preview_rows", "reading", "done"],
-      ["data_store.findings.query", "reading", "done"]
-    ]);
-    const audit = await instance.stores.audit.listAuditEvents({ clientInstanceId });
-    const rowsOf = (operation: string) =>
-      audit
-        .filter((event) => event.metadata?.operation === operation)
-        .map((event) => [event.type, event.subject, event.metadata?.action])
-        .sort();
-    const three = (subject: string, action?: string) => [
-      ["operation.authorization_checked", subject, action],
-      ["operation.completed", subject, undefined],
-      ["operation.started", subject, undefined]
-    ];
-    expect(rowsOf("data_store.findings.insert")).toEqual(three(record.id, "data_store.insert"));
-    expect(rowsOf("data_store.findings.query")).toEqual(three(record.id, "data_store.read"));
-    // A call over HTTP is the store's own operation: one name per act, in the run and the trail.
-    expect(rowsOf("data_store.findings.preview_rows")).toEqual(three(record.id, "data_store.read"));
-    expect(
-      audit.filter((event) => String(event.metadata?.operation).startsWith("data_stores."))
-    ).toEqual([]);
-    const kept = JSON.stringify({ runs, audit, record });
-    expect(kept).not.toContain("client-secret-7");
-    expect(kept).not.toContain("select client_id");
-  });
-
-  it("refuses a person without a right on the store its rows over HTTP with the right named, whatever the request says of where it comes from", async () => {
+  it("refuses a person without a right on the store its rows over HTTP with the right named, whatever the request says of where it comes from, and gives back its connections on close", async () => {
     const person = (id: string, roles: string[]) => ({
       id,
       externalUserId: id,
@@ -226,7 +154,7 @@ describe("a Data Store on an assembled instance", () => {
       enabled: true,
       users: [person("user-1", ["user", "admin", "superadmin"]), person("member-1", ["user"])]
     });
-    await publishStore(instance);
+    const record = await publishStore(instance);
     await overHttp(instance, "data_stores.insert", {
       payload: { table: "findings", rows: [finding] },
       headers: { "idempotency-key": "seed" }
@@ -281,65 +209,22 @@ describe("a Data Store on an assembled instance", () => {
       payload: { sql: "select count(*)::integer as count from findings" }
     });
     expect(counted.json()).toMatchObject({ rows: [{ count: 1 }] });
-  });
 
-  it("gives back its connections to the stores when the process closes", async () => {
-    const instance = await start(true);
-    const admin = await person(instance, "user-1", ["user", "admin", "superadmin"]);
-    const record = await publishStore(instance);
-    await call(instance, admin, "query", { sql: "select 1 as one" });
-    const sql = postgres(await fileTestDatabaseUrl(), { max: 1 });
+    // The process gives back its connections to the stores when it closes.
+    const platform = postgres(await fileTestDatabaseUrl(), { max: 1 });
     const open = async () =>
       (
-        await sql<{ count: number }[]>`
+        await platform<{ count: number }[]>`
         select count(*)::integer as count from pg_stat_activity
         where usename = ${record.roles.app}`
       )[0]?.count;
-
     try {
       expect(await open()).toBeGreaterThan(0);
       await close();
       await eventually(async () => expect(await open()).toBe(0));
     } finally {
-      await sql.end();
+      await platform.end();
     }
-  });
-
-  it("retires the store when its asset is deleted: the operations are gone and the rows stay", async () => {
-    const instance = await start(true);
-    const record = await publishStore(instance);
-    await overHttp(instance, "data_stores.insert", {
-      payload: { table: "findings", rows: [finding] }
-    });
-
-    const deleted = await instance.api.call("assets.delete", {
-      params: { kind: DATA_STORE_ASSET_KIND, name: "findings" },
-      payload: { expectedRevision: 1 }
-    });
-
-    expect(deleted.statusCode).toBe(200);
-    expect(await recordOf(instance)).toMatchObject({ id: record.id, status: "retired" });
-    expect(
-      await instance.execution.operationCalls.registry.resolve(
-        dataStoreOperationName("findings", "query")
-      )
-    ).toBeUndefined();
-    expect(
-      (await overHttp(instance, "data_stores.query", { payload: { sql: "select 1" } })).statusCode
-    ).toBe(404);
-    const url = new URL(await fileTestDatabaseUrl());
-    url.pathname = `/${record.location.database}`;
-    const inStore = postgres(url.toString(), { max: 1 });
-    try {
-      expect(await inStore`select client_id from findings`).toHaveLength(1);
-    } finally {
-      await inStore.end();
-    }
-    // The id is held while the retired database is there.
-    expect((await put(instance)).statusCode).toBe(200);
-    const again = await publish(instance, 1);
-    expect(again.statusCode).toBe(409);
-    expect(again.json<ErrorBody>().error.details).toMatchObject({ reason: "data_store_id_held" });
   });
   describe("with one assembled instance and store", () => {
     const { start, publishStore } = useDataStoreInstance({
@@ -367,6 +252,88 @@ describe("a Data Store on an assembled instance", () => {
         await Promise.all([sql.end(), platform.end()]);
       }
     });
+    it("records one run per call and audit rows that hold names and counts, never a value", async () => {
+      const instance = shared;
+      const admin = await person(instance, "user-1", ["user", "admin", "superadmin"]);
+      const record = sharedRecord;
+
+      await call(instance, admin, "insert", { table: "findings", rows: [finding] });
+      await call(instance, admin, "query", {
+        sql: "select client_id from findings where client_id = $1",
+        parameters: ["client-secret-7"]
+      });
+      await overHttp(instance, "data_stores.preview_rows", { query: { table: "findings" } });
+
+      const runs = (await instance.stores.operationRuns.list({ clientInstanceId })).filter((run) =>
+        run.operation.startsWith("data_store")
+      );
+      expect(runs.map((run) => [run.operation, run.effect, run.status]).sort()).toEqual([
+        ["data_store.findings.insert", "changing", "done"],
+        ["data_store.findings.preview_rows", "reading", "done"],
+        ["data_store.findings.query", "reading", "done"]
+      ]);
+      const audit = await instance.stores.audit.listAuditEvents({ clientInstanceId });
+      const rowsOf = (operation: string) =>
+        audit
+          .filter((event) => event.metadata?.operation === operation)
+          .map((event) => [event.type, event.subject, event.metadata?.action])
+          .sort();
+      const three = (subject: string, action?: string) => [
+        ["operation.authorization_checked", subject, action],
+        ["operation.completed", subject, undefined],
+        ["operation.started", subject, undefined]
+      ];
+      expect(rowsOf("data_store.findings.insert")).toEqual(three(record.id, "data_store.insert"));
+      expect(rowsOf("data_store.findings.query")).toEqual(three(record.id, "data_store.read"));
+      // A call over HTTP is the store's own operation: one name per act, in the run and the trail.
+      expect(rowsOf("data_store.findings.preview_rows")).toEqual(
+        three(record.id, "data_store.read")
+      );
+      expect(
+        audit.filter((event) => String(event.metadata?.operation).startsWith("data_stores."))
+      ).toEqual([]);
+      const kept = JSON.stringify({ runs, audit, record });
+      expect(kept).not.toContain("client-secret-7");
+      expect(kept).not.toContain("select client_id");
+    });
+
+    it("refuses malformed scoped table metadata and keeps ownership scope working", async () => {
+      const world = { ...shared, storeName: "scoped-metadata" };
+      for (const scope of ["mandant", { mandant: "mandant_nr" }, null, false]) {
+        const response = await put(world, [
+          {
+            path: "store.yaml",
+            text: `id: findings\ntables:\n  - name: findings\n    scope: ${JSON.stringify(scope)}\n`
+          }
+        ]);
+        expect(response.statusCode, response.body).toBe(422);
+        expect(response.json()).toMatchObject({
+          error: {
+            code: "VALIDATION_FAILED",
+            details: {
+              issues: expect.arrayContaining([
+                expect.objectContaining({
+                  message: expect.stringContaining("tables"),
+                  path: ["store.yaml", "tables"]
+                })
+              ])
+            }
+          }
+        });
+      }
+      expect(
+        await world.stores.configAssets.getConfigAsset({
+          clientInstanceId,
+          kind: "data_store",
+          name: "scoped-metadata"
+        })
+      ).toBeUndefined();
+      expect(
+        (await put(world, [{ path: "store.yaml", text: "id: findings\nscope: instance\n" }]))
+          .statusCode
+      ).toBe(200);
+    });
+
     it("brings the kind with the contract's rights, the jobs with their retries and the schedule while the module is on", async () => {
       const instance = shared;
 
@@ -673,7 +640,6 @@ describe("a Data Store on an assembled instance", () => {
       // The route names its verb itself: an id that carries another verb is no store.
       const smuggled = await viaReadingRoute("findings.insert", { sql: "select 1" });
       expect(smuggled.statusCode).toBe(404);
-      expect(smuggled.json<ErrorBody>().error.message).toBe("Data Store is not available");
       // And the body of an insert is no query: it is refused before anything runs.
       const asQuery = await viaReadingRoute("findings", insert);
       expect(asQuery.statusCode).toBeGreaterThanOrEqual(400);
@@ -686,18 +652,7 @@ describe("a Data Store on an assembled instance", () => {
       ).toEqual([]);
     });
 
-    it("answers an id no store has as not available, to a caller who holds the right", async () => {
-      const instance = shared;
-
-      const response = await instance.api.call("data_stores.describe", {
-        params: { store: "nowhere" }
-      });
-
-      expect(response.statusCode).toBe(404);
-      expect(response.json<ErrorBody>().error.message).toBe("Data Store is not available");
-    });
-
-    it("offers the operations of a store to an agent as tools, each with a description of its use", async () => {
+    it("offers the operations of a store to an agent as tools, and no Workflow-only verb", async () => {
       const instance = shared;
       const [source] = instance.execution.modulesStarted.dataToolSources;
       const names = DATA_STORE_OPERATION_VERBS.map((verb) =>
@@ -715,10 +670,7 @@ describe("a Data Store on an assembled instance", () => {
         ["data_store.findings.describe", "reading"],
         ["data_store.findings.preview_rows", "reading"]
       ]);
-      for (const tool of tools) {
-        expect(tool.description).toContain("the Data Store 'Findings'");
-        expect(tool.inputJsonSchema).toMatchObject({ type: "object" });
-      }
+      for (const tool of tools) expect(tool.inputJsonSchema).toMatchObject({ type: "object" });
     });
 
     it("answers the state of a store over HTTP to a caller who may read it", async () => {

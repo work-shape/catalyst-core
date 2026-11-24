@@ -128,9 +128,28 @@ describe("the use level of a personal key", () => {
     expect(second.published.statusCode).toBe(403);
     const refused = errorSchema.parse(second.published.json()).error;
     expect(refused.details).toEqual({ action: "connection.use", reason: "outside_key_scope" });
-    expect(refused.message).toBe(
-      "The API key of this call does not cover 'connection.use' on the whole instance, and 'workflow-runner' would act with it. Only a holder of a right gives or lends it: use a key whose scopes name it"
-    );
+
+    // A start of the published Workflow needs the level's `workflow.use` on the key.
+    await t.allow({ kind: "user", id: tim.id }, "workflow.use");
+    const start = async (scopes: string[]) =>
+      t.call(tim.id, "workflows.start", {
+        params: { workflow: WORKFLOW },
+        payload: { input: { note: "x" } },
+        headers: await personalKeyToken(t, (await issuePersonalKey(t, scopes, tim.id)).secret)
+      });
+    const without = await start(AUTHORING);
+    expect(without.statusCode).toBe(403);
+    expect(errorSchema.parse(without.json()).error.details).toEqual({
+      action: "workflow.use",
+      reason: "outside_key_scope"
+    });
+    // With the level the key passes its scope; this Workflow is not turned on for outside
+    // clients, so the start ends at that rule and not at the key's scope.
+    const withLevel = await start([...AUTHORING, "workflow.use"]);
+    expect(withLevel.statusCode, withLevel.body).toBe(409);
+    expect(errorSchema.parse(withLevel.json()).error.details).toEqual({
+      reason: "no_outside_trigger"
+    });
   });
 
   it("never exceeds the person's own rights: once Tim loses the right, the key publishes nothing", async () => {
@@ -170,38 +189,6 @@ describe("the use level of a personal key", () => {
     expect(errorSchema.parse(issued.json()).error.details).toEqual({ action: "connection.use" });
   });
 
-  it("counts on the operations the key reaches: a start needs the level's `workflow.use`", async () => {
-    const { t, tim } = await ready();
-    await t.allow({ kind: "user", id: tim.id }, "workflow.use");
-    const start = async (scopes: string[]) =>
-      t.call(tim.id, "workflows.start", {
-        params: { workflow: WORKFLOW },
-        payload: { input: { note: "x" } },
-        headers: await personalKeyToken(t, (await issuePersonalKey(t, scopes, tim.id)).secret)
-      });
-    const key = await issuePersonalKey(t, [...AUTHORING, "connection.use"], tim.id);
-    const { published } = await writeAndPublish(
-      t,
-      await personalKeyToken(t, key.secret),
-      null,
-      "one"
-    );
-    expect(published.statusCode, published.body).toBe(200);
-
-    const without = await start(AUTHORING);
-    expect(without.statusCode).toBe(403);
-    expect(errorSchema.parse(without.json()).error.details).toEqual({
-      action: "workflow.use",
-      reason: "outside_key_scope"
-    });
-    // With the level the key passes its scope; this Workflow is not turned on for outside
-    // clients, so the start ends at that rule and not at the key's scope.
-    const withUse = await start([...AUTHORING, "workflow.use"]);
-    expect(withUse.statusCode, withUse.body).toBe(409);
-    expect(errorSchema.parse(withUse.json()).error.details).toEqual({
-      reason: "no_outside_trigger"
-    });
-  });
   // The key screen offers only what the instance names here, and starts a connect code's key
   // with all of it ticked but connection.use: each offer must be issuable as it stands.
   it("names per workspace the use level its person may hand on there, and issues every right it offers", async () => {

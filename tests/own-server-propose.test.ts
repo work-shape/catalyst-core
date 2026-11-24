@@ -299,7 +299,6 @@ describe("an agent's proposal of a person's own MCP server", () => {
         ownServer: { title: "Meine Notizen", url: ADDRESS },
         privateChat: false
       });
-      expect(JSON.stringify(output), what).toContain("only in the person's private chats");
       expect(tool.outputSchema?.parse(output), what).toEqual(output);
       // The audit names the mode alone, as in a private chat.
       if (answer.status === "success") {

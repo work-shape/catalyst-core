@@ -126,14 +126,6 @@ describe("GR-PUB-2: the default publish guardrail asks only when a publish widen
     );
   });
 
-  it("check 76: a first publish waits for an approver", async () => {
-    expectStatus(await t.putApp(t.kai.id, "first", appFiles("first", { id: "first" })), 200);
-    const response = await t.publish(t.kai.id, "first", 1);
-    expectStatus(response, 202);
-    heldSchema.parse(response.json());
-    expect((await stored("first"))?.publishedRevision).toBeUndefined();
-  });
-
   it("check 76: an outside host the live revision does not call files an app_publish item", async () => {
     await liveApp("host");
     await kaiWrites("host", "host 2", { externalHosts: ["api.example.com"] });

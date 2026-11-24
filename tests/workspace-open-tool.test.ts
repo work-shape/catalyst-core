@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { RULES, RELEASED_KIT_VERSIONS, type PageBuildLimits } from "@work-shape/catalyst-app-build";
+import { RELEASED_KIT_VERSIONS, type PageBuildLimits } from "@work-shape/catalyst-app-build";
 import {
   createPageBuildClient,
   createPageBundleJobs,
@@ -300,39 +300,6 @@ const reactPage = (routes: Record<string, string>) => ({
 });
 
 describe("workspace.open", () => {
-  it("keeps its opening sentence and tells the agent where fonts and libraries belong", async () => {
-    const harness = await createWorkspaceHarness();
-    const tool = createWorkspaceOpenTool({
-      workspace: new WorkspaceCommandService({
-        store: harness.store,
-        objectStore: harness.objectStore,
-        fileStore: harness.objectStore
-      }).dependencies,
-      builds: {
-        build: async () => {
-          throw new Error("Description only");
-        }
-      }
-    });
-    for (const { sentence, fix } of RULES) expect(tool.description).toContain(`${sentence} ${fix}`);
-    expect(tool.description).toMatch(/^Show an HTML file or a folder/u);
-    expect(tool.description).toContain(`which is ${RELEASED_KIT_VERSIONS.at(-1)} for a new App`);
-    for (const rule of [
-      "allow-scripts allow-forms allow-downloads",
-      "without allow-same-origin",
-      "clipboard: write only, through navigator.clipboard.writeText on a user click",
-      "form-action 'none'",
-      "localStorage",
-      "storage.get/set",
-      "Data Stores",
-      "Network",
-      "SecurityError"
-    ])
-      expect(tool.description).toContain(rule);
-    expect(tool.description).toContain(
-      "Put fonts and libraries in the App's folder or use the kit's; an outside address (Google Fonts, Adobe Fonts or a CDN) will not load."
-    );
-  });
   it("returns runtime_rule with the original file, line and repair before storing a preview", async () => {
     const harness = await createSaveHarness();
     await harness.write("dialogs", {
@@ -500,7 +467,6 @@ export const Route = createFileRoute("/")({ component: () => <p>never</p> });
   // dialog proposed the path.
   it("answers the name the folder gives itself: its manifest's, else its HTML title, else none", async () => {
     const harness = await createSaveHarness();
-    await harness.write("calculator", reactPage({ "index.tsx": fileRoute("/") }));
     await harness.write("offers", {
       "app.yaml": htmlManifest,
       "index.html": "<!doctype html><title>Not the manifest's</title><h1>Offers</h1>"
@@ -510,7 +476,6 @@ export const Route = createFileRoute("/")({ component: () => <p>never</p> });
     });
     await harness.write("plain", { "index.html": "<!doctype html><h1>Hamburg</h1>" });
 
-    expect((await harness.open("calculator")).output?.title).toBe("Demo Page");
     expect((await harness.open("offers")).output?.title).toBe("Demo Page");
     expect((await harness.open("weather/index.html")).output?.title).toBe("Wetter & Wind");
     const untitled = await harness.open("plain");

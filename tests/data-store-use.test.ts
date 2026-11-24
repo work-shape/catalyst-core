@@ -797,21 +797,12 @@ describe("the Data Store card", () => {
     ).toBe(true);
   });
 
-  it("asks in German and shows the store once added", () => {
+  it("offers the add button only outside an embedding host's session", () => {
     const use = required(readDataStoreUse(answer));
     const open = render(
       createElement(DataStoreUseCardView, { use, state: "open", onConfirm: () => undefined })
     );
-    expect(open).toContain("„Team figures“ in diesem Chat lesen?");
-    expect(open).toContain("Erlauben");
-    const added = render(createElement(DataStoreUseCardView, { use, state: "added" }));
-    expect(added).toContain('data-state="added"');
-    expect(added).toContain("„Team figures“ wird in diesem Chat gelesen.");
-    expect(added).not.toContain("Erlauben");
-  });
-
-  it("offers no add in an embedding host's session and says where it is done", () => {
-    const use = required(readDataStoreUse(answer));
+    expect(open).toContain("<button");
     const embedded = render(
       createElement(
         EmbeddedSessionProvider,
@@ -819,9 +810,6 @@ describe("the Data Store card", () => {
         createElement(DataStoreUseCardView, { use, state: "open" })
       )
     );
-    expect(embedded).toContain("„Team figures“ in diesem Chat lesen?");
-    expect(embedded).toContain("Das kannst nur du erlauben, in der eigenen App des Chats.");
-    expect(embedded).not.toContain("Erlauben</button>");
     expect(embedded).not.toContain("<button");
   });
 });

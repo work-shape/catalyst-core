@@ -95,18 +95,14 @@ describe("a changing call of a Data Store that carries an idempotency key", () =
     ]);
     expect(JSON.stringify(kept)).not.toContain("step-1");
     expect(JSON.stringify(kept)).not.toContain("client-");
-  });
 
-  it("answers the first call again where the store has since become full", async () => {
-    const world = await published("full");
-    const first = await insert(world, 10, "step-full");
+    // The first call is answered again where the store has since become full.
     await db.sql`update data_stores set size_limit_bytes = 1024 where id = ${world.id}`;
-
     expect(await refusal(insert(world, 10, "step-other"))).toMatchObject({
       details: { reason: "data_store_size_limit" }
     });
-    expect(await insert(world, 10, "step-full")).toEqual(first);
-    expect(await countOf(world)).toBe(10);
+    expect(await insert(world, 1_000, "workflow_step:step-1")).toEqual(first);
+    expect(await countOf(world)).toBe(1_000);
   });
 
   it("refuses a key that was used for another input or another operation, by a reason of its own", async () => {
@@ -153,7 +149,7 @@ describe("a changing call of a Data Store that carries an idempotency key", () =
     expect(await records(world)).toHaveLength(1);
   });
 
-  it("keeps no record of a call that is rolled back, so the same key adds its rows afterwards", async () => {
+  it("keeps no record of a call that is rolled back or carries no key, so the same key adds its rows afterwards", async () => {
     const world = await published("rolled-back");
     const broken = { table: "findings", rows: [finding(1, { severity: "unheard-of" })] };
 
@@ -164,6 +160,11 @@ describe("a changing call of a Data Store that carries an idempotency key", () =
     expect(await records(world)).toHaveLength(0);
     expect(await insert(world, 2, "step-good")).toMatchObject({ inserted: 2 });
     expect(await countOf(world)).toBe(2);
+    // Without a key every call adds its rows and no record is kept.
+    await insert(world, 2);
+    await insert(world, 2);
+    expect(await countOf(world)).toBe(6);
+    expect(await records(world)).toHaveLength(1);
   });
 
   it("records a load with its counts and reads its dataset once", async () => {
@@ -202,20 +203,6 @@ describe("a changing call of a Data Store that carries an idempotency key", () =
     expect(await load()).toEqual(first);
     expect(reads).toBe(1);
     expect(await countOf(world, "month_findings")).toBe(5);
-  });
-
-  it("behaves without a key as it did: every call adds its rows and no record is kept", async () => {
-    const world = await published("unkeyed");
-
-    await insert(world, 2);
-    await insert(world, 2);
-
-    expect(await countOf(world)).toBe(4);
-    expect(
-      await connect(world.record.location.database)`
-        select 1 from pg_catalog.pg_tables where schemaname = 'catalyst' and tablename = 'calls'`
-    ).toHaveLength(1);
-    expect(await records(world)).toHaveLength(0);
   });
 
   it("gives a store that was provisioned before the records existed its table at the first call with a key", async () => {

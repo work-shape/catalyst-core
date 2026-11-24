@@ -20,11 +20,36 @@ import {
 // per call with an outcome per item, and a complete pass withdraws what it did not name only
 // once its run ended done, above the share only after a person confirmed it.
 
-/** Moderate on purpose: the 10,000-item volume is the scale suite's, not a unit test's. */
-const ITEMS = 200;
+/** Two pages (100 rows each): the 10,000-item volume is the scale suite's, not a unit test's. */
+const ITEMS = 120;
 
 describe("a Workflow puts documents into a Knowledge Base (KBW-1)", { timeout: 600_000 }, () => {
   const { world } = useKnowledgeWorkflow();
+  type World = Awaited<ReturnType<typeof world>>;
+
+  /** Runs the source jobs with every queued job and backoff wake due, until `check` holds. */
+  function drain<Result>(w: World, check: () => Promise<Result>) {
+    return eventually(async () => {
+      await w.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
+      await w.platform`update platform_job_wakes set run_after = now() where kind like 'knowledge_base.%'`;
+      await w.worker.runDue();
+      return check();
+    }, 180_000);
+  }
+  /** Until the ingest Operation Run ended done; answers it. */
+  const settle = (w: World, id: string) =>
+    drain(w, async () => {
+      const run = await w.instance.stores.operationRuns.get({ clientInstanceId, id });
+      expect(run?.status, JSON.stringify(run?.error)).toBe("done");
+      return required(run);
+    });
+  /** Until every complete pass of the source has been decided. */
+  const settlePasses = (w: World) =>
+    drain(w, async () => {
+      expect(
+        await w.sql`select id from catalyst_kb.sync_runs where source_id=${SOURCE} and pass_state='awaiting_run'`
+      ).toEqual([]);
+    });
 
   it("takes a dataset in one Operation Run, every item indexed or failed, one bad item failing alone", async () => {
     const w = await world();
@@ -40,7 +65,7 @@ describe("a Workflow puts documents into a Knowledge Base (KBW-1)", { timeout: 6
     };
     const dataset = await run.dataset(rows);
     const operationRunId = operationRunOf(await run.call("ingest", { dataset }));
-    const ended = await w.settle(operationRunId);
+    const ended = await settle(w, operationRunId);
     const output = knowledgeIngestOutputSchema.parse(ended.output?.value);
     expect(output).toMatchObject({
       accepted: ITEMS - 2,
@@ -91,7 +116,7 @@ describe("a Workflow puts documents into a Knowledge Base (KBW-1)", { timeout: 6
     // The same items again at the same version cost nothing and change nothing.
     const again = await w.startRun();
     const repeated = await again.call("ingest", { items: [item(1), item(2)] });
-    const repeatedRun = await w.settle(operationRunOf(repeated));
+    const repeatedRun = await settle(w, operationRunOf(repeated));
     expect(repeatedRun.output?.value).toMatchObject({ accepted: 2, done: 2, failed: 0 });
   });
 
@@ -104,8 +129,8 @@ describe("a Workflow puts documents into a Knowledge Base (KBW-1)", { timeout: 6
       second.call("ingest", { items: [item(300), item(301), item(302)] })
     ]);
     const [endedA, endedB] = await Promise.all([
-      w.settle(operationRunOf(a)),
-      w.settle(operationRunOf(b))
+      settle(w, operationRunOf(a)),
+      settle(w, operationRunOf(b))
     ]);
     expect(endedA.output?.value).toMatchObject({ accepted: 2, done: 2, failed: 0 });
     expect(endedB.output?.value).toMatchObject({ accepted: 3, done: 3, failed: 0 });
@@ -116,7 +141,8 @@ describe("a Workflow puts documents into a Knowledge Base (KBW-1)", { timeout: 6
   it("withdraws what a complete pass did not name once the run ended done, and nothing from a failed run", async () => {
     const w = await world();
     const first = await w.startRun();
-    await w.settle(
+    await settle(
+      w,
       operationRunOf(
         await first.call("ingest", {
           dataset: await first.dataset(Array.from({ length: ITEMS }, (_, n) => item(n)))
@@ -127,7 +153,8 @@ describe("a Workflow puts documents into a Knowledge Base (KBW-1)", { timeout: 6
 
     // A failed run withdraws nothing, though its pass promised to be complete.
     const failed = await w.startRun();
-    const failedPass = await w.settle(
+    const failedPass = await settle(
+      w,
       operationRunOf(
         await failed.call("ingest", {
           dataset: await failed.dataset(Array.from({ length: ITEMS - 10 }, (_, n) => item(n))),
@@ -137,12 +164,13 @@ describe("a Workflow puts documents into a Knowledge Base (KBW-1)", { timeout: 6
     );
     expect(failedPass.output?.value).toMatchObject({ withdrawn: 10 });
     await failed.end("failed");
-    await w.settlePasses();
+    await settlePasses(w);
     expect(await w.states()).toEqual({ fetched: ITEMS });
 
     // A run that ends done withdraws the ten it did not name, and search leaves them out.
     const done = await w.startRun();
-    await w.settle(
+    await settle(
+      w,
       operationRunOf(
         await done.call("ingest", {
           dataset: await done.dataset(Array.from({ length: ITEMS - 10 }, (_, n) => item(n))),
@@ -152,7 +180,7 @@ describe("a Workflow puts documents into a Knowledge Base (KBW-1)", { timeout: 6
     );
     expect(await w.states()).toEqual({ fetched: ITEMS });
     await done.end("done");
-    await w.settlePasses();
+    await settlePasses(w);
     expect(await w.states()).toEqual({ fetched: ITEMS - 10, withdrawn: 10 });
     const withdrawnIds =
       await w.sql`select item_id from catalyst_kb.source_items where source_id=${SOURCE} and state='withdrawn' order by item_id`;
@@ -182,7 +210,8 @@ describe("a Workflow puts documents into a Knowledge Base (KBW-1)", { timeout: 6
   it("keeps a document whose new version the pass could not take, and withdraws nothing after a pass of the run failed", async () => {
     const w = await world();
     const first = await w.startRun();
-    await w.settle(
+    await settle(
+      w,
       operationRunOf(
         await first.call("ingest", {
           dataset: await first.dataset(Array.from({ length: ITEMS }, (_, n) => item(n)))
@@ -195,14 +224,15 @@ describe("a Workflow puts documents into a Knowledge Base (KBW-1)", { timeout: 6
     const second = await w.startRun();
     const rows: unknown[] = Array.from({ length: ITEMS }, (_, n) => item(n));
     rows[5] = { ...item(5, "2"), originLink: "ftp://dms.example.test/doc-5" };
-    const pass = await w.settle(
+    const pass = await settle(
+      w,
       operationRunOf(
         await second.call("ingest", { dataset: await second.dataset(rows), complete: true })
       )
     );
     expect(pass.output?.value).toMatchObject({ failed: 1, withdrawn: 0 });
     await second.end("done");
-    await w.settlePasses();
+    await settlePasses(w);
     expect(await w.states()).toEqual({ fetched: ITEMS });
     const [kept] =
       await w.sql`select version from catalyst_kb.source_items where source_id=${SOURCE} and item_id=${item(5).itemId}`;
@@ -215,9 +245,10 @@ describe("a Workflow puts documents into a Knowledge Base (KBW-1)", { timeout: 6
         dataset: await third.dataset(Array.from({ length: 10 }, (_, n) => item(n)))
       })
     );
-    await w.settle(partial);
+    await settle(w, partial);
     await w.sql`update catalyst_kb.sync_runs set state='failed', failure_code='knowledge_source_unreachable' where operation_run_id=${partial}`;
-    await w.settle(
+    await settle(
+      w,
       operationRunOf(
         await third.call("ingest", {
           dataset: await third.dataset(Array.from({ length: 10 }, (_, n) => item(10 + n))),
@@ -226,7 +257,7 @@ describe("a Workflow puts documents into a Knowledge Base (KBW-1)", { timeout: 6
       )
     );
     await third.end("done");
-    await w.settlePasses();
+    await settlePasses(w);
     expect(await w.states()).toEqual({ fetched: ITEMS });
     const [dropped] =
       await w.sql`select pass_state from catalyst_kb.sync_runs where source_id=${SOURCE} and workflow_run_id=${third.runId} and complete`;
@@ -241,16 +272,14 @@ describe("a Workflow puts documents into a Knowledge Base (KBW-1)", { timeout: 6
     const b = operationRunOf(await second.call("ingest", { items: [item(2)], complete: true }));
     expect(await w.sql`select sync_run_id from catalyst_kb.ingest_waiting`).toHaveLength(1);
     await second.end("failed");
-    await w.settle(a);
-    await eventually(async () => {
-      await w.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
-      await w.worker.runDue();
+    await settle(w, a);
+    await drain(w, async () => {
       const run = await w.instance.stores.operationRuns.get({ clientInstanceId, id: b });
       expect(run).toMatchObject({
         status: "failed",
         error: { code: "knowledge_ingest_cancelled" }
       });
-    }, 180_000);
+    });
     expect(await w.sql`select sync_run_id from catalyst_kb.ingest_waiting`).toEqual([]);
     expect(await w.sql`select sync_run_id from catalyst_kb.ingest_items`).toEqual([]);
     expect(await w.sql`select sync_run_id from catalyst_kb.ingest_failures`).toEqual([]);
@@ -288,7 +317,8 @@ describe("a Workflow puts documents into a Knowledge Base (KBW-1)", { timeout: 6
   it("waits for a confirmation in the Inbox above the share, and withdraws once it is given", async () => {
     const w = await world();
     const first = await w.startRun();
-    await w.settle(
+    await settle(
+      w,
       operationRunOf(
         await first.call("ingest", {
           dataset: await first.dataset(Array.from({ length: ITEMS }, (_, n) => item(n)))
@@ -298,7 +328,8 @@ describe("a Workflow puts documents into a Knowledge Base (KBW-1)", { timeout: 6
     await first.end("done");
     const kept = Math.round(ITEMS * 0.3);
     const second = await w.startRun();
-    await w.settle(
+    await settle(
+      w,
       operationRunOf(
         await second.call("ingest", {
           dataset: await second.dataset(Array.from({ length: kept }, (_, n) => item(n))),
@@ -307,14 +338,12 @@ describe("a Workflow puts documents into a Knowledge Base (KBW-1)", { timeout: 6
       )
     );
     await second.end("done");
-    const pass = await eventually(async () => {
-      await w.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
-      await w.worker.runDue();
+    const pass = await drain(w, async () => {
       const [row] =
         await w.sql`select pass_state, approval_request_id from catalyst_kb.sync_runs where source_id=${SOURCE} and complete`;
       expect(row?.pass_state).toBe("confirming");
       return required(row);
-    }, 180_000);
+    });
     expect(await w.states()).toEqual({ fetched: ITEMS });
     const request = required(
       await w.instance.stores.approvals.getApprovalRequest({
@@ -331,11 +360,9 @@ describe("a Workflow puts documents into a Knowledge Base (KBW-1)", { timeout: 6
       payload: { decision: "approve" }
     });
     expect(decision.statusCode, decision.body).toBe(200);
-    await eventually(async () => {
-      await w.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
-      await w.worker.runDue();
+    await drain(w, async () => {
       expect(await w.states()).toEqual({ fetched: kept, withdrawn: ITEMS - kept });
-    }, 180_000);
+    });
   });
 
   it("refuses a call that is no step of a Workflow run", async () => {

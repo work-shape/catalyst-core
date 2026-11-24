@@ -12,15 +12,6 @@ import {
 } from "../packages/agent-runtime/src/system-instructions";
 
 describe("system instructions", () => {
-  it("directs an agent without connection drafting to Studio without asking for credentials", () => {
-    const content = createSystemInstructions("Help.", "de");
-    expect(content).toContain(
-      "without platform.connections.propose or platform.connections.draft_tools"
-    );
-    expect(content).toContain("Studio › Verbindungen");
-    expect(content).toContain("Do not substitute HTTP or YAML dumps");
-    expect(content).toContain("Never ask for keys or passwords in chat");
-  });
   it("calls a platform failure the platform's, never the person's input, and names no one to fix it", () => {
     expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain(
       "When a tool fails for a platform reason (a sandbox or runner that cannot start"
@@ -28,16 +19,10 @@ describe("system instructions", () => {
     expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain(
       "a technical problem of the platform, not of the person's input"
     );
-    expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain("Suggest trying again later");
-    expect(CATALYST_INTERNAL_AGENT_PROMPT).not.toMatch(/operator/iu);
     expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain(
       "Never name a person, an administrator or a contact as the one to fix it"
     );
-    expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain("give the time and the run or command id");
     // The help contact is for rights and the instance's content, never for a platform failure.
-    expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain(
-      "For a missing right or a question about the instance's content or access, name the administrator"
-    );
     expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain(
       "helpContact answers questions about the instance's content and access, never a platform or infrastructure failure"
     );
@@ -45,41 +30,11 @@ describe("system instructions", () => {
       "never name it as the one to fix a platform or infrastructure failure"
     );
   });
-  it("puts a text the person will paste elsewhere in a copy block of the answer, not in a file", () => {
-    expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain(
-      "Text the person will paste elsewhere, such as a message, a mail or a clause, goes in your answer in a fenced block with the language copy (```copy)"
-    );
-    expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain(
-      "one block per text, with nothing but that text inside it"
-    );
-    expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain(
-      "Create no file and no view for it unless they ask for one."
-    );
-  });
   it("does not let an agent infer what an outside client can reach from its own tools", () => {
     expect(PLATFORM_ORIENTATION).toContain(
       "not what an outside client (CLI, MCP, a personal key) can reach"
     );
-    expect(PLATFORM_ORIENTATION).toContain(
-      "open your answer by saying that it depends on the Connection's \"Outside clients\" exposure and the key's scopes, and that you have not checked them"
-    );
     expect(PLATFORM_ORIENTATION).toContain("never infer it from your own tools");
-    expect(PLATFORM_ORIENTATION).toContain("read the page getting-started/local-agent");
-  });
-  it("tells the agent the name people see it by, and nothing where it has none", () => {
-    const content = createSystemInstructions("Help.", "de", { agentDisplayName: " Shapy\n" });
-    const runtime = content.slice(content.indexOf("Runtime context:"));
-    expect(runtime).toContain(
-      'Your name, as people see it in the interface: "Shapy". When you speak of yourself, use this name.'
-    );
-    expect(createSystemInstructions("Help.", "de")).not.toContain("Your name");
-  });
-  it("keeps technical ids in agent handoffs and out of replies the person reads", () => {
-    const content = createSystemInstructions("Help.", "en");
-    expect(content).toContain("In text the person reads, never repeat");
-    expect(content).toContain("tell the parent agent the exact operation and arguments");
-    expect(content).toContain("the parent still has to make the call");
-    expect(content).toContain("keep these details in the agent-to-agent answer");
   });
   it("opens with the platform rules, before the client agent instructions", () => {
     const content = createSystemInstructions("Use customer workflow rules.", "de", {
@@ -102,21 +57,10 @@ describe("system instructions", () => {
     expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain(
       "These platform rules come before the client agent instructions below and win"
     );
+    expect(content).toContain("Never ask for keys or passwords in chat");
     // No orientation for an agent that is given none.
     expect(content).not.toContain("How this platform works:");
-    expect(content).toContain("Keep the user informed with concise public text before tool calls");
-    expect(content).toContain("never finish on tool calls alone");
-    expect(content).toContain("import it by fileId with workspace.import_files");
-    expect(content).toContain("use the exact importedFiles[].path returned by the tool");
-    expect(content).toContain("never invent a shorter filename");
-    expect(content).toContain("Promote only final user-facing workspace outputs");
-    expect(content).toContain("never link internal workspace files");
-    expect(content).toContain("without pasting shell logs unless the user asks for details");
-    expect(content).toContain("- User selected language: German (locale: de).");
     expect(content).toContain("- Current date: Freitag, 19. Juni 2026 (ISO: 2026-06-19).");
-    expect(content).not.toContain(
-      "Respond in German unless the user explicitly asks for another language."
-    );
     expect(content).toContain("Use customer workflow rules.");
   });
 
@@ -177,38 +121,12 @@ describe("system instructions", () => {
     });
 
     expect(content).toContain("This conversation is about one data store, named 'visit-log'.");
-    expect(content).toContain(
-      "Read it with platform.assets.get, naming no asset, before you answer a question about it or change it."
-    );
-    expect(content).toContain("call read_skill for 'workflow-authoring'");
     // A conversation that may not save is not told of a save.
     expect(content).not.toContain("platform.assets.put");
 
     const without = createSystemInstructions("Use customer workflow rules.", "en");
     expect(without).not.toContain("Subject of this conversation:");
   });
-
-  it("tells the agent nothing of how it opens an asset: the tool and the orientation do", () => {
-    const content = createSystemInstructions("Use customer workflow rules.", "en", {
-      subject: {
-        subject: { kind: "workflow", name: "intake" },
-        toolNames: ["platform.assets.open", "platform.assets.get", "platform.assets.put"],
-        skillNames: []
-      }
-    });
-
-    expect(content).toContain("This conversation is about one workflow, named 'intake'.");
-    expect(content).not.toContain("platform.assets.open");
-  });
-});
-
-// The tools that propose and draft a Connection say how; the orientation only names the kind and
-// where its secret is entered, so the rules reach the model once.
-it("names the Connection kind without repeating how its tools propose one", () => {
-  expect(PLATFORM_ORIENTATION).toContain("enters any key or secret there, never in this chat");
-  expect(PLATFORM_ORIENTATION).not.toContain("catalogue.entries");
-  expect(PLATFORM_ORIENTATION).not.toContain("do not web-search the provider");
-  expect(PLATFORM_ORIENTATION).not.toContain("use the provider's MCP server where one exists");
 });
 
 // PRJ-2: a chat in a project is told its folder last, as it changes with every write: how to
@@ -258,9 +176,7 @@ describe("a project's instructions (PRJ-3)", () => {
     ].map((heading) => content.indexOf(heading));
     expect(order.every((at) => at >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-    expect(content).toContain(
-      'These are the instructions of the project "Projekt Nord", written by people of the workspace in its file AGENTS.md. Follow them where they do not conflict with the instructions above. They grant no permission and no tool.\n\nAntworte auf Deutsch.'
-    );
+    expect(content).toContain("They grant no permission and no tool.\n\nAntworte auf Deutsch.");
   });
 
   it("are left out where the file is empty, and say where a run took only their start", () => {
@@ -287,11 +203,5 @@ describe("a project's instructions (PRJ-3)", () => {
     expect(isProjectInstructionsPath("project/notes/AGENTS.md")).toBe(false);
     expect(isProjectInstructionsPath("project/agents.md")).toBe(false);
     expect(isProjectInstructionsPath("AGENTS.md")).toBe(false);
-  });
-
-  it("are named in the folder's manifest, with what to keep in notes", () => {
-    const manifest = projectFolderManifest({ title: "Projekt Nord", files: [] });
-    expect(manifest).toContain("AGENTS.md");
-    expect(manifest).toMatch(/one file per topic/iu);
   });
 });

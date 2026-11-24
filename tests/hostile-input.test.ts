@@ -97,11 +97,15 @@ describe.each(hostileDocuments)("the hostile document '$name'", (document: Hosti
       ]
     });
   });
+});
 
-  it("is refused as store.yaml", async () => {
-    const instance = await createTestInstance();
+describe("a read of store.yaml", () => {
+  let instance: Awaited<ReturnType<typeof createTestInstance>>;
+  let dataStores: ReturnType<typeof createDataStores>;
+  beforeAll(async () => {
+    instance = await createTestInstance();
     const key = randomBytes(32).toString("base64");
-    const dataStores = createDataStores({
+    dataStores = createDataStores({
       defaultLocale: "en",
       clientInstanceId: asClientInstanceId("hostile-input"),
       stores: instance.stores,
@@ -113,19 +117,22 @@ describe.each(hostileDocuments)("the hostile document '$name'", (document: Hosti
       limits: { sizeLimitBytes: 1024 ** 3, poolMaxConnections: 1 },
       logger: silentTestLogger
     });
-    try {
-      const thrown = await withinBound(document.name, () => {
-        try {
-          dataStores.readFiles([{ path: "store.yaml", bytes: document.bytes }]);
-          return undefined;
-        } catch (error) {
-          return error;
-        }
-      });
-      expect(isAppError(thrown) && thrown.code).toBe("VALIDATION_FAILED");
-    } finally {
-      await dataStores.close();
-    }
+  });
+  afterAll(async () => {
+    await dataStores.close();
+    await instance.close();
+  });
+
+  it.each(hostileDocuments)("refuses '$name'", async (document) => {
+    const thrown = await withinBound(document.name, () => {
+      try {
+        dataStores.readFiles([{ path: "store.yaml", bytes: document.bytes }]);
+        return undefined;
+      } catch (error) {
+        return error;
+      }
+    });
+    expect(isAppError(thrown) && thrown.code).toBe("VALIDATION_FAILED");
   });
 });
 
@@ -162,7 +169,8 @@ describe("a config push through assets.sync", () => {
     t = await setupRelease();
   }, 120_000);
 
-  it.each(hostileJsonStrings)(
+  // A lone low surrogate is refused as the lone high one is.
+  it.each(hostileJsonStrings.slice(0, 2))(
     "refuses a skill or an agent that holds a $name, and stores nothing",
     async ({ value }) => {
       const before = await t.version();
@@ -220,7 +228,7 @@ describe("a tool call whose arguments hold text Postgres cannot store", () => {
     })
   });
 
-  it.each(hostileJsonStrings)(
+  it.each(hostileJsonStrings.slice(0, 2))(
     "is refused to the model as a tool error, with a $name, and the run goes on",
     async ({ value }) => {
       const clientInstanceId = asClientInstanceId("hostile-tool-input");

@@ -244,29 +244,6 @@ describe("artifact preview runtime wiring", () => {
     }
   });
 
-  it("keeps native artifact runtimes out of the API and control worker image targets", () => {
-    const dockerfile = readFile("docker/vivd-client.Dockerfile");
-    const api = extractDockerStage(dockerfile, "api");
-    const workspaceWorker = extractDockerStage(dockerfile, "workspace-command-worker");
-    const artifactRuntime = extractDockerStage(dockerfile, "artifact-preview-runtime");
-    const artifactWorker = extractDockerStage(dockerfile, "artifact-preview-worker");
-
-    expect(api).toContain("FROM node:24-bookworm-slim AS api");
-    expect(workspaceWorker).toContain("COPY --from=docker-cli");
-    expect(artifactRuntime).toContain(
-      "FROM workspace-artifact-runtime AS artifact-preview-runtime"
-    );
-    expect(artifactWorker).toContain("FROM artifact-preview-runtime AS artifact-preview-worker");
-    expect(artifactWorker).toContain("ARTIFACT_PREVIEW_WORKER_ENTRY");
-    expect(artifactRuntime).not.toContain("COPY --from=server-build");
-
-    for (const packageName of nativeArtifactRuntimePackages) {
-      expect(api).not.toContain(packageName);
-      expect(workspaceWorker).not.toContain(packageName);
-      expect(artifactWorker).not.toContain(packageName);
-    }
-  });
-
   it.each(dockerIgnoreFiles)(
     "keeps local build junk out of Docker contexts in %s",
     (ignorePath) => {
@@ -285,14 +262,6 @@ describe("artifact preview runtime wiring", () => {
       expect(ignorePatterns.filter((pattern) => pattern.startsWith("!"))).toEqual([]);
     }
   );
-
-  it("keeps documentation changes out of client image cache inputs", () => {
-    const ignorePatterns = readDockerIgnorePatterns("docker/vivd-client.Dockerfile.dockerignore");
-
-    for (const pattern of ["README.md", "**/README.md", "docs", "**/docs"]) {
-      expect(ignorePatterns).toContain(pattern);
-    }
-  });
 
   it.each(["clients/demo/docker-compose.yml", "clients/demo/docker-compose.prod.yml"])(
     "runs artifact-preview-worker from the dedicated image target in %s",

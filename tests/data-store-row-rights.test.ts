@@ -87,11 +87,7 @@ describe("Data Store row rights for people", () => {
     reason: { kind: "forbidden", action, reason: "no_grant" }
   });
 
-  it.each([
-    { label: "read-only", rights: ["data_store.read"] },
-    { label: "insert-only", rights: ["data_store.insert"] },
-    { label: "definition write and publish", rights: ["data_store.write", "data_store.publish"] }
-  ])("$label rights grant only their row operations", async ({ rights }) => {
+  it("grants each right only its row operations, and a workspace's row grant misses another workspace's store", async () => {
     const world = await start(true, "allow");
     const record = await makeStore(world, "holidays");
     const admin = await person(world, "row-admin", ["user", "admin", "superadmin"]);
@@ -106,15 +102,21 @@ describe("Data Store row rights for people", () => {
         scopeId: record.id,
         grantedBy: asUserId(admin.id)
       });
-    const member = await person(world, `person-${rights.join("-")}`, ["user"]);
-    for (const action of rights) await give(member.id, action);
-    for (const verb of ["insert", "update", "delete_rows"] as const) {
-      const result = await call(world, member, "holidays", verb, inputs[verb]);
-      expect(result, `${rights}: ${verb}: ${JSON.stringify(result)}`).toMatchObject(
-        rights.includes("data_store.insert") && verb === "insert"
-          ? { status: "done" }
-          : refused(verb === "insert" ? "data_store.insert" : "data_store.execute")
-      );
+    for (const rights of [
+      ["data_store.read"],
+      ["data_store.insert"],
+      ["data_store.write", "data_store.publish"]
+    ]) {
+      const member = await person(world, `person-${rights.join("-")}`, ["user"]);
+      for (const action of rights) await give(member.id, action);
+      for (const verb of ["insert", "update", "delete_rows"] as const) {
+        const result = await call(world, member, "holidays", verb, inputs[verb]);
+        expect(result, `${rights}: ${verb}: ${JSON.stringify(result)}`).toMatchObject(
+          rights.includes("data_store.insert") && verb === "insert"
+            ? { status: "done" }
+            : refused(verb === "insert" ? "data_store.insert" : "data_store.execute")
+        );
+      }
     }
     for (const role of ["builder", "publisher"] as const) {
       const actor = await person(world, `role-${role}`, ["user", role]);
@@ -127,6 +129,42 @@ describe("Data Store row rights for people", () => {
     }
     expect(ROLE_DEFAULT_ACTIONS.admin).toEqual(
       expect.arrayContaining(["data_store.insert", "data_store.execute"])
+    );
+
+    const member = await person(world, "row-member", ["user"]);
+    const workspaces = [];
+    for (const name of ["A", "B"]) {
+      const created = await world.api.call("workspaces.create", { payload: { name } });
+      expect(created.statusCode, created.body).toBe(200);
+      const workspace = created.json<{ id: string }>();
+      workspaces.push(workspace);
+      await makeStore(world, `store-${name.toLowerCase()}`, workspace.id);
+    }
+    const one = required(workspaces[0]);
+    for (const action of ["data_store.insert", "data_store.execute"]) {
+      const grant = await world.api.call("permissions.grant", {
+        payload: {
+          holderKind: "user",
+          holderId: member.id,
+          action,
+          effect: "allow",
+          scopeKind: "workspace",
+          scopeId: one.id
+        }
+      });
+      expect(grant.statusCode, grant.body).toBe(200);
+    }
+    expect(await call(world, member, "store-a", "insert", inputs.insert)).toMatchObject({
+      status: "done"
+    });
+    expect(await call(world, member, "store-b", "insert", inputs.insert)).toMatchObject(
+      refused("data_store.insert")
+    );
+    expect(await call(world, member, "store-a", "update", inputs.update)).toMatchObject({
+      status: "done"
+    });
+    expect(await call(world, member, "store-b", "update", inputs.update)).toMatchObject(
+      refused("data_store.execute")
     );
   });
 
@@ -299,44 +337,5 @@ describe("Data Store row rights for people", () => {
         })
       ).json()
     ).toMatchObject({ rows: [{ count: 0 }] });
-  });
-
-  it("workspace A's row grant misses workspace B's store", async () => {
-    const world = await start(true, "allow");
-    const member = await person(world, "row-member", ["user"]);
-    const workspaces = [];
-    for (const name of ["A", "B"]) {
-      const created = await world.api.call("workspaces.create", { payload: { name } });
-      expect(created.statusCode, created.body).toBe(200);
-      const workspace = created.json<{ id: string }>();
-      workspaces.push(workspace);
-      await makeStore(world, `store-${name.toLowerCase()}`, workspace.id);
-    }
-    const one = required(workspaces[0]);
-    for (const action of ["data_store.insert", "data_store.execute"]) {
-      const grant = await world.api.call("permissions.grant", {
-        payload: {
-          holderKind: "user",
-          holderId: member.id,
-          action,
-          effect: "allow",
-          scopeKind: "workspace",
-          scopeId: one.id
-        }
-      });
-      expect(grant.statusCode, grant.body).toBe(200);
-    }
-    expect(await call(world, member, "store-a", "insert", inputs.insert)).toMatchObject({
-      status: "done"
-    });
-    expect(await call(world, member, "store-b", "insert", inputs.insert)).toMatchObject(
-      refused("data_store.insert")
-    );
-    expect(await call(world, member, "store-a", "update", inputs.update)).toMatchObject({
-      status: "done"
-    });
-    expect(await call(world, member, "store-b", "update", inputs.update)).toMatchObject(
-      refused("data_store.execute")
-    );
   });
 });

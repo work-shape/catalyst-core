@@ -72,6 +72,35 @@ describe("agent runs as claimed jobs", () => {
     expect(await fixture.jobs()).toMatchObject([{ status: "succeeded", attempts: 1 }]);
   });
 
+  // MODEL-REGION-3: the worker hands a subagent's run what picked the model of the run that
+  // started it, so the runtime counts that run's route among the subagent's own.
+  it("starts a subagent's run with the model its parent run was started on", async () => {
+    const fixture = await createFixture("ancestors");
+    const parent = await fixture.accept("Do the work", { modelBindingId: "outside" });
+    const parentPass = fixture.worker().runDue();
+    const parentExecution = await fixture.executor.next();
+    const child = await db.store.childAgentRuns.startSubagentRun({
+      clientInstanceId: fixture.clientInstanceId,
+      parentRunId: parent.id,
+      parentOperationRunId: createPlatformId<"OperationRunId">("oprun"),
+      agentName: "research_agent",
+      description: "Read",
+      task: "Read",
+      correlationId: crypto.randomUUID()
+    });
+    if (child.status !== "started") throw new Error("No child");
+
+    const childPass = fixture.worker().runDue();
+    const childExecution = await fixture.executor.next();
+    expect(childExecution.input.ancestors).toEqual([
+      { agentName: "test_agent", modelBindingId: "outside" }
+    ]);
+    expect(parentExecution.input.ancestors).toBeUndefined();
+    childExecution.complete();
+    parentExecution.complete();
+    await Promise.all([parentPass, childPass]);
+  });
+
   it("refuses the next append of a worker whose lease was stolen and stores nothing of it", async () => {
     const fixture = await createFixture("stolen");
     harness.heartbeatsByHand();

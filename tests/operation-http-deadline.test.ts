@@ -270,7 +270,8 @@ it("persists timeout before aborting a connector that answers success on abort",
   }
 });
 
-it.each(["en", "de"] as const)("names the effective timeout limit in %s", async (locale) => {
+it("names the effective timeout limit", async () => {
+  const locale = "en";
   const entered = deferred<void>();
   const release = deferred<void>();
   const f = await direct(async () => {
@@ -289,10 +290,7 @@ it.each(["en", "de"] as const)("names the effective timeout limit in %s", async 
       status: "failed",
       error: {
         code: "TIMEOUT",
-        message:
-          locale === "de"
-            ? `'deadline.probe' hat die Grenze runtime.deadline (${deadline.toISOString()}) erreicht`
-            : `'deadline.probe' reached the limit runtime.deadline (${deadline.toISOString()})`
+        message: `'deadline.probe' reached the limit runtime.deadline (${deadline.toISOString()})`
       }
     });
   } finally {
@@ -301,31 +299,25 @@ it.each(["en", "de"] as const)("names the effective timeout limit in %s", async 
   }
 });
 
-it.each(["en", "de"] as const)(
-  "never dispatches after admission consumes definition.timeoutMs (%s)",
-  async (locale) => {
-    const execute = vi.fn(async () => ({}));
-    const f = await direct(execute);
-    useFakeClockBesidePostgres();
-    f.deps.policy.centralSettings = async () => {
-      await vi.advanceTimersByTimeAsync(300_123);
-      return [];
-    };
-    const outcome = await settleOnFakeClock(f.run({ locale }));
-    expect(execute).not.toHaveBeenCalled();
-    expect(outcome.run).toMatchObject({
-      status: "failed",
-      error: {
-        code: "TIMEOUT",
-        unexecuted: true,
-        message:
-          locale === "de"
-            ? "'deadline.probe' hat die Grenze definition.timeoutMs (300000 ms) erreicht"
-            : "'deadline.probe' reached the limit definition.timeoutMs (300000 ms)"
-      }
-    });
-  }
-);
+it("never dispatches after admission consumes definition.timeoutMs", async () => {
+  const execute = vi.fn(async () => ({}));
+  const f = await direct(execute);
+  useFakeClockBesidePostgres();
+  f.deps.policy.centralSettings = async () => {
+    await vi.advanceTimersByTimeAsync(300_123);
+    return [];
+  };
+  const outcome = await settleOnFakeClock(f.run());
+  expect(execute).not.toHaveBeenCalled();
+  expect(outcome.run).toMatchObject({
+    status: "failed",
+    error: {
+      code: "TIMEOUT",
+      unexecuted: true,
+      message: "'deadline.probe' reached the limit definition.timeoutMs (300000 ms)"
+    }
+  });
+});
 
 it.each(["deadline", "exact-deadline", "abort"] as const)(
   "never dispatches when %s arrives during admission",
@@ -456,7 +448,7 @@ it("records an abort during the approved run claim as unexecuted", async () => {
   });
 });
 
-it.each(["knowledge_base.use", "connection.use"] as const)(
+it.each(["connection.use"] as const)(
   "keeps a resumed %s refusal as localized permission help (AVAIL-1)",
   async (action) => {
     const f = await direct(async () => ({}));

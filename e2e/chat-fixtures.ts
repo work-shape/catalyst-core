@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { requestWithOrigin } from "./request-with-origin";
-import type { Locator, Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { expect, test as baseTest } from "./test";
 import { z } from "zod";
 import { uiOrigin } from "./view-fixtures";
@@ -48,14 +48,6 @@ export const test = baseTest.extend<
   }
 });
 
-export function settingsGear(page: Page): Locator {
-  return page.getByRole("button", { name: "Settings", exact: true });
-}
-
-export function settingsPages(page: Page): Locator {
-  return page.getByRole("navigation", { name: "Settings pages" });
-}
-
 export async function createListedConversation(page: Page, title: string): Promise<{ id: string }> {
   const started = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/conversations/runs`, {
     data: {
@@ -83,10 +75,6 @@ export async function createListedConversation(page: Page, title: string): Promi
   return conversation;
 }
 
-export function legacyConversationPath(conversationId: string): string {
-  return `/c/${encodeURIComponent(conversationId)}`;
-}
-
 export const collaborationWorkspaceUrlPattern = /\/w\/[^/]+$/u;
 
 export const collaborationWorkspaceConversationUrlPattern = /\/w\/[^/]+\/c\/[^/]+$/u;
@@ -95,9 +83,7 @@ export function conversationUrlPattern(conversationId: string): RegExp {
   return new RegExp(`/w/[^/]+/c/${escapeRegExp(encodeURIComponent(conversationId))}$`, "u");
 }
 
-export const COMPOSER_GROWTH_LINES = 6;
-
-export const LONG_RUN_WORDS = 500;
+const LONG_RUN_WORDS = 500;
 
 export const LONG_RUN_END_TIMEOUT_MS = 30_000;
 
@@ -125,7 +111,7 @@ export function currentConversationId(page: Page): string {
   return decodeURIComponent(match[1]);
 }
 
-export function escapeRegExp(value: string): string {
+function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
@@ -175,37 +161,6 @@ export function countResponses(
     }
   });
   return () => count;
-}
-
-export async function expandDisclosure(trigger: Locator): Promise<void> {
-  await expect(trigger).toBeVisible();
-  if ((await trigger.getAttribute("aria-expanded")) !== "true") {
-    await trigger.click();
-  }
-  await expect(trigger).toHaveAttribute("aria-expanded", "true");
-}
-
-export async function openWorkHistoryToolCard(chatRegion: Locator): Promise<Locator> {
-  await expandDisclosure(chatRegion.getByRole("button", { name: /^Work history/u }));
-  await expandDisclosure(weatherStepFold(chatRegion));
-  const toolCallCard = chatRegion.getByTestId("tool-call-card").last();
-  await expect(toolCallCard).toBeVisible();
-  return toolCallCard;
-}
-
-export function weatherStepFold(chatRegion: Locator): Locator {
-  return chatRegion
-    .getByTestId("assistant-work-group-trigger")
-    .filter({ hasText: /^Weather Forecast$/u });
-}
-
-export async function stopActiveRun(page: Page): Promise<void> {
-  const stopButton = page.getByRole("button", { name: "Stop generating" });
-  if ((await stopButton.count()) === 0) {
-    return;
-  }
-  await stopButton.click();
-  await expect(page.getByRole("button", { name: "Send message" })).toBeVisible({ timeout: 10_000 });
 }
 
 export async function readPagedList<Item>(

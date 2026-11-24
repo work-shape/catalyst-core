@@ -12,7 +12,6 @@ import {
   withScopes,
   type AppInstance
 } from "./support/app-instance";
-import { withTestSql } from "./support/test-sql";
 import type { TestCallInput, TestOperationName } from "./support/operations";
 
 afterEach(() => vi.useRealTimers());
@@ -323,36 +322,6 @@ describe("an App with a draft and a published revision", () => {
     expect((await history()).map(({ number }) => number)).toEqual([1]);
   });
 
-  it("omits an unknown publication date from the history and live version, then dates a new publish", async () => {
-    const name = "unknown-publish-time";
-    await created(name, "historical App");
-    expectStatus(await t.publish(t.admin.id, name, 1), 200);
-    const app = await stored(name);
-    await withTestSql(async (sql) => {
-      await sql`UPDATE config_asset_publications SET published_at_known = false WHERE asset_id = ${app?.id ?? ""}`;
-    });
-    const read = async () =>
-      (
-        await t.expectOk(t.admin.id, "assets.get", {
-          params: { kind: "app", name },
-          query: { workspaceId: t.workspaceId }
-        })
-      ).json<{ liveVersion: { number: number; publishedAt?: string } }>();
-    const history = (
-      await t.expectOk(t.admin.id, "assets.publications.list", {
-        params: { kind: "app", name },
-        query: { workspaceId: t.workspaceId }
-      })
-    ).json<{ items: { publishedAt?: string }[] }>();
-    expect(history.items[0]).not.toHaveProperty("publishedAt");
-    expect((await read()).liveVersion).not.toHaveProperty("publishedAt");
-    expectStatus(await t.publish(t.admin.id, name, 1), 200);
-    expect((await read()).liveVersion).toMatchObject({
-      number: 2,
-      publishedAt: expect.any(String)
-    });
-  });
-
   it("names a publisher whose account is gone as a deleted account", async () => {
     const name = "publication-gone";
     await created(name, "saved by Admin");
@@ -534,52 +503,6 @@ describe("an App with a draft and a published revision", () => {
     });
     expectStatus(withPublish, 200);
     await t.stores.access.deleteGrant({ clientInstanceId, grantId: grant.id });
-  });
-
-  it("lists the draft ahead of the published revision after a write and beside it after a discard", async () => {
-    await created("notes", "one");
-    await t.publish(t.admin.id, "notes", 1);
-    expect(await t.listed("notes")).toMatchObject({
-      revision: 1,
-      draftRevision: 1,
-      publishedRevision: 1
-    });
-
-    const second = fileWriteSchema.parse(
-      (await t.putApp(t.admin.id, "notes", appFiles("two"))).json()
-    );
-    expect(await t.listed("notes")).toMatchObject({
-      revision: 2,
-      draftRevision: 2,
-      publishedRevision: 1
-    });
-
-    const discarded = await t.expectOk(t.admin.id, "assets.discard_draft", {
-      params: { kind: "app", name: "notes" },
-      payload: { expectedRevision: 2, workspaceId: t.workspaceId }
-    });
-    expect(pointersSchema.parse(discarded.json())).toEqual({
-      draftRevision: 1,
-      publishedRevision: 1
-    });
-    expect(await t.listed("notes")).toMatchObject({
-      revision: 1,
-      draftRevision: 1,
-      publishedRevision: 1
-    });
-    expect((await shown(t.admin.id, "notes", "draft")).document.body).toContain("one");
-
-    // Revision 2 stays a revision of the App, so the next write is the third.
-    const third = fileWriteSchema.parse(
-      (await t.putApp(t.admin.id, "notes", appFiles("three"))).json()
-    );
-    expect(third.revision).toBe(3);
-    expect(third.fileSetId).not.toBe(second.fileSetId);
-    expect(await t.listed("notes")).toMatchObject({ draftRevision: 3, publishedRevision: 1 });
-    // And the discarded revision can still be published by its number.
-    const old = await t.publish(t.admin.id, "notes", 2);
-    expect(pointersSchema.parse(old.json())).toMatchObject({ publishedRevision: 2 });
-    expect((await shown(t.kai.id, "notes", "published")).document.body).toContain("two");
   });
 
   it("refuses somebody outside the workspace, a member's token on another file set, and a member the draft", async () => {

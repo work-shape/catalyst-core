@@ -48,6 +48,14 @@ describe("the reference an instance serves", () => {
         expect((await instance.call(operation, {}, caller)).statusCode).toBe(200);
       }
     }
+
+    // The page is a document that can load nothing and no other site may frame.
+    const page = await instance.call("docs.get", {}, asCaller());
+    expect(page.headers["content-security-policy"]).toMatch(
+      /^default-src 'none'; style-src 'sha256-[A-Za-z0-9+/=]+'; .*; frame-ancestors 'none'$/u
+    );
+    expect(page.headers["x-frame-options"]).toBe("DENY");
+    expect(page.body).not.toMatch(/<script|<link|<img|<iframe|\ssrc=|url\(|@import/iu);
   });
 
   it("describes every operation the instance registered, as the release does", async () => {
@@ -91,21 +99,5 @@ describe("the reference an instance serves", () => {
     const page = await instance.call("docs.get", {}, asCaller());
     expect(page.body).not.toContain("approval-requests");
     expect(page.body).toContain(apiOperations["conversations.list"].id);
-  });
-
-  it("serves the page as a document that can load nothing", async () => {
-    const instance = await createTestInstanceWith(withApprovals);
-    const page = await instance.call("docs.get", {}, asCaller());
-    expect(page.headers["content-type"]).toBe("text/html; charset=utf-8");
-    expect(page.headers["content-security-policy"]).toMatch(
-      /^default-src 'none'; style-src 'sha256-[A-Za-z0-9+/=]+'; .*; frame-ancestors 'none'$/u
-    );
-    expect(page.headers["x-frame-options"]).toBe("DENY");
-    expect(page.body).toContain(`href="${apiOperations["openapi.get"].path}" download`);
-    // No script, no image, no stylesheet and no font: one style element is all the page has.
-    expect(page.body).not.toMatch(/<script|<link|<img|<iframe|\ssrc=|url\(|@import/iu);
-    expect(page.body.match(/<style>/gu)).toHaveLength(1);
-    expect(page.body).toContain("text/event-stream");
-    expect(page.body).toContain("x-server-credential");
   });
 });

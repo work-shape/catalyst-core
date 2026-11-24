@@ -75,12 +75,10 @@ describe("the state of a Data Store", () => {
     });
   }
 
-  it("answers the level, the size against the limit and the last migration of a store in one read", async () => {
+  it("answers the level, the size against the limit, the conditions for their audience and the last migration in one read, also without the store's database", async () => {
     const world = await published("ready");
 
-    const state = await stateOf(world);
-
-    expect(state).toEqual({
+    expect(await stateOf(world)).toEqual({
       id: world.id,
       name: "findings",
       status: "ready",
@@ -99,74 +97,31 @@ describe("the state of a Data Store", () => {
       lastMigration: { outcome: "applied", migration: { number: 1, name: "init" } }
     });
     expect(world.record.sizeBytes).toBeGreaterThan(0);
-  });
 
-  it("declares a read under data_store.read that leaves no run and reaches no database of a store", async () => {
-    const world = await published("declared");
-    const operation = await operationOf(world);
-
-    expect(operation).toMatchObject({
-      name: "data_store.findings.state",
-      effect: "reading",
-      action: "data_store.read",
-      scope: "config_assets:read",
-      auth: "principal",
-      module: "dataStores"
-    });
-    expect(operation.recordsEveryCall).toBeUndefined();
-    expect(operation.resource({})).toMatchObject({ kind: "data_store", id: world.id });
-    // The database of the store is gone, and its state is still answered.
-    await world.dataStores.close();
-    await db.sql.unsafe(`drop database "${world.record.location.database}" with (force)`);
-    expect(await stateOf(world)).toMatchObject({ status: "ready", level: 1 });
-  });
-
-  it("says a store is near its limit from 80 percent of it", async () => {
-    const world = await published("near");
+    // Near its limit from 80 percent of it.
     const at = (bytes: number) =>
       db.sql`update data_stores set size_bytes = ${bytes}, size_limit_bytes = 1000 where id = ${world.id}`;
-
     await at(799);
     expect(await stateOf(world)).toMatchObject({
       size: { bytes: 799, limitBytes: 1000, nearLimit: false }
     });
     await at(800);
     expect(await stateOf(world)).toMatchObject({ size: { bytes: 800, nearLimit: true } });
-  });
 
-  it("says of each thing the server leaves open what an operator does about it", async () => {
-    const world = await published("open");
+    // What the server leaves open is shown to a signed-in holder of system.view, and hidden
+    // from a deny or a personal key.
     await db.sql`update data_stores set conditions = ${db.sql.json([
       "server_databases_open",
       "sessions_open",
       "temp_files_unbounded"
     ])} where id = ${world.id}`;
-
-    const { conditions } = stateSchema.parse(await stateOf(world));
-
-    expect(conditions.map(({ code }) => code)).toEqual([
+    const codes = async (access: ActorAccess, actor: AuthenticatedUser = reader) =>
+      stateSchema.parse(await stateOf(world, access, actor)).conditions.map(({ code }) => code);
+    expect(await codes(operator)).toEqual([
       "server_databases_open",
       "sessions_open",
       "temp_files_unbounded"
     ]);
-    const [databases, sessions, tempFiles] = conditions.map(({ message }) => message);
-    expect(databases).toContain("REVOKE CONNECT ON DATABASE <name> FROM PUBLIC");
-    expect(databases).toContain("host postgres,template1 /^catalyst_ds_ all reject");
-    expect(sessions).toContain("superuser");
-    expect(sessions).toContain("end another query of this store");
-    expect(tempFiles).toContain("temp_file_limit in postgresql.conf");
-
-    await db.sql`update data_stores set conditions = '[]'::jsonb where id = ${world.id}`;
-    expect(await stateOf(world)).toMatchObject({ conditions: [] });
-  });
-
-  it("shows server conditions to a signed-in holder of system.view, and hides them from a deny or a personal key", async () => {
-    const world = await published("audience");
-    await db.sql`update data_stores set conditions = ${db.sql.json(["sessions_open"])} where id = ${world.id}`;
-    const codes = async (access: ActorAccess) =>
-      stateSchema.parse(await stateOf(world, access)).conditions.map(({ code }) => code);
-
-    expect(await codes(operator)).toEqual(["sessions_open"]);
     // An admin reads the store and does not see how the instance runs.
     expect(await codes(accessOf(reader))).toEqual([]);
     expect(
@@ -177,13 +132,15 @@ describe("the state of a Data Store", () => {
       )
     ).toEqual([]);
     expect(await codes(accessOf({ ...reader, roles: ["user", "superadmin"] }))).toEqual([
-      "sessions_open"
+      "server_databases_open",
+      "sessions_open",
+      "temp_files_unbounded"
     ]);
     // A model-check scope cannot disclose server details through an authoring read.
     const keyOwner = { ...reader, keyScopes: ["data_store.read", "system.view"] };
     const keyAccess = accessOf(keyOwner, { grants: [instanceRow("system.view", "allow")] });
     expect(keyAccess.authorize("system.view").allowed).toBe(true);
-    expect(stateSchema.parse(await stateOf(world, keyAccess, keyOwner)).conditions).toEqual([]);
+    expect(await codes(keyAccess, keyOwner)).toEqual([]);
     // The rest of the state is the same for both.
     const { conditions: _shown, ...forOperator } = z
       .record(z.string(), z.unknown())
@@ -192,6 +149,22 @@ describe("the state of a Data Store", () => {
       .record(z.string(), z.unknown())
       .parse(await stateOf(world, accessOf(reader)));
     expect(forAdmin).toEqual(forOperator);
+
+    // A read under data_store.read that leaves no run and reaches no database of a store.
+    const operation = await operationOf(world);
+    expect(operation).toMatchObject({
+      name: "data_store.findings.state",
+      effect: "reading",
+      action: "data_store.read",
+      scope: "config_assets:read",
+      auth: "principal",
+      module: "dataStores"
+    });
+    expect(operation.recordsEveryCall).toBeUndefined();
+    expect(operation.resource({})).toMatchObject({ kind: "data_store", id: world.id });
+    await world.dataStores.close();
+    await db.sql.unsafe(`drop database "${world.record.location.database}" with (force)`);
+    expect(await stateOf(world)).toMatchObject({ status: "ready", level: 1 });
   });
 
   it("names the migration that failed and why, and the level the store stays at", async () => {

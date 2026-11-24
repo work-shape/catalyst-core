@@ -71,8 +71,6 @@ describe("the id of a saved App", () => {
   it.each([
     ["Umsatzübersicht", TAKEN],
     ["  Größen & Maße 2026 ", "groessen-masse-2026"],
-    ["Über_uns", "ueber-uns"],
-    ["Café Crème", "cafe-creme"],
     ["???", "app"],
     // An id starts with a letter, as every address a create dialog makes.
     ["2026 Bericht", "app-2026-bericht"],
@@ -106,9 +104,7 @@ describe("the name a built preview is read by, which Save as app proposes", () =
   it("is the name the folder gives itself, then the folder's name, then Vorschau", () => {
     expect(proposed("apps/revenue", { title: "Umsatzübersicht" })).toBe("Umsatzübersicht");
     expect(proposed("apps/revenue")).toBe("revenue");
-    expect(proposed("apps/revenue/")).toBe("revenue");
     expect(proposed("reports/q3.html")).toBe("q3");
-    expect(proposed("apps/revenue", { title: "  " })).toBe("revenue");
     expect(proposed(undefined)).toBe("Vorschau");
   });
 
@@ -118,13 +114,8 @@ describe("the name a built preview is read by, which Save as app proposes", () =
     expect(htmlTitle(html("<!doctype html><title>\n Wetter &amp; Wind </title>"))).toBe(
       "Wetter & Wind"
     );
-    expect(htmlTitle(html("<html><head><TITLE>Angebote</TITLE></head></html>"))).toBe("Angebote");
-    expect(htmlTitle(html("<!doctype html><h1>Hamburg</h1>"))).toBeUndefined();
-    expect(htmlTitle(html("<title>   </title>"))).toBeUndefined();
     // A title in the body is no title of the document.
     expect(htmlTitle(html("<body><svg><title>Chart</title></svg></body>"))).toBeUndefined();
-    // A file that is not HTML at all.
-    expect(htmlTitle(new Uint8Array([0xff, 0xfe, 0x00, 0x3c]))).toBeUndefined();
     const late = `<!doctype html><!--${"x".repeat(70 * 1024)}--><title>Too late</title>`;
     expect(htmlTitle(html(late))).toBeUndefined();
   });

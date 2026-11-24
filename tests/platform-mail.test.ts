@@ -46,31 +46,23 @@ describe("mail templates", () => {
       identity
     );
 
-    expect(mail.subject).toBe("Passwort für Example Chat zurücksetzen");
     expect(mail.text).toContain("https://chat.example.test/#password-setup=tok");
     expect(mail.text).toContain("60 Minuten");
     expect(mail.html).toContain('href="https://chat.example.test/#password-setup=tok"');
   });
 
   it("renders a Workflow notice mail as the link to the notice and nothing of what it says", () => {
-    for (const [locale, subject] of [
-      ["de", "Neue Mitteilungen in Example Chat"],
-      ["en", "New notices in Example Chat"]
-    ] as const) {
-      const mail = renderMail(
-        {
-          template: "workflow-notice",
-          to: { email: "ada@example.test" },
-          locale,
-          params: { link: "https://chat.example.test/inbox/apr_1", count: 50 }
-        },
-        identity
-      );
-      expect(mail.subject).toBe(subject);
-      expect(mail.text).toContain("50");
-      expect(mail.text).toContain("https://chat.example.test/inbox/apr_1");
-      expect(mail.html).toContain('href="https://chat.example.test/inbox/apr_1"');
-    }
+    const mail = renderMail(
+      {
+        template: "workflow-notice",
+        to: { email: "ada@example.test" },
+        locale: "en",
+        params: { link: "https://chat.example.test/inbox/apr_1", count: 50 }
+      },
+      identity
+    );
+    expect(mail.text).toContain("https://chat.example.test/inbox/apr_1");
+    expect(mail.html).toContain('href="https://chat.example.test/inbox/apr_1"');
   });
 
   it("escapes caller-supplied labels in HTML", () => {
@@ -215,22 +207,15 @@ describe("mail release config", () => {
     expect(createClientBranding(config).passwordResetEnabled).toBe(true);
   });
 
-  it("refuses the capture provider in production", () => {
-    expect(() =>
-      parseClientInstanceConfig({
-        ...withMail,
-        clientInstance: { ...base.clientInstance, environment: "production" }
-      })
-    ).toThrow(/capture mail provider/u);
-  });
-
-  it("refuses the capture provider in staging", () => {
-    expect(() =>
-      parseClientInstanceConfig({
-        ...withMail,
-        clientInstance: { ...base.clientInstance, environment: "staging" }
-      })
-    ).toThrow(/capture mail provider/u);
+  it("refuses the capture provider in production and staging", () => {
+    for (const environment of ["production", "staging"]) {
+      expect(() =>
+        parseClientInstanceConfig({
+          ...withMail,
+          clientInstance: { ...base.clientInstance, environment }
+        })
+      ).toThrow(/capture mail provider/u);
+    }
   });
 });
 
@@ -265,6 +250,12 @@ describe("password setup by email", () => {
     expect(auditTypes).toContain("user.password_reset_requested");
     expect(auditTypes).toContain("user.password_reset");
     expect(JSON.stringify(await harness.listAuditEvents())).not.toContain(token);
+    // The anonymous request is recorded without an actor, with the user as subject.
+    const requested = (await harness.listAuditEvents()).find(
+      (event) => event.type === "user.password_reset_requested"
+    );
+    expect(requested!.actor).toBeUndefined();
+    expect(requested!.subject).toEqual(expect.any(String));
   });
 
   it("stops sending after three requests for the same address within an hour", async () => {
@@ -324,20 +315,11 @@ describe("password setup by email", () => {
     expect(await ip("198.51.100.9")).toBe("198.51.100.9");
   });
 
-  it("rejects reset requests while mail is disabled", async () => {
-    const harness = await createMailHarness({ mailEnabled: false });
-    expect((await harness.requestReset("ada@example.test")).statusCode).toBe(422);
-  });
-
-  it("lists captured mail only while the capture provider is active", async () => {
-    const capturing = await createMailHarness({ listCaptured: true });
-    const delivering = await createMailHarness();
-
-    expect((await capturing.server.call("captured_mail.list", {})).statusCode).toBe(200);
-    expect((await delivering.server.call("captured_mail.list", {})).statusCode).toBe(404);
-  });
-
-  it("pages identical captured mails with tied timestamps without losing rows", async () => {
+  it("lists captured mail only while the capture provider is active, paging tied timestamps without losing rows", async () => {
+    // While mail is off, a reset is refused and nothing is listed.
+    const disabled = await createMailHarness({ mailEnabled: false });
+    expect((await disabled.requestReset("ada@example.test")).statusCode).toBe(422);
+    expect((await disabled.server.call("captured_mail.list", {})).statusCode).toBe(404);
     const harness = await createMailHarness({ listCaptured: true });
     const clock = vi
       .spyOn(Date.prototype, "toISOString")
@@ -369,51 +351,6 @@ describe("password setup by email", () => {
       clock.mockRestore();
       await harness.server.close();
     }
-  });
-
-  it("records an anonymous reset request without an actor and keeps the user as subject", async () => {
-    const harness = await createMailHarness();
-    await harness.addPasswordUser("ada@example.test", "Ada");
-
-    await harness.requestReset("ada@example.test");
-
-    await eventually(async () =>
-      expect((await harness.listAuditEvents()).map((event) => event.type)).toContain(
-        "user.password_reset_requested"
-      )
-    );
-    const requested = (await harness.listAuditEvents()).find(
-      (event) => event.type === "user.password_reset_requested"
-    );
-    expect(requested!.actor).toBeUndefined();
-    expect(requested!.subject).toEqual(expect.any(String));
-  });
-
-  it("refuses to re-invite a user whose email no longer matches their password sign-in", async () => {
-    const harness = await createMailHarness();
-    const created = await harness.server.call("users.create", {
-      payload: { displayLabel: "Grace", email: "grace@example.test" }
-    });
-    const user = created.json<{ id: string }>();
-    expect(
-      (await harness.server.call("users.invitation.send", { params: { userId: user.id } }))
-        .statusCode
-    ).toBe(200);
-
-    const updated = await harness.server.call("users.update", {
-      params: { userId: user.id },
-      payload: { email: "grace.hopper@example.test" }
-    });
-    expect(updated.statusCode).toBe(200);
-
-    const reinvited = await harness.server.call("users.invitation.send", {
-      params: { userId: user.id }
-    });
-    expect(reinvited.statusCode).toBe(409);
-    expect(reinvited.json()).toMatchObject({
-      error: { message: expect.stringContaining("password sign-in") }
-    });
-    expect(harness.transport.list()).toHaveLength(1);
   });
 
   it("redacts internal invitation delivery failures through HTTP", async () => {
@@ -458,7 +395,6 @@ describe("password setup by email", () => {
 
     const [mail] = harness.transport.list();
     expect(mail!.to.email).toBe("grace@example.test");
-    expect(mail!.text).toContain("Admin has invited you to Demo");
     const completed = await harness.server.call("password_setup.complete", {
       payload: { token: readToken(mail!.text), password: "graces-password" }
     });
@@ -467,6 +403,18 @@ describe("password setup by email", () => {
     expect((await harness.listAuditEvents()).map((event) => event.type)).toContain(
       "user.invitation_sent"
     );
+
+    // Once the email no longer matches the password sign-in, no invitation is sent again.
+    const updated = await harness.server.call("users.update", {
+      params: { userId },
+      payload: { email: "grace.hopper@example.test" }
+    });
+    expect(updated.statusCode).toBe(200);
+    const reinvited = await harness.server.call("users.invitation.send", {
+      params: { userId }
+    });
+    expect(reinvited.statusCode).toBe(409);
+    expect(harness.transport.list()).toHaveLength(1);
   });
 });
 

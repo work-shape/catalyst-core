@@ -243,7 +243,7 @@ describe("a reference to an asset the caller may not read", () => {
 
 describe("an asset of the instance", () => {
   it("has no neighbours: a skill of the instance is a reference only for a caller who may read it", async () => {
-    const { t } = await setup();
+    const { t, workspaceId } = await setup();
     await t.put(t.admin.id, "agent", "plain");
     // Lena reads and writes the one agent, and is denied the one skill.
     for (const action of ["agent.read", "agent.write"]) {
@@ -276,6 +276,62 @@ describe("an asset of the instance", () => {
       validation: { valid: true, issues: [] },
       put: 200
     });
+    // Is refused as taken without saying where, whoever holds it.
+    {
+      const other = await t.sharedWorkspace("Other team");
+      await applyAtCurrentRevisions(t.stores.configAssets, {
+        clientInstanceId,
+        mutations: [
+          {
+            type: "upsert",
+            kind: "skill",
+            name: "other-notes",
+            config: skill("other-notes"),
+            scope: { kind: "workspace", workspaceId: other }
+          }
+        ]
+      });
+      // Lena may write the skills of the workspace and reads nothing of the instance or of the
+      // other workspace.
+      await t.stores.access.createGrant({
+        clientInstanceId,
+        holderKind: "user",
+        holderId: t.lena.id,
+        action: "skill.write",
+        effect: "allow",
+        scopeKind: "workspace",
+        scopeId: workspaceId,
+        grantedBy: t.admin.id
+      });
+      const create = async (name: string) => {
+        const response = await t.call(t.lena.id, "assets.put", {
+          params: { kind: "skill", name },
+          payload: { config: skill(name), expectedRevision: null, workspaceId }
+        });
+        if (response.statusCode === 200) return { status: 200 };
+        return { status: response.statusCode, ...errorSchema.parse(response.json()).error };
+      };
+      const taken = (name: string) => ({
+        status: 412,
+        code: "REVISION_CONFLICT",
+        message: `Config skill '${name}' is not at the revision the call names`,
+        details: { reason: "revision_conflict", conflicts: [{ kind: "skill", name }] }
+      });
+
+      // A skill of the instance and one of another workspace: both answered alike, by name only.
+      for (const name of ["handbook", "other-notes"]) {
+        expect(await create(name), name).toEqual(taken(name));
+      }
+      expect(await t.stored("skill", "handbook")).toMatchObject({
+        revision: 1,
+        scope: { kind: "instance" }
+      });
+      // A free name becomes the workspace's.
+      expect(await create("free-name")).toEqual({ status: 200 });
+      expect(await t.stored("skill", "free-name")).toMatchObject({
+        scope: { kind: "workspace", workspaceId }
+      });
+    }
   });
 });
 
@@ -313,17 +369,6 @@ describe("an issue of an asset the caller may not read", () => {
     expect(issues.length).toBe(2);
     expect(issues.at(-1)?.message).toBe(unread);
     withoutNames(draft.body);
-
-    const german = await t.expectOk(t.kai.id, "assets.validate", {
-      ...address,
-      params: { kind: "skill" },
-      payload: { config: untitled, ...inKai },
-      headers: { "accept-language": "de" }
-    });
-    expect(german.body).toContain(
-      "Die Änderung würde ein Asset beschädigen, das der Aufrufer nicht lesen darf"
-    );
-    expect(german.body).not.toContain("second-reader");
 
     // A delete of the skill the agents list is refused as in use, and counts what it may not
     // name (SKILL-DEL-1).
@@ -363,64 +408,5 @@ describe("an issue of an asset the caller may not read", () => {
       agents: ["first-reader", "second-reader"]
     });
     expect(named.body).not.toContain(unread);
-  });
-});
-
-describe("a name another owner holds", () => {
-  it("is refused as taken without saying where, whoever holds it", async () => {
-    const { t, workspaceId } = await setup();
-    const other = await t.sharedWorkspace("Other team");
-    await applyAtCurrentRevisions(t.stores.configAssets, {
-      clientInstanceId,
-      mutations: [
-        {
-          type: "upsert",
-          kind: "skill",
-          name: "other-notes",
-          config: skill("other-notes"),
-          scope: { kind: "workspace", workspaceId: other }
-        }
-      ]
-    });
-    // Lena may write the skills of the workspace and reads nothing of the instance or of the
-    // other workspace.
-    await t.stores.access.createGrant({
-      clientInstanceId,
-      holderKind: "user",
-      holderId: t.lena.id,
-      action: "skill.write",
-      effect: "allow",
-      scopeKind: "workspace",
-      scopeId: workspaceId,
-      grantedBy: t.admin.id
-    });
-    const create = async (name: string) => {
-      const response = await t.call(t.lena.id, "assets.put", {
-        params: { kind: "skill", name },
-        payload: { config: skill(name), expectedRevision: null, workspaceId }
-      });
-      if (response.statusCode === 200) return { status: 200 };
-      return { status: response.statusCode, ...errorSchema.parse(response.json()).error };
-    };
-    const taken = (name: string) => ({
-      status: 412,
-      code: "REVISION_CONFLICT",
-      message: `Config skill '${name}' is not at the revision the call names`,
-      details: { reason: "revision_conflict", conflicts: [{ kind: "skill", name }] }
-    });
-
-    // A skill of the instance and one of another workspace: both answered alike, by name only.
-    for (const name of ["handbook", "other-notes"]) {
-      expect(await create(name), name).toEqual(taken(name));
-    }
-    expect(await t.stored("skill", "handbook")).toMatchObject({
-      revision: 1,
-      scope: { kind: "instance" }
-    });
-    // A free name becomes the workspace's.
-    expect(await create("free-name")).toEqual({ status: 200 });
-    expect(await t.stored("skill", "free-name")).toMatchObject({
-      scope: { kind: "workspace", workspaceId }
-    });
   });
 });

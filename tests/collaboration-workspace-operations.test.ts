@@ -154,15 +154,6 @@ describe("workspaces and members: every change is an Operation Run", () => {
     }
   });
 
-  it("leaves no run for the personal workspace the interface asks for on every load", async () => {
-    const f = await setup();
-    const before = await f.t.stores.operationRuns.list({ clientInstanceId });
-    for (let load = 0; load < 3; load += 1) {
-      await f.t.expectOk(f.member.id, "workspaces.ensure_personal");
-    }
-    expect(await f.t.stores.operationRuns.list({ clientInstanceId })).toHaveLength(before.length);
-  });
-
   it("answers a repeated creation from its run and creates one workspace", async () => {
     const f = await setup();
     const create = () =>
@@ -180,6 +171,14 @@ describe("workspaces and members: every change is an Operation Run", () => {
       (workspace) => workspace.name === "Once"
     );
     expect(named).toHaveLength(1);
+    // Leaves no run for the personal workspace the interface asks for on every load.
+    {
+      const before = await f.t.stores.operationRuns.list({ clientInstanceId });
+      for (let load = 0; load < 3; load += 1) {
+        await f.t.expectOk(f.member.id, "workspaces.ensure_personal");
+      }
+      expect(await f.t.stores.operationRuns.list({ clientInstanceId })).toHaveLength(before.length);
+    }
   });
 });
 
@@ -278,33 +277,31 @@ describe("workspaces and members: the role is asked before the policy", () => {
     expect(
       await f.t.stores.workspaces.getAccessRequest({ ...f.scope, userId: f.outsider.id })
     ).toBeDefined();
-  });
+    // Ends an Admin's change of an Owner as a refusal that names the operation.
+    {
+      const refused = await f.t.call(f.admin.id, "workspaces.members.remove", {
+        params: { collaborationWorkspaceId: f.workspaceId, userId: f.owner.id }
+      });
+      expect(refused.statusCode).toBe(403);
+      expect(errorOf(refused)).toEqual({
+        code: "FORBIDDEN",
+        message: "Workspace Admins may remove regular Members only",
+        details: { action: "workspaces.members.remove", reason: "no_grant" }
+      });
+      const [run] = await f.runs("workspaces.members.remove");
+      expect(run).toMatchObject({ status: "denied", workspaceId: f.workspaceId });
+      expect(await f.memberIds()).toEqual(f.members);
 
-  // The rule depends on the member the call names, so the operation itself refuses.
-  it("ends an Admin's change of an Owner as a refusal that names the operation", async () => {
-    const f = await setup();
-    const refused = await f.t.call(f.admin.id, "workspaces.members.remove", {
-      params: { collaborationWorkspaceId: f.workspaceId, userId: f.owner.id }
-    });
-    expect(refused.statusCode).toBe(403);
-    expect(errorOf(refused)).toEqual({
-      code: "FORBIDDEN",
-      message: "Workspace Admins may remove regular Members only",
-      details: { action: "workspaces.members.remove", reason: "no_grant" }
-    });
-    const [run] = await f.runs("workspaces.members.remove");
-    expect(run).toMatchObject({ status: "denied", workspaceId: f.workspaceId });
-    expect(await f.memberIds()).toEqual(f.members);
-
-    // The last active Owner stays, as before: the operation's own answer, so the run failed.
-    const last = await f.t.call(f.owner.id, "workspaces.members.leave", {
-      params: { collaborationWorkspaceId: f.workspaceId }
-    });
-    expect(last.statusCode).toBe(409);
-    expect((await f.runs("workspaces.members.leave")).map((left) => left.error?.code)).toEqual([
-      "CONFLICT"
-    ]);
-    expect(await f.memberIds()).toEqual(f.members);
+      // The last active Owner stays, as before: the operation's own answer, so the run failed.
+      const last = await f.t.call(f.owner.id, "workspaces.members.leave", {
+        params: { collaborationWorkspaceId: f.workspaceId }
+      });
+      expect(last.statusCode).toBe(409);
+      expect((await f.runs("workspaces.members.leave")).map((left) => left.error?.code)).toEqual([
+        "CONFLICT"
+      ]);
+      expect(await f.memberIds()).toEqual(f.members);
+    }
   });
 
   it("does not show a workspace to somebody outside it, and asks no policy for them", async () => {

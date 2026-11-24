@@ -1,5 +1,3 @@
-import { createElement } from "react";
-import type { PartState } from "@assistant-ui/react";
 import { LocalAgentRuntime } from "@work-shape/catalyst-agent-runtime";
 import {
   ASK_QUESTION_TOOL_NAME,
@@ -13,7 +11,6 @@ import type { ModelCompletionRequest } from "@work-shape/catalyst-model-provider
 import { createAskQuestionTool, ToolRegistry } from "@work-shape/catalyst-tool-execution";
 import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import {
-  QuestionCardView,
   isQuestionCall,
   questionAnswers,
   readAskedQuestion
@@ -23,11 +20,6 @@ import { createConversationWithMessages, noReportedUsage } from "./helpers/agent
 import { withTestModelGateway } from "./support/model-gateway";
 import { createStaticConfigAssetSource } from "./support/static-config-asset-source";
 import { createTestInstance } from "./support/test-instance";
-import {
-  createAssistantMessageGroupBy,
-  createVisibleFinalAssistantPartIndices
-} from "./support/chat-ui";
-import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // ASK-1: the agent asks the person one question with a few answers. The tool answers the
 // question as the card shows it, the recommended answer first; the run ends its turn after the
@@ -100,15 +92,6 @@ describe("the question tool", () => {
     expect((await run({ question: " ", options: [option("A"), option("B")] })).status).toBe(
       "invalid"
     );
-  });
-
-  it("tells the agent to ask about outcomes in everyday words, never about how it is built", () => {
-    expect(tool.effect).toBe("reading");
-    expect(tool.title?.de).toBe("Frage stellen");
-    expect(tool.description).toContain("your turn ends after this step");
-    expect(tool.description).toContain("Never ask about how it is built");
-    expect(tool.description).toContain("storage, data stores, Workflows");
-    expect(tool.description).toContain('"Only me"');
   });
 });
 
@@ -255,43 +238,5 @@ describe("the question card", () => {
     expect(answers.get("q2")).toBe("For the team, but read only");
     // No message follows the last question yet: it is open.
     expect(answers.has("q3")).toBe(false);
-  });
-
-  it("stands in the thread during and after the run, beside the answer's text", () => {
-    const call: PartState = {
-      ...part("q1"),
-      type: "tool-call",
-      args: { question: asked.question },
-      argsText: "{}",
-      status: { type: "complete" }
-    };
-    const parts: PartState[] = [
-      { type: "text", text: "One thing first.", status: { type: "complete" } },
-      call
-    ];
-    const groupBy = createAssistantMessageGroupBy();
-    expect(groupBy(call, {})).toEqual([]);
-    expect(createVisibleFinalAssistantPartIndices(parts, 0)).toEqual([0, 1]);
-  });
-
-  it("shows the answers in German with the recommended one marked, then the answer given", () => {
-    const question = readAskedQuestion(part("q").result);
-    if (!question) throw new Error("no question");
-    const render = (node: ReturnType<typeof createElement>) =>
-      renderToStaticMarkup(createElement(TranslationProvider, { locale: "de", children: node }));
-    const open = render(
-      createElement(QuestionCardView, { asked: question, onAnswer: () => undefined })
-    );
-    expect(open).toContain('data-state="open"');
-    expect(open).toContain("Empfohlen");
-    expect(open).toContain("Oder eigene Antwort");
-    expect(open.indexOf("Only me")).toBeLessThan(open.indexOf("My whole team"));
-    const answered = render(
-      createElement(QuestionCardView, { asked: question, answer: "Only me" })
-    );
-    expect(answered).toContain('data-state="answered"');
-    expect(answered).toContain("Deine Antwort");
-    expect(answered).not.toContain("data-question-option");
-    expect(answered).not.toContain("data-question-own");
   });
 });

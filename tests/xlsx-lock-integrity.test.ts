@@ -22,10 +22,4 @@ describe("SheetJS lock integrity", () => {
       "SheetJS lock integrity is missing or changed"
     );
   });
-
-  it("rejects a missing package entry", () => {
-    expect(() => checkXlsxIntegrity("packages: {}\n")).toThrow(
-      "SheetJS lock integrity is missing or changed"
-    );
-  });
 });

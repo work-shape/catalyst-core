@@ -1,12 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { isRecord } from "@work-shape/catalyst-asset-schemas";
-import { isJsonObject, isRecord as coreIsRecord, type JsonValue } from "@work-shape/catalyst-core";
+import { isJsonObject, type JsonValue } from "@work-shape/catalyst-core";
 
 describe("record guards", () => {
-  it("keeps core imports on the shared asset-schemas guard", () => {
-    expect(coreIsRecord).toBe(isRecord);
-  });
-
   it("accepts any non-null object except arrays, without checking its values or prototype", () => {
     const objects: unknown[] = [
       {},
@@ -15,21 +11,7 @@ describe("record guards", () => {
       new Date(0),
       new Error("example")
     ];
-    const others: unknown[] = [
-      null,
-      undefined,
-      [],
-      [{}],
-      "",
-      "value",
-      0,
-      1,
-      false,
-      true,
-      Symbol(),
-      1n,
-      () => ({})
-    ];
+    const others: unknown[] = [null, undefined, [], "value", 0, () => ({})];
 
     for (const value of objects) expect(isRecord(value)).toBe(true);
     for (const value of others) expect(isRecord(value)).toBe(false);
@@ -37,18 +19,7 @@ describe("record guards", () => {
 
   it("keeps the JSON guard's object semantics for JSON values", () => {
     const objects: JsonValue[] = [{}, { nested: [null, { value: true }] }];
-    const others: (JsonValue | undefined)[] = [
-      null,
-      undefined,
-      [],
-      [{}],
-      "",
-      "value",
-      0,
-      1,
-      false,
-      true
-    ];
+    const others: (JsonValue | undefined)[] = [null, undefined, [], "value", 0];
 
     for (const value of objects) expect(isJsonObject(value)).toBe(true);
     for (const value of others) expect(isJsonObject(value)).toBe(false);

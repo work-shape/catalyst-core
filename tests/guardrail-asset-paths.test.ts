@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { DATA_STORE_ASSET_KIND, DATA_STORE_MANIFEST_FILE } from "@work-shape/catalyst-core";
+import {
+  DATA_STORE_ASSET_KIND,
+  DATA_STORE_MANIFEST_FILE,
+  asConversationId
+} from "@work-shape/catalyst-core";
+import { deriveAppContentKey, storePageFileSet } from "@work-shape/catalyst-server";
 import { setupWorkspaceHolder } from "./support/asset-operations";
 import { clientInstanceId as accessInstanceId, skill } from "./support/access-instance";
 import { z } from "zod";
@@ -15,6 +20,52 @@ import { IBAN, guardedEvents, ibanPattern, judge, noIban } from "./support/guard
 // The paths by which content reaches an asset or goes live beside a save and a publish: an
 // earlier revision brought back, an App written from a Page, a file that is no text, the
 // migrations of a Data Store. Each is asked at its before-event like a save or a publish.
+
+// The verifier's regressions of PR 47 (GR-2b) live here too: photos, disguised images,
+// UTF-16 and Apps of another workspace.
+
+const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const text = (value: string) => new TextEncoder().encode(value);
+const bytes = (path: string, content: Uint8Array) => ({
+  path,
+  base64: Buffer.from(content).toString("base64")
+});
+
+/** A PNG-signed file of `size` bytes that holds no text: its signature, then binary noise. */
+function photoBytes(size: number): Uint8Array {
+  const content = new Uint8Array(size);
+  content.set(PNG);
+  // Bytes that are no printable text and hold no digit run an IBAN pattern could match.
+  for (let index = PNG.length; index < size; index += 1) content[index] = 0x80 + (index % 0x7f);
+  return content;
+}
+
+const verdict = (violates: boolean) => ({
+  text: JSON.stringify({ violates, reason: "Needs a look." }),
+  toolCalls: [],
+  usage: {
+    inputTokens: 1,
+    outputTokens: 1,
+    totalTokens: 2,
+    source: "provider_reported" as const,
+    webSearchCallCount: 0
+  }
+});
+
+/** The demo's two IBAN rules (clients/demo/config/app.yaml): block, no `filter.kind`. */
+const demoRules = {
+  no_iban_in_assets: noIban({
+    displayName: "No IBAN in assets",
+    filter: undefined,
+    check: { kind: "pattern", pattern: ibanPattern, reason: "Assets hold no IBAN." }
+  }),
+  no_iban_in_apps: noIban({
+    displayName: "No IBAN in published Apps",
+    on: "app.before_publish",
+    filter: undefined,
+    check: { kind: "pattern", pattern: ibanPattern, reason: "Apps hold no IBAN." }
+  })
+};
 
 describe("a guardrail on a revert", () => {
   // Fails without the change: a revert wrote the earlier revision back unchecked.
@@ -194,17 +245,7 @@ describe("a guardrail that holds an App written from a Page", () => {
           if (asked === 2 && page) {
             await t?.storePage("third revision", {}, { conversationId: page.conversationId });
           }
-          return {
-            text: JSON.stringify({ violates: asked === 1, reason: "Needs a look." }),
-            toolCalls: [],
-            usage: {
-              inputTokens: 1,
-              outputTokens: 1,
-              totalTokens: 2,
-              source: "provider_reported",
-              webSearchCallCount: 0
-            }
-          };
+          return verdict(asked === 1);
         });
         return { operations: { events: guarded.events } };
       }
@@ -245,18 +286,64 @@ describe("a guardrail that holds an App written from a Page", () => {
       await t?.close();
     }
   });
+
+  // GR-2b: the guardrails read the Page's newest revision, and execute read it again and
+  // copied a revision saved in between, unread.
+  it("never copies a Page revision that no guardrail read", async () => {
+    let t: AppInstance | undefined;
+    let conversationId: string | undefined;
+    let complete: ReturnType<typeof guardedEvents>["complete"] | undefined;
+    t = await setupAppInstance({
+      server: (stores) => {
+        const guarded = guardedEvents(stores, {
+          no_iban: noIban({
+            displayName: "No IBAN in Apps",
+            filter: { kind: "app" },
+            check: { kind: "pattern", pattern: ibanPattern, reason: "Apps hold no IBAN." }
+          }),
+          privacy: { ...judge("asset.before_write", "block"), filter: { kind: "app" } }
+        });
+        complete = guarded.complete;
+        return { operations: { events: guarded.events } };
+      }
+    });
+    try {
+      const clean = await t.storePage("Angebot ohne Konto");
+      conversationId = clean.conversationId;
+      complete?.mockImplementation(async () => {
+        // The Page is saved again while the judge reads revision 1.
+        await t?.storePage(`Konto ${IBAN}`, {}, { conversationId });
+        return verdict(false);
+      });
+      const created = await t.call(t.admin.id, "apps.create_from_page", {
+        payload: { ...clean, name: "offers", title: "Offers", workspaceId: t.workspaceId }
+      });
+      // Either the write is refused, or what it wrote is what the guardrails read.
+      if (created.statusCode === 200) {
+        const asset = await t.stores.configAssets.getConfigAsset({
+          clientInstanceId: accessInstanceId,
+          kind: "app",
+          name: "offers"
+        });
+        const origin = asset
+          ? await t.stores.configAssets.getConfigAssetPageOrigin({
+              clientInstanceId: accessInstanceId,
+              assetId: asset.id
+            })
+          : undefined;
+        expect(origin?.fileSetNumber).toBe(1);
+      } else {
+        expect(created.statusCode).toBe(409);
+      }
+    } finally {
+      await t.close();
+    }
+  });
 });
 
 describe("a guardrail on a file that is no text", () => {
-  const bytes = (path: string, content: Uint8Array) => ({
-    path,
-    base64: Buffer.from(content).toString("base64")
-  });
   // A PNG's signature and the start of its header: not UTF-8, and it holds NUL bytes.
-  const image = bytes(
-    "logo.png",
-    new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d])
-  );
+  const image = bytes("logo.png", new Uint8Array([...PNG, 0, 0, 0, 0x0d]));
 
   // Fails without the change: a file that is no text was left out of what a pattern read, so
   // an IBAN beside a NUL byte was saved unread.
@@ -299,15 +386,18 @@ describe("a guardrail on a file that is no text", () => {
       })
     });
     try {
-      const text = `name;iban\nŁukasz;${IBAN}\n`;
-      const littleEndian = bytes("accounts.csv", new Uint8Array(Buffer.from(text, "utf16le")));
-      const bigEndian = bytes(
+      const csv = `name;iban\nŁukasz;${IBAN}\n`;
+      const littleEndian = bytes("accounts.csv", new Uint8Array(Buffer.from(csv, "utf16le")));
+      const bigEndian = bytes("accounts.csv", new Uint8Array(Buffer.from(csv, "utf16le").swap16()));
+      // GR-2b r2: a Windows export, UTF-16LE with a byte order mark.
+      const marked = bytes(
         "accounts.csv",
-        new Uint8Array(Buffer.from(text, "utf16le").swap16())
+        new Uint8Array([0xff, 0xfe, ...Buffer.from(csv, "utf16le")])
       );
       for (const [name, file] of [
         ["offers", littleEndian],
-        ["archive", bigEndian]
+        ["archive", bigEndian],
+        ["export", marked]
       ] as const) {
         const put = await t.putApp(t.admin.id, name, [...appFiles("Angebot"), file]);
         expect(put.statusCode, put.body).toBe(403);
@@ -352,17 +442,7 @@ describe("a guardrail on a file that is no text", () => {
         });
         guarded.complete.mockImplementation(async () => {
           judged += 1;
-          return {
-            text: '{"violates":false,"reason":"Fine."}',
-            toolCalls: [],
-            usage: {
-              inputTokens: 1,
-              outputTokens: 1,
-              totalTokens: 2,
-              source: "provider_reported",
-              webSearchCallCount: 0
-            }
-          };
+          return verdict(false);
         });
         return { operations: { events: guarded.events } };
       }
@@ -387,6 +467,207 @@ describe("a guardrail on a file that is no text", () => {
       );
       expect(judged).toBe(1);
       expect((await t.listed("archive")).publishedRevision).toBeUndefined();
+    } finally {
+      await t.close();
+    }
+  });
+
+  // GR-2b r2: a photo read as Latin-1 for a pattern was refused as too large to read, and a
+  // judge refused a set of photos over 2 MiB before it was asked.
+  it("saves and publishes an App with 2.5 MB of photos under the demo's rules and a judge", async () => {
+    let judged = 0;
+    const t = await setupAppInstance({
+      server: (stores) => {
+        const guarded = guardedEvents(stores, {
+          ...demoRules,
+          privacy: { ...judge("asset.before_write", "block"), displayName: "Privacy" }
+        });
+        guarded.complete.mockImplementation(async () => {
+          judged += 1;
+          return verdict(false);
+        });
+        return { operations: { events: guarded.events } };
+      }
+    });
+    try {
+      const put = await t.putApp(t.admin.id, "offers", [
+        ...appFiles("Angebot"),
+        bytes("hero.png", photoBytes(1_250_000)),
+        bytes("team.png", photoBytes(1_250_000))
+      ]);
+      expect(put.statusCode, put.body).toBe(200);
+      expect(judged).toBe(1);
+      const published = await t.publish(t.admin.id, "offers", 1);
+      expect(published.statusCode, published.body).toBe(200);
+    } finally {
+      await t.close();
+    }
+  });
+
+  // GR-2b r2/r3: a file that only starts like an image, with short lines of text after it.
+  it("hands a judge the lines of a list put into a file that starts like an image", async () => {
+    const seen: string[] = [];
+    const t = await setupAppInstance({
+      server: (stores) => {
+        const guarded = guardedEvents(stores, {
+          privacy: { ...judge("asset.before_write", "block"), displayName: "Privacy" }
+        });
+        guarded.complete.mockImplementation(async (request) => {
+          seen.push(JSON.stringify(request));
+          return verdict(false);
+        });
+        return { operations: { events: guarded.events } };
+      }
+    });
+    try {
+      const disguised = bytes(
+        "people.png",
+        new Uint8Array([
+          ...PNG,
+          ...text("Max Mustermann\n0171 2345678\nErika Muster\n030 9876543\nDiagnose F32\n")
+        ])
+      );
+      const put = await t.putApp(t.admin.id, "offers", [...appFiles("Angebot"), disguised]);
+      if (put.statusCode === 200) {
+        expect(seen.join("\n")).toContain("Mustermann");
+      } else {
+        expect(put.statusCode).toBe(403);
+      }
+    } finally {
+      await t.close();
+    }
+  });
+
+  // GR-2b r3: a set over 8 MiB was refused before reading, though photos add next to no text.
+  it("saves a Page with 9.5 MB of photos and no IBAN as an App", async () => {
+    const t = await setupAppInstance({
+      server: (stores) => ({ operations: { events: guardedEvents(stores, demoRules).events } })
+    });
+    try {
+      const { id: conversationId } = z
+        .object({ id: z.string() })
+        .parse(
+          (
+            await t.expectOk(t.admin.id, "conversations.create", { payload: { title: "Offers" } })
+          ).json()
+        );
+      const manifest = { id: "offers-page", name: "Offers", kit: "1.0.0", entry: "index.html" };
+      const html = text("<!doctype html><title>Offers</title><p>Angebot</p>");
+      const stored = await storePageFileSet(
+        {
+          clientInstanceId: accessInstanceId,
+          stores: t.stores,
+          pages: {
+            objects: t.objects,
+            contentKey: deriveAppContentKey("content-secret-".repeat(4))
+          }
+        },
+        {
+          conversationId: asConversationId(conversationId),
+          pageName: "Offers",
+          kitVersion: "1.0.0",
+          manifest,
+          sourceFiles: [
+            { path: "app.yaml", bytes: text(JSON.stringify(manifest)) },
+            { path: "index.html", bytes: html },
+            ...[1, 2, 3, 4, 5].map((index) => ({
+              path: `photo-${index}.png`,
+              bytes: photoBytes(1_900_000)
+            }))
+          ],
+          builtFiles: [{ path: "index.html", bytes: html }]
+        }
+      );
+      const created = await t.call(t.admin.id, "apps.create_from_page", {
+        payload: {
+          conversationId,
+          pageId: stored.page.id,
+          name: "offers",
+          title: "Offers",
+          workspaceId: t.workspaceId
+        }
+      });
+      expect(created.statusCode, created.body).toBe(200);
+    } finally {
+      await t.close();
+    }
+  });
+});
+
+describe("a guardrail on an App of another workspace named in a revert or a publish", () => {
+  // GR-2b: the before-events read the revision by kind and name alone, so a writer of
+  // workspace A had B's App read, judged and named. It is now refused as a name of no App.
+  it("reads no revision of it and answers as for the name of no App", async () => {
+    const t = await setupAppInstance({
+      server: (stores) => ({
+        operations: {
+          events: guardedEvents(stores, {
+            on_write: noIban({
+              displayName: "IBAN on write",
+              filter: { kind: "app" },
+              check: { kind: "pattern", pattern: ibanPattern, reason: "Apps hold no IBAN." },
+              outcome: "warn"
+            }),
+            on_publish: noIban({
+              displayName: "IBAN on publish",
+              on: "app.before_publish",
+              filter: undefined,
+              check: { kind: "pattern", pattern: ibanPattern, reason: "Apps hold no IBAN." }
+            })
+          }).events
+        }
+      })
+    });
+    try {
+      // Workspace B's App, with an IBAN in its draft.
+      expect((await t.putApp(t.admin.id, "payroll", appFiles(`Konto ${IBAN}`))).statusCode).toBe(
+        200
+      );
+      const hits = async (name: string) =>
+        (
+          await t.stores.guardrails.listHits({
+            clientInstanceId: accessInstanceId,
+            guardrailName: name,
+            limit: 10
+          })
+        ).length;
+      const writeHitsBefore = await hits("on_write");
+      // Lena reads, writes and publishes Apps in workspace A only.
+      const other = await t.sharedWorkspace("A");
+      for (const action of ["app.read", "app.write", "app.publish"]) {
+        await t.stores.access.createGrant({
+          clientInstanceId: accessInstanceId,
+          holderKind: "user",
+          holderId: t.lena.id,
+          action,
+          effect: "allow",
+          scopeKind: "workspace",
+          scopeId: other,
+          grantedBy: t.admin.id
+        });
+      }
+      const answer = async (operation: "assets.revert" | "assets.publish", name: string) => {
+        const response = await t.call(t.lena.id, operation, {
+          params: { kind: "app", name },
+          payload:
+            operation === "assets.revert"
+              ? { revision: 1, expectedRevision: 1, workspaceId: other }
+              : { revision: 1, workspaceId: other }
+        });
+        const { error } = response.json<{ error: { code: string; message: string } }>();
+        return {
+          status: response.statusCode,
+          code: error.code,
+          message: error.message.replaceAll(name, "<name>")
+        };
+      };
+      for (const operation of ["assets.revert", "assets.publish"] as const) {
+        expect(await answer(operation, "payroll"), operation).toEqual(
+          await answer(operation, "nobody-holds-this")
+        );
+      }
+      expect(await hits("on_write")).toBe(writeHitsBefore);
+      expect(await hits("on_publish")).toBe(0);
     } finally {
       await t.close();
     }

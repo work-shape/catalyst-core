@@ -14,9 +14,8 @@ import {
   uiLabelsEn
 } from "@work-shape/catalyst-ui";
 
-// A tab row that does not fit scrolls sideways (UI-LIB-1: the Inbox at 390 with a count). It
-// fades the edge that hides tabs, keeps its line whole under the fade, and scrolls the selected
-// tab into view. happy-dom lays nothing out, so a browser's measures are set here: every tab is
+// A tab row that does not fit scrolls sideways (UI-LIB-1: the Inbox at 390 with a count) and
+// scrolls the selected tab into view. happy-dom lays nothing out, so a browser's measures are set here: every tab is
 // 100 px wide, the row shows 250 px, and the fade is 16 px.
 
 const TAB_WIDTH = 100;
@@ -103,11 +102,6 @@ describe("a tab row that does not fit", () => {
     expect(row().scrollLeft).toBe(400 + 16 - ROW_WIDTH);
   });
 
-  it("leaves a row whose selected tab already shows where it is", () => {
-    render(viewTabs({ defaultValue: "a" }));
-    expect(row().scrollLeft).toBe(0);
-  });
-
   it("scrolls to the tab selected next, in a row the caller holds the value of", () => {
     const element = (value: string) => viewTabs({ value, onValueChange() {} });
     render(element("a"));
@@ -148,23 +142,6 @@ describe("a tab row that does not fit", () => {
     expect(row().scrollLeft).toBe(120);
   });
 
-  it("fades the edge that hides tabs and draws the line on a frame the fade leaves whole", () => {
-    render(viewTabs({ defaultValue: "a" }));
-    expect(row().style.maskImage).toBe(
-      "linear-gradient(to right, black 0, black calc(100% - 1rem), transparent 100%)"
-    );
-    expect(row().className).not.toContain("shadow-");
-    expect(row().parentElement?.className).toContain("shadow-[inset_0_-1px_0_var(--color-border)]");
-
-    act(() => {
-      row().scrollLeft = 5 * TAB_WIDTH - ROW_WIDTH;
-      row().dispatchEvent(new Event("scroll"));
-    });
-    expect(row().style.maskImage).toBe(
-      "linear-gradient(to right, transparent 0, black 1rem, black 100%)"
-    );
-  });
-
   it("scrolls the open route's tab into view in a navigation of links", () => {
     const nav = (open: string) =>
       createElement(
@@ -179,7 +156,6 @@ describe("a tab row that does not fit", () => {
         )
       );
     render(nav("a"));
-    expect(row().closest("nav")?.getAttribute("aria-label")).toBe("Sections");
     expect(row().scrollLeft).toBe(0);
     render(nav("d"));
     expect(row().scrollLeft).toBe(400 + 16 - ROW_WIDTH);

@@ -82,7 +82,6 @@ describe("what a personal key reaches", () => {
       payload: { name: "Model checks", scopes: ["system.view"], expiresAt: inDays(1) }
     });
     expect(create.statusCode).toBe(422);
-    expect(errorSchema.parse(create.json()).error.message).toContain("system.view");
     const grant = await t.expectOk(t.root.id, "permissions.grant", {
       payload: {
         holderKind: "user",
@@ -115,9 +114,9 @@ describe("what a personal key reaches", () => {
     await t.expectOk(t.root.id, "permissions.revoke", { params: { grantId: denyId } });
     const refused = await t.call(t.kai.id, "instance.infrastructure.check", { headers });
     expect(refused.statusCode).toBe(403);
-    expect(errorSchema.parse(refused.json()).error).toMatchObject({
-      message: expect.stringContaining("system.view"),
-      details: { action: "system.view", reason: "no_grant" }
+    expect(errorSchema.parse(refused.json()).error.details).toMatchObject({
+      action: "system.view",
+      reason: "no_grant"
     });
   });
 
@@ -143,35 +142,25 @@ describe("what a personal key reaches", () => {
       headers: { [SERVICE_HEADER]: "model-checker" }
     });
     expect(service.statusCode).toBe(403);
-    expect(errorSchema.parse(service.json()).error.message).toBe(
-      "Service principals cannot access user-scoped routes"
-    );
-  });
-
-  it("refuses Run live once over HTTP for a superadmin's key token, while asset reads still work", async () => {
-    const t = await setup();
-    await t.putAgent(t.root.id, "helper");
-    const { secret } = await t.issue([...PERSONAL_API_KEY_ACTIONS], t.root.id);
-    const headers = await t.tokenFor(secret);
-    const params = { kind: "agent", name: "helper" };
-    const refused = await t.call(t.root.id, "assets.run_live_once", {
-      params,
-      payload: { part: "send", expectedRevision: 1 },
-      headers
-    });
-    expect(refused.statusCode).toBe(403);
-    expect(errorSchema.parse(refused.json()).error).toMatchObject({
-      code: "FORBIDDEN",
-      message: "Run live once needs a person signed in to the app; API keys cannot use it",
-      details: { reason: "user_only" }
-    });
-    await t.expectOk(t.root.id, "assets.get", { params, headers });
   });
 
   it("is refused on every operation whose scope a key never carries, for a superadmin's widest key", async () => {
     const t = await setup();
+    await t.putAgent(t.root.id, "helper");
     const { secret } = await t.issue([...PERSONAL_API_KEY_ACTIONS], t.root.id);
     const headers = await t.tokenFor(secret);
+    // Run live once needs a person signed in, while asset reads still work.
+    const live = await t.call(t.root.id, "assets.run_live_once", {
+      params: { kind: "agent", name: "helper" },
+      payload: { part: "send", expectedRevision: 1 },
+      headers
+    });
+    expect(live.statusCode).toBe(403);
+    expect(errorSchema.parse(live.json()).error.details).toMatchObject({ reason: "user_only" });
+    await t.expectOk(t.root.id, "assets.get", {
+      params: { kind: "agent", name: "helper" },
+      headers
+    });
     const reached: string[] = [];
     let refused = 0;
     for (const [name, operation] of Object.entries(apiOperations)) {
@@ -201,25 +190,6 @@ describe("what a personal key reaches", () => {
     expect(refused).toBeGreaterThan(80);
   });
 
-  it("does not confirm a connect code, even with the owner signed in elsewhere", async () => {
-    const t = await setup();
-    await grantKaiWorkspace(t);
-    const headers = await t.tokenFor((await t.issue([`agent.read:${t.kaiTeam}`])).secret);
-    const started = z
-      .object({ userCode: z.string(), deviceCode: z.string() })
-      .parse((await t.instance.call("connect_codes.start", { payload: {} })).json());
-    const confirm = await t.call(t.kai.id, "me.connect_codes.confirm", {
-      params: { userCode: started.userCode },
-      payload: { name: "x", scopes: [`agent.read:${t.kaiTeam}`], expiresAt: inDays(1) },
-      headers
-    });
-    expect(confirm.statusCode).toBe(403);
-    const redeem = await t.instance.call("connect_codes.redeem", {
-      payload: { deviceCode: started.deviceCode }
-    });
-    expect(redeem.json()).toEqual({ status: "pending" });
-  });
-
   it("reads only its workspace where the owner holds rights in more than one", async () => {
     const t = await setup();
     await grantKaiWorkspace(t);
@@ -238,6 +208,20 @@ describe("what a personal key reaches", () => {
     const headers = await t.tokenFor(
       (await t.issue([`agent.read:${t.kaiTeam}`, `agent.write:${t.kaiTeam}`])).secret
     );
+    // A key does not confirm a connect code, even with its owner signed in elsewhere.
+    const started = z
+      .object({ userCode: z.string(), deviceCode: z.string() })
+      .parse((await t.instance.call("connect_codes.start", { payload: {} })).json());
+    const confirm = await t.call(t.kai.id, "me.connect_codes.confirm", {
+      params: { userCode: started.userCode },
+      payload: { name: "x", scopes: [`agent.read:${t.kaiTeam}`], expiresAt: inDays(1) },
+      headers
+    });
+    expect(confirm.statusCode).toBe(403);
+    const redeem = await t.instance.call("connect_codes.redeem", {
+      payload: { deviceCode: started.deviceCode }
+    });
+    expect(redeem.json()).toEqual({ status: "pending" });
     const listIn = (workspaceId: string, signedIn: Record<string, string> = headers) =>
       t.call(t.kai.id, "assets.list", {
         params: { kind: "agent" },

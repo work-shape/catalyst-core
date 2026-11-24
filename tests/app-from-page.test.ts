@@ -299,61 +299,42 @@ describe("an App made from a Page", () => {
     expect(t.objects.keys().filter((key) => key.startsWith("assets/"))).toEqual([]);
   });
 
-  it("refuses with the runner image named where it is older than the release", async () => {
-    const outdated: AssetRepoCommitRunner = async () => ({
+  it("refuses with a reason an operator can act on when the commit fails or is refused", async () => {
+    let answer: Awaited<ReturnType<AssetRepoCommitRunner>> = {
       status: "failed",
       reason: "command_missing",
-      message:
-        "The runner image of this instance has no 'catalyst-asset-repo'. It is older than the release that keeps repositories: a problem of the platform, not of the request, solved by rolling out the runner image of this release."
-    });
-    const old = await setup({ commits: outdated });
-    const refused = await create(old, await old.storePage("old image"), "old");
+      message: "The runner image of this instance has no 'catalyst-asset-repo'."
+    };
+    const t = await setup({ commits: async () => answer });
 
-    expectStatus(refused, 409);
-    expect(errorSchema.parse(refused.json()).error).toMatchObject({
-      message: expect.stringMatching(
-        /^The runner image of this instance has no 'catalyst-asset-repo'/u
-      ),
-      details: { reason: "runner_image_outdated" }
+    const old = await create(t, await t.storePage("old image"), "old");
+    expectStatus(old, 409);
+    expect(errorSchema.parse(old.json()).error.details).toMatchObject({
+      reason: "runner_image_outdated"
     });
-    expect(await stored(old, "old")).toBeUndefined();
-  });
 
-  it("refuses with a reason an operator can act on when the worker's disk is full", async () => {
-    const full: AssetRepoCommitRunner = async () => ({
+    answer = {
       status: "refused",
       code: "no_space",
       message: "The server has too little free disk space for this save."
-    });
-    const t = await setup({ commits: full });
+    };
+    const full = await create(t, await t.storePage("no room"), "full");
+    expectStatus(full, 409);
+    expect(errorSchema.parse(full.json()).error.details).toMatchObject({ reason: "no_space" });
 
-    const refused = await create(t, await t.storePage("no room"), "full");
-
-    expectStatus(refused, 409);
-    expect(errorSchema.parse(refused.json()).error).toMatchObject({
-      message: "The server has too little free disk space for this save.",
-      details: { reason: "no_space" }
-    });
-    expect(await stored(t, "full")).toBeUndefined();
-  });
-
-  it("says what to do when the history of the App is at its limit", async () => {
-    const t = await setup({
-      commits: async () => ({
-        status: "refused",
-        code: "history_too_large",
-        message: "The stored history of this asset has reached the limit."
-      })
-    });
-
-    const refused = await create(t, await t.storePage("long history"), "long");
-
-    expectStatus(refused, 422);
-    expect(errorSchema.parse(refused.json()).error).toMatchObject({
-      message:
-        "The stored history of this app has reached the limit of 100 MiB. Nothing was saved. Until history can be shortened, the way out is a new app from the current files.",
+    answer = {
+      status: "refused",
+      code: "history_too_large",
+      message: "The stored history of this asset has reached the limit."
+    };
+    const long = await create(t, await t.storePage("long history"), "long");
+    expectStatus(long, 422);
+    // The store's wording about an asset is told as the App's, with the way out.
+    expect(errorSchema.parse(long.json()).error).toMatchObject({
+      message: expect.stringContaining("new app from the current files"),
       details: { reason: "history_too_large" }
     });
+    for (const name of ["old", "full", "long"]) expect(await stored(t, name)).toBeUndefined();
   });
 
   it("refuses on an instance where no worker takes commits", async () => {

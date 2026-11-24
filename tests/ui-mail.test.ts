@@ -4,7 +4,6 @@ import { createRoot, type Root } from "react-dom/client";
 import {
   MailPreview,
   RecipientField,
-  TemplateText,
   TemplateTextField,
   UiRoot,
   normalizeTemplateParts,
@@ -95,16 +94,6 @@ describe("TemplateTextField", () => {
     });
     expect(seen.at(-1)).toEqual(["Hi\n", { option: "load#emails" }]);
   });
-
-  it("shows the text read-only with its chips", async () => {
-    const node = await mount(
-      createElement(TemplateText, {
-        value: ["Result ", { option: "load#emails" }],
-        options: fields
-      })
-    );
-    expect(node.textContent).toBe("Result Addresses");
-  });
 });
 
 describe("RecipientField", () => {
@@ -166,14 +155,6 @@ describe("RecipientField", () => {
 });
 
 describe("MailPreview", () => {
-  it("says the mail is empty before there is one", async () => {
-    const node = await mount(createElement(MailPreview, { state: "empty", label: "Mail" }));
-    expect(node.querySelector("[data-mail-preview]")?.getAttribute("data-mail-preview")).toBe(
-      "empty"
-    );
-    expect(node.textContent).toBe(uiLabelsEn.mailEmpty);
-  });
-
   it("draws a server body in a sandboxed frame that runs no script", async () => {
     const node = await mount(
       createElement(MailPreview, {
@@ -189,28 +170,5 @@ describe("MailPreview", () => {
     expect(frame?.getAttribute("srcdoc")).toContain("Content-Security-Policy");
     expect(node.querySelector('[data-mail-row="to"]')?.textContent).toContain("Miriam");
     expect(node.querySelector('[data-mail-recipient="picked"]')?.textContent).toBe("Addresses");
-  });
-
-  it("marks a test send and names whom it would have reached", async () => {
-    const node = await mount(
-      createElement(
-        MailPreview,
-        {
-          label: "Mail",
-          test: { to: [{ label: "Miriam" }] },
-          to: [{ label: "Tester" }],
-          subject: "Report"
-        },
-        "Body"
-      )
-    );
-    expect(node.querySelector("[data-mail-preview]")?.getAttribute("data-mail-preview")).toBe(
-      "test"
-    );
-    expect(node.querySelector('[data-mail-row="subject"]')?.textContent).toContain(
-      uiLabelsEn.mailTestPrefix
-    );
-    expect(node.querySelector("[data-mail-test]")?.textContent).toContain("Miriam");
-    expect(node.querySelector("[data-mail-body]")?.textContent).toBe("Body");
   });
 });

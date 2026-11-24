@@ -7,11 +7,14 @@ import {
   allowedLinkTarget,
   createInlineImageLoader,
   mailAccentColor,
+  mailProviderDefinitions,
+  renderMail,
   renderMailMarkdown,
   type MailSenderIdentity,
   type WorkflowMessageMailMessage
 } from "@work-shape/catalyst-mail";
-import { mailDomainAllowed, mailDomainOf } from "@work-shape/catalyst-core";
+import { ProviderRegistry, mailDomainAllowed, mailDomainOf } from "@work-shape/catalyst-core";
+import { noticeMailSettingsSchema } from "@work-shape/catalyst-config-schema";
 
 // MAIL-1: what leaves the instance in a mail of `mail.send`. Events checks 130, 131 and 132.
 
@@ -72,20 +75,6 @@ describe("the Markdown of a mail's body", () => {
     expect(text).toContain("run and ok (https://kanzlei.de/a?b=1&c=2)");
   });
 
-  it("renders a table, lists and headings, and a text part beside them", () => {
-    const { html, text } = renderMailMarkdown(
-      "## Befunde\n\n| Mandant | Offen |\n| --- | ---: |\n| A & B | 2 |\n\n- eins\n- zwei",
-      { accentColor: "#0a7f5a" }
-    );
-    expect(html).toContain("<h2");
-    expect(html).toContain("<table");
-    expect(html).toContain("A &amp; B");
-    expect(html).toContain("text-align:right;");
-    expect(html).toContain("<ul");
-    expect(text).toContain("Mandant | Offen\nA & B | 2");
-    expect(text).toContain("- eins\n- zwei");
-  });
-
   it("links only over https, http and mailto", () => {
     expect(allowedLinkTarget("https://a.example/x")).toBe("https://a.example/x");
     expect(allowedLinkTarget("mailto:a@b.example")).toBe("mailto:a@b.example");
@@ -95,30 +84,12 @@ describe("the Markdown of a mail's body", () => {
 });
 
 describe("the template workflow-message", () => {
-  it("frames the body with the instance's name, accent colour and footers, escaping the subject", async () => {
+  it("escapes the subject in the frame and keeps a colour that is no colour out of a style", async () => {
     const sender = new TemplateMailSender(new CaptureMailTransport(), identity);
     const mail = await sender.preview(message("Hallo"));
     expect(mail.subject).toBe("Monatscheck <b>März</b>");
     expect(mail.html).toContain("Monatscheck &lt;b&gt;März&lt;/b&gt;");
     expect(mail.html).toContain("#0a7f5a");
-    expect(mail.html).toContain("Example Catalyst");
-    expect(mail.html).toContain("Der Workflow „Mandanten-Check“ von Example Catalyst hat diese");
-    expect(mail.html).toContain("Beispiel GmbH<br>Amtsgericht X");
-    expect(mail.text).toContain("Hallo\n\n--\n\nDer Workflow");
-    const english = await sender.preview(
-      message("Hi", {
-        locale: "en",
-        params: {
-          subject: "S",
-          markdown: "Hi",
-          sentBy: { kind: "agent", onBehalfOf: "Ada" }
-        }
-      })
-    );
-    expect(english.text).toContain(
-      "An agent of Example Catalyst sent this e-mail on behalf of Ada."
-    );
-    // A colour that is no colour never reaches a style.
     expect(mailAccentColor("red;background:url(x)")).toBe("#b5573a");
   });
 
@@ -239,23 +210,6 @@ describe("the envelope in the adapters", () => {
       failure: "unsent"
     });
   });
-
-  it("captures the envelope as a provider would send it", async () => {
-    const capture = new CaptureMailTransport();
-    const result = await capture.deliver(rendered, identity);
-    expect(result).toMatchObject({ ok: true, messageId: expect.stringMatching(/^capture-/u) });
-    expect(capture.list()[0]).toMatchObject({
-      from: { email: "catalyst@mail.example.test", name: "Kanzlei Team" },
-      to: { email: "a@kanzlei.de", displayLabel: "Anna" },
-      recipients: {
-        to: rendered.to,
-        cc: rendered.cc,
-        bcc: rendered.bcc
-      },
-      replyTo: { email: "office@kanzlei.de" },
-      inlineImages: [{ contentId: "logo", contentType: "image/png", bytes: PNG.byteLength }]
-    });
-  });
 });
 
 describe("the recipient domains", () => {
@@ -268,5 +222,76 @@ describe("the recipient domains", () => {
     expect(mailDomainAllowed("evilkanzlei.de", ["*.kanzlei.de"])).toBe(false);
     expect(mailDomainAllowed("gmail.com", ["*"])).toBe(true);
     expect(mailDomainAllowed("gmail.com", [])).toBe(false);
+  });
+});
+
+describe("notice mail's content boundary", () => {
+  const notice = { title: "Sensitive Mandant title", text: "Confidential finding account 4711" };
+
+  it("treats batching settings as mail port fields for every existing adapter", () => {
+    const registry = new ProviderRegistry(mailProviderDefinitions);
+    for (const provider of ["mailjet", "capture"]) {
+      const entry = {
+        provider,
+        appUrl: "https://chat.example.test",
+        sender: { fromAddress: "noreply@example.test" },
+        notices: noticeMailSettingsSchema.parse({}),
+        ...(provider === "mailjet"
+          ? { region: "eu", apiKeySecret: "MAIL_KEY", apiSecretSecret: "MAIL_SECRET" }
+          : {})
+      };
+      expect(() => registry.validate("mail", { path: "infrastructure.mail", entry })).not.toThrow();
+    }
+  });
+
+  it("renders only counts and a link even when the source notice has sensitive fields", () => {
+    for (const locale of ["de", "en"] as const) {
+      const mail = renderMail(
+        {
+          ...notice,
+          template: "workflow-notice" as const,
+          to: { email: "ada@example.test" },
+          locale,
+          params: { count: 17, link: "https://chat.example.test/inbox" }
+        },
+        { fromAddress: "noreply@example.test", fromName: "Example", productName: "Example" }
+      );
+      expect(mail.text).toContain("17");
+      expect(mail.html).toContain('href="https://chat.example.test/inbox"');
+      for (const part of [mail.subject, mail.text, mail.html]) {
+        expect(part).not.toContain(notice.title);
+        expect(part).not.toContain(notice.text);
+        expect(part).not.toContain("4711");
+      }
+    }
+  });
+
+  it("refuses only intervals whose delivery date cannot be represented", () => {
+    const clock = vi.spyOn(Date, "now").mockReturnValue(1000);
+    try {
+      const lastRepresentableInterval = 8_640_000_000_000_000 - 1000;
+      expect(
+        noticeMailSettingsSchema.parse({ digestIntervalMs: lastRepresentableInterval })
+          .digestIntervalMs
+      ).toBe(lastRepresentableInterval);
+      expect(
+        noticeMailSettingsSchema.safeParse({ digestIntervalMs: lastRepresentableInterval + 1 })
+          .success
+      ).toBe(false);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it("has operator defaults without an arbitrary maximum and rejects invalid settings", () => {
+    expect(noticeMailSettingsSchema.parse({})).toEqual({
+      batchSize: 100,
+      digestIntervalMs: 300000
+    });
+    expect(noticeMailSettingsSchema.parse({ batchSize: 10000 }).batchSize).toBe(10000);
+    for (const value of [0, 1.5, "100"]) {
+      expect(noticeMailSettingsSchema.safeParse({ batchSize: value }).success).toBe(false);
+      expect(noticeMailSettingsSchema.safeParse({ digestIntervalMs: value }).success).toBe(false);
+    }
   });
 });

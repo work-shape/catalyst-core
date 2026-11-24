@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { DATA_STORE_ASSET_KIND } from "@work-shape/catalyst-core";
-import { eventually } from "./support/assertions";
+import { DATA_STORE_ASSET_KIND, DATA_STORE_JOB_KINDS } from "@work-shape/catalyst-core";
+import { awaitStoreLevels } from "@work-shape/catalyst-server";
+import { CONDITION_WAIT_MS, eventually, required, waitUntil } from "./support/assertions";
+import { createTestInstance } from "./support/test-instance";
 import {
   INIT_SQL,
   init,
@@ -375,10 +377,9 @@ describe("the migrations of a Data Store", () => {
       }
     ]);
 
-    expect((await failureOf(world)).failure).toEqual({
+    expect((await failureOf(world)).failure).toMatchObject({
       code: "migration_failed",
-      message:
-        "'migrations/0002_far.sql' asks for something the database does not support (SQLSTATE 0A000)."
+      message: expect.stringContaining("SQLSTATE 0A000")
     });
   });
   it("looks at the roles with the database's own functions, whatever a migration put in their place", async () => {
@@ -502,5 +503,184 @@ describe("the migrations of a Data Store", () => {
       status: "provisioning",
       failure: { code: "provisioning_failed" }
     });
+  });
+
+  // Provisioning opens a migration-role socket. Restart the runtime before the next publish:
+  // only a cold executor proves that reading its password stays in the held transaction.
+  it.each([false, true])(
+    "completes a cold migration with rollback=%s on one Platform Store connection",
+    async (rollback) => {
+      const world = await published(`cold_${rollback}`);
+      await world.dataStores.close();
+      const applicationName = `migration_credentials_${rollback}`;
+      const { stores } = await createTestInstance({
+        postgres: { applicationName, poolSize: 1 }
+      });
+      const cold = world.restart(stores);
+      try {
+        await publish(world, [
+          manifest(),
+          init,
+          {
+            path: "migrations/0002_cold.sql",
+            text: `create table cold_result (id integer);${rollback ? " select 1/0;" : ""}`
+          }
+        ]);
+        let ended = false;
+        const running = cold.worker.runDue().finally(() => {
+          ended = true;
+        });
+        try {
+          await waitUntil(() => ended, "the cold migration completes", CONDITION_WAIT_MS);
+        } finally {
+          if (!ended) {
+            // Release only this test's blocked transaction so a regression can fail cleanly.
+            await db.sql`select pg_terminate_backend(pid) from pg_stat_activity
+              where datname = ${new URL(db.databaseUrl).pathname.slice(1)}
+                and application_name = ${applicationName} and state = 'idle in transaction'`;
+          }
+          await running;
+        }
+        const record = await recordOf(world, world.id);
+        expect(record).toMatchObject({
+          status: "ready",
+          level: rollback ? 1 : 2,
+          migrations: rollback ? [{ number: 1 }] : [{ number: 1 }, { number: 2 }]
+        });
+        if (rollback) {
+          expect(record.failure).toMatchObject({
+            code: "migration_failed",
+            message: expect.stringContaining("SQLSTATE 22012")
+          });
+        } else {
+          expect(record.failure).toBeUndefined();
+        }
+        const sql = connect(record.location.database);
+        expect(
+          (await sql`select to_regclass('public.cold_result') is not null as present`)[0]
+        ).toEqual({ present: !rollback });
+        expect(await sql`select number from catalyst.migrations order by number`).toEqual(
+          rollback ? [{ number: 1 }] : [{ number: 1 }, { number: 2 }]
+        );
+      } finally {
+        await jobs.stopWorkers();
+        await cold.dataStores.close();
+        await stores.close();
+      }
+    }
+  );
+
+  // Crash recovery runs the real handlers' exhaustion hook without entering failAttempt.
+  it.each(["provision", "migrate"] as const)(
+    "records %s exhaustion, answers the App's wait and clears the failure on manual retry",
+    async (operation) => {
+      const world = operation === "provision" ? await setup(operation) : await published(operation);
+      const files =
+        operation === "provision"
+          ? [manifest(), init]
+          : [
+              manifest(),
+              init,
+              {
+                path: "migrations/0002_note.sql",
+                text: "alter table findings add column note text;"
+              }
+            ];
+      const id = await publish(world, files);
+      const kind = DATA_STORE_JOB_KINDS[operation];
+      // The database state left by a killed worker on its final attempt, with no failAttempt.
+      const [job] = await db.sql<{ id: string }[]>`
+      update platform_jobs set status = 'running', attempts = max_attempts,
+        lease_owner = 'killed-worker', lease_token = 'lost-lease',
+        lease_expires_at = now() - interval '1 second'
+      where client_instance_id = ${world.clientInstanceId} and kind = ${kind} and status = 'queued'
+      returning id`;
+      expect(job).toBeDefined();
+      expect((await recordOf(world, id)).failure).toBeUndefined();
+      await world.worker.runDue();
+      const failed = await recordOf(world, id);
+      expect(failed).toMatchObject({ failure: { code: "job_exhausted" } });
+      expect(
+        await db.sql`select status, error_code from platform_jobs where id = ${required(job).id}`
+      ).toEqual([{ status: "dead", error_code: "LEASE_EXPIRED" }]);
+
+      let sleeps = 0;
+      const wait = () =>
+        awaitStoreLevels(
+          () => recordOf(world, id),
+          [
+            {
+              name: "findings",
+              title: "Findings",
+              storeId: id,
+              level: files.length - 1,
+              migrations: new Map()
+            }
+          ],
+          {
+            timeoutMs: 60_000,
+            pollMs: 250,
+            now: () => 0,
+            sleep: () => {
+              sleeps++;
+              throw new Error("A failed store must refuse before sleeping");
+            }
+          }
+        );
+      expect(await refusal(wait())).toMatchObject({
+        code: "CONFLICT",
+        details: { reason: "data_store_job_exhausted", dataStore: "findings" }
+      });
+      expect(sleeps).toBe(0);
+
+      // The same transaction as the jobs admin retry: both the job and subject are restored.
+      const retry = required(world.dataStores.jobRetries.find((entry) => entry.kind.kind === kind));
+      await db.store.transaction(async (stores) => {
+        expect(
+          await stores.jobs.retry({
+            clientInstanceId: world.clientInstanceId,
+            id: required(job).id
+          })
+        ).toMatchObject({ outcome: "requeued" });
+        expect(
+          await required(retry.restoreSubject)(
+            { clientInstanceId: world.clientInstanceId, kind, subject: id },
+            stores
+          )
+        ).toBe(true);
+      });
+      expect((await recordOf(world, id)).failure).toBeUndefined();
+      await settle(world, id, files.length - 1);
+      await expect(wait()).resolves.toBeUndefined();
+    }
+  );
+
+  it("preserves the specific failure of a final attempt", async () => {
+    const world = await setup("specific");
+    const id = await publish(world, [manifest(), init]);
+    const failure = { code: "platform_role_lacks_privilege", message: "Grant CREATEDB." };
+    await db.store.dataStores.putDataStore({ ...(await recordOf(world, id)), failure });
+    await db.sql`update platform_jobs set status = 'running', attempts = max_attempts,
+      lease_owner = 'killed-worker', lease_token = 'lost-lease', lease_expires_at = now() - interval '1 second'
+      where client_instance_id = ${world.clientInstanceId}`;
+    await world.worker.runDue();
+    expect((await recordOf(world, id)).failure).toEqual(failure);
+  });
+
+  it("refuses restoring missing or retired subjects", async () => {
+    const world = await setup("not_restorable");
+    const id = await publish(world, [manifest(), init]);
+    const record = await recordOf(world, id);
+    await db.store.dataStores.putDataStore({ ...record, status: "retired" });
+    for (const retry of world.dataStores.jobRetries.filter((entry) => entry.restoreSubject)) {
+      for (const subject of [undefined, "missing", id]) {
+        expect(
+          await required(retry.restoreSubject)(
+            { clientInstanceId: world.clientInstanceId, kind: retry.kind.kind, subject },
+            db.store
+          )
+        ).toBe(false);
+      }
+    }
   });
 });

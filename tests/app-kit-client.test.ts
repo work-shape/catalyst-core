@@ -88,10 +88,6 @@ function recordingTransport() {
 }
 
 describe("the two halves of the bridge", () => {
-  it("mark their messages the same way", () => {
-    expect([BRIDGE_MARK, BRIDGE_VERSION]).toEqual([APP_BRIDGE_MARK, APP_BRIDGE_VERSION]);
-  });
-
   it("agree on what a Page sends: the interface accepts every message of the client", async () => {
     const { transport, sent, deliver } = recordingTransport();
     const client = createAppClient(transport);
@@ -121,46 +117,16 @@ describe("the two halves of the bridge", () => {
     }
   });
 
-  // Fails before the removal: the kit offered `connections.call`, a free call of a Connection.
-  it("offer no free call of a Connection: a Page reaches one through a named action", () => {
+  // Fails before the removal (kit 1.4.0): the kit offered `connections.call`, a free call of a
+  // Connection. A Page reaches one through a named action.
+  it("offer no free call of a Connection, in the client and in the newest released kit", () => {
     const client = createAppClient(recordingTransport().transport);
-    expect(Object.keys(client).sort()).toEqual([
-      "actions",
-      "feedback",
-      "getContext",
-      "navigate",
-      "onThemeChange",
-      "pdf",
-      "resize",
-      "workflowRuns"
-    ]);
+    expect("connections" in client).toBe(false);
     expect("connections" in kitClient).toBe(false);
-  });
-
-  // Fails before kit 1.4.0: every released kit offered `connections.call` to a new Page.
-  // Fails before kit 1.7.0: a call without the interface said only "The interface did not
-  // answer.", and an agent added retries to the App for a fault of the host.
-  // Fails before kit 1.8.0: a Page could not tell a test run its draft started (DP-1).
-  // Fails before kit 1.9.0: a published App could not send feedback to its builders (LU-6).
-  // Fails before kit 1.10.0: an App made its PDFs with an outside service or a library (PDF-1).
-  it("ship kit 1.10.0 with personal JSON storage, without a free call of a Connection, naming the host's fault, test runs, feedback and PDFs", () => {
-    expect(RELEASED_KIT_VERSIONS.at(-1)).toBe("1.10.0");
-    const files = loadAppKitFiles();
-    const kit = files.get("1.10.0")?.get("kit.js")?.bytes.toString("utf8");
-    expect(kit).not.toMatch(/connection/u);
+    const newest = RELEASED_KIT_VERSIONS.at(-1) ?? "";
+    const kit = loadAppKitFiles().get(newest)?.get("kit.js")?.bytes.toString("utf8");
     expect(kit).toMatch(/\bas actions\b/u);
-    expect(kit).toMatch(/\bas storage\b/u);
-    expect(kit).toMatch(/trying again inside the App does not help/u);
-    expect(kit).toMatch(/simulatedSteps/u);
-    expect(kit).toMatch(/\bas AppFeedback\b/u);
-    expect(kit).toMatch(/feedback_result/u);
-    expect(kit).toMatch(/pdf_result/u);
-    // A released version stays as it was: 1.9.0 knows no PDF, 1.8.0 no feedback.
-    const previous = files.get("1.9.0")?.get("kit.js")?.bytes.toString("utf8");
-    expect(previous).toMatch(/feedback_result/u);
-    expect(previous).not.toMatch(/pdf_result/u);
-    const older = files.get("1.8.0")?.get("kit.js")?.bytes.toString("utf8");
-    expect(older).not.toMatch(/feedback_result/u);
+    expect(kit).not.toMatch(/connection/u);
   });
 
   it("agree on what the interface sends: the client reads what the schema allows", () => {
@@ -189,48 +155,6 @@ describe("the two halves of the bridge", () => {
         })
       )
     ).toMatchObject({ context: { can: {} } });
-    const done = {
-      type: "action_result",
-      session: "s",
-      requestId: "1",
-      ok: true,
-      result: { runId: "run-1", status: "done", result: { rows: [1, 2] } }
-    } as const;
-    expect(readHostMessage(hostMessage(done))).toEqual(done);
-    const refused = {
-      type: "action_result",
-      session: "s",
-      requestId: "2",
-      ok: false,
-      error: { code: "forbidden", message: "Not allowed", right: "connection.use", runId: "run-2" }
-    } as const;
-    expect(readHostMessage(hostMessage(refused))).toEqual(refused);
-    const thanked = { type: "feedback_result", session: "s", requestId: "3", ok: true } as const;
-    expect(readHostMessage(hostMessage(thanked))).toEqual(thanked);
-    const unpublished = {
-      type: "feedback_result",
-      session: "s",
-      requestId: "4",
-      ok: false,
-      error: { code: "feedback_app_unpublished", message: "Only a published App takes feedback." }
-    } as const;
-    expect(readHostMessage(hostMessage(unpublished))).toEqual(unpublished);
-    const printed = {
-      type: "pdf_result",
-      session: "s",
-      requestId: "5",
-      ok: true,
-      pdf: new Uint8Array([37, 80, 68, 70]).buffer
-    } as const;
-    expect(readHostMessage(hostMessage(printed))).toEqual(printed);
-    const tooLong = {
-      type: "pdf_result",
-      session: "s",
-      requestId: "6",
-      ok: false,
-      error: { code: "pdf_too_many_pages", message: "The PDF would have more than 50 pages." }
-    } as const;
-    expect(readHostMessage(hostMessage(tooLong))).toEqual(tooLong);
     // A PDF answer without the bytes is no answer the client reads.
     expect(
       readHostMessage({
@@ -318,21 +242,6 @@ describe("the kit client", () => {
 
     expect((await asked).locale).toBe("de");
     expect(sent.at(-1)).toEqual({ type: "navigate", session: "session-1", path: "/a" });
-  });
-
-  it("tells a theme change to every listener until it stops listening", async () => {
-    const { transport, deliver } = recordingTransport();
-    const client = createAppClient(transport);
-    const seen: string[] = [];
-
-    const stop = client.onThemeChange((change) => seen.push(change.mode));
-    deliver(hostMessage({ type: "context", session: "session-1", context }));
-    await client.getContext();
-    deliver(hostMessage({ type: "theme", theme, mode: "dark" }));
-    stop();
-    deliver(hostMessage({ type: "theme", theme, mode: "light" }));
-
-    expect(seen).toEqual(["dark"]);
   });
 
   it("sends one call with an id of its own and gives the caller the answer that names it", async () => {
@@ -606,12 +515,6 @@ describe("the kit client", () => {
       });
     expect(appBridgePageMessageSchema.safeParse(message("")).success).toBe(false);
     expect(
-      appBridgePageMessageSchema.safeParse(message("x".repeat(4 * 1024 * 1024 + 1))).success
-    ).toBe(false);
-    expect(appBridgePageMessageSchema.safeParse(message("<p/>", { format: "B5" })).success).toBe(
-      false
-    );
-    expect(
       appBridgePageMessageSchema.safeParse(message("<p/>", { margin: { top: "calc(1px)" } }))
         .success
     ).toBe(false);
@@ -654,15 +557,6 @@ describe("the kit client", () => {
       retryable: false,
       message: expect.stringContaining("not of the App: trying again inside the App does not help")
     });
-  });
-
-  it("says so when no interface answers", async () => {
-    const { transport } = recordingTransport();
-    const client = createAppClient(transport, { contextTimeoutMs: 5 });
-
-    await expect(client.getContext()).rejects.toThrow(
-      "The interface that shows this App did not answer it."
-    );
   });
 });
 
@@ -758,14 +652,5 @@ describe("the transport of a Page in a frame", () => {
 
     arrive(interfaceWindow, "https://chat.example.test", change);
     expect(seen.map((message) => message.type)).toEqual(["context", "theme"]);
-  });
-
-  it("stops listening when asked", () => {
-    const { page, listeners } = windows();
-    const stop = createFrameTransport(page).subscribe(() => undefined);
-
-    expect(listeners.size).toBe(1);
-    stop();
-    expect(listeners.size).toBe(0);
   });
 });

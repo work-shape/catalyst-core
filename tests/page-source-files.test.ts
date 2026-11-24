@@ -67,35 +67,13 @@ async function withPage({ instance, context }: Awaited<ReturnType<typeof startIn
 }
 
 describe("pages.files.list", () => {
-  it("lists the source files of a revision by path, with size and hash and without content", async () => {
+  it("lists the source files of a revision by path, with size and hash and without content, only to who may read it", async () => {
     const started = await startInstance();
     const { params } = await withPage(started);
 
     const listed = await started.instance.call("pages.files.list", { params }, "user-1");
 
     expect(listed.statusCode).toBe(200);
-    expect(listed.json<{ files: object[] }>().files).toMatchInlineSnapshot(`
-      [
-        {
-          "bytes": 12,
-          "contentType": "text/yaml; charset=utf-8",
-          "path": "app.yaml",
-          "sha256": "5fc4d0c6b07315cd736ef64bb08df0b2389cdc2c4e1548a7dcdfaf38a3bb20b8",
-        },
-        {
-          "bytes": 38,
-          "contentType": "text/plain; charset=utf-8",
-          "path": "src/main.ts",
-          "sha256": "ff12d07e2d419e919017a5f32ceeaffb31d0595dc05ab80bd406c2d98613e9fe",
-        },
-        {
-          "bytes": 24,
-          "contentType": "text/plain; charset=utf-8",
-          "path": "src/routes/index.tsx",
-          "sha256": "b4fab2f314ec81a05288520a5aaacf549e8538ae91efb3623b6412ca6b84efa7",
-        },
-      ]
-    `);
     expect(listed.json<{ files: object[] }>().files).toEqual(
       ["app.yaml", "src/main.ts", "src/routes/index.tsx"].map((path) => {
         const source = sourceFiles.find((file) => file.path === path);
@@ -112,26 +90,19 @@ describe("pages.files.list", () => {
     // No built file is a source file, and a listing holds no line of any file.
     expect(listed.body).not.toContain("index.html");
     expect(listed.body).not.toContain("dataset");
-  });
 
-  it("answers someone who may not read the conversation as if there were no Page", async () => {
-    const started = await startInstance();
-    const { params } = await withPage(started);
-
+    // Someone who may not read the conversation is answered as if there were no Page.
     const refused = await started.instance.call("pages.files.list", { params }, "user-2");
 
     expect(refused.statusCode).toBe(404);
     expect(refused.body).not.toContain("src/main.ts");
-  });
 
-  it("answers a revision of another Page with 404", async () => {
-    const started = await startInstance();
-    const first = await withPage(started);
+    // A revision of another Page is not found.
     const second = await withPage(started);
 
     const foreign = await started.instance.call(
       "pages.files.list",
-      { params: { ...first.params, fileSetId: second.params.fileSetId } },
+      { params: { ...params, fileSetId: second.params.fileSetId } },
       "user-1"
     );
 

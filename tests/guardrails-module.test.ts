@@ -23,15 +23,12 @@ const blocker = {
 };
 
 describe("the guardrails module", () => {
-  it("is on where the release config has no switch for it", () => {
+  it("is on where the release config has no switch for it, and off where the switch says so", () => {
     const config = parseClientInstanceConfig(createTestConfig());
     expect(resolveModuleSwitches(config).guardrails).toEqual({ enabled: true });
     expect(resolveInstanceModules(config, []).snapshot.isEnabled("guardrails")).toBe(true);
-  });
-
-  it("is off where the switch says so", () => {
-    const config = parseClientInstanceConfig({ ...createTestConfig(), ...off });
-    expect(resolveInstanceModules(config, []).snapshot.isEnabled("guardrails")).toBe(false);
+    const offConfig = parseClientInstanceConfig({ ...createTestConfig(), ...off });
+    expect(resolveInstanceModules(offConfig, []).snapshot.isEnabled("guardrails")).toBe(false);
   });
 
   it("refuses a release that sets guardrails while the module is off, naming them", () => {
@@ -63,11 +60,26 @@ describe("the guardrails module", () => {
 });
 
 describe("the guardrails module while it is off", () => {
-  it("answers its operations with module_off", async () => {
+  it("answers its operations, its kind and its rights with module_off", async () => {
     const t = await fixture({ release: off, settings: () => [] });
+    // The requester is known once they have called.
+    expect((await t.call("requester", "first")).statusCode).toBe(200);
     for (const [operation, input] of [
       ["guardrails.list_shipped", {}],
-      ["guardrails.list_hits", { params: { name: "blocker" } }]
+      ["guardrails.list_hits", { params: { name: "blocker" } }],
+      ["assets.list", { params: { kind: "guardrail" } }],
+      [
+        "permissions.grant",
+        {
+          payload: {
+            holderKind: "user",
+            holderId: await t.userId("Requester"),
+            action: "guardrail.publish",
+            effect: "allow",
+            scopeKind: "instance"
+          }
+        }
+      ]
     ] as const) {
       const refused = await t.app.call(operation, { ...input, headers: t.as("root") });
       expect(refused.statusCode, operation).toBe(404);
@@ -76,34 +88,6 @@ describe("the guardrails module while it is off", () => {
         module: "guardrails"
       });
     }
-  });
-
-  it("hides the guardrail kind", async () => {
-    const t = await fixture({ release: off, settings: () => [] });
-    const refused = await t.app.call("assets.list", {
-      params: { kind: "guardrail" },
-      headers: t.as("root")
-    });
-    expect(refused.statusCode).toBe(404);
-    expect(errorOf(refused).details).toMatchObject({ reason: "module_off", module: "guardrails" });
-  });
-
-  it("grants no guardrail right", async () => {
-    const t = await fixture({ release: off, settings: () => [] });
-    // The requester is known once they have called.
-    expect((await t.call("requester", "first")).statusCode).toBe(200);
-    const refused = await t.app.call("permissions.grant", {
-      headers: t.as("root"),
-      payload: {
-        holderKind: "user",
-        holderId: await t.userId("Requester"),
-        action: "guardrail.publish",
-        effect: "allow",
-        scopeKind: "instance"
-      }
-    });
-    expect(refused.statusCode, refused.body).toBe(404);
-    expect(errorOf(refused).details).toMatchObject({ reason: "module_off", module: "guardrails" });
   });
 
   it("allows at the before-events, also where a guardrail stored while it was on blocks", async () => {

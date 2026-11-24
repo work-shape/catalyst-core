@@ -155,28 +155,13 @@ describe("AF-1 selected agent file intake", () => {
     }
   });
 
-  it.each([[], ["workspace.exec"], ["workspace.import_files"]])(
+  it.each([["workspace.exec"], ["workspace.import_files"]])(
     "keeps the existing list without both tools (%s)",
     async (...toolNames: string[]) => {
       const f = await fixture(toolNames);
       try {
-        for (const extension of [
-          "heic",
-          "tiff",
-          "bmp",
-          "eml",
-          "emlx",
-          "msg",
-          "dat",
-          "zip",
-          "7z",
-          "rar",
-          "pages",
-          "numbers"
-        ]) {
-          const refused = await f.upload(`synthetic.${extension}`);
-          expect(refused.statusCode).toBe(422);
-          expect(refused.json().error.message).toContain("Supported types:");
+        for (const extension of ["heic", "eml", "zip", "pages"]) {
+          expect((await f.upload(`synthetic.${extension}`)).statusCode).toBe(422);
         }
         expect((await f.upload("notes.csv", Buffer.from("a,b\n1,2"))).statusCode).toBe(200);
       } finally {

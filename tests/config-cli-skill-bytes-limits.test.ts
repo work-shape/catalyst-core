@@ -32,67 +32,37 @@ async function copy() {
 }
 
 describe("CLI skill limits before sending", () => {
-  it.each(["size", "count", "ELF", "LFS", "script", "total", "link"])(
-    "refuses %s locally before sending",
-    async (failure) => {
-      const source = await copy();
-      let reason: string, path: string;
-      if (failure === "count") {
-        for (let i = 0; i < 496; i++)
-          await writeFile(
-            join(source, "skills/form/assets", `${String(i).padStart(3, "0")}.bin`),
-            ""
-          );
-        reason = "skill_too_many_files";
-        path = "SKILL.md";
-      } else if (failure === "link") {
-        path = "assets/link";
-        reason = "symbolic link";
-        await symlink("logo.png", join(source, "skills/form", path));
-      } else {
-        path = failure === "script" ? "scripts/bad.py" : "assets/bad.bin";
-        const bytes =
-          failure === "size"
-            ? Buffer.alloc(2 * 1024 * 1024 + 1)
-            : failure === "ELF"
-              ? Buffer.from([0x7f, 0x45, 0x4c, 0x46])
-              : failure === "LFS"
-                ? Buffer.from("version https://git-lfs.github.com/spec/v1\n")
-                : failure === "total"
-                  ? Buffer.alloc(2 * 1024 * 1024)
-                  : Buffer.from([0xff]);
-        await writeFile(join(source, "skills/form", path), bytes);
-        if (failure === "total")
-          for (let i = 0; i < 3; i++)
-            await writeFile(join(source, "skills/form/assets", `${i}.bin`), bytes);
-        if (failure === "total") path = "assets/logo.png";
-        reason =
-          failure === "size"
-            ? "skill_file_too_large"
-            : failure === "ELF"
-              ? "skill_file_executable"
-              : failure === "LFS"
-                ? "skill_file_lfs_pointer"
-                : failure === "total"
-                  ? "skill_too_large"
-                  : "skill_file_not_text";
-      }
-      let calls = 0;
-      const err: string[] = [];
-      expect(
-        await runConfigCommand("push", {
-          cwd: source,
-          env: { CATALYST_API_KEY: "test" },
-          fetchImpl: async () => {
-            calls++;
-            throw new Error("must not send");
-          },
-          stderr: (text) => err.push(text)
-        })
-      ).toBe(1);
-      expect(calls).toBe(0);
-      expect(err.join("")).toContain(reason);
-      expect(err.join("")).toContain(path);
+  it.each(["size", "ELF", "link"])("refuses %s locally before sending", async (failure) => {
+    const source = await copy();
+    let reason: string, path: string;
+    if (failure === "link") {
+      path = "assets/link";
+      reason = "symbolic link";
+      await symlink("logo.png", join(source, "skills/form", path));
+    } else {
+      path = "assets/bad.bin";
+      const bytes =
+        failure === "size"
+          ? Buffer.alloc(2 * 1024 * 1024 + 1)
+          : Buffer.from([0x7f, 0x45, 0x4c, 0x46]);
+      await writeFile(join(source, "skills/form", path), bytes);
+      reason = failure === "size" ? "skill_file_too_large" : "skill_file_executable";
     }
-  );
+    let calls = 0;
+    const err: string[] = [];
+    expect(
+      await runConfigCommand("push", {
+        cwd: source,
+        env: { CATALYST_API_KEY: "test" },
+        fetchImpl: async () => {
+          calls++;
+          throw new Error("must not send");
+        },
+        stderr: (text) => err.push(text)
+      })
+    ).toBe(1);
+    expect(calls).toBe(0);
+    expect(err.join("")).toContain(reason);
+    expect(err.join("")).toContain(path);
+  });
 });

@@ -7,12 +7,8 @@ import { LibreOfficeArtifactPreviewRenderer } from "@work-shape/catalyst-tool-ex
 
 describe("artifact preview spreadsheet source formats", () => {
   it.each([
+    // xlsx is read by the worker's own spreadsheet tests.
     { bookType: "biff8", extension: "xls", mimeType: "application/vnd.ms-excel" },
-    {
-      bookType: "xlsx",
-      extension: "xlsx",
-      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    },
     {
       bookType: "ods",
       extension: "ods",

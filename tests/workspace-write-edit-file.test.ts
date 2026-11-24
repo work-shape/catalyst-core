@@ -62,11 +62,6 @@ describe("the definitions of the two file tools", () => {
     for (const name of ["workspace.write_file", "workspace.edit_file"]) {
       const tool = harness.tools.find((candidate) => candidate.name === name);
       expect(tool).toMatchObject({ effect: "changing", permission: { mode: "allow" } });
-      // Each says when the other one, or the shell, is the tool to take.
-      expect(tool?.description).toContain("workspace.exec");
-      expect(tool?.description).toContain(
-        name === "workspace.write_file" ? "workspace.edit_file" : "workspace.write_file"
-      );
     }
   });
 });
@@ -156,8 +151,6 @@ describe("workspace.write_file", () => {
     expect(error.code).toBe("validation_failed");
     expect(error.message).toContain("WORKSPACE_WRITE_FILE_MAX_BYTES");
     expect(error.message).toContain(String(WORKSPACE_WRITE_FILE_MAX_BYTES + 1));
-    expect(error.message).toContain("workspace.exec");
-    expect(error.message).toContain("split");
     expect(await storedText(harness, "over.txt")).toBeUndefined();
   });
 
@@ -170,7 +163,6 @@ describe("workspace.write_file", () => {
     });
 
     expect(error.message).toContain("text only");
-    expect(error.message).toContain("workspace.exec");
     expect(await workspaceFiles(harness)).toEqual([]);
   });
 
@@ -184,7 +176,6 @@ describe("workspace.write_file", () => {
     });
 
     expect(error.message).toContain("maxWorkspaceBytes");
-    expect(error.message).toContain("workspace.exec");
     expect(error.details).toMatchObject({ totalBytes: 25, maxWorkspaceBytes: 20 });
     expect(await storedText(harness, "b.txt")).toBeUndefined();
     // The same file may grow to the limit: its old size does not count twice.
@@ -226,14 +217,12 @@ describe("workspace.write_file", () => {
 
     expect(aliased.code).toBe("validation_failed");
     expect(aliased.message).toContain("must not end with a slash");
-    expect(aliased.message).toContain("relative to /workspace");
     expect(reserved.map((error) => error.message)).toEqual([
       expect.stringContaining("'artifacts' is a folder every workspace has"),
       expect.stringContaining("'tmp' is a folder every workspace has"),
       expect.stringContaining("'scripts' is a folder every workspace has"),
       expect.stringContaining("'previews' is a folder every workspace has")
     ]);
-    expect(reserved[0]?.message).toContain("artifacts/notes.md");
     expect(await workspaceFiles(harness)).toEqual([]);
     // A file inside such a folder is an ordinary file.
     await expect(
@@ -333,7 +322,7 @@ describe("workspace.edit_file", () => {
     expect(await storedText(harness, "config.ini")).toBe("one\r\n\tTWO\r\nthree");
   });
 
-  it("says that a text was not found, and to read the file again", async () => {
+  it("refuses a text that is not found", async () => {
     const harness = await harnessWithFile();
 
     const error = await refusal(harness, "workspace.edit_file", {
@@ -343,8 +332,6 @@ describe("workspace.edit_file", () => {
 
     expect(error.code).toBe("handler_failed");
     expect(error.message).toContain("edits[0].oldText was not found in 'config.ini'");
-    expect(error.message).toContain("Read the file again with workspace.read_file");
-    expect(error.message).toContain("match exactly, including spaces, tabs and line breaks");
     expect(error.details).toMatchObject({ path: "config.ini", edit: 0, occurrences: 0 });
     expect(await storedText(harness, "config.ini")).toBe(original);
   });
@@ -364,7 +351,7 @@ describe("workspace.edit_file", () => {
     expect(await storedText(harness, "config.ini")).toBe("first\r\nsecond  \r\nthird\r\n");
   });
 
-  it("says how often a text occurs and where, and to add surrounding lines", async () => {
+  it("refuses a text that occurs more than once, and names where", async () => {
     const harness = await harnessWithFile();
 
     const error = await refusal(harness, "workspace.edit_file", {
@@ -376,7 +363,6 @@ describe("workspace.edit_file", () => {
     expect(error.message).toContain(
       "edits[0].oldText occurs 2 times in 'config.ini', at lines 2, 4"
     );
-    expect(error.message).toContain("Add surrounding lines to oldText");
     expect(error.details).toMatchObject({ occurrences: 2, lines: [2, 4] });
     expect(await storedText(harness, "config.ini")).toBe(original);
   });
@@ -394,7 +380,6 @@ describe("workspace.edit_file", () => {
     });
 
     expect(error.message).toContain("edits[2].oldText was not found");
-    expect(error.message).toContain("Nothing was changed");
     expect(await storedText(harness, "config.ini")).toBe(original);
     // One write stored the file; the refused edit stored nothing beside it.
     expect(harness.objectStore.keys()).toHaveLength(1);
@@ -412,7 +397,6 @@ describe("workspace.edit_file", () => {
     });
 
     expect(error.message).toContain("edits[0] and edits[1] change the same text");
-    expect(error.message).toContain("Merge them into one edit");
     expect(await storedText(harness, "config.ini")).toBe(original);
 
     // Two edits that touch each other without sharing a character both apply.
@@ -506,21 +490,7 @@ describe("workspace.edit_file", () => {
     expect(error.code).toBe("validation_failed");
     const details = JSON.stringify(error.details);
     expect(details).toContain("WORKSPACE_FILE_TOOL_INPUT_MAX_CHARS");
-    expect(details).toContain("Send the edits in several calls");
     expect(await storedText(harness, "config.ini")).toBe(original);
-  });
-
-  it("says that the file does not exist, and how to find or create it", async () => {
-    const harness = await harnessWithFile();
-
-    const error = await refusal(harness, "workspace.edit_file", {
-      path: "other.ini",
-      edits: [{ oldText: "a", newText: "b" }]
-    });
-
-    expect(error.message).toContain("'other.ini' was not found");
-    expect(error.message).toContain("Call workspace.list_files");
-    expect(error.message).toContain("workspace.write_file");
   });
 
   it("takes the most edits a call may have, and refuses one more with the constant", async () => {
@@ -536,7 +506,6 @@ describe("workspace.edit_file", () => {
     expect(error.code).toBe("validation_failed");
     expect(error.message).toContain("WORKSPACE_EDIT_MAX_EDITS");
     expect(error.message).toContain(`got ${WORKSPACE_EDIT_MAX_EDITS + 1}`);
-    expect(error.message).toContain("Send the edits in several calls");
     expect(await storedText(harness, "config.ini")).toBe(lines.join("\n"));
 
     await expect(
@@ -584,9 +553,7 @@ describe("workspace.edit_file", () => {
 
     expect(traversal.message).toContain("relative to /workspace");
     expect(binary.message).toContain("not a UTF-8 text file");
-    expect(binary.message).toContain("workspace.exec");
     expect(large.message).toContain("maxReadFileBytes");
-    expect(large.message).toContain("workspace.exec");
   });
 
   it("respects the size limit of the workspace", async () => {

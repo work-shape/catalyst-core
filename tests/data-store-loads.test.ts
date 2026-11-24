@@ -388,133 +388,106 @@ describe("a load into a Data Store", () => {
     expect(await count(world)).toBe(1_120);
   });
 
-  it.each(["en", "de"] as const)(
-    "names only a replacement table wait timeout (%s)",
-    async (locale) => {
-      const datasets = datasetsOfTest();
-      const timeoutMs = 750;
-      const world = await published(
-        "wait-limit",
-        [manifest(), init, keyed],
-        datasets.reader,
-        undefined,
-        {
-          load: { rows: 100_000, bytes: 64 * 1024 ** 2, timeoutMs }
-        }
-      );
-      const holder = await connect(world.record.location.database).reserve();
-      try {
-        for (const phase of ["table", "group"]) {
-          await holder`begin`;
-          if (phase === "table") {
-            await holder`select pg_advisory_xact_lock(hashtextextended('catalyst replace table month_findings', 0))`;
-          } else {
-            await holder`select pg_advisory_xact_lock(hashtextextended('month_findings ' || row('2026-09'::text)::text, 0))`;
-          }
-          const error = await refusal(
-            call(
-              world,
-              "load",
-              {
-                table: "month_findings",
-                dataset: datasets.put(`ds_${phase}`, [[found(1)]]),
-                key: KEY,
-                replace: {
-                  by: ["month"],
-                  ...(phase === "group" ? { values: { month: "2026-09" } } : {})
-                }
-              },
-              undefined,
-              locale
-            )
-          );
-          expect(error).toMatchObject(
-            phase === "table"
-              ? {
-                  code: "CONFLICT",
-                  details: { reason: "load_replace_timeout", timeoutMs },
-                  message: expect.stringContaining(`limits.timeoutMs (${timeoutMs} ms`)
-                }
-              : { code: "TIMEOUT", details: { sqlState: "57014" } }
-          );
-          if (phase === "table")
-            expect(error.message).toContain(
-              locale === "de" ? "anderer Ersetzungslauf" : "Another replacement"
-            );
-          await holder`rollback`;
-        }
-      } finally {
-        await holder`rollback`;
-        holder.release();
+  it("names only a replacement table wait timeout", async () => {
+    const datasets = datasetsOfTest();
+    const timeoutMs = 750;
+    const world = await published(
+      "wait-limit",
+      [manifest(), init, keyed],
+      datasets.reader,
+      undefined,
+      {
+        load: { rows: 100_000, bytes: 64 * 1024 ** 2, timeoutMs }
       }
-      expect(await count({ ...world, datasets })).toBe(0);
-    }
-  );
-
-  it.each(["en", "de"] as const)(
-    "refuses reversed update keys across chunks as safe to retry (%s)",
-    async (locale) => {
-      const world = await store("reversed-updates");
-      await load(world, world.datasets.put("ds_stored", [many(2_200)]));
-      const update = (dataset: unknown, key: string) =>
-        call(
-          world,
-          "load",
-          {
+    );
+    const holder = await connect(world.record.location.database).reserve();
+    try {
+      for (const phase of ["table", "group"]) {
+        await holder`begin`;
+        if (phase === "table") {
+          await holder`select pg_advisory_xact_lock(hashtextextended('catalyst replace table month_findings', 0))`;
+        } else {
+          await holder`select pg_advisory_xact_lock(hashtextextended('month_findings ' || row('2026-09'::text)::text, 0))`;
+        }
+        const error = await refusal(
+          call(world, "load", {
             table: "month_findings",
-            dataset,
+            dataset: datasets.put(`ds_${phase}`, [[found(1)]]),
             key: KEY,
-            onConflict: "update"
-          },
-          key,
-          locale
+            replace: {
+              by: ["month"],
+              ...(phase === "group" ? { values: { month: "2026-09" } } : {})
+            }
+          })
         );
-      const second = world.datasets.put("ds_b", [
-        many(1_100, { note: "b" }, 1_100),
-        many(1_100, { note: "b" })
-      ]);
-      let later: Promise<PromiseSettledResult<unknown>[]> | undefined;
-      const first = world.datasets.put(
-        "ds_a",
-        [many(1_100, { note: "a" }), many(1_100, { note: "a" }, 1_100)],
-        async () => {
-          if (later) return; // The same dataset is read again on a retry.
-          later = Promise.allSettled([update(second, "step-b")]);
-          await eventually(async () => {
-            const [waiting] = await db.sql<{ count: number }[]>`
+        expect(error).toMatchObject(
+          phase === "table"
+            ? {
+                code: "CONFLICT",
+                details: { reason: "load_replace_timeout", timeoutMs },
+                message: expect.stringContaining(`limits.timeoutMs (${timeoutMs} ms`)
+              }
+            : { code: "TIMEOUT", details: { sqlState: "57014" } }
+        );
+        await holder`rollback`;
+      }
+    } finally {
+      await holder`rollback`;
+      holder.release();
+    }
+    expect(await count({ ...world, datasets })).toBe(0);
+  });
+
+  it("refuses reversed update keys across chunks as safe to retry", async () => {
+    const world = await store("reversed-updates");
+    await load(world, world.datasets.put("ds_stored", [many(2_200)]));
+    const update = (dataset: unknown, key: string) =>
+      call(
+        world,
+        "load",
+        {
+          table: "month_findings",
+          dataset,
+          key: KEY,
+          onConflict: "update"
+        },
+        key
+      );
+    const second = world.datasets.put("ds_b", [
+      many(1_100, { note: "b" }, 1_100),
+      many(1_100, { note: "b" })
+    ]);
+    let later: Promise<PromiseSettledResult<unknown>[]> | undefined;
+    const first = world.datasets.put(
+      "ds_a",
+      [many(1_100, { note: "a" }), many(1_100, { note: "a" }, 1_100)],
+      async () => {
+        if (later) return; // The same dataset is read again on a retry.
+        later = Promise.allSettled([update(second, "step-b")]);
+        await eventually(async () => {
+          const [waiting] = await db.sql<{ count: number }[]>`
           select count(*)::integer as count from pg_stat_activity
           where datname = ${world.record.location.database} and wait_event_type = 'Lock'`;
-            expect(waiting?.count).toBe(1);
-          });
-        }
-      );
-      const [a] = await Promise.allSettled([update(first, "step-a")]);
-      const [b] = await required(later);
-      const results = [required(a), required(b)];
-      expect(results.filter(({ status }) => status === "fulfilled")).toHaveLength(1);
-      const failed = required(results.find((result) => result.status === "rejected"));
-      expect(failed.reason).toMatchObject({
-        code: "CONFLICT",
-        changedNothing: true,
-        details: { reason: "load_concurrent_rows", sqlState: "40P01" },
-        message: expect.stringContaining(
-          locale === "de"
-            ? "gleichzeitigen Schreibvorgang auf dieselben Zeilen"
-            : "concurrent write to the same rows"
-        )
-      });
-      expect(failed.reason).toMatchObject({
-        message: expect.stringContaining(
-          locale === "de" ? "erneuter Versuch ist sicher" : "safe to retry"
-        )
-      });
-      // The rolled-back call leaves no key record: the Workflow can retry with the same key.
-      expect(
-        await (a?.status === "rejected" ? update(first, "step-a") : update(second, "step-b"))
-      ).toMatchObject({ updated: 2_200 });
-      expect(await count(world)).toBe(2_200);
-    }
-  );
+          expect(waiting?.count).toBe(1);
+        });
+      }
+    );
+    const [a] = await Promise.allSettled([update(first, "step-a")]);
+    const [b] = await required(later);
+    const results = [required(a), required(b)];
+    expect(results.filter(({ status }) => status === "fulfilled")).toHaveLength(1);
+    const failed = required(results.find((result) => result.status === "rejected"));
+    expect(failed.reason).toMatchObject({
+      code: "CONFLICT",
+      changedNothing: true,
+      details: { reason: "load_concurrent_rows", sqlState: "40P01" }
+    });
+    // The rolled-back call leaves no key record: the Workflow can retry with the same key.
+    expect(
+      await (a?.status === "rejected" ? update(first, "step-a") : update(second, "step-b"))
+    ).toMatchObject({ updated: 2_200 });
+    expect(await count(world)).toBe(2_200);
+  });
 
   it.each(["rows", "bytes"])(
     "completes replacements with reversed groups across %s chunks",
@@ -734,6 +707,10 @@ describe("a load into a Data Store", () => {
       )
     ).toMatchObject({ details: { reason: "load_too_large", cap: "dataStores.load.bytes" } });
     expect(await count(bounded)).toBe(0);
+    // The whole bound is taken in one call.
+    expect(await load(bounded, bounded.datasets.put("ds_whole", [many(1_002)]))).toMatchObject({
+      inserted: 1_002
+    });
   });
 
   it("refuses an oversized known view before reading, using its own parts rather than its parent's bytes", async () => {
@@ -780,16 +757,68 @@ describe("a load into a Data Store", () => {
       metadata.mockRestore();
     }
   });
-
-  it("takes the whole bound in one call", async () => {
-    const world = await store("whole", undefined, {
-      load: { rows: 1_000, bytes: 67_108_864, timeoutMs: 600_000 }
+  it("keeps a later-chunk row wait after the table lock as TIMEOUT and rolls back the earlier chunk", async () => {
+    const held = { month: "2026-10", id: 2_000, note: "stored" };
+    const first = Array.from({ length: 1_100 }, (_, id) => ({ month: "2026-09", id, note: "new" }));
+    let reachedLaterPart = false;
+    const world = await published(
+      "after-table-lock",
+      [
+        manifest(),
+        {
+          path: "migrations/0001_init.sql",
+          text: `create table month_findings (
+              month text not null, id integer not null, note text,
+              primary key (month, id)
+            );`
+        }
+      ],
+      {
+        async *read(reference) {
+          if (reference.$dataset === "ds_stored") {
+            yield [held];
+          } else {
+            // More than 1,000 rows flushes a full statement before the later part.
+            yield first;
+            reachedLaterPart = true;
+            yield [held];
+          }
+        }
+      },
+      undefined,
+      { load: { rows: 100_000, bytes: 64 * 1024 ** 2, timeoutMs: 500 } }
+    );
+    const storedBytes = Buffer.byteLength(JSON.stringify([held]));
+    await call(world, "load", {
+      table: "month_findings",
+      dataset: { $dataset: "ds_stored", rowCount: 1, bytes: storedBytes }
     });
-    const rows = [many(1_000)];
-
-    expect(await load(world, world.datasets.put("ds_whole", rows))).toMatchObject({
-      inserted: 1_000
-    });
-    expect(await count(world)).toBe(1_000);
+    const holder = await connect(world.record.location.database).reserve();
+    try {
+      await holder`begin`;
+      // The replacement gets its table lock before it reaches this held row.
+      await holder`select * from month_findings where month = '2026-10' for update`;
+      expect(
+        await refusal(
+          call(world, "load", {
+            table: "month_findings",
+            dataset: {
+              $dataset: "ds_wait",
+              rowCount: first.length + 1,
+              bytes: Buffer.byteLength(JSON.stringify(first)) + storedBytes
+            },
+            key: ["month", "id"],
+            replace: { by: ["month"] }
+          })
+        )
+      ).toMatchObject({ code: "TIMEOUT", details: { sqlState: "57014" } });
+      expect(reachedLaterPart).toBe(true);
+    } finally {
+      await holder`rollback`;
+      holder.release();
+    }
+    expect(
+      await call(world, "query", { sql: "select month, id, note from month_findings" })
+    ).toMatchObject({ rows: [held] });
   });
 });

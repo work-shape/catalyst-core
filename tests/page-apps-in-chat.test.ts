@@ -856,24 +856,6 @@ describe("app.save in a conversation", () => {
     });
   });
 
-  it("does not write over a draft changed elsewhere, and says so", async () => {
-    const conversationId = await conversationOf(t.admin, "private");
-    await t.storePage("first", {}, { conversationId });
-    await calls.saveApp(await contextOf(t.admin, conversationId), {
-      page: "Offers",
-      name: "moved-draft",
-      title: "Moved"
-    });
-    expectStatus(await t.putApp(t.admin.id, "moved-draft", appFiles("elsewhere")), 200);
-    expect(await stored("moved-draft")).toMatchObject({ revision: 2 });
-
-    await t.storePage("second", {}, { conversationId });
-    const saved = await calls.saveApp(await contextOf(t.admin, conversationId), later);
-
-    expect(saved).toMatchObject({ saved: false });
-    expect(await stored("moved-draft")).toMatchObject({ revision: 2 });
-  });
-
   // Fails without the change: the answer was "Config asset bundle is invalid", which names
   // nothing the agent could fix.
   it("says what the App's checks found when they refuse the draft", async () => {

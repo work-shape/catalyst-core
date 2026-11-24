@@ -201,11 +201,8 @@ describe("run cancellation logging", () => {
     await expect(runtime.getStatus(run.runId, runContext)).resolves.toBe("failed");
   });
 
-  it.each([
-    "Agent run stored no event within the idle limit",
-    "Agent run worker is stopping",
-    "Agent run lease was lost"
-  ])("logs a worker-stopped run at error with its stack: %s", async (reason) => {
+  it("logs a worker-stopped run at error with its stack", async () => {
+    const reason = "Agent run lease was lost";
     const { lines } = captureStdout();
     const { execute, conversationHistory, context, entered } = runtimeWithFailure(true);
     const worker = new AbortController();

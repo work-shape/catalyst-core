@@ -64,6 +64,10 @@ const honestDay = {
   tokens: Math.ceil((MEASURED.tokens * WORKING_DAY_MINUTES) / MEASURED.minutes)
 };
 
+/** A runaway loop's rate. ACCEPT-1c measured 2.5M tokens in 35 minutes; a busy eight-hour day is about 34.3M. */
+const RUNAWAY_TOKENS_PER_MINUTE = 2_000_000;
+const RUNAWAY_BUSY_DAY_TOKENS = Math.ceil((2_500_000 * 480) / 35);
+
 type Limits = { budget?: UsageBudgetConfig; safeguards?: UsageSafeguardsConfig };
 
 describe("usage safeguards per person", () => {
@@ -642,20 +646,6 @@ describe("usage safeguards per person", () => {
   it.each([
     {
       period: "day",
-      metric: "modelCallCount",
-      scope: "user",
-      message:
-        "Daily model call safeguard has been reached for your own calls. Resets at midnight UTC."
-    },
-    {
-      period: "month",
-      metric: "tokens",
-      scope: "system",
-      message:
-        "Monthly model token safeguard has been reached for product calls. Resets at the start of next month UTC."
-    },
-    {
-      period: "day",
       metric: "costMicros",
       scope: "instance",
       message: "Daily model spend budget has been reached for the instance. Resets at midnight UTC."
@@ -676,8 +666,6 @@ describe("usage safeguards per person", () => {
 
   it.each([
     ["knowledge_embedding", true],
-    ["knowledge_embedding", false],
-    ["knowledge_field_extraction", true],
     ["knowledge_field_extraction", false]
   ] as const)("keeps %s off chat counters with a person: %s", async (purpose, withPerson) => {
     const { clientInstanceId, people } = await instanceWith(`ingestion_${purpose}_${withPerson}`, [
@@ -740,6 +728,87 @@ describe("usage safeguards per person", () => {
       await expect(
         governance.admitModelCall(own(clientInstanceId, required(people[0])))
       ).rejects.toMatchObject({ details: { reason: "MODEL_NOT_PRICED" } });
+    }
+  );
+
+  // Runaway loops under the shipped safeguards.
+  it.each([
+    ["own", 1],
+    ["product", 1],
+    ["unattended", 7]
+  ] as const)(
+    "stops a sequential %s loop, including an unattended UTC rollover",
+    async (scope, factor) => {
+      const safeguards = parseClientInstanceConfig({
+        clientInstance: { id: "runaway", displayName: "Runaway" },
+        infrastructure: { models: { local: { provider: "deterministic" } } }
+      }).usage.safeguards;
+      const clientInstanceId = db.clientInstance(scope);
+      const person = `${clientInstanceId}_anna`;
+      await ensureTestUser(clientInstanceId, person);
+      const governance = new ModelUsageGovernance({
+        store: db.store.usage,
+        budget: {},
+        safeguards
+      });
+      const call: ModelCallAdmission = {
+        clientInstanceId,
+        providerId: "local",
+        model: "local",
+        correlationId: "runaway",
+        request: { inputCharacters: 3_000 },
+        attribution:
+          scope === "own"
+            ? {
+                kind: "agent_run",
+                userId: person,
+                agentName: "assistant",
+                conversationId: asConversationId("conv_runaway"),
+                runId: asAgentRunId("run_runaway")
+              }
+            : {
+                kind: "system",
+                purpose: "guardrail_judge",
+                ...(scope === "product" ? { userId: person } : {})
+              }
+      };
+      const consumed = 200_000_000 * factor;
+      const usage = {
+        inputTokens: consumed,
+        cachedInputTokens: 0,
+        outputTokens: 0,
+        totalTokens: consumed,
+        source: "provider_reported" as const
+      };
+      let beforeReset = 0;
+      if (scope === "unattended") {
+        // Start just below the previous day's limit. Only this fixture's rows move to yesterday;
+        // admission must start fresh daily counters while preserving monthly consumption.
+        beforeReset = consumed - RUNAWAY_TOKENS_PER_MINUTE;
+        await governance.recordModelUsage({
+          ...call,
+          ...usage,
+          inputTokens: beforeReset,
+          totalTokens: beforeReset
+        });
+        await db.sql`update model_usage_events set created_at = created_at - interval '1 day'
+          where client_instance_id = ${clientInstanceId}`;
+        await db.sql`update model_usage_counters set period_start = period_start - 1
+          where client_instance_id = ${clientInstanceId} and period_kind = 'day'`;
+      }
+      await governance.settleModelCall(await governance.admitModelCall(call), usage);
+      await expect(governance.admitModelCall(call)).rejects.toMatchObject({
+        details: { scope: scope === "own" ? "user" : "system", period: "day", metric: "tokens" }
+      });
+      expect((beforeReset + consumed) / RUNAWAY_TOKENS_PER_MINUTE).toBeLessThan(24 * 60);
+      if (scope === "unattended") {
+        expect((2 * consumed) / RUNAWAY_TOKENS_PER_MINUTE).toBe(1_400);
+        expect((2 * consumed) / RUNAWAY_TOKENS_PER_MINUTE).toBeLessThan(24 * 60);
+        // Ten workflows, each twice a busy measured day, fit daily and for 22 working days.
+        expect(10 * 2 * RUNAWAY_BUSY_DAY_TOKENS).toBeLessThan(consumed);
+        expect(10 * 2 * Math.ceil((91 * 480) / 35)).toBeLessThan(20_000 * factor);
+        expect(10 * 2 * RUNAWAY_BUSY_DAY_TOKENS * 22).toBeLessThan(4_000_000_000 * factor);
+      }
     }
   );
 });

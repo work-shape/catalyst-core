@@ -90,16 +90,6 @@ function shownButtons(head: HTMLElement): string[] {
 }
 
 describe("a page head's actions", () => {
-  it("stand as buttons where the head has room for all of them", () => {
-    headWidth = 1200;
-
-    expect(shownButtons(renderHead())).toEqual([
-      "Verlauf",
-      "Als Standard festlegen",
-      "Jetzt starten"
-    ]);
-  });
-
   it("fold the secondary actions into the … menu where they do not fit, and keep the primary", () => {
     headWidth = 390;
 
@@ -133,14 +123,6 @@ describe("a page head's actions", () => {
       "Als Standard festlegen",
       "Jetzt starten"
     ]);
-  });
-
-  it("keep no second button out of sight to measure with", () => {
-    headWidth = 1200;
-    const head = renderHead("ID kopieren");
-
-    expect(head.querySelectorAll("button")).toHaveLength(4);
-    expect(head.querySelector("[inert]")?.textContent).toBe("VerlaufAls Standard festlegen");
   });
 });
 

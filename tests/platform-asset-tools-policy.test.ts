@@ -157,59 +157,199 @@ describe("a policy on assets.put and the agent's save", () => {
     return { settings, revision, save, firstSave };
   }
 
-  it.each<[string, CentralPolicySetting]>([
-    ["deny", { operation: "assets.put", value: "deny" }],
-    [
-      "deny for Workflows",
-      { operation: "assets.put", value: "deny", assetKind: WORKFLOW_ASSET_KIND }
-    ],
-    ["deny for every asset operation", { operation: "assets.*", value: "deny" }]
-  ])(
-    "refuses the save where assets.put is set to %s",
-    async (_title, setting) => {
-      const t = await fixture();
-      const before = await t.revision();
-      t.settings.push(setting);
-      const { events, answer } = await t.save("Under deny");
-      expect(`${events}${answer ?? ""}`).toContain("A rule prevents this action here.");
-      expect(answer ?? "").toContain("Ask an instance administrator, for example Owner.");
-      expect(answer ?? "").not.toContain('"saved":true');
-      expect(await t.revision()).toBe(before);
-    },
-    120_000
-  );
-
-  it("holds the save for an approval where assets.put asks for one, and saves nothing until then", async () => {
-    const t = await fixture();
-    const before = await t.revision();
-    t.settings.push({ operation: "assets.put", value: "approval", assetKind: WORKFLOW_ASSET_KIND });
-    const { answer, events } = await t.save("Under approval");
-    expect(answer).toBeUndefined();
-    expect(events).toContain('"mode":"approval"');
-    expect(await t.revision()).toBe(before);
-  }, 120_000);
-
-  it("saves where the setting on assets.put is of another kind of asset, or allows", async () => {
+  it("refuses, saves or holds the agent's save and first save as the setting on assets.put says", async () => {
     const t = await fixture();
     const before = (await t.revision()) ?? 0;
-    t.settings.push(
+    for (const setting of [
+      { operation: "assets.put", value: "deny", assetKind: WORKFLOW_ASSET_KIND },
+      { operation: "assets.*", value: "deny" }
+    ] satisfies CentralPolicySetting[]) {
+      t.settings.splice(0, t.settings.length, setting);
+      const { events, answer } = await t.save("Under deny");
+      expect(`${events}${answer ?? ""}`, setting.operation).toContain(
+        "A rule prevents this action here."
+      );
+      expect(answer ?? "").not.toContain('"saved":true');
+      expect(await t.revision()).toBe(before);
+    }
+
+    // A setting of another kind of asset, or one that allows, saves.
+    t.settings.splice(
+      0,
+      t.settings.length,
       { operation: "assets.put", value: "deny", assetKind: "agent" },
       { operation: "assets.put", value: "allow", assetKind: WORKFLOW_ASSET_KIND }
     );
     const { answer } = await t.save("Not meant");
     expect(JSON.parse(answer ?? "null")).toEqual({ saved: true, revision: before + 1 });
-  }, 120_000);
 
-  it("holds a first save that would create a Workflow to the setting on assets.put (NAV-2)", async () => {
-    const t = await fixture();
-    t.settings.push({ operation: "assets.put", value: "deny", assetKind: WORKFLOW_ASSET_KIND });
+    // A first save that would create a Workflow is held to the setting too (NAV-2).
+    t.settings.splice(0, t.settings.length, {
+      operation: "assets.put",
+      value: "deny",
+      assetKind: WORKFLOW_ASSET_KIND
+    });
     const denied = await t.firstSave("year-end");
     expect(denied.said).toContain("A rule prevents this action here.");
     expect(denied.stored).toBeUndefined();
-
     t.settings.splice(0);
-    const saved = await t.firstSave("year-end");
-    expect(saved.said).toContain('"created":true');
-    expect(saved.stored?.scope).toEqual({ kind: "workspace", workspaceId: expect.any(String) });
+    const created = await t.firstSave("year-end");
+    expect(created.said).toContain('"created":true');
+    expect(created.stored?.scope).toEqual({ kind: "workspace", workspaceId: expect.any(String) });
+
+    // An approval holds the save, and nothing is saved until then.
+    t.settings.push({ operation: "assets.put", value: "approval", assetKind: WORKFLOW_ASSET_KIND });
+    const held = await t.save("Under approval");
+    expect(held.answer).toBeUndefined();
+    expect(held.events).toContain('"mode":"approval"');
+    expect(await t.revision()).toBe(before + 1);
+  }, 120_000);
+});
+
+// An administrator's setting on assets.put holds the agent's first save as it holds the same
+// put through the API: it is asked of the kind and the owner the save creates, so a setting on
+// a workspace applies to a save in its conversations and a setting on another kind does not
+// (NAV-2, Platform Access check 44). The first case grew from the verifier's probe of PR 91.
+
+const firstWorkflowConfig = (name: string) => ({
+  name,
+  manifest: {
+    id: name,
+    name,
+    runAs: "workflow-runner",
+    inputs: { type: "object" },
+    outputs: { type: "object" },
+    steps: [
+      { id: "start", name: "Start by hand", type: "trigger", triggers: [{ kind: "manual" }] },
+      { id: "result", name: "Result", type: "output", input: {} }
+    ]
+  }
+});
+const skillConfig = (name: string) => ({
+  name,
+  title: name,
+  description: "A skill",
+  content: "Guidance."
+});
+
+describe("a setting on assets.put against the agent's first save", () => {
+  let open: TestInstance | undefined;
+  afterEach(async () => {
+    await open?.close();
+    open = undefined;
+  });
+
+  /** An instance with the Shared Workspace Finance and the settings the case gives for it. */
+  async function instanceWith(settingsFor: (finance: string) => CentralPolicySetting[]) {
+    let settings: CentralPolicySetting[] = [];
+    const config = createTestConfig({
+      toolNames: [...PLATFORM_TOOL_NAMES],
+      developmentAuth: {
+        enabled: true,
+        defaultUserId: "owner",
+        users: [
+          {
+            id: "owner",
+            externalUserId: "owner",
+            displayLabel: "Owner",
+            roles: ["user", "admin", "superadmin"]
+          }
+        ]
+      }
+    });
+    config.modules = { assetManagement: { enabled: true }, workflows: { enabled: true } };
+    config.administration.agentConfiguration.enabled = true;
+    config.administration.agentConfiguration.allowSkillEditing = true;
+    const app = await createTestInstance({
+      config,
+      env: {},
+      tools: [],
+      operations: { centralPolicySettings: () => settings }
+    });
+    open = app;
+    const clientInstanceId = asClientInstanceId(config.clientInstance.id);
+    await app.stores.apiAccess.createServicePrincipal({
+      clientInstanceId,
+      displayLabel: "workflow-runner"
+    });
+    const workspace = await app.call("workspaces.create", { payload: { name: "Finance" } });
+    expect(workspace.statusCode, workspace.body).toBe(200);
+    const finance = z.object({ id: z.string() }).parse(workspace.json()).id;
+    settings = settingsFor(finance);
+    /**
+     * The agent's first save of the Workflow or skill `name`, in a private conversation of the
+     * workspace or of the caller's own, and what was stored.
+     */
+    const firstSave = async (
+      kind: typeof WORKFLOW_ASSET_KIND | "skill",
+      name: string,
+      collaborationWorkspaceId?: string
+    ) => {
+      const created = await app.call("conversations.create", {
+        payload: {
+          title: "New",
+          ...(collaborationWorkspaceId ? { collaborationWorkspaceId, visibility: "private" } : {})
+        }
+      });
+      const id = z.object({ id: z.string() }).parse(created.json()).id;
+      const config = kind === WORKFLOW_ASSET_KIND ? firstWorkflowConfig(name) : skillConfig(name);
+      const put = { kind, name, config };
+      const started = await injectStartConversationRun(
+        app,
+        id,
+        `/tool platform.assets.put ${JSON.stringify(put)}`
+      );
+      let drained = false;
+      const observing = drainRunEvents(app, id, started.run.id).then(() => {
+        drained = true;
+      });
+      // A new skill is live at once, so a save no setting refuses waits for its person, who
+      // confirms it here.
+      const runId = asAgentRunId(started.run.id);
+      await waitUntil(
+        async () =>
+          drained ||
+          (await app.stores.agentRuns.getAgentRun({ clientInstanceId, runId }))?.status ===
+            "waiting_for_decision",
+        "the save is decided or waits for its person",
+        60_000
+      );
+      if (!drained) {
+        const held = (await app.stores.operationRuns.list({ clientInstanceId })).find(
+          (run) =>
+            run.origin.kind === "agent" &&
+            run.origin.agentRunId === runId &&
+            run.status === "pending_confirmation"
+        );
+        if (!held) throw new Error("The save waits for no confirmation");
+        const confirmed = await app.call("operations.decide", {
+          params: { runId: held.id },
+          payload: { decision: "confirm" }
+        });
+        expect(confirmed.statusCode, confirmed.body).toBe(200);
+      }
+      await observing;
+      return app.stores.configAssets.getConfigAsset({ clientInstanceId, kind, name });
+    };
+    return { app, firstSave, finance };
+  }
+
+  it("refuses the first save of the kind and workspace the setting denies, as the API's put is refused", async () => {
+    const { app, firstSave, finance } = await instanceWith((finance) => [
+      { operation: "assets.put", value: "deny", assetKind: "skill", workspaceId: finance },
+      { operation: "assets.put", value: "deny", assetKind: "agent" }
+    ]);
+    const api = await app.call("assets.put", {
+      params: { kind: "skill", name: "close-guide" },
+      payload: { config: skillConfig("close-guide"), workspaceId: finance, expectedRevision: null }
+    });
+    expect(api.statusCode).toBe(403);
+    expect(api.json()).toMatchObject({ error: { code: "POLICY_DENIED" } });
+    expect(await firstSave("skill", "month-guide", finance)).toBeUndefined();
+    // Outside the workspace, or of another kind, the setting does not reach.
+    expect(await firstSave("skill", "payroll-guide")).toBeDefined();
+    expect(await firstSave(WORKFLOW_ASSET_KIND, "month-close", finance)).toMatchObject({
+      scope: { kind: "workspace", workspaceId: finance }
+    });
   }, 120_000);
 });

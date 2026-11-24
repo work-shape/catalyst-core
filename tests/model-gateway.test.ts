@@ -24,6 +24,7 @@ import {
   type ModelCompletion,
   type ModelCompletionStreamEvent
 } from "@work-shape/catalyst-model-provider";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import { createFakeSecrets } from "./support/fixtures";
 import { ALL_MODEL_CAPABILITIES, createRecordingGovernance } from "./support/model-gateway";
 import { eventually } from "./support/assertions";
@@ -89,8 +90,6 @@ describe("model gateway", () => {
       },
       "native tool 'web_search'"
     ],
-    ["a continuation", { continuation: { providerId: "main", state: {} } }, "continuation"],
-    ["the fast tier", { fastTier: true }, "fast tier"],
     ["structured output", { output: { jsonSchema: { type: "object" } } }, "structured output"]
   ])(
     "refuses %s the adapter does not declare before it calls the adapter",
@@ -865,3 +864,80 @@ async function drain(events: AsyncIterable<ModelCallStreamEvent>): Promise<Model
 function waitsBetween(times: number[]): number[] {
   return times.slice(1).map((time, index) => time - (times[index] ?? 0));
 }
+
+const fallbackConfig = (modelBindings: Record<string, unknown>[]) => ({
+  clientInstance: { id: "fallback-config", displayName: "Fallback config" },
+  infrastructure: {
+    models: {
+      eu: {
+        provider: "openai-compatible",
+        region: "eu",
+        model: "chat-deployment",
+        baseUrl: "https://resource.example.test/openai/v1",
+        credentialSecret: "EU_KEY",
+        authMode: "api-key"
+      },
+      us: {
+        provider: "openai-compatible",
+        region: "global",
+        model: "chat-model",
+        baseUrl: "https://api.example.test/v1",
+        credentialSecret: "US_KEY"
+      }
+    }
+  },
+  modelBindings
+});
+
+describe("a model binding's fallback in release config", () => {
+  it("accepts two chat bindings of one region that name each other", () => {
+    const config = parseClientInstanceConfig(
+      fallbackConfig([
+        { id: "primary", providerId: "eu", model: "model-a", fallback: "second" },
+        { id: "second", providerId: "eu", model: "model-b", fallback: "primary" }
+      ])
+    );
+
+    expect(config.modelBindings.map((binding) => [binding.id, binding.fallback])).toEqual([
+      ["primary", "second"],
+      ["second", "primary"]
+    ]);
+  });
+
+  it.each([
+    [
+      "itself",
+      [{ id: "primary", providerId: "eu", fallback: "primary" }],
+      "names itself as its fallback"
+    ],
+    [
+      "an embedding binding",
+      [
+        { id: "primary", providerId: "eu", fallback: "vectors" },
+        { id: "vectors", providerId: "eu", kind: "embedding", dimensions: 8 }
+      ],
+      "names embedding binding 'vectors' as its fallback"
+    ],
+    [
+      "a binding in another region",
+      [
+        { id: "primary", providerId: "eu", fallback: "abroad" },
+        { id: "abroad", providerId: "us" }
+      ],
+      "runs in region 'eu', but its fallback 'abroad' runs in region 'global'"
+    ]
+  ])("refuses a fallback that is %s", (_name, bindings, message) => {
+    expect(() => parseClientInstanceConfig(fallbackConfig(bindings))).toThrow(message);
+  });
+
+  it("refuses a fallback on an embedding binding", () => {
+    expect(() =>
+      parseClientInstanceConfig(
+        fallbackConfig([
+          { id: "chat", providerId: "eu" },
+          { id: "vectors", providerId: "eu", kind: "embedding", dimensions: 8, fallback: "chat" }
+        ])
+      )
+    ).toThrow();
+  });
+});

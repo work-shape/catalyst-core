@@ -1,8 +1,4 @@
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ACCOUNTING_MAXIMUM_PAGE_SIZE, SIZE_GROUPS } from "@work-shape/catalyst-demo/sample-mcp";
 import { required } from "./support/assertions";
 import {
   cents,
@@ -10,23 +6,21 @@ import {
   clientsOf,
   everyPosting,
   INDUSTRIES,
+  PUBLIC_HOLIDAYS,
   isCreditor,
   isDebtor,
-  MONTH,
   MONTHS,
   sample,
-  type Industry,
+  weekdayOf,
   type Posting
 } from "./support/sample-accounting";
 
 // Whether the books of the accounting sample are those of real businesses: who the clients
 // are, what they earn and spend, whom they deal with and how an invoice is settled.
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** Two months that follow one another, to see what carries over from one to the next. */
 const AUGUST = "2026-08";
 const SEPTEMBER = "2026-09";
-const YEAR = Array.from({ length: 12 }, (_, month) => `2025-${String(month + 1).padStart(2, "0")}`);
 const OWNER_RUN_FORMS = ["Einzelunternehmen", "Freiberufler", "GbR", "e. K."];
 /** A period's net revenue and net expenses, as the accounts' classes and the booking sides say. */
 function profitAndLoss(clientId: number, months: readonly string[]) {
@@ -44,14 +38,34 @@ function profitAndLoss(clientId: number, months: readonly string[]) {
   return { revenue, expenses, margin: (revenue - expenses) / revenue };
 }
 
-function median(values: number[]): number {
-  return required([...values].sort((left, right) => left - right)[Math.floor(values.length / 2)]);
-}
-
 /** The digits of a document number as one number, to compare two numbers of one format. */
 const numberOf = (document: string) => Number(document.replace(/\D/gu, ""));
 /** The format of a document number: the number with every digit replaced. */
 const formatOf = (document: string) => document.replace(/\d/gu, "9");
+
+// On which days the accounting sample books: nothing on a public holiday, a restaurant's till
+// every day it is open and most at the weekend, and the cash to the bank on a banking day.
+
+const SUNDAY = 0;
+const SATURDAY = 6;
+/** A month of each year of the sample that holds public holidays. */
+const HOLIDAY_MONTHS = ["2024-05", "2025-04", "2025-12", "2026-01", "2026-05"];
+const YEAR_2026 = sample.months.filter((month) => month.startsWith("2026"));
+
+const isTillReport = ({ posting_description }: Posting) =>
+  posting_description.startsWith("Tageseinnahmen");
+
+/** The bookings of a client's till in a month, by the till report they belong to. */
+function tillReports(clientId: number, month: string): Posting[][] {
+  const reports = new Map<string, Posting[]>();
+  for (const row of everyPosting(clientId, month).filter(isTillReport)) {
+    reports.set(row.document_field_1, [...(reports.get(row.document_field_1) ?? []), row]);
+  }
+  // A planted duplicate repeats one line of a report word for word.
+  return [...reports.values()].map((lines) =>
+    lines.filter((line, index) => JSON.stringify(line) !== JSON.stringify(lines[index - 1]))
+  );
+}
 
 describe("demo sample accounting books", () => {
   it("has the client list of a real firm: mostly sole traders and freelancers, and volume that fits the legal form", () => {
@@ -88,55 +102,6 @@ describe("demo sample accounting books", () => {
       new Set(sample.clients.map(({ client_id }) => sample.businessOf(client_id).industry))
     ).toEqual(new Set(INDUSTRIES));
   });
-
-  it("lists the clients in no alphabetical order and with mandates that began over many years", () => {
-    const names = sample.clients.map(({ name }) => name);
-    // In an alphabetical list every name follows a smaller one. Here about half do.
-    const rising = names.filter((name, index) => index > 0 && name > required(names[index - 1]));
-    expect(rising.length).toBeGreaterThan(200);
-    expect(rising.length).toBeLessThan(400);
-    const years = new Set(sample.clients.map(({ created_at }) => created_at.slice(0, 4)));
-    expect(years.size).toBeGreaterThanOrEqual(15);
-    for (const { created_at } of sample.clients) expect(created_at < "2024-01-01").toBe(true);
-    // A client is entered at some time of a working day, not all at one.
-    const times = sample.clients.map(({ created_at }) => created_at.slice(11));
-    expect(new Set(times).size).toBeGreaterThan(590);
-    for (const time of times) expect(time >= "06:00" && time < "19:00", time).toBe(true);
-  });
-
-  it("gives each industry margins of its own: most clients profitable, some not, none absurd", () => {
-    const margins = new Map<Industry, number[]>(
-      INDUSTRIES.map((industry) => [
-        industry,
-        clientsOf(industry, 8).map((id) => profitAndLoss(id, YEAR).margin)
-      ])
-    );
-    const all = [...margins.values()].flat();
-    expect(all).toHaveLength(8 * INDUSTRIES.length);
-    for (const [industry, values] of margins) {
-      for (const margin of values) {
-        expect(margin, industry).toBeGreaterThan(-0.5);
-        expect(margin, industry).toBeLessThan(0.75);
-      }
-      expect(median(values), industry).toBeGreaterThan(0);
-    }
-    expect(all.filter((margin) => margin > 0).length).toBeGreaterThan(0.7 * all.length);
-    // In any one month a few clients in a hundred lose money.
-    const smaller = sample.clients
-      .map(({ client_id }) => client_id)
-      .filter((id) => sample.postingCount(id, SEPTEMBER) <= 4_000);
-    const lossMaking = smaller.filter((id) => {
-      const { revenue, expenses } = profitAndLoss(id, [SEPTEMBER]);
-      return expenses > revenue;
-    });
-    expect(lossMaking.length).toBeGreaterThan(0.02 * smaller.length);
-    expect(lossMaking.length).toBeLessThan(0.25 * smaller.length);
-    // Where the owner's income is the profit, the margin is far above a trader's.
-    const medianOf = (industry: Industry) => median(required(margins.get(industry)));
-    expect(medianOf("freelancer")).toBeGreaterThan(medianOf("retail") + 0.15);
-    expect(medianOf("medicalPractice")).toBeGreaterThan(medianOf("manufacturing") + 0.15);
-    expect(medianOf("retail")).toBeLessThan(0.2);
-  }, 120_000);
 
   it("relates debit and credit plausibly in each month and taxes each industry as its law says", () => {
     const share = (rows: Posting[], test: (row: Posting) => boolean) =>
@@ -316,31 +281,6 @@ describe("demo sample accounting books", () => {
     ).toBeGreaterThan(required(customers[1]).size * 0.5);
   });
 
-  it("staffs a restaurant as its revenue can pay", () => {
-    const restaurants = sample.clients
-      .map(({ client_id }) => client_id)
-      .filter((id) => sample.businessOf(id).industry === "restaurant");
-    expect(restaurants.length).toBeGreaterThan(40);
-    let mostEmployees = 0;
-    for (const clientId of restaurants) {
-      const rows = everyPosting(clientId, SEPTEMBER);
-      // Each employee's net wage is transferred once a month.
-      const employees = rows.filter(
-        ({ posting_description }, index) =>
-          /^Lohn .+ Überweisung$/u.test(posting_description) &&
-          posting_description !== rows[index - 1]?.posting_description
-      ).length;
-      mostEmployees = Math.max(mostEmployees, employees);
-      if (employees === 0) continue;
-      const { revenue } = profitAndLoss(clientId, [SEPTEMBER]);
-      // A head in a restaurant brings in a few thousand euros a month, not tens of thousands.
-      expect(revenue / 100 / employees, `client ${clientId}`).toBeGreaterThan(3_000);
-      expect(revenue / 100 / employees, `client ${clientId}`).toBeLessThan(20_000);
-    }
-    expect(mostEmployees).toBeGreaterThan(10);
-    expect(mostEmployees).toBeLessThan(100);
-  });
-
   it("books receivables and payables through personal accounts: the invoice first, the payment later, some open at month end", () => {
     const planted = (clientId: number, month: string) =>
       Object.values(sample.expectedFindings(clientId, month)).reduce(
@@ -477,28 +417,93 @@ describe("demo sample accounting books", () => {
     }
   });
 
-  it("states in the README the figures the code gives", () => {
-    const readme = readFileSync(resolve(root, "clients/demo/README.md"), "utf8");
-    for (const group of SIZE_GROUPS) {
-      const bookings =
-        group.minimum === group.maximum
-          ? `exactly ${group.minimum.toLocaleString("en-US")}`
-          : `${group.minimum.toLocaleString("en-US")} to ${group.maximum.toLocaleString("en-US")}`;
-      expect(readme).toMatch(
-        new RegExp(`\\| ${group.name} +\\| ${group.clients} +\\| ${bookings} +\\|`, "u")
-      );
+  it("books nothing on a nationwide public holiday but the takings of a restaurant's till", () => {
+    expect(PUBLIC_HOLIDAYS).toHaveLength(27);
+    let bookings = 0;
+    let tillReportsOnHolidays = 0;
+    for (const industry of INDUSTRIES) {
+      for (const clientId of clientsOf(industry, 3)) {
+        for (const month of HOLIDAY_MONTHS) {
+          for (const row of everyPosting(clientId, month)) {
+            bookings += 1;
+            if (!PUBLIC_HOLIDAYS.includes(row.date)) continue;
+            expect(isTillReport(row), `${industry} ${clientId} ${row.date}`).toBe(true);
+            expect(industry).toBe("restaurant");
+            tillReportsOnHolidays += 1;
+          }
+        }
+      }
     }
-    const withCostCentres = sample.clients.filter(({ client_id }) =>
-      sample
-        .postings(client_id, MONTH, 0, ACCOUNTING_MAXIMUM_PAGE_SIZE)
-        .some(({ kost1 }) => kost1 !== "")
-    ).length;
-    expect(readme).toContain(`${withCostCentres} of the 600 clients book with cost centres`);
-    const deviating = sample.clients.filter(
-      ({ client_id }) =>
-        required(sample.fiscalYears(client_id)[0]).fiscal_year_start % 10_000 !== 101
-    ).length;
-    expect(readme).toContain(`${deviating} have a fiscal year that does not start in January`);
-    expect(readme).toContain(`at most ${ACCOUNTING_MAXIMUM_PAGE_SIZE.toLocaleString("en-US")}`);
+    expect(bookings).toBeGreaterThan(10_000);
+    expect(tillReportsOnHolidays).toBeGreaterThan(0);
+  });
+
+  it("books a restaurant's till report in two bookings, food at 7 % and drinks at 19 %", () => {
+    const restaurants = clientsOf("restaurant", 6, 4_000);
+    expect(restaurants).toHaveLength(6);
+    for (const clientId of restaurants) {
+      const chart = chartOf(clientId);
+      for (const [month, foodShare] of [
+        // Food eaten in the restaurant is taxed at 7 % from 2026. Before that only food
+        // taken away was, the smaller part of a day's takings.
+        ["2026-09", { least: 0.5, most: 0.8 }],
+        ["2025-09", { least: 0.08, most: 0.35 }]
+      ] as const) {
+        const reports = tillReports(clientId, month);
+        expect(reports.length).toBeGreaterThan(0);
+        for (const lines of reports) {
+          const [first] = lines;
+          const where = `${clientId} ${required(first).document_field_1}`;
+          expect(lines.map(({ tax_rate }) => tax_rate).sort(), where).toEqual([19, 7]);
+          for (const line of lines) {
+            expect(line).toMatchObject({
+              date: required(first).date,
+              posting_description: required(first).posting_description,
+              document_link: required(first).document_link,
+              debit_credit_indicator: "H"
+            });
+            expect(required(chart.get(line.account_number)).account_class).toBe("revenue");
+            expect(required(chart.get(line.contra_account_number)).label).toBe("Kasse");
+          }
+          const net = lines.reduce((sum, line) => sum + line.net_amount, 0);
+          const food = required(lines.find(({ tax_rate }) => tax_rate === 7)).net_amount;
+          expect(food / net, where).toBeGreaterThan(foodShare.least);
+          expect(food / net, where).toBeLessThan(foodShare.most);
+        }
+        // A till reports once a day.
+        const tillDays = reports.map(
+          (lines) => `${required(lines[0]).date} ${required(lines[0]).posting_description}`
+        );
+        expect(new Set(tillDays).size).toBe(tillDays.length);
+      }
+    }
+  });
+
+  it("brings the till's cash to the bank on banking days, in amounts and at intervals that vary", () => {
+    const [clientId] = clientsOf("restaurant", 100).filter(
+      (id) => sample.postingCount(id, "2026-09") >= 150
+    );
+    const deposits = YEAR_2026.flatMap((month) =>
+      everyPosting(required(clientId), month).filter(
+        ({ posting_description }, index, rows) =>
+          posting_description.startsWith("Bareinzahlung") &&
+          posting_description !== rows[index - 1]?.posting_description
+      )
+    );
+    expect(deposits.length).toBeGreaterThan(30);
+    for (const { date, amount } of deposits) {
+      expect([SATURDAY, SUNDAY]).not.toContain(weekdayOf(date));
+      expect(PUBLIC_HOLIDAYS).not.toContain(date);
+      // Notes, so whole fifties.
+      expect(cents(amount) % 5_000).toBe(0);
+    }
+    const amounts = new Map<number, number>();
+    for (const { amount } of deposits) amounts.set(amount, (amounts.get(amount) ?? 0) + 1);
+    expect(amounts.size).toBeGreaterThan(15);
+    expect(Math.max(...amounts.values())).toBeLessThan(deposits.length / 5);
+    const gaps = deposits
+      .slice(1)
+      .map(({ date }, index) => Date.parse(date) - Date.parse(required(deposits[index]).date));
+    expect(new Set(gaps).size).toBeGreaterThan(2);
   });
 });

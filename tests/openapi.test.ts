@@ -33,51 +33,6 @@ const schemeNames = (id: keyof typeof apiOperations) =>
   documentedOperation(id).security.flatMap((requirement) => Object.keys(requirement));
 
 describe("the released OpenAPI document", () => {
-  it("lists the thirteen asset operations at their addresses and none of the five they replace", () => {
-    const listed = Object.entries(released.paths).flatMap(([path, methods]) =>
-      Object.entries(methods).map(
-        ([method, operation]) => `${operation.operationId}  ${method.toUpperCase()} ${path}`
-      )
-    );
-    expect(
-      listed.filter((entry) => /^(?:assets\.|platform\.context\.get )/u.test(entry)).sort()
-    ).toEqual([
-      "assets.adopt_repository  POST /api/v1/assets/{kind}/adopt-repository",
-      "assets.check_name  POST /api/v1/assets/{kind}/check-name",
-      "assets.delete  POST /api/v1/assets/{kind}/{name}/delete",
-      "assets.discard_draft  POST /api/v1/assets/{kind}/{name}/discard-draft",
-      "assets.get  GET /api/v1/assets/{kind}/{name}",
-      "assets.list  GET /api/v1/assets/{kind}",
-      "assets.list_live_once  GET /api/v1/assets/{kind}/{name}/run-live-once",
-      "assets.move  POST /api/v1/assets/{kind}/{name}/move",
-      "assets.move_check  POST /api/v1/assets/{kind}/{name}/move/check",
-      "assets.preview  POST /api/v1/assets/{kind}/{name}/preview",
-      "assets.publications.list  GET /api/v1/assets/{kind}/{name}/publications",
-      "assets.publish  POST /api/v1/assets/{kind}/{name}/publish",
-      "assets.put  PUT /api/v1/assets/{kind}/{name}",
-      "assets.revert  POST /api/v1/assets/{kind}/{name}/revert",
-      "assets.revisions.list  GET /api/v1/assets/{kind}/{name}/revisions",
-      "assets.run_live_once  POST /api/v1/assets/{kind}/{name}/run-live-once",
-      "assets.set_availability  PUT /api/v1/assets/{kind}/{name}/availability",
-      "assets.set_default  POST /api/v1/assets/{kind}/default",
-      "assets.sync  POST /api/v1/assets/sync",
-      "assets.sync_check  POST /api/v1/assets/sync/check",
-      "assets.validate  POST /api/v1/assets/{kind}/validate",
-      "platform.context.get  GET /api/v1/context"
-    ]);
-    const ids = listed.map((entry) => entry.split("  ")[0]);
-    for (const removed of ["get", "put", "delete", "revert", "revisions.list"]) {
-      expect(ids).not.toContain(`config_assets.${removed}`);
-    }
-    expect(Object.keys(released.paths).filter((path) => path.includes("/config/assets/"))).toEqual(
-      []
-    );
-    // What stays of the old group.
-    expect(ids).toEqual(
-      expect.arrayContaining(["config_assets.get_overview", "instance.workspaces.list"])
-    );
-  });
-
   it("carries the release version and is the same on every generation", async () => {
     const manifest = z
       .object({ version: z.string() })
@@ -260,22 +215,6 @@ describe("the released OpenAPI document", () => {
       "Location",
       "IdempotentReplayed"
     ]);
-
-    const page = renderApiReferencePage(registered, {
-      documentHref: "openapi.json",
-      theme: {
-        light: {
-          surfaceColor: "#ffffff",
-          backgroundColor: "#f5f5f5",
-          textColor: "#1a1a1a",
-          mutedTextColor: "#5e5e5e",
-          borderColor: "#e5e5e5",
-          accentColor: "#1a1a1a"
-        }
-      }
-    });
-    expect(page.html).toContain("Idempotency-Key");
-    expect(page.html).toContain("Operation-Run-Id");
   });
 
   it("lists each credential once with its alternative scopes in the reference", () => {

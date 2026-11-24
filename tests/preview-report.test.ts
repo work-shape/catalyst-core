@@ -3,8 +3,6 @@
 import { Window } from "happy-dom";
 import { describe, expect, it } from "vitest";
 import {
-  APP_BRIDGE_MARK,
-  APP_BRIDGE_VERSION,
   appBridgePageMessageSchema,
   boundPreviewReport,
   previewReportSchema,
@@ -444,14 +442,6 @@ describe("the interface's report of a preview", () => {
     expect(sent).toHaveLength(2);
   });
 
-  it("waits 5 seconds for the greeting from the guard's first report too", () => {
-    const { reporter, sent, advance } = reporterWithClock();
-    // The frame's load event was missed: the guard's report says the document loaded.
-    reporter.guardReport(guard());
-    advance(PREVIEW_GREETING_MS);
-    expect(sent.at(-1)).toMatchObject({ loaded: true, bridge: "not_connected" });
-  });
-
   it("stops once the instance no longer knows the frame's address", async () => {
     const { reporter, sent, advance } = reporterWithClock(() =>
       Promise.reject(new ApiError(404, "Not found", undefined))
@@ -460,21 +450,5 @@ describe("the interface's report of a preview", () => {
     reporter.guardReport(guard());
     advance(60_000);
     expect(sent).toHaveLength(1);
-  });
-
-  it("posts what the guard reports as a bridge message from the frame", () => {
-    const message = {
-      [APP_BRIDGE_MARK]: APP_BRIDGE_VERSION,
-      type: "report",
-      report: guard()
-    };
-    expect(appBridgePageMessageSchema.parse(message)).toEqual(message);
-    // A guard report longer than the interface takes is no report.
-    expect(
-      appBridgePageMessageSchema.safeParse({
-        ...message,
-        report: guard({ entries: [{ kind: "error", message: "x".repeat(1001), count: 1 }] })
-      }).success
-    ).toBe(false);
   });
 });

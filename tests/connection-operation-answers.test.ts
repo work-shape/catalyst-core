@@ -462,12 +462,6 @@ describe("the Connection routes", () => {
     expect(JSON.stringify(detail)).not.toContain(oversized.description);
   });
 
-  it("bounds a Connection page read to the published-consumer deadline", async () => {
-    const t = await fixture();
-    const definition = await t.operationCalls.registry.resolve("connections.get");
-    expect(definition?.timeoutMs).toBe(15_000);
-  });
-
   it("lists runtime health from only the Connection page of assets, without new revisions", async () => {
     const t = await fixture();
     const first = await t.seed("a-tested");

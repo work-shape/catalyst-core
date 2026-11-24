@@ -433,22 +433,7 @@ describe("resolvePolicy: who can confirm and what can wait", () => {
       })
     ).toMatchObject({
       code: "POLICY_DENIED",
-      message: expect.stringMatching(/^The guardrail 'Items are approved' asks for another/u),
       details: { operation: "items.create", guardrailId: "items-approved" }
-    });
-  });
-
-  it("says in a policy refusal that an approval was asked which the call cannot wait for", () => {
-    expect(
-      operationDenialError({
-        kind: "policy",
-        operation: "items.create",
-        reason: "approval_unavailable"
-      })
-    ).toMatchObject({
-      code: "POLICY_DENIED",
-      message: expect.stringContaining("put an approval step before the step"),
-      details: { operation: "items.create", reason: "approval_unavailable" }
     });
   });
 

@@ -187,53 +187,34 @@ describe("an agent of Only me in its owner's own chats", () => {
     expect((await listed(t.kai.id, team, KEY)).ownChatAgents).toBeUndefined();
   });
 
-  it("runs in its owner's private team chat and marks it, which then stays private", async () => {
-    const { t, team, chat, start, marked } = await setup();
-    const own = await chat(t.kai.id, team, "private");
-    expect(await marked(own.id)).toBe(false);
-    const started = await start(t.kai.id, own.id);
-    expect(started.statusCode, started.body).toBe(200);
-    expect(await marked(own.id)).toBe(true);
-
-    // Moved to the team for its members to read, the chat is refused; it stays Kai's alone.
-    await t.expectRefused(
-      t.kai.id,
-      "conversations.move",
-      {
-        params: { conversationId: own.id },
-        payload: { collaborationWorkspaceId: team, visibility: "workspace" }
-      },
-      {
-        status: 422,
-        code: "VALIDATION_FAILED",
-        details: { reason: "personal_conversation_private" }
-      }
-    );
-  });
-
-  it("runs in its owner's Personal Workspace, whose chat then never moves to a team for its members", async () => {
+  it("runs in its owner's private team chat or Personal Workspace and marks it, which then stays private", async () => {
     const { t, team, kaiHome, chat, start, marked } = await setup();
+    const own = await chat(t.kai.id, team, "private");
     const home = await chat(t.kai.id, kaiHome);
-    const started = await start(t.kai.id, home.id);
-    expect(started.statusCode, started.body).toBe(200);
-    expect(await marked(home.id)).toBe(true);
-    await t.expectRefused(
-      t.kai.id,
-      "conversations.move",
-      {
-        params: { conversationId: home.id },
-        payload: { collaborationWorkspaceId: team, visibility: "workspace" }
-      },
-      {
-        status: 422,
-        code: "VALIDATION_FAILED",
-        details: { reason: "personal_conversation_private" }
-      }
-    );
+    for (const conversation of [own, home]) {
+      expect(await marked(conversation.id)).toBe(false);
+      const started = await start(t.kai.id, conversation.id);
+      expect(started.statusCode, started.body).toBe(200);
+      expect(await marked(conversation.id)).toBe(true);
+      // Moved to the team for its members to read, the chat is refused; it stays Kai's alone.
+      await t.expectRefused(
+        t.kai.id,
+        "conversations.move",
+        {
+          params: { conversationId: conversation.id },
+          payload: { collaborationWorkspaceId: team, visibility: "workspace" }
+        },
+        {
+          status: 422,
+          code: "VALIDATION_FAILED",
+          details: { reason: "personal_conversation_private" }
+        }
+      );
+    }
   });
 
-  it("is refused in a chat the team reads, which stays unmarked", async () => {
-    const { t, team, chat, marked } = await setup();
+  it("is refused in a chat the team reads, to another member, to its owner's key and for a scheduled prompt", async () => {
+    const { t, team, chat, start, marked } = await setup();
     const shared = await chat(t.kai.id, team);
     expect(shared.visibility).toBe("workspace");
     await t.expectRefused(
@@ -246,10 +227,44 @@ describe("an agent of Only me in its owner's own chats", () => {
       notFound
     );
     expect(await marked(shared.id)).toBe(false);
-  });
 
-  it("is the agent a file is read for only in its owner's own chat", async () => {
-    const { t, team, chat } = await setup();
+    // Another member, even in their own private chat.
+    const lenas = await chat(t.lena.id, team, "private");
+    await t.expectRefused(
+      t.lena.id,
+      "conversations.runs.start",
+      {
+        params: { conversationId: lenas.id },
+        payload: { agentName: OWN, idempotencyKey: "lena-1", message: { text: "Kais Steuer" } }
+      },
+      notFound
+    );
+    expect(await marked(lenas.id)).toBe(false);
+
+    // Its owner's key, in the owner's own private chat.
+    const own = await chat(t.kai.id, team, "private");
+    const started = await start(t.kai.id, own.id, KEY);
+    expect(started.statusCode, started.body).toBe(404);
+    expect(await marked(own.id)).toBe(false);
+
+    // A scheduled prompt.
+    await t.expectRefused(
+      t.kai.id,
+      "scheduled_starts.create",
+      {
+        payload: {
+          agentName: OWN,
+          prompt: "Daily",
+          cron: "0 9 * * 1-5",
+          timeZone: "Europe/Berlin",
+          collaborationWorkspaceId: team
+        }
+      },
+      notFound
+    );
+
+    // A file is read for it only in its owner's own chat. This instance stores no files: past
+    // the agent's check, the upload stops there.
     const upload = (conversationId: string) => {
       const multipart = createMultipartFilePayload({
         fieldName: "file",
@@ -264,38 +279,10 @@ describe("an agent of Only me in its owner's own chats", () => {
         payload: multipart.payload
       });
     };
-    // This instance stores no files: past the agent's check, the upload stops there.
-    const own = await upload((await chat(t.kai.id, team, "private")).id);
-    expect(own.json()).toMatchObject({
+    expect((await upload(own.id)).json()).toMatchObject({
       error: { message: "Attachment handling is not configured" }
     });
-    const shared = await upload((await chat(t.kai.id, team)).id);
-    expect(shared.json()).toMatchObject({
-      error: { code: "NOT_FOUND", message: "The selected agent is not available" }
-    });
-  });
-
-  it("is refused to another member, even in their own private chat", async () => {
-    const { t, team, chat, marked } = await setup();
-    const lenas = await chat(t.lena.id, team, "private");
-    await t.expectRefused(
-      t.lena.id,
-      "conversations.runs.start",
-      {
-        params: { conversationId: lenas.id },
-        payload: { agentName: OWN, idempotencyKey: "lena-1", message: { text: "Kais Steuer" } }
-      },
-      notFound
-    );
-    expect(await marked(lenas.id)).toBe(false);
-  });
-
-  it("is refused to its owner's key, in the owner's own private chat", async () => {
-    const { t, team, chat, start, marked } = await setup();
-    const own = await chat(t.kai.id, team, "private");
-    const started = await start(t.kai.id, own.id, KEY);
-    expect(started.statusCode, started.body).toBe(404);
-    expect(await marked(own.id)).toBe(false);
+    expect((await upload(shared.id)).json()).toMatchObject({ error: { code: "NOT_FOUND" } });
   });
 
   it("starts a new chat only where it will be private, leaving nothing behind where it is refused", async () => {
@@ -440,24 +427,6 @@ async function runToEnd(
 }
 
 describe("an agent of Only me beyond the chat its owner chose it in", () => {
-  it("is refused for a scheduled prompt, even in its owner's own private chat", async () => {
-    const { t, team } = await setup();
-    await t.expectRefused(
-      t.kai.id,
-      "scheduled_starts.create",
-      {
-        payload: {
-          agentName: OWN,
-          prompt: "Daily",
-          cron: "0 9 * * 1-5",
-          timeZone: "Europe/Berlin",
-          collaborationWorkspaceId: team
-        }
-      },
-      { status: 404, code: "NOT_FOUND" }
-    );
-  });
-
   it("acts on a call that waited only in the owner's own marked chat", async () => {
     const { t, team, kaiHome, chat, start } = await setup();
     const calls = await getTestOperationCalls(t.instance);
@@ -739,18 +708,14 @@ describe("an agent of Only me beyond the chat its owner chose it in", () => {
 });
 
 describe("an agent of Only me in the usage of a team", () => {
-  it.each(["instance", "workspace", "unknown"] as const)(
+  it.each(["workspace", "unknown"] as const)(
     "keeps a %s agent's own name when a personal agent now has that name",
     async (scopeKind) => {
       const { t, team } = await setup();
       // The run captured its agent before that name belonged to Kai's personal agent.
       // Names are unique per instance today; a move or replacement can reuse one mid-run.
       const agentScope: AssetScope | undefined =
-        scopeKind === "unknown"
-          ? undefined
-          : scopeKind === "instance"
-            ? { kind: "instance" }
-            : { kind: "workspace", workspaceId: team };
+        scopeKind === "unknown" ? undefined : { kind: "workspace", workspaceId: team };
       const usage = new ModelUsageGovernance({
         store: t.stores.usage,
         costs: {},

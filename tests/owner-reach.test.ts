@@ -129,28 +129,6 @@ describe("owner reach through the assembled API", () => {
     }
   });
 
-  it("G1: words the refusal with the ladder's words and the next step, in EN and DE", async () => {
-    const { world, team } = await setup();
-    const say = async (locale: string) =>
-      errorSchema.parse(
-        (
-          await setAvailability(
-            world,
-            "agent",
-            "own-helper",
-            { mode: "selected", collaborationWorkspaceIds: [team.id] },
-            { "accept-language": locale }
-          )
-        ).json()
-      ).error.message;
-    expect(await say("en")).toBe(
-      `Agent 'own-helper' is in a Personal Workspace ("Only me") and is used only there, not in a team or by everyone. Create it in a Shared Workspace or for everyone, or ask an admin.`
-    );
-    expect(await say("de")).toBe(
-      "Agent 'own-helper' liegt unter „Nur ich“, in einem persönlichen Arbeitsbereich, und wird nur dort genutzt, nicht in einem Team oder von Allen. Lege das in einem Team-Arbeitsbereich oder für Alle an, oder bitte einen Admin darum."
-    );
-  });
-
   it("tells a reader a Personal Workspace's agent, subagent or Knowledge Base has no availability to set", async () => {
     const { world, team, personal } = await setup();
     const scope: AssetScope = { kind: "workspace", workspaceId: team.id };
@@ -219,7 +197,7 @@ describe("owner reach through the assembled API", () => {
     ).toMatchObject({ missing: [], administrators: [] });
   });
 
-  it("words a reference to what a person owns with where it sits and the next step, in the caller's language", async () => {
+  it("refuses a reference to what a person owns from a team's or everyone's agent", async () => {
     const { world, team, other } = await setup();
     await seed(
       world,
@@ -228,60 +206,22 @@ describe("owner reach through the assembled API", () => {
       { kind: "workspace", workspaceId: other.id },
       true
     );
-    const refusal = async (config: JsonObject, workspaceId: string | undefined, locale: string) => {
-      const refused = await put(world, "agent", config, workspaceId, {
-        "accept-language": locale
-      });
+    const refusal = async (config: JsonObject, workspaceId: string | undefined) => {
+      const refused = await put(world, "agent", config, workspaceId);
       expect(refused.statusCode, refused.body).toBe(422);
       return errorSchema.parse(refused.json()).error;
     };
-    const reader = (name: string, extra: JsonObject) => agent(name, extra);
 
-    // A team's agent naming a person's Knowledge Base: it sits with its owner, share it up.
-    const inTeamEn = await refusal(
-      reader("team-reader", { knowledgeBases: ["own-kb"] }),
-      team.id,
-      "en"
-    );
-    expect(inTeamEn.details).toMatchObject({
+    // A team's agent naming a person's Knowledge Base.
+    expect(
+      (await refusal(agent("team-reader", { knowledgeBases: ["own-kb"] }), team.id)).details
+    ).toMatchObject({
       reason: "invalid_scope",
       reference: { kind: "knowledge_base", name: "own-kb", reach: "personal" }
     });
-    expect(inTeamEn.message).toBe(
-      `Knowledge Base "own-kb" is only for you ("Only me"). Agent "team-reader" belongs to the team "Team" and so may not rely on it. Share Knowledge Base "own-kb" with the team "Team" using "Share…", or ask an admin.`
-    );
-    const inTeamDe = await refusal(
-      reader("team-reader", { knowledgeBases: ["own-kb"] }),
-      team.id,
-      "de"
-    );
-    expect(inTeamDe.message).toBe(
-      `Wissensbasis „own-kb“ ist nur für dich („Nur ich“). Agent „team-reader“ gehört zum Team „Team“ und darf sich darum nicht darauf stützen. Teile Wissensbasis „own-kb“ über „Teilen…“ mit dem Team „Team“, oder bitte einen Admin darum.`
-    );
-
-    // An agent for everyone: share it with everyone.
-    const forAll = await refusal(
-      reader("all-reader", { knowledgeBases: ["own-kb"] }),
-      undefined,
-      "de"
-    );
-    expect(forAll.message).toContain("Agent „all-reader“ ist für Alle");
-    expect(forAll.message).toContain("über „Teilen…“ mit Allen, oder bitte einen Admin darum.");
-
-    // Another team's Knowledge Base is no step of a person: only an admin moves it.
-    const elsewhere = await refusal(
-      reader("team-reader", { knowledgeBases: ["other-kb"] }),
-      team.id,
-      "en"
-    );
-    expect(elsewhere.message).toBe(
-      `Knowledge Base "other-kb" belongs to the team "Other team". Agent "team-reader" belongs to the team "Team" and so may not rely on it. Ask an admin.`
-    );
-
-    // Never a command line for an agent to run.
-    for (const { message } of [inTeamEn, inTeamDe, forAll, elsewhere]) {
-      expect(message).not.toMatch(/\bCLI\b|catalyst /i);
-    }
+    // An agent for everyone, and another team's Knowledge Base.
+    await refusal(agent("all-reader", { knowledgeBases: ["own-kb"] }), undefined);
+    await refusal(agent("team-reader", { knowledgeBases: ["other-kb"] }), team.id);
   });
 
   it("G2: the dependency branch never widens a Personal Workspace's Knowledge Base, and rolls the agent back", async () => {

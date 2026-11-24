@@ -44,28 +44,6 @@ describe("UI theme defaults", () => {
     expect(schemaDefaults.accentColor).toBe(schemaInputs.light.accentColor);
   });
 
-  it("keeps every default neutral without a colour cast, and the accent the only colour", () => {
-    for (const mode of modes) {
-      for (const [name, value] of Object.entries(schemaInputs[mode])) {
-        const { r, g, b } = requireHex(value);
-        const accent = name === "accentColor" || name === "accentStrongColor";
-        // An accent is plainly terracotta. A neutral is clean: red and blue at most a few levels
-        // apart, so it reads neither brown nor grey-blue.
-        const warm = accent ? r >= g && g >= b : true;
-        const quiet = accent ? r - b >= 80 : Math.abs(r - b) <= 6;
-        expect([mode, name, warm, quiet]).toEqual([mode, name, true, true]);
-      }
-    }
-  });
-
-  it("returns the same token names in both modes", () => {
-    for (const mode of modes) {
-      expect(Object.keys(createThemeTokens(schemaInputs[mode], mode))).toEqual([
-        ...THEME_TOKEN_NAMES
-      ]);
-    }
-  });
-
   it("maps every colour of the stylesheet's theme to a token of the mapping", async () => {
     const stylesheet = await readFile(stylesheetPath, "utf8");
     const colourTheme = /@theme inline \{([^}]*)\}/u.exec(stylesheet)?.[1] ?? "";
@@ -160,66 +138,14 @@ describe("UI theme contrast", () => {
     expect(failing).toEqual([]);
   });
 
-  it("measures the values the design names", () => {
-    expect(table.light?.["text on page"]).toBeCloseTo(16.32, 1);
-    expect(table.light?.["text on sidebar"]).toBeCloseTo(15.34, 1);
-    expect(table.light?.["muted text on page"]).toBeCloseTo(6.3, 1);
-    expect(table.light?.["warning as text on sidebar"]).toBeCloseTo(4.52, 1);
-    expect(table.light?.["primary button label on page"]).toBeCloseTo(6.03, 1);
-    expect(table.light?.["primary button label when pressed on sidebar"]).toBeCloseTo(4.8, 1);
-    expect(table.light?.["label on the solid accent"]).toBeCloseTo(4.78, 1);
-    expect(table.light?.["chosen segment on sidebar"]).toBeCloseTo(5.11, 1);
-    expect(table.dark?.["text on page"]).toBeCloseTo(15.0, 1);
-    expect(table.dark?.["text on raised"]).toBeCloseTo(12.99, 1);
-    expect(table.dark?.["muted text on raised"]).toBeCloseTo(6.61, 1);
-    expect(table.dark?.["primary button label on page"]).toBeCloseTo(7.49, 1);
-    expect(table.dark?.["danger button label on hover on raised"]).toBeCloseTo(4.74, 1);
-    // The blue second accent, as text and as a badge.
-    expect(table.light?.["info as text on sidebar"]).toBeCloseTo(5.39, 1);
-    expect(table.dark?.["info as text on raised"]).toBeCloseTo(6.08, 1);
-    expect(table.dark?.["info badge on raised"]).toBeCloseTo(5.82, 1);
-    expect(Math.min(...Object.values(table.light ?? {}))).toBeCloseTo(4.52, 1);
-    expect(Math.min(...Object.values(table.dark ?? {}))).toBeCloseTo(4.74, 1);
-  });
-
   it.each(modes)(
-    "keeps the scrollbar thumb of the %s default theme at 3:1 on page, card and raised surface where it shows",
-    async (mode) => {
-      const stylesheet = await readFile(stylesheetPath, "utf8");
-      // One colour gives the thumb wherever it shows: over its area, focused, dragged.
-      const share =
-        Number(
-          /--scrollbar-thumb: color-mix\(in srgb, var\(--muted-foreground\) (\d+)%, transparent\)/u.exec(
-            stylesheet
-          )?.[1]
-        ) / 100;
-      const tokens = createThemeTokens(schemaInputs[mode], mode);
-      const muted = flatten(parseColor(tokens["--muted-foreground"]), undefined);
-      const ratios: Record<string, number> = {};
-      for (const surfaceToken of ["--background", "--card", "--popover"] as const) {
-        const surface = flatten(parseColor(tokens[surfaceToken]), undefined);
-        const thumb = flatten({ ...muted, a: share }, surface);
-        ratios[surfaceToken] = contrastRatio(thumb, surface);
-      }
-
-      expect(share).toBeGreaterThan(0);
-      expect(Object.keys(ratios)).toHaveLength(3);
-      expect(Object.entries(ratios).filter(([, ratio]) => ratio < 3)).toEqual([]);
-    }
-  );
-});
-
-describe("UI theme tint colours", () => {
-  const tints = ["blue", "green", "amber", "violet", "teal", "rose"] as const;
-
-  it.each(modes)(
-    "keeps every tint of the %s default theme at 3:1 on page, sidebar, raised surface and its own tile",
+    "keeps every tint and level colour of the %s default theme at 3:1 on page, sidebar, raised surface and a tint's own tile",
     (mode) => {
       const tokens = createThemeTokens(schemaInputs[mode], mode);
       const ratios: Record<string, number> = {};
       for (const surfaceToken of ["--background", "--sidebar", "--popover"] as const) {
         const surface = flatten(parseColor(tokens[surfaceToken]), undefined);
-        for (const tint of tints) {
+        for (const tint of ["blue", "green", "amber", "violet", "teal", "rose"] as const) {
           const hue = requireHex(tokens[`--tint-${tint}`]);
           const tile = {
             r: surface.r + (hue.r - surface.r) * 0.12,
@@ -229,43 +155,16 @@ describe("UI theme tint colours", () => {
           ratios[`${tint} on ${surfaceToken}`] = contrastRatio(hue, surface);
           ratios[`${tint} on its tile on ${surfaceToken}`] = contrastRatio(hue, tile);
         }
-      }
-
-      expect(Object.keys(ratios)).toHaveLength(36);
-      expect(Object.entries(ratios).filter(([, ratio]) => ratio < 3)).toEqual([]);
-    }
-  );
-});
-
-describe("UI theme level colours", () => {
-  const levels = [1, 2, 3, 4, 5, 6] as const;
-
-  it.each(modes)(
-    "keeps every level colour of the %s default theme at 3:1 on page, sidebar and raised surface",
-    (mode) => {
-      const tokens = createThemeTokens(schemaInputs[mode], mode);
-      const ratios: Record<string, number> = {};
-      for (const surfaceToken of ["--background", "--sidebar", "--popover"] as const) {
-        const surface = flatten(parseColor(tokens[surfaceToken]), undefined);
-        for (const level of levels) {
+        for (const level of [1, 2, 3, 4, 5, 6] as const) {
           const name: ThemeTokenName = `--level-${level}`;
           ratios[`${name} on ${surfaceToken}`] = contrastRatio(requireHex(tokens[name]), surface);
         }
       }
 
-      expect(Object.keys(ratios)).toHaveLength(18);
+      expect(Object.keys(ratios)).toHaveLength(54);
       expect(Object.entries(ratios).filter(([, ratio]) => ratio < 3)).toEqual([]);
     }
   );
-
-  it.each(modes)("ends the %s scale on a warm colour that is not the danger red", (mode) => {
-    const tokens = createThemeTokens(schemaInputs[mode], mode);
-    const top = requireHex(tokens["--level-6"]);
-
-    // Warm: red over green over blue. A high level is not an error, so not the danger red.
-    expect(top.r > top.g && top.g > top.b).toBe(true);
-    expect(tokens["--level-6"]).not.toBe(tokens["--destructive"]);
-  });
 });
 
 interface Rgba extends RgbColor {

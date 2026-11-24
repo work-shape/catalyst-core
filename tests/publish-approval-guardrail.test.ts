@@ -184,7 +184,7 @@ describe("publishing needs an instance admin's approval", () => {
     );
   });
 
-  it("PUBQ-1: a held publish's Inbox item leads with the same sentence as the Publish dialog, in the approver's language", async () => {
+  it("PUBQ-1: a held publish's Inbox item leads with the same sentence as the Publish dialog", async () => {
     await created("narrated");
     const held = heldSchema.parse((await t.publish(t.kai.id, "narrated", 1)).json());
     const narrativeSchema = z.object({ summary: z.string().min(1), warnings: z.array(z.string()) });
@@ -209,78 +209,44 @@ describe("publishing needs an instance admin's approval", () => {
     const english = await reviewed();
     expect(english.summary).toMatch(/^Offers opens for /u);
     expect(english).toEqual(await asked());
-    await t.stores.users.updateUser({ clientInstanceId, userId: t.admin.id, locale: "de" });
+  });
+
+  it("keeps the draft, Details and Inbox approval available after narration fails", async () => {
+    const name = "summary-failure";
+    await created(name);
+    const held = heldSchema.parse((await t.publish(t.kai.id, name, 1)).json());
+    const calls = await getTestOperationCalls(t.instance);
+    const narrator = calls.publishNarrator;
+    if (!narrator) throw new Error("The assembled test instance needs a publish narrator");
+    const failed = vi
+      .spyOn(narrator, "narrate")
+      .mockRejectedValue(new Error("private Connection error"));
     try {
-      const german = await reviewed();
-      expect(german.summary).toMatch(/^Offers öffnet sich für /u);
-      expect(german).toEqual(await asked());
+      const draft = (
+        await t.expectOk(t.admin.id, "assets.get", {
+          params: { kind: "app", name },
+          query: { workspaceId: t.workspaceId, revision: "1" }
+        })
+      ).json();
+      const review = (await request(t.admin.id, held.approvalRequestId)).preview.review;
+      const summary = "The summary could not be prepared. Details are still available.";
+      expect(draft.publishNarrative).toEqual({ summary, warnings: [] });
+      expect(draft.allowed).toContain("publish");
+      expect(review).toMatchObject({
+        publishNarrative: { summary, warnings: [] },
+        files: [
+          { path: "app.yaml", change: "added" },
+          { path: "index.html", change: "added" }
+        ]
+      });
+      expect(JSON.stringify(review)).not.toContain("private Connection error");
+      expectStatus(await decide(t.admin.id, held.approvalRequestId, "approve"), 200);
+      await getTestJobs(t.instance).runDue();
+      expect((await stored(name))?.publishedRevision).toBe(1);
     } finally {
-      await t.stores.users.updateUser({ clientInstanceId, userId: t.admin.id, locale: null });
+      failed.mockRestore();
     }
   });
-
-  // Replaces e2e/publish-narrative.spec.ts "PUBQ-1: every publish question leads with the plain
-  // sentence in the reader's language, the lists behind Details": an approver's Inbox item of a
-  // member's publish for only themselves names the publisher (SHARE-1).
-  it("PUBQ-1: a held publish for only its publisher names the publisher in the approver's Inbox item", async () => {
-    await created("narrated-own");
-    const response = await t.call(t.kai.id, "assets.publish", {
-      params: { kind: "app", name: "narrated-own" },
-      payload: { revision: 1, workspaceId: t.workspaceId, audience: "self" }
-    });
-    expectStatus(response, 202);
-    const held = heldSchema.parse(response.json());
-    const { summary } = z
-      .object({ review: z.object({ publishNarrative: z.object({ summary: z.string() }) }) })
-      .parse((await request(t.admin.id, held.approvalRequestId)).preview).review.publishNarrative;
-    expect(summary).toMatch(/^Offers opens for /u);
-    expect(summary).toContain(t.kai.displayLabel);
-  });
-
-  it.each(["en", "de"] as const)(
-    "keeps the draft, Details and Inbox approval available after narration fails in %s",
-    async (locale) => {
-      const name = `summary-failure-${locale}`;
-      await created(name);
-      const held = heldSchema.parse((await t.publish(t.kai.id, name, 1)).json());
-      const calls = await getTestOperationCalls(t.instance);
-      const narrator = calls.publishNarrator;
-      if (!narrator) throw new Error("The assembled test instance needs a publish narrator");
-      const failed = vi
-        .spyOn(narrator, "narrate")
-        .mockRejectedValue(new Error("private Connection error"));
-      await t.stores.users.updateUser({ clientInstanceId, userId: t.admin.id, locale });
-      try {
-        const draft = (
-          await t.expectOk(t.admin.id, "assets.get", {
-            params: { kind: "app", name },
-            query: { workspaceId: t.workspaceId, revision: "1" }
-          })
-        ).json();
-        const review = (await request(t.admin.id, held.approvalRequestId)).preview.review;
-        const summary =
-          locale === "de"
-            ? "Die Zusammenfassung konnte nicht erstellt werden. Die Details sind weiterhin verfügbar."
-            : "The summary could not be prepared. Details are still available.";
-        expect(draft.publishNarrative).toEqual({ summary, warnings: [] });
-        expect(draft.allowed).toContain("publish");
-        expect(review).toMatchObject({
-          publishNarrative: { summary, warnings: [] },
-          files: [
-            { path: "app.yaml", change: "added" },
-            { path: "index.html", change: "added" }
-          ]
-        });
-        expect(JSON.stringify(review)).not.toContain("private Connection error");
-        expectStatus(await decide(t.admin.id, held.approvalRequestId, "approve"), 200);
-        await getTestJobs(t.instance).runDue();
-        expect((await stored(name))?.publishedRevision).toBe(1);
-      } finally {
-        failed.mockRestore();
-        await t.stores.users.updateUser({ clientInstanceId, userId: t.admin.id, locale: null });
-      }
-    }
-  );
 
   it("publishes exactly the held revision once an admin approves, as the member with the admin as approver", async () => {
     await created("rates");
@@ -445,7 +411,7 @@ describe("publishing a Workflow under the shipped guardrail", () => {
     });
   };
 
-  it("makes an approver's own publish live, through the guardrail and the kind's approve right", async () => {
+  it("makes an approver's own publish live, and holds a member's as a workflow_publish request until approved", async () => {
     const t = await guarded();
 
     const published = await rootPublishes(t, "notify-clients");
@@ -465,12 +431,9 @@ describe("publishing a Workflow under the shipped guardrail", () => {
     expect(hits).toContainEqual(
       expect.objectContaining({ event: "workflow.before_publish", subjectName: "notify-clients" })
     );
-  });
 
-  // With RIGHTS-1a a member who holds the publish right and every right of the principal may
-  // publish a Workflow: under the guardrail that publish waits for a holder of workflow.approve.
-  it("holds a member's publish as a workflow_publish request, and publishes it on approval", async () => {
-    const t = await guarded();
+    // With RIGHTS-1a a member who holds the publish right and every right of the principal may
+    // publish a Workflow: under the guardrail that publish waits for a holder of workflow.approve.
     await rootPublishes(t, "notify-members");
     const notify = await t.assetId(WORKFLOW_ASSET_KIND, "notify-members");
     await t.grant(t.kai.id, "workflow.read", { assetId: notify });

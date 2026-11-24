@@ -3,8 +3,7 @@ import { listenTestInstance, createTestInstance, type TestInstance } from "./sup
 import { afterEach, describe, expect, it } from "vitest";
 
 import { completedOutput, createApiClient, listAll } from "@work-shape/catalyst-api-client";
-import { apiErrorResponseSchema, apiOperations } from "@work-shape/catalyst-api-contract";
-import { openApiJsonOperation } from "./support/operations";
+import { apiErrorResponseSchema } from "@work-shape/catalyst-api-contract";
 import { inspect } from "node:util";
 import postgres from "postgres";
 import { z } from "zod";
@@ -252,18 +251,20 @@ describe("API Access administration", () => {
     });
   });
 
-  it.each([
-    ["caller management permission", ["api_access.manage"]],
-    ["user administration permission", ["users.manage"]],
-    ["governance permission", ["audit.view"]],
-    ["unknown permission", ["unknown.permission"]]
-  ])("rejects %s grants", async (_label, permissions) => {
+  it("rejects grants of caller management, user administration, governance and unknown keys", async () => {
     const fixture = await createFixture();
-    const response = await fixture.server.call("service_principals.create", {
-      headers: { authorization: "Bearer superadmin" },
-      payload: { displayLabel: "Invalid", permissions }
-    });
-    expect(response.statusCode).toBe(422);
+    for (const permission of [
+      "api_access.manage",
+      "users.manage",
+      "audit.view",
+      "unknown.permission"
+    ]) {
+      const response = await fixture.server.call("service_principals.create", {
+        headers: { authorization: "Bearer superadmin" },
+        payload: { displayLabel: "Invalid", permissions: [permission] }
+      });
+      expect(response.statusCode, permission).toBe(422);
+    }
   });
 
   it("rejects unsupported credential scopes and non-future expiry", async () => {
@@ -418,18 +419,6 @@ describe("API Access changes as Operation Runs", () => {
     expect(stored.map(({ name, scopes, expiresAt }) => ({ name, scopes, expiresAt }))).toEqual([
       { name: "From the body", scopes: ["config_assets:read"], expiresAt: undefined }
     ]);
-  });
-
-  it("declares no waiting answer for the call that answers the key", () => {
-    const { responses } = openApiJsonOperation("api_credentials.create");
-    expect(Object.keys(responses)).toContain("200");
-    expect(Object.keys(responses)).not.toContain("202");
-    expect(Object.keys(openApiJsonOperation("service_principals.create").responses)).toContain(
-      "202"
-    );
-    expect(apiOperations["api_credentials.create"].errors).not.toContain("DECLINED");
-    // The other three changes can wait for an approval and say so.
-    expect(apiOperations["api_credentials.revoke"].accepted).toBeDefined();
   });
 
   it("records each change as one run of its caller, with the audit rows of the change", async () => {

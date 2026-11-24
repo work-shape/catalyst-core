@@ -26,7 +26,6 @@ import {
 import { platformContextSchema } from "@work-shape/catalyst-api-contract";
 import { PLATFORM_TOOL_NAMES } from "@work-shape/catalyst-client-assembly";
 import {
-  CONNECTION_DRAFT_TOOL_NAME,
   createConnectionDraftTool,
   createConnectionOfferTool,
   createPlatformDiscoveryTools
@@ -295,8 +294,8 @@ describe("the tools that find what is on the platform", () => {
     });
   });
 
-  it("marks only this conversation's workspace as current, even without build rights here", async () => {
-    const t = await fixture(false);
+  it("marks only this conversation's workspace as current, orients from what is available there, and lists no kind of a module that is off", async () => {
+    const t = await fixture(false, true);
     const shared = await t.app.call(
       "workspaces.create",
       { payload: { name: "Skill builders" } },
@@ -342,10 +341,20 @@ describe("the tools that find what is on the platform", () => {
         actions: expect.arrayContaining(["skill.write"])
       })
     ]);
-  }, 120_000);
 
-  it("orients from localized agents and published Apps available in this workspace", async () => {
-    const t = await fixture(false, true);
+    // A module that is off lists none of its kinds, and its kind is refused as one that does
+    // not exist.
+    const context = contextSchema.parse((await owner("platform.context")).answer);
+    expect(context.modules).not.toContain("workflows");
+    expect(context.kinds.map(({ kind }) => kind)).not.toContain("workflow");
+    expect(context.actions.filter((action) => action.startsWith("workflow."))).toEqual([]);
+
+    const off = await owner("platform.assets.list", { kind: "workflow" });
+    const unknown = await owner("platform.assets.list", { kind: "no-such-kind" });
+    expect(off.answer).toMatchObject({ code: "handler_failed" });
+    expect(unknown.answer).toMatchObject({ code: "handler_failed" });
+
+    // Localized agents and published Apps available in this workspace.
     t.app.stores.users.getInstanceAdminName = async () => "Mara";
     const chat = await t.conversationOf(OWNER, { locale: "de" });
     const scope = {
@@ -384,7 +393,7 @@ describe("the tools that find what is on the platform", () => {
       revision: app.revision,
       revisionId: app.activeRevisionId
     });
-    const read = z
+    const oriented = z
       .object({
         helpContact: z.object({ displayLabel: z.string() }),
         availableHere: z.object({
@@ -394,14 +403,17 @@ describe("the tools that find what is on the platform", () => {
         })
       })
       .parse((await chat("platform.context")).answer);
-    expect(read.helpContact.displayLabel).toBe("Mara");
-    expect(read.availableHere.agents).toContainEqual({ name: "test_agent", title: "Test-Helfer" });
-    expect(read.availableHere.apps).toEqual([{ name: "offered-app", title: "Angebote" }]);
+    expect(oriented.helpContact.displayLabel).toBe("Mara");
+    expect(oriented.availableHere.agents).toContainEqual({
+      name: "test_agent",
+      title: "Test-Helfer"
+    });
+    expect(oriented.availableHere.apps).toEqual([{ name: "offered-app", title: "Angebote" }]);
     const listed = foundSchema.parse(
       (await chat("platform.assets.list", { kind: "agent" })).answer
     );
     expect(listed.assets.find((asset) => asset.name === "test_agent")?.title).toBe("Test-Helfer");
-  });
+  }, 120_000);
 
   it("lets an agent in a conversation about nothing read the platform skill, see what the instance has and find the assets its user may read, and nothing of the others", async () => {
     const t = await fixture(true);
@@ -468,30 +480,11 @@ describe("the tools that find what is on the platform", () => {
     expect(hidden.answer).toEqual(missing.answer);
     const memberEveryKind = foundSchema.parse((await member("platform.assets.list", {})).answer);
     expect(memberEveryKind.assets.map(({ kind }) => kind)).not.toContain("workflow");
-  }, 120_000);
 
-  it("lists no kind of a module that is off, and refuses it as a kind that does not exist", async () => {
-    const t = await fixture(false);
-    const owner = await t.conversationOf(OWNER);
-    const context = contextSchema.parse((await owner("platform.context")).answer);
-    expect(context.modules).not.toContain("workflows");
-    expect(context.kinds.map(({ kind }) => kind)).not.toContain("workflow");
-    expect(context.actions.filter((action) => action.startsWith("workflow."))).toEqual([]);
-
-    const off = await owner("platform.assets.list", { kind: "workflow" });
-    const unknown = await owner("platform.assets.list", { kind: "no-such-kind" });
-    const refusal = (kind: string) => ({
-      code: "handler_failed",
-      message: `This platform has no kind '${kind}'. platform.context lists the kinds it has`
-    });
-    expect(off.answer).toEqual(refusal("workflow"));
-    expect(unknown.answer).toEqual(refusal("no-such-kind"));
-  }, 120_000);
-
-  it("resolves notification people by literal name or email only within the caller's rights, with bounded matches", async () => {
-    const t = await fixture(true);
-    const owner = await t.conversationOf(OWNER);
-    const member = await t.conversationOf(MEMBER);
+    // Notification people resolve by literal name or email, only within the caller's rights,
+    // with bounded matches. Fresh conversations keep each answer on the first page.
+    const asOwner = await t.conversationOf(OWNER);
+    const asMember = await t.conversationOf(MEMBER);
     await t.app.stores.apiAccess.createServicePrincipal({
       clientInstanceId: t.clientInstanceId,
       name: "summary-account",
@@ -518,31 +511,31 @@ describe("the tools that find what is on the platform", () => {
     });
     for (const query of ["ADA", "ada@example.test"]) {
       expect(
-        read.parse((await owner("platform.context", { person: query })).answer).people
+        read.parse((await asOwner("platform.context", { person: query })).answer).people
       ).toEqual([{ id: person.id, displayLabel: person.displayLabel, email: person.email }]);
       expect(
-        read.parse((await member("platform.context", { person: query })).answer).people
+        read.parse((await asMember("platform.context", { person: query })).answer).people
       ).toEqual([]);
     }
-    const self = read.parse((await member("platform.context", { person: "Member" })).answer);
+    const self = read.parse((await asMember("platform.context", { person: "Member" })).answer);
     expect(self.people).toEqual([{ id: self.caller.id, displayLabel: "Member" }]);
     expect(self.workflowPrincipals).toEqual([]);
-    expect(read.parse((await owner("platform.context")).answer).workflowPrincipals).toEqual([
+    expect(read.parse((await asOwner("platform.context")).answer).workflowPrincipals).toEqual([
       { name: "summary-account", displayLabel: "Summary account" }
     ]);
     for (const query of ["%", "_", "' OR true --", "not-a-person"])
       expect(
-        read.parse((await owner("platform.context", { person: query })).answer).people
+        read.parse((await asOwner("platform.context", { person: query })).answer).people
       ).toEqual([]);
     for (let index = 0; index < 21; index++)
       await t.app.stores.users.createUser({
         clientInstanceId: t.clientInstanceId,
         displayLabel: `Team ${index}`
       });
-    const many = read.parse((await owner("platform.context", { person: "Team" })).answer);
+    const many = read.parse((await asOwner("platform.context", { person: "Team" })).answer);
     expect(many.people).toHaveLength(20);
     expect(many.peopleTruncated).toBe(true);
-    const invalid = await owner("platform.context", { person: "\u0000" });
+    const invalid = await asOwner("platform.context", { person: "\u0000" });
     expect(invalid.answer).not.toHaveProperty("people");
   }, 120_000);
 
@@ -578,7 +571,7 @@ describe("the tools that find what is on the platform", () => {
     expect(context?.description).not.toContain("Settings > API access");
   });
 
-  it("tells an agent which kinds of Connection the instance makes and how each signs in, and drafts REST tools only for an API without the provider's sign-in", async () => {
+  it("tells an agent which kinds of Connection the instance makes and how each signs in", async () => {
     // Felix's run: asked for Gmail, the agent researched Google's OAuth documentation and drafted
     // REST tools that sign in with nothing. The instance answers which types it has instead.
     const clientInstanceId = asClientInstanceId("connector-types-client");
@@ -633,7 +626,6 @@ describe("the tools that find what is on the platform", () => {
     expect(signIn[HTTP_API_CONNECTOR_TYPE]).toEqual(
       expect.arrayContaining(["none", "oauth", "oauth_client"])
     );
-    expect(context?.description).toContain("connectorTypes lists the kinds of Connection");
 
     // Without the module, no type is told.
     const off = createPlatformDiscoveryTools(calls).find(
@@ -643,19 +635,6 @@ describe("the tools that find what is on the platform", () => {
     expect(offResult?.status === "success" ? offResult.output : undefined).not.toHaveProperty(
       "connectorTypes"
     );
-
-    // Offered entries come first; custom OAuth proposals carry their complete settings.
-    const draft = createConnectionDraftTool({
-      connectorTypes: registry,
-      connectorType: HTTP_API_CONNECTOR_TYPE
-    });
-    expect(draft.name).toBe(CONNECTION_DRAFT_TOOL_NAME);
-    expect(draft.description).toContain(
-      "If an entry fits, propose it with platform.connections.propose"
-    );
-    expect(draft.description).toContain("Otherwise propose the whole custom Connection");
-    expect(draft.description).not.toContain("once OAuth for REST APIs is available");
-    expect(draft.description).not.toMatch(/not supported yet/iu);
   });
 
   it("shows no card the person approves in an answer that still asks them something", async () => {
@@ -676,71 +655,6 @@ describe("the tools that find what is on the platform", () => {
     expect(await source("workshaper.ts")).toContain(
       "Never show one in the same answer as a question"
     );
-  });
-
-  it("finds files the agent made for the person and none it only rendered to check its work", async () => {
-    const t = await fixture(false, true);
-    const { clientInstanceId } = t;
-    const stores = t.app.stores;
-    const chat = await t.conversationOf(OWNER);
-    const conversationId = asConversationId(chat.id);
-    const workspaceFile = (path: string) => ({
-      clientInstanceId,
-      conversationId,
-      kind: "image.png",
-      objectKey: `execution-workspaces/private/${path}`,
-      filename: path.replace(/^.*\//, ""),
-      mimeType: "image/png",
-      byteSize: 3,
-      checksum: `sha256:${path}`
-    });
-    // A render the agent looked at, as workspace.preview_images stores it.
-    await stores.files.createManagedArtifact({
-      ...workspaceFile("previews/contoso_daten.png"),
-      metadata: {
-        source: "execution_workspace",
-        purpose: "inspection",
-        workspaceId: "ws-1",
-        workspacePath: "previews/contoso_daten.png"
-      }
-    });
-    // One stored before the purpose was recorded, known by its id.
-    await stores.files.ensureManagedArtifact({
-      ...workspaceFile("previews/contoso_start.png"),
-      id: asManagedArtifactId("art_workspace_preview_stored_before_the_purpose"),
-      metadata: {
-        source: "execution_workspace",
-        workspaceId: "ws-1",
-        workspacePath: "previews/contoso_start.png"
-      }
-    });
-    // A chart promoted for the person, then looked at again: the look is the newer row.
-    const promoted = await stores.files.createManagedArtifact({
-      ...workspaceFile("artifacts/umsatz_chart.png"),
-      metadata: {
-        source: "execution_workspace",
-        workspaceId: "ws-1",
-        workspacePath: "artifacts/umsatz_chart.png"
-      }
-    });
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    await stores.files.ensureManagedArtifact({
-      ...workspaceFile("artifacts/umsatz_chart.png"),
-      id: asManagedArtifactId("art_workspace_preview_looked_at_the_chart"),
-      metadata: {
-        source: "execution_workspace",
-        purpose: "inspection",
-        workspaceId: "ws-1",
-        workspacePath: "artifacts/umsatz_chart.png"
-      }
-    });
-
-    const found = filesSchema.parse(
-      (await chat("platform.files.list", { kind: "generated_file" })).answer
-    );
-    expect(found.files.map(({ id, name }) => ({ id, name }))).toEqual([
-      { id: promoted.id, name: "umsatz_chart.png" }
-    ]);
   });
 
   it("finds the Pages and files of every conversation of the workspace the user may read, from any chat, and nothing else", async () => {
@@ -897,5 +811,66 @@ describe("the tools that find what is on the platform", () => {
     ]);
     expect((await list(MEMBER, diary.collaborationWorkspaceId)).statusCode).toBe(404);
     expect((await list(MEMBER, workspaceId, { text: "tax\u0000" })).statusCode).toBe(422);
+
+    // Files the agent made for the person are found; none it only rendered to check its work.
+    const chat = await t.conversationOf(OWNER);
+    const conversationId = asConversationId(chat.id);
+    const workspaceFile = (path: string) => ({
+      clientInstanceId,
+      conversationId,
+      kind: "image.png",
+      objectKey: `execution-workspaces/private/${path}`,
+      filename: path.replace(/^.*\//, ""),
+      mimeType: "image/png",
+      byteSize: 3,
+      checksum: `sha256:${path}`
+    });
+    // A render the agent looked at, as workspace.preview_images stores it.
+    await stores.files.createManagedArtifact({
+      ...workspaceFile("previews/contoso_daten.png"),
+      metadata: {
+        source: "execution_workspace",
+        purpose: "inspection",
+        workspaceId: "ws-1",
+        workspacePath: "previews/contoso_daten.png"
+      }
+    });
+    // One stored before the purpose was recorded, known by its id.
+    await stores.files.ensureManagedArtifact({
+      ...workspaceFile("previews/contoso_start.png"),
+      id: asManagedArtifactId("art_workspace_preview_stored_before_the_purpose"),
+      metadata: {
+        source: "execution_workspace",
+        workspaceId: "ws-1",
+        workspacePath: "previews/contoso_start.png"
+      }
+    });
+    // A chart promoted for the person, then looked at again: the look is the newer row.
+    const promoted = await stores.files.createManagedArtifact({
+      ...workspaceFile("artifacts/umsatz_chart.png"),
+      metadata: {
+        source: "execution_workspace",
+        workspaceId: "ws-1",
+        workspacePath: "artifacts/umsatz_chart.png"
+      }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await stores.files.ensureManagedArtifact({
+      ...workspaceFile("artifacts/umsatz_chart.png"),
+      id: asManagedArtifactId("art_workspace_preview_looked_at_the_chart"),
+      metadata: {
+        source: "execution_workspace",
+        purpose: "inspection",
+        workspaceId: "ws-1",
+        workspacePath: "artifacts/umsatz_chart.png"
+      }
+    });
+
+    const found = filesSchema.parse(
+      (await chat("platform.files.list", { kind: "generated_file" })).answer
+    );
+    expect(found.files.map(({ id, name }) => ({ id, name }))).toEqual([
+      { id: promoted.id, name: "umsatz_chart.png" }
+    ]);
   }, 180_000);
 });
