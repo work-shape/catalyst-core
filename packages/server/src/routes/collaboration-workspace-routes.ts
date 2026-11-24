@@ -21,6 +21,7 @@ import { APP_ACTIONS, APP_ASSET_KIND } from "../apps/app-kind";
 import { accessResource } from "../assets/asset-access";
 import { listedTo } from "../assets/asset-read-service";
 import { agentConnections } from "../connections/agent-connections";
+import { agentKnowledgeBases } from "../knowledge/agent-knowledge-bases";
 import { pageScope, paginate } from "../http/paging";
 import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
@@ -217,6 +218,7 @@ export function registerCollaborationWorkspaceRoutes(
         reasoningEffortsOfBinding: (bindingId: string) =>
           options.modelGateway.capabilities({ bindingId }).reasoningEfforts,
         connections: await agentConnections(options),
+        knowledgeBases: await agentKnowledgeBases(options, access),
         mayWriteAgent: agentWriter({ user, access }, assets)
       };
       const { defaultAgentName, agents } = createSafeConfigView(

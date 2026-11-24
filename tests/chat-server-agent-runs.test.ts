@@ -1234,6 +1234,7 @@ describe("agent availability per Collaboration Workspace", () => {
         "connections",
         "displayName",
         "initialPrompts",
+        "knowledgeBases",
         "name",
         "selectableModels",
         "starters"

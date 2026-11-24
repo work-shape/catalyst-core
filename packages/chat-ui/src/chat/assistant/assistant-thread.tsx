@@ -5,12 +5,14 @@ import {
   useAuiState,
   useThreadViewportStore
 } from "@assistant-ui/react";
-import { ArrowDown, CircleAlert, Info, Lock } from "lucide-react";
+import { ArrowDown, CircleAlert, Info, Library, Lock } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, type ReactNode, type RefObject } from "react";
 import type { DraftAttachment, SafeConfig } from "@work-shape/catalyst-api-client";
 import {
   Banner,
   Button,
+  Chip,
+  ChipList,
   cn,
   SkillIcon,
   Spinner,
@@ -501,6 +503,7 @@ export function AssistantThread({
               <ThreadStartBlock
                 initialPrompts={initialPrompts}
                 starters={agent?.starters ?? []}
+                knowledgeBases={agent?.knowledgeBases ?? []}
                 start={start}
                 onStarterChosen={() => {
                   // The request stands in the composer now: the person goes on writing there.
@@ -677,18 +680,21 @@ export function ThreadWelcomeHeading({
 }
 
 /**
- * What the start page offers under the composer: the starters, then the agent's own prompts,
+ * What the start page offers under the composer: the agent's Knowledge Bases as quiet labels, the starters, then the agent's own prompts,
  * all in one list of the same cards. A conversation about an asset, or about a new one, offers
  * what a person asks of that instead, and never the agent's own prompts.
  */
 export function ThreadStartBlock({
   initialPrompts,
   starters,
+  knowledgeBases = [],
   start,
   onStarterChosen
 }: {
   initialPrompts: Array<{ title: string; prompt: string; icon?: string }>;
   starters: NonNullable<SafeConfig["agents"][number]["starters"]>;
+  /** The Knowledge Bases the agent answers from that the person may read. */
+  knowledgeBases?: NonNullable<SafeConfig["agents"][number]["knowledgeBases"]>;
   /** What the conversation is for: an asset, or a new one of a kind. */
   start?: ConversationStart;
   onStarterChosen(): void;
@@ -719,6 +725,28 @@ export function ThreadStartBlock({
   const iconSize = initialPrompts.length + starters.length > 4 ? "md" : "lg";
   return (
     <div className="grid flex-[3] basis-0 content-start gap-5 pb-8 pt-2">
+      {/* What the agent answers from, as labels that stand back behind the requests below:
+          they send nothing, and each says on hover or focus what it holds. They keep to one
+          line at any width; those without room stand behind "+3". */}
+      <ChipList
+        label={t("chatKnowledge")}
+        tone="quiet"
+        moreLabel={(count) => t("chatKnowledgeMore", { count })}
+        className="justify-center"
+      >
+        {knowledgeBases.map((knowledgeBase) => (
+          <Chip
+            key={knowledgeBase.name}
+            tone="quiet"
+            className="max-w-64"
+            leading={<Library aria-hidden="true" />}
+            description={knowledgeBase.description}
+            accessibleLabel={t("chatKnowledgeTag", { title: knowledgeBase.title })}
+          >
+            {knowledgeBase.title}
+          </Chip>
+        ))}
+      </ChipList>
       {/* The requests the agent's author wrote, then what its skills offer to begin with: twelve
           at most, which the server keeps. Choosing one fills the composer and sends nothing, so
           the person reads and completes the request first. */}

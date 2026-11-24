@@ -80,6 +80,16 @@ export interface PopoverContentProps extends HTMLAttributes<HTMLDivElement> {
    * such as a panel beside a menu, calls `preventDefault()` to close that level instead.
    */
   onEscapeKeyDown?(event: KeyboardEvent): void;
+  /**
+   * Called as the popover opens, before focus moves to the first control in it.
+   * `preventDefault()` leaves focus where it is, for content that takes it itself.
+   */
+  onOpenAutoFocus?(event: Event): void;
+  /**
+   * Called as the popover closes, before focus returns to the trigger. `preventDefault()`
+   * leaves focus where it is.
+   */
+  onCloseAutoFocus?(event: Event): void;
   side?: PopoverSide;
   align?: "start" | "center" | "end";
   sideOffset?: number;

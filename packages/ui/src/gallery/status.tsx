@@ -6,6 +6,7 @@ import {
   Inbox,
   KeyRound,
   LayoutGrid,
+  Library,
   Shield,
   Users,
   X
@@ -16,7 +17,7 @@ import { Spinner } from "../feedback/spinner";
 import { Avatar, type AvatarKind, type AvatarSize } from "../status/avatar";
 import { AvatarStack } from "../status/avatar-stack";
 import { Badge, type BadgeAppearance, type BadgeTone } from "../status/badge";
-import { Chip, ChipAction, ScopeChip, type ChipSize } from "../status/chip";
+import { Chip, ChipAction, ChipList, ScopeChip, type ChipSize } from "../status/chip";
 import { CountBadge, type CountBadgeTone } from "../status/count-badge";
 import { fileTypeIcons } from "../status/file-type-icons";
 import {
@@ -272,7 +273,7 @@ export const statusGallery: GalleryGroup = {
     },
     {
       name: "Chip",
-      components: ["Chip", "ChipAction", "ScopeChip"],
+      components: ["Chip", "ChipAction", "ChipList", "ScopeChip"],
       render: (text) => (
         <>
           {chipSizes.map((size) => (
@@ -313,6 +314,29 @@ export const statusGallery: GalleryGroup = {
             </Samples>
           ))}
           <RemovableChips text={text} />
+          <Samples label="quiet">
+            <div className="w-72">
+              <ChipList label={text.chipKnowledge} tone="quiet" moreLabel={() => text.chipShowMore}>
+                {[
+                  text.rowKnowledge,
+                  text.workspaceMarketing,
+                  text.workspaceFinance,
+                  text.workspaceLegal,
+                  text.groupEditors
+                ].map((title) => (
+                  <Chip
+                    key={title}
+                    tone="quiet"
+                    leading={<Library aria-hidden="true" />}
+                    description={text.chipKnowledgeAbout}
+                    accessibleLabel={`${text.chipKnowledge}: ${title}`}
+                  >
+                    {title}
+                  </Chip>
+                ))}
+              </ChipList>
+            </div>
+          </Samples>
           <Samples label="ScopeChip">
             <ScopeChip scope="instance" name={text.instanceName} />
             <ScopeChip scope="instance" name={text.instanceName} readOnlyLabel={text.readOnly} />
