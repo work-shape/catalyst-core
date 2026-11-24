@@ -317,7 +317,10 @@ export const unusedWorkflowNoticesStore: WorkflowNoticesStore = {
   publisher: unsupported,
   publishedByCredential: unsupported,
   failureCount: unsupported,
-  markNotified: unsupported
+  markNotified: unsupported,
+  openFailureNotice: unsupported,
+  updateFailureNotice: unsupported,
+  linkFailureNotice: unsupported
 };
 export const unusedOperationRegistry: OperationRegistry = {
   register: unsupported,

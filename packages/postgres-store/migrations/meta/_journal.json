@@ -1464,6 +1464,20 @@
       "when": 1795119372394,
       "tag": "0208_tool_code_call_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 209,
+      "version": "7",
+      "when": 1795513726893,
+      "tag": "0209_workflow_failure_notice_coalesce",
+      "breakpoints": true
+    },
+    {
+      "idx": 210,
+      "version": "7",
+      "when": 1795513728723,
+      "tag": "0210_workflow_failure_notice_index",
+      "breakpoints": true
     }
   ]
 }

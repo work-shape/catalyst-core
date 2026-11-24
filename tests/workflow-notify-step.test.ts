@@ -328,6 +328,110 @@ describe("Workflow notify steps and grouped failure notices", () => {
     ]);
   });
 
+  describe("one open failure notice per Workflow and publisher", () => {
+    const failing = (id: string) => ({
+      ...definition(id, []),
+      outputs: {
+        type: "object",
+        required: ["missing"],
+        properties: { missing: { type: "string" } }
+      }
+    });
+    async function fail(
+      t: WorkflowFixture,
+      workflow: string,
+      worker: ReturnType<WorkflowFixture["worker"]>
+    ) {
+      const run = runSchema.parse(
+        (
+          await t.expectOk(t.root.id, "workflows.start", {
+            params: { workflow },
+            payload: { input: {} }
+          })
+        ).json()
+      );
+      expect((await t.finish(run.id, worker)).status).toBe("failed");
+      await worker.runDue();
+      return run.id;
+    }
+    async function open(t: WorkflowFixture) {
+      const listed = z
+        .object({
+          items: z.array(
+            z
+              .object({
+                id: z.string(),
+                status: z.string(),
+                summary: z.string(),
+                preview: z
+                  .object({
+                    text: z.string(),
+                    link: z.object({ workflowId: z.string(), runId: z.string() }).loose()
+                  })
+                  .loose()
+              })
+              .loose()
+          )
+        })
+        .parse((await t.expectOk(t.root.id, "approval_requests.list")).json()).items;
+      return listed.filter((item) => item.status === "pending");
+    }
+
+    it("counts a second failing run into the open notice, links it and moves it to the top, per Workflow", async () => {
+      const t = await ready();
+      await save(t, failing("hourly-a"));
+      await save(t, failing("hourly-b"));
+      const worker = t.worker();
+      await fail(t, "hourly-a", worker);
+      await fail(t, "hourly-b", worker);
+      const latest = await fail(t, "hourly-a", worker);
+      expect(await open(t)).toMatchObject([
+        {
+          summary: "Workflow runs need attention",
+          preview: {
+            text: "2 runs failed, reached a limit or have failed entries. Open the run to review them.",
+            link: { workflowId: "hourly-a", runId: latest }
+          }
+        },
+        {
+          summary: "A Workflow run needs attention",
+          preview: { link: { workflowId: "hourly-b" } }
+        }
+      ]);
+    }, 120_000);
+
+    it("opens a fresh notice for the next failing run once the person marked it handled", async () => {
+      const t = await ready();
+      await save(t, failing("hourly-c"));
+      const worker = t.worker();
+      await fail(t, "hourly-c", worker);
+      await fail(t, "hourly-c", worker);
+      const [first] = await open(t);
+      await t.expectOk(t.root.id, "approval_requests.decide", {
+        params: { requestId: required(first).id },
+        payload: { decision: "approve" }
+      });
+      expect(await open(t)).toEqual([]);
+      const next = await fail(t, "hourly-c", worker);
+      const fresh = await open(t);
+      expect(fresh).toMatchObject([
+        {
+          summary: "A Workflow run needs attention",
+          preview: {
+            text: "1 run failed, reached a limit or has failed entries. Open the run to review it.",
+            link: { runId: next }
+          }
+        }
+      ]);
+      expect(required(fresh[0]).id).not.toBe(required(first).id);
+      // A later failing run counts into the fresh notice, not the handled one.
+      await fail(t, "hourly-c", worker);
+      expect(await open(t)).toMatchObject([
+        { id: required(fresh[0]).id, preview: { text: expect.stringMatching(/^2 runs/u) } }
+      ]);
+    }, 120_000);
+  });
+
   it("creates exactly one notice for five failed children even when the root failure job runs twice", async () => {
     const t = await ready();
     const child = {

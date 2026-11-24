@@ -4,6 +4,7 @@ import {
   defineJobKind,
   isWorkflowRunEnded,
   type ClientInstanceId,
+  type JsonObject,
   type LocaleCode,
   type Notices,
   type PlatformStores,
@@ -54,6 +55,7 @@ export function createFailureNotices(options: {
   notices?: (stores: PlatformStores) => Notices;
   /** The instance's default language, for a publisher who chose none. English when left out. */
   locale?: LocaleCode;
+  now?: () => Date;
 }) {
   const { clientInstanceId } = options;
   return defineJobHandler({
@@ -81,20 +83,71 @@ export function createFailureNotices(options: {
         if (!user || user.status !== "active") return;
         const notices = options.notices?.(tx);
         if (!notices) throw new Error("The instance has no notice sender");
-        if (!(await tx.workflowNotices.markNotified({ clientInstanceId, rootRunId }))) return;
+        const marked = await tx.workflowNotices.markNotified({
+          clientInstanceId,
+          rootRunId,
+          failures: count
+        });
+        if (!marked) return;
+        const copy = failureCopy[user.locale ?? options.locale ?? "en"];
+        // While the person has not marked the Workflow's last failure notice handled, a later
+        // failing run updates it: one notice per Workflow, counting every failing run since it
+        // was opened, linking the newest run and standing at the top of the Inbox.
+        const open = await tx.workflowNotices.openFailureNotice({
+          clientInstanceId,
+          workflowId: root.workflow,
+          userId: user.id
+        });
+        const link = open && openLink(open.payload);
+        if (open && link) {
+          const { title, text } = copy(open.failures + count);
+          const updated = await tx.workflowNotices.updateFailureNotice({
+            clientInstanceId,
+            noticeId: open.noticeId,
+            summary: title,
+            payload: { title, text, link: { ...link, runId: root.id } },
+            at: (options.now?.() ?? new Date()).toISOString()
+          });
+          if (updated) {
+            await tx.workflowNotices.linkFailureNotice({
+              clientInstanceId,
+              rootRunId,
+              noticeId: open.noticeId
+            });
+            return;
+          }
+        }
+        let noticeId: string | undefined;
         await notices.send(
           {
             from: failureSender(root),
             to: { users: [publisher] },
-            ...failureCopy[user.locale ?? options.locale ?? "en"](count),
+            ...copy(count),
             channels: ["inbox"],
             link: { kind: "workflow_run", workflowId: root.workflow, runId: root.id }
           },
-          { correlationId: root.correlationId }
+          {
+            correlationId: root.correlationId,
+            created: (item) => {
+              noticeId = item.id;
+            }
+          }
         );
+        if (noticeId)
+          await tx.workflowNotices.linkFailureNotice({ clientInstanceId, rootRunId, noticeId });
       });
     }
   });
+}
+
+/** The run link an open failure notice holds, with the workspace it resolved for its person. */
+function openLink(payload: JsonObject) {
+  const link = payload.link;
+  if (typeof link !== "object" || link === null || Array.isArray(link)) return undefined;
+  const { kind, workspaceId, workflowId } = link;
+  if (kind !== "workflow_run" || typeof workspaceId !== "string" || typeof workflowId !== "string")
+    return undefined;
+  return { kind, workspaceId, workflowId };
 }
 
 function failureSender(run: WorkflowRun) {

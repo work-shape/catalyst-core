@@ -1,10 +1,11 @@
 import { countWorkflowFailures } from "./postgres-workflow-failure-counts";
-import { and, desc, eq } from "drizzle-orm";
-import { asUserId, type WorkflowNoticesStore } from "@work-shape/catalyst-core";
+import { and, desc, eq, sql, sum } from "drizzle-orm";
+import { NOTICE_KIND, asUserId, type WorkflowNoticesStore } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import {
   workflowRevisionPublishers as publishers,
   workflowFailureNotices as notices,
+  approvalRequests,
   configAssetPublications,
   configAssetRevisions
 } from "./schema";
@@ -69,6 +70,70 @@ export function createPostgresWorkflowNoticesStore(db: PostgresConnection): Work
         .onConflictDoNothing()
         .returning({ id: notices.rootRunId });
       return rows.length === 1;
+    },
+    async openFailureNotice(input) {
+      const key = JSON.stringify([
+        "workflow-failure-notice",
+        input.clientInstanceId,
+        input.workflowId,
+        input.userId
+      ]);
+      await db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
+      // Only a notice a failure marker names is a failure notice: a notify step's notice to the
+      // same person about the same Workflow is never reworded.
+      const [open] = await db
+        .select({ noticeId: approvalRequests.id, payload: approvalRequests.payload })
+        .from(approvalRequests)
+        .where(
+          and(
+            eq(approvalRequests.clientInstanceId, input.clientInstanceId),
+            eq(approvalRequests.addresseeUserId, input.userId),
+            eq(approvalRequests.status, "pending"),
+            eq(approvalRequests.kind, NOTICE_KIND),
+            sql`${approvalRequests.payload}->'link'->>'workflowId' = ${input.workflowId}`,
+            sql`exists (select 1 from ${notices} where ${notices.noticeId} = ${approvalRequests.id})`
+          )
+        )
+        .orderBy(desc(approvalRequests.createdAt), desc(approvalRequests.id))
+        .limit(1)
+        .for("update");
+      if (!open) return undefined;
+      const [counted] = await db
+        .select({ failures: sum(notices.failures).mapWith(Number) })
+        .from(notices)
+        .where(
+          and(
+            eq(notices.clientInstanceId, input.clientInstanceId),
+            eq(notices.noticeId, open.noticeId)
+          )
+        );
+      return { ...open, failures: counted?.failures ?? 0 };
+    },
+    async updateFailureNotice(input) {
+      const at = new Date(input.at);
+      const rows = await db
+        .update(approvalRequests)
+        .set({ summary: input.summary, payload: input.payload, createdAt: at, updatedAt: at })
+        .where(
+          and(
+            eq(approvalRequests.clientInstanceId, input.clientInstanceId),
+            eq(approvalRequests.id, input.noticeId),
+            eq(approvalRequests.status, "pending")
+          )
+        )
+        .returning({ id: approvalRequests.id });
+      return rows.length === 1;
+    },
+    async linkFailureNotice(input) {
+      await db
+        .update(notices)
+        .set({ noticeId: input.noticeId })
+        .where(
+          and(
+            eq(notices.clientInstanceId, input.clientInstanceId),
+            eq(notices.rootRunId, input.rootRunId)
+          )
+        );
     }
   };
 }
