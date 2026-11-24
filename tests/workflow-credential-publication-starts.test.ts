@@ -123,74 +123,91 @@ const KEEPER = {
   ]
 };
 
-describe("a Workflow a credential published, at its start", () => {
-  let open: WorkflowFixture | undefined;
-  afterEach(async () => {
-    await open?.instance.close();
-    open = undefined;
+let open: WorkflowFixture | undefined;
+afterEach(async () => {
+  await open?.instance.close();
+  open = undefined;
+});
+
+/** An instance with personal keys, its runner allowed to start Workflows, and a key. */
+async function ready(options: Parameters<typeof readyWorkflows>[1] = {}) {
+  const t = await readyWorkflows(
+    (fixture) => {
+      open = fixture;
+    },
+    { personalKeys: true, definitions: "assets", ...options }
+  );
+  await t.allow({ kind: "service_principal", id: t.principal.id }, "workflow.use");
+  const key = await personalKeyToken(t, (await issuePersonalKey(t, SCOPES, t.root.id)).secret);
+  return { t, key };
+}
+
+/** The Connection's `echo`, and `write` where asked, open to outside clients or not. */
+const expose = (t: WorkflowFixture, connection: string, outside: boolean, writes = false) => {
+  const exposure = outside ? ["workflow", "outside"] : ["workflow"];
+  return t.seed(connection, {
+    displayName: connection,
+    operations: [
+      operationOf("echo", { exposure }),
+      ...(writes ? [operationOf("write", { effect: "changing", exposure })] : [])
+    ]
+  });
+};
+
+/** Writes the definition as a draft and publishes it, by the key where given. */
+async function publish(
+  t: WorkflowFixture,
+  manifest: { id: string } & Record<string, unknown>,
+  headers?: Record<string, string>
+) {
+  const current = await t.call(t.root.id, "assets.get", {
+    params: { kind: WORKFLOW_ASSET_KIND, name: manifest.id }
+  });
+  const written = await t.call(t.root.id, "assets.put", {
+    params: { kind: WORKFLOW_ASSET_KIND, name: manifest.id },
+    payload: {
+      config: { name: manifest.id, manifest },
+      expectedRevision:
+        current.statusCode === 200 ? revisionSchema.parse(current.json()).revision : null
+    },
+    ...(headers ? { headers } : {})
+  });
+  expect(written.statusCode, written.body).toBe(200);
+  const { revision } = revisionSchema.parse(written.json());
+  return { revision, response: await again(t, manifest.id, revision, headers) };
+}
+
+/** Publishes the revision once more, by the key where given. */
+const again = (
+  t: WorkflowFixture,
+  name: string,
+  revision: number,
+  headers?: Record<string, string>
+) =>
+  t.call(t.root.id, "assets.publish", {
+    params: { kind: WORKFLOW_ASSET_KIND, name },
+    payload: { revision },
+    ...(headers ? { headers } : {})
   });
 
-  const ready = async (now?: () => Date) => {
-    const t = await readyWorkflows(
-      (fixture) => {
-        open = fixture;
-      },
-      { personalKeys: true, definitions: "assets", ...(now ? { now } : {}) }
-    );
-    await t.allow({ kind: "service_principal", id: t.principal.id }, "workflow.use");
-    await expose(t, "crm", true);
+const ok = (response: { statusCode: number; body: string }) =>
+  expect(response.statusCode, response.body).toBe(200);
+
+/** Publishes and expects the publish to go live. */
+const published = async (
+  t: WorkflowFixture,
+  manifest: { id: string } & Record<string, unknown>,
+  headers?: Record<string, string>
+) => ok((await publish(t, manifest, headers)).response);
+
+describe("a Workflow a credential published, at its start", () => {
+  const withCrmAndHr = async (now?: () => Date) => {
+    const keyed = await ready(now ? { now } : {});
+    await expose(keyed.t, "crm", true);
     // hr is the Connection whose admin keeps it from outside clients.
-    await expose(t, "hr", false);
-    const key = personalKeyToken(t, (await issuePersonalKey(t, SCOPES, t.root.id)).secret);
-    return { t, key: await key };
+    await expose(keyed.t, "hr", false);
+    return keyed;
   };
-
-  const expose = (t: WorkflowFixture, connection: string, outside: boolean) =>
-    t.seed(connection, {
-      displayName: connection,
-      operations: [
-        operationOf("echo", { exposure: outside ? ["workflow", "outside"] : ["workflow"] })
-      ]
-    });
-
-  /** Writes the definition as a draft and publishes it, by the key where given. */
-  async function publish(
-    t: WorkflowFixture,
-    manifest: { id: string } & Record<string, unknown>,
-    headers?: Record<string, string>
-  ) {
-    const current = await t.call(t.root.id, "assets.get", {
-      params: { kind: WORKFLOW_ASSET_KIND, name: manifest.id }
-    });
-    const written = await t.call(t.root.id, "assets.put", {
-      params: { kind: WORKFLOW_ASSET_KIND, name: manifest.id },
-      payload: {
-        config: { name: manifest.id, manifest },
-        expectedRevision:
-          current.statusCode === 200 ? revisionSchema.parse(current.json()).revision : null
-      },
-      ...(headers ? { headers } : {})
-    });
-    expect(written.statusCode, written.body).toBe(200);
-    const { revision } = revisionSchema.parse(written.json());
-    return { revision, response: await again(t, manifest.id, revision, headers) };
-  }
-
-  /** Publishes the revision once more, by the key where given. */
-  const again = (
-    t: WorkflowFixture,
-    name: string,
-    revision: number,
-    headers?: Record<string, string>
-  ) =>
-    t.call(t.root.id, "assets.publish", {
-      params: { kind: WORKFLOW_ASSET_KIND, name },
-      payload: { revision },
-      ...(headers ? { headers } : {})
-    });
-
-  const ok = (response: { statusCode: number; body: string }) =>
-    expect(response.statusCode, response.body).toBe(200);
 
   const start = (t: WorkflowFixture, workflow: string) =>
     t.call(t.root.id, "workflows.start", {
@@ -216,7 +233,7 @@ describe("a Workflow a credential published, at its start", () => {
   const runOf = (response: { json(): unknown }) => runSchema.parse(response.json());
 
   it("refuses the start once a person re-publishes its child to read a closed Connection", async () => {
-    const { t, key } = await ready();
+    const { t, key } = await withCrmAndHr();
     ok((await publish(t, reader("read-clients", "crm", [{ kind: "parent" }]))).response);
     const parent = relay("copy-clients", "read-clients", [{ kind: "manual" }]);
     ok((await publish(t, parent, key)).response);
@@ -245,7 +262,7 @@ describe("a Workflow a credential published, at its start", () => {
   });
 
   it("skips its schedule once outside is taken off an operation it calls", async () => {
-    const { t, key } = await ready(() => NOW);
+    const { t, key } = await withCrmAndHr(() => NOW);
     const scheduled = reader("copy-clients", "crm", [
       { kind: "schedule", cron: "0 * * * *" },
       { kind: "manual" }
@@ -281,81 +298,15 @@ describe("a Workflow a credential published, at its start", () => {
       )
     ).toContain("schedule");
   });
-
-  it("starts as before what a key published that reaches only open data, and what a person published that reads closed data", async () => {
-    const { t, key } = await ready();
-    ok((await publish(t, reader("open-clients", "crm", [{ kind: "manual" }]), key)).response);
-    const byKey = await start(t, "open-clients");
-    ok(byKey);
-    expect((await t.finish(runOf(byKey).id)).status).toBe("done");
-
-    ok((await publish(t, reader("hr-clients", "hr", [{ kind: "manual" }]))).response);
-    const byPerson = await start(t, "hr-clients");
-    ok(byPerson);
-    expect((await t.finish(runOf(byPerson).id)).status).toBe("done");
-  });
 });
 
 describe("a child a credential published, and the Workflows that start it", () => {
-  let open: WorkflowFixture | undefined;
-  afterEach(async () => {
-    await open?.instance.close();
-    open = undefined;
-  });
-
-  const ready = async () => {
-    const t = await readyWorkflows(
-      (fixture) => {
-        open = fixture;
-      },
-      { personalKeys: true, definitions: "assets" }
-    );
-    await t.allow({ kind: "service_principal", id: t.principal.id }, "workflow.use");
-    await expose(t, "crm", true);
-    await expose(t, "hr", false);
-    const key = personalKeyToken(t, (await issuePersonalKey(t, SCOPES, t.root.id)).secret);
-    return { t, key: await key };
+  const withCrmAndHr = async () => {
+    const keyed = await ready();
+    await expose(keyed.t, "crm", true);
+    await expose(keyed.t, "hr", false);
+    return keyed;
   };
-
-  const expose = (t: WorkflowFixture, connection: string, outside: boolean) =>
-    t.seed(connection, {
-      displayName: connection,
-      operations: [
-        operationOf("echo", { exposure: outside ? ["workflow", "outside"] : ["workflow"] })
-      ]
-    });
-
-  async function publish(
-    t: WorkflowFixture,
-    manifest: { id: string } & Record<string, unknown>,
-    headers?: Record<string, string>
-  ) {
-    const current = await t.call(t.root.id, "assets.get", {
-      params: { kind: WORKFLOW_ASSET_KIND, name: manifest.id }
-    });
-    const written = await t.call(t.root.id, "assets.put", {
-      params: { kind: WORKFLOW_ASSET_KIND, name: manifest.id },
-      payload: {
-        config: { name: manifest.id, manifest },
-        expectedRevision:
-          current.statusCode === 200 ? revisionSchema.parse(current.json()).revision : null
-      },
-      ...(headers ? { headers } : {})
-    });
-    expect(written.statusCode, written.body).toBe(200);
-    const { revision } = revisionSchema.parse(written.json());
-    return {
-      revision,
-      response: await t.call(t.root.id, "assets.publish", {
-        params: { kind: WORKFLOW_ASSET_KIND, name: manifest.id },
-        payload: { revision },
-        ...(headers ? { headers } : {})
-      })
-    };
-  }
-
-  const ok = (response: { statusCode: number; body: string }) =>
-    expect(response.statusCode, response.body).toBe(200);
 
   const expectCallersRefused = (
     response: { statusCode: number; body: string; json(): unknown },
@@ -371,7 +322,7 @@ describe("a child a credential published, and the Workflows that start it", () =
   };
 
   it("refuses a key's publish of a child that a live Workflow reading a closed Connection starts", async () => {
-    const { t, key } = await ready();
+    const { t, key } = await withCrmAndHr();
     ok((await publish(t, KEEPER)).response);
     ok((await publish(t, reader("copy-hr", "hr", [{ kind: "manual" }], "keep-clients"))).response);
     // The child reads nothing itself: its own reach is open, its parent's is not.
@@ -386,7 +337,7 @@ describe("a child a credential published, and the Workflows that start it", () =
   });
 
   it("refuses it through a Workflow between, and names only Workflows the key may read", async () => {
-    const { t, key } = await ready();
+    const { t, key } = await withCrmAndHr();
     ok((await publish(t, KEEPER)).response);
     ok((await publish(t, relay("relay-clients", "keep-clients"))).response);
     ok((await publish(t, reader("copy-hr", "hr", [{ kind: "manual" }], "relay-clients"))).response);
@@ -396,7 +347,7 @@ describe("a child a credential published, and the Workflows that start it", () =
   });
 
   it("lets a key publish a child that only Workflows reaching open data start", async () => {
-    const { t, key } = await ready();
+    const { t, key } = await withCrmAndHr();
     ok((await publish(t, KEEPER)).response);
     ok(
       (await publish(t, reader("copy-crm", "crm", [{ kind: "manual" }], "keep-clients"))).response
@@ -411,7 +362,7 @@ describe("a child a credential published, and the Workflows that start it", () =
   });
 
   it("refuses the child's start from a parent a person later published to read a closed Connection", async () => {
-    const { t, key } = await ready();
+    const { t, key } = await withCrmAndHr();
     ok((await publish(t, KEEPER)).response);
     ok(
       (await publish(t, reader("copy-clients", "crm", [{ kind: "manual" }], "keep-clients")))
@@ -455,7 +406,7 @@ describe("a child a credential published, and the Workflows that start it", () =
   });
 
   it("walks past a run an operation step started, to the run whose step started it", async () => {
-    const { t, key } = await ready();
+    const { t, key } = await withCrmAndHr();
     ok((await publish(t, KEEPER)).response);
     ok((await publish(t, relay("relay-clients", "keep-clients", [{ kind: "manual" }]))).response);
     // Only the relay starts the child, and it reaches open data: the key publishes the child.
@@ -504,12 +455,6 @@ describe("a child a credential published, and the Workflows that start it", () =
 });
 
 describe("a continuation of a child a credential published", () => {
-  let open: WorkflowFixture | undefined;
-  afterEach(async () => {
-    await open?.instance.close();
-    open = undefined;
-  });
-
   /** Writes erp's clients in histories of five step runs, each the next continuation. */
   function continuing() {
     const base = z
@@ -570,46 +515,15 @@ describe("a continuation of a child a credential published", () => {
   };
 
   it("fails the next history once a run that started it reads data closed to outside clients", async () => {
-    const t = await readyWorkflows(
-      (fixture) => {
-        open = fixture;
-      },
-      { personalKeys: true, definitions: "assets", datasetObjects: new MemoryObjectStorage() }
-    );
-    await t.allow({ kind: "service_principal", id: t.principal.id }, "workflow.use");
+    const { t, key } = await ready({ datasetObjects: new MemoryObjectStorage() });
     t.state.centralSettings = [
       { operation: "connection.crm.write", value: "allow" },
       { operation: "connection.erp.write", value: "allow" }
     ];
-    const expose = (connection: string, outside: boolean) => {
-      const exposure = outside ? ["workflow", "outside"] : ["workflow"];
-      return t.seed(connection, {
-        displayName: connection,
-        operations: [
-          operationOf("echo", { exposure }),
-          operationOf("write", { effect: "changing", exposure })
-        ]
-      });
-    };
-    await expose("crm", true);
-    await expose("erp", true);
-    const key = await personalKeyToken(t, (await issuePersonalKey(t, SCOPES, t.root.id)).secret);
-    const publish = async (manifest: { id: string }, headers?: Record<string, string>) => {
-      const written = await t.call(t.root.id, "assets.put", {
-        params: { kind: WORKFLOW_ASSET_KIND, name: manifest.id },
-        payload: { config: { name: manifest.id, manifest }, expectedRevision: null },
-        ...(headers ? { headers } : {})
-      });
-      expect(written.statusCode, written.body).toBe(200);
-      const published = await t.call(t.root.id, "assets.publish", {
-        params: { kind: WORKFLOW_ASSET_KIND, name: manifest.id },
-        payload: { revision: revisionSchema.parse(written.json()).revision },
-        ...(headers ? { headers } : {})
-      });
-      expect(published.statusCode, published.body).toBe(200);
-    };
-    await publish(continuing(), key);
-    await publish(parent);
+    await expose(t, "crm", true, true);
+    await expose(t, "erp", true, true);
+    await published(t, continuing(), key);
+    await published(t, parent);
     const started = await t.call(t.root.id, "workflows.start", {
       params: { workflow: "read-then-keep" },
       payload: { input: { note: NOTE } }
@@ -623,7 +537,7 @@ describe("a continuation of a child a credential published", () => {
     for (let pass = 0; pass < 50 && (await histories()).length === 0; pass++) await worker.runDue();
     expect(await histories()).toHaveLength(1);
     // crm's admin takes outside back while the child's first history runs.
-    await expose("crm", false);
+    await expose(t, "crm", false, true);
     for (let pass = 0; pass < 150; pass++) {
       await worker.runDue();
       if ((await histories()).some((run) => run.status === "failed")) break;
@@ -636,56 +550,16 @@ describe("a continuation of a child a credential published", () => {
 });
 
 describe("a run an operation step started, after its start call is gone", () => {
-  let open: WorkflowFixture | undefined;
   const hanging: (() => void)[] = [];
-  afterEach(async () => {
+  afterEach(() => {
     for (const letGo of hanging.splice(0)) letGo();
-    await open?.instance.close();
-    open = undefined;
   });
 
-  const ready = async () => {
-    const t = await readyWorkflows(
-      (fixture) => {
-        open = fixture;
-      },
-      { personalKeys: true, definitions: "assets", datasetObjects: new MemoryObjectStorage() }
-    );
-    await t.allow({ kind: "service_principal", id: t.principal.id }, "workflow.use");
-    t.state.centralSettings = [{ operation: "connection.erp.write", value: "allow" }];
-    const key = await personalKeyToken(t, (await issuePersonalKey(t, SCOPES, t.root.id)).secret);
-    return { t, key };
+  const readyErp = async () => {
+    const keyed = await ready({ datasetObjects: new MemoryObjectStorage() });
+    keyed.t.state.centralSettings = [{ operation: "connection.erp.write", value: "allow" }];
+    return keyed;
   };
-
-  const expose = (t: WorkflowFixture, connection: string, outside: boolean) => {
-    const exposure = outside ? ["workflow", "outside"] : ["workflow"];
-    return t.seed(connection, {
-      displayName: connection,
-      operations: [
-        operationOf("echo", { exposure }),
-        operationOf("write", { effect: "changing", exposure })
-      ]
-    });
-  };
-
-  async function publish(
-    t: WorkflowFixture,
-    manifest: { id: string } & Record<string, unknown>,
-    headers?: Record<string, string>
-  ) {
-    const written = await t.call(t.root.id, "assets.put", {
-      params: { kind: WORKFLOW_ASSET_KIND, name: manifest.id },
-      payload: { config: { name: manifest.id, manifest }, expectedRevision: null },
-      ...(headers ? { headers } : {})
-    });
-    expect(written.statusCode, written.body).toBe(200);
-    const published = await t.call(t.root.id, "assets.publish", {
-      params: { kind: WORKFLOW_ASSET_KIND, name: manifest.id },
-      payload: { revision: revisionSchema.parse(written.json()).revision },
-      ...(headers ? { headers } : {})
-    });
-    expect(published.statusCode, published.body).toBe(200);
-  }
 
   const CHILD_STEP = {
     id: "child",
@@ -782,13 +656,13 @@ describe("a run an operation step started, after its start call is gone", () => 
     );
 
   it("refuses a key's child that its third history starts, under a starter whose reach is closed", async () => {
-    const { t, key } = await ready();
-    await expose(t, "hr", false);
-    await expose(t, "erp", true);
+    const { t, key } = await readyErp();
+    await expose(t, "hr", false, true);
+    await expose(t, "erp", true, true);
     // The key publishes the child while nothing starts it.
-    await publish(t, KEEPER, key);
-    await publish(t, looping([CHILD_STEP]));
-    await publish(t, starter("hr", 3));
+    await published(t, KEEPER, key);
+    await published(t, looping([CHILD_STEP]));
+    await published(t, starter("hr", 3));
     const starterId = await startStarter(t);
     const worker = t.worker();
     for (let pass = 0; pass < 300; pass++) {
@@ -815,12 +689,12 @@ describe("a run an operation step started, after its start call is gone", () => 
   }, 60_000);
 
   it("fails a key's Workflow at its second continuation once the run that started it reads closed data", async () => {
-    const { t, key } = await ready();
-    await expose(t, "crm", true);
-    await expose(t, "erp", true);
+    const { t, key } = await readyErp();
+    await expose(t, "crm", true, true);
+    await expose(t, "erp", true, true);
     // The key's Workflow reaches erp, open, and nothing starts it when the key publishes it.
-    await publish(t, looping(), key);
-    await publish(t, starter("crm"));
+    await published(t, looping(), key);
+    await published(t, starter("crm"));
     await startStarter(t);
     const worker = t.worker();
     for (let pass = 0; pass < 300 && (await histories(t)).length < 2; pass++) await worker.runDue();
@@ -837,7 +711,7 @@ describe("a run an operation step started, after its start call is gone", () => 
     const call = (await histories(t))[0]?.operationRunId ?? "";
     expect(await t.stores.operationRuns.get({ clientInstanceId, id: call })).toBeUndefined();
     // crm's admin takes outside back while the second history runs.
-    await expose(t, "crm", false);
+    await expose(t, "crm", false, true);
     for (let pass = 0; pass < 300; pass++) {
       await worker.runDue();
       if ((await histories(t)).some((run) => run.status === "failed" || run.status === "done"))
@@ -861,11 +735,11 @@ describe("a run an operation step started, after its start call is gone", () => 
   };
 
   it("asks a starter whose kept definition retention cleared by the revision it names", async () => {
-    const { t, key } = await ready();
-    await expose(t, "crm", true);
-    await expose(t, "erp", true);
-    await publish(t, looping(), key);
-    await publish(t, starter("crm"));
+    const { t, key } = await readyErp();
+    await expose(t, "crm", true, true);
+    await expose(t, "erp", true, true);
+    await published(t, looping(), key);
+    await published(t, starter("crm"));
     const starterId = await startStarter(t);
     const worker = t.worker();
     expect((await until(t, worker, 2)).map((part) => part.status)).toEqual([
@@ -893,12 +767,12 @@ describe("a run an operation step started, after its start call is gone", () => 
   }, 60_000);
 
   it("keeps the starter a run opened before it was kept reads from its start call, at its next continuation", async () => {
-    const { t, key } = await ready();
-    await expose(t, "hr", false);
-    await expose(t, "erp", true);
-    await publish(t, KEEPER, key);
-    await publish(t, looping([CHILD_STEP]));
-    await publish(t, starter("hr", 3));
+    const { t, key } = await readyErp();
+    await expose(t, "hr", false, true);
+    await expose(t, "erp", true, true);
+    await published(t, KEEPER, key);
+    await published(t, looping([CHILD_STEP]));
+    await published(t, starter("hr", 3));
     const starterId = await startStarter(t);
     const worker = t.worker();
     const [first] = await until(t, worker, 1);
@@ -925,9 +799,9 @@ describe("a run an operation step started, after its start call is gone", () => 
   }, 60_000);
 
   it("refuses a key's Workflow that a run starts by the platform's own start operation", async () => {
-    const { t, key } = await ready();
-    await expose(t, "erp", true);
-    await publish(t, looping(), key);
+    const { t, key } = await readyErp();
+    await expose(t, "erp", true, true);
+    await published(t, looping(), key);
     // Calls the platform API, which no outside client is open to: its reach is closed.
     const caller = {
       id: "start-by-api",
@@ -947,7 +821,7 @@ describe("a run an operation step started, after its start call is gone", () => 
         { id: "result", name: "Result", type: "output", input: {} }
       ]
     };
-    await publish(t, caller);
+    await published(t, caller);
     const started = await t.call(t.root.id, "workflows.start", {
       params: { workflow: "start-by-api" },
       payload: { input: {} }
@@ -965,12 +839,12 @@ describe("a run an operation step started, after its start call is gone", () => 
   }, 60_000);
 
   it("refuses the child of a run whose start call was pruned, by the starter it kept", async () => {
-    const { t, key } = await ready();
-    await expose(t, "hr", false);
-    await expose(t, "erp", true);
-    await publish(t, KEEPER, key);
+    const { t, key } = await readyErp();
+    await expose(t, "hr", false, true);
+    await expose(t, "erp", true, true);
+    await published(t, KEEPER, key);
     // Writes erp once, then starts the key's child.
-    await publish(t, {
+    await published(t, {
       ...looping([CHILD_STEP]),
       limits: { stepRuns: 100 },
       steps: [
@@ -986,7 +860,7 @@ describe("a run an operation step started, after its start call is gone", () => 
         { id: "result", name: "Result", type: "output", input: {} }
       ]
     });
-    await publish(t, starter("hr"));
+    await published(t, starter("hr"));
     const held = holdingFirst(t, "write", hanging);
     await startStarter(t);
     const worker = await reach(t, held.inCall);

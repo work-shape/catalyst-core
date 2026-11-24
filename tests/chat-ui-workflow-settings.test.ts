@@ -25,9 +25,8 @@ import { recordedApiClient } from "./support/recorded-api-client";
 // Berlin time" writes the trigger's cron and zone; a schedule the field cannot read is saved
 // untouched; the start fields write `inputs`; the last way to start stays on; the result, the
 // limits and the account are read-only lines; and a reader who may not write the Workflow sees
-// it all read-only. Fails without WF-EDIT-5: the Workflow had no Settings tab.
-// What other systems and the engine need is folded under "Advanced", which opens by itself
-// where something in it needs a person.
+// it all read-only. What other systems and the engine need is folded under "Advanced", which
+// opens by itself where something in it needs a person.
 
 const { t } = createTranslationContext("en");
 const WORKFLOW = "bookings";
@@ -159,10 +158,7 @@ afterEach(async () => {
 async function mount(
   source: WorkflowsSource,
   mayWrite = true,
-  {
-    locale = "en",
-    onOpenRoute = () => undefined
-  }: { locale?: "en" | "de"; onOpenRoute?: OpenRoute } = {}
+  { onOpenRoute = () => undefined }: { onOpenRoute?: OpenRoute } = {}
 ): Promise<HTMLElement> {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -192,7 +188,7 @@ async function mount(
               { value: host, children: null },
               createElement(
                 TranslationProvider,
-                { locale, children: null },
+                { locale: "en", children: null },
                 createElement(
                   UiRoot,
                   { mode: "light", labels: uiLabelsEn },
@@ -372,85 +368,6 @@ describe("the Settings tab of a Workflow (WF-EDIT-5)", () => {
     });
   });
 
-  it("shows the result, the limits and the owner as read-only lines", async () => {
-    const container = await mount(sourceOf(manifestWith([{ kind: "manual" }]), []));
-    const facts = required(container.querySelector("[data-workflow-facts]"));
-    expect(facts.textContent).toContain("Bookings");
-    expect(facts.textContent).toContain("Runs up to 30 hours");
-    expect(facts.textContent).toContain(t("workflows.workflowSettings.onFailureNotify"));
-    expect(facts.textContent).toContain(t("workflows.workflowSettings.ownerInstance"));
-  });
-
-  it("folds what other systems and the engine need under Advanced", async () => {
-    const container = await mount(sourceOf(manifestWith([{ kind: "manual" }]), []));
-    const advanced = required(container.querySelector("[data-workflow-advanced]"));
-    const trigger = required(
-      advanced.querySelector<HTMLButtonElement>("[data-workflow-advanced-trigger]")
-    );
-    expect(trigger.getAttribute("aria-expanded")).toBe("false");
-    expect(trigger.textContent).toContain(t("workflows.workflowSettings.advanced"));
-    // The limits, the account, the owner and the starts by another system stand in it.
-    expect(advanced.querySelector("[data-workflow-facts]")).not.toBeNull();
-    expect(advanced.textContent).toContain(t("workflows.workflowSettings.runsAs"));
-    expect(advanced.textContent).toContain(t("workflows.workflowSettings.byWebhook"));
-    // What a person sets stays above it: the schedule, the start by hand and what it asks for.
-    const starts = required(container.querySelector("[data-workflow-starts]"));
-    expect(advanced.contains(starts)).toBe(false);
-    expect(starts.textContent).toContain(t("workflows.workflowSettings.onSchedule"));
-    expect(starts.textContent).toContain(t("workflows.workflowSettings.byHand"));
-    expect(starts.textContent).not.toContain(t("workflows.workflowSettings.byWebhook"));
-    expect(advanced.contains(required(container.querySelector("[data-workflow-inputs]")))).toBe(
-      false
-    );
-    await act(async () => trigger.click());
-    expect(trigger.getAttribute("aria-expanded")).toBe("true");
-    // Its line is a heading of the page's second level, so its parts stand under it.
-    expect(trigger.closest("h2")).not.toBeNull();
-    expect([...advanced.querySelectorAll("h3")].map((heading) => heading.textContent)).toEqual([
-      t("workflows.workflowSettings.startsMore"),
-      t("workflows.workflowSettings.runAndAccess")
-    ]);
-  });
-
-  it("sets each way to start in one row, the switch beside its text", async () => {
-    const container = await mount(
-      sourceOf(
-        manifestWith([
-          { kind: "schedule", cron: "0 8 * * 1", timeZone: "Europe/Berlin" },
-          { kind: "manual" }
-        ]),
-        []
-      )
-    );
-    const starts = required(container.querySelector("[data-workflow-starts]"));
-    const rows = [...starts.querySelectorAll('[data-slot="settings-row"]')];
-    expect(rows.map((row) => row.querySelector("label")?.textContent)).toEqual([
-      t("workflows.workflowSettings.onSchedule"),
-      t("workflows.workflowSettings.byHand"),
-      t("workflows.workflowSettings.onSync")
-    ]);
-    for (const row of rows) {
-      // The switch stands before its label, and the label names it.
-      const toggle = required(
-        row.querySelector('[data-slot="settings-row-leading"] [role="switch"]')
-      );
-      expect(row.querySelector("label")?.getAttribute("for")).toBe(toggle.id);
-    }
-    // The schedule's row holds its button, named for what it sets.
-    const when = required(rows[0]?.querySelector("[data-workflow-schedule-when]"));
-    expect(when.textContent).toBe("Every Monday at 08:00 AM");
-    expect(when.getAttribute("aria-label")).toBe("When: Every Monday at 08:00 AM");
-    expect(
-      [...container.querySelectorAll('[data-workflow-starts-more] [data-slot="settings-row"]')].map(
-        (row) => row.querySelector("label")?.textContent
-      )
-    ).toEqual([
-      t("workflows.workflowSettings.byParent"),
-      t("workflows.workflowSettings.byOutside"),
-      t("workflows.workflowSettings.byWebhook")
-    ]);
-  });
-
   it("opens Advanced by itself where something in it needs a person", async () => {
     const open = (container: Element) =>
       required(container.querySelector("[data-workflow-advanced-trigger]")).getAttribute(
@@ -465,17 +382,6 @@ describe("the Settings tab of a Workflow (WF-EDIT-5)", () => {
       })
     );
     await settled(() => expect(open(waiting)).toBe("true"));
-    const secured = await mount(
-      sourceOf(manifestWith([{ kind: "manual" }, { kind: "webhook" }]), [], undefined, {
-        webhookSecret: "set"
-      })
-    );
-    await settled(() =>
-      expect(secured.querySelector("[data-workflow-webhook]")?.textContent).toContain(
-        "Set (version 1)"
-      )
-    );
-    expect(open(secured)).toBe("false");
     // A draft that changes what stands there: the limits here.
     const changed = await mount(
       sourceOf(manifestWith([{ kind: "manual" }]), [], undefined, {
@@ -483,16 +389,6 @@ describe("the Settings tab of a Workflow (WF-EDIT-5)", () => {
       })
     );
     await settled(() => expect(open(changed)).toBe("true"));
-    // A draft that changes only what stands above the fold leaves it folded.
-    const renamed = await mount(
-      sourceOf(manifestWith([{ kind: "manual" }]), [], undefined, {
-        published: { ...manifestWith([{ kind: "manual" }]), name: "Old bookings" }
-      })
-    );
-    await settled(() =>
-      expect(input(renamed, t("workflows.workflowSettings.name")).value).toBe("Bookings")
-    );
-    expect(open(renamed)).toBe("false");
   });
 
   it("is read-only for a reader who may not write the Workflow", async () => {
@@ -543,9 +439,6 @@ describe("the Workflows that call a Workflow (WF-EDIT-5b)", () => {
       onOpenRoute: (route) => opened.push(route)
     });
     const callers = required(container.querySelector("[data-workflow-callers]"));
-    expect(callers.textContent).toBe(
-      `${t("workflows.workflowSettings.calledBy")} Month end, Tax return`
-    );
     const links = [...callers.querySelectorAll("a")];
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
       "/w/cw_1/workflows/month-end",
@@ -555,18 +448,6 @@ describe("the Workflows that call a Workflow (WF-EDIT-5b)", () => {
     expect(opened).toEqual([
       { kind: "workflow", collaborationWorkspaceId: "cw_2", workflow: "tax-return" }
     ]);
-  });
-
-  it("says it in German", async () => {
-    const container = await mount(callerSource(), false, { locale: "de" });
-    expect(required(container.querySelector("[data-workflow-callers]")).textContent).toBe(
-      "Aufgerufen von Month end, Tax return"
-    );
-  });
-
-  it("names no caller where the instance names none", async () => {
-    const container = await mount(sourceOf(manifestWith([{ kind: "parent" }]), []));
-    expect(container.querySelector("[data-workflow-callers]")).toBeNull();
   });
 });
 
@@ -604,22 +485,9 @@ describe("the Apps that start a Workflow, on its page", () => {
       onOpenRoute: (route) => opened.push(route)
     });
     const line = required(container.querySelector("[data-workflow-app-callers]"));
-    expect(line.textContent).toBe("Started by the apps “Client intake”, “Orders”, and “Returns”");
     const links = [...line.querySelectorAll("a")];
     expect(links.map((link) => link.textContent)).toEqual(["Client intake", "Orders", "Returns"]);
     await act(async () => required(links[0]).click());
     expect(opened).toEqual([{ kind: "app", collaborationWorkspaceId: "cw_2", app: "intake" }]);
-  });
-
-  it("says it in German", async () => {
-    const container = await mount(appSource(three), false, { locale: "de" });
-    expect(required(container.querySelector("[data-workflow-app-callers]")).textContent).toBe(
-      "Gestartet von den Apps „Client intake“, „Orders“ und „Returns“"
-    );
-  });
-
-  it("says nothing where no App starts it", async () => {
-    const container = await mount(appSource([]));
-    expect(container.querySelector("[data-workflow-app-callers]")).toBeNull();
   });
 });

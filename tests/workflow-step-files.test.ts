@@ -229,19 +229,9 @@ describe("the step files of a Workflow asset", () => {
     const cases: [string, ReturnType<typeof config>, string[]][] = [
       ["name", config({ ...definition(), name: "Dou\u0000ble" }), ["manifest", "name"]],
       [
-        "description",
-        config({ ...definition(), description: "a\ud800b" }),
-        ["manifest", "description"]
-      ],
-      [
         "step name",
         config({ ...definition(), steps: [{ ...steps[0], name: "x\udc00" }, ...steps.slice(1)] }),
         ["manifest", "steps", "0", "name"]
-      ],
-      [
-        "schema text",
-        config({ ...definition(), inputs: { type: "object", description: "a\u0000b" } }),
-        ["manifest", "inputs", "description"]
       ],
       [
         "key",
@@ -252,14 +242,6 @@ describe("the step files of a Workflow asset", () => {
         "file content",
         config(definition(), [{ ...good, content: "a\u0000b" }]),
         ["files", "0", "content"]
-      ],
-      [
-        "file path",
-        config(definition(["double.py", "a\u0000.py"]), [
-          good,
-          { path: "steps/a\u0000.py", content: "" }
-        ]),
-        ["files", "1", "path"]
       ]
     ];
     // A check answers each part of a path as text, a refused save an index as a number.

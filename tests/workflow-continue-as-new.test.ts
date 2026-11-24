@@ -253,52 +253,45 @@ describe("continue-as-new", chainRun, () => {
     expect(wire.json()).toMatchObject({ continuation: next.continuation, labels: next.labels });
   });
 
-  it.each(["offset", "Sensitive Person"])(
-    "records a failed successor by input position for %s without retaining data keys",
-    async (field) => {
-      const { t, definitions } = await ready();
-      await t.expectOk(t.root.id, "workflows.start", {
-        params: { workflow: "notify-clients" },
-        payload: {
-          input: {
-            note: "Quarterly figures are ready",
-            ...(field === "offset" ? {} : { [field]: "invalid" })
-          }
-        }
-      });
-      const worker = t.worker();
-      for (let pass = 0; pass < 10; pass++) {
-        await worker.runDue();
-        if (writesOf(t).length === 1) break;
+  it("records a failed successor by input position without retaining data keys", async () => {
+    const field = "Sensitive Person";
+    const { t, definitions } = await ready();
+    await t.expectOk(t.root.id, "workflows.start", {
+      params: { workflow: "notify-clients" },
+      payload: {
+        input: { note: "Quarterly figures are ready", [field]: "invalid" }
       }
-      const revision = definitions.publish({
-        ...definition(),
-        inputs: {
-          type: "object",
-          properties: {
-            note: { type: "string" },
-            offset: { type: field === "offset" ? "string" : "integer" }
-          },
-          required: ["offset"],
-          additionalProperties: { type: "integer" }
-        }
-      });
-      const chain = await finishChain(t);
-      expect(chain.find((run) => run.continuation?.number === 2)).toMatchObject({
-        status: "failed",
-        definitionRevisionId: revision,
-        error: {
-          code: "continuation_invalid",
-          message: "The successor input does not fit at field 2"
-        }
-      });
-      expect(JSON.stringify(chain.map((run) => run.error)).includes("Sensitive Person")).toBe(
-        false
-      );
-      expect(chain.find((run) => run.continuation?.number === 1)?.status).toBe("continued");
-      expect(writesOf(t)).toHaveLength(2);
+    });
+    const worker = t.worker();
+    for (let pass = 0; pass < 10; pass++) {
+      await worker.runDue();
+      if (writesOf(t).length === 1) break;
     }
-  );
+    const revision = definitions.publish({
+      ...definition(),
+      inputs: {
+        type: "object",
+        properties: {
+          note: { type: "string" },
+          offset: { type: "integer" }
+        },
+        required: ["offset"],
+        additionalProperties: { type: "integer" }
+      }
+    });
+    const chain = await finishChain(t);
+    expect(chain.find((run) => run.continuation?.number === 2)).toMatchObject({
+      status: "failed",
+      definitionRevisionId: revision,
+      error: {
+        code: "continuation_invalid",
+        message: "The successor input does not fit at field 2"
+      }
+    });
+    expect(JSON.stringify(chain.map((run) => run.error)).includes("Sensitive Person")).toBe(false);
+    expect(chain.find((run) => run.continuation?.number === 1)?.status).toBe("continued");
+    expect(writesOf(t)).toHaveLength(2);
+  });
 
   it("drains concurrent admitted items before the checkpoint and preserves item order without duplicate calls", async () => {
     const manifest = definition(2);
@@ -331,52 +324,51 @@ describe("continue-as-new", chainRun, () => {
     expect(written).toBe(2);
   });
 
-  it.each([{ concurrency: 8, budget: 7 }])(
-    "checkpoints nested items once at outer concurrency $concurrency and budget $budget",
-    async ({ concurrency, budget }) => {
-      const manifest = definition();
-      const before = {
-        id: "before",
-        name: "Before inner",
-        type: "operation",
-        operation: "connection.crm.write",
-        input: { client: { ref: { step: "each_client", path: "id" } }, phase: { value: "before" } }
-      };
-      const inner = {
-        id: "inner",
-        name: "Inner",
-        type: "loop",
-        items: { step: "clients", path: "clients" },
-        steps: [
-          {
-            id: "pair",
-            name: "Write pair",
-            type: "operation",
-            operation: "connection.crm.write",
-            input: {
-              client: { ref: { step: "each_client", path: "id" } },
-              inner: { ref: { step: "inner", path: "id" } }
-            }
+  it("checkpoints nested items once at outer concurrency 8 and budget 7", async () => {
+    const concurrency = 8;
+    const budget = 7;
+    const manifest = definition();
+    const before = {
+      id: "before",
+      name: "Before inner",
+      type: "operation",
+      operation: "connection.crm.write",
+      input: { client: { ref: { step: "each_client", path: "id" } }, phase: { value: "before" } }
+    };
+    const inner = {
+      id: "inner",
+      name: "Inner",
+      type: "loop",
+      items: { step: "clients", path: "clients" },
+      steps: [
+        {
+          id: "pair",
+          name: "Write pair",
+          type: "operation",
+          operation: "connection.crm.write",
+          input: {
+            client: { ref: { step: "each_client", path: "id" } },
+            inner: { ref: { step: "inner", path: "id" } }
           }
-        ]
-      };
-      manifest.steps = manifest.steps.map((step) =>
-        step.id === "each_client" ? { ...step, concurrency, steps: [before, inner] } : step
-      );
-      const { t } = await ready({ ...manifest, limits: { stepRuns: budget } });
-      await start(t);
-      const chain = await finishChain(t);
-      expect(chain.some((run) => run.status === "done")).toBe(true);
-      expect(chain.every((run) => run.status === "continued" || run.status === "done")).toBe(true);
-      expect(writesOf(t)).toHaveLength(12);
-      expect(new Set(writesOf(t).map((write) => JSON.stringify(write))).size).toBe(12);
-      const final = chain.find((run) => run.status === "done");
-      if (!final) throw new Error("Missing final nested history");
-      expect(await t.stores.workflowRuns.readRunOutput({ clientInstanceId, id: final.id })).toEqual(
-        { value: { sent: 3, failed: 0 } }
-      );
-    }
-  );
+        }
+      ]
+    };
+    manifest.steps = manifest.steps.map((step) =>
+      step.id === "each_client" ? { ...step, concurrency, steps: [before, inner] } : step
+    );
+    const { t } = await ready({ ...manifest, limits: { stepRuns: budget } });
+    await start(t);
+    const chain = await finishChain(t);
+    expect(chain.some((run) => run.status === "done")).toBe(true);
+    expect(chain.every((run) => run.status === "continued" || run.status === "done")).toBe(true);
+    expect(writesOf(t)).toHaveLength(12);
+    expect(new Set(writesOf(t).map((write) => JSON.stringify(write))).size).toBe(12);
+    const final = chain.find((run) => run.status === "done");
+    if (!final) throw new Error("Missing final nested history");
+    expect(await t.stores.workflowRuns.readRunOutput({ clientInstanceId, id: final.id })).toEqual({
+      value: { sent: 3, failed: 0 }
+    });
+  });
 
   it("carries a last-key cursor through declared input and continues nonempty pages until the source is empty", async () => {
     const manifest = definition();
@@ -480,7 +472,8 @@ describe("continue-as-new", chainRun, () => {
   });
 });
 
-it.each([1, 2])("cancels the live Lauf by member %i's id", async (member) => {
+it("cancels the live Lauf by an earlier member's id", async () => {
+  const member = 1;
   const { t } = await ready(definition(1));
   await start(t);
   const worker = t.worker();

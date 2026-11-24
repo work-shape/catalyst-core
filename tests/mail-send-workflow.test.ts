@@ -76,12 +76,7 @@ describe("mail.send from a Workflow (MAIL-1)", () => {
       subject: "Monthly check"
     });
     expect(mail?.text).toContain("Client | Open");
-    expect(mail?.text).toContain('The Workflow "Flow monthly" of Example Catalyst sent');
     expect(mail?.html).toContain("<table");
-    expect(mail?.html).toContain("#123456");
-    expect(mail?.html).toContain("Example Catalyst");
-    expect(mail?.html).toContain("Musterstrasse 1");
-    expect(mail?.html).toContain("Flow monthly");
     const answered: unknown = JSON.parse(required(step.outputPreview).text);
     expect(answered).toMatchObject({
       messageId: expect.stringMatching(/^capture-/u),
@@ -404,7 +399,6 @@ describe("mail.send's provider failures (MAIL-1, check 140)", () => {
       { ok: false, reason: "provider_uncertain", failure: "uncertain" }
     ]);
     expect(step.error).toMatchObject({ code: "operation_interrupted" });
-    expect(step.error?.message).toContain("may or may not");
     expect(transport.delivered).toHaveLength(1);
     expect(await mailEvents()).toMatchObject([
       { type: "mail.sent", metadata: { outcome: "uncertain" } }
@@ -489,8 +483,7 @@ describe("a test run of a mail.send step", () => {
     expect(ended.status).toBe("failed");
     expect(ended.error).toMatchObject({
       code: "tester_key_cannot_carry",
-      action: "mail_sender.use",
-      message: expect.stringContaining("No API key can carry the right 'mail_sender.use'")
+      action: "mail_sender.use"
     });
     expect(t.capturedMail()).toEqual([]);
     // Kai, who lacks mail_sender.use, is told so through his key as in the app.

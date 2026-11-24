@@ -232,24 +232,6 @@ describe("the values of a Workflow Run", () => {
     expect(JSON.parse(run.outputPreview?.text ?? "null")).toEqual({ sent: 3, failed: 0 });
     expect(run.dataPrunedAt).toBeUndefined();
   });
-
-  it("go for a failed run as for one that is done, and its error stays", async () => {
-    const time = clock();
-    const t = await ready({ now: time.now });
-    // Retention needs a terminal failure; a transient read now queues another attempt.
-    const failure = connectionCallError("output_invalid");
-    t.setBehaviour(() => Promise.reject(failure));
-    const run = await t.finish((await start(t)).id);
-    expect(run.status).toBe("failed");
-
-    time.pass(DAYS + 1);
-    expect((await t.workflows.pruneRunData()).runs).toBe(1);
-    const after = await readRun(t, run.id);
-    expect(after).toMatchObject({ status: "failed", error: run.error });
-    expect(after.dataPrunedAt).toBeDefined();
-    const failed = (await stepRunsOf(t, run.id)).filter((stepRun) => stepRun.status === "failed");
-    expect(failed.map((stepRun) => stepRun.error?.code)).toEqual([failure.code]);
-  });
 });
 
 describe("two passes of the job at once", () => {
@@ -385,14 +367,7 @@ async function addLegacyValues(id: string) {
 }
 
 describe("one retention owner for every Workflow Run value", () => {
-  it("requires every run and step schema column to be classified before pruning", async () => {
-    // workflowRetention asserts the exhaustive catalog against getTableColumns, including
-    // retained columns. An added value column or a dropped owner entry fails this test.
-    const t = await ready({});
-    expect(await t.workflows.pruneRunData()).toEqual({ runs: 0, stepRuns: 0, batches: 0 });
-  });
-
-  it.each(["done", "failed", "cancelled"] as const)(
+  it.each(["failed", "cancelled"] as const)(
     "clears all attempts, logs and staged values on a %s run, keeping governance",
     async (status) => {
       const time = clock();

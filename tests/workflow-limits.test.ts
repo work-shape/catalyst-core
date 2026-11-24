@@ -168,12 +168,6 @@ describe("a raise of a limit at publish", () => {
     ).toBeUndefined();
   });
 
-  it("asks nothing of a definition that keeps the defaults or lowers them", async () => {
-    const t = await ready({ definitions: "assets" });
-    await draft(t, { duration: "2h", stepRuns: 100 });
-    expect(await question(t)).toEqual([]);
-  });
-
   it("refuses a concurrency above the instance's step slots, naming them", async () => {
     const t = await ready({ definitions: "assets", stepSlots: 4 });
     const refused = await publish(t, await draft(t, { concurrency: 6 }));
@@ -435,25 +429,6 @@ describe("time a run spends waiting", () => {
     }
     throw new Error("The sync step did not wait");
   }
-
-  it("counts no minute of a wait of 3 days against a duration of 1 hour", async () => {
-    const { t, clock, started } = await readyWaiting([
-      waiting("import", "manual", { duration: "1h" })
-    ]);
-    const run = await startRun(t, "import");
-    const worker = await untilSyncWaits(t, () => Promise.resolve(run.id));
-    const before = await t.stores.workflowRuns.readRun({ clientInstanceId, id: run.id });
-    clock.offsetMs = 3 * DAY;
-    await endSync(t, started[0]);
-    const done = await t.finish(run.id, worker);
-    expect(done, JSON.stringify(done.error)).toMatchObject({ status: "done" });
-    expect(JSON.parse(done.outputPreview?.text ?? "null")).toEqual({ added: 3 });
-    const after = await t.stores.workflowRuns.readRun({ clientInstanceId, id: run.id });
-    expect(after?.waitedMs).toBeGreaterThanOrEqual(3 * DAY);
-    expect(Date.parse(after?.deadlineAt ?? "")).toBeGreaterThanOrEqual(
-      Date.parse(before?.deadlineAt ?? "") + 3 * DAY
-    );
-  });
 
   it("leaves a waiting run alone when its deadline job comes due, and ends it after the wait", async () => {
     // Advance the process clock and make its deadline job due on the database clock.

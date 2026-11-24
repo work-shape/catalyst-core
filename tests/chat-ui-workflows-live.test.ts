@@ -1,30 +1,9 @@
-import { createElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "./support/chat-ui/shared";
-import {
-  WorkflowPageView,
-  WorkflowRunPageView,
-  createInstanceSource,
-  failureHappened,
-  startOffered,
-  toWorkflow,
-  toWorkflowRun,
-  toWorkflowStepRun,
-  workflowGraph
-} from "@work-shape/catalyst-chat-ui/workflows";
-import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
+import { createInstanceSource, startOffered } from "@work-shape/catalyst-chat-ui/workflows";
 import { recordedApiClient } from "./support/recorded-api-client";
-import { failureAdvice } from "./support/chat-ui/studio-workflows";
 
-// The Workflow screens over the engine of an instance: the reads and the two writes through
-// the client, and what the pages say about what the engine does not do yet. Every test here
-// fails without the live source: the screens read samples and named no limit of the engine.
-
-const { t } = createTranslationContext("en");
-const de = createTranslationContext("de").t;
-const render = (node: ReactNode) =>
-  renderToStaticMarkup(createElement(TranslationProvider, { locale: "en", children: node }));
-const noop = () => undefined;
+// The Workflow screens' source over the engine of an instance: the reads and the writes through
+// the client, as the contract names them. What the pages say of it is in the run page's tests.
 
 const run = {
   id: "wfr_1",
@@ -309,10 +288,7 @@ describe("the Workflow screens over the engine of an instance", () => {
 
   it.each([
     "{",
-    "[]",
-    JSON.stringify({ published: { done: "false" }, assets: { done: false } }),
-    JSON.stringify({ published: { done: false, cursor: 17 }, assets: { done: false } }),
-    JSON.stringify({ published: { done: false, after: 17 }, assets: { done: false } })
+    JSON.stringify({ published: { done: false, cursor: 17 }, assets: { done: false } })
   ])("refuses an invalid list cursor before reading the instance: %s", async (cursor) => {
     const { source, calls } = instance();
     await expect(source.listWorkflows("cw_1", { limit: 2, cursor }, signal)).rejects.toThrow(
@@ -431,32 +407,6 @@ describe("the Workflow screens over the engine of an instance", () => {
       "workflows.list",
       "assets.list",
       "assets.list"
-    ]);
-  });
-
-  it("reads past an empty asset page to the draft after it", async () => {
-    const { source, calls } = instance({
-      workflowPages: { "": { items: [] } },
-      assetPages: {
-        "": {
-          items: [],
-          nextCursor: "a2"
-        },
-        a2: { items: [summaryOf({ name: "late-draft", title: "Late draft" })] }
-      }
-    });
-    const first = await source.listWorkflows(
-      "cw_1",
-      { limit: WORKFLOW_PAGE, cursor: undefined },
-      signal
-    );
-    expect(first.items.map((item) => item.id)).toEqual(["late-draft"]);
-    expect(first.nextCursor).toBeUndefined();
-    expect(calls.map((call) => [call.operation, call.query.cursor])).toEqual([
-      ["workflows.list", undefined],
-      ["assets.list", undefined],
-      ["assets.list", undefined],
-      ["assets.list", "a2"]
     ]);
   });
 
@@ -615,20 +565,6 @@ describe("the Workflow screens over the engine of an instance", () => {
     expect(calls.at(-1)?.query).toEqual({ limit: "200", cursor: `c${OLD_FRAME_CAP / FRAME_PAGE}` });
   });
 
-  it("asks the instance for the entries of one loop in one state", async () => {
-    const { source, calls } = instance();
-    await source.runs?.listEntryStepRuns(
-      "wfr_1",
-      { containerStepRunId: "sr_3", status: "failed", limit: 50, cursor: undefined },
-      signal
-    );
-    expect(calls[0]).toMatchObject({
-      operation: "workflows.list_step_runs",
-      params: { runId: "wfr_1" },
-      query: { containerStepRunId: "sr_3", status: "failed", limit: "50" }
-    });
-  });
-
   it("keeps the technical account label through the list and detail mappings", async () => {
     const issue = {
       code: "principal_inactive",
@@ -658,396 +594,101 @@ describe("the Workflow screens over the engine of an instance", () => {
     // The run was asked to stop and is still going: the call at work is not broken off.
     expect(cancelled).toMatchObject({ status: "running", ended: false, stopping: true });
   });
-});
 
-describe("a Workflow the instance accepts no start of", () => {
-  const blocked = (issues: { code: string; message: string }[], mayStart = true) =>
-    toWorkflow(
-      {
-        name: "weekly-check",
-        publishedRevision: 1,
-        config: {
-          name: "Weekly check",
-          steps: [{ id: "start", type: "trigger", triggers: [{ kind: "manual" }] }]
+  it("picks loops inside an entry into the frame, and leaves ordinary entries out", async () => {
+    const { source } = instance({
+      stepRunPages: [
+        {
+          items: [
+            stepRun("sr_start", "start", { stepType: "trigger" }),
+            stepRun("sr_loop", "each_client", { stepType: "loop" }),
+            stepRun("sr_contacts_1", "each_contact", {
+              stepType: "loop",
+              containerStepRunId: "sr_loop",
+              iteration: { index: 1 },
+              loop: { total: 4, done: 3, failed: 1, running: 0 }
+            }),
+            stepRun("sr_send", "send", { containerStepRunId: "sr_loop", iteration: { index: 0 } })
+          ]
         }
-      },
-      { revisionId: "rev_1", refusedFor: issues, mayStart }
-    );
-  const page = (workflow: ReturnType<typeof blocked>) =>
-    render(
-      createElement(WorkflowPageView, {
-        workspaceId: "cw_1",
-        workflowId: "weekly-check",
-        read: { workflow, problem: undefined, retry: noop },
-        runsAvailable: true,
-        onOpenChild: noop,
-        onOpenRoute: noop,
-        onStart: noop
-      })
-    );
-
-  it("is shown with each reason of the instance, and its start is switched off", () => {
-    const workflow = blocked([NOT_BUILT]);
-    expect(startOffered(workflow)).toBe(false);
-    const markup = page(workflow);
-    expect(markup).toContain("Weekly check");
-    expect(markup).toContain(t("workflows.notRunnable.title"));
-    expect(markup).toContain("does not run a step of the type &#x27;agent&#x27; yet");
-    expect(markup).toMatch(/<button[^>]* disabled=""[^>]*>.*Start now/su);
-  });
-
-  it("says that it cannot be started now where the reason is none of the engine's", () => {
-    const markup = page(
-      blocked([{ code: "principal_inactive", message: "The instance has no active principal" }])
-    );
-    expect(markup).toContain(t("workflows.notRunnable.refused"));
-    expect(markup).not.toContain(t("workflows.notRunnable.title"));
-    expect(markup).toContain(
-      t("workflows.notRunnable.accountUnavailable", { place: "Settings › API access" })
-    );
-    expect(markup).not.toContain("The instance has no active principal");
-  });
-
-  it("shows no start, switched off or not, to a reader who may not start", () => {
-    expect(page(blocked([NOT_BUILT], false))).not.toContain(t("workflows.startNow"));
-    expect(page(blocked([]))).not.toContain(' disabled=""');
-  });
-});
-
-describe("what a run says about how it ended", () => {
-  const definition = toWorkflow({
-    name: "open-invoices",
-    publishedRevision: 1,
-    config: {
-      name: "Open invoices",
-      steps: [
-        { id: "start", type: "trigger", triggers: [{ kind: "manual" }] },
-        { id: "remind", name: "Send the reminders", type: "operation" }
       ]
-    }
-  });
-  const page = (
-    resource: Parameters<typeof toWorkflowRun>[0],
-    stepRuns: readonly Parameters<typeof toWorkflowStepRun>[0][] = []
-  ) =>
-    render(
-      createElement(WorkflowRunPageView, {
-        workspaceId: "cw_1",
-        workflowId: "open-invoices",
-        workflow: definition,
-        read: {
-          run: toWorkflowRun(resource),
-          problem: undefined,
-          silentSince: undefined,
-          stepsFailed: false,
-          stepRuns: stepRuns.map(toWorkflowStepRun),
-          retry: noop
-        },
-        now: new Date("2026-10-12T09:12:00.000Z"),
-        canCancel: true,
-        canRunAgain: false,
-        stopping: toWorkflowRun(resource).stopping,
-        onCancel: noop,
-        onRunAgain: noop,
-        onOpenRoute: noop
-      })
-    );
-
-  it("names the right the account of the Workflow lacks", () => {
-    const failure = toWorkflowRun({
-      ...run,
-      status: "failed",
-      error: { code: "FORBIDDEN", message: "may not", action: "connection.use" }
-    }).failure;
-    expect(failure).toMatchObject({ reason: "missingRight", action: "connection.use" });
-    // The right to use a Connection reads in plain words, never as its technical name.
-    expect(failure && failureHappened(failure, t)).toBe(
-      "The workflow may not do this: its account may not use the Connection that one of its steps calls."
-    );
-    expect(failure && failureHappened(failure, de)).not.toContain("connection.use");
-    // Any other right is named.
-    expect(failureHappened({ reason: "missingRight", action: "workflow.start" }, t)).toBe(
-      "The workflow may not do this: its account lacks the right “workflow.start”."
-    );
-    // A refusal that names no action keeps the sentence without one.
-    expect(failureHappened({ reason: "missingRight" }, t)).toBe(t("workflows.reason.missingRight"));
-    // The run's page names the account the run acted as.
-    expect(
-      page({
-        ...run,
-        status: "failed",
-        error: { code: "FORBIDDEN", message: "may not", action: "connection.use" }
-      })
-    ).toContain("its account “Workflow runner” may not use the Connection");
-  });
-
-  it("names the Connection by its title and the account on the step and the run (ACCEPT-2e C-3)", () => {
-    const refused = {
-      code: "FORBIDDEN",
-      message: "may not",
-      action: "connection.use",
-      connection: "buchhaltung-kanzlei",
-      connectionTitle: "Buchhaltung Kanzlei"
-    };
-    const failure = toWorkflowRun({ ...run, status: "failed", error: refused }).failure;
-    expect(failure && failureHappened(failure, t, { connection: "buchhaltung-kanzlei" })).toBe(
-      "The workflow may not do this: its account may not use the Connection “Buchhaltung Kanzlei”."
-    );
-    const html = page({ ...run, status: "failed", error: refused }, [
-      stepRun("wfs_1", "start", { stepType: "trigger" }),
-      stepRun("wfs_2", "remind", { status: "failed", error: refused })
-    ]);
-    const named = "its account “Workflow runner” may not use the Connection “Buchhaltung Kanzlei”";
-    // The run's notice says it with what to do about it, although the failed step is held.
-    expect(html).toContain(named);
-    expect(html).toContain("data-failure-advice");
-    expect(html).not.toContain("“buchhaltung-kanzlei”");
-    // The failed step on the canvas names the account too.
-    const failedRun = toWorkflowRun({ ...run, status: "failed", error: refused });
-    const graph = workflowGraph(definition.steps, createTranslationContext("en"), {
-      run: failedRun,
-      stepRuns: [
-        toWorkflowStepRun(stepRun("wfs_2", "remind", { status: "failed", error: refused }))
-      ],
-      now: new Date("2026-10-12T09:12:00.000Z")
     });
-    expect(graph.nodes.find((node) => node.id === "remind")?.footer).toContain(named);
+    const frame = await source.runs?.listFrameStepRuns("wfr_1", undefined, signal);
+    expect(frame?.stepRuns.map((entry) => entry.id)).toEqual(["sr_start", "sr_loop"]);
+    expect(frame?.entryLoops.map((entry) => entry.id)).toEqual(["sr_contacts_1"]);
   });
 
-  it("tells a step refused for its Connection's exposure where to open it, never to grant a right (WF-OUT)", () => {
-    const outside = {
-      code: "FORBIDDEN",
-      message:
-        "'connection.buchhaltung-kanzlei.list_invoices' is not exposed to outside clients, and an outside client started this run. Expose it to outside clients on the Connection's page, or turn off starts by outside clients in the Workflow's settings",
-      action: "connection_exposure:outside"
-    };
-    const failure = toWorkflowStepRun(
-      stepRun("wfs_2", "remind", { status: "failed", error: outside })
-    ).failure;
-    expect(failure).toMatchObject({
-      reason: "notExposed",
-      exposure: "outside",
-      connection: "buchhaltung-kanzlei"
+  it("reads from which steps a run is re-run, and starts a re-run (EW-11)", async () => {
+    const { client, calls } = recordedApiClient(({ operation }) =>
+      operation === "workflows.rerun_steps"
+        ? {
+            items: [
+              { step: "clients", changed: true },
+              {
+                step: "result",
+                changed: false,
+                refusal: { code: "rerun_step_changed", step: "clients" }
+              }
+            ]
+          }
+        : {
+            ...run,
+            id: "wr_new",
+            rerunOf: { runId: "wr_first", fromStep: "clients", reusedSteps: [] }
+          }
+    );
+    const source = createInstanceSource(client, "k");
+    const steps = await source.runs?.rerunSteps?.("wr_first", signal);
+    expect(steps?.[1]).toEqual({
+      step: "result",
+      changed: false,
+      refusal: { code: "rerun_step_changed", step: "clients" }
     });
-    // The action no grant carries is never kept as a right to name.
-    expect(failure?.action).toBeUndefined();
-    if (failure === undefined) throw new Error("no failure");
-    const admin = { administers: true, place: "Settings › API access" };
-    expect(failureHappened(failure, t)).toBe(
-      "An outside client started this run, and the Connection “buchhaltung-kanzlei” does not let outside clients call this operation."
-    );
-    expect(failureHappened(failure, de)).toBe(
-      "Ein externer Client hat diesen Lauf gestartet, und die Verbindung „buchhaltung-kanzlei“ lässt externe Clients diese Operation nicht aufrufen."
-    );
-    // An administrator of accounts is told the same: no account's right opens it.
-    expect(failureAdvice(failure, t, admin)).toBe(
-      "Whoever manages the Connection “buchhaltung-kanzlei” can add “Outside clients” under “Callable by” for this operation on its page. Or start the workflow here, not from an outside client."
-    );
-    expect(failureAdvice(failure, de, admin)).toBe(
-      "Wer die Verbindung „buchhaltung-kanzlei“ verwaltet, kann auf ihrer Seite bei dieser Operation „Externe Clients“ unter „Aufrufbar durch“ ergänzen. Oder starte den Workflow hier statt über einen externen Client."
-    );
-    // The Connection's title wins where the instance sends one.
-    expect(failureHappened({ ...failure, connectionTitle: "Buchhaltung Kanzlei" }, t)).toContain(
-      "the Connection “Buchhaltung Kanzlei”"
-    );
+    const started = await source.runs?.rerun?.("wr_first", "clients");
+    expect(started?.rerunOf).toEqual({ runId: "wr_first", fromStep: "clients", reusedSteps: [] });
+    expect(calls[1]).toMatchObject({ operation: "workflows.rerun", params: { runId: "wr_first" } });
+    expect(JSON.parse(calls[1]?.body ?? "{}")).toEqual({ fromStep: "clients" });
+  });
 
-    // The run's page says it, although the failed step is held, and offers no right.
-    const html = page({ ...run, status: "failed", error: outside }, [
-      stepRun("wfs_1", "start", { stepType: "trigger" }),
-      stepRun("wfs_2", "remind", { status: "failed", error: outside })
-    ]);
-    expect(html).toContain("does not let outside clients call this operation");
-    expect(html).toContain("under “Callable by”");
-    for (const grant of ["lacks the right", "this right", "connection_exposure"]) {
-      expect(html).not.toContain(grant);
-    }
-
-    // Not exposed to Workflows: the Connection's page again, with its own surface.
-    const workflow = toWorkflowRun({
-      ...run,
-      status: "failed",
-      error: {
-        code: "FORBIDDEN",
-        message:
-          "'connection.crm.search' is not exposed to Workflows. Expose it to Workflows on the Connection's page",
-        action: "connection_exposure:workflow"
+  it("starts a test run of the draft, and switches one step live for the next one (EW-5t)", async () => {
+    const { client, calls } = recordedApiClient(({ operation }) =>
+      operation === "workflows.test"
+        ? { ...run, id: "wr_test", mode: "test", status: "queued" }
+        : operation === "assets.list_live_once"
+          ? {
+              items: [
+                {
+                  part: "bill",
+                  switchedAt: "2026-10-14T08:00:00.000Z",
+                  usedByRunId: "wr_1",
+                  usedAt: "2026-10-14T08:30:00.000Z"
+                }
+              ]
+            }
+          : { draftRevision: 3, part: "send" }
+    );
+    const source = createInstanceSource(client, "k");
+    expect(await source.drafts?.test("notify-clients", { note: "Hello" })).toMatchObject({
+      id: "wr_test",
+      test: true
+    });
+    expect(calls[0]).toMatchObject({
+      operation: "workflows.test",
+      params: { workflow: "notify-clients" }
+    });
+    expect(JSON.parse(calls[0]?.body ?? "{}")).toEqual({ input: { note: "Hello" } });
+    await source.drafts?.runLiveOnce("notify-clients", "send", 3);
+    expect(calls[1]).toMatchObject({
+      operation: "assets.run_live_once",
+      params: { kind: "workflow", name: "notify-clients" }
+    });
+    expect(JSON.parse(calls[1]?.body ?? "{}")).toEqual({ part: "send", expectedRevision: 3 });
+    expect(await source.drafts?.listLiveOnce("notify-clients", signal)).toEqual([
+      {
+        step: "bill",
+        switchedAt: "2026-10-14T08:00:00.000Z",
+        used: { runId: "wr_1", at: "2026-10-14T08:30:00.000Z" }
       }
-    }).failure;
-    expect(workflow && failureHappened(workflow, t)).toBe(
-      "The Connection “crm” does not let Workflows call this operation."
-    );
-    expect(workflow && failureAdvice(workflow, de, admin)).toBe(
-      "Wer die Verbindung „crm“ verwaltet, kann auf ihrer Seite bei dieser Operation „Workflows“ unter „Aufrufbar durch“ ergänzen. Starte den Workflow dann erneut."
-    );
-
-    // Data of no Connection, which no exposure opens: only the run side is offered.
-    const knowledge = toWorkflowRun({
-      ...run,
-      status: "failed",
-      error: {
-        code: "FORBIDDEN",
-        message:
-          "'knowledge.search' reads data that is not open to outside clients, and an outside client started the test run. To run this step, start the test run signed in to the app",
-        action: "connection_exposure:outside"
-      }
-    }).failure;
-    expect(knowledge?.connection).toBeUndefined();
-    expect(knowledge && failureHappened(knowledge, t)).toBe(
-      "An outside client started this run, and this step reads data that is not open to outside clients."
-    );
-    expect(knowledge && failureAdvice(knowledge, t, admin)).toBe(
-      "Start the workflow here, not from an outside client."
-    );
-    // A sentence of another form names no Connection.
-    const unnamed = toWorkflowRun({
-      ...run,
-      status: "failed",
-      error: { code: "FORBIDDEN", message: "may not", action: "connection_exposure:outside" }
-    }).failure;
-    expect(unnamed).toMatchObject({ reason: "notExposed", exposure: "outside" });
-    expect(unnamed?.connection).toBeUndefined();
-
-    // A missing right keeps its grant advice.
-    expect(
-      failureAdvice({ reason: "missingRight", action: "connection.use" }, t, {
-        ...admin,
-        account: "Workflow runner",
-        connection: "crm"
-      })
-    ).toBe(
-      "Under Settings › API access, allow the account “Workflow runner” to use the Connection “crm”, then run the workflow again."
-    );
-  });
-
-  it("names the right a tester lacks in words, never as its technical name", () => {
-    const failure = { reason: "testerMissingRight", action: "connection.use" } as const;
-    expect(failureHappened(failure, t)).toBe(
-      "You may not do this: a test run acts as you, and you lack the right “Use connections”."
-    );
-    expect(failureHappened(failure, de)).toBe(
-      "Du darfst das nicht: Ein Testlauf handelt als du, und dir fehlt das Recht „Verbindungen verwenden“."
-    );
-  });
-
-  it("says why a test run a personal API key started failed, in words and with a next step", () => {
-    const failed = (code: string, action?: string) =>
-      toWorkflowRun({
-        ...run,
-        status: "failed",
-        error: { code, message: "The instance's sentence", ...(action ? { action } : {}) }
-      }).failure;
-    const unusable = failed("tester_key_unusable");
-    const scope = failed("tester_key_scope", "connection.use");
-    const cannotCarry = failed("tester_key_cannot_carry", "mail_sender.use");
-    expect(unusable).toMatchObject({ reason: "testerKeyUnusable" });
-    expect(scope).toMatchObject({ reason: "testerKeyScope", action: "connection.use" });
-    expect(cannotCarry).toMatchObject({ reason: "testerKeyCannotCarry" });
-
-    expect(unusable && failureHappened(unusable, t)).toBe(
-      "The API key this test run was started with has been revoked or has expired, so the run stopped."
-    );
-    // The right the key lacks reads as the rights screens name it, never as its id.
-    expect(scope && failureHappened(scope, t)).toBe(
-      "The API key this test run was started with lacks the right “Use connections”, which you hold yourself."
-    );
-    expect(scope && failureHappened(scope, de)).toBe(
-      "Dem API-Schlüssel, mit dem dieser Testlauf gestartet wurde, fehlt das Recht „Verbindungen verwenden“, das du selbst hast."
-    );
-    expect(cannotCarry && failureHappened(cannotCarry, de)).not.toContain("mail_sender.use");
-    // A right this interface has no words for is not named at all.
-    expect(failureHappened({ reason: "testerKeyCannotCarry", action: "x.unknown" }, t)).toBe(
-      t("workflows.reason.testerKeyCannotCarry")
-    );
-    expect(failureHappened({ reason: "testerKeyScope" }, de)).toBe(
-      de("workflows.reason.testerKeyScope")
-    );
-
-    // The run's page says what happened and what to do, and keeps the instance's sentence
-    // behind the technical details.
-    for (const [code, advice] of [
-      [
-        "tester_key_unusable",
-        "Test the workflow again here in the app, or start the test run with a key that is still valid."
-      ],
-      [
-        "tester_key_scope",
-        "Test the workflow here in the app, or start the test run with a key that has this right."
-      ],
-      ["tester_key_cannot_carry", "Test the workflow here in the app."]
-    ] as const) {
-      const html = page({
-        ...run,
-        status: "failed",
-        error: { code, message: "The instance's sentence" }
-      });
-      expect(html).toContain(advice);
-      expect(html).not.toContain(t("workflows.reason.other"));
-      expect(html).not.toContain(code);
-    }
-  });
-
-  it("names the Workflow whose run key is held in the step's own call chain, and nothing else", () => {
-    const cycle = {
-      code: "run_key_cycle",
-      message: "The operation 'workflow.open-invoices.start' failed (run_key_cycle)"
-    };
-    const failure = toWorkflowStepRun(
-      stepRun("wfs_cycle", "remind", { stepType: "workflow", status: "failed", error: cycle })
-    ).failure;
-    expect(failure).toMatchObject({ reason: "runKeyCycle", workflow: "open-invoices" });
-    expect(failure && failureHappened(failure, t)).toBe(
-      "The key for Workflow “open-invoices” is held by a run in its own call chain."
-    );
-    expect(failure && failureHappened(failure, de)).toBe(
-      "Den Schlüssel für den Workflow „open-invoices“ hält ein Lauf in seiner eigenen Aufrufkette."
-    );
-    // The run the step failed carries the same sentence.
-    expect(page({ ...run, status: "failed", error: cycle })).toContain(
-      "The key for Workflow “open-invoices” is held by a run in its own call chain."
-    );
-
-    // A sentence of any other form names no Workflow: nothing of it reaches the sentence.
-    for (const message of [
-      "The operation 'workflow.open-invoices.start' failed (run_key_cycle): key=abc",
-      "The operation 'workflow.Open Invoices.start' failed (run_key_cycle)",
-      "The operation 'connection.open-invoices.start' failed (run_key_cycle)",
-      "run key 'secret-key' is held"
-    ]) {
-      const other = toWorkflowRun({
-        ...run,
-        status: "failed",
-        error: { code: "run_key_cycle", message }
-      }).failure;
-      expect(other).toMatchObject({ reason: "runKeyCycle" });
-      expect(other?.workflow).toBeUndefined();
-      expect(other && failureHappened(other, t)).toBe(t("workflows.reason.runKeyCycle"));
-    }
-    // The form alone names no Workflow under another code.
-    expect(
-      toWorkflowRun({
-        ...run,
-        status: "failed",
-        error: { code: "run_key_invalid", message: cycle.message }
-      }).failure?.workflow
-    ).toBeUndefined();
-  });
-
-  it("says of a run interrupted in a changing call that the call may have happened and was not repeated", () => {
-    const markup = page({
-      ...run,
-      status: "failed",
-      error: { code: "operation_interrupted", message: "interrupted" }
-    });
-    expect(markup).toContain("The change may or may not have happened");
-    expect(markup).toContain("was not repeated");
-    expect(de("workflows.reason.interrupted")).toContain("nicht wiederholt");
-  });
-
-  it("says that a cancel waits for the call that is going, and offers no second cancel", () => {
-    const markup = page({ ...run, cancelledAt: "2026-10-12T09:01:00.000Z" });
-    expect(markup).toContain(t("workflows.run.stopping"));
-    expect(markup).toContain(t("workflows.run.stoppingLine"));
-    expect(markup).not.toContain(`>${t("workflows.run.cancel")}<`);
-    expect(page(run)).not.toContain(t("workflows.run.stoppingLine"));
+    ]);
   });
 });

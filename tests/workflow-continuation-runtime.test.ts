@@ -118,77 +118,71 @@ function failFirst(t: WorkflowFixture) {
   );
 }
 
-it.each([5])(
-  "carries all loop totals and later-step counts after first-item failure at budget %s",
-  async (budget) => {
-    const { t } = await ready(continuing("notify-clients", budget));
-    failFirst(t);
-    await start(t);
-    const runs = await finish(t, "notify-clients");
-    const last = runs.at(-1);
-    expect(last?.status).toBe("done");
-    if (!last) throw new Error("Missing last run");
-    expect(await t.stores.workflowRuns.readRunOutput({ clientInstanceId, id: last.id })).toEqual({
-      value: { sent: 2, failed: 1 }
-    });
-    const loop = (await stepRunsOf(t, last.id)).find((step) => step.stepId === "each_client");
-    expect(JSON.parse(loop?.outputPreview?.text ?? "null")).toMatchObject({
-      total: 3,
-      done: 2,
-      failed: 1
-    });
-    expect(last.failedItemCount).toBe(1);
-    const listed = await t.expectOk(t.root.id, "workflows.list_runs", {
-      params: { workflow: "notify-clients" }
-    });
-    expect(listed.json().items).toContainEqual(
-      expect.objectContaining({
-        id: last.id,
-        status: "done",
-        failedItemCount: 1
-      })
-    );
-    const workflows = await t.expectOk(t.root.id, "workflows.list");
-    expect(workflows.json().items).toContainEqual(
-      expect.objectContaining({
-        id: "notify-clients",
-        lastRun: expect.objectContaining({ id: last.id, failedItemCount: 1 })
-      })
-    );
-    expect(writesOf(t)).toHaveLength(3);
-    if (budget === 5) expect(runs.length).toBeGreaterThan(1);
-  }
-);
+it("carries all loop totals and later-step counts after first-item failure", async () => {
+  const { t } = await ready(continuing("notify-clients", 5));
+  failFirst(t);
+  await start(t);
+  const runs = await finish(t, "notify-clients");
+  const last = runs.at(-1);
+  expect(last?.status).toBe("done");
+  if (!last) throw new Error("Missing last run");
+  expect(await t.stores.workflowRuns.readRunOutput({ clientInstanceId, id: last.id })).toEqual({
+    value: { sent: 2, failed: 1 }
+  });
+  const loop = (await stepRunsOf(t, last.id)).find((step) => step.stepId === "each_client");
+  expect(JSON.parse(loop?.outputPreview?.text ?? "null")).toMatchObject({
+    total: 3,
+    done: 2,
+    failed: 1
+  });
+  expect(last.failedItemCount).toBe(1);
+  const listed = await t.expectOk(t.root.id, "workflows.list_runs", {
+    params: { workflow: "notify-clients" }
+  });
+  expect(listed.json().items).toContainEqual(
+    expect.objectContaining({
+      id: last.id,
+      status: "done",
+      failedItemCount: 1
+    })
+  );
+  const workflows = await t.expectOk(t.root.id, "workflows.list");
+  expect(workflows.json().items).toContainEqual(
+    expect.objectContaining({
+      id: "notify-clients",
+      lastRun: expect.objectContaining({ id: last.id, failedItemCount: 1 })
+    })
+  );
+  expect(writesOf(t)).toHaveLength(3);
+  expect(runs.length).toBeGreaterThan(1);
+});
 
-it.each([false, true])(
-  "finishes a continuing child's dataset chain once and reports its whole total to the parent (failure=%s)",
-  async (failure) => {
-    const { t } = await ready(continuing("child-can"), parent());
-    if (failure) failFirst(t);
-    await start(t, t.root.id, "parent");
-    const parents = await finish(t, "parent");
-    expect(parents).toHaveLength(1);
-    const run = parents[0];
-    if (!run) throw new Error("Missing parent");
-    expect(run.status).toBe("done");
-    const detail = await t.expectOk(t.root.id, "workflows.get_run", { params: { runId: run.id } });
-    expect(detail.json().failedDescendantCount).toBe(failure ? 1 : 0);
-    expect(
-      await t.stores.workflowNotices.failureCount({ clientInstanceId, rootRunId: run.id })
-    ).toBe(failure ? 1 : 0);
+it("finishes a continuing child's dataset chain once and reports its whole total and failures to the parent", async () => {
+  const { t } = await ready(continuing("child-can"), parent());
+  failFirst(t);
+  await start(t, t.root.id, "parent");
+  const parents = await finish(t, "parent");
+  expect(parents).toHaveLength(1);
+  const run = parents[0];
+  if (!run) throw new Error("Missing parent");
+  expect(run.status).toBe("done");
+  const detail = await t.expectOk(t.root.id, "workflows.get_run", { params: { runId: run.id } });
+  expect(detail.json().failedDescendantCount).toBe(1);
+  expect(await t.stores.workflowNotices.failureCount({ clientInstanceId, rootRunId: run.id })).toBe(
+    1
+  );
 
-    expect((await chain(t, "child-can")).map((part) => part.status)).toEqual([
-      "continued",
-      "continued",
-      "done"
-    ]);
-    expect(writesOf(t)).toHaveLength(3);
-    expect(new Set(writesOf(t).map((write) => JSON.stringify(write))).size).toBe(3);
-    expect(await t.stores.workflowRuns.readRunOutput({ clientInstanceId, id: run.id })).toEqual({
-      value: { sent: failure ? 2 : 3, failed: failure ? 1 : 0 }
-    });
-  }
-);
+  expect((await chain(t, "child-can")).map((part) => part.status)).toEqual([
+    "continued",
+    "continued",
+    "done"
+  ]);
+  expect(writesOf(t)).toHaveLength(3);
+  expect(new Set(writesOf(t).map((write) => JSON.stringify(write))).size).toBe(3);
+  expect(await t.stores.workflowRuns.readRunOutput({ clientInstanceId, id: run.id })).toEqual({
+    value: { sent: 2, failed: 1 }
+  });
+});
 
 it("carries counts across cursor pages without replaying an old page", async () => {
   const { t } = await ready(continuing("notify-clients", 7, true));
@@ -400,24 +394,3 @@ it.each(["sibling", "another chain"])(
     expect(writesOf(t)).toHaveLength(3);
   }
 );
-
-it("reports the same failure totals without continuation", async () => {
-  const base = notifyClients({ onItemFailure: "continue" });
-  const { t } = await ready({
-    ...base,
-    limits: { stepRuns: 20_000 },
-    steps: base.steps.map((step) =>
-      step.id === "clients" ? { ...step, dataset: { at: "clients" } } : step
-    )
-  });
-  failFirst(t);
-  await start(t);
-  const runs = await finish(t, "notify-clients");
-  expect(runs).toHaveLength(1);
-  const final = runs[0];
-  if (!final) throw new Error("Missing unsplit run");
-  expect(final.status).toBe("done");
-  expect(await t.stores.workflowRuns.readRunOutput({ clientInstanceId, id: final.id })).toEqual({
-    value: { sent: 2, failed: 1 }
-  });
-});

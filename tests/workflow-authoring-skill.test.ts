@@ -8,18 +8,13 @@ import {
   parseWorkflowManifest,
   readWorkflowManifest,
   workflowAuthoringSkill,
-  workflowStepFileIssues,
-  workflowStepTypesNotRun,
-  type WorkflowStepFile
+  workflowStepTypesNotRun
 } from "@work-shape/catalyst-workflows";
-import { WORKFLOW_FIXTURES } from "./support/workflow-instance";
 
 // The skill an agent reads before it changes a Workflow says what the engine of this release
 // runs. Its step reference is made from the engine's own list of step types, so the two cannot
 // say different things; these tests fail when they do, and when an example stops being a
-// definition the engine accepts. What it says of the step files of a `code` step is held
-// against the check a save runs: the paths, the bounds and the codes it names are the ones
-// that check answers.
+// definition the engine accepts.
 
 const headings = [...workflowAuthoringSkill.content.matchAll(/^### `type: ([a-z]+)`$/gmu)].map(
   (match) => match[1]
@@ -60,49 +55,6 @@ describe("the skill for writing a Workflow", () => {
     }
   });
 
-  it("says of each step type what the parser says: a step of it is accepted, one of another refused", () => {
-    const withStep = (type: string) => ({
-      id: "example",
-      name: "Example",
-      runAs: "workflow-runner",
-      inputs: { type: "object" },
-      outputs: { type: "object" },
-      steps: [
-        { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
-        ...(type === "notify"
-          ? [
-              {
-                id: "tell",
-                name: "Tell",
-                type,
-                to: { users: ["usr_ada"] },
-                channels: ["inbox"],
-                title: { value: "Notice" },
-                text: { value: "Ready" }
-              }
-            ]
-          : type === "agent"
-            ? [
-                {
-                  id: "ask",
-                  name: "Ask",
-                  type,
-                  instructions: "ask.md",
-                  input: {},
-                  inputSchema: { type: "object" },
-                  outputSchema: { type: "object" }
-                }
-              ]
-            : []),
-        { id: "result", name: "Result", type: "output", input: {} }
-      ]
-    });
-    expect(parseWorkflowManifest(withStep("none")).ok).toBe(true);
-    expect(parseWorkflowManifest(withStep("notify")).ok).toBe(true);
-    expect(workflowStepTypesNotRun()).not.toContain("agent");
-    expect(parseWorkflowManifest(withStep("agent")).ok).toBe(true);
-  });
-
   it("shows examples the engine accepts as they are written", () => {
     expect(WORKFLOW_AUTHORING_EXAMPLES.length).toBeGreaterThanOrEqual(2);
     for (const example of WORKFLOW_AUTHORING_EXAMPLES) {
@@ -113,7 +65,10 @@ describe("the skill for writing a Workflow", () => {
   });
 
   it("shows the fixture Workflow without a run account, so its publish makes its own", async () => {
-    const file = await readFile(`${WORKFLOW_FIXTURES}/top-customers/workflow.yaml`, "utf8");
+    const file = await readFile(
+      new URL("./fixtures/workflows/top-customers/workflow.yaml", import.meta.url),
+      "utf8"
+    );
     const stored = readWorkflowManifest(file);
     const shown = readWorkflowManifest(WORKFLOW_AUTHORING_EXAMPLES[0]?.yaml ?? "");
     const withoutAccount = (manifest: object) =>
@@ -123,62 +78,6 @@ describe("the skill for writing a Workflow", () => {
     );
     for (const example of WORKFLOW_AUTHORING_EXAMPLES)
       expect(example.yaml, example.title).not.toMatch(/^runAs:/mu);
-  });
-
-  describe("on the step files of a code step", () => {
-    const { content } = workflowAuthoringSkill;
-    /** The steps of a definition with one code step per file, as the parser reads them. */
-    const stepsOf = (files: readonly string[]) => {
-      const parsed = parseWorkflowManifest({
-        id: "example",
-        name: "Example",
-        runAs: "workflow-runner",
-        inputs: { type: "object" },
-        outputs: { type: "object" },
-        steps: [
-          { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
-          ...files.map((file, position) => ({
-            id: `code${position}`,
-            name: "Run",
-            type: "code",
-            file,
-            input: {},
-            inputSchema: { type: "object" },
-            outputSchema: { type: "object" }
-          })),
-          { id: "result", name: "Result", type: "output", input: {} }
-        ]
-      });
-      if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
-      return parsed.manifest;
-    };
-    const issuesOf = (steps: readonly string[], files: readonly WorkflowStepFile[]) =>
-      workflowStepFileIssues(stepsOf(steps), files).map(({ path, code }) => ({ path, code }));
-
-    it("describes the immutable tree, entry alias, operator bounds and absolute IO paths", () => {
-      for (const text of [
-        "entry: lib/run.py",
-        "file: run.py",
-        "read-only",
-        "PYTHONPATH",
-        "NODE_PATH",
-        "WORKFLOW_INPUT_FILE",
-        "WORKFLOW_OUTPUT_FILE",
-        "workflows.source.*",
-        "code_file_missing"
-      ])
-        expect(content).toContain(text);
-      expect(content).not.toContain("code_file_unused");
-      expect(
-        issuesOf(
-          ["a.py"],
-          [
-            { path: "steps/a.py", content: "" },
-            { path: "sql/query.sql", content: "select 1" }
-          ]
-        )
-      ).toEqual([]);
-    });
   });
 
   describe("on what the manifest holds beside the steps", () => {

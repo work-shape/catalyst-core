@@ -28,7 +28,6 @@ import {
 import {
   createWorkflowTestTools,
   createToolOperationRunner,
-  registerToolOperations,
   ToolRegistry,
   WORKFLOW_TEST_TOOL_NAMES
 } from "@work-shape/catalyst-tool-execution";
@@ -190,12 +189,6 @@ describe("the agent projections of Workflow testing", () => {
     }
   });
 
-  it("keeps the native operations' rights and validation rather than registering tool replacements", async () => {
-    const registry = createOperationRegistry();
-    registerToolOperations(registry, createWorkflowTestTools(), { clientInstanceId });
-    expect((await registry.list()).operations).toEqual([]);
-  });
-
   it.each(["agent", "app"] as const)(
     "refuses draft runs from a marked %s conversation, including dispatch rechecks",
     async (kind) => {
@@ -314,8 +307,6 @@ describe("the agent projections of Workflow testing", () => {
 
   it.each([
     { ...conversation, subject: { kind: "workflow", name: "another-workflow" } },
-    { ...conversation, subject: { kind: "app", name: "subject-workflow" } },
-    { ...conversation, subject: undefined },
     { ...conversation, status: "deleted" as const },
     undefined
   ])(

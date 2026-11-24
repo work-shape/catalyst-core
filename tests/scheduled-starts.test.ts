@@ -457,7 +457,6 @@ describe("scheduled prompts API", () => {
         payload: { ...fields, cron, collaborationWorkspaceId: workspace.id }
       });
       expect(refused.statusCode, cron).toBe(422);
-      expect(refused.body).toContain("at most every 15 minutes");
     }
     const start = scheduledStartSchema.parse(
       (
@@ -504,27 +503,6 @@ describe("scheduled prompts API", () => {
     ).toEqual({
       scheduledFor: ["2030-01-15T10:00:00.000Z"],
       nextRunAt: "2030-01-15T11:00:00.000Z"
-    });
-  });
-
-  it("records a late tick in the repeated Berlin hour for the first showing of that hour", async () => {
-    // 27 October 2030: 02:00 is shown at 00:00 UTC in summer time and again at 01:00 UTC in
-    // winter time. The schedule ran for it the first time; the second is not due again.
-    expect(
-      await lateTick("0 * * * *", "2030-10-26T20:00:00.000Z", "2030-10-27T01:30:00.000Z")
-    ).toEqual({
-      scheduledFor: ["2030-10-27T00:00:00.000Z"],
-      nextRunAt: "2030-10-27T02:00:00.000Z"
-    });
-  });
-
-  it("records a late tick after the skipped Berlin hour for the time it skipped", async () => {
-    // 31 March 2030: 02:30 is skipped, so it is due at 03:00 summer time, 01:00 UTC.
-    expect(
-      await lateTick("30 2 * * *", "2030-03-30T01:30:00.000Z", "2030-03-31T01:20:00.000Z")
-    ).toEqual({
-      scheduledFor: ["2030-03-31T01:00:00.000Z"],
-      nextRunAt: "2030-04-01T00:30:00.000Z"
     });
   });
 

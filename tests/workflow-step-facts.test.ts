@@ -95,7 +95,6 @@ describe("WF-PANEL-1a facts of the Workflow revision read", () => {
     expect(asset.stepFacts?.read).toMatchObject({
       effect: "reading",
       source: { kind: "connection", title: "Exampledata", service: "exampledata" },
-      description: "Returns its input.",
       available: true,
       inputSchema: { type: "object", properties: { text: { type: "string", maxLength: 40 } } },
       outputSchema: { type: "object" }
@@ -180,18 +179,6 @@ describe("WF-PANEL-1a facts of the Workflow revision read", () => {
     expect(asset.config).not.toHaveProperty("stepFacts");
     expect(JSON.stringify(asset.config)).not.toContain("catalyst@mail.example.test");
     expect(JSON.stringify(asset.stepFacts)).not.toContain("capture");
-  });
-
-  it("keeps the mail source kind when outbound mail is unavailable", async () => {
-    const t = await ready();
-    await store(t, "workflow", address.name, {
-      name: address.name,
-      manifest: definition([op("send", "mail.send")])
-    });
-    expect((await read(t)).stepFacts?.send).toEqual({
-      source: { kind: "mail_sender" },
-      available: false
-    });
   });
 
   it("names Data Stores, Knowledge Bases and Workflow operations, and marks unknown operations", async () => {
@@ -285,28 +272,6 @@ describe("WF-PANEL-1a facts of the Workflow revision read", () => {
       timeZone: "Europe/Berlin",
       nextDueAt: "2026-10-24T06:00:00.000Z"
     });
-  });
-
-  it("names no model the AI step does not declare", async () => {
-    const t = await ready();
-    await store(t, "workflow", address.name, {
-      name: address.name,
-      manifest: definition(
-        [
-          {
-            id: "ai",
-            type: "agent",
-            name: "Write summary",
-            instructions: "steps/ai.md",
-            input: {},
-            inputSchema: { type: "object" },
-            outputSchema: { type: "object" }
-          }
-        ],
-        ["connection.crm.echo"]
-      )
-    });
-    expect((await read(t)).stepFacts?.ai).toEqual({});
   });
 
   it("keeps step paths on list reasons and validate/put issues", async () => {

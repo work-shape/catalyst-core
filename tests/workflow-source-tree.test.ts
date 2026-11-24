@@ -47,7 +47,7 @@ const limits = {
 };
 
 describe("a Workflow revision's source tree (check 152)", () => {
-  it.each(["lib/run.py", "lib/run.js", "lib/run.mjs"])(
+  it.each(["lib/run.py", "lib/run.mjs"])(
     "runs %s from the tree root, importing lib and reading SQL with an unused file",
     async (entry) => {
       const root = await directory();

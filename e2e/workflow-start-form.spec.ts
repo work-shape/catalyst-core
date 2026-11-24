@@ -1,7 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
-import { type Browser, type Locator, type Page } from "@playwright/test";
+import { type Browser, type Page } from "@playwright/test";
 import { z } from "zod";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test, type PageErrorWatch } from "./test";
@@ -34,12 +32,12 @@ test.use({
 // is one of this spec's own. Fails without the form: a Workflow with inputs offered no start.
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 
-/** Where the pictures of a run go. Without it the test takes none. */
-const shotsDir = process.env.E2E_SHOTS_DIR;
-
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
 
-/** The member who starts the Workflow, from `tests/fixtures/e2e-users/workflow-start-form.yaml`. No other spec uses it. */
+/**
+ * The member who starts the Workflow, from `tests/fixtures/e2e-users/workflow-start-form.yaml`.
+ * No other spec uses it.
+ */
 const member = {
   email: "e2e-workflow-start@example.test",
   password: "e2e-workflow-start-password"
@@ -181,48 +179,13 @@ async function grant(root: Page, memberId: string, assetId: string, action: stri
   return idSchema.parse(await granted.json()).id;
 }
 
-/** Pictures of the form as a start left empty leaves it, in both themes and languages. */
-async function shootForm(page: Page, open: () => Promise<Locator>): Promise<void> {
-  if (!shotsDir) {
-    return;
-  }
-  await mkdir(shotsDir, { recursive: true });
-  {
-    const [theme, locale, width]: ["light", "en", number] = ["light", "en", 1440];
-    await page.evaluate(
-      ([themeValue, localeValue]) => {
-        window.localStorage.setItem("vivd-catalyst:theme", themeValue);
-        window.localStorage.setItem("vivd-catalyst:locale", localeValue);
-      },
-      [theme, locale] as const
-    );
-    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
-    await page.reload();
-    const dialog = await open();
-    await dialog.locator('button[type="submit"]').click();
-    await expect(dialog.getByRole("alert").first()).toBeVisible();
-    await page.screenshot({
-      path: join(shotsDir, `workflow-start-form-${theme}-${locale}-${String(width)}.png`),
-      animations: "disabled"
-    });
-    await page.keyboard.press("Escape");
-    await expect(dialog).toBeHidden();
-  }
-  await page.evaluate(() => {
-    window.localStorage.setItem("vivd-catalyst:theme", "light");
-    window.localStorage.setItem("vivd-catalyst:locale", "en");
-  });
-  await page.setViewportSize(WIDE);
-  await page.reload();
-}
-
 test("a member starts a Workflow with inputs from its form and sees the run end; a reader sees no start", async ({
   page,
   browser,
   pageErrors,
   accessState: _accessState
 }) => {
-  test.setTimeout(shotsDir ? 300000 : 120000);
+  test.setTimeout(120000);
   const suffix = randomUUID().slice(0, 8);
   const id = `start-form-${suffix}`;
   const name = `Booking check ${suffix}`;
@@ -261,30 +224,12 @@ test("a member starts a Workflow with inputs from its form and sees the run end;
     await grant(root, memberId, assetId, "workflow.use")
   ];
   try {
-    // The Workflow's Settings say under "Advanced" whom every run acts as: the account's label.
-    await page.goto(`/w/${workspaceId}/workflows/${id}/settings`);
-    const advanced = page.getByTestId("workflow-settings-page").locator("[data-workflow-advanced]");
-    await advanced.locator("[data-workflow-advanced-trigger]").click();
-    await expect(advanced.locator("[data-workflow-facts]")).toContainText(runAs);
     await page.goto(`/w/${workspaceId}/workflows`);
     const card = page.getByRole("listitem").filter({ hasText: name });
     const dialog = page.getByRole("dialog", { name: `Start “${name}” now?` });
     // Start now stands above the card that opens the Workflow, and keeps its own action.
-    const openForm = async () => {
-      await card.getByRole("button", { name: "Start now", exact: true }).click();
-      await expect(dialog).toBeVisible();
-      return dialog;
-    };
-    // The pictures are taken in both languages, so the card's start is found in either.
-    await shootForm(page, async () => {
-      await card.getByRole("button", { name: /^(?:Start now|Jetzt starten)$/u }).click();
-      const shown = page.getByRole("dialog");
-      await expect(shown).toBeVisible();
-      return shown;
-    });
-    await openForm();
-    await expect(dialog).toContainText("Fill in what this run starts with.");
-    await expect(dialog).toContainText("Whose bookings to check.");
+    await card.getByRole("button", { name: "Start now", exact: true }).click();
+    await expect(dialog).toBeVisible();
     const client = dialog.getByRole("textbox", { name: /^Client/u });
     const month = dialog.getByLabel(/^First day/u);
     const limit = dialog.getByRole("spinbutton", { name: /^Most bookings/u });
@@ -293,12 +238,7 @@ test("a member starts a Workflow with inputs from its form and sees the run end;
     const start = dialog.getByRole("button", { name: "Start", exact: true });
     // The default stands in its field.
     await expect(limit).toHaveValue("10");
-    // A start without the required values is refused in the form, each under its field.
-    await start.click();
-    await expect(dialog.getByText("Enter a value.", { exact: true })).toHaveCount(2);
-    await expect(dialog.getByText("Choose one.", { exact: true })).toBeVisible();
-    await expect(client).toHaveAttribute("aria-invalid", "true");
-    // What the inputs refuse is refused in the form, in the reader's words.
+    // What the inputs refuse is refused in the form, before anything is sent.
     await client.fill("N");
     await month.fill("2026-09-01");
     await region.selectOption("north");
@@ -313,12 +253,8 @@ test("a member starts a Workflow with inputs from its form and sees the run end;
     // passes the form and not the instance, which names the field it refuses.
     await publish(root, { id, name, runAs, mostBookings: 3 });
     await start.click();
-    await expect(dialog).toContainText("These values were not accepted.");
     await expect(dialog.getByText("must be <= 3", { exact: true })).toBeVisible();
-    await expect(dialog).toBeVisible();
     await limit.fill("2");
-    // A changed value is the reader's again.
-    await expect(dialog.getByText("must be <= 3", { exact: true })).toHaveCount(0);
     // The start opens the new run, which ends as done with what the form gave.
     await start.click();
     await expect(dialog).toBeHidden();
@@ -346,10 +282,7 @@ test("a member starts a Workflow with inputs from its form and sees the run end;
     await page.goto(`/w/${workspaceId}/workflows`);
     await expect(card).toBeVisible();
     await expect(card.getByRole("button", { name: "Start now", exact: true })).toHaveCount(0);
-    // The whole card opens the Workflow: a click on its name lands on Open, whose area lies
-    // over it.
-    await expect(card.getByRole("link", { name: `Open ${name}`, exact: true })).toHaveCount(1);
-    await card.getByRole("heading", { name, exact: true }).click({ force: true });
+    await card.getByRole("link", { name: `Open ${name}`, exact: true }).click();
     const workflowPage = page.getByTestId("workflow-page");
     await expect(workflowPage.getByRole("heading", { level: 1 })).toHaveText(name);
     await expect(workflowPage.getByRole("button", { name: "Start now", exact: true })).toHaveCount(

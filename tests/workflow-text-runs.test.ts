@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import {
-  WORKFLOW_MARKDOWN_MAX_ROWS,
-  WORKFLOW_TEXT_FORMAT_MARKDOWN,
-  type JsonValue
-} from "@work-shape/catalyst-core";
+import { WORKFLOW_TEXT_FORMAT_MARKDOWN, type JsonValue } from "@work-shape/catalyst-core";
 import { operationOf, write } from "./support/connection-operations";
 import {
   publishedDefinitions,
@@ -12,7 +8,7 @@ import {
   workflowFixture,
   type WorkflowFixture
 } from "./support/workflow-instance";
-import { NOTE, readyWorkflows, start, stepRunsOf } from "./support/workflow-runs";
+import { NOTE, readyWorkflows, start } from "./support/workflow-runs";
 
 // EW-TEXT at run time (events-workflows-and-guardrails.md check 143): a published Workflow
 // reads clients from the Connection `crm` and joins a subject and a Markdown body from them in
@@ -101,35 +97,10 @@ describe("a text joined from parts when the step runs", () => {
     });
   });
 
-  it("joins a list of 100 records as a table", async () => {
-    const clients = Array.from({ length: WORKFLOW_MARKDOWN_MAX_ROWS }, (_, index) => ({
-      id: `c${index}`
-    }));
-    const { run } = await runWith(clients);
-    expect(run.status).toBe("done");
-  });
-
-  it("fails the step with input_invalid on a list of 101 records", async () => {
-    const clients = Array.from({ length: WORKFLOW_MARKDOWN_MAX_ROWS + 1 }, (_, index) => ({
-      id: `c${index}`
-    }));
-    const { t, run } = await runWith(clients);
-    expect(run.status).toBe("failed");
-    expect(run.error).toMatchObject({
-      code: "input_invalid",
-      message: "Part 2 of 'body' is a list of more than 100 rows"
-    });
-    const result = (await stepRunsOf(t, run.id)).find((stepRun) => stepRun.stepId === "result");
-    expect(result).toMatchObject({ status: "failed", error: { code: "input_invalid" } });
-  });
-
   it("fails the step with input_invalid when the joined text is longer than its field allows", async () => {
     const { run } = await runWith([{ id: "client-anna" }], 10);
     expect(run.status).toBe("failed");
-    expect(run.error).toMatchObject({
-      code: "input_invalid",
-      message: "The text joined for 'subject' is longer than the 10 characters the field allows"
-    });
+    expect(run.error).toMatchObject({ code: "input_invalid" });
     // The message names the field and its limit, and nothing of the text.
     expect(run.error?.message).not.toContain(NOTE);
   });

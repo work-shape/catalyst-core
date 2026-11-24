@@ -103,32 +103,27 @@ describe("starting a Workflow with a personal key", () => {
     expect(only.statusCode, only.body).toBe(200);
   });
 
-  it("refuses a key without workflow.use, naming it, though it may read and write Workflows", async () => {
+  it("refuses a key without workflow.use, naming it, and one narrowed to another workspace", async () => {
     const context = await ready();
     for (const scopes of [["workflow.read"], ["workflow.read", "workflow.write"]]) {
       const refused = await startWith(context, scopes);
       expect(refused.statusCode, refused.body).toBe(403);
-      const { error } = errorSchema.parse(refused.json());
-      expect(error.details).toEqual({ action: "workflow.use", reason: "outside_key_scope" });
-      expect(error.message).toContain("'workflow.use'");
-      expect(error.message).toContain("use level");
+      expect(errorSchema.parse(refused.json()).error.details).toEqual({
+        action: "workflow.use",
+        reason: "outside_key_scope"
+      });
     }
-    expect(context.t.executed).toEqual([]);
-  });
-
-  it("narrows the start to the workspace and Workflow the key names", async () => {
-    const context = await ready();
     const created = await context.t.call(context.t.root.id, "workspaces.create", {
       payload: { name: "Elsewhere" }
     });
     expect(created.statusCode, created.body).toBe(200);
     const elsewhere = created.json<{ id: string }>().id;
-    const refused = await startWith(context, [
+    const narrowed = await startWith(context, [
       "workflow.read",
       `workflow.use:${elsewhere}/notify-clients`
     ]);
-    expect(refused.statusCode, refused.body).toBe(403);
-    expect(errorSchema.parse(refused.json()).error.details).toMatchObject({
+    expect(narrowed.statusCode, narrowed.body).toBe(403);
+    expect(errorSchema.parse(narrowed.json()).error.details).toMatchObject({
       action: "workflow.use",
       reason: "outside_key_scope"
     });

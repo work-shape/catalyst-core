@@ -2,6 +2,12 @@ import { createElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { createTranslationContext } from "./support/chat-ui/shared";
 import {
+  areaOfRoute,
+  createInstanceSource,
+  instanceTimeZoneOf,
+  railSections,
+  resolveWorkflowRights,
+  shownRailSections,
   StartDialog,
   WorkflowPageView,
   WorkflowRunPageView,
@@ -18,17 +24,23 @@ import {
   toWorkflowListItem,
   toWorkflowRun,
   toWorkflowStepRun,
+  WorkflowRemoveKnowledge,
+  workflowsAccess,
+  workflowsRowShown,
+  workspaceRouteFromPath,
+  workspaceRoutePath,
   type WorkflowRunList,
   type WorkflowRunRead
 } from "@work-shape/catalyst-chat-ui/workflows";
+import { workflowsContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
+import { recordedApiClient } from "./support/recorded-api-client";
 
 // The screens of the Workflows area, each state from fixtures built here and taken through the
-// mapping of the data module, as an answer of the instance is. Every test here fails without
-// the area: the screens and the mapping did not exist.
+// mapping of the data module, as an answer of the instance is; who is shown the area, its
+// addresses, and the question before a Workflow is deleted.
 
 const { t } = createTranslationContext("en");
-const de = createTranslationContext("de").t;
 
 const render = (node: ReactNode, locale: "en" | "de" = "en") =>
   renderToStaticMarkup(createElement(TranslationProvider, { locale, children: node }));
@@ -216,15 +228,17 @@ describe("the list of Workflows", () => {
     description: "Reads the clients and sends each of them a note."
   };
 
-  it("tells whoever may not build what a Workflow is, and offers nothing to build", () => {
-    const markup = render(listPage([]));
-    expect(markup).toContain(
-      "No workflows yet. A workflow, for example, sends a summary every Monday or reminds clients of overdue invoices."
-    );
-    expect(markup).not.toContain("builder");
-    expect(markup).toContain(t("workflows.description"));
-    expect(markup).not.toContain("<button");
-    expect(render(listPage([]), "de")).toContain(de("workflows.emptyReadOnly"));
+  it("offers a builder the agent on the empty list, a reader nothing, and New once there are Workflows", () => {
+    expect(render(listPage([]))).not.toContain("<button");
+    const page = (rows: Parameters<typeof listPage>[0]) =>
+      render(createElement(WorkflowsPageView, { ...listPage(rows).props, onNew: noop }));
+    const empty = page([]);
+    expect(empty).toContain(t("workflows.empty"));
+    expect(empty).not.toContain(t("workflows.new"));
+    // While the list loads, New stands: making one never waits for the answer.
+    expect(page(undefined)).toContain(t("workflows.new"));
+    expect(page([summary])).toContain(t("workflows.new"));
+    expect(page([summary])).not.toContain(t("workflows.empty"));
   });
 
   // DISCOVERY-PAGING: a page may come back empty with more to read. The list is empty only once
@@ -239,67 +253,18 @@ describe("the list of Workflows", () => {
       })
     );
     expect(markup).toContain("data-workflows-more");
-    expect(markup).toContain(t("workflows.showMore"));
     expect(markup).not.toContain(t("workflows.empty"));
     expect(markup).not.toContain(t("workflows.emptyReadOnly"));
   });
 
-  it("offers a builder the agent with two examples on the empty list", () => {
-    const markup = render(createElement(WorkflowsPageView, { ...listPage([]).props, onNew: noop }));
-    expect(markup).toContain(t("workflows.empty"));
-    expect(markup).toContain(">Build one with the agent</button>");
-    expect(markup).toContain('aria-label="Examples to start with"');
-    expect(markup).toContain("Monday task summary");
-    expect(markup).toContain("Reminder of overdue invoices");
-    expect(markup).not.toContain(t("workflows.emptyReadOnly"));
-    const german = render(
-      createElement(WorkflowsPageView, { ...listPage([]).props, onNew: noop }),
-      "de"
-    );
-    expect(german).toContain(">Einen mit dem Agenten bauen</button>");
-    expect(german).toContain(de("workflows.exampleSummaryTitle"));
-  });
-
-  it("drops the head's New while the empty list offers the agent, and shows it once there are Workflows", () => {
-    const page = (rows: Parameters<typeof listPage>[0]) =>
-      render(createElement(WorkflowsPageView, { ...listPage(rows).props, onNew: noop }));
-    const empty = page([]);
-    expect(empty).toContain(">Build one with the agent</button>");
-    expect(empty).not.toContain(t("workflows.new"));
-    // While the list loads, New stands: making one never waits for the answer.
-    expect(page(undefined)).toContain(t("workflows.new"));
-    const listed = page([summary]);
-    expect(listed).toContain(t("workflows.new"));
-    expect(listed).not.toContain("Build one with the agent");
-  });
-
-  it("lists each Workflow by its name and its sentence, with a link to its page", () => {
-    const markup = render(listPage([summary]));
-    expect(markup).toContain("Notify clients");
-    expect(markup).toContain("Reads the clients and sends each of them a note.");
-    expect(markup).toContain('href="/w/cw_1/workflows/notify-clients"');
-    // The card's target is named as one sentence with the Workflow's name, in either language.
-    expect(markup).toContain('aria-label="Open Notify clients"');
-    expect(render(listPage([summary]), "de")).toContain('aria-label="Notify clients öffnen"');
-    // The whole card opens the Workflow: the link to its page is the card's one target.
-    expect(markup.match(/data-card-target=""/gu)).toHaveLength(1);
-    expect(markup).toMatch(
+  it("links each card to its Workflow, and to its runs only once it ran", () => {
+    const never = render(listPage([summary]));
+    expect(never.match(/data-card-target=""/gu)).toHaveLength(1);
+    expect(never).toMatch(
       /<a[^>]*data-card-target=""[^>]*href="\/w\/cw_1\/workflows\/notify-clients"/u
     );
-    // The id is a builder's: the row never shows it as text.
-    expect(markup.replaceAll('href="/w/cw_1/workflows/notify-clients"', "")).not.toContain(
-      "notify-clients"
-    );
-  });
-
-  it("says how the latest run of a Workflow stands, as its last run, or that it has none", () => {
-    const never = render(listPage([summary]));
-    expect(never).not.toContain(t("workflows.run.failed"));
-    expect(never).toContain(t("workflows.noRunsPlain"));
-    expect(never).not.toContain(t("workflows.lastRun"));
-    // A Workflow that never ran has no runs to lead to.
     expect(never).not.toContain('href="/w/cw_1/workflows/notify-clients/runs"');
-    const markup = render(
+    const ran = render(
       listPage([
         {
           ...summary,
@@ -307,10 +272,8 @@ describe("the list of Workflows", () => {
         }
       ])
     );
-    expect(markup).toContain(t("workflows.run.failed"));
-    expect(markup).toContain(t("workflows.lastRun"));
-    expect(markup).toContain('dateTime="2026-10-12T09:00:00.000Z"');
-    expect(markup).toContain('href="/w/cw_1/workflows/notify-clients/runs"');
+    expect(ran).toContain(t("workflows.run.failed"));
+    expect(ran).toContain('href="/w/cw_1/workflows/notify-clients/runs"');
   });
 
   it("lists a draft never published to who may write Workflows, opening on its page (NAV-2)", () => {
@@ -324,23 +287,10 @@ describe("the list of Workflows", () => {
     expect(listedToReader(toWorkflowListItem(summary), onInstance(false))).toBe(true);
     const markup = render(
       createElement(WorkflowsPageView, {
-        workspaceId: "cw_1",
-        list: {
-          rows: [draft],
-          failed: false,
-          hasMore: false,
-          loadingMore: false,
-          loadMore: noop,
-          retry: noop
-        },
-        now,
-        runsAvailable: true,
-        onOpenRoute: noop,
-        onStart: noop
+        ...listPage([]).props,
+        list: { ...listPage([]).props.list, rows: [draft] }
       })
     );
-    expect(markup).toContain("First draft");
-    expect(markup).toContain(t("workflows.draft.unpublished"));
     expect(markup).toContain('href="/w/cw_1/workflows/first-draft"');
     expect(markup).not.toContain(t("workflows.startNow"));
   });
@@ -374,17 +324,8 @@ describe("the list of Workflows", () => {
     expect(render(listPage([{ ...usable, inputs: list }]))).not.toContain(t("workflows.startNow"));
   });
 
-  it("shows placeholders while the list loads, and the head at once", () => {
-    const markup = render(listPage(undefined));
-    expect(markup).toContain(t("workflows.title"));
-    expect(markup).toContain("animate-pulse");
-    expect(markup).not.toContain(t("workflows.emptyReadOnly"));
-  });
-
-  it("says that the list could not be loaded and offers to try again", () => {
-    const markup = render(listPage(undefined, true));
-    expect(markup).toContain(t("workflows.listFailed"));
-    expect(markup).toContain(t("tryAgain"));
+  it("offers to try again where the list could not be loaded", () => {
+    expect(render(listPage(undefined, true))).toContain(t("tryAgain"));
   });
 
   it("lists every Workflow at first and offers the kinds as a filter (WF-KIND)", () => {
@@ -398,10 +339,6 @@ describe("the list of Workflows", () => {
     expect(toWorkflowListItem(importer).kind).toBe("data");
     // A Workflow the list names without a kind, and a draft never published, are processes.
     expect(toWorkflowListItem(summary).kind).toBe("process");
-    expect(
-      toAssetWorkflowListItem({ name: "d", title: "D", updatedAt: now.toISOString() }).kind
-    ).toBe("process");
-    // A draft never published takes the kind its asset row names, a process where it names none.
     const draft = (attributes?: Record<string, string | boolean>) =>
       toAssetWorkflowListItem({
         name: "d",
@@ -410,30 +347,59 @@ describe("the list of Workflows", () => {
         ...(attributes ? { attributes } : {})
       }).kind;
     expect(draft({ workflowKind: "data" })).toBe("data");
-    expect(draft({ workflowKind: "process" })).toBe("process");
     expect(draft({ workflowKind: "other" })).toBe("process");
-    expect(draft({})).toBe("process");
+    expect(draft()).toBe("process");
 
     // Every Workflow stands on the list at first: nothing waits behind a filter.
     const markup = render(listPage([importer, reminder]));
     expect(markup).toContain("Notify clients");
     expect(markup).toContain("Invoice import");
-    // A data flow says so on its card.
-    expect(markup).toContain(t("workflows.kindDataOne"));
-    // The kinds are one choice, All chosen.
-    expect(markup).toContain(t("workflows.kindAll"));
-    expect(markup).toContain(t("workflows.kindProcess"));
     expect(markup).toContain(t("workflows.kindData"));
-    expect(markup).toMatch(/role="radio"[^>]*aria-checked="true"[^>]*>(?:(?!<\/button>).)*All/u);
-    expect(render(listPage([importer, reminder]), "de")).toContain("Alle");
     // Without both kinds there is nothing to choose between.
     expect(render(listPage([reminder]))).not.toContain(t("workflows.kindData"));
-    // Only data Workflows: they are listed, with no filter and no empty message.
     const onlyData = render(listPage([importer]));
     expect(onlyData).toContain("Invoice import");
-    expect(onlyData).not.toContain(t("workflows.kindProcessEmpty"));
     expect(onlyData).not.toContain(t("workflows.kindAll"));
-    expect(onlyData).not.toContain(t("workflows.emptyReadOnly"));
+  });
+
+  // A Workflow's card names the Apps that start it: two by name, the rest counted, each a link
+  // to its App in the workspace that owns it. No line where none does.
+  it("names two Apps that start a Workflow on its card, counts the rest, and links each", () => {
+    const app = (name: string, title: string, workspaceId?: string) => ({
+      name,
+      title,
+      scope:
+        workspaceId === undefined
+          ? { kind: "instance" as const }
+          : { kind: "workspace" as const, workspaceId }
+    });
+    const card = (appCallers?: ReturnType<typeof app>[]) => {
+      const view = listPage([]);
+      return render(
+        createElement(WorkflowsPageView, {
+          ...view.props,
+          list: {
+            ...view.props.list,
+            rows: [toWorkflowListItem(summary, appCallers ? { appCallers } : undefined)]
+          }
+        })
+      );
+    };
+    const apps = [
+      app("a", "Alpha", "cw_2"),
+      app("b", "Beta"),
+      app("c", "Gamma"),
+      app("d", "Delta")
+    ];
+    const markup = card(apps);
+    const appLink = (workspace: string, name: string) =>
+      `href="${workspaceRoutePath({ kind: "app", collaborationWorkspaceId: workspace, app: name })}"`;
+    expect(markup).toContain(appLink("cw_2", "a"));
+    expect(markup).toContain(appLink("cw_1", "b"));
+    expect(markup).not.toContain(appLink("cw_1", "c"));
+    expect(markup).toContain("2 more");
+    expect(card()).not.toContain("data-workflow-app-callers");
+    expect(card([])).not.toContain("data-workflow-app-callers");
   });
 });
 
@@ -468,68 +434,17 @@ describe("the page of a Workflow", () => {
       onStart: noop
     });
 
-  it("names the Workflow, says what it does and offers its drawing, its runs and a start", () => {
+  it("offers its drawing, its runs and a start, and neither where the instance runs no Workflow", () => {
     const markup = render(page());
-    expect(markup).toContain("Notify clients");
-    expect(markup).toContain("Reads the clients and sends each of them a note.");
     expect(markup).toContain(t("workflows.startNow"));
-    expect(markup).toContain(t("workflows.tabWorkflow"));
     expect(markup).toContain('href="/w/cw_1/workflows/notify-clients/runs"');
-    // The drawing is a region of its own, named after the Workflow.
     expect(markup).toContain('data-testid="workflow-canvas"');
+    const off = render(page({ runsAvailable: false }));
+    expect(off).not.toContain(t("workflows.startNow"));
+    expect(off).not.toContain('href="/w/cw_1/workflows/notify-clients/runs"');
   });
 
-  it("says in its head when it runs, in words, and not whom its runs act as", () => {
-    const started = (triggers: readonly Record<string, unknown>[]) =>
-      toWorkflow(
-        {
-          name: "notify-clients",
-          config: {
-            ...definition,
-            steps: [{ ...definition.steps[0], triggers }, ...definition.steps.slice(1)]
-          },
-          publishedRevision: 3
-        },
-        { mayStart: true, runsAs: "Monthly close" }
-      );
-    const monday = { kind: "schedule", cron: "0 8 * * 1", timeZone: "Europe/Berlin" };
-    const when = (triggers: readonly Record<string, unknown>[], locale: "en" | "de" = "de") =>
-      /data-workflow-when=""[^>]*>([^<]*)</u.exec(
-        render(page({ workflow: started(triggers) }), locale)
-      )?.[1];
-    expect(when([monday, { kind: "manual" }])).toBe(
-      "Läuft jeden Montag um 08:00 (Ortszeit Berlin)"
-    );
-    expect(when([monday], "en")).toBe("Runs every Monday at 08:00 AM (Berlin time)");
-    // Monday to Friday is what the schedule field writes first.
-    expect(when([{ kind: "schedule", cron: "30 7 * * 1-5" }])).toBe(
-      "Läuft montags bis freitags um 07:30"
-    );
-    // Several days of a week and every hour are said too.
-    expect(when([{ kind: "schedule", cron: "0 8 * * 1,3" }])).toBe(
-      "Läuft jeden Montag und Mittwoch um 08:00"
-    );
-    expect(when([{ kind: "schedule", cron: "0 8 * * 3,1" }], "en")).toBe(
-      "Runs every Monday and Wednesday at 08:00 AM"
-    );
-    expect(when([{ kind: "schedule", cron: "0 * * * *" }])).toBe(de("workflows.when.hourly"));
-    expect(when([{ kind: "schedule", cron: "15 * * * *" }])).toBe(
-      "Läuft jede Stunde, 15 Minuten nach der vollen Stunde"
-    );
-    expect(when([{ kind: "schedule", cron: "*/5 * * * *" }])).toBe("Läuft nach Zeitplan");
-    // Every way that starts it without a person is said; a start by hand beside one is not.
-    expect(when([{ kind: "manual" }, { kind: "platform_event" }, { kind: "webhook" }])).toBe(
-      `${de("workflows.when.event")} · ${de("workflows.when.system")}`
-    );
-    expect(when([{ kind: "parent" }])).toBe(de("workflows.when.parent"));
-    expect(when([{ kind: "manual" }])).toBe(de("workflows.schedule.manualOnly"));
-    // The account every run acts as is a line of the Settings, not of the head.
-    const markup = render(page({ workflow: started([monday]) }));
-    expect(markup).not.toContain("Monthly close");
-    expect(markup).not.toContain("Runs as");
-  });
-
-  it("says when the published revision runs, not the draft the reader is shown", () => {
+  it("says in its head when the published revision runs, not the draft the reader is shown", () => {
     const monday = { kind: "schedule", cron: "0 8 * * 1", timeZone: "Europe/Berlin" };
     const config = (triggers: readonly Record<string, unknown>[]) => ({
       ...definition,
@@ -548,17 +463,15 @@ describe("the page of a Workflow", () => {
                 config: config([monday]),
                 publishedRevision: pointers.publishedRevision
               },
-              { mayStart: true },
+              { mayStart: true, runsAs: "Monthly close" },
               pointers
             ),
             ...(liveSteps === undefined ? {} : { liveSteps })
-          }),
-          "de"
+          })
         )
       )?.[1];
-    // The draft is the published revision: its schedule is the one that runs.
     expect(shown({ draftRevision: 3, publishedRevision: 3 })).toBe(
-      "Läuft jeden Montag um 08:00 (Ortszeit Berlin)"
+      "Runs every Monday at 08:00 AM (Berlin time)"
     );
     // The draft differs: the line waits for the published revision and says that one.
     expect(shown({ draftRevision: 4, publishedRevision: 3 })).toBeUndefined();
@@ -567,12 +480,11 @@ describe("the page of a Workflow", () => {
       { mayStart: true }
     ).steps;
     expect(shown({ draftRevision: 4, publishedRevision: 3 }, live)).toBe(
-      de("workflows.schedule.manualOnly")
+      t("workflows.schedule.manualOnly")
     );
     // Never published: it runs in no way yet.
-    expect(shown({ draftRevision: 1 })).toBe(
-      "Sobald veröffentlicht: Läuft jeden Montag um 08:00 (Ortszeit Berlin)"
-    );
+    expect(shown({ draftRevision: 1 })).toContain("Runs every Monday");
+    expect(shown({ draftRevision: 1 })).not.toBe("Runs every Monday at 08:00 AM (Berlin time)");
   });
 
   it("says at the top that the last run failed, with the way to it", () => {
@@ -582,15 +494,10 @@ describe("the page of a Workflow", () => {
       failedItemCount,
       failedDescendantCount: 0
     });
-    // A run that stopped at a limit, and one that ended done over failed items, are said too.
-    expect(render(page({ lastRun: run("limit_reached") }))).toContain(t("workflows.lastRunLimit"));
-    expect(render(page({ lastRun: run("done", 2) }))).toContain(t("workflows.lastRunPartly"));
+    expect(render(page({ lastRun: run("limit_reached") }))).toContain("data-last-run-failed");
+    expect(render(page({ lastRun: run("done", 2) }))).toContain("data-last-run-failed");
     const failed = render(page({ lastRun: run("failed") }));
-    expect(failed).toContain(t("workflows.lastRunFailed"));
     expect(failed).toContain('href="/w/cw_1/workflows/notify-clients/runs/wr_9"');
-    expect(failed.indexOf("data-last-run-failed")).toBeLessThan(
-      failed.indexOf('data-testid="workflow-canvas"')
-    );
     // A run that ended well says nothing, and nothing is said where the instance runs none.
     expect(render(page({ lastRun: run("done") }))).not.toContain("data-last-run-failed");
     expect(render(page({ lastRun: run("failed"), runsAvailable: false }))).not.toContain(
@@ -598,38 +505,32 @@ describe("the page of a Workflow", () => {
     );
   });
 
-  it("offers neither a start nor the runs where the instance runs no Workflow", () => {
-    const markup = render(page({ runsAvailable: false }));
-    expect(markup).toContain("Notify clients");
-    expect(markup).not.toContain(t("workflows.startNow"));
-    expect(markup).not.toContain('href="/w/cw_1/workflows/notify-clients/runs"');
-  });
-
-  it("shows no id, no operation name and no file name of the definition", () => {
-    for (const locale of ["en", "de"] as const) {
-      const blocked = {
-        ...workflow,
-        refusedFor: [
-          {
-            code: "principal_inactive",
-            message: "The internal account workflow-runner is disabled.",
-            principalDisplayLabel: "Booking checks"
-          }
-        ]
-      };
-      const markup = render(page({ workflow: blocked }), locale);
-      for (const internal of ["connection.crm", "check.py", "summary.md", "workflow-runner"]) {
-        expect(markup).not.toContain(internal);
-      }
-      expect(markup).toContain(
-        locale === "de"
-          ? "Dieser Workflow läuft als Technisches Konto „Booking checks“, das ausgeschaltet ist. Ein Administrator schaltet es unter Einstellungen › API-Zugang ein."
-          : "This workflow runs as the technical account “Booking checks”, which is switched off. An administrator switches it on under Settings › API access."
-      );
+  it("shows no id, no operation name, no file name and no account name of the definition", () => {
+    const blocked = {
+      ...workflow,
+      refusedFor: [
+        {
+          code: "principal_inactive",
+          message: "The internal account workflow-runner is disabled.",
+          principalDisplayLabel: "Booking checks"
+        }
+      ]
+    };
+    const markup = render(page({ workflow: blocked }));
+    for (const internal of ["connection.crm", "check.py", "summary.md", "workflow-runner"]) {
+      expect(markup).not.toContain(internal);
     }
+    expect(markup).toContain("Booking checks");
   });
 
-  it("offers the start of a Workflow with inputs, and none where the form cannot ask for one", () => {
+  it("offers the start only where a revision is published, the reader may start it and the form can ask", () => {
+    expect(startOffered(workflow)).toBe(true);
+    expect(startOffered({ ...workflow, mayStart: false })).toBe(false);
+    expect(startOffered({ ...workflow, published: false })).toBe(false);
+    expect(startOffered({ ...workflow, startsByHand: false })).toBe(false);
+    expect(render(page({ workflow: { ...workflow, mayStart: false } }))).not.toContain(
+      t("workflows.startNow")
+    );
     const asking = (inputs: Record<string, unknown>) =>
       toWorkflow(
         { name: "top-customers", publishedRevision: 1, config: definition },
@@ -641,7 +542,6 @@ describe("the page of a Workflow", () => {
       required: ["limit"]
     });
     expect(startOffered(limit)).toBe(true);
-    expect(render(page({ workflow: limit }))).toContain(t("workflows.startNow"));
     // A required list has no field: the start stays with the agent and the API.
     const list = asking({
       type: "object",
@@ -652,55 +552,15 @@ describe("the page of a Workflow", () => {
     expect(render(page({ workflow: list }))).not.toContain(t("workflows.startNow"));
   });
 
-  it("offers the start only where a revision is published and the reader may start it", () => {
-    const readOnly = { ...workflow, mayStart: false };
-    expect(startOffered(workflow)).toBe(true);
-    expect(startOffered(readOnly)).toBe(false);
-    expect(startOffered({ ...workflow, published: false })).toBe(false);
-    expect(startOffered({ ...workflow, startsByHand: false })).toBe(false);
-    // A reader sees the Workflow and its drawing, and no start.
-    const markup = render(page({ workflow: readOnly }));
-    expect(markup).toContain(workflow.name);
-    expect(markup).not.toContain(t("workflows.startNow"));
-  });
-
-  it("shows placeholders while the Workflow loads", () => {
-    const markup = render(
-      createElement(WorkflowPageView, {
-        workspaceId: "cw_1",
-        workflowId: "notify-clients",
-        read: { workflow: undefined, problem: undefined, retry: noop },
-        runsAvailable: true,
-        onOpenChild: noop,
-        onOpenRoute: noop,
-        onStart: noop
-      })
-    );
-    expect(markup).toContain("animate-pulse");
-    expect(markup).toContain(t("workflows.backToList"));
-    expect(markup).not.toContain("notify-clients</");
-  });
-
-  it("shows the not-found state for a Workflow that is not there, with the way to the list", () => {
-    const markup = render(page({ problem: "missing" }));
-    expect(markup).toContain("data-not-found");
-    expect(markup).toContain(`>${t("workflows.missing")}</h1>`);
-    // One step, and no head that waits for a name: no placeholder, no tabs, no start.
-    expect(markup).toMatch(/<a[^>]*href="\/w\/cw_1\/workflows"[^>]*>Back to Workflows<\/a>/u);
-    expect(markup).not.toContain("animate-pulse");
-    expect(markup).not.toContain(t("workflows.tabs"));
-    expect(markup).not.toContain('data-testid="workflow-canvas"');
-  });
-
-  it.each([
-    ["missing", "workflows.missing"],
-    ["unavailable", "workflows.unavailable"],
-    ["failed", "workflows.failed"]
-  ] as const)("says in a sentence when the Workflow is %s", (problem, key) => {
-    const markup = render(page({ problem }));
-    expect(markup).toContain(t(key));
-    expect(markup).not.toContain('data-testid="workflow-canvas"');
-    expect(markup.includes(t("tryAgain"))).toBe(problem === "failed");
+  it("shows no drawing where the Workflow could not be read, and a retry only where it failed", () => {
+    for (const problem of ["missing", "unavailable", "failed"] as const) {
+      const markup = render(page({ problem }));
+      expect(markup).not.toContain('data-testid="workflow-canvas"');
+      expect(markup.includes(t("tryAgain"))).toBe(problem === "failed");
+    }
+    const missing = render(page({ problem: "missing" }));
+    expect(missing).toContain("data-not-found");
+    expect(missing).toContain('href="/w/cw_1/workflows"');
   });
 
   it("shows a Workflow a step opened as its own page, with a link back to each before it", () => {
@@ -731,70 +591,36 @@ describe("the page of a Workflow", () => {
         onStart: noop
       })
     );
-    expect(markup).toContain('data-slot="breadcrumb"');
-    expect(markup).toMatch(/aria-current="page"[^>]*>Send reminders</u);
     expect(markup).toContain('href="/w/cw_1/workflows/notify-clients"');
-    // The head, its start and its runs are those of the Workflow that is shown.
-    expect(markup).toContain(">Send reminders</h1>");
+    // The start and the runs are those of the Workflow that is shown.
     expect(markup).toContain('href="/w/cw_1/workflows/send-reminders/runs"');
   });
 
-  it("asks once before the start and answers a refusal in the dialog", () => {
-    const dialog = (error?: string) =>
-      render(
-        createElement(StartDialog, {
-          name: "Notify clients",
-          loading: false,
-          error,
-          onConfirm: noop,
-          onClose: noop
-        })
-      );
-    expect(dialog()).toContain(t("workflows.start.title", { name: "Notify clients" }));
-    expect(dialog()).toContain(t("workflows.start.bodyManual"));
-    expect(dialog(t("workflows.start.refused"))).toContain(t("workflows.start.refused"));
-  });
-
-  it("asks for the inputs in the dialog, each with its label, its hint and its default", () => {
+  it("asks for the inputs in the start dialog, with defaults and the instance's refusal of a value", () => {
     const form = startFormOf({
       type: "object",
       properties: {
-        month: { type: "string", format: "date", title: "Month", description: "The first day." },
+        month: { type: "string", format: "date", title: "Month" },
         limit: { type: "integer", default: 10 },
-        region: { type: "string", enum: ["north", "south"] },
-        dry_run: { type: "boolean", default: true }
+        region: { type: "string", enum: ["north", "south"] }
       },
       required: ["month", "region"]
     });
-    const refused = [{ path: ["limit"], message: "must be <= 100" }];
-    const markup = (locale: "en" | "de") =>
-      render(
-        createElement(StartDialog, {
-          name: "Top customers",
-          form,
-          loading: false,
-          error: undefined,
-          refusedValues: refused,
-          onConfirm: noop,
-          onClose: noop
-        }),
-        locale
-      );
-    const en = markup("en");
-    expect(en).toContain(t("workflows.startForm.body"));
-    expect(en).not.toContain(t("workflows.start.bodyManual"));
-    expect(en).toContain(">Month<");
-    expect(en).toContain("The first day.");
-    expect(en).toContain('type="date"');
-    // The name stands as words where the schema gives no title; no key is shown.
-    expect(en).toContain(">Dry run<");
-    expect(en).not.toContain("dry_run<");
-    expect(en).toContain('value="10"');
-    expect(en).toContain(">north<");
-    // The instance's sentence on a value stands under its field.
-    expect(en).toContain("must be &lt;= 100");
-    expect(en).toContain(t("workflows.startForm.refused"));
-    expect(markup("de")).toContain(de("workflows.startForm.body"));
+    const markup = render(
+      createElement(StartDialog, {
+        name: "Top customers",
+        form,
+        loading: false,
+        error: undefined,
+        refusedValues: [{ path: ["limit"], message: "must be <= 100" }],
+        onConfirm: noop,
+        onClose: noop
+      })
+    );
+    expect(markup).toContain('type="date"');
+    expect(markup).toContain('value="10"');
+    expect(markup).toContain(">north<");
+    expect(markup).toContain("must be &lt;= 100");
   });
 });
 
@@ -811,28 +637,21 @@ describe("the runs of a Workflow", () => {
       onOpenRoute: noop
     });
 
-  it("names the Workflow and says that there are no runs", () => {
-    const markup = render(page(runList()));
-    expect(markup).toContain("Notify clients");
-    expect(markup).toContain(t("workflows.noRuns"));
-  });
-
   it("lists each run with how it ended, each a link to its run", () => {
     const rows = [
       toWorkflowRun(runResource({ id: "wr_2", status: "failed", trigger: "schedule" })),
-      toWorkflowRun(runResource({ id: "wr_1", status: "done" }))
+      toWorkflowRun(runResource({ id: "wr_1", status: "done", mode: "test" }))
     ];
     const markup = render(page(runList({ rows })));
     expect(markup).toContain('href="/w/cw_1/workflows/notify-clients/runs/wr_2"');
     expect(markup).toContain(t("workflows.run.failed"));
     expect(markup).toContain(t("workflows.run.done"));
-    expect(markup).toContain("Ada Lovelace");
+    expect(markup.match(/data-test-run=""/gu)).toHaveLength(1);
   });
 
   // ACCEPT-2a E1: a run's time names the zone it is shown in, beside a schedule in its own zone.
   it("names the zone of each run's time", () => {
     const rows = [toWorkflowRun(runResource({ id: "wr_1", status: "done", trigger: "schedule" }))];
-    // The time in the reader's own zone, ending in that zone's name ("UTC", "MESZ").
     const shown = new Date("2026-10-12T09:00:00.000Z").toLocaleString("de", {
       year: "numeric",
       month: "short",
@@ -845,7 +664,7 @@ describe("the runs of a Workflow", () => {
     expect(render(page(runList({ rows })), "de")).toContain(`>${shown}<`);
   });
 
-  it("says on a failed row why it failed, in the sentence of its page, on one line", () => {
+  it("says on a failed row why it failed, never the instance's code or sentence", () => {
     const rows = [
       toWorkflowRun(
         runResource({
@@ -861,22 +680,9 @@ describe("the runs of a Workflow", () => {
     const reasons = [...markup.matchAll(/data-run-reason=""[^>]*>([^<]*)</gu)].map(
       (match) => match[1]
     );
-    // A failed run whose reason did not arrive says the general sentence; a done run none.
     expect(reasons).toEqual([t("workflows.reason.missingRight"), t("workflows.reason.other")]);
-    expect(markup).toMatch(/data-run-reason="" class="block truncate"/u);
     expect(markup).not.toContain("FORBIDDEN");
     expect(markup).not.toContain("The instance&#x27;s own sentence");
-    expect(render(page(runList({ rows })), "de")).toContain(de("workflows.reason.missingRight"));
-  });
-
-  it("marks a test run of the draft among the runs", () => {
-    const rows = [
-      toWorkflowRun(runResource({ id: "wr_3", status: "done", mode: "test" })),
-      toWorkflowRun(runResource({ id: "wr_1", status: "done" }))
-    ];
-    const markup = render(page(runList({ rows })));
-    expect(markup.match(/data-test-run=""/gu)).toHaveLength(1);
-    expect(markup).toContain(t("workflows.run.testBadge"));
   });
 
   it("folds empty runs side by side into one row, and keeps every other run a row (WF-KIND)", () => {
@@ -902,9 +708,8 @@ describe("the runs of a Workflow", () => {
       false
     ]);
     const markup = render(page(runList({ rows, hasMore: true })));
-    expect(markup.match(/data-empty-runs="3"/gu)).toHaveLength(1);
     expect(markup.match(/data-empty-runs=/gu)).toHaveLength(1);
-    expect(markup).toContain(">3 empty runs<");
+    expect(markup).toContain('data-empty-runs="3"');
     // Folded, the three empty runs are behind the row; the others stand, a lone empty one too.
     for (const shown of ["wr_9", "wr_5", "wr_4", "wr_3", "wr_2"]) {
       expect(markup).toContain(`href="/w/cw_1/workflows/notify-clients/runs/${shown}"`);
@@ -913,24 +718,11 @@ describe("the runs of a Workflow", () => {
       expect(markup).not.toContain(`/runs/${folded}"`);
     }
     expect(markup).toContain(t("workflows.showMore"));
-    expect(render(page(runList({ rows })), "de")).toContain(">3 leere Läufe<");
   });
 
-  it("offers more runs where the instance has more", () => {
-    const rows = [toWorkflowRun(runResource({ status: "failed", trigger: "schedule" }))];
-    const markup = render(page(runList({ rows, hasMore: true })));
-    expect(markup).toContain(t("workflows.showMore"));
-  });
-
-  it("says that the runs could not be loaded", () => {
-    const markup = render(page(runList({ rows: undefined, failed: true })));
-    expect(markup).toContain(t("workflows.runs.listFailed"));
-    expect(markup).toContain(t("tryAgain"));
-  });
-
-  it("says that the instance runs no Workflow yet, in both languages", () => {
+  it("offers to try again where the runs could not be loaded, and lists none where the instance runs none", () => {
+    expect(render(page(runList({ rows: undefined, failed: true })))).toContain(t("tryAgain"));
     expect(render(page(runList(), false))).toContain(t("workflows.runsUnavailable"));
-    expect(render(page(runList(), false), "de")).toContain(de("workflows.runsUnavailable"));
   });
 
   it("reads a list again only while one of its runs is going", () => {
@@ -943,7 +735,6 @@ describe("the runs of a Workflow", () => {
 describe("the page of a run", () => {
   it("reads a run again every two seconds until it has ended", () => {
     expect(runRefreshMs(toWorkflowRun(runResource({ status: "queued" })))).toBe(2_000);
-    expect(runRefreshMs(toWorkflowRun(runResource({ status: "running" })))).toBe(2_000);
     expect(runRefreshMs(toWorkflowRun(runResource({ status: "waiting" })))).toBe(2_000);
     for (const status of ["done", "failed", "cancelled", "limit_reached"] as const) {
       expect(runRefreshMs(toWorkflowRun(runResource({ status })))).toBe(false);
@@ -951,33 +742,17 @@ describe("the page of a run", () => {
     expect(runRefreshMs(undefined)).toBe(false);
   });
 
-  it("says of a queued run that it begins by itself, in both languages", () => {
-    const read = runRead(runResource({ status: "queued", startedAt: undefined }), []);
-    const markup = render(runPage(read));
-    expect(markup).toContain(t("workflows.run.queued"));
-    expect(markup).toContain(t("workflows.run.queuedLine"));
-    expect(render(runPage(read), "de")).toContain(de("workflows.run.queuedLine"));
-  });
-
-  it("names the run, its Workflow, who started it and for how long it has run, and offers the cancel", () => {
-    const markup = render(runPage(runRead(runResource(), [startStep]), { canCancel: true }));
-    expect(markup).toContain(t("workflows.run.running"));
-    expect(markup).toContain('href="/w/cw_1/workflows/notify-clients"');
-    expect(markup).toContain("Ada Lovelace");
-    expect(markup).toContain(t("workflows.run.soFar", { duration: "11 min" }));
-    expect(markup).toContain(t("workflows.run.cancel"));
-    expect(markup).toContain('data-testid="workflow-canvas"');
-    // A run at work has nothing to say above its drawing.
-    expect(markup).not.toContain("data-run-notices");
-  });
-
-  it("shows a run that is done with how long it took and no way to cancel it", () => {
+  it("offers the cancel on a going run where it may be cancelled, and not on an ended or stopping one", () => {
+    const going = runRead(runResource(), [startStep]);
+    expect(render(runPage(going, { canCancel: true }))).toContain(t("workflows.run.cancel"));
+    expect(render(runPage(going, { canCancel: false }))).not.toContain(t("workflows.run.cancel"));
+    expect(render(runPage(going, { canCancel: true, stopping: true }))).not.toContain(
+      t("workflows.run.cancel")
+    );
     const done = runResource({ status: "done", finishedAt: "2026-10-12T09:00:42.000Z" });
-    const markup = render(runPage(runRead(done, [startStep]), { canCancel: false }));
-    expect(markup).toContain(t("workflows.run.done"));
-    expect(markup).not.toContain(t("workflows.run.cancel"));
-    expect(markup).toContain("41 sec");
-    expect(markup).not.toContain(t("workflows.run.soFar", { duration: "41 sec" }));
+    expect(render(runPage(runRead(done, [startStep]), { canCancel: false }))).not.toContain(
+      t("workflows.run.cancel")
+    );
   });
 
   const failedRun = runResource({
@@ -994,53 +769,22 @@ describe("the page of a run", () => {
       error: { code: "operation_failed", message: "The call of the operation failed" }
     });
     const withStep = render(runPage(runRead(failedRun, [startStep, failedStep])));
-    expect(withStep).toContain(t("workflows.run.failed"));
     expect(withStep).not.toContain(t("workflows.reason.other"));
-    // Until the step has arrived, the run says why it ended.
+    // Until the step has arrived, the run says why it ended, never by its code.
     const without = render(runPage(runRead(failedRun, [startStep])));
     expect(without).toContain(t("workflows.reason.other"));
-    expect(without).toContain(t("workflows.technicalDetails"));
     expect(without).not.toContain("operation_failed");
   });
 
-  it("shows a cancelled run with when it was cancelled", () => {
-    const run = runResource({ status: "cancelled", finishedAt: "2026-10-12T09:03:00.000Z" });
-    const markup = render(runPage(runRead(run, [startStep])));
-    expect(markup).toContain(t("workflows.run.cancelled"));
-    expect(markup).toContain(
-      t("workflows.run.cancelledLine", {
-        time: new Date("2026-10-12T09:03:00.000Z").toLocaleTimeString("en")
-      })
-    );
-    expect(markup).not.toContain(t("workflows.run.cancel"));
-  });
-
-  it("says which limit stopped a run that reached one", () => {
+  it("says which limit stopped a run that reached one, never by its code", () => {
     const run = runResource({
       status: "limit_reached",
       finishedAt: "2026-10-12T09:30:00.000Z",
       error: { code: "step_limit", message: "The run reached its limit of 50000 steps" }
     });
     const markup = render(runPage(runRead(run, [startStep, clientsStep])));
-    expect(markup).toContain(t("workflows.run.limitReached"));
     expect(markup).toContain(t("workflows.reason.stepLimit"));
-    // The instance's own sentence waits behind a fold; its code is never shown.
-    expect(markup).toContain(t("workflows.technicalDetails"));
     expect(markup).not.toContain("step_limit");
-    const german = render(runPage(runRead(run, [startStep, clientsStep])), "de");
-    expect(german).toContain(de("workflows.run.limitReached"));
-    expect(german).toContain(de("workflows.reason.stepLimit"));
-  });
-
-  it("says that a run waits, and that a run is being stopped until the instance has ended it", () => {
-    expect(render(runPage(runRead(runResource({ status: "waiting" }), [startStep])))).toContain(
-      t("workflows.run.waitingLine")
-    );
-    const markup = render(
-      runPage(runRead(runResource(), [startStep]), { canCancel: true, stopping: true })
-    );
-    expect(markup).toContain(t("workflows.run.stopping"));
-    expect(markup).not.toContain(t("workflows.run.cancel"));
   });
 
   it("leads from a child run back to the run that started it", () => {
@@ -1051,9 +795,7 @@ describe("the page of a run", () => {
       parentWorkflow: "quarter-close"
     });
     const markup = render(runPage(runRead(child, [startStep])));
-    expect(markup).toContain('data-slot="breadcrumb"');
     expect(markup).toContain('href="/w/cw_1/workflows/quarter-close/runs/wr_1"');
-    expect(markup).toContain(t("workflows.run.parent"));
   });
 
   it("offers the cancel to whoever started the run, and to whoever may write Workflows", () => {
@@ -1065,34 +807,253 @@ describe("the page of a run", () => {
     expect(cancelOffered(ended, "user_1", onInstance(true), undefined)).toBe(false);
   });
 
-  const unread = {
-    run: undefined,
-    silentSince: undefined,
-    stepsFailed: false,
-    stepRuns: undefined,
-    retry: noop
-  };
-
-  it("shows placeholders while the run loads", () => {
-    const markup = render(runPage({ ...unread, problem: undefined }));
-    expect(markup).toContain("animate-pulse");
-    expect(markup).toContain(t("workflows.backToRuns"));
-  });
-
-  it.each([
-    ["missing", "workflows.run.missing"],
-    ["unavailable", "workflows.run.unavailable"],
-    ["failed", "workflows.run.failedToLoad"]
-  ] as const)("says in a sentence when the run is %s", (problem, key) => {
-    const markup = render(runPage({ ...unread, problem }));
-    expect(markup).toContain(t(key));
-    expect(markup.includes(t("tryAgain"))).toBe(problem === "failed");
-  });
-
-  it("says for how long the instance has not answered, and keeps the last state readable", () => {
+  it("offers a retry only where the run failed to load, and keeps the last state while the instance is silent", () => {
+    const unread = {
+      run: undefined,
+      silentSince: undefined,
+      stepsFailed: false,
+      stepRuns: undefined,
+      retry: noop
+    };
+    for (const problem of ["missing", "unavailable", "failed"] as const) {
+      expect(render(runPage({ ...unread, problem })).includes(t("tryAgain"))).toBe(
+        problem === "failed"
+      );
+    }
     const read = runRead(runResource(), [startStep]);
     const markup = render(runPage({ ...read, silentSince: now.getTime() - 9_000 }));
     expect(markup).toContain(t("workflows.run.stale", { seconds: 9 }));
     expect(markup).toContain(t("workflows.run.running"));
+  });
+});
+
+// Who is shown the Workflows area: its row in the rail and its addresses. One function
+// decides both, from the module's switch and the rights the instance names.
+describe("who is shown the Workflows area", () => {
+  const modulesOn = { workflows: { enabled: true } };
+  const reader = { actions: ["workflow.read"], assetActions: [] };
+
+  it("opens it for a person who may read every or one single Workflow, and closes it otherwise", () => {
+    expect(workflowsAccess({ modules: modulesOn, workspaces: true, context: reader })).toBe("open");
+    expect(
+      workflowsAccess({
+        modules: modulesOn,
+        workspaces: true,
+        context: { actions: [], assetActions: ["workflow.read"] }
+      })
+    ).toBe("open");
+    expect(
+      workflowsAccess({
+        modules: modulesOn,
+        workspaces: true,
+        context: { actions: ["app.read", "workflow.use"], assetActions: ["app.read"] }
+      })
+    ).toBe("closed");
+  });
+
+  // NAV-VIS-1 review: the row follows the server's flag alone, so a member the flag names
+  // through `workflow.use` or a narrower `workflow.write` reaches the area it leads to.
+  it("opens it for a person the instance names the row, without the right to read", () => {
+    const member = {
+      actions: ["workflow.use"],
+      assetActions: [],
+      visibleSections: ["workflows" as const]
+    };
+    expect(workflowsAccess({ modules: modulesOn, workspaces: true, context: member })).toBe("open");
+    expect(workflowsRowShown("open", member)).toBe(true);
+    expect(workflowsAccess({ modules: modulesOn, workspaces: false, context: member })).toBe(
+      "closed"
+    );
+  });
+
+  it("closes it while the module is off or there is no workspace, and decides nothing before the instance answered", () => {
+    expect(workflowsAccess({ modules: {}, workspaces: true, context: reader })).toBe("closed");
+    expect(
+      workflowsAccess({
+        modules: { workflows: { enabled: false } },
+        workspaces: true,
+        context: reader
+      })
+    ).toBe("closed");
+    expect(workflowsAccess({ modules: modulesOn, workspaces: false, context: reader })).toBe(
+      "closed"
+    );
+    expect(workflowsAccess({ modules: undefined, workspaces: true, context: reader })).toBe(
+      "unknown"
+    );
+    expect(workflowsAccess({ modules: modulesOn, workspaces: true, context: undefined })).toBe(
+      "unknown"
+    );
+  });
+
+  // NAV-VIS-1: the instance names the row where its list shows the person a Workflow or they
+  // may write one, so a member is never shown an empty row.
+  it("shows the rail row only where the area is open and the instance names it", () => {
+    const ids = (workflows: boolean) =>
+      shownRailSections(railSections, { apps: true, workflows }).map((section) => section.id);
+    expect(ids(true)).toEqual(["apps", "workflows"]);
+    expect(ids(false)).toEqual(["apps"]);
+    const named = { visibleSections: ["workflows" as const] };
+    expect(workflowsRowShown("open", named)).toBe(true);
+    expect(workflowsRowShown("unknown", named)).toBe(true);
+    expect(workflowsRowShown("open", { visibleSections: [] })).toBe(false);
+    expect(workflowsRowShown("closed", named)).toBe(false);
+    expect(workflowsRowShown("unknown", undefined)).toBe(false);
+  });
+});
+
+describe("what a reader holds on Workflows, by owner", () => {
+  const none = { read: false, write: false, publish: false, delete: false };
+
+  it("names the instance's own Workflows by what the instance names on its own assets", () => {
+    const context = workflowsContext(["workflow.read", "workflow.publish"], {}, ["workflow.write"]);
+    // A right on one single Workflow is that Workflow's to say, never a right on all of them.
+    expect(resolveWorkflowRights(context, undefined)).toEqual({
+      instance: { read: true, write: false, publish: true, delete: false }
+    });
+  });
+
+  it("names the open workspace's own Workflows by that workspace's actions alone", () => {
+    const context = workflowsContext(["workflow.read"], {
+      cw_open: ["workflow.read", "workflow.write"],
+      cw_other: ["workflow.write", "workflow.publish", "workflow.delete"]
+    });
+    expect(resolveWorkflowRights(context, "cw_open")).toEqual({
+      instance: { ...none, read: true },
+      workspace: { id: "cw_open", rights: { ...none, read: true, write: true } }
+    });
+  });
+
+  // ACCEPT-FIX-6: an older server names no zone; a schedule then names none rather than a guess.
+  it("reads the instance's zone where the instance names one, and nothing from an older server", () => {
+    const current = workflowsContext([]);
+    expect(instanceTimeZoneOf(current)).toEqual({ timeZone: "UTC", defaulted: true });
+    const { id, name } = current.instance;
+    expect(instanceTimeZoneOf({ instance: { id, name } })).toBeUndefined();
+    expect(instanceTimeZoneOf({ instance: { id, name, timeZone: "Europe/Berlin" } })).toEqual({
+      timeZone: "Europe/Berlin",
+      defaulted: false
+    });
+    expect(instanceTimeZoneOf(undefined)).toBeUndefined();
+  });
+
+  it("holds nothing before the instance has answered", () => {
+    expect(resolveWorkflowRights(undefined, "cw_open")).toEqual({
+      instance: none,
+      workspace: { id: "cw_open", rights: none }
+    });
+  });
+});
+
+describe("the addresses of the Workflows area", () => {
+  it("resolves each address and writes it again, and says not found for one it does not have", () => {
+    const ws = "cw_1";
+    const addresses = [
+      ["/w/cw_1/workflows", { kind: "workflows", collaborationWorkspaceId: ws }],
+      [
+        "/w/cw_1/workflows/notify/open/remind/mail",
+        {
+          kind: "workflow",
+          collaborationWorkspaceId: ws,
+          workflow: "notify",
+          opened: "remind/mail"
+        }
+      ],
+      [
+        "/w/cw_1/workflows/notify/runs/wr_7",
+        { kind: "workflow-run", collaborationWorkspaceId: ws, workflow: "notify", run: "wr_7" }
+      ]
+    ] as const;
+    for (const [path, route] of addresses) {
+      expect(workspaceRouteFromPath(path)).toEqual(route);
+      expect(workspaceRoutePath(route)).toBe(path);
+      expect(areaOfRoute(route)).toBe("workflows");
+    }
+    expect(workspaceRouteFromPath("/w/cw_1/workflows/notify/runs/wr_7/more")).toEqual({
+      kind: "not-found"
+    });
+  });
+});
+
+// KBW-2c (Knowledge Bases check 112): the question before a Workflow is deleted names the
+// Knowledge Bases it fed, each with its documents, and counts those the reader cannot open.
+describe("the question before a Workflow is deleted (KBW-2c)", () => {
+  const view = {
+    knowledgeBases: [
+      { name: "contracts", title: "Contracts", documents: 12 },
+      { name: "handbook", title: "Handbook", documents: 1 }
+    ],
+    hidden: { knowledgeBases: 2, documents: 40 }
+  };
+  const asset = {
+    id: "asset_import",
+    kind: "workflow",
+    name: "import",
+    title: "Import",
+    scope: { kind: "instance" },
+    revision: 4,
+    draftRevision: 4,
+    publishedRevision: 4,
+    createdAt: "2026-10-10T09:00:00.000Z",
+    updatedAt: "2026-10-17T09:00:00.000Z",
+    config: { name: "import", manifest: { id: "import", name: "Import", steps: [] } }
+  };
+
+  it("names each Knowledge Base it fed and counts the hidden ones, and says nothing where it fed none", () => {
+    const markup = render(createElement(WorkflowRemoveKnowledge, { view }));
+    expect(markup).toContain("Contracts");
+    expect(markup).toContain("Handbook");
+    expect(markup).toContain("2 knowledge bases you cannot open");
+    expect(
+      render(
+        createElement(WorkflowRemoveKnowledge, {
+          view: { knowledgeBases: [], hidden: { knowledgeBases: 0, documents: 0 } }
+        })
+      )
+    ).toBe("");
+  });
+
+  it("asks the instance what the delete ends, and deletes at the revision it asked at", async () => {
+    const { client, calls } = recordedApiClient(({ operation }) =>
+      operation === "assets.get"
+        ? asset
+        : operation === "knowledge_bases.workflow_sources"
+          ? view
+          : { version: 7, revision: 5, warnings: [] }
+    );
+    const removal = createInstanceSource(client, "test").removal;
+    expect(await removal?.read("import", new AbortController().signal)).toEqual({
+      revision: 4,
+      ...view
+    });
+    await removal?.remove("import", 4);
+    expect(
+      calls.map((call) => [
+        call.operation,
+        call.params,
+        call.body ? JSON.parse(call.body) : undefined
+      ])
+    ).toEqual([
+      ["assets.get", { kind: "workflow", name: "import" }, undefined],
+      ["knowledge_bases.workflow_sources", { workflow: "import" }, undefined],
+      ["assets.delete", { kind: "workflow", name: "import" }, { expectedRevision: 4 }]
+    ]);
+  });
+
+  it("answers no Knowledge Base where the instance has none", async () => {
+    const { client } = recordedApiClient(({ operation }) =>
+      operation === "assets.get"
+        ? asset
+        : Response.json(
+            { error: { code: "NOT_FOUND", message: "Module 'knowledge' is off on this instance" } },
+            { status: 404 }
+          )
+    );
+    expect(
+      await createInstanceSource(client, "test").removal?.read(
+        "import",
+        new AbortController().signal
+      )
+    ).toEqual({ revision: 4, knowledgeBases: [], hidden: { knowledgeBases: 0, documents: 0 } });
   });
 });

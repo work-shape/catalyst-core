@@ -1,6 +1,6 @@
 import { afterEach, expect, it } from "vitest";
 import { z } from "zod";
-import type { JsonObject, JsonValue } from "@work-shape/catalyst-core";
+import type { JsonValue } from "@work-shape/catalyst-core";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
 import {
   publishedDefinitions,
@@ -41,7 +41,8 @@ const workflow = (id: string, steps: unknown[]) => ({
   steps
 });
 
-it.each(["root_input", "operation_input", "child_input", "loop", "output", "paged_row"] as const)(
+// Root, child, loop and output routes are proved in workflow-dataset-isolation; these two are not.
+it.each(["operation_input", "paged_row"] as const)(
   "refuses a foreign reference through %s over HTTP",
   async (route) => {
     const definitions = publishedDefinitions();
@@ -52,39 +53,17 @@ it.each(["root_input", "operation_input", "child_input", "loop", "output", "page
         result({ rows: ref("read", "rows") })
       ])
     );
-    definitions.publish(workflow("child", [trigger, result({})]));
-    const consumer =
-      route === "operation_input"
-        ? [{ ...read, id: "consume", input: { wrapped: ref("read", "wrapped") } }, result({})]
-        : route === "child_input"
-          ? [
-              {
-                id: "child",
-                name: "Child",
-                type: "workflow",
-                workflow: "child",
-                input: { wrapped: ref("read", "wrapped") }
-              },
-              result({})
-            ]
-          : route === "loop"
-            ? [
-                {
-                  id: "loop",
-                  name: "Loop",
-                  type: "loop",
-                  items: { step: "read", path: "foreign" },
-                  steps: [{ ...read, id: "consume" }]
-                },
-                result({})
-              ]
-            : [result({ wrapped: ref("read", "wrapped") })];
     definitions.publish(
       workflow(
         "target",
         route === "paged_row"
           ? [trigger, { ...read, paginate: true, dataset: { at: "rows" } }, result({})]
-          : [trigger, read, ...consumer]
+          : [
+              trigger,
+              read,
+              { ...read, id: "consume", input: { wrapped: ref("read", "wrapped") } },
+              result({})
+            ]
       )
     );
     const objects = new MemoryObjectStorage();
@@ -114,11 +93,11 @@ it.each(["root_input", "operation_input", "child_input", "loop", "output", "page
     await f.allow({ kind: "service_principal", id: f.principal.id }, "connection.use");
     await f.allow({ kind: "service_principal", id: f.principal.id }, "workflow.use");
     const base = await listenTestInstance(f.instance);
-    const start = async (id: string, input: JsonObject = {}, who = f.root.id) => {
+    const start = async (id: string) => {
       return fetchTestOperation(base, "workflows.start", {
         params: { workflow: id },
-        headers: { "x-test-user": who, "content-type": "application/json" },
-        body: JSON.stringify({ input })
+        headers: { "x-test-user": f.root.id, "content-type": "application/json" },
+        body: JSON.stringify({ input: {} })
       });
     };
     f.setBehaviour(async () => ({ rows: [{ id: 1 }] }));
@@ -140,14 +119,6 @@ it.each(["root_input", "operation_input", "child_input", "loop", "output", "page
       calls++;
       return { foreign, wrapped: [{ nested: foreign }], rows: [{ nested: foreign }] };
     });
-    if (route === "root_input") {
-      await f.allow({ kind: "user", id: f.kai.id }, "workflow.use");
-      expect((await start("target", { wrapped: [{ nested: foreign }] }, f.kai.id)).status).toBe(
-        403
-      );
-      expect(calls).toBe(0);
-      return;
-    }
     const attempted = await start("target");
     expect(attempted.status).toBe(200);
     const target = runSchema.parse(await attempted.json());

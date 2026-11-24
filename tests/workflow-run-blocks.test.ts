@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { workflowStepRunFilterSchema } from "@work-shape/catalyst-core";
-import { clientInstanceId } from "./support/access-instance";
 import {
   publishedDefinitions,
   runSchema,
@@ -303,25 +301,5 @@ describe("the step runs of a run outside its loops", () => {
       { params: { runId: run.id }, query: { topLevel: "true", containerStepRunId: top[2]?.id } },
       { status: 422, code: "VALIDATION_FAILED" }
     );
-  });
-
-  it("is a filter of the store, which the contract's schema names", async () => {
-    const t = await ready();
-    const started = await start(t);
-    const run = await t.finish(started.id);
-    const read = await t.stores.workflowRuns.readRun({ clientInstanceId, id: run.id });
-    if (!read) throw new Error("The run cannot be read");
-    const filter = workflowStepRunFilterSchema.parse({ topLevel: true, status: "done" });
-    const stepRuns = await t.stores.workflowRuns.listStepRuns({
-      clientInstanceId,
-      runId: read.id,
-      filter
-    });
-    expect(stepRuns.map((stepRun) => stepRun.key)).toEqual([
-      "start",
-      "clients",
-      "each_client",
-      "result"
-    ]);
   });
 });

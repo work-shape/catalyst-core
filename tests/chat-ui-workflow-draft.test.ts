@@ -1,22 +1,29 @@
 import { createElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
+import { ApiError } from "@work-shape/catalyst-api-client";
 import { createTranslationContext } from "./support/chat-ui/shared";
+import { instanceSentence } from "./support/chat-ui/studio-build-area";
 import {
   DraftChangeDialog,
   draftChangesSentence,
+  RightsLacking,
   WorkflowPageView,
   createInstanceSource,
   draftState,
   editOffered,
-  toWorkflow
+  giveFailureSentence,
+  toWorkflow,
+  workflowPublishRefusal,
+  type WorkflowPublishRightsView
 } from "@work-shape/catalyst-chat-ui/workflows";
+import { ACTIONS } from "@work-shape/catalyst-core";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { recordedApiClient } from "./support/recorded-api-client";
 
-// The draft of a Workflow on its page: who is offered the conversation in which the agent
-// changes it, and what the bar says of a draft that is not the published revision. Every test
-// here fails without the page half of "the agent edits a Workflow": the page named no draft,
-// offered no conversation and neither published nor discarded.
+// The draft of a Workflow on its page and over the instance: who is offered the conversation in
+// which the agent changes it, what the bar says of a draft that is not the published revision,
+// what its publish sends and asks, the rights its technical accounts lack (with the one step
+// that gives them), and the Data Store drafts one Publish makes live with it (LIVE-2).
 
 const { t } = createTranslationContext("en");
 const de = createTranslationContext("de").t;
@@ -48,48 +55,30 @@ const unpublished = workflowAt({ draftRevision: 1 });
 /** What a reader without the write and the publish right is answered: no draft is named. */
 const publishedView = workflowAt({ publishedRevision: 4 });
 
-describe("how the draft of a Workflow stands beside what is published", () => {
-  it("says that the draft differs where it is another revision than the published one", () => {
+describe("how the draft of a Workflow stands, and who may edit it with the agent", () => {
+  it("says ahead, unpublished or nothing, by the two pointers the instance names", () => {
     expect(ahead.draft).toEqual({
       revision: 6,
       publishedRevision: 4,
       testForm: { fields: [], unsupported: [] }
     });
     expect(draftState(ahead)).toBe("ahead");
-  });
-
-  it("says nothing where the draft is the published revision", () => {
     expect(draftState(level)).toBeUndefined();
-  });
-
-  it("says of a draft that was never published that it is not published, not that it differs", () => {
     expect(unpublished.draft).toEqual({ revision: 1, testForm: { fields: [], unsupported: [] } });
     expect(draftState(unpublished)).toBe("unpublished");
-  });
-
-  it("says nothing to a reader the instance answers the published revision", () => {
     expect(publishedView.draft).toBeUndefined();
     expect(draftState(publishedView)).toBeUndefined();
     expect(draftState(undefined)).toBeUndefined();
   });
-});
 
-describe("who is offered to edit a Workflow with the agent", () => {
-  const writes = (write: boolean) => ({
-    instance: { read: true, write, publish: false, delete: false }
-  });
-
-  it("offers it to a reader who may write Workflows and is shown the draft", () => {
+  it("offers the edit to a writer shown the draft, and to nobody else", () => {
+    const writes = (write: boolean) => ({
+      instance: { read: true, write, publish: false, delete: false }
+    });
     expect(editOffered(writes(true), ahead)).toBe(true);
     expect(editOffered(writes(true), level)).toBe(true);
     expect(editOffered(writes(true), unpublished)).toBe(true);
-  });
-
-  it("offers it to nobody without the right to write Workflows", () => {
     expect(editOffered(writes(false), ahead)).toBe(false);
-  });
-
-  it("offers it nowhere the instance named no draft, and not before the record arrived", () => {
     expect(editOffered(writes(true), publishedView)).toBe(false);
     expect(editOffered(writes(true), undefined)).toBe(false);
   });
@@ -113,21 +102,8 @@ describe("the draft of a Workflow over an instance", () => {
         case "assets.get":
           return answer;
         case "assets.list":
-          // The open workspace owns no Workflow here.
-          return { items: [] };
         case "workflows.list":
-          return {
-            items: [
-              {
-                id: "month-end",
-                name: "Month end",
-                definitionRevisionId: "rev_4",
-                actions: ["workflow.read", "workflow.use"],
-                runnable: true,
-                reasons: []
-              }
-            ]
-          };
+          return { items: [] };
         default:
           return { draftRevision: 6, publishedRevision: 6 };
       }
@@ -135,22 +111,28 @@ describe("the draft of a Workflow over an instance", () => {
     return { source: createInstanceSource(client, "k"), calls };
   };
 
-  it("reads the two pointers of the draft from the read of the asset", async () => {
-    const { source } = instance();
-    const workflow = await source.getWorkflow("cw_1", "month-end", signal);
-    expect(workflow.draft).toEqual({
-      revision: 6,
-      publishedRevision: 4,
-      testForm: { fields: [], unsupported: [] }
-    });
-    expect(draftState(workflow)).toBe("ahead");
-  });
-
-  it("carries the limits the draft raises from the read of the asset to the publish question", async () => {
+  it("reads the pointers of the draft, its publish question and its pending stores from the read of the asset", async () => {
     const raise = "Raises the run time of each run from 12h to 30h.";
-    const { source } = instance({ ...asset, publishQuestion: [raise] });
+    const findings = {
+      name: "findings",
+      title: "Findings",
+      revision: 3,
+      publishedRevision: 2,
+      liveLevel: 1,
+      pendingMigrations: ["add_note"]
+    };
+    const { source } = instance({
+      ...asset,
+      publishQuestion: [raise],
+      publishDataStores: [findings]
+    });
     const workflow = await source.getWorkflow("cw_1", "month-end", signal);
+    expect(workflow.draft).toMatchObject({ revision: 6, publishedRevision: 4 });
+    expect(draftState(workflow)).toBe("ahead");
     expect(workflow.draft?.publishQuestion).toEqual([raise]);
+    expect(workflow.draft?.publishDataStores).toEqual([
+      { name: "findings", title: "Findings", revision: 3, pendingMigrations: ["add_note"] }
+    ]);
   });
 
   it("names no draft where the instance answered the published view", async () => {
@@ -161,15 +143,20 @@ describe("the draft of a Workflow over an instance", () => {
     expect(workflow.published).toBe(true);
   });
 
-  it("publishes the revision the page read, by its number", async () => {
+  it("publishes the revision the page read, with each store at the revision the question showed", async () => {
     const { source, calls } = instance();
     await source.drafts?.publish("month-end", 6);
-    expect(calls).toHaveLength(1);
+    await source.drafts?.publish("month-end", 6, undefined, [{ name: "findings", revision: 3 }]);
+    expect(calls).toHaveLength(2);
     expect(calls[0]).toMatchObject({
       operation: "assets.publish",
       params: { kind: "workflow", name: "month-end" }
     });
     expect(JSON.parse(calls[0]?.body ?? "{}")).toEqual({ revision: 6 });
+    expect(JSON.parse(calls[1]?.body ?? "{}")).toEqual({
+      revision: 6,
+      dataStores: [{ name: "findings", revision: 3 }]
+    });
   });
 
   it("discards the draft it read, named as the revision it expects", async () => {
@@ -184,15 +171,9 @@ describe("the draft of a Workflow over an instance", () => {
 });
 
 describe("the page of a Workflow with a draft", () => {
-  const edit: {
-    busy: boolean;
-    error: string | undefined;
-    start(): void;
-    startWith(prompt: string): void;
-    dismissError(): void;
-  } = {
+  const edit = {
     busy: false,
-    error: undefined,
+    error: undefined as string | undefined,
     start: noop,
     startWith: noop,
     dismissError: noop
@@ -201,7 +182,6 @@ describe("the page of a Workflow with a draft", () => {
     input: {
       workflow?: typeof ahead;
       edit?: Partial<typeof edit>;
-      offered?: boolean;
       draft?: {
         state: "ahead" | "unpublished";
         onPublish?: () => void;
@@ -209,8 +189,7 @@ describe("the page of a Workflow with a draft", () => {
         liveVersion?: { number: number; publishedAt?: string; by?: string };
         testCopies?: readonly { name: string; title: string }[];
       };
-    } = {},
-    locale: "en" | "de" = "en"
+    } = {}
   ) =>
     render(
       createElement(WorkflowPageView, {
@@ -218,83 +197,50 @@ describe("the page of a Workflow with a draft", () => {
         workflowId: "month-end",
         read: { workflow: input.workflow ?? ahead, problem: undefined, retry: noop },
         runsAvailable: true,
-        edit: input.offered === false ? undefined : { ...edit, ...input.edit },
+        edit: { ...edit, ...input.edit },
         draft: input.draft,
         onOpenChild: noop,
         onOpenRoute: noop,
         onStart: noop
-      }),
-      locale
+      })
     );
-
-  it("leaves the conversation with the agent to the page head's Chat, beside the start", () => {
-    // "Edit with the agent" left the head: "Chat" on every page starts the conversation.
-    expect(page()).toContain(t("workflows.startNow"));
-    expect(page({ offered: false })).toContain(t("workflows.startNow"));
-  });
+  const publishButton = `>${t("workflows.draft.publish")}</`;
+  const discardButton = `>${t("workflows.draft.discard")}</`;
 
   it("says in place that the instance made no conversation, as an alert", () => {
     const markup = page({ edit: { error: t("workflows.edit.refused") } });
     expect(markup).toContain("data-edit-refused");
     expect(markup).toContain('role="alert"');
-    expect(markup).toContain(t("workflows.edit.refused"));
     expect(page()).not.toContain("data-edit-refused");
   });
 
-  // DT-1b, Workflows check 6: the bar of the draft says what its calls do and names the live
-  // revision; the page head says the draft once and offers the publish, the discard in its menu.
-  it("says what a draft's calls do and what is live, with the publish in the head", () => {
-    const markup = page({
-      draft: {
-        state: "ahead",
-        onPublish: noop,
-        onDiscard: noop,
-        liveVersion: { number: 4, publishedAt: "2026-10-12T14:05:00.000Z", by: "Anna Beispiel" }
-      }
-    });
-    expect(markup).toContain('data-workflow-draft="ahead"');
-    expect(markup).toContain("Draft · reads live data · changes are simulated");
-    expect(markup).toContain("Live: version 4, published by Anna Beispiel on Oct 12");
-    expect(markup).toContain(`>${t("workflows.draft.publish")}</`);
-    expect(markup).toContain('data-asset-status="draft"');
-    expect(markup).toContain(t("build.headDraft"));
-    // Discard stands in the head's "…" menu, never as a button of the bar.
-    expect(markup).not.toContain(`>${t("workflows.draft.discard")}</`);
-    const german = page({ draft: { state: "ahead", onPublish: noop, onDiscard: noop } }, "de");
-    expect(german).toContain(de("build.headDraft"));
-    expect(german).toContain(`>${de("workflows.draft.publish")}</`);
-  });
-
-  it("says it without a button to a reader who may neither publish nor discard", () => {
-    const markup = page({ draft: { state: "ahead" } });
-    expect(markup).toContain("data-draft-header");
-    expect(markup).not.toContain(`>${t("workflows.draft.publish")}</`);
-    expect(markup).not.toContain(`>${t("workflows.draft.discard")}</`);
-  });
-
-  it("says of a draft that was never published what is true of it, and offers no discard", () => {
-    const markup = page({
-      workflow: unpublished,
-      draft: { state: "unpublished", onPublish: noop }
-    });
-    expect(markup).toContain('data-workflow-draft="unpublished"');
-    expect(markup).toContain("Not published yet");
-    expect(markup).not.toContain("Live: version");
-    expect(markup).not.toContain(`>${t("workflows.draft.discard")}</`);
+  // DT-1b, Workflows check 6: the page head offers the publish, the discard in its menu.
+  it("offers the publish in the head to who may publish, never the discard as a button, and neither to a reader", () => {
+    const publisher = page({ draft: { state: "ahead", onPublish: noop, onDiscard: noop } });
+    expect(publisher).toContain('data-workflow-draft="ahead"');
+    expect(publisher).toContain(publishButton);
+    expect(publisher).not.toContain(discardButton);
+    const reader = page({ draft: { state: "ahead" } });
+    expect(reader).toContain("data-draft-header");
+    expect(reader).not.toContain(publishButton);
+    expect(reader).not.toContain(discardButton);
+    const never = page({ workflow: unpublished, draft: { state: "unpublished", onPublish: noop } });
+    expect(never).toContain('data-workflow-draft="unpublished"');
+    expect(never).not.toContain(discardButton);
+    expect(page({ workflow: level })).not.toContain("data-workflow-draft");
   });
 
   // DT-2 in the head: a store whose test copy the draft writes to is named, with its page.
-  it("names each test copy the draft's changing calls write to, with the way to it", () => {
+  it("links each test copy the draft's changing calls write to", () => {
     const markup = page({
       draft: { state: "ahead", testCopies: [{ name: "invoices", title: "Invoices" }] }
     });
-    expect(markup).toContain("Invoices: test copy");
     expect(markup).toMatch(
       /href="[^"]*\/build\/data-stores\/invoices"[^>]*data-draft-test-target="copy"/u
     );
   });
 
-  it("says what the draft changes against the live version, step by step", () => {
+  it("counts what the draft changes against the live version, and says nothing without changes", () => {
     const changes: Parameters<typeof draftChangesSentence>[0] = {
       steps: new Map([
         ["a", "new"],
@@ -305,112 +251,290 @@ describe("the page of a Workflow with a draft", () => {
       fields: new Map(),
       removed: []
     };
-    expect(draftChangesSentence(changes, "en", t)).toBe(
-      "Against the live version: 1 new step, 2 changed steps, and 1 removed step."
-    );
+    expect(draftChangesSentence(changes, "en", t)).toContain("2 changed steps");
     expect(draftChangesSentence(undefined, "en", t)).toBeUndefined();
   });
+});
 
-  it("shows no bar where the draft is the published revision", () => {
-    expect(page({ workflow: level })).not.toContain("data-workflow-draft");
-  });
-
-  it("asks once before a publish and before a discard, and answers a refusal in the question", () => {
-    const dialog = (change: "publish" | "discard", error?: string) =>
-      render(
-        createElement(DraftChangeDialog, {
-          change,
-          name: "Month end",
-          revision: 6,
-          publishedRevision: 4,
-          loading: false,
-          error,
-          onConfirm: noop,
-          onClose: noop
-        })
-      );
-    expect(dialog("publish")).toContain(t("workflows.draft.publishTitle", { name: "Month end" }));
-    expect(dialog("publish")).toContain(t("workflows.draft.publishBody", { number: 6 }));
-    expect(dialog("discard")).toContain(t("workflows.draft.discardTitle", { name: "Month end" }));
-    expect(dialog("discard")).toContain(t("workflows.draft.discardBody", { number: 4 }));
-    expect(dialog("publish", "Needs what administering service principals needs")).toContain(
-      "Needs what administering service principals needs"
+describe("the question before a publish or a discard", () => {
+  const dialog = (
+    change: "publish" | "discard",
+    more: Partial<Parameters<typeof DraftChangeDialog>[0]> = {}
+  ) =>
+    render(
+      createElement(DraftChangeDialog, {
+        change,
+        name: "Month end",
+        revision: 6,
+        publishedRevision: 4,
+        loading: false,
+        error: undefined,
+        onConfirm: noop,
+        onClose: noop,
+        ...more
+      })
     );
+
+  it("answers a refusal in the question", () => {
+    expect(
+      dialog("publish", { error: "Needs what administering service principals needs" })
+    ).toContain("Needs what administering service principals needs");
   });
 
   // DT-1b, Apps check 45 for a Workflow: the publish lists each step that changes something,
   // new or changed, and the outside hosts it calls for the first time.
-  it("lists the changing steps the publish makes live, new or changed, and the hosts it adds", () => {
-    const markup = render(
-      createElement(DraftChangeDialog, {
-        change: "publish",
-        name: "Month end",
-        revision: 6,
-        publishedRevision: 4,
-        changing: [
-          { label: "Write the invoice", change: "new" },
-          { label: "Send the reminder", change: "changed" }
-        ],
-        hostsAdded: ["api.example.com"],
-        loading: false,
-        error: undefined,
-        onConfirm: noop,
-        onClose: noop
-      })
-    );
-    expect(markup).toContain('data-testid="workflow-publish-changing"');
-    expect(markup).toMatch(/data-change-item="Write the invoice"[^]*?>New</u);
-    expect(markup).toMatch(/data-change-item="Send the reminder"[^]*?>Changed</u);
-    expect(markup).toMatch(/data-change-item="api\.example\.com"[^]*?>New</u);
+  it("lists the changing steps the publish makes live and the hosts it adds", () => {
+    const markup = dialog("publish", {
+      changing: [
+        { label: "Write the invoice", change: "new" },
+        { label: "Send the reminder", change: "changed" }
+      ],
+      hostsAdded: ["api.example.com"]
+    });
+    expect(markup).toContain('data-change-item="Write the invoice"');
+    expect(markup).toContain('data-change-item="Send the reminder"');
+    expect(markup).toContain('data-change-item="api.example.com"');
   });
 
   // ACCEPT-2a C3: with the schedule removed, the publish says no schedule.
-  it("says how the published revision starts, and no schedule it does not have", () => {
-    const body = (starts?: { byHand: boolean; onSchedule: boolean }) =>
-      render(
-        createElement(DraftChangeDialog, {
-          change: "publish",
-          name: "Month end",
-          revision: 6,
-          publishedRevision: 4,
-          ...(starts ? { starts } : {}),
-          loading: false,
-          error: undefined,
-          onConfirm: noop,
-          onClose: noop
-        })
-      );
-    const byHand = body({ byHand: true, onSchedule: false });
-    expect(byHand).toContain(t("workflows.draft.publishBodyByHand", { number: 6 }));
-    expect(byHand).not.toContain("schedule");
-    expect(body({ byHand: false, onSchedule: true })).toContain(
-      t("workflows.draft.publishBodySchedule", { number: 6 })
+  it("says no schedule the published revision does not have", () => {
+    expect(dialog("publish", { starts: { byHand: true, onSchedule: false } })).not.toContain(
+      "schedule"
     );
-    expect(body({ byHand: true, onSchedule: true })).toContain(
-      "Version 6 becomes the one that runs, by hand and on its schedule."
+    expect(dialog("publish", { starts: { byHand: false, onSchedule: true } })).toContain(
+      "schedule"
     );
-    expect(body()).not.toContain("schedule");
+    expect(dialog("publish")).not.toContain("schedule");
   });
 
   it("names each limit the draft raises in the publish question, and nothing in the discard", () => {
     const raise = "Raises the run time of each run from 12h to 30h.";
-    const dialog = (change: "publish" | "discard", question?: string[]) =>
-      render(
-        createElement(DraftChangeDialog, {
-          change,
-          name: "Month end",
-          revision: 6,
-          publishedRevision: 4,
-          ...(question ? { question } : {}),
-          loading: false,
-          error: undefined,
-          onConfirm: noop,
-          onClose: noop
-        })
-      );
-    expect(dialog("publish", [raise])).toContain(raise);
-    expect(dialog("publish", [raise])).toContain(t("workflows.draft.publishChanges"));
-    expect(dialog("discard", [raise])).not.toContain(raise);
-    expect(dialog("publish")).not.toContain("workflow-publish-question");
+    expect(dialog("publish", { question: [raise] })).toContain(raise);
+    expect(dialog("discard", { question: [raise] })).not.toContain(raise);
+  });
+
+  // LIVE-2: one Publish of the Workflow publishes the Data Store drafts its steps call first and
+  // applies their migrations; a migration that fails says that the Workflow is not published.
+  it("names each store it publishes first with its migrations, beside the account line", () => {
+    const account = "Runs as its own account “Import findings” and may add rows to Findings.";
+    const store = {
+      name: "findings",
+      title: "Findings",
+      revision: 3,
+      publishedRevision: 2,
+      liveLevel: 1,
+      pendingMigrations: ["add_note", "add_due"]
+    };
+    const markup = dialog("publish", {
+      question: [account],
+      stores: [store, { ...store, name: "clients", title: "Clients", pendingMigrations: [] }]
+    });
+    expect(markup).toContain("add_note");
+    expect(markup).toContain("add_due");
+    expect(markup).toContain(t("workflows.draft.publishStore", { title: "Clients" }));
+    expect(markup).toContain(account);
+  });
+
+  it("says that the Workflow is not published when a store's migration fails", () => {
+    const refusal = (publishing?: "workflow") =>
+      new ApiError(409, "refused", {
+        error: {
+          code: "CONFLICT",
+          message: "The migration failed.",
+          details: {
+            reason: "data_store_migration_failed",
+            dataStore: "findings",
+            title: "Findings",
+            migration: "add_note",
+            level: 1,
+            ...(publishing ? { publishing } : {})
+          }
+        }
+      });
+    expect(instanceSentence(refusal("workflow"), t)).toBe(
+      t("refusals.dataStoreMigrationFailedWorkflow", {
+        dataStore: "Findings",
+        migration: "add_note"
+      })
+    );
+    // An App's Publish keeps its own sentence.
+    expect(instanceSentence(refusal(), t)).not.toBe(instanceSentence(refusal("workflow"), t));
+  });
+});
+
+// The question before a Workflow is published names, in the reader's words, the rights its
+// technical accounts lack, and offers the one step that gives them to whoever may.
+describe("the rights the technical accounts of a publish lack", () => {
+  const rightId = new RegExp(
+    `(?<![\\w.])(${ACTIONS.map((a) => a.replace(/\./gu, "\\.")).join("|")})(?![\\w])`,
+    "u"
+  );
+  const never = () => Promise.resolve();
+  const lacking = (administers: boolean): WorkflowPublishRightsView => ({
+    administers,
+    hiddenWorkflows: 0,
+    workflows: [
+      {
+        workflow: "parent",
+        revision: "draft",
+        runAs: "workflow-runner",
+        account: { label: "Workflow runner", status: "active" },
+        rights: [
+          {
+            action: "workflow.use",
+            asset: { kind: "workflow", name: "child" },
+            steps: ["child"],
+            neededFor: "publish",
+            held: false,
+            ...(administers
+              ? { grant: { holderId: "sp_secret_id", scopeId: "asset_secret_id" } }
+              : { refusal: "not_administrator" as const })
+          }
+        ]
+      },
+      {
+        workflow: "child",
+        revision: "published",
+        runAs: "workflow-runner",
+        account: { label: "Workflow runner", status: "active" },
+        rights: [
+          {
+            action: "connection.use",
+            asset: { kind: "connection", name: "exampledata" },
+            steps: ["read"],
+            neededFor: "run",
+            held: false,
+            refusal: administers ? ("not_held" as const) : ("not_administrator" as const)
+          },
+          {
+            action: "data_store.insert",
+            asset: { kind: "data_store", name: "mandanten" },
+            steps: ["store"],
+            neededFor: "run",
+            held: true
+          }
+        ]
+      }
+    ]
+  });
+  const rights = (view: WorkflowPublishRightsView, locale: "en" | "de" = "en") =>
+    render(createElement(RightsLacking, { view, give: never, onGiven: never }), locale);
+
+  it("names each lacking right on its resource, offers the give step, and never a right's id or a grant's ids", () => {
+    const en = rights(lacking(true));
+    expect(en).toContain("Workflow child");
+    expect(en).toContain("Connection exampledata");
+    expect(en).not.toContain("mandanten");
+    expect(en).toContain('data-testid="workflow-publish-rights-give"');
+    for (const markup of [en, rights(lacking(true), "de")]) {
+      expect(markup).not.toMatch(rightId);
+      expect(markup).not.toContain("sp_secret_id");
+      expect(markup).not.toContain("asset_secret_id");
+    }
+  });
+
+  it("offers no step to a reader who administers no account", () => {
+    expect(rights(lacking(false))).not.toContain('data-testid="workflow-publish-rights-give"');
+  });
+
+  it("counts the child Workflows the reader cannot see and names no resource it cannot see", () => {
+    const only = rights({ administers: false, hiddenWorkflows: 2, workflows: [] });
+    // A hidden child alone still says something is missing, never that all is held.
+    expect(only).toContain("2 child workflows you cannot see");
+    expect(only).not.toContain("hold every right");
+    const held: WorkflowPublishRightsView = {
+      administers: true,
+      hiddenWorkflows: 0,
+      workflows: lacking(true).workflows.map((entry) => ({
+        ...entry,
+        rights: entry.rights.map((right) => ({ ...right, held: true }))
+      }))
+    };
+    expect(rights(held, "de")).toContain("Die Technischen Konten haben jedes Recht");
+  });
+
+  it("says a refused publish in the reader's language, never by its reason, right id or the instance's sentence", () => {
+    const refusal = (code: string, details: Record<string, string>) =>
+      new ApiError(code === "FORBIDDEN" ? 403 : 400, "refused", {
+        error: {
+          code,
+          message: "The parent's principal does not hold workflow.use on the child",
+          details
+        }
+      });
+    for (const reason of [
+      "child_use_forbidden",
+      "no_parent_trigger",
+      "child_unpublished",
+      "workflow_cycle",
+      "run_as_missing",
+      "run_as_disabled",
+      "user_only"
+    ])
+      for (const translate of [t, de]) {
+        const sentence =
+          workflowPublishRefusal(refusal("VALIDATION_FAILED", { reason }), translate) ?? "";
+        expect(sentence, reason).not.toBe("");
+        expect(sentence, reason).not.toMatch(rightId);
+        expect(sentence, reason).not.toContain(reason);
+      }
+    expect(
+      workflowPublishRefusal(
+        refusal("FORBIDDEN", { reason: "no_grant", action: "connection.use" }),
+        de
+      )
+    ).toContain("Verbindungen verwenden");
+    // A refusal the page has no sentence for is said as the instance said it.
+    expect(
+      workflowPublishRefusal(
+        refusal("FORBIDDEN", { reason: "no_grant", action: "workflow.publish" }),
+        t
+      )
+    ).toBeUndefined();
+    // A right on a resource the reader may not see is refused at the grant, and said so.
+    const hidden = refusal("FORBIDDEN", { reason: "not_visible", action: "connection.read" });
+    expect(giveFailureSentence(hidden, t)).not.toBe(giveFailureSentence(new Error("offline"), t));
+    expect(giveFailureSentence(hidden, t)).not.toMatch(rightId);
+  });
+
+  it("reads the Workflow's needs and gives each right through the ordinary grant write", async () => {
+    const { client, calls } = recordedApiClient(({ operation }) =>
+      operation === "workflows.principal_rights"
+        ? lacking(true)
+        : {
+            id: "grant_1",
+            holderKind: "service_principal",
+            holderId: "sp_1",
+            action: "workflow.use",
+            effect: "allow",
+            scopeKind: "asset",
+            scopeId: "asset_1",
+            createdAt: "2026-10-18T10:00:00.000Z"
+          }
+    );
+    const source = createInstanceSource(client, "test").publishRights;
+    expect(await source?.read("parent", new AbortController().signal)).toEqual(lacking(true));
+    await source?.give({ holderId: "sp_1", action: "workflow.use", scopeId: "asset_1" });
+    expect(
+      calls.map((call) => [
+        call.operation,
+        call.params,
+        call.body ? JSON.parse(call.body) : undefined
+      ])
+    ).toEqual([
+      ["workflows.principal_rights", { workflow: "parent" }, undefined],
+      [
+        "permissions.grant",
+        {},
+        {
+          holderKind: "service_principal",
+          holderId: "sp_1",
+          action: "workflow.use",
+          effect: "allow",
+          scopeKind: "asset",
+          scopeId: "asset_1"
+        }
+      ]
+    ]);
   });
 });

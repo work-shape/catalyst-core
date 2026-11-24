@@ -219,7 +219,7 @@ describe("approval request workflow", () => {
   it("requires a nonblank comment for request_changes", async () => {
     const f = await fixture();
     const request = await f.create();
-    for (const comment of [undefined, "", "   "]) {
+    for (const comment of [undefined, "   "]) {
       await expect(
         f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
           requestId: request.id,

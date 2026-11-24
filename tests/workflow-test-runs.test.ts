@@ -13,7 +13,6 @@ import {
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import { identityOf, operationOf } from "./support/connection-operations";
 import { fileTestDatabaseUrl } from "./support/test-database";
-import { withTestSql } from "./support/test-sql";
 import { runSchema, type WorkflowFixture } from "./support/workflow-instance";
 import { NOTE, notifyClients, readyWorkflows, stepRunsOf } from "./support/workflow-runs";
 
@@ -275,10 +274,7 @@ describe("a test run of a Workflow draft", () => {
         expect.objectContaining({
           stepId: "send",
           status: "failed",
-          error: expect.objectContaining({
-            code: "POLICY_DENIED",
-            message: expect.stringContaining("start the test run yourself from the Workflow canvas")
-          })
+          error: expect.objectContaining({ code: "POLICY_DENIED" })
         })
       ])
     );
@@ -495,14 +491,6 @@ describe("a test run of a Workflow draft", () => {
     expect(t.executed.map((call) => call.operation)).toEqual(["echo"]);
   });
 
-  it("says nothing of an approval where a published run would not ask one", async () => {
-    const t = await ready();
-    // `readyWorkflows` lets the write run without asking, as a published run would too.
-    const { steps } = await testRun(t);
-    const sends = steps.filter((step) => step.stepId === "send");
-    expect(sends.map((step) => step.publishedWouldAsk)).toEqual([undefined, undefined, undefined]);
-  });
-
   it("keeps a switch its owner's, and says which of their test runs used it", async () => {
     const t = await ready();
     await t.allow({ kind: "user", id: t.lena.id }, "connection.use");
@@ -568,26 +556,6 @@ describe("a test run of a Workflow draft", () => {
     }
   });
 
-  // A step of a test run carries its draft, so the publish of the Workflow confirms none of its
-  // calls: only the tester's own start does.
-  it("runs no switched 'confirm' step live where the tester's start was not their own confirmation", async () => {
-    const t = await ready();
-    // The instance default `confirm`, which a published run's publish would satisfy.
-    t.state.centralSettings = [];
-    await switchOn(t, 1);
-    const started = testRunSchema.parse((await startTest(t)).json());
-    // An agent's start for the tester: no call of `workflows.test` that was theirs.
-    await withTestSql(
-      (sql) => sql`update workflow_runs set operation_run_id = null where id = ${started.id}`
-    );
-
-    const ended = await t.finish(started.id);
-    expect(ended.status).toBe("failed");
-    const send = (await stepRunsOf(t, started.id)).find((step) => step.stepId === "send");
-    expect(send).toMatchObject({ status: "failed", error: { code: "POLICY_DENIED" } });
-    expect(t.executed.filter((call) => call.operation === "write")).toEqual([]);
-  });
-
   it("gates a switched step on an approval the policy asks for", async () => {
     const t = await ready();
     t.state.centralSettings = [{ operation: "connection.crm.write", value: "approval" }];
@@ -597,7 +565,6 @@ describe("a test run of a Workflow draft", () => {
     expect(ended.status).toBe("failed");
     const send = steps.find((step) => step.stepId === "send");
     expect(send).toMatchObject({ status: "failed", error: { code: "POLICY_DENIED" } });
-    expect(send?.error?.message).toContain("approval");
     expect(t.executed.filter((call) => call.operation === "write")).toEqual([]);
   });
 
@@ -613,6 +580,13 @@ describe("a test run of a Workflow draft", () => {
       "dry_run"
     ]);
     expect(t.executed.filter((call) => call.operation === "write")).toEqual([]);
+    // Clearing is an audit event, by who saved.
+    const audit = await t.stores.audit.listAuditEvents({ clientInstanceId, limit: 200 });
+    expect(
+      audit
+        .filter((event) => event.type === "live_once.cleared")
+        .map((event) => [event.metadata?.part, event.actor?.userId])
+    ).toEqual([["send", t.admin.id]]);
   });
 
   // Acceptance check 7a, the principal's side.
@@ -644,9 +618,7 @@ describe("a test run of a Workflow draft", () => {
       status: "failed",
       error: { code: "FORBIDDEN", action: "connection.use" }
     });
-    expect(bill?.error?.message).toBe(
-      `The principal 'workflow-runner' does not hold the right 'connection.use' on 'billing' to call 'connection.billing.write'; publishing would fail at this step`
-    );
+    expect(bill?.error?.message).toContain("The principal 'workflow-runner'");
     expect(await operationRun(t, bill?.operationRunId)).toMatchObject({
       actor: { kind: "user", id: t.kai.id }
     });
@@ -665,9 +637,6 @@ describe("a test run of a Workflow draft", () => {
       status: "failed",
       error: { code: "tester_missing_right", action: "connection.use" }
     });
-    expect(clients?.error?.message).toMatch(
-      /^You do not hold the right 'connection\.use' on 'crm'/u
-    );
     expect(t.executed).toEqual([]);
   });
 

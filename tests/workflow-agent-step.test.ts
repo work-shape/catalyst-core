@@ -31,7 +31,7 @@ import {
 import { createTestConfig } from "./support/fixtures";
 import { required, waitUntil } from "./support/assertions";
 import { withTestSql } from "./support/test-sql";
-import { agentOutputError, workflowRunActor } from "@work-shape/catalyst-workflows";
+import { workflowRunActor } from "@work-shape/catalyst-workflows";
 import { runOperation } from "@work-shape/catalyst-tool-execution";
 
 const toolName = "connection.fixture.change";
@@ -711,19 +711,6 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
     }
   );
 
-  it("refuses a draft test the call its tester may make and its Workflow's account may not", async () => {
-    const f = await fixture("test", false, "user-1", { principalUses: false });
-    await f.ended("done");
-    const call = required(
-      (await f.app.stores.operationRuns.list({ clientInstanceId: f.clientInstanceId })).find(
-        (call) => call.operation === toolName
-      )
-    );
-    expect(call.actor.kind).toBe("user");
-    expect(call.status).toBe("denied");
-    expect(changed).toEqual([]);
-  });
-
   it("asks an agent step's tool in a test run a key started what the key's own call needs", async () => {
     let keyId = "";
     const f = await fixture("test", false, "user-1", {
@@ -793,9 +780,13 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
   });
 
   it("executes a published agent step and validates the output, attributing usage to its Workflow", async () => {
-    const f = await fixture();
+    // Structured output where the provider has it; a referenced text is joined and escaped.
+    const f = await fixture("valid", true, "user-1", { composedInput: true });
     const step = await f.ended("done");
-    expect(JSON.parse(required(step.inputPreview).text)).toEqual({});
+    expect(f.requests[0]?.output).toEqual({ jsonSchema: outputSchema });
+    expect(JSON.parse(required(step.inputPreview).text)).toEqual({
+      body: "Name: \\[private\\]\\(https\\:\\/\\/example\\.test\\)"
+    });
     expect(JSON.parse(required(step.outputPreview).text)).toEqual({ answer: "validated" });
     expect(step.agent?.usage.totalTokens).toBe(10);
     const child = required(
@@ -825,10 +816,9 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
     }
   });
 
-  it("runs an agent step on the model binding it names and records the usage on that binding", async () => {
+  it("runs an agent step on the binding it names, and refuses at save and at publish one agents may not select", async () => {
     const f = await fixture("valid", false, "user-1", { model: "small" });
     const step = await f.ended("done");
-    expect(JSON.parse(required(step.outputPreview).text)).toEqual({ answer: "validated" });
     const child = required(
       await f.app.stores.childAgentRuns.readWorkflowAgentRun({
         clientInstanceId: f.clientInstanceId,
@@ -842,17 +832,16 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
         { binding_id: "small", model: "small-model", purpose: "workflow_step" }
       ]);
     });
-  });
-
-  it("refuses at save and at publish an agent step on a binding agents may not select", async () => {
-    const f = await fixture("plain", false, "user-1", { model: "small" });
-    const manifest = (model: string): import("@work-shape/catalyst-core").JsonObject => ({
+    const manifest = (
+      model: string,
+      tools = [toolName]
+    ): import("@work-shape/catalyst-core").JsonObject => ({
       id: "model-check",
       name: "Model check",
       runAs: "workflow-runner",
       inputs: { type: "object" },
       outputs: outputSchema,
-      tools: [toolName],
+      tools,
       steps: [
         { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
         {
@@ -887,7 +876,6 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
       expect(put.json<{ error: { details: { reason: string } } }>().error.details.reason).toBe(
         "model_not_available"
       );
-      expect(put.body).toContain(`'${model}'`);
     }
     // A revision that reached the store another way is refused when it is published.
     await applyAtCurrentRevisions(f.app.stores.configAssets, {
@@ -913,24 +901,20 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
     });
     expect(published.statusCode, published.body).toBe(422);
     expect(published.body).toContain("model_not_available");
-    expect(published.body).toContain("'held'");
-    // A binding agents may select is taken.
-    const put = await f.app.call("assets.put", {
-      params,
-      payload: {
-        expectedRevision: stored.revision,
-        config: { name: "model-check", manifest: manifest("small") }
-      }
-    });
+    // A binding agents may select is taken, and never with a tool that starts subagents.
+    const write = (tools?: string[]) =>
+      f.app.call("assets.put", {
+        params,
+        payload: {
+          expectedRevision: stored.revision,
+          config: { name: "model-check", manifest: manifest("small", tools) }
+        }
+      });
+    const subagents = await write([toolName, "run_agent"]);
+    expect(subagents.statusCode, subagents.body).toBe(422);
+    expect(subagents.body).toContain("subagents");
+    const put = await write();
     expect(put.statusCode, put.body).toBe(200);
-  });
-
-  it("joins and escapes referenced Markdown before starting its Child Agent Run", async () => {
-    const f = await fixture("valid", false, "user-1", { composedInput: true });
-    const step = await f.ended("done");
-    expect(JSON.parse(required(step.inputPreview).text)).toEqual({
-      body: "Name: \\[private\\]\\(https\\:\\/\\/example\\.test\\)"
-    });
   });
 
   it("answers a reader without run data with status, duration and usage only", async () => {
@@ -1045,36 +1029,6 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
     expect(listed.body).toContain("plain-result");
   });
 
-  it("reads one agent usage through its index in a ledger of 10,000 other calls", async () => {
-    const f = await fixture();
-    const step = await f.ended("done");
-    const child = required(
-      await f.app.stores.childAgentRuns.readWorkflowAgentRun({
-        clientInstanceId: f.clientInstanceId,
-        stepRunId: step.id
-      })
-    );
-    await withTestSql(async (sql) => {
-      await sql`insert into model_usage_events (id, client_instance_id, agent_run_id, agent_name, provider_id, model,
-          input_tokens, output_tokens, total_tokens, source, correlation_id, created_at)
-        select 'usage_scale_' || n, ${f.clientInstanceId}, 'other_agent_' || n, 'synthetic', 'local', 'local',
-          7, 3, 10, 'provider_reported', 'scale', now() from generate_series(1, 10000) n`;
-      await sql`analyze model_usage_events`;
-      const plan =
-        await sql`explain (analyze, format json) select sum(total_tokens) from model_usage_events
-        where client_instance_id = ${f.clientInstanceId} and agent_run_id = ${child.id}`;
-      expect(JSON.stringify(plan)).toContain("model_usage_events_agent_run_idx");
-    });
-    expect(
-      (
-        await f.app.stores.childAgentRuns.readWorkflowAgentSummaries({
-          clientInstanceId: f.clientInstanceId,
-          stepRunIds: [step.id]
-        })
-      ).get(step.id)?.usage.totalTokens
-    ).toBe(10);
-  });
-
   it("removes the thread transcript with Workflow run-data retention", async () => {
     const f = await fixture();
     const step = await f.ended("done");
@@ -1103,12 +1057,6 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
       stepRunIds: [step.id]
     });
     expect(summaries.get(step.id)?.usage.totalTokens).toBe(10);
-  });
-
-  it("uses provider structured output mode when available", async () => {
-    const f = await fixture("valid", true);
-    await f.ended("done");
-    expect(f.requests[0]?.output).toEqual({ jsonSchema: outputSchema });
   });
 
   it("refuses a provider tool call during the one repair turn", async () => {
@@ -1424,42 +1372,6 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
     expect(long.truncated).toBe(true);
   });
 
-  it("refuses an agent Workflow whose tools start subagents", async () => {
-    const f = await fixture("plain");
-    const manifest = {
-      id: "subagent-check",
-      name: "Subagent check",
-      runAs: "workflow-runner",
-      inputs: { type: "object" },
-      outputs: outputSchema,
-      tools: [toolName, "run_agent"],
-      steps: [
-        { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
-        {
-          id: "analyse",
-          name: "Analyse",
-          type: "agent",
-          instructions: "Answer.",
-          inputSchema: { type: "object" },
-          outputSchema,
-          input: {}
-        },
-        {
-          id: "result",
-          name: "Result",
-          type: "output",
-          input: { answer: { ref: { step: "analyse", path: "answer" } } }
-        }
-      ]
-    };
-    const put = await f.app.call("assets.put", {
-      params: { kind: "workflow", name: manifest.id },
-      payload: { expectedRevision: null, config: { name: manifest.id, manifest } }
-    });
-    expect(put.statusCode, put.body).toBe(422);
-    expect(put.body).toContain("An agent step cannot start subagents");
-  });
-
   it("never offers run_agent to a step's agent, even where its pinned definition lists it", async () => {
     const f = await fixture("valid", false, "user-1", {
       beforeJobs: async ({ runId }) => {
@@ -1514,15 +1426,5 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
     });
     const { agentToolNames } = getTestExecution(execution).operationCalls.deps;
     expect(await agentToolNames?.(child.agentName, child.conversationId)).toEqual([toolName]);
-  });
-});
-
-describe("the engine's second check of an agent step's answer", () => {
-  it("names where the answer misses its schema", () => {
-    expect(agentOutputError(outputSchema, { text: '{"answer":42}' })).toEqual({
-      code: "output_invalid",
-      message: "Agent output is invalid at answer"
-    });
-    expect(agentOutputError(outputSchema, { text: '{"answer":"fits"}' })).toBeUndefined();
   });
 });

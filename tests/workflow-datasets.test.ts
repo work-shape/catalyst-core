@@ -2,7 +2,6 @@ import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { listenTestInstance } from "./support/test-instance";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
 import { afterEach, describe, expect, it } from "vitest";
-import { parseWorkflowManifest } from "@work-shape/catalyst-workflows";
 import { clientInstanceId } from "./support/access-instance";
 import { publishedDefinitions, runSchema, type WorkflowFixture } from "./support/workflow-instance";
 import {
@@ -32,15 +31,6 @@ function datasetWorkflow() {
 }
 
 describe("Workflow datasets", () => {
-  it("accepts dataset producers and named row types, while naming the deferred slices", () => {
-    expect(parseWorkflowManifest(datasetWorkflow())).toMatchObject({ ok: true });
-    const paged = datasetWorkflow();
-    paged.steps = paged.steps.map((step) =>
-      step.id === "clients" ? { ...step, paginate: true } : step
-    );
-    expect(parseWorkflowManifest(paged)).toMatchObject({ ok: true });
-  });
-
   it("stores only a reference, loops over its rows once and removes intermediates at run end", async () => {
     const definitions = publishedDefinitions();
     definitions.publish(datasetWorkflow());

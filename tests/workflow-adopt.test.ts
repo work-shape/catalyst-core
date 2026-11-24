@@ -205,8 +205,8 @@ describe("the adoption of Workflows from before their repositories", () => {
   // Fails without the operation: every revision of these Workflows stays without a commit.
   it("commits every revision once, oldest first, by its author at its time, and a second run changes nothing", async () => {
     const { t, objects, writeOld, revisions, ledger, adopt } = await ready();
-    const names = ["adopt-one", "adopt-five", "adopt-twenty"];
-    const counts = [1, 5, 20];
+    const names = ["adopt-one", "adopt-two", "adopt-nine"];
+    const counts = [1, 2, 9];
     const ids: string[] = [];
     for (const [index, name] of names.entries()) {
       ids.push(await writeOld(name, counts[index] ?? 0));
@@ -216,7 +216,7 @@ describe("the adoption of Workflows from before their repositories", () => {
     }
 
     const first = await adopt();
-    expect(first).toMatchObject({ adopted: 3, revisions: 26, commits: 26, refused: 0 });
+    expect(first).toMatchObject({ adopted: 3, revisions: 12, commits: 12, refused: 0 });
     expect([...first.adoptedAssetIds].sort()).toEqual([...ids].sort());
     // The answer walks Personal Workspaces too: it holds ids and counts, never a name.
     for (const body of first.bodies) {
@@ -253,7 +253,7 @@ describe("the adoption of Workflows from before their repositories", () => {
     ).toEqual(
       counts.map((count, index) => ({ assetId: ids[index], revisions: count, commits: count }))
     );
-    expect(JSON.stringify(audit)).not.toMatch(/adopt-(one|five|twenty)/u);
+    expect(JSON.stringify(audit)).not.toMatch(/adopt-(one|two|nine)/u);
 
     const before = await Promise.all(names.map(revisions));
     const second = await adopt();

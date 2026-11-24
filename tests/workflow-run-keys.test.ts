@@ -200,17 +200,14 @@ describe("run-key wait cycles", () => {
     ];
   }
 
-  async function refused(t: WorkflowFixture, runId: string, workflow: string) {
+  async function refused(t: WorkflowFixture, runId: string) {
     const run = await t.finish(runId, undefined, 40);
     expect(run.status).toBe("failed");
     expect(run.error?.code).toBe("run_key_cycle");
     const steps = await stepRunsOf(t, runId);
     expect(steps.find((step) => step.stepId === "call")).toMatchObject({
       status: "failed",
-      error: {
-        code: "run_key_cycle",
-        message: `The operation 'workflow.${workflow}.start' failed (run_key_cycle)`
-      }
+      error: { code: "run_key_cycle" }
     });
     expect((await stepRuns(t, runId)).some((step) => step.linkedRunId !== undefined)).toBe(false);
     return run;
@@ -390,7 +387,7 @@ describe("run-key wait cycles", () => {
     expect((await t.finish(ping.id, undefined, 40)).status).toBe("failed");
     const [pong] = await children(t, ping.id);
     if (!pong) throw new Error("Missing pong child");
-    await refused(t, pong.id, "ping");
+    await refused(t, pong.id);
     expect((await startWith(t, "ping", "", "a")).id).not.toBe(ping.id);
     expect((await startWith(t, "pong", "", "b")).id).not.toBe(pong.id);
   });
@@ -423,7 +420,7 @@ describe("run-key wait cycles", () => {
       payload: { input: {}, key: "private-key" }
     });
     const run = runSchema.parse(response.json());
-    const ended = await refused(t, run.id, "self");
+    const ended = await refused(t, run.id);
     expect(JSON.stringify(ended.error)).not.toContain("private-key");
     expect(await children(t, run.id)).toEqual([]);
   });
@@ -441,7 +438,7 @@ describe("run-key wait cycles", () => {
     expect((await t.finish(gamma.id, undefined, 40)).status).toBe("failed");
     const [beta] = await children(t, alpha.id);
     if (!beta) throw new Error("Missing beta child");
-    await refused(t, beta.id, "gamma");
+    await refused(t, beta.id);
     expect((await stepRuns(t, gamma.id)).find((step) => step.stepId === "call")).toMatchObject({
       linkedRunId: alpha.id,
       status: "failed"

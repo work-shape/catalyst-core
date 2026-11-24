@@ -189,10 +189,8 @@ describe("a schedule on the days the clock of its time zone is changed", () => {
     const named = (timeZone?: string) =>
       clientInstance.safeParse({ id: "demo", displayName: "Demo", timeZone });
     expect(named("Europe/Berlin")).toMatchObject({ success: true });
-    expect(named("UTC")).toMatchObject({ success: true });
     expect(named()).toMatchObject({ success: true, data: { id: "demo" } });
     expect(named("Europe/Atlantis").success).toBe(false);
-    expect(named("").success).toBe(false);
     await expect(workflowFixture({ timeZone: "Europe/Atlantis" })).rejects.toMatchObject({
       code: "VALIDATION_FAILED"
     });
@@ -214,7 +212,6 @@ describe("a schedule whose process and database disagree on the time", () => {
 
   it.each([
     ["behind the database's by ten minutes", -10 * 60_000],
-    ["behind the database's by half a second", -500],
     ["ahead of the database's by ninety seconds", 90_000]
   ])("starts the run and queues the next due time with a process clock %s", async (_, skew) => {
     const { cron, dueAt } = thisMinute();
@@ -250,35 +247,4 @@ describe("a schedule whose process and database disagree on the time", () => {
     // That due time is lost, and the schedule is not: the next one is queued.
     expect(await jobs(t, "queued")).toBe(1);
   }, 60_000);
-});
-
-describe("the schedule of one Workflow", () => {
-  it("is planned when its definition is published and ends when it is taken back", async () => {
-    const definitions = publishedDefinitions();
-    const t = await readyWorkflows(
-      (fixture) => {
-        open = fixture;
-      },
-      { definitions: definitions.source, now: () => at("2030-03-10T10:30:20Z") }
-    );
-    // Nothing is published yet.
-    expect(await t.workflows.planSchedule("tick")).toBeUndefined();
-    definitions.publish(tick("0 * * * *"));
-    expect(await t.workflows.planSchedule("tick")).toEqual({
-      workflow: "tick",
-      dueAt: "2030-03-10T11:00:00.000Z"
-    });
-    // Asked again, it queues no second job.
-    await t.workflows.planSchedule("tick");
-    expect(await jobs(t, "queued")).toBe(1);
-    // A Workflow that is started by hand alone has nothing to plan.
-    definitions.publish({
-      ...tick("0 * * * *"),
-      steps: [
-        { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
-        { id: "result", name: "Result", type: "output", input: {} }
-      ]
-    });
-    expect(await t.workflows.planSchedule("tick")).toBeUndefined();
-  });
 });

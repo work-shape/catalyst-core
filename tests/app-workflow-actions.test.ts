@@ -7,7 +7,9 @@ import {
   type InstanceWorkflows
 } from "@work-shape/catalyst-client-assembly";
 import {
+  APP_WORKFLOW_RUN_OUTPUT_MAX_BYTES,
   WORKFLOW_ASSET_KIND,
+  appWorkflowRunOutput,
   asAgentRunId,
   asConversationId,
   asToolCallId,
@@ -597,5 +599,20 @@ describe("an App that starts a Workflow", () => {
     });
     // Whoever may not write the App reads no review of its draft.
     expectStatus(await t.call(t.kai.id, "apps.publish_review", { params: { app: "visits" } }), 403);
+  });
+});
+
+// DP-0b: above the size of an action result a frame is told only that the output was cut. The
+// engine keeps a run's output within the same size, so no run reaches the cap through a call.
+describe("the output of a Workflow Run as a frame is answered it", () => {
+  it("answers an output of exactly the cap whole, and one byte more as cut, counting bytes", () => {
+    // `{"t":"…"}` is 8 bytes around the text.
+    const atCap = { t: "y".repeat(APP_WORKFLOW_RUN_OUTPUT_MAX_BYTES - 8) };
+    const overCap = { t: "y".repeat(APP_WORKFLOW_RUN_OUTPUT_MAX_BYTES - 7) };
+    expect(appWorkflowRunOutput(atCap)).toEqual({ output: atCap });
+    expect(appWorkflowRunOutput(overCap)).toEqual({ outputTruncated: true });
+    // "ä" is two bytes as UTF-8: half the cap in characters is the whole cap in bytes.
+    const wide = { t: "ä".repeat(APP_WORKFLOW_RUN_OUTPUT_MAX_BYTES / 2) };
+    expect(appWorkflowRunOutput(wide)).toEqual({ outputTruncated: true });
   });
 });

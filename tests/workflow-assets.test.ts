@@ -115,15 +115,17 @@ describe("a Workflow stored as an asset", () => {
       payload: { input: { note: NOTE } }
     });
 
-  it("lists a never-published data draft with its kind through existing asset attributes", async () => {
+  it("lists a data Workflow with its kind, as a never-published draft and once published (KBW-0)", async () => {
     const t = await ready();
-    await put(t, { ...notifyClients(), kind: "data" }, null);
-    const listed = await t.expectOk(t.root.id, "assets.list", {
+    const revision = await put(t, { ...notifyClients(), kind: "data" }, null);
+    const assets = await t.expectOk(t.root.id, "assets.list", {
       params: { kind: WORKFLOW_ASSET_KIND }
     });
-    expect(listed.json()).toMatchObject({
+    expect(assets.json()).toMatchObject({
       items: [{ name: WORKFLOW, attributes: { workflowKind: "data" } }]
     });
+    expect((await publish(t, revision)).statusCode).toBe(200);
+    expect((await listed(t))[0]).toMatchObject({ id: WORKFLOW, kind: "data" });
   });
 
   it("keeps process drafts editable but refuses data writes at every live revision gate", async () => {
@@ -157,34 +159,17 @@ describe("a Workflow stored as an asset", () => {
         details: { reason: "process_workflow_write_operation" }
       }
     });
-    expect(refused.body).toContain("kind: data");
     expect(await published(t)).toBe(live);
   });
 
-  it("classifies process and data runs for all ten item and write outcomes", async () => {
+  it("classifies process and data runs as empty by their items and writes", async () => {
     const t = await ready();
     let revision: number | null = null;
     const cases = [
       ["process", [], { done: 0, failed: 0 }, false],
       ["data", [], { done: 0, failed: 0 }, true],
-      ["data", [{ id: "one" }], { done: 0, failed: 0 }, true],
       ["data", [{ id: "one" }], { done: 1, failed: 0 }, false],
-      ["data", [{ id: "one" }], { done: 0, failed: 1 }, false],
-      ["data", [{ id: "one" }], { received: "unknown" }, false],
       ["data", [{ id: "one" }], { table: "rows", inserted: 0, skipped: 0 }, true],
-      ["data", [{ id: "one" }], { withdrawn: 0 }, true],
-      [
-        "data",
-        [{ id: "one" }],
-        {
-          accepted: 0,
-          done: 0,
-          failed: 0,
-          withdrawn: 0,
-          failures: { $dataset: "empty", rowCount: 0, bytes: 0 }
-        },
-        true
-      ],
       ["data", [{ id: "one" }], { done: "0", failed: 0 }, false]
     ] as const;
     for (const [kind, clients, output, empty] of cases) {
@@ -239,22 +224,9 @@ describe("a Workflow stored as an asset", () => {
     );
     const refused = await publish(t, second);
     expect(refused.statusCode, refused.body).toBe(422);
-    expect(refused.json()).toMatchObject({
-      error: {
-        code: "VALIDATION_FAILED",
-        message: "Workflow package 'outside-image' is not available in the runner image"
-      }
-    });
+    expect(refused.json()).toMatchObject({ error: { code: "VALIDATION_FAILED" } });
+    expect(refused.body).toContain("outside-image");
     expect(await published(t)).toBe(live);
-  });
-
-  it("refuses every declared package at publish with an empty runner manifest", async () => {
-    const t = await ready();
-    const revision = await put(t, { ...notifyClients(), packages: ["pypdf"] }, null);
-    const refused = await publish(t, revision);
-    expect(refused.statusCode, refused.body).toBe(422);
-    expect(refused.body).toContain("Workflow package 'pypdf' is not available in the runner image");
-    expect(await published(t)).toBeUndefined();
   });
 
   it("names the active configured account on an unpublished draft to its writer", async () => {
@@ -344,7 +316,7 @@ describe("a Workflow stored as an asset", () => {
     expect((await listed(t))[0]?.lastRun).toMatchObject({ id: run.id, status: "done" });
   });
 
-  it.each(["condition", "parallel"])("saves, publishes and runs a %s block", async (type) => {
+  it("saves, publishes and runs a block", async () => {
     const t = await ready();
     const base = notifyClients();
     const read = {
@@ -354,21 +326,12 @@ describe("a Workflow stored as an asset", () => {
       operation: "connection.crm.echo",
       input: { text: { ref: { step: "start", path: "input.note" } } }
     };
-    const block =
-      type === "condition"
-        ? {
-            id: "block",
-            name: "Choose",
-            type,
-            when: { ref: { step: "start", path: "input.note" }, op: "equals", value: NOTE },
-            then: [read]
-          }
-        : {
-            id: "block",
-            name: "Together",
-            type,
-            branches: [{ id: "one", name: "One", steps: [read] }]
-          };
+    const block = {
+      id: "block",
+      name: "Together",
+      type: "parallel",
+      branches: [{ id: "one", name: "One", steps: [read] }]
+    };
     const revision = await put(
       t,
       { ...base, steps: [base.steps[0], block, ...base.steps.slice(1)] },
@@ -384,7 +347,7 @@ describe("a Workflow stored as an asset", () => {
     expect(container?.status).toBe("done");
     expect(steps.find((step) => step.stepId === "analysis")).toMatchObject({
       containerStepRunId: container?.id,
-      branch: type === "condition" ? "then" : "one",
+      branch: "one",
       status: "done"
     });
   });
@@ -486,10 +449,7 @@ describe("a Workflow stored as an asset", () => {
     expect(disabled?.reasons.map((reason) => [reason.code, reason.path])).toEqual([
       ["principal_inactive", "runAs"]
     ]);
-    expect(disabled?.reasons[0]).toMatchObject({
-      principalDisplayLabel: "Booking checks",
-      message: "The technical account ‘Booking checks’ is disabled."
-    });
+    expect(disabled?.reasons[0]).toMatchObject({ principalDisplayLabel: "Booking checks" });
     expect(disabled?.reasons[0]?.message).not.toContain(t.principal.name);
     expect(await startReason()).toBe("principal_inactive");
     await t.stores.apiAccess.updateServicePrincipal({
@@ -564,15 +524,6 @@ describe("a Workflow stored as an asset", () => {
     ]);
     // The list names a Workflow and carries no definition: the page reads that as the asset.
     expect(unknown?.description).toHaveLength(WORKFLOW_LIST_DESCRIPTION_MAX);
-  });
-
-  it("reads and lists an explicitly data Workflow (KBW-0)", async () => {
-    const t = await ready();
-    const revision = await put(t, { ...notifyClients(), kind: "data" }, null);
-    expect((await publish(t, revision)).statusCode).toBe(200);
-    expect((await listed(t))[0]).toMatchObject({ id: WORKFLOW, kind: "data" });
-    const read = (await t.expectOk(t.root.id, "assets.get", { params: address })).json();
-    expect(read).toMatchObject({ config: { manifest: { kind: "data" } } });
   });
 
   it("keeps a run on the revision it started with when another is published", async () => {

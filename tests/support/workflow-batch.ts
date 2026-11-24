@@ -37,7 +37,7 @@ const failureSchema: JsonObject = {
   required: ["item", "code", "message"]
 };
 const itemsSchema = z.union([z.array(z.json()), workflowDatasetReferenceSchema]);
-export function manifest(batch?: number, inline = false) {
+function manifest(batch?: number, inline = false) {
   const base = notifyClients();
   const operation = (id: string, step: string, path = "") => ({
     id,

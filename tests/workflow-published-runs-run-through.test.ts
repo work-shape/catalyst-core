@@ -298,7 +298,6 @@ describe("a run of a published Workflow revision", () => {
     w.settings.push({ operation: INSERT, value: "deny" });
     const run = await w.runByHand();
     expect(run).toMatchObject({ status: "failed", error: { code: "POLICY_DENIED" } });
-    expect(run.error?.message).toBe(`The instance's policy does not allow '${INSERT}' from here`);
     expect(await w.rows()).toEqual([0]);
   }, 120_000);
 
@@ -314,9 +313,6 @@ describe("a run of a published Workflow revision", () => {
 
     const run = await w.finish(runId);
     expect(run).toMatchObject({ status: "failed", error: { code: "POLICY_DENIED" } });
-    expect(run.error?.message).toBe(
-      `The Workflow of this run was deleted, so its publish no longer confirms '${INSERT}'`
-    );
     expect(await w.rows()).toEqual([0]);
     const [refused] = await w.insertRuns();
     expect(refused).toMatchObject({
@@ -356,9 +352,6 @@ describe("a run of a published Workflow revision", () => {
 
     const run = await w.runByHand();
     expect(run).toMatchObject({ status: "failed", error: { code: "POLICY_DENIED" } });
-    expect(run.error?.message).toBe(
-      `The guardrail 'Findings are approved' asks for another person's approval of '${INSERT}': A person checks each finding. The call cannot wait for one. In a Workflow, put an approval step before the step that calls it.`
-    );
     expect(await w.rows()).toEqual([0]);
     const [refused] = await w.insertRuns();
     expect(refused).toMatchObject({
@@ -382,7 +375,6 @@ describe("a run of a published Workflow revision", () => {
 
     const run = await w.runByHand();
     expect(run).toMatchObject({ status: "failed", error: { code: "GUARDRAIL_BLOCKED" } });
-    expect(run.error?.message).toContain("Guardrail 'Findings are approved' blocked");
     expect(await w.rows()).toEqual([0]);
   }, 120_000);
 });

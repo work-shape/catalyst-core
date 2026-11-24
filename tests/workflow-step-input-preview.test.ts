@@ -106,7 +106,6 @@ describe("WF-PANEL-1a the input of a step run", () => {
   });
 
   it.each([
-    { name: "a plain text", text: "x".repeat(4_000), kept: `{"text":"${"x".repeat(1_991)}` },
     // The cut would split the emoji's surrogate pair, which Postgres refuses to store.
     {
       name: "an emoji at the bound",

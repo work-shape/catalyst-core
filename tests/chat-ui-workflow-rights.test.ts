@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, createElement, type ReactNode } from "react";
+import { act, createElement, Fragment, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { PlatformContext } from "@work-shape/catalyst-api-client";
+import { ApiError, type PlatformContext } from "@work-shape/catalyst-api-client";
 import { createTranslationContext, TranslationProvider } from "./support/chat-ui/shared";
 import {
   createInstanceSource,
@@ -15,6 +15,8 @@ import {
   WorkflowsHostProvider,
   WorkflowsPage,
   WorkflowsSourceProvider,
+  workflowAccountRefusal,
+  workflowPublishRefusal,
   workspaceRoutePath,
   type WorkflowsHost,
   type WorkflowsSource
@@ -27,7 +29,7 @@ import { WorkspaceApiClientProvider } from "@work-shape/catalyst-chat-ui/workspa
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 import { workflowsContext } from "./chat-ui-build-fixtures";
 import { CONDITION_WAIT_MS } from "./support/assertions";
-import { runsReadable, workflowRightsOn } from "./support/chat-ui";
+import { runsReadable, useStartRun, workflowRightsOn } from "./support/chat-ui";
 import { recordedApiClient, type RecordedApiCall } from "./support/recorded-api-client";
 
 // UI-FIX-2: what the Workflow screens offer follows what the instance says the reader may do
@@ -35,6 +37,8 @@ import { recordedApiClient, type RecordedApiCall } from "./support/recorded-api-
 // stand: the instance's for a Workflow the instance owns. Write on one Workflow offers that
 // one's draft and no other. The runs of a Workflow are offered to who may read it, never for
 // writing, publishing or starting it; starting follows the engine's own answer.
+// ACCEPT-1c B4: a refusal over the technical account a Workflow runs as names the account by its
+// label and where an administrator changes it, never the instance's diagnostic or internal name.
 
 const { t } = createTranslationContext("en");
 const OPEN = "cw_open";
@@ -583,5 +587,78 @@ describe("the page of a run, by the run's own Workflow", () => {
     await waitForText(container, "Granted");
     expect(buttonTexts(container)).not.toContain(t("workflows.run.cancel"));
     expect(offersChat(container)).toBe(false);
+  });
+});
+
+describe("a refusal over the Workflow's technical account (ACCEPT-1c B4)", () => {
+  const de = createTranslationContext("de").t;
+  const SERVER_SENTENCE =
+    "This Workflow runs as the technical account 'workflow-runner', which is missing or disabled.";
+  const refusal = (code: string, details: Record<string, string>) =>
+    new ApiError(code === "CONFLICT" ? 409 : 400, "refused", {
+      error: { code, message: SERVER_SENTENCE, details }
+    });
+  const inactive = () =>
+    refusal("CONFLICT", {
+      reason: "principal_inactive",
+      runAs: "workflow-runner",
+      principalDisplayLabel: "Booking checks"
+    });
+
+  it("names the account by its label and where it is changed, never by its internal name", () => {
+    for (const translate of [t, de]) {
+      const sentence = workflowAccountRefusal(inactive(), translate) ?? "";
+      expect(sentence).toContain("Booking checks");
+      expect(sentence).not.toContain("workflow-runner");
+    }
+    expect(workflowAccountRefusal(inactive(), t)).toContain("Settings › API access");
+    // The account does not exist: no label came along, and its internal name is not shown.
+    const gone = refusal("CONFLICT", { reason: "principal_inactive", runAs: "workflow-runner" });
+    expect(workflowAccountRefusal(gone, t)).not.toContain("workflow-runner");
+    for (const reason of ["run_as_missing", "run_as_unknown", "run_as_disabled"]) {
+      expect(workflowPublishRefusal(refusal("VALIDATION_FAILED", { reason }), t)).toContain(
+        "Settings › API access"
+      );
+    }
+    // An account another asset owns: no account named.
+    expect(
+      workflowPublishRefusal(
+        refusal("VALIDATION_FAILED", { reason: "run_as_owned", runAs: "nightly-import-a1" }),
+        t
+      )
+    ).not.toContain("nightly-import-a1");
+    expect(workflowAccountRefusal(refusal("FORBIDDEN", { reason: "no_grant" }), t)).toBe(undefined);
+  });
+
+  it("says so in the start dialog, not with the instance's diagnostic", async () => {
+    const { client } = recordedApiClient(() => ({}));
+    const instance = createInstanceSource(client, "k");
+    const runs = instance.runs;
+    if (runs === undefined) throw new Error("The instance source has runs");
+    const source: WorkflowsSource = {
+      ...instance,
+      runs: { ...runs, start: () => Promise.reject(inactive()) }
+    };
+    function StartHarness() {
+      const start = useStartRun({ workflow: "month-end", name: "Month end" });
+      return createElement(
+        Fragment,
+        null,
+        createElement("button", { type: "button", "data-open": "", onClick: start.open }, "open"),
+        start.dialog
+      );
+    }
+    const container = await mount(createElement(StartHarness), source);
+    await act(async () => container.querySelector<HTMLButtonElement>("[data-open]")?.click());
+    const confirm = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === t("workflows.start.confirm")
+    );
+    expect(confirm).toBeDefined();
+    await act(async () => confirm?.click());
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Booking checks"), {
+      timeout: CONDITION_WAIT_MS
+    });
+    expect(document.body.textContent).not.toContain(SERVER_SENTENCE);
+    expect(document.body.textContent).not.toContain("workflow-runner");
   });
 });
